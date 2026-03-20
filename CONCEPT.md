@@ -2482,18 +2482,18 @@ int main() {
 
 ```json
 {
-    "name": "myapp",
-    "main": "src/index.tsc"
+  "name": "myapp",
+  "main": "src/index.tsc"
 }
 ```
 
 ```json
 {
-    "name": "myapp",
-    "builds": [
-        { "name": "server", "main": "src/server.tsc" },
-        { "name": "cli",    "main": "src/cli.tsc"    }
-    ]
+  "name": "myapp",
+  "builds": {
+    "server": { "main": "src/server.tsc" },
+    "cli": { "main": "src/cli.tsc" }
+  }
 }
 ```
 
@@ -2566,7 +2566,6 @@ int main() {
 
 | Поле | Описание | Дефолт |
 |------|----------|--------|
-| `"name"` | имя билда | обязательно |
 | `"main"` | entry point файл (override верхнего уровня) | наследует |
 | `"emit"` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"lib"` | `"binary"` для desktop, `"hex"` для embedded |
 | `"outDir"` | директория вывода | `./build/<name>` |
@@ -2574,6 +2573,7 @@ int main() {
 | `"mcu"` | модель MCU (только для embedded) | — |
 | `"optimize"` | уровень оптимизации (`O0`..`O3`, `Os`) | `O0` |
 | `"defaultNumber"` | тип для `number` | `f64` |
+| `"runtime"` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
 
 #### Pipeline сборки
 
@@ -2704,9 +2704,9 @@ myapp/
   "name": "myapp",
   "version": "1.0.0",
   "main": "src/index.tsc",
-  "builds": [
-    { "name": "desktop", "emit": "binary", "outDir": "build/desktop" }
-  ]
+  "builds": {
+    "desktop": { "emit": "binary", "outDir": "build/desktop" }
+  }
 }
 ```
 
@@ -3125,12 +3125,31 @@ TSC разделяет конкурентность на три независи
 | Механизм | Платформа | Уровень |
 |----------|-----------|---------|
 | `async/await` | все | стандартный |
-| `std/thread` | OS (desktop/server) | продвинутый |
+| `std/threads` | OS (desktop/server) | продвинутый |
 | `@interrupt` | embedded (AVR/Cortex) | системный |
 
 ---
 
 #### 1. Async/Await — стандартный способ
+
+##### Архитектура async runtime
+
+```
+TSC код (async/await)
+        ↓
+  компилятор TSC
+        ↓
+  state machines в C   ← как Rust генерирует Future
+        ↓
+  Runtime Interface (абстракция)
+        ↓
+  ┌─────────────┬──────────────┬──────────────┐
+  │   libuv     │   io_uring   │  poll loop   │
+  │  (desktop)  │   (Linux)    │  (embedded)  │
+  └─────────────┴──────────────┴──────────────┘
+```
+
+TSC-код не знает какой runtime под капотом — работает с абстракцией. Runtime задаётся в `tsc.packages.json` через поле `"runtime"`. `std/fs`, `std/net`, `std/ws` зависят от этого runtime.
 
 Единственный event loop, один поток исполнения. `Shared<T>` и `Weak<T>` **не атомарны** — никаких накладных расходов. Narrowing через `if (x != null)` безопасен — между проверкой и использованием никакой другой код не выполняется.
 
@@ -3216,6 +3235,69 @@ const [a, b, c] = await Promise.all([taskA(), taskB(), taskC()]);
 - Если любая задача завершается ошибкой — `Promise.all` бросает эту ошибку, остальные отменяются
 - Типы элементов выводятся компилятором из переданных Promise
 
+##### Promise.any
+
+Ждёт **первого успешного**. Если все задачи завершились ошибкой — бросает ошибку последней:
+
+```typescript
+// возвращает первый успешно загруженный ресурс
+const data = await Promise.any([
+    fetchFromMirror1(url),
+    fetchFromMirror2(url),
+    fetchFromMirror3(url),
+])
+```
+
+- Тип результата: `T` (общий тип всех Promise)
+- Если хотя бы одна задача успешна — остальные отменяются
+- Если все задачи бросают — `Promise.any` бросает ошибку последней завершившейся
+
+##### Promise.race
+
+Ждёт **первого завершившегося** — успех или ошибка:
+
+```typescript
+// таймаут через Promise.race
+const result = await Promise.race([
+    fetchData(url),
+    sleep(5000).then(() => { throw new TimeoutError() })
+])
+```
+
+- Возвращает результат первой завершившейся задачи (или бросает её ошибку)
+- Остальные задачи отменяются
+- Тип результата: общий тип всех Promise в массиве
+
+##### Promise.allSettled
+
+Ждёт **всех**, собирает результаты включая ошибки — никогда не бросает:
+
+```typescript
+type SettledResult<T> =
+    | { status: "fulfilled", value: T }
+    | { status: "rejected",  reason: Error }
+
+const results = await Promise.allSettled([taskA(), taskB(), taskC()])
+
+for (const r of results) {
+    if (r.status == "fulfilled") console.log(r.value)
+    else                         console.error(r.reason)
+}
+```
+
+- Всегда завершается успехом
+- Возвращает `SettledResult<T>[]` — по одному элементу на каждую задачу
+- Порядок результатов соответствует порядку задач в массиве
+
+**Сравнительная таблица:**
+
+| Метод | Ждёт | При ошибке | Результат |
+|-------|------|------------|-----------|
+| `Promise.all` | всех | бросает сразу | `T[]` (или кортеж) |
+| `Promise.any` | первого успешного | бросает если все упали | `T` |
+| `Promise.race` | первого (любого) | бросает если первый упал | `T` |
+| `Promise.allSettled` | всех | не бросает | `SettledResult<T>[]` |
+
 ##### Правила await
 
 - `await` только внутри `async` функции — иначе ошибка компилятора
@@ -3253,25 +3335,385 @@ async function main(): void {
 На desktop/server — стандартный event loop (libuv или аналог).
 На embedded — poll loop, скомпилированный в state machine без heap.
 
----
+##### Отмена задач — AbortSignal
 
-#### 2. Threads (std/thread) — продвинутый уровень
-
-Только там где есть OS. Потоки работают как **изоляты** — без общей памяти. Связь исключительно через каналы с передачей владения.
+Кооперативная отмена async операций. Компилятор вставляет проверку флага автоматически — разработчик пишет только бизнес-логику.
 
 ```typescript
-import { Thread, channel } from "std/thread";
+const controller = new AbortController()
+const signal = controller.signal
+
+// отменяем через 5 секунд
+setTimeout(() => controller.abort(new TimeoutError()), 5000)
+
+try {
+    const data = await fetch(url, { signal })
+} catch (e) {
+    if (e instanceof AbortError) console.log("отменено:", e.cause)
+}
+```
+
+**`AbortController`:**
+```typescript
+class AbortController {
+    readonly signal: AbortSignal
+    abort(reason?: Error): void   // idempotent — повторный вызов no-op
+}
+```
+
+**`AbortSignal`:**
+```typescript
+class AbortSignal {
+    readonly aborted: boolean      // true после abort()
+    readonly reason:  Error | null // reason переданный в abort(), или null
+
+    onAbort(callback: () => void): void  // низкоуровневая очистка (close fd, cancel io_uring)
+
+    static timeout(ms: i32): AbortSignal // хелпер — сигнал который отменяется через N мс
+}
+```
+
+`AbortSignal.timeout(ms)` — удобный хелпер, не нужен лишний `AbortController`:
+```typescript
+const data = await fetch(url, { signal: AbortSignal.timeout(5000) })
+```
+
+**Автоматические проверки компилятора:**
+
+Если функция принимает `signal?: AbortSignal` — компилятор вставляет проверку в начале каждого state в сгенерированной state machine (каждая `await`-точка):
+
+```typescript
+// TSC — пишем только логику
+async function loadConfig(path: string, signal?: AbortSignal): Config {
+    const raw  = await readFile(path)    // ← автопроверка
+    const json = await parseJson(raw)   // ← автопроверка
+    return validate(json)
+}
+```
+
+C-output (каждый state начинается с проверки):
+```c
+case STATE_READ_FILE:
+    if (signal && atomic_load(&signal->aborted)) {
+        ctx->state = STATE_ERROR;
+        ctx->error = signal->reason ? signal->reason : &AbortError_default;
+        break;
+    }
+    // ... логика чтения ...
+```
+
+Компилятор также добавляет проверку в начало длинных циклов `for`/`while`, если внутри есть хотя бы одна `await`.
+
+**`signal.onAbort(callback)`** — для очистки ресурсов которые не управляются через `await`:
+
+```typescript
+async function readSocket(fd: i32, signal?: AbortSignal): Buffer {
+    signal?.onAbort(() => close(fd))   // закрываем fd при отмене
+    const data = await recv(fd)
+    return data
+}
+```
+
+Callbacks вызываются **синхронно** в том потоке который вызвал `abort()`. Никакого `await` внутри callback — ошибка компилятора.
+
+**`AbortError`** — ошибка которую бросает state machine при обнаружении отменённого сигнала:
+
+```typescript
+class AbortError extends Error {
+    cause: Error | null   // reason из controller.abort(reason)
+}
+```
+
+C-output — `AbortSignal` это `Readonly`-подобная структура:
+```c
+struct AbortSignal {
+    atomic_bool  aborted;
+    Error*       reason;       // null если нет причины
+    AbortCallback* callbacks;  // linked list onAbort-обработчиков
+};
+```
+
+**Взаимодействие с `Promise.race`:**
+```typescript
+// AbortController позволяет остановить проигравшие задачи
+const ctrl = new AbortController()
+
+const result = await Promise.race([
+    fetchFromA(url, { signal: ctrl.signal }),
+    fetchFromB(url, { signal: ctrl.signal }),
+])
+
+ctrl.abort()   // победитель уже вернул результат, проигравший прекратит работу при следующей await
+```
+
+---
+
+#### 2. Threads (std/threads) — продвинутый уровень
+
+Только там где есть OS. Потоки работают как **изоляты** — без общей памяти. Связь через каналы (передача владения) или через `Atomic<T>` / `AtomicArray<T>`.
+
+##### Atomic<T>
+
+Единственный способ разделить значение между потоками без канала. Heap-allocated, встроенный атомарный ref count. Compiler делает escape analysis: если `Atomic<T>` не уходит в `Thread.spawn` — размещается на стеке без ref count.
+
+```typescript
+import { Atomic, AtomicArray, LoadOrdering, StoreOrdering, RmwOrdering } from "std/threads"
+
+const counter = new Atomic<i32>(0)
+
+Thread.spawn(() => {
+    // компилятор: counter._retain() перед spawn
+    // компилятор: counter._release() в конце потока
+    counter.fetchAdd(1, RmwOrdering.AcqRel)
+})
+
+counter.load(LoadOrdering.Acquire)          // i32
+counter.store(0, StoreOrdering.Release)     // void
+counter.fetchAdd(1, RmwOrdering.AcqRel)     // i32 — старое значение
+counter.fetchSub(1, RmwOrdering.AcqRel)     // i32
+counter.fetchAnd(0xFF, RmwOrdering.AcqRel)  // i32
+counter.fetchOr(0x01,  RmwOrdering.AcqRel)  // i32
+counter.fetchXor(0x01, RmwOrdering.AcqRel)  // i32
+counter.swap(42, RmwOrdering.AcqRel)        // i32 — старое значение
+counter.compareExchange(
+    expected, desired,
+    RmwOrdering.AcqRel,   // success ordering
+    LoadOrdering.Acquire  // failure ordering — провал только читает
+): { success: boolean, value: i32 }
+```
+
+Memory ordering типы — компилятор запрещает неверные комбинации:
+
+```typescript
+enum LoadOrdering  { Relaxed, Acquire, SeqCst }           // только для load / failure
+enum StoreOrdering { Relaxed, Release, SeqCst }           // только для store
+enum RmwOrdering   { Relaxed, Acquire, Release, AcqRel, SeqCst }  // read-modify-write
+```
+
+C-output:
+```c
+struct Atomic_i32 {
+    _Atomic int32_t value;
+    atomic_size_t ref_count;
+};
+```
+
+##### AtomicArray<T>
+
+Массив атомарных значений — одна аллокация, все элементы атомарны. Использует C99 Flexible Array Member.
+
+```typescript
+// инициализация
+const arr = new AtomicArray<i32>(1024)          // нулями, размер 1024
+const arr = new AtomicArray<i32>([1, 2, 3, 4]) // из литерала — без двойного цикла
+const arr = new AtomicArray<i32>(existing)      // из i32[] — move, без двойного цикла
+
+arr.load(0, LoadOrdering.Acquire)              // i32
+arr.store(0, 42, StoreOrdering.Release)        // void
+arr.fetchAdd(0, 1, RmwOrdering.AcqRel)         // i32
+arr.compareExchange(0, expected, desired,
+    RmwOrdering.AcqRel,
+    LoadOrdering.Acquire
+)                                              // { success: boolean, value: i32 }
+arr.length                                     // i32 — bounds checking при каждом обращении
+```
+
+C-output (FAM — одна аллокация):
+```c
+struct AtomicArray_i32 {
+    atomic_size_t ref_count;
+    size_t length;
+    _Atomic int32_t data[];  // данные идут сразу за метаданными (C99 FAM)
+};
+// аллокация: malloc(sizeof(struct AtomicArray_i32) + sizeof(int32_t) * n)
+```
+
+Заметки компилятора:
+- **compareExchange zero-cost**: `const { success, value } = arr.compareExchange(...)` — компилятор не создаёт временную структуру на стеке, переменные используются напрямую
+- **Relaxed на x86/ARM практически бесплатен** — используй `RmwOrdering.Relaxed` для счётчиков профилировщика и статистики где порядок не важен; значительно быстрее чем JS `Atomics` который всегда использует более тяжёлую семантику
+- **Bounds checking**: `length` хранится в структуре — компилятор вставляет проверку индекса при каждом обращении к элементу
+
+##### Правила Thread.spawn (обновлено)
+
+| Тип | Разрешено | Поведение |
+|-----|-----------|-----------|
+| Owned `T` | ✅ | неявный move |
+| Примитив | ✅ | copy |
+| `Atomic<T>` | ✅ | retain/release автоматически |
+| `AtomicArray<T>` | ✅ | retain/release автоматически |
+| `Readonly<T>` | ✅ | retain/release автоматически |
+| `Ref<T>` / `Mut<T>` | ❌ | ошибка компилятора |
+| `Shared<T>` / `Weak<T>` | ❌ | ошибка компилятора |
+
+Только там где есть OS. Потоки работают как **изоляты** — без общей памяти. Связь через каналы с передачей владения или через `Atomic<T>`.
+
+##### channel<T>
+
+**Bounded MPMC** — кольцевой буфер, одна аллокация. Capacity обязателен.
+
+```typescript
+import { Thread, channel, select, after } from "std/threads"
+
+const [tx, rx] = channel<Message>(128)   // capacity = 128
+
+// sender
+await tx.send(msg)         // move владения в канал; ждёт если полный (backpressure)
+tx.trySend(msg)            // boolean — false если полный, не блокирует
+tx.close()                 // закрыть канал; получатель вычитает остаток, затем получает null
+
+// receiver
+const msg = await rx.recv()   // Message | null — null если канал закрыт и пуст
+rx.tryRecv()                  // Message | null — не блокирует
+```
+
+Ownership: `await tx.send(msg)` — move `msg` в канал. При удалении канала с непрочитанными элементами компилятор вызывает деструкторы всех оставшихся объектов.
+
+C-output — кольцевой буфер с MPMC:
+```c
+typedef struct {
+    pthread_mutex_t  mutex;
+    pthread_cond_t   not_full;
+    pthread_cond_t   not_empty;
+    void**           buf;          // ring buffer
+    size_t           capacity;
+    size_t           head, tail, count;
+    atomic_size_t    ref_count;
+    bool             closed;
+} Channel;
+```
+
+##### select
+
+Ждёт первого готового из нескольких каналов. Ровно одно поле результата non-null.
+
+```typescript
+const result = await select({
+    msg:     rx1.recv(),     // Message | null
+    err:     errCh.recv(),   // AppError | null
+    timeout: after(500)      // null — сигнал таймаута
+})
+
+if (result.msg)      handleMsg(result.msg)
+else if (result.err) handleErr(result.err)
+else                 handleTimeout()
+```
+
+`after(ms)` — Timer Task в event loop, не полноценный канал (нет аллокации буфера).
+
+Fairness: перед регистрацией callbacks компилятор обходит каналы в случайном порядке через `tryRecv()`. Если хотя бы один готов — возвращает сразу без регистрации в event loop.
+
+C-output — SelectState:
+```c
+typedef struct {
+    void*    channel;      // указатель на канал или таймер
+    void*    result_buf;   // куда писать значение
+    size_t   val_size;     // сколько байт копировать
+    int      arm_id;       // индекс → имя поля (msg=0, err=1, timeout=2)
+} SelectArm;
+
+typedef struct {
+    SelectArm*    arms;
+    size_t        count;
+    atomic_bool   resolved;   // CAS — только один arm побеждает
+    atomic_size_t ref_count;  // = count; каждый callback делает release()
+    void*         promise;    // резолвить при победе
+} SelectState;
+```
+
+Результат select — tagged union (экономия стека: в каждый момент заполнено ровно одно поле):
+```c
+struct SelectResult {
+    int arm_id;   // дискриминант: 0=msg, 1=err, 2=timeout
+    union {
+        Message*  msg;
+        AppError* err;
+        // для timeout поле не нужно
+    } data;
+};
+```
+Компилятор генерирует `SelectResult` по конкретному вызову `select{}` — типы в union известны на этапе компиляции.
+
+Жизненный цикл `SelectState`: `ref_count = arms_count`. Каждый callback (победитель или нет) делает `dec_ref`. Последний вошедший освобождает память. После победы одного — остальные отписываются от своих каналов.
+
+##### Readonly<T>
+
+Глубоко иммутабельная обёртка для zero-copy sharing крупных данных между потоками. Compile-time проверка: все поля рекурсивно должны быть примитивами, `string`, `Atomic<T>`, `AtomicArray<T>` или `Readonly<U>`. Любое мутабельное поле — ошибка компилятора.
+
+```typescript
+import { Readonly } from "std/threads"
+
+struct Config {
+    maxRetries: i32
+    timeout:    f64
+    hosts:      string[]
+}
+
+// создаём один раз — передаём во все потоки
+const cfg = new Readonly(new Config {
+    maxRetries: 3,
+    timeout:    5000.0,
+    hosts:      ["a.example.com", "b.example.com"]
+})
+
+Thread.spawn(() => {
+    // компилятор: cfg._retain() перед spawn
+    // компилятор: cfg._release() в конце потока
+    console.log(cfg.maxRetries)   // ✅ чтение безопасно из любого потока
+    cfg.maxRetries = 5            // ❌ ошибка компилятора: Readonly
+})
+```
+
+`new Readonly(obj)` — move `obj` внутрь. После этого исходный `obj` недоступен. Нельзя создать `Readonly<T>` если `T` содержит `Shared<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` или мутабельное поле — ошибка компилятора.
+
+C-output — одна аллокация (`atomic_size_t ref_count` + inline данные):
+```c
+struct Readonly_Config {
+    atomic_size_t ref_count;
+    Config data;               // данные сразу за счётчиком
+};
+// аллокация: malloc(sizeof(struct Readonly_Config))
+```
+
+Retain/release генерируется компилятором автоматически на границе `Thread.spawn`. `ref_count` доходит до нуля → вызов деструктора `data` → `free`.
+
+Зачем не `const`: `const` локальная переменная — это гарантия компилятора только в текущем потоке. `Readonly<T>`:
+1. **Thread-safe** — атомарный ref count, safe для `Thread.spawn`
+2. **Deep** — рекурсивная проверка; `const obj` может хранить `Shared<T>` внутри
+3. **Owned** — автоматическое управление памятью
+
+Типичное использование: конфиги, lookup-таблицы, скомпилированные шейдеры, статичные данные уровня — один раз создать, раздать во все потоки без копирования.
+
+```typescript
+// ✅ Readonly<T> с Atomic<T> внутри — допустимо
+struct Stats {
+    hits:   Atomic<i64>   // мутабельный, но сам по себе thread-safe
+    misses: Atomic<i64>
+}
+
+const stats = new Readonly(new Stats {
+    hits:   new Atomic<i64>(0),
+    misses: new Atomic<i64>(0)
+})
+
+// несколько потоков читают конфиг и пишут в атомики одновременно
+Thread.spawn(() => {
+    stats.hits.fetchAdd(1, RmwOrdering.Relaxed)   // ✅
+})
+```
+
+```typescript
+import { Thread, channel, select, after } from "std/threads"
 
 async function main(): void {
-    const [tx, rx] = channel<i32[]>();
+    const [tx, rx] = channel<i32[]>(64)
 
     const t = Thread.spawn(() => {
         // тяжёлые вычисления в отдельном потоке
-        const result = heavyComputation();
-        tx.send(result);  // move — передача владения через канал
-    });
+        const result = heavyComputation()
+        tx.send(result)   // move владения в канал
+    })
 
-    const result = await rx.recv();  // ждём результат из async-кода
+    const result = await rx.recv()   // ждём результат
     t.join();
     console.log(result);
 }
@@ -3283,9 +3725,11 @@ async function main(): void {
 |-----|-----------|-----------|
 | Owned `T` | ✅ | неявный move |
 | Примитив | ✅ | copy |
+| `Atomic<T>` | ✅ | retain/release автоматически |
+| `AtomicArray<T>` | ✅ | retain/release автоматически |
+| `Readonly<T>` | ✅ | retain/release автоматически |
 | `Ref<T>` / `Mut<T>` | ❌ | ошибка компилятора |
 | `Shared<T>` / `Weak<T>` | ❌ | ошибка компилятора |
-| `Readonly<T>` | ➡️ | v2 (не реализовано) |
 
 **Global State в контексте потоков:**
 
@@ -3303,33 +3747,139 @@ class Server {
 Компилятор проверяет захваченные переменные **на границе `Thread.spawn`**:
 - Мутабельный `let` или глобаль → ошибка компилятора
 - `Shared<T>` или `Weak<T>` → ошибка компилятора
+- `Ref<T>` / `Mut<T>` → ошибка компилятора
 - Owned `T` → неявный move
 - Примитив → copy
+- `Atomic<T>` / `AtomicArray<T>` / `Readonly<T>` → retain/release автоматически
 
 ---
 
 #### 3. @interrupt — только Embedded
 
-ISR — аппаратное прерывание. Не поток, не closure. Никакого захвата контекста, только работа с `@volatile` регистрами и `Atomic<T>`:
+ISR — аппаратное прерывание. Не поток, не closure. Никакого захвата контекста.
+
+##### Volatile<T> — регистры MMIO
+
+`Volatile<T>` гарантирует что каждое чтение/запись доходит до памяти (не кэшируется в регистр процессора). Транслируется в `volatile T*` в C. Используется исключительно для Memory-Mapped I/O.
 
 ```typescript
-@interrupt("TIMER0_OVF")
-function onTimer(): void {
-    PORTB ^= 0x01;  // toggle LED — только hardware registers
+import { Volatile, pointer } from "std/embedded"
+
+// описываем регистры периферии
+struct UartRegs {
+    dr:        Volatile<u32>   // Data Register
+    rsr:       Volatile<u32>   // Status Register
+    _reserved: u32[4]          // пропуск памяти
+    fr:        Volatile<u32>   // Flag Register
 }
 
-@interrupt("USART_RX")
-function onReceive(): void {
-    const byte = UDR0;  // volatile register read
-    rxBuffer.push_atomic(byte);  // Atomic<T> — ok
+// маппинг на физический адрес
+const UART0 = pointer<UartRegs>(0x101f1000)
+
+UART0.dr.write(0x41)              // C: *(volatile uint32_t*)0x101f1000 = 0x41
+const status = UART0.fr.read()   // C: *(volatile uint32_t*)0x101f1018 — не кэшируется
+```
+
+> `Volatile<T>` ≠ `Atomic<T>`: атомики используют инструкции синхронизации которые периферия не понимает. Для MMIO регистров — только `Volatile<T>`.
+
+Два гарантии `Volatile<T>`:
+1. **No cache** — каждое чтение/запись физически идёт на шину, не кэшируется в регистр процессора
+2. **No reordering** — компилятор не переставляет инструкции чтения/записи `Volatile<T>` относительно друг друга (критично для последовательности инициализации периферии)
+
+##### @interrupt
+
+```typescript
+import { Atomic, RmwOrdering } from "std/threads"
+
+static readonly irqCount = new Atomic<u32>(0)
+static readonly [tx, rx] = channel<Event>(32)
+
+@interrupt(14)    // номер вектора IRQ
+function onTimerInterrupt(): void {
+    // Atomic<T> — ok
+    irqCount.fetchAdd(1, RmwOrdering.Relaxed)
+
+    // channel trySend — ok (не блокирует)
+    tx.trySend(new Event(14))
+
+    // Volatile<T> — ok
+    TIMER_REG.sr.write(0x0)   // сброс флага прерывания
 }
 ```
 
-- Доступ к обычным переменным программы — ошибка компилятора
-- Доступ к `Shared<T>`, `Ref<T>`, owned объектам — ошибка компилятора
-- Доступ к `@volatile` и `Atomic<T>` — разрешён
+Компилятор генерирует платформенный атрибут:
+```c
+// GCC/Clang (ARM Cortex)
+__attribute__((interrupt("IRQ")))
+void onTimerInterrupt(void) { ... }
 
-`std/thread` на embedded targets — ошибка компилятора (нет OS).
+// AVR
+ISR(TIMER0_OVF_vect) { ... }
+```
+
+Context saving — полностью на стороне C компилятора через `__attribute__((interrupt))`. TSC не генерирует код сохранения регистров.
+
+##### Правила @interrupt
+
+| Операция | Разрешено |
+|----------|-----------|
+| `Atomic<T>` / `AtomicArray<T>` | ✅ |
+| `Volatile<T>` (MMIO) | ✅ |
+| `tx.trySend()` | ✅ (не блокирует) |
+| `await` | ❌ ошибка компилятора |
+| `new` (heap allocation) | ❌ ошибка компилятора |
+| `await tx.send()` (блокирующий) | ❌ ошибка компилятора |
+| Owned / `Shared<T>` / `Ref<T>` | ❌ ошибка компилятора |
+| Обычные переменные программы | ❌ ошибка компилятора |
+
+`std/threads` на embedded targets — ошибка компилятора (нет OS).
+
+##### std/sync — критические секции (embedded)
+
+Для безопасного доступа к составным данным которые меняет IRQ — временный запрет прерываний:
+
+```typescript
+import { interrupts } from "std/sync"
+
+interrupts.disable(() => {
+    // прерывания выключены на время выполнения лямбды
+    // гарантирует атомарность группы операций
+    const snapshot = sensorData.x  // читаем составную структуру безопасно
+    const y = sensorData.y
+    process(snapshot, y)
+})
+// прерывания автоматически включаются по выходу
+```
+
+C-output (платформозависимый):
+```c
+// ARM Cortex-M
+__asm volatile("cpsid i");   // disable interrupts
+{ /* тело лямбды */ }
+__asm volatile("cpsie i");   // enable interrupts
+
+// x86
+__asm volatile("cli");
+{ /* тело лямбды */ }
+__asm volatile("sti");
+
+// AVR
+uint8_t sreg = SREG; cli();
+{ /* тело лямбды */ }
+SREG = sreg;  // восстанавливаем флаги (не просто sei())
+```
+
+> Внутри `interrupts.disable()` те же ограничения что и в `@interrupt`: нет `await`, нет `new`.
+
+##### Итоговая таблица Low-level инструментов
+
+| Задача | TSC синтаксис | Гарантия |
+|--------|---------------|----------|
+| MMIO регистры | `Volatile<T>` | Прямое обращение к шине, no reorder |
+| Обработчик прерывания | `@interrupt(N)` | `__attribute__((interrupt))`, context saved |
+| Общее состояние с IRQ | `static Atomic<T>` | Атомарный доступ без гонок |
+| Составные данные с IRQ | `interrupts.disable()` | Критическая секция |
+| Связь IRQ → основной код | `channel.trySend()` | Передача без блокировки |
 
 ---
 
@@ -3344,44 +3894,591 @@ function onReceive(): void {
 │       └── Shared<T>/Weak<T> не атомарны              │
 │       └── Weak narrowing безопасен                   │
 │                                                      │
-│  std/thread ───── isolates ────── OS only            │
+│  std/threads ───── isolates ────── OS only            │
 │       │                                              │
-│       └── только owned/primitive через каналы        │
+│       ├── channel<T>: передача владения              │
+│       ├── Atomic<T> / AtomicArray<T>: shared счётчики│
+│       ├── Readonly<T>: zero-copy immutable sharing   │
 │       └── компилятор проверяет на Thread.spawn       │
 │                                                      │
 │  @interrupt ────── ISR ─────────── embedded only     │
 │       │                                              │
-│       └── только @volatile + Atomic<T>               │
+│       └── только Volatile<T> + Atomic<T>             │
 │       └── нет захвата контекста                      │
 └─────────────────────────────────────────────────────┘
 ```
 
 ### Standard Library
 
-> TBD
+#### Globals
 
----
+Глобальные объекты и функции — импорт не нужен.
 
-## Open Questions
+`console` и `process` — глобальные, импорт не нужен.
 
-- **Стандартная библиотека — что входит:**
-  - `std/io` — консоль, файлы
-  - `std/fs` — файловая система
-  - `std/net` — сеть, HTTP
-  - `std/math` — математика
-  - `std/string` — утилиты строк
-  - `std/collections` — дополнительные коллекции
-  - `std/thread` — потоки (уже есть)
-  - `std/env` — переменные окружения, аргументы
-  - `std/time` — работа со временем
-- **Concurrency (детальное обсуждение):**
-  - Async/await runtime — libuv или своя event loop реализация?
-  - `Atomic<T>` — какие операции? (`load`, `store`, `fetch_add`, CAS?)
-  - `channel<T>` — bounded vs unbounded? backpressure?
-  - `@interrupt` — как именно объявляются `@volatile` регистры?
-  - `Readonly<T>` (v2) — глубокая иммутабельность для передачи между потоками
-  - Structured concurrency — нужны ли `TaskGroup` / `withTaskGroup`?
-  - Отмена задач — `AbortSignal` или другой механизм?
+```typescript
+// console — все платформы
+console.log("hello")
+console.error("error")
+console.warn("warning")
+console.debug("debug")
+
+// таймеры — все платформы
+const id = setTimeout(() => console.log("hello"), 1000)  // i64 — id таймера
+clearTimeout(id)
+const tick = setInterval(() => update(), 100)             // i64 — id интервала
+clearInterval(tick)
+
+// sleep — все платформы (только внутри async)
+await sleep(500)   // пауза 500мс
+
+// высокоточный таймер — все платформы
+performance.now()  // f64 — миллисекунды с момента старта программы
+
+// process — только desktop/server
+process.exit(0)
+process.argv   // string[] — аргументы командной строки
+process.env    // Map<string, string> — переменные окружения
+```
+
+На **embedded** targets `process.*` — ошибка компилятора (нет OS, нет процесса). Вместо этого используются `std/serial`, `std/gpio` и др.
+
+Недоступно на embedded (требует OS):
+- `process.*`
+- `std/threads`
+
+Только для embedded:
+- `std/sync` — критические секции (`interrupts.disable()`)
+- `std/embedded` — `Volatile<T>`, `pointer<T>(addr)`
+
+#### process.stdin / stdout / stderr
+
+```typescript
+// stdin — async чтение
+const line = await process.stdin.readLine()   // string | null (null = EOF)
+const all  = await process.stdin.readAll()    // string
+
+// stdout / stderr — запись
+await process.stdout.write("hello")
+await process.stderr.write("error\n")
+```
+
+#### std/io
+
+Абстракция потоков — базовые интерфейсы `Reader` и `Writer`. Используются для построения поверх них (файлы, сеть, serial).
+
+```typescript
+import { Reader, Writer, Stream } from "std/io"
+
+interface Reader {
+    read(buf: u8[]): i32 | null throws IOError   // прочитать в буфер, null = EOF
+    readLine(): string | null throws IOError
+    readAll(): string throws IOError
+}
+
+interface Writer {
+    write(data: string): void throws IOError
+    write(data: u8[]): void throws IOError
+    flush(): void throws IOError
+}
+
+interface Stream extends Reader, Writer {}
+```
+
+`process.stdin` реализует `Reader`, `process.stdout` / `process.stderr` реализуют `Writer`.
+
+#### std/fs
+
+Все операции async. Реализация зависит от платформы:
+
+| Платформа | Реализация |
+|-----------|-----------|
+| Desktop/Server | POSIX / Windows API |
+| Embedded (SD карта) | FatFS |
+| Embedded (Flash) | LittleFS |
+
+```typescript
+import { fs } from "std/fs"
+
+// файлы
+const text = await fs.readFile("data.txt")            // string throws IOError
+const raw  = await fs.readFileBytes("data.bin")       // u8[] throws IOError
+await fs.writeFile("out.txt", "hello")                // void throws IOError
+await fs.writeFileBytes("out.bin", bytes)             // void throws IOError
+await fs.appendFile("log.txt", "new line\n")          // void throws IOError
+await fs.deleteFile("old.txt")                        // void throws IOError
+await fs.copyFile("src.txt", "dst.txt")               // void throws IOError
+await fs.moveFile("old.txt", "new.txt")               // void throws IOError
+
+// директории
+await fs.mkdir("mydir")                               // void throws IOError
+await fs.mkdir("a/b/c", { recursive: true })          // создать вложенные
+await fs.rmdir("mydir")                               // void throws IOError
+await fs.rmdir("mydir", { recursive: true })          // удалить со содержимым
+const entries = await fs.readDir(".")                 // DirEntry[] throws IOError
+
+// мета
+const exists = await fs.exists("file.txt")            // boolean
+const info   = await fs.stat("file.txt")              // FileStat throws IOError
+const isFile = await fs.isFile("file.txt")            // boolean
+const isDir  = await fs.isDir("mydir")                // boolean
+```
+
+Типы:
+
+```typescript
+struct DirEntry {
+    name: string        // имя файла/директории
+    path: string        // полный путь
+    isFile: boolean
+    isDir: boolean
+}
+
+struct FileStat {
+    size: i64           // размер в байтах
+    createdAt: Date
+    modifiedAt: Date
+    isFile: boolean
+    isDir: boolean
+}
+```
+
+#### std/net
+
+Реализация зависит от платформы: POSIX sockets на desktop/server, lwIP на embedded.
+
+##### fetch (глобальный)
+
+```typescript
+// GET
+const res = await fetch("https://api.example.com/users")
+const users = await res.json<User[]>()
+
+// POST
+const res = await fetch("https://api.example.com/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(user),
+})
+
+// Response
+res.status    // i32 — 200, 404, 500...
+res.ok        // boolean — status 200-299
+res.headers   // Map<string, string>
+await res.text()        // string throws NetworkError
+await res.json<T>()     // T throws NetworkError | ParseError
+await res.bytes()       // u8[] throws NetworkError
+```
+
+##### HTTP сервер
+
+```typescript
+import { HttpServer, HttpRequest, HttpResponse } from "std/net"
+
+const server = new HttpServer(async (req: HttpRequest, res: HttpResponse) => {
+    if (req.method === "GET" && req.path === "/") {
+        res.status = 200
+        res.headers.set("Content-Type", "text/plain")
+        await res.send("Hello, World!")
+    } else {
+        res.status = 404
+        await res.send("Not Found")
+    }
+})
+
+await server.listen(8080)
+console.log("listening on :8080")
+```
+
+```typescript
+struct HttpRequest {
+    method:  string               // "GET", "POST", ...
+    path:    string               // "/users/42"
+    headers: Map<string, string>
+    body:    string | null
+}
+
+struct HttpResponse {
+    let status:  i32
+    let headers: Map<string, string>
+    send(body: string): void throws IOError
+    send(body: u8[]): void throws IOError
+    json<T>(data: T): void throws IOError
+}
+```
+
+##### TCP сокеты
+
+```typescript
+import { TCPSocket, TCPServer } from "std/net"
+
+// клиент
+const socket = await TCPSocket.connect("localhost", 8080)  // throws NetworkError
+await socket.write("hello\n")
+const line = await socket.readLine()   // string | null
+socket.close()
+
+// сервер
+const server = new TCPServer()
+await server.listen(8080)
+while (true) {
+    const client = await server.accept()   // TCPSocket
+    const data = await client.readAll()
+    await client.write("ok")
+    client.close()
+}
+```
+
+##### UDP сокеты
+
+```typescript
+import { UDPSocket } from "std/net"
+
+const socket = new UDPSocket()
+await socket.bind(8080)
+
+// отправка
+await socket.send("192.168.1.1", 8080, bytes)
+
+// приём
+const { data, addr, port } = await socket.recv()  // throws NetworkError
+```
+
+#### std/ws
+
+WebSocket клиент и сервер. Работает на desktop/server и embedded (например ESP32 + lwIP).
+
+```typescript
+import { WebSocket, WebSocketServer } from "std/ws"
+
+// клиент
+const ws = await WebSocket.connect("ws://localhost:8080")  // throws NetworkError
+
+ws.onMessage((data: string) => {
+    console.log("received:", data)
+})
+
+ws.onClose(() => {
+    console.log("disconnected")
+})
+
+await ws.send("hello")
+await ws.close()
+
+// бинарные данные
+ws.onMessage((data: u8[]) => { ... })
+await ws.sendBytes(bytes)
+
+// сервер
+const server = new WebSocketServer()
+
+server.onConnect((client: WebSocket) => {
+    client.onMessage((data: string) => {
+        client.send(`echo: ${data}`)
+    })
+})
+
+await server.listen(8080)
+```
+
+#### std/math
+
+`Math` — глобальный объект, импорт не нужен.
+
+##### Константы
+
+```typescript
+Math.PI       // 3.141592653589793
+Math.E        // 2.718281828459045
+Math.SQRT2    // 1.4142135623730951
+Math.LN2      // 0.6931471805599453
+Math.LN10     // 2.302585092994046
+Math.LOG2E    // 1.4426950408889634
+Math.LOG10E   // 0.4342944819032518
+```
+
+##### Методы
+
+```typescript
+// округление
+Math.floor(4.7)       // f64 → f64 — 4.0
+Math.ceil(4.2)        // f64 → f64 — 5.0
+Math.round(4.5)       // f64 → f64 — 5.0
+Math.trunc(4.9)       // f64 → f64 — 4.0
+
+// арифметика
+Math.abs(-5)          // перегрузка: i32|f64 → тот же тип
+Math.pow(2.0, 10.0)   // f64 → f64 — 1024.0
+Math.sqrt(9.0)        // f64 → f64 — 3.0
+Math.cbrt(27.0)       // f64 → f64 — 3.0
+Math.hypot(3.0, 4.0)  // f64 → f64 — 5.0
+
+// тригонометрия (радианы)
+Math.sin(Math.PI / 2) // 1.0
+Math.cos(0.0)         // 1.0
+Math.tan(Math.PI / 4) // 1.0
+Math.asin(1.0)        // Math.PI / 2
+Math.acos(1.0)        // 0.0
+Math.atan(1.0)        // Math.PI / 4
+Math.atan2(1.0, 1.0)  // Math.PI / 4
+
+// логарифмы
+Math.log(Math.E)      // 1.0
+Math.log2(8.0)        // 3.0
+Math.log10(1000.0)    // 3.0
+Math.exp(1.0)         // Math.E
+
+// утилиты
+Math.min(3, 1, 4, 1)       // перегрузка: i32|f64 → тот же тип
+Math.max(3, 1, 4, 1)       // перегрузка: i32|f64 → тот же тип
+Math.clamp(15, 0, 10)      // перегрузка: i32|f64 → тот же тип — 10
+Math.sign(-5.0)            // f64 → f64 — -1.0
+Math.sign(0.0)             // 0.0
+Math.sign(5.0)             // 1.0
+
+// random (0..1, без seed)
+Math.random()              // f64 — [0.0, 1.0)
+```
+
+
+#### std/string
+
+##### Regex
+
+```typescript
+import { Regex } from "std/string"
+
+const re = new Regex("^\\d+$")
+const reLiteral = /^\d+$/          // литеральный синтаксис (как в JS)
+const reFlags = /hello/gi          // флаги: g, i, m
+
+re.test("123")                     // boolean
+re.match("hello world")            // string[] | null — все совпадения
+re.matchAll("aabbcc")              // string[][] — все группы
+re.replace("hello", "world")       // string
+re.replaceAll("aaa", "b")          // string
+re.split("a,b,c")                  // string[]
+```
+
+##### Кодирование
+
+```typescript
+import { base64, hex, url } from "std/string"
+
+// base64
+base64.encode(bytes: u8[]): string
+base64.decode(s: string): u8[] throws ParseError
+
+// hex
+hex.encode(bytes: u8[]): string     // "deadbeef"
+hex.decode(s: string): u8[] throws ParseError
+
+// URL
+url.encode(s: string): string       // "hello%20world"
+url.decode(s: string): string throws ParseError
+url.encodeComponent(s: string): string
+url.decodeComponent(s: string): string throws ParseError
+```
+
+##### Форматирование
+
+```typescript
+import { format } from "std/string"
+
+format("Hello %s, you are %d years old", name, age)   // string
+format("Pi is %.2f", Math.PI)                          // "Pi is 3.14"
+format("%05d", 42)                                     // "00042"
+
+// спецификаторы:
+// %s — string
+// %d — целое число
+// %f — float (%.Nf — N знаков после запятой)
+// %x — hex (нижний регистр)
+// %X — hex (верхний регистр)
+// %b — binary
+// %o — octal
+// %% — литеральный %
+```
+
+#### std/random
+
+`Math.random()` остаётся как JS-совместимое легаси. `std/random` — полноценный типизированный API.
+
+Единственный метод `next<T>` — тип параметра диктует поведение:
+
+```typescript
+rng.next<i32>()           // случайный i32 (весь диапазон)
+rng.next<i16>(0, 100)     // i16 в [0, 100)
+rng.next<u8>(0, 255)      // u8 в [0, 255)
+rng.next<f64>()           // f64 в [0.0, 1.0)
+rng.next<f32>(0.0, 5.0)   // f32 в [0.0, 5.0)
+rng.next<boolean>()       // boolean
+rng.next<u8[]>(16)        // u8[] длиной 16
+rng.next<i32[]>(10)       // i32[] длиной 10
+
+rng.shuffle(arr)          // перемешать массив на месте
+rng.pick<T>(arr)          // T | null — случайный элемент массива
+```
+
+##### Random (все платформы)
+
+```typescript
+import { Random } from "std/random"
+
+const rng = new Random()            // auto-seed из OS энтропии (desktop/server)
+                                    // на embedded — ошибка компилятора
+const rng = new Random(42)          // фиксированный seed — воспроизводимо (все платформы)
+
+const a = rng.next<i32>(0, 100)
+```
+
+##### SecureRandom — криптографически стойкий (desktop/server)
+
+```typescript
+import { SecureRandom } from "std/random"
+
+const secure = new SecureRandom()
+const key = secure.next<u8[]>(32)   // 32 случайных байта из OS
+// на embedded — ошибка компилятора
+```
+
+##### HardwareRandom — аппаратный источник (embedded)
+
+```typescript
+import { HardwareRandom } from "std/random"
+
+const hw = new HardwareRandom()     // ADC шум, аппаратный RNG, таймер
+const seed = hw.next<u32>()         // получить seed из железа
+const rng = new Random(seed)        // использовать как seed для Random
+// на desktop/server — ошибка компилятора
+```
+
+#### std/temporal
+
+Полноценная замена legacy `Date`. Основан на TC39 Temporal proposal. Все объекты **иммутабельны**. Месяцы **1-based** (январь = 1).
+
+```typescript
+import { PlainDate, PlainTime, PlainDateTime, Instant, ZonedDateTime, Duration, Now } from "std/temporal"
+```
+
+##### PlainDate
+
+```typescript
+const d = PlainDate.from("2024-03-20")
+const d = new PlainDate(2024, 3, 20)    // year, month (1-12), day
+
+d.year    // i32 — 2024
+d.month   // i32 — 3 (март, 1-based!)
+d.day     // i32 — 20
+d.dayOfWeek  // i32 — 1=пн, 7=вс
+
+d.add({ days: 10 })           // PlainDate
+d.subtract({ months: 1 })     // PlainDate
+d.until(other)                // Duration
+d.since(other)                // Duration
+d.toString()                  // "2024-03-20"
+```
+
+##### PlainTime
+
+```typescript
+const t = PlainTime.from("14:30:00")
+const t = new PlainTime(14, 30, 0)      // hour, minute, second
+
+t.hour    // i32
+t.minute  // i32
+t.second  // i32
+
+t.add({ hours: 2 })           // PlainTime
+t.toString()                  // "14:30:00"
+```
+
+##### PlainDateTime
+
+```typescript
+const dt = PlainDateTime.from("2024-03-20T14:30:00")
+const dt = new PlainDateTime(2024, 3, 20, 14, 30, 0)
+
+dt.date   // PlainDate
+dt.time   // PlainTime
+dt.year   // i32
+dt.month  // i32
+dt.day    // i32
+dt.hour   // i32
+dt.minute // i32
+dt.second // i32
+
+dt.add({ days: 1, hours: 2 })  // PlainDateTime
+dt.until(other)                // Duration
+dt.toString()                  // "2024-03-20T14:30:00"
+```
+
+##### Instant
+
+```typescript
+const i = Instant.from("2024-03-20T14:30:00Z")
+const i = Now.instant()         // текущий момент
+
+i.epochSeconds      // i64
+i.epochMilliseconds // i64
+i.epochNanoseconds  // i64
+
+i.add({ hours: 1 })    // Instant
+i.until(other)         // Duration
+i.toString()           // "2024-03-20T14:30:00Z"
+```
+
+##### Duration
+
+```typescript
+const dur = Duration.from({ years: 1, months: 2, days: 3, hours: 4 })
+
+dur.years   // i32
+dur.months  // i32
+dur.days    // i32
+dur.hours   // i32
+dur.minutes // i32
+dur.seconds // i32
+
+dur.total("hours")   // f64 — всё в часах
+dur.toString()       // "P1Y2M3DT4H"
+```
+
+##### ZonedDateTime (только desktop/server)
+
+```typescript
+import { ZonedDateTime } from "std/temporal"
+
+const zdt = ZonedDateTime.from("2024-03-20T14:30:00[Europe/Moscow]")
+const zdt = Now.zonedDateTime("Europe/Moscow")  // текущее время в timezone
+
+zdt.timeZone  // string — "Europe/Moscow"
+zdt.offset    // string — "+03:00"
+zdt.toPlainDateTime()   // PlainDateTime (без timezone)
+zdt.toInstant()         // Instant
+
+// на embedded — ошибка компилятора (нет tzdata)
+```
+
+##### Now
+
+```typescript
+Now.instant()                      // Instant — текущий момент UTC
+Now.plainDate()                    // PlainDate — сегодня (системный timezone)
+Now.plainTime()                    // PlainTime — текущее время
+Now.plainDateTime()                // PlainDateTime
+Now.zonedDateTime("Europe/Moscow") // ZonedDateTime (desktop/server only)
+```
+
+#### std/threads
+
+Только для desktop/server — на embedded ошибка компилятора (нет OS scheduler).
+
+Подробное описание API — в разделе [Concurrency → Threads (std/threads)](#2-threads-stdthread----продвинутый-уровень).
+
+```typescript
+import { Thread, channel } from "std/threads"
+```
 
 ---
 
@@ -3493,25 +4590,128 @@ doc/
 - [ ] Каждое правило и оператор записать в каталог раздела, в файл вида `[номер_раздела]_[название_раздела].md`
 - [ ] Собрать под каждое правило и оператор кодовую базу и записать в тот же файл
 
+---
+
+### Методология
+
+Каждый компонент реализуется по одному циклу:
+
+```
+1. Тесты    — написать test corpus (формат Этап 0):
+               входной .tsc → ожидаемый C output / ошибка компилятора
+2. Реализация — реализовать компонент до полного прохождения тестов
+3. Лог      — вести log/<компонент>.md: решения, проблемы, изменения дизайна
+```
+
+Структура файлов проекта:
+```
+doc/          — test corpus (Этап 0)
+log/          — логи компонентов
+src/          — исходный код компилятора
+```
+
+---
+
 ### Этап 1: Инфраструктура
-- [ ] Парсер (свой или swc)
-- [ ] AST → IR lowering
-- [ ] ScopeManager: ALIVE, MOVED, DROPPED
 
-### Этап 2: Кодогенерация структур
-- [ ] class/interface → struct в C
-- [ ] `_free` деструкторы
+Фундамент — без него ничего не работает.
 
-### Этап 3: Ownership анализ
-- [ ] Move при присваивании
-- [ ] Вставка `free()` в конце блоков
-- [ ] Эпилог cleanup
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Парсер (swc или свой) | `doc/parser/` | `log/parser.md` |
+| AST → IR lowering | `doc/ir/` | `log/ir.md` |
+| ScopeManager (ALIVE / MOVED / DROPPED) | `doc/scope/` | `log/scope.md` |
+| tsclang CLI (init, build, run, clean) | `doc/cli/` | `log/cli.md` |
 
-### Этап 4: Borrow Checker
-- [ ] `Ref<T>` / `Mut<T>` проверки
-- [ ] Scope Constraint
+---
 
-### Этап 5: ARC
-- [ ] Runtime: `RC_retain` / `RC_release`
-- [ ] `Shared<T>` тип
-- [ ] `Weak<T>` тип — weak ref, optional chaining при доступе
+### Этап 2: Базовая кодогенерация
+
+Простейший рабочий компилятор: типы, функции, управляющие конструкции.
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Примитивные типы (i8..u64, f32/f64, bool, string) | `doc/types/primitives/` | `log/types.md` |
+| Функции → C функции | `doc/functions/` | `log/functions.md` |
+| struct / class / interface → C struct + `_free` | `doc/structs/` | `log/structs.md` |
+| enum → C typedef + string tables | `doc/enums/` | `log/enums.md` |
+| if / else / ternary | `doc/control/if/` | `log/control.md` |
+| for / while / do-while / labeled break | `doc/control/loops/` | `log/control.md` |
+| switch / case | `doc/control/switch/` | `log/control.md` |
+| match (pattern matching) | `doc/control/match/` | `log/control.md` |
+| Операторы и приоритеты | `doc/operators/` | `log/operators.md` |
+
+---
+
+### Этап 3: Система типов
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Номинальная типизация | `doc/typesystem/nominal/` | `log/typesystem.md` |
+| Type inference | `doc/typesystem/inference/` | `log/typesystem.md` |
+| Generics → монорфизация | `doc/typesystem/generics/` | `log/generics.md` |
+| Перегрузка функций | `doc/typesystem/overloads/` | `log/overloads.md` |
+| Result\<T,E\> + оператор `?` | `doc/errors/` | `log/errors.md` |
+
+---
+
+### Этап 4: Ownership & Borrow Checker
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Move при присваивании | `doc/ownership/move/` | `log/ownership.md` |
+| Вставка `_free` / `free()` в конце блоков | `doc/ownership/free/` | `log/ownership.md` |
+| Эпилог cleanup (early return, throw) | `doc/ownership/epilog/` | `log/ownership.md` |
+| `Ref<T>` / `Mut<T>` — borrow check | `doc/borrow/` | `log/borrow.md` |
+| Scope Constraint | `doc/borrow/scope/` | `log/borrow.md` |
+
+---
+
+### Этап 5: ARC & Thread-Safety
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| `Shared<T>` — ARC retain/release | `doc/arc/shared/` | `log/arc.md` |
+| `Weak<T>` — weak ref + narrowing | `doc/arc/weak/` | `log/arc.md` |
+| `Atomic<T>` / `AtomicArray<T>` | `doc/threads/atomic/` | `log/threads.md` |
+| `Readonly<T>` — deep immutability | `doc/threads/readonly/` | `log/threads.md` |
+| `Thread.spawn` + capture rules | `doc/threads/spawn/` | `log/threads.md` |
+| `channel<T>` + `select` | `doc/threads/channel/` | `log/threads.md` |
+| `@interrupt` + `Volatile<T>` + `std/sync` | `doc/embedded/interrupt/` | `log/embedded.md` |
+
+---
+
+### Этап 6: Async/Await
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| async/await → state machine codegen | `doc/async/statemachine/` | `log/async.md` |
+| `Promise<T>` — explicit/implicit | `doc/async/promise/` | `log/async.md` |
+| `Promise.all/any/race/allSettled` | `doc/async/promise_combinators/` | `log/async.md` |
+| `AbortSignal` / `AbortController` | `doc/async/abort/` | `log/async.md` |
+| Runtime интеграция (libuv / io_uring / embedded poll) | `doc/async/runtime/` | `log/async_runtime.md` |
+
+---
+
+### Этап 7: Standard Library
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Globals: console, setTimeout, Math, Date, JSON, fetch | `doc/stdlib/globals/` | `log/stdlib.md` |
+| `std/io` | `doc/stdlib/io/` | `log/stdlib.md` |
+| `std/fs` | `doc/stdlib/fs/` | `log/stdlib.md` |
+| `std/net` + `std/ws` | `doc/stdlib/net/` | `log/stdlib.md` |
+| `std/string` + `std/math` + `std/random` | `doc/stdlib/utils/` | `log/stdlib.md` |
+| `std/temporal` | `doc/stdlib/temporal/` | `log/stdlib.md` |
+| `std/embedded` | `doc/stdlib/embedded/` | `log/embedded.md` |
+
+---
+
+### Этап 8: Package Manager
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| `tsc.packages.json` — парсинг и валидация | `doc/pkg/config/` | `log/pkg.md` |
+| `tsclang install` — pkg-config / git / url зависимости | `doc/pkg/install/` | `log/pkg.md` |
+| `tsclang update` — обновление зависимостей | `doc/pkg/update/` | `log/pkg.md` |
+| CMakeLists.txt генерация | `doc/pkg/cmake/` | `log/pkg.md` |
