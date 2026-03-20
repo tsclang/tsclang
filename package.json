@@ -1,6 +1,6 @@
 {
-  "name": "@tsclang/tsclang",
-  "version": "0.0.2",
+  "name": "tsclang",
+  "version": "0.0.1",
   "description": "TypeScript like code language for transpiling to C",
   "publishConfig": {
     "access": "public"
