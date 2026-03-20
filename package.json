@@ -1,0 +1,26 @@
+{
+  "name": "@tsclang/tsclang",
+  "version": "0.0.1",
+  "description": "TypeScript like code language for transpiling to C",
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/tsclang/tsclang#readme",
+  "bugs": {
+    "url": "https://github.com/tsclang/tsclang/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsclang/tsclang.git"
+  },
+  "license": "MIT",
+  "author": "fwmakc",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "tsclang": "./bin/index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
