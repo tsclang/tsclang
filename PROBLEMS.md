@@ -104,42 +104,28 @@ arr.capacity = 200      // ✅ — записывается напрямую
 
 `Shared<T>` остаётся строго read-only. Это сильная гарантия, не ограничение.
 
-### 3.3 Deconstructuring — нет partial move
+### 3.3 ~~Deconstructuring — нет partial move~~ ✅ РЕШЕНО
 
-```typescript
-const { name } = user    // всегда Ref<string> — borrow
-const name: string = user.name  // move — только через явную аннотацию
-```
+**Решение:** три правила:
 
-Нет синтаксиса для partial move через деструктуризацию. В Rust `let User { name, age } = user` — это partial move. В TSC деструктуризация всегда создаёт borrows. Это вынуждает писать дополнительный код при построении нового объекта из полей старого.
+1. **Деструктуризация без аннотации** — всегда borrow: `const { name, age } = user` → `name: Ref<string>, age: i32`
+2. **Деструктуризация с аннотацией типа на паттерн** — move: `const { name, age }: { name: string; age: i32 } = user` → name moved, age copied. Линтер предупреждает.
+3. **Деструктуризация в `match`** — всегда move: match потребляет значение целиком, все ветки exhaustive. Явный borrow через `{ field: Ref<T> }`.
 
-### 3.4 Cleanup при `throw` — код дублируется квадратично
+Дополнительно: переименование в зарезервированное имя типа (`{ name: string }`) — ошибка компилятора.
 
-```c
-// сгенерировано:
-Foo* a = Foo_new();
-Bar* b = Bar_new();
-if (!_r.ok) {
-    Foo_free(a);  // ← дубль
-    Bar_free(b);  // ← дубль
-    return ...;
-}
-use(a, b);
-Foo_free(a);
-Bar_free(b);
-```
+### 3.4 ~~Cleanup при `throw` — код дублируется квадратично~~ ✅ РЕШЕНО
 
-Cleanup-код дублируется для каждой `?`-точки. Для функции с N owned переменных и M точек propagation — O(N×M) строк cleanup в C. Rust решает через единую `drop` точку в конце scope. Альтернатива: `goto cleanup` подход с флагами.
+**Решение:** `goto cleanup` — единая точка очистки, O(N+M) вместо O(N×M). Все owned указатели объявляются `NULL` в начале функции (C99-совместимо). Loop-local переменные — inline free перед `goto`. Вложенные scopes — scope-local переменные освобождаются inline, outer через `cleanup`. Подробно с примерами — CONCEPT.md §"Стратегия cleanup при throw / ?".
 
-### 3.5 `any` — не различает owned vs borrowed
+### 3.5 ~~`any` — не различает owned vs borrowed~~ ✅ РЕШЕНО
 
-```typescript
-function getFromC(): any { ... }
-let val: any = getFromC()
-// это owned pointer? borrowed? stack pointer?
-```
+**Решение:** `.d.tsc` файлы — C interop через типизированные декларации. Три вида:
+1. `declare type Foo = { ... }` — C struct с известным layout (уже работало)
+2. `declare opaque type Foo { destructor: c_free_fn }` — opaque handle, компилятор вызывает деструктор через `goto cleanup`
+3. `declare function` с bare `T` (owned) или `Ref<T>` (borrowed) — существующая ownership система
 
-`any` = `void*`, borrow checker отключён. Нет способа пометить "это owned any" (нужен `free`) vs "это borrowed any" (не нужен `free`). C interop — главный источник memory bugs, и текущий подход создаёт неотслеживаемые утечки и dangling pointers.
+`any` остаётся как escape hatch для случаев с непоследовательным C ownership. Подробно — CONCEPT.md §"Синтаксис .d.tsc файлов".
 
 ---
 
