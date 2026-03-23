@@ -131,46 +131,21 @@ arr.capacity = 200      // ✅ — записывается напрямую
 
 ## 4. Async — незамеченные проблемы
 
-### 4.1 Размер state machine на embedded — риск stack overflow
+### 4.1 ~~Размер state machine на embedded — риск stack overflow~~ ✅ РЕШЕНО
 
-```typescript
-async function complexOp(): Result {
-    const a = await step1()   // переменная живёт через все await
-    const b = await step2(a)
-    const c = await step3(b)
-    // ... 10+ await точек
-}
-```
+**Решение:** компилятор минимизирует struct — только переменные живые через хотя бы один await. Статический анализ worst-case async stack: обход графа вызовов, сумма sizeof по глубочайшему пути. При наличии `stack_size` в platform profile — превышение = ошибка компилятора с указанием виновника. Флаг `--report-stack` для профилирования без сборки. Подробно — CONCEPT.md §"State machine size и stack safety на embedded".
 
-State machine на стеке включает ВСЕ локальные переменные живые через любой await. На AVR ATmega328p стек — 2KB. Несколько вложенных async вызовов легко переполняют стек без предупреждения. Компилятор должен вычислять и выдавать worst-case stack usage для embedded.
+### 4.2 ~~`Promise.all` с разными типами ошибок — не специфицировано~~ ✅ РЕШЕНО
 
-### 4.2 `Promise.all` с разными типами ошибок — не специфицировано
+**Решение:** throws-union — специальный случай, допустим только в позиции `throws` (не как тип значения). Компилятор выводит union из ошибок всех входящих промисов. Fail-fast: первая ошибка по порядку индекса в массиве побеждает (на однопоточном event loop истинной одновременности нет). Для сбора всех ошибок — `Promise.allSettled` с типизированным кортежем результатов. Подробно — CONCEPT.md §"Promise.all" и §"Promise.allSettled".
 
-```typescript
-async function a(): void throws IOError { ... }
-async function b(): void throws NetworkError { ... }
-await Promise.all([a(), b()])  // throws... что?
-```
+### 4.3 ~~`AbortSignal` + однопоточный event loop — `atomic_bool` лишний~~ ✅ РЕШЕНО
 
-Если обе кидают разные ошибки — Promise.all должен кидать `IOError | NetworkError`. Не описано. Если `a()` упала а `b()` нет — теряется ли ошибка b? Нужна явная спецификация error union для Promise.all.
+**Решение:** `AbortSignal` — `Readonly<>`, может быть отправлен в `Thread.spawn`. Значит `abort()` может прийти из worker thread → `atomic_bool` оправдан на desktop. На embedded нет threads → компилятор генерирует `bool`. Это платформо-зависимый C-output, как с `usize`. Подробно — CONCEPT.md §"Отмена задач — AbortSignal".
 
-### 4.3 `AbortSignal` + однопоточный event loop — `atomic_bool` лишний
+### 4.4 ~~`onAbort` callback — race condition при threads~~ ✅ РЕШЕНО
 
-```c
-struct AbortSignal {
-    atomic_bool aborted;  // ← зачем если single-threaded?
-};
-```
-
-Декларируется что event loop однопоточный и `Shared<T>` поэтому не атомарен. Но AbortSignal использует `atomic_bool`. Либо event loop НЕ гарантированно однопоточный (противоречие), либо `atomic_bool` — лишний overhead. На embedded это значимо.
-
-### 4.4 `onAbort` callback — race condition при threads
-
-```typescript
-signal.onAbort(() => close(fd))  // вызывается синхронно в потоке abort()
-```
-
-Если `abort()` вызван из worker thread — callback выполняется в worker thread, пока основной поток может быть в середине state machine. Это race condition без предупреждения компилятора, даже несмотря на запрет `await` внутри callback.
+**Решение:** `abort()` никогда не выполняет callbacks синхронно. Он только атомарно ставит флаг и планирует callbacks на event loop. Callbacks всегда выполняются в event loop-контексте — независимо откуда вызван `abort()`. Гонка невозможна.
 
 ---
 
@@ -373,12 +348,12 @@ Spec: "если `Atomic<T>` не уходит в `Thread.spawn` — размещ
 | 8 | ~~`Promise.then()` используется, не определён~~ | ✅ решено | — |
 | 9 | Async closures не специфицированы | 🟠 серьёзная | Средняя |
 | 10 | ~~Thread.spawn — нет рекурсивного Send-check~~ | ✅ решено | — |
-| 11 | `select` не type-safe | 🟠 серьёзная | Высокая |
-| 12 | `Shared<T>` без interior mutability | 🟠 серьёзная | Высокая |
+| 11 | ~~`select` не type-safe~~ | ✅ решено | — |
+| 12 | ~~`Shared<T>` без interior mutability~~ | ✅ решено | — |
 | 13 | `new Array(N)` ломает JS-код | 🟠 серьёзная | Низкая |
 | 14 | ~~Entry point detection — `async function main()`~~ | ✅ решено | — |
 | 15 | ~~Тип замыкания с `Mut<T>` захватом~~ | ✅ решено | — |
-| 16 | State machine size на embedded — риск stack overflow | 🟡 важная | Средняя |
+| 16 | ~~State machine size на embedded — риск stack overflow~~ | ✅ решено | — |
 | 17 | `Date` 0-indexed vs Temporal 1-indexed | 🟡 важная | Низкая |
 | 18 | `Reader.read(buf)` — move вместо Mut | 🟡 важная | Низкая |
 | 19 | `??` conditional move — borrow checker underspecified | 🟡 важная | Высокая |

@@ -4747,6 +4747,47 @@ typedef struct { int _state; /* захваченные переменные */ }
 bool FetchUserTask_poll(FetchUserTask* t) { switch (t->_state) { ... } }
 ```
 
+##### State machine size и stack safety на embedded
+
+State machine struct содержит только переменные, **живые через хотя бы один await**. Переменная, использованная до await и больше не нужная, в struct не попадает — компилятор минимизирует размер автоматически:
+
+```typescript
+async function op(): Result {
+    const tmp = heavyCompute()    // tmp не переживает await → НЕ попадает в struct
+    const a = await step1(tmp)    // tmp мёртв здесь
+    const b = await step2(a)      // struct: { _state, a, b } — только живые
+}
+```
+
+**Статический анализ worst-case async stack:**
+
+Компилятор обходит граф async-вызовов и суммирует `sizeof` всех state machine по глубочайшему пути. Если платформа имеет `stack_size` в профиле — превышение является ошибкой компилятора:
+
+```
+error: async call stack exceeds platform limit (256 bytes)
+  op: 12 bytes
+  └─ step2: 8 bytes
+       └─ fetchRaw: 244 bytes  ← виновник
+hint: reduce live variables across await in fetchRaw
+      use --report-stack to see full breakdown
+```
+
+Флаг `--report-stack` выводит полную картину без сборки:
+
+```
+tsclang build --report-stack
+
+Async stack usage:
+  main              4 B
+  └─ op            12 B
+       └─ step1     8 B
+       └─ step2     8 B
+            └─ fetchRaw  244 B  ⚠️  near limit
+  Total worst-case: 276 B  ❌  exceeds stack_size: 256 B
+```
+
+Новый синтаксис не требуется — только диагностика компилятора.
+
 ##### Promise<T>
 
 Тип возвращаемого значения `async` функции — `Promise<T>`. Обе записи эквивалентны:
@@ -4840,8 +4881,29 @@ const [a, b, c] = await Promise.all([taskA(), taskB(), taskC()]);
 ```
 
 - Все задачи запускаются одновременно, ждём завершения всех
-- Если любая задача завершается ошибкой — `Promise.all` бросает эту ошибку, остальные отменяются
+- Fail-fast: первая ошибка побеждает, остальные задачи отменяются через AbortSignal
 - Типы элементов выводятся компилятором из переданных Promise
+
+**Throws-union:** если промисы бросают разные типы ошибок — компилятор выводит их union. Throws-union допустим только в позиции `throws` (не как тип значения), все члены обязаны наследовать `Error`:
+
+```typescript
+async function a(): void throws IOError { ... }
+async function b(): void throws NetworkError { ... }
+
+// компилятор выводит: throws IOError | NetworkError
+await Promise.all([a(), b()])
+
+try {
+    await Promise.all([a(), b()])
+} catch (e) {
+    if (e instanceof IOError) { ... }
+    else if (e instanceof NetworkError) { ... }
+}
+```
+
+Если все промисы бросают одно и то же — union схлопывается в один тип.
+
+**Порядок при "одновременном" падении:** на однопоточном event loop истинной одновременности нет — порядок обработки детерминирован. Если несколько промисов упали в одном тике, первым обрабатывается тот, чей индекс в массиве меньше. Остальные ошибки теряются. Для сбора всех ошибок используй `Promise.allSettled`.
 
 ##### Promise.any
 
@@ -4886,21 +4948,30 @@ const result = await Promise.race([
 Ждёт **всех**, собирает результаты включая ошибки — никогда не бросает:
 
 ```typescript
-type SettledResult<T> =
-    | { status: "fulfilled", value: T }
-    | { status: "rejected",  reason: Error }
+type SettledResult<T, E extends Error> =
+    | { status: "fulfilled"; value: T }
+    | { status: "rejected";  error: E }
+```
 
-const results = await Promise.allSettled([taskA(), taskB(), taskC()])
+Возвращает **кортеж** — каждый элемент типизирован по своему промису:
 
-for (const r of results) {
-    if (r.status == "fulfilled") console.log(r.value)
-    else                         console.error(r.reason)
+```typescript
+async function fetchUser(id: i32): User throws NetworkError { ... }
+async function validateForm(data: FormData): void throws ValidationError { ... }
+
+const [r1, r2] = await Promise.allSettled([fetchUser(1), validateForm(data)])
+// r1: SettledResult<User, NetworkError>
+// r2: SettledResult<void, ValidationError>
+
+match (r1) {
+    { status: "fulfilled", value } => console.log(value.name)
+    { status: "rejected",  error } => console.log(error.message)  // error: NetworkError
 }
 ```
 
-- Всегда завершается успехом
-- Возвращает `SettledResult<T>[]` — по одному элементу на каждую задачу
+- Никогда не бросает — все ошибки в результате
 - Порядок результатов соответствует порядку задач в массиве
+- Используй когда нужно знать результат каждой задачи независимо от других
 
 **Сравнительная таблица:**
 
@@ -5097,14 +5168,32 @@ case STATE_CLEANUP:
     break;
 ```
 
-C-output — `AbortSignal` это `Readonly`-подобная структура:
+C-output — зависит от платформы. `AbortSignal` может быть отправлен в `Thread.spawn` (он `Readonly<>`), поэтому `abort()` может прийти из worker thread — отсюда `atomic_bool` на desktop:
+
 ```c
+/* desktop — abort() может быть вызван из worker thread */
 struct AbortSignal {
-    atomic_bool  aborted;
-    Error*       reason;       // null если нет причины
-    AbortCallback* callbacks;  // linked list onAbort-обработчиков
+    atomic_bool    aborted;
+    Error*         reason;       // null если нет причины
+    AbortCallback* callbacks;    // linked list onAbort-обработчиков
+};
+
+/* embedded — нет threads, plain bool достаточно */
+struct AbortSignal {
+    bool           aborted;
+    AbortCallback* callbacks;
+    /* reason убран — на embedded нет heap для Error* */
 };
 ```
+
+**`abort()` никогда не выполняет callbacks синхронно** — независимо от того, откуда вызван (event loop или worker thread). Он только атомарно ставит флаг и планирует callbacks на event loop:
+
+```
+Worker thread:   abort() → atomic set aborted=true → schedule callbacks на event loop
+Event loop:      следующий тик → выполняет onAbort callbacks в своём контексте
+```
+
+Это гарантирует отсутствие гонки: callbacks всегда выполняются в event loop, даже если `abort()` вызван из другого потока.
 
 **Взаимодействие с `Promise.race`:**
 ```typescript
@@ -6560,7 +6649,7 @@ export function computed<T>(deps: Mut<Signal<any>>[], fn: () => T): Signal<T> {
 
 ## Roadmap
 
-### Этап 0: Подготовка
+### Подготовка
 
 Нужно выявить потенциальные проблемы дизайна.
 
@@ -6690,7 +6779,11 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 1: Инфраструктура
+### Этапы
+
+---
+
+#### Инфраструктура
 
 Фундамент — без него ничего не работает.
 
@@ -6703,7 +6796,7 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 2: Базовая кодогенерация
+#### Базовая кодогенерация
 
 Простейший рабочий компилятор: типы, функции, управляющие конструкции.
 
@@ -6723,7 +6816,16 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 3: Package Manager (базовый)
+#### Standard Library (базовый)
+
+| Компонент | Тесты | Лог |
+|-----------|-------|-----|
+| Globals: console, setTimeout, Math, Date, JSON, fetch | `doc/stdlib/globals/` | `log/stdlib.md` |
+| `std/string` + `std/math` + `std/random` | `doc/stdlib/utils/` | `log/stdlib.md` |
+
+---
+
+#### Package Manager (базовый)
 
 Минимум для сборки — чтобы как можно раньше видеть рабочий C-код.
 
@@ -6739,7 +6841,7 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 4: Система типов
+#### Система типов
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
@@ -6751,7 +6853,7 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 5: Ownership & Borrow Checker
+#### Ownership & Borrow Checker
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
@@ -6763,7 +6865,7 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 6: ARC & Thread-Safety
+#### ARC & Thread-Safety
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
@@ -6777,7 +6879,7 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 7: Async/Await
+#### Async/Await
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
@@ -6789,21 +6891,19 @@ src/          — исходный код компилятора
 
 ---
 
-### Этап 8: Standard Library
+#### Standard Library (полный)
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
-| Globals: console, setTimeout, Math, Date, JSON, fetch | `doc/stdlib/globals/` | `log/stdlib.md` |
 | `std/io` | `doc/stdlib/io/` | `log/stdlib.md` |
 | `std/fs` | `doc/stdlib/fs/` | `log/stdlib.md` |
 | `std/net` + `std/ws` | `doc/stdlib/net/` | `log/stdlib.md` |
-| `std/string` + `std/math` + `std/random` | `doc/stdlib/utils/` | `log/stdlib.md` |
 | `std/temporal` | `doc/stdlib/temporal/` | `log/stdlib.md` |
 | `std/embedded` | `doc/stdlib/embedded/` | `log/embedded.md` |
 
 ---
 
-### Этап 9: Package Manager (полный)
+#### Package Manager (полный)
 
 | Компонент | Тесты | Лог |
 |-----------|-------|-----|
