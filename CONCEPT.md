@@ -60,6 +60,8 @@ let a: number = 10  // — валидно и в TS, и в TSClang
 
 A TypeScript-inspired language that compiles to C and auto-generates build files (CMakeLists.txt).
 
+Dependency/library management.
+
 - File extension: `.tsc`
 - CLI: `tsclang`
 - Output: `.c` / `.h` files + `CMakeLists.txt`
@@ -91,81 +93,6 @@ tsclang --version
 npx tsclang build
 ```
 
-### CLI — команды
-
-```bash
-tsclang build               # компиляция проекта
-tsclang build --release     # с оптимизациями
-
-tsclang dev                 # watch mode: следит за файлами, пересобирает и перезапускает при изменении
-tsclang dev --target avr    # то же для embedded: пересобирает и прошивает через avrdude/openocd
-
-tsclang format              # форматирует код
-tsclang format --check      # проверяет форматирование без изменений (для CI)
-
-tsclang install @scope/pkg  # установить пакет
-tsclang install             # установить все зависимости из tsc.packages.json
-
-tsclang lint                # проверить код линтером (детали TBD)
-```
-
-**`tsclang dev` — детали:**
-- File watcher: inotify (Linux) / FSEvents (macOS) / ReadDirectoryChangesW (Windows)
-- Инкрементальная сборка — пересобирает только изменённые файлы
-- Desktop: kill старого процесса + запуск нового
-- Embedded (`--target avr` и др.): пересборка + автоматическая прошивка
-
----
-
-## Core Goals
-
-- [ ] TypeScript-like syntax and type system
-- [ ] Compiles to readable, idiomatic C
-- [ ] Auto-generates CMakeLists.txt
-- [ ] Dependency/library management
-
----
-
-## Tooling — открытые вопросы
-
-Инструменты спроектированы на уровне интерфейса, детали реализации не определены.
-
-### Форматтер
-
-`tsclang format` / `tsclang format --check` — концепция ясна (см. §Форматирование), детали не определены:
-
-- [ ] Конфигурируемый стиль или единый (как gofmt)?
-- [ ] Интеграция с prettier/editorconfig?
-- [ ] Формат конфига (в `tsc.packages.json` или отдельный файл)?
-
-### Линтер
-
-Упоминается в концепте (`--lint`, рекомендации по `implements` vs `extends`, `-Wformat` для printf и др.), но как отдельный инструмент не специфицирован:
-
-- [ ] Встроен в компилятор (`tsclang lint`) или отдельный пакет?
-- [ ] Набор правил по умолчанию
-- [ ] Конфигурация — какие предупреждения включены/отключены
-- [ ] Интеграция с IDE (LSP diagnostics)
-- [ ] Связь с `@allow-native` / `@allow-unsafe` — как линтер их видит?
-
-### Hot Reload / Hot Restart
-
-Реализуется через `tsclang dev` — команда CLI, не механизм компилятора. Никаких аннотаций и специальной кодогенерации не требуется.
-
-**Workflow:**
-1. Разработчик запускает `tsclang dev`
-2. Код компилируется и запускается автоматически
-3. Разработчик сохраняет файл в IDE
-4. `tsclang dev` обнаруживает изменение → инкрементальная пересборка → перезапуск
-
-**Desktop** — пересборка + kill + restart процесса.
-**Embedded** — пересборка + автоматическая прошивка через avrdude/openocd.
-
-Открытые вопросы:
-- [ ] Сохранение состояния между перезапусками (нужно ли? как?)
-- [ ] Скорость инкрементальной сборки при большом проекте
-- [ ] Конфигурация — какой процесс запускать, аргументы, env
-
 ---
 
 ## Design Decisions
@@ -177,16 +104,15 @@ tsclang lint                # проверить код линтером (дет
 Форматирование — **никогда не ошибка компилятора**. Компилятор проверяет только семантику. Форматирование — отдельный инструмент:
 
 ```bash
-tsclang format          # форматирует код на месте
-tsclang format --check  # проверяет без изменений — для CI
+tsclang lint          # проверяет без изменений — для CI
+tsclang lint -fix     # форматирует код на месте
 ```
 
 | Инструмент | Роль |
 |---|---|
-| `tsclang build` | только семантические ошибки, форматирование игнорируется |
-| `tsclang format` | форматирует код (как prettier / gofmt) |
-| `tsclang format --check` | CI-проверка — exit code 1 если не отформатировано |
-| Линтер | предупреждения о стиле — опционально |
+| `tsclang build` | семантические ошибки, форматирование игнорируется |
+| `tsclang lint` | семантические ошибки, предупреждения о стиле, CI-проверка — exit code 1 если нарушены правила |
+| `tsclang lint -fix` | форматирует код (как prettier / gofmt) |
 | IDE | format-on-save через плагин |
 
 Это позволяет language server (автодополнение, типы, рефакторинг) работать корректно пока разработчик пишет незаконченный или неотформатированный код.
@@ -3797,6 +3723,74 @@ tsclang install @types/openssl
 import { sqlite3_open } from "sqlite3"  // резолвится через @types/sqlite3
 ```
 
+#### Импорт C-библиотек — два сценария
+
+C-библиотека и её TSClang-декларации — это два разных аспекта. В отличие от JS/TS, C-код не поставляется вместе с типами автоматически.
+
+**Сценарий А: системная библиотека**
+
+Библиотека установлена на системе (`apt install libsqlite3-dev`, `brew install sqlite3`). TSClang только добавляет декларации и информацию о линковке:
+
+```bash
+tsclang install @types/sqlite3   # только .d.tsc + declare link
+```
+
+```typescript
+import { sqlite3_open } from "sqlite3"   // резолвится через @types/sqlite3
+```
+
+`@types/sqlite3` содержит `declare link` — компилятор добавляет `-lsqlite3` в CMakeLists.txt:
+
+```typescript
+// @types/sqlite3/index.d.tsc
+declare link {
+    libs: ["sqlite3"]            // → target_link_libraries(myapp sqlite3)
+    pkg_config: "sqlite3"        // использует pkg-config если доступен
+}
+
+declare opaque type SqliteDb { destructor: sqlite3_close }
+declare function sqlite3_open(path: string): SqliteDb
+// ...
+```
+
+**Сценарий Б: бандлированная библиотека**
+
+Пакет содержит и `.d.tsc` и сам C-код (`sqlite3.c`). Никакой системной зависимости — компилируется как часть проекта:
+
+```bash
+tsclang install @sqlite/sqlite3  # содержит sqlite3.c + index.d.tsc
+```
+
+```typescript
+import { sqlite3_open } from "@sqlite/sqlite3"
+```
+
+Пакет содержит `sqlite3.c`, `sqlite3.h` и `index.d.tsc`. Вся информация о компиляции — в `declare link` внутри `.d.tsc`:
+
+```typescript
+// @sqlite/sqlite3/index.d.tsc
+declare link {
+    c_sources: ["sqlite3.c"]     // C-файлы компилируются как часть проекта
+    c_includes: ["."]            // include директории
+}
+
+declare opaque type SqliteDb { destructor: sqlite3_close }
+declare function sqlite3_open(path: string): SqliteDb
+// ...
+```
+
+TSClang добавляет `sqlite3.c` в `CMakeLists.txt` как обычный source file. Для embedded — единственный практичный вариант (нет системного менеджера пакетов).
+
+**Сравнение сценариев:**
+
+| | Сценарий А (системная) | Сценарий Б (бандл) |
+|---|---|---|
+| Импорт | `from "sqlite3"` | `from "@sqlite/sqlite3"` |
+| Установка | `tsclang install @types/sqlite3` + системный пакет | `tsclang install @sqlite/sqlite3` |
+| Портабельность | зависит от системы | ✅ самодостаточен |
+| Embedded | ❌ нет системного пакетного менеджера | ✅ |
+| Большие библиотеки (OpenSSL) | ✅ не нужно vendorить | тяжело |
+
 #### Резолюция импортов
 
 | Синтаксис импорта | Резолюция (по порядку) |
@@ -3853,8 +3847,8 @@ declare module "sqlite3" {
 
 ```typescript
 // расширение interface из установленного пакета — тот же паттерн что в TS
-import "mylib"
-declare module "mylib" {
+import "@myco/mylib"
+declare module "@myco/mylib" {
     interface Request {
         user?: User   // добавляем своё поле
     }
@@ -3996,9 +3990,6 @@ warning: native block — C code inserted verbatim, memory management is manual
 
 Подавление:
 ```typescript
-// @allow-native — отключить предупреждение для одной строки
-native `PORTB |= (1 << PB5);`  // @allow-native
-
 // tsc.packages.json — глобально для проекта
 { "allowNative": true }
 ```
@@ -4037,9 +4028,6 @@ warning: unsafe block — ownership and type checks disabled
 
 Подавление:
 ```typescript
-// @allow-unsafe — для одного блока
-unsafe { ... }  // @allow-unsafe
-
 // tsc.packages.json — глобально
 { "allowUnsafe": true }
 ```
@@ -4053,7 +4041,7 @@ unsafe { ... }  // @allow-unsafe
 | Borrow checker | отключён (C не знает о нём) | отключён явно |
 | Type checker | отключён | отключён |
 | Предупреждение | ✅ | ✅ |
-| Подавить | `@allow-native` / `allowNative` | `@allow-unsafe` / `allowUnsafe` |
+| Подавить | `allowNative` | `allowUnsafe` |
 
 ### Build System & Package Manager
 
@@ -4436,8 +4424,9 @@ tsclang install               # установить зависимости из
 tsclang update                # обновить зависимости, пересоздать lock-файл
 tsclang clean                 # удалить build артефакты (outDir)
 tsclang run                   # собрать дефолтный build + запустить бинарь
-tsclang lint                  # отформатировать все .tsc файлы проекта
-tsclang lint --check          # проверить форматирование без изменений (CI)
+tsclang dev                   # собрать и запустить в режиме отслеживания
+tsclang lint                  # проверить форматирование без изменений (CI)проекта
+tsclang lint --fix            # отформатировать все .tsc файлы 
 ```
 
 - Если build не указан — используется `"desktop"` или первый в списке
@@ -4514,6 +4503,28 @@ tsclang run
   # запускает: ./build/desktop/myapp --port 8080 --verbose
   ```
 
+#### `tsclang dev` подробно
+
+Запускает сборку в режиме Hot Reload / Hot Restart.
+
+Аргументы идентичны команде `tsclang run`.
+
+Команда CLI, не механизм компилятора. Никаких аннотаций и специальной кодогенерации не требуется.
+
+**Workflow:**
+1. Разработчик запускает `tsclang dev`
+2. Код компилируется и запускается автоматически
+3. Разработчик сохраняет файл в IDE
+4. `tsclang dev` обнаруживает изменение → инкрементальная пересборка → перезапуск
+
+**Desktop** — пересборка + kill + restart процесса.
+**Embedded** — пересборка + автоматическая прошивка через avrdude/openocd.
+
+- File watcher: inotify (Linux) / FSEvents (macOS) / ReadDirectoryChangesW (Windows)
+- Инкрементальная сборка — пересобирает только изменённые файлы
+- Desktop: kill старого процесса + запуск нового
+- Embedded (`"target": "avr"` и др.): пересборка + автоматическая прошивка
+
 #### `tsclang init` подробно
 
 ```bash
@@ -4559,27 +4570,49 @@ tsclang run              # собрать и запустить
 ```json
 {
   "dependencies": {
-    "mylib": "^1.0.0",
-    "sdl2": ">=2.28.0",
-    "json": {
-      "git": "github.com/nlohmann/json@3.11.0"
+    "@myco/mylib": "^1.0.0",
+    "@scope/sdl2": ">=2.28.0",
+
+    "@sqlite/sqlite3": {
+      "git": "github.com/sqlite/sqlite3@3.44.0"
+      // types не нужны — sqlite3.d.tsc есть в корне репо, найдётся автоматически
     },
-    "libfoo": {
+
+    "@nlohmann/json": {
+      "git": "github.com/nlohmann/json@3.11.0",
+      "types": "single_include/nlohmann/json.d.tsc"  // нестандартный путь к .d.tsc в репо
+    },
+
+    "@someuser/libfoo": {
       "git": "github.com/someuser/libfoo@1.0.0",
       "build": "make PREFIX={install_dir}",
       "headers": "include/",
-      "lib": "libfoo.a"
+      "lib": "libfoo.a",
+      "types": "@types/libfoo"   // типов в репо нет — берём из отдельного @types пакета
     },
-    "libbaz": {
+
+    "@somevendor/libbaz": {
       "url": "https://some.site.com/download/lib_1.0.0.zip",
       "version": "1.0.0",
       "build": "make PREFIX={install_dir}",
       "headers": "include/",
       "lib": "libbaz.a"
+      // types не указаны → компилятор ищет @types/libbaz автоматически
     }
   }
 }
 ```
+
+**Резолюция типов для зависимости** (порядок приоритета):
+
+1. Явное `"types"` в конфиге → используется оно
+2. `.d.tsc` в корне скачанного репо/пакета → найдётся автоматически
+3. `@types/<name>` установлен → используется автоматически
+4. Ничего не найдено → ошибка компилятора:
+   ```
+   error: no type declarations found for @someuser/libfoo
+   hint: install @types/libfoo or add "types" field to dependency config
+   ```
 
 #### Версионирование
 
@@ -4597,7 +4630,7 @@ tsclang run              # собрать и запустить
 2. **Реестр** (`tsc-lang.org`) — скачивает и собирает нужную версию
    - _(реестр не реализован)_ → ошибка компилятора с подсказкой:
      ```
-     error: sdl2 >=2.28.0 not found
+     error: @scope/sdl2 >=2.28.0 not found
      hint: install it manually, e.g.:
        apt install libsdl2-dev
        brew install sdl2
@@ -4698,7 +4731,7 @@ target_link_libraries(myapp PRIVATE ~/.tsc/cache/libfoo@1.0.0/_install/lib/libfo
 ```json
 {
   "dependencies": {
-    "libfoo": {
+    "@someuser/libfoo": {
       "git": "github.com/someuser/libfoo@1.0.0",
       "cmake_options": {
         "FOO_BUILD_TESTS": false,
