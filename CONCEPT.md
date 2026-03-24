@@ -91,6 +91,30 @@ tsclang --version
 npx tsclang build
 ```
 
+### CLI — команды
+
+```bash
+tsclang build               # компиляция проекта
+tsclang build --release     # с оптимизациями
+
+tsclang dev                 # watch mode: следит за файлами, пересобирает и перезапускает при изменении
+tsclang dev --target avr    # то же для embedded: пересобирает и прошивает через avrdude/openocd
+
+tsclang format              # форматирует код
+tsclang format --check      # проверяет форматирование без изменений (для CI)
+
+tsclang install @scope/pkg  # установить пакет
+tsclang install             # установить все зависимости из tsc.packages.json
+
+tsclang lint                # проверить код линтером (детали TBD)
+```
+
+**`tsclang dev` — детали:**
+- File watcher: inotify (Linux) / FSEvents (macOS) / ReadDirectoryChangesW (Windows)
+- Инкрементальная сборка — пересобирает только изменённые файлы
+- Desktop: kill старого процесса + запуск нового
+- Embedded (`--target avr` и др.): пересборка + автоматическая прошивка
+
 ---
 
 ## Core Goals
@@ -102,11 +126,70 @@ npx tsclang build
 
 ---
 
+## Tooling — открытые вопросы
+
+Инструменты спроектированы на уровне интерфейса, детали реализации не определены.
+
+### Форматтер
+
+`tsclang format` / `tsclang format --check` — концепция ясна (см. §Форматирование), детали не определены:
+
+- [ ] Конфигурируемый стиль или единый (как gofmt)?
+- [ ] Интеграция с prettier/editorconfig?
+- [ ] Формат конфига (в `tsc.packages.json` или отдельный файл)?
+
+### Линтер
+
+Упоминается в концепте (`--lint`, рекомендации по `implements` vs `extends`, `-Wformat` для printf и др.), но как отдельный инструмент не специфицирован:
+
+- [ ] Встроен в компилятор (`tsclang lint`) или отдельный пакет?
+- [ ] Набор правил по умолчанию
+- [ ] Конфигурация — какие предупреждения включены/отключены
+- [ ] Интеграция с IDE (LSP diagnostics)
+- [ ] Связь с `@allow-native` / `@allow-unsafe` — как линтер их видит?
+
+### Hot Reload / Hot Restart
+
+Реализуется через `tsclang dev` — команда CLI, не механизм компилятора. Никаких аннотаций и специальной кодогенерации не требуется.
+
+**Workflow:**
+1. Разработчик запускает `tsclang dev`
+2. Код компилируется и запускается автоматически
+3. Разработчик сохраняет файл в IDE
+4. `tsclang dev` обнаруживает изменение → инкрементальная пересборка → перезапуск
+
+**Desktop** — пересборка + kill + restart процесса.
+**Embedded** — пересборка + автоматическая прошивка через avrdude/openocd.
+
+Открытые вопросы:
+- [ ] Сохранение состояния между перезапусками (нужно ли? как?)
+- [ ] Скорость инкрементальной сборки при большом проекте
+- [ ] Конфигурация — какой процесс запускать, аргументы, env
+
+---
+
 ## Design Decisions
 
 ### Syntax
 
 #### Форматирование
+
+Форматирование — **никогда не ошибка компилятора**. Компилятор проверяет только семантику. Форматирование — отдельный инструмент:
+
+```bash
+tsclang format          # форматирует код на месте
+tsclang format --check  # проверяет без изменений — для CI
+```
+
+| Инструмент | Роль |
+|---|---|
+| `tsclang build` | только семантические ошибки, форматирование игнорируется |
+| `tsclang format` | форматирует код (как prettier / gofmt) |
+| `tsclang format --check` | CI-проверка — exit code 1 если не отформатировано |
+| Линтер | предупреждения о стиле — опционально |
+| IDE | format-on-save через плагин |
+
+Это позволяет language server (автодополнение, типы, рефакторинг) работать корректно пока разработчик пишет незаконченный или неотформатированный код.
 
 TSC следует соглашениям TypeScript/JavaScript.
 
@@ -6251,7 +6334,7 @@ import { gpio } from "std/embedded" // ✅
 import { Reader, Writer, Stream } from "std/io"
 
 interface Reader {
-    read(buf: u8[]): i32 | null throws IOError   // прочитать в буфер, null = EOF
+    read(buf: Mut<u8[]>): i32 | null throws IOError   // прочитать в буфер, null = EOF
     readLine(): string | null throws IOError
     readAll(): string throws IOError
 }
