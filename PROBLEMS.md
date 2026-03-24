@@ -151,27 +151,17 @@ arr.capacity = 200      // ✅ — записывается напрямую
 
 ## 5. Thread система — фундаментальный пробел
 
-### 5.1 `await` недоступен в `Thread.spawn` — нет bridge между async и threads
+### 5.1 ~~`await` недоступен в `Thread.spawn` — нет bridge между async и threads~~ ✅ РЕШЕНО
 
-```typescript
-const t = Thread.spawn(() => {
-    // это синхронная функция — нет await
-    tx.send(result)   // блокирующий вызов если канал полон
-})
-```
+**Решение:** Это намеренное дизайн-решение, не проблема. Async и threads — два разделённых мира: event loop неблокирующий, OS threads блокирующие. Канал — единственный bridge, и это правильно. OS-блокировка потока при полном канале — ожидаемое поведение, именно для этого и нужны потоки. Подробно — CONCEPT.md §"Thread<T> — типизированный результат".
 
-Если канал полон — поток блокируется полностью (OS block). Нет механизма сделать CPU-bound поток async-aware. Async и threads работают как два несвязанных мира без composition.
+### 5.2 ~~`Thread.spawn` не параметризован результатом~~ ✅ РЕШЕНО
 
-### 5.2 `Thread.spawn` не параметризован результатом
+**Решение:** Добавлен `Thread<T>` с типизированным `join()`. Обе формы валидны:
+- `Thread<T>` + `await t.join()` — сахар для "запустить и получить результат", под капотом `channel<T>(1)`
+- Явный `channel<T>` — для стриминга, нескольких значений, `select`
 
-```typescript
-const t = Thread.spawn(() => {
-    return heavyComputation()  // куда уходит return value?
-})
-const result = t.join()  // возвращает void?
-```
-
-Нет `Thread<T>` с `join(): T`. Единственный способ вернуть результат — через канал. Это лишний verbosity для простых parallel tasks.
+Компилируются в идентичный C-output. Подробно — CONCEPT.md §"Thread<T> — типизированный результат".
 
 ---
 
@@ -181,14 +171,9 @@ const result = t.join()  // возвращает void?
 
 **Решение:** `Date` (legacy) остаётся только для TS-совместимости. Для всей новой работы с временем — `std/temporal` (PlainDate, Instant, ZonedDateTime и т.д.), который не использует `gmtime`.
 
-### 6.2 Variadic C функции — не специфицировано
+### 6.2 ~~Variadic C функции — не специфицировано~~ ✅ РЕШЕНО
 
-```typescript
-import { printf } from "libc"
-printf("Hello %s, age %d", name, age)  // variadic — как типизировать?
-```
-
-TSC система типов не поддерживает variadic функции. Весь libc interop для debug/logging требует падения в `any` без type safety.
+**Решение:** `std/libc` экспортирует тип `Scalar` — объединение всех C-совместимых скалярных типов. Variadic функции объявляются с `...args: Scalar[]`. Пользовательские обёртки могут использовать `Scalar` как обычный тип параметра — компилятор генерирует `vprintf`-вызов при spread. Формат-строка не проверяется компилятором, только линтером. Подробно — CONCEPT.md §"Variadic C функции — тип Scalar".
 
 ### 6.3 `Reader.read(buf: u8[])` — принимает owned буфер
 

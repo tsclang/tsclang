@@ -3591,7 +3591,7 @@ int main(void) {
 
 - Типы импортов по источнику:
   - `"./path"` — локальный файл
-  - `"std/libc"`, `"std/libm"` и др. — встроенные декларации + генерирует `#include <...>` в C (краткая форма без `std/` тоже работает)
+  - `"std/libc"`, `"std/math"` и др. — встроенные декларации + генерирует `#include <...>` в C (краткая форма без `std/` тоже работает)
     ```typescript
     import { printf } from "std/libc";  // или просто "libc" — эквивалентно
     // компилятор знает сигнатуру printf — есть встроенный std/libc.d.tsc
@@ -3630,9 +3630,76 @@ myproject/
 
 ```typescript
 import { printf, fprintf } from "std/libc"   // → #include <stdio.h>
-import { sin, cos, sqrt }  from "std/libm"   // → #include <math.h>
+import { sin, cos, sqrt }  from "std/math"   // → #include <math.h>
 import { malloc, free }    from "std/libc"
 ```
+
+##### Variadic C функции — тип Scalar
+
+C variadic функции (`printf`, `fprintf` и др.) принимают произвольное число аргументов. Для их типизации `std/libc` экспортирует тип `Scalar` — объединение всех C-совместимых скалярных типов:
+
+```typescript
+// std/libc.d.tsc
+export type Scalar = i8 | u8 | i16 | u16 | i32 | u32 | i64 | u64
+                   | f32 | f64 | number | usize | string | Ref<u8[]>
+
+declare function printf(fmt: string, ...args: Scalar[]): i32
+declare function fprintf(stream: Ref<FILE>, fmt: string, ...args: Scalar[]): i32
+declare function sprintf(buf: Mut<u8[]>, fmt: string, ...args: Scalar[]): i32
+declare function snprintf(buf: Mut<u8[]>, n: usize, fmt: string, ...args: Scalar[]): i32
+```
+
+```typescript
+import { printf, Scalar } from "std/libc"
+
+// ✅ правильное использование
+printf("%d", 42)
+printf("%s %d", "age:", 25)
+printf("%.2f", 3.14)
+printf("%zu", buf.length)          // usize
+
+// ❌ ошибки компилятора
+printf("%d", user)                 // error: User не является Scalar
+printf("%d", [1, 2, 3])           // error: i32[] не является Scalar
+printf("%d", () => 42)            // error: замыкание не является Scalar
+printf("%d", null)                // error: null не является Scalar
+```
+
+`Scalar` — обычный тип, его можно импортировать и использовать в пользовательских обёртках:
+
+```typescript
+import { printf, Scalar } from "std/libc"
+
+// обычная TSClang-функция — не declare
+function log(level: string, fmt: string, ...args: Scalar[]): void {
+    printf("[%s] ", level)
+    printf(fmt, ...args)    // компилятор разворачивает в vprintf-вызов
+}
+
+log("INFO", "connected on port %d", 8080)   // ✅
+log("ERROR", "user: %s", user)              // ❌ User не Scalar
+```
+
+C-output для пользовательской обёртки:
+
+```c
+void log(const char* level, const char* fmt, ...) {
+    printf("[%s] ", level);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+}
+```
+
+**`Scalar` допустим только как тип параметра в функциях.** Как тип переменной — ошибка компилятора (это union, C-представления нет):
+
+```typescript
+const x: Scalar = 42    // ❌ Scalar как тип переменной запрещён
+function log(fmt: string, ...args: Scalar[]): void { ... }  // ✅ только параметр
+```
+
+**Проверка формат-строки** (`%d` vs тип аргумента) — не компилятор, только линтер (аналог `-Wformat` в clang).
 
 **3. Пакеты из реестра** — аналог `@types` в TypeScript. Декларации без C-кода, scope `@types` зарезервирован для declaration-only пакетов:
 
@@ -3663,7 +3730,7 @@ import { sqlite3_open } from "sqlite3"  // резолвится через @type
 |----------|-----------------|---------------|
 | `tsc_packages/@types/*` | ✅ всегда | нет |
 | `types/` в корне проекта | ✅ по конвенции | нет |
-| Встроенные (`libc`, `libm`) | ✅ всегда | нет |
+| Встроенные (`libc`, `math`) | ✅ всегда | нет |
 | Нестандартное расположение | ❌ | `"declarations": ["path/"]` в `tsc.packages.json` |
 
 #### Приоритет деклараций и переопределение
@@ -3674,7 +3741,7 @@ import { sqlite3_open } from "sqlite3"  // резолвится через @type
 1. ./sqlite3.d.tsc          — рядом с импортирующим файлом
 2. types/sqlite3.d.tsc      — папка types/ в корне проекта
 3. @types/sqlite3           — установленный пакет
-4. встроенные               — libc, libm и др.
+4. встроенные               — libc, math и др.
 ```
 
 Чтобы заменить `@types/sqlite3` своей версией — достаточно положить файл в `types/`:
@@ -3796,6 +3863,114 @@ cleanup:
 ```
 
 **Ограничение:** C API с непоследовательным ownership (функция иногда возвращает owned, иногда borrowed в зависимости от аргументов) не может быть выражен точно — используй `any` и управляй вручную.
+
+#### Inline C — `native`
+
+Последний resort когда `.d.tsc` недостаточно: C макросы, прямой доступ к регистрам, inline asm, platform ifdefs. Вставляет C-код verbatim в сгенерированный output.
+
+```typescript
+// простая вставка
+native `PORTB |= (1 << PB5);`
+
+// с интерполяцией TSClang-переменных — компилятор подставляет C-имя
+const pin: u8 = 5
+native `PORTB |= (1 << ${pin});`
+
+// многострочно
+native `
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        counter++;
+    }
+`
+
+// inline asm через C — отдельного unsafe asm нет, используем native
+native `asm volatile("nop");`
+native `asm volatile("sei");`   // enable interrupts (AVR)
+native `asm volatile("cli");`   // disable interrupts (AVR)
+
+// GCC inline asm с input/output операндами
+const val: u8 = 0xFF
+native `
+    asm volatile(
+        "out %0, %1"
+        :
+        : "I" (_SFR_IO_ADDR(PORTB)), "r" (${val})
+    );
+`
+
+// platform ifdef
+native `
+    #ifdef __AVR__
+    power_usart0_disable();
+    #endif
+`
+```
+
+Компилятор и линтер выдают предупреждение на каждый `native` блок:
+```
+warning: native block — C code inserted verbatim, memory management is manual
+```
+
+Подавление:
+```typescript
+// @allow-native — отключить предупреждение для одной строки
+native `PORTB |= (1 << PB5);`  // @allow-native
+
+// tsc.packages.json — глобально для проекта
+{ "allowNative": true }
+```
+
+**Ограничения:**
+- Как expression — требует явную аннотацию типа (вывести из C невозможно):
+  ```typescript
+  const val: i32 = native `read_register(PINB)`      // ✅
+  const ptr: Ref<u8[]> = native `get_buffer_ptr()`   // ✅
+  const val = native `read_register(PINB)`            // ❌ error: native expression requires explicit type annotation
+  ```
+- TSClang-переменные объявленные внутри — невидимы type checker'у
+- Borrow checker отключён — управление памятью ручное
+- `${expr}` — только простые переменные, не произвольные выражения
+
+**Ассемблерные вставки** — через `native` с C's `asm volatile()`. Отдельного синтаксиса для asm нет: TSClang компилирует в C, поэтому asm всё равно проходит через GCC/clang inline asm. `native` покрывает этот кейс полностью.
+
+**Это escape hatch, не стандартный инструмент.** Для всего что можно выразить через `declare function` — используй `.d.tsc`.
+
+#### `unsafe {}` — отключение проверок TSClang
+
+Отключает borrow checker и ownership checks для блока TSClang-кода. Используется когда система типов мешает, но inline C не нужен.
+
+```typescript
+unsafe {
+    const x = doRiskyThing()       // borrow checker выключен
+    const y = value as Ref<u8[]>   // опасный каст — разрешён внутри unsafe
+    const z = ptr                  // move после использования — без ошибки
+}
+```
+
+Компилятор и линтер предупреждают:
+```
+warning: unsafe block — ownership and type checks disabled
+```
+
+Подавление:
+```typescript
+// @allow-unsafe — для одного блока
+unsafe { ... }  // @allow-unsafe
+
+// tsc.packages.json — глобально
+{ "allowUnsafe": true }
+```
+
+**Различие между `native` и `unsafe {}`:**
+
+| | `native` | `unsafe {}` |
+|---|---|---|
+| Код внутри | C (verbatim) | TSClang |
+| Назначение | вызов C кода, макросы, asm | обход borrow checker |
+| Borrow checker | отключён (C не знает о нём) | отключён явно |
+| Type checker | отключён | отключён |
+| Предупреждение | ✅ | ✅ |
+| Подавить | `@allow-native` / `allowNative` | `@allow-unsafe` / `allowUnsafe` |
 
 ### Build System & Package Manager
 
@@ -5477,6 +5652,64 @@ Thread.spawn(() => {
 })
 ```
 
+##### Thread<T> — типизированный результат
+
+`Thread.spawn` возвращает `Thread<T>`, где `T` выводится из return type callback. Обе формы получения результата валидны и компилируются в идентичный C-output:
+
+```typescript
+// Форма 1: Thread<T> — сахар для простого "запустить и получить результат"
+const t = Thread.spawn(() => heavyComputation())   // Thread<HeavyResult>
+
+const result = await t.join()   // из async-контекста — не блокирует event loop
+// const result = t.join()      // из другого потока — блокирует OS thread
+
+// Форма 2: явный канал — для сложных случаев (стриминг, несколько значений, select)
+const [tx, rx] = channel<HeavyResult>(1)
+Thread.spawn(() => { tx.send(heavyComputation()) })
+const result = await rx.recv()
+```
+
+Под капотом `Thread<T>` — это `channel<T>(1)`, генерируемый компилятором автоматически. Никакой скрытой магии — только удобная обёртка над явным примитивом.
+
+Если поток бросает — ошибка propagates через `join()`:
+
+```typescript
+const t = Thread.spawn(() => {
+    if (fail) throw new IOError("disk full")
+    return computeResult()
+})
+
+try {
+    const result = await t.join()   // throws IOError если поток упал
+} catch (e) { ... }
+```
+
+`Thread<void>` — для потоков без результата, `join()` используется только как точка синхронизации:
+
+```typescript
+const t = Thread.spawn(() => { doWork() })
+await t.join()   // ждём завершения, результата нет
+```
+
+**Когда какую форму использовать:**
+
+| Задача | Форма |
+|--------|-------|
+| Запустить и получить один результат | `Thread<T>` + `await t.join()` |
+| Стримить несколько значений | явный `channel<T>` |
+| Несколько потоков → один получатель | явные каналы + `select` |
+| Сложная координация | явные каналы |
+
+**Async и threads — два намеренно разделённых мира:**
+
+`await` внутри `Thread.spawn` — ошибка компилятора. Поток не имеет event loop. Блокирующие операции (`send`, `recv`, `t.join()`) вызываются без `await` и блокируют OS-поток через mutex/condvar. Канал — единственный bridge между ними:
+
+```
+Event loop:   await rx.recv()  ←──────────────┐  неблокирующий
+                                               │
+Thread:       tx.send(result)  ────────────────┘  блокирующий (если полный)
+```
+
 ```typescript
 import { Thread, channel, select, after } from "std/threads"
 
@@ -5490,8 +5723,8 @@ async function main(): void {
     })
 
     const result = await rx.recv()   // ждём результат
-    t.join();
-    console.log(result);
+    t.join()
+    console.log(result)
 }
 ```
 
