@@ -511,8 +511,9 @@ myproject/
   src/
     main.tsc
   types/
-    sqlite3.d.tsc         ← своя декларация
-    sqlite3-ext.d.tsc     ← расширение (declaration merging)
+    sqlite3/
+      sqlite3.d.tsc         ← своя декларация
+      sqlite3-ext.d.tsc     ← расширение (declaration merging)
 ```
 
 **Полная замена**:

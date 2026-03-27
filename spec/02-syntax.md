@@ -7,6 +7,7 @@
 ```bash
 tsclang lint          # проверяет без изменений — для CI
 tsclang lint -fix     # форматирует код на месте
+tsclang lint -f       # алиас
 ```
 
 | Инструмент | Роль |
