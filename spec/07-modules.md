@@ -387,15 +387,110 @@ TSClang добавляет `sqlite3.c` в `CMakeLists.txt` как обычный
 | Embedded | ❌ нет системного пакетного менеджера | ✅ |
 | Большие библиотеки (OpenSSL) | ✅ не нужно vendorить | тяжело |
 
+## Path Aliases
+
+Path aliases — короткие имена для путей, избавляют от `../../..` в импортах:
+
+```typescript
+// Без aliases
+import { utils } from "../../../shared/utils";
+
+// С aliases
+import { utils } from "#shared/utils";
+```
+
+### Символы для aliases
+
+`@` зарезервирован для scopes пакетного реестра (`@mycompany/mylib`). Если использовать `@` для aliases — импорт `@lib/utils` становится неоднозначным (alias или пакет?). Поэтому aliases используют `#` или `~`:
+
+| Символ | Назначение | Пример |
+|--------|------------|--------|
+| `@` | Scopes реестра | `@mycompany/mylib`, `@tsc/sqlite3` |
+| `#` | Path aliases (рекомендуется) | `#/components/Button`, `#shared/utils` |
+| `~` | Path aliases (альтернатива) | `~/components/Button` |
+
+### Конфигурация
+
+В `tsc.packages.json`, поле `paths`:
+
+```json
+{
+  "name": "my-project",
+  "main": "src/main.tsc",
+  "paths": {
+    "#/*": ["./src/*"],
+    "#shared/*": ["./src/shared/*"],
+    "#ui/*": ["./src/components/ui/*"]
+  }
+}
+```
+
+Прямые aliases без префикса тоже допустимы, но могут конфликтовать со stdlib:
+
+```json
+{
+  "paths": {
+    "components/*": ["./src/components/*"],
+    "shared/*": ["./src/shared/*"]
+  }
+}
+```
+
+> **Предупреждение:** если есть прямой alias `io/*`, то `import ... from "io"` резолвится в alias, а не в `std/io`. При прямых aliases всегда используйте явный `std/` для stdlib.
+
+### Wildcard `*`
+
+`*` в ключе заменяется на совпавшую часть в значении. Только один `*` на alias:
+
+```json
+{ "paths": { "#components/*": ["./src/components/*"] } }
+```
+
+```typescript
+import { Button } from "#components/Button";      // → ./src/components/Button
+import { Input } from "#components/forms/Input";  // → ./src/components/forms/Input
+```
+
+### Разрешённые символы в ключах
+
+Только кросс-платформенные символы: `a-z A-Z 0-9 - _ . # $ % + = ( ) [ ] { } ; , ! ~ '`
+
+Запрещены: `:` `\` `<` `>` `|` `"` `\0` `@` и `/` в роли не разделителя пути.
+
+В отличие от TypeScript, который разрешает любые символы, TSClang ограничивает символы для кросс-платформенности.
+
+### Стили aliases — сравнение
+
+| Стиль | Пример | Конфликты со stdlib | Явность |
+|-------|--------|---------------------|---------|
+| `#/` (рекомендуется) | `#/components/Button` | Нет | Высокая |
+| `~/` | `~/components/Button` | Нет | Средняя |
+| Прямой | `components/Button` | Возможны | Низкая |
+
+### Монорепозиторий
+
+```json
+// apps/web/tsc.packages.json
+{
+  "paths": {
+    "#core/*": ["../../packages/core/*"],
+    "#ui/*": ["../../packages/ui/*"]
+  }
+}
+```
+
 ## Резолюция импортов
 
 | Синтаксис импорта | Резолюция (по порядку) |
 |-------------------|------------------------|
 | `"./foo"` | `foo.tsc` → `foo.d.tsc` |
 | `"./foo.d"` | только `foo.d.tsc` |
+| `"#/..."` / `"~/..."` | path alias из `paths` в `tsc.packages.json` → ошибка если не найден |
 | `"std/foo"` | встроенная stdlib/C bindings |
-| `"foo"` (без `./` и `@`) | `std/foo` (stdlib) → `@types/foo` (если установлен) → ошибка |
+| `"foo"` (без `./`, `@`, `#`, `~`) | `paths` alias → `std/foo` (stdlib) → `@types/foo` (если установлен) → ошибка |
 | `"@scope/name"` | `tsc_packages/@scope/name/` — только точное совпадение |
+
+`#` и `~` aliases **никогда** не ищутся в реестре — компилятор сразу выдаёт ошибку если alias не объявлен в `paths`.
 
 ## Авто-обнаружение деклараций
 

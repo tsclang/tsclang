@@ -150,7 +150,8 @@
 | **.d.tsc файлы** | C interop: `declare type`, `declare opaque type`, `declare function`; три вида деклараций. |
 | **Scalar** | Тип для variadic C-функций (`printf`); `...args: Scalar[]`. |
 | **Импорт C-библиотек** | Бандлированные и кастомные библиотеки; два сценария подключения. |
-| **Резолюция импортов** | Порядок поиска: локальный файл → node_modules → stdlib. |
+| **Path Aliases** | `#` / `~` aliases в `paths` (tsc.packages.json); почему не `@`; wildcard; разрешённые символы; приоритет резолюции. |
+| **Резолюция импортов** | Порядок поиска: alias → локальный файл → stdlib → реестр. |
 | **Declaration Merging** | Расширение деклараций без замены; augmentation паттерн. |
 | **Inline C (`native`)** | Вставка C-кода напрямую в TSC; когда использовать. |
 | **`unsafe {}`** | Отключение проверок TSClang (borrow checker, null checks); эскейп хетч. |
