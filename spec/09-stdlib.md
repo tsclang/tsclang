@@ -1,5 +1,10 @@
 # TSClang — Стандартная библиотека
 
+## Принципы
+
+1. **Минимум в stdlib** — только базовые модули
+2. **Tree-shaking** — в бинарник попадает только используемое
+
 ## Error (base class)
 
 Глобальный базовый класс для всех ошибок — импорт не нужен.
@@ -275,8 +280,10 @@ await process.stderr.write("error\n")
 | `std/ws` | ✅ | ❌ | ❌ | поверх `std/net` |
 | `std/threads` | ✅ | ❌ | ❌ | требует OS-потоки (libuv) |
 | `std/reactive` | ✅ | ❌ | ❌ | поверх `std/threads` |
-| `std/embedded` | ❌ | ✅ | ✅ | GPIO, UART, SPI, I2C |
+| `std/hal` | ✅ | ✅ | ✅ | HAL интерфейсы (GPIO, UART, SPI, I2C); desktop — mock-реализация для тестов |
+| `std/embedded` | ❌ | ✅ | ✅ | Низкоуровневый доступ: `Volatile<T>`, `pointer<T>(addr)` |
 | `std/sync` | ❌ | ✅ | ✅ | атомики без ОС (spin-lock, barrier) |
+| `std/avr` | ❌ | ✅ | ✅ | AVR-specific (GPIO, UART, etc.) |
 
 **Легенда:** ✅ — полная поддержка, 🟡 — частичная поддержка, ❌ — недоступно
 
@@ -284,8 +291,66 @@ await process.stderr.write("error\n")
 
 ```typescript
 // target: avr
-import { readFile } from "std/fs"  // ❌ ошибка компилятора: std/fs не поддерживается на AVR
+import { readFile } from "std/fs"   // ❌ ошибка компилятора: std/fs не поддерживается на AVR
 import { gpio } from "std/embedded" // ✅
+```
+
+### Механизм conditional availability
+
+Stdlib модули декларируют поддерживаемые платформы через `@platform`:
+
+```typescript
+// Внутри stdlib: std/net доступен только на desktop и arm
+@platform("desktop", "arm")
+module std/net {
+    export function connect(host: string, port: u16): Socket
+}
+```
+
+При импорте на неподдерживаемой платформе — ошибка компилятора:
+
+```
+error: std/net is not available on target "avr"
+  this module requires one of: desktop, arm
+```
+
+Тот же механизм `@platform` используется в пользовательском коде (см. spec/06-concurrency.md).
+
+### Короткий импорт
+
+Все `std/`-модули можно импортировать без префикса — эквивалентные формы:
+
+```typescript
+import { Thread } from "std/threads"   // явная форма (рекомендуется)
+import { Thread } from "threads"       // краткая форма
+```
+
+Порядок резолюции для короткого имени:
+1. `./name.tsc` — локальный файл
+2. `std/name` — stdlib
+3. ошибка компилятора
+
+Подробнее о форматах импорта — в spec/08-build.md.
+
+## Официальные пакеты в реестре (`@tsc/*`)
+
+Популярные C-wrappers публикуются в реестре `registry.tsclang.org` как `@tsc/*`:
+
+```
+@tsc/sqlite3   — SQLite3
+@tsc/openssl   — OpenSSL
+@tsc/curl      — libcurl
+@tsc/zlib      — zlib
+```
+
+Установка и использование аналогичны любому пакету из реестра:
+
+```bash
+tsclang install @tsc/sqlite3
+```
+
+```typescript
+import { sqlite3_open } from "@tsc/sqlite3"
 ```
 
 ---
@@ -825,6 +890,57 @@ Now.plainDateTime()                // PlainDateTime
 Now.zonedDateTime("Europe/Moscow") // ZonedDateTime (desktop/server only)
 ```
 
+## std/hal
+
+Hardware Abstraction Layer — платформо-независимые интерфейсы для работы с железом. Доступен на всех платформах: на embedded реализуется через `declare module "std/hal"` в platform profile, на desktop — mock-реализация для тестирования библиотек без железа.
+
+| Компонент | Где | Содержимое |
+|-----------|-----|------------|
+| Интерфейсы | `std/hal` (stdlib) | GPIO, UART, SPI, I2C — без реализации |
+| Реализации | Platform profile | `declare module "std/hal" { ... }` |
+
+Библиотеки импортируют интерфейсы из `std/hal`, platform profile предоставляет конкретные реализации для железа.
+
+```typescript
+import { GPIO, UART, SPI, I2C, PinMode } from "std/hal"
+```
+
+**Интерфейсы:**
+
+```typescript
+export enum PinMode { Input, Output, InputPullup }
+
+export interface GPIO {
+    pinMode(pin: u8, mode: PinMode): void
+    digitalWrite(pin: u8, value: bool): void
+    digitalRead(pin: u8): bool
+}
+
+export interface UART {
+    begin(baud: u32): void
+    write(data: Ref<u8[]>): void
+    read(): u8
+    available(): bool
+}
+
+export interface SPI {
+    begin(): void
+    transfer(data: u8): u8
+}
+
+export interface I2C {
+    begin(): void
+    write(addr: u8, data: Ref<u8[]>): bool
+    read(addr: u8, buf: Mut<u8[]>, len: u8): bool
+}
+```
+
+Platform profile предоставляет реализацию через `declare module "std/hal" { ... }` — подробнее в [Platform Profile → Структура пакета](08-build.md).
+
+Библиотека написанная через `std/hal` портируется на любую платформу сменой профиля — без изменения кода.
+
+---
+
 ## std/threads
 
 Только для desktop/server — на embedded ошибка компилятора (нет OS scheduler).
@@ -923,3 +1039,403 @@ export function computed<T>(deps: Mut<Signal<any>>[], fn: () => T): Signal<T> {
 ```
 
 > **Отличие от Vue:** в TSClang зависимости указываются явно (`effect([a, b], fn)`). Пропущенная зависимость не вызовет перезапуск — это намеренное ограничение: нет магии, нет interior mutability, чистая библиотека без поддержки компилятора.
+
+## std/libc
+
+Базовые C bindings — функции стандартной C-библиотеки. Доступны на всех платформах, но subset зависит от `declare module "std/libc"` в platform profile.
+
+```typescript
+import { 
+    printf, fprintf, sprintf, snprintf,
+    malloc, free, realloc,
+    memcpy, memset, memcmp, memmove,
+    strlen, strcpy, strcat, strcmp, strncmp,
+    fopen, fclose, fread, fwrite, fseek, ftell, FILE
+} from "std/libc"
+```
+
+### Memory
+
+```typescript
+malloc(size: usize): Mut<u8> | null           // выделить память, null при OOM
+free(ptr: Mut<u8>): void                       // освободить память
+realloc(ptr: Mut<u8>, size: usize): Mut<u8> | null  // изменить размер
+
+memcpy(dest: Mut<u8[]>, src: Ref<u8[]>, n: usize): void   // копировать n байт
+memset(dest: Mut<u8[]>, c: u8, n: usize): void            // заполнить n байт значением c
+memcmp(a: Ref<u8[]>, b: Ref<u8[]>, n: usize): i8          // сравнить n байт, -1/0/1
+memmove(dest: Mut<u8[]>, src: Ref<u8[]>, n: usize): void  // копировать с перекрытием
+```
+
+### Strings
+
+```typescript
+strlen(s: Ref<string>): usize                  // длина строки в байтах
+strcpy(dest: Mut<u8[]>, src: Ref<string>): void        // копировать строку
+strcat(dest: Mut<u8[]>, src: Ref<string>): void        // конкатенировать строки
+strcmp(a: Ref<string>, b: Ref<string>): i8             // сравнить строки, -1/0/1
+strncmp(a: Ref<string>, b: Ref<string>, n: usize): i8  // сравнить первые n байт
+```
+
+### I/O
+
+```typescript
+type FILE = opaque                             // opaque file handle
+
+fopen(path: string, mode: string): Ref<FILE> | null  // открыть файл
+fclose(file: Ref<FILE>): i32                          // закрыть файл
+fread(buf: Mut<u8[]>, size: usize, n: usize, file: Ref<FILE>): usize  // читать
+fwrite(buf: Ref<u8[]>, size: usize, n: usize, file: Ref<FILE>): usize  // писать
+fseek(file: Ref<FILE>, offset: i64, whence: i32): i32  // переместить указатель
+ftell(file: Ref<FILE>): i64                            // текущая позиция
+```
+
+### Variadic functions и Scalar
+
+C variadic функции (`printf`, `fprintf` и др.) принимают произвольное число аргументов. Для типизации используется `Scalar`:
+
+```typescript
+export type Scalar = i8 | u8 | i16 | u16 | i32 | u32 | i64 | u64
+                   | f32 | f64 | number | usize | string | Ref<u8[]>
+
+declare function printf(fmt: string, ...args: Scalar[]): i32
+declare function fprintf(stream: Ref<FILE>, fmt: string, ...args: Scalar[]): i32
+declare function sprintf(buf: Mut<u8[]>, fmt: string, ...args: Scalar[]): i32
+declare function snprintf(buf: Mut<u8[]>, n: usize, fmt: string, ...args: Scalar[]): i32
+```
+
+```typescript
+import { printf, Scalar } from "std/libc"
+
+printf("%d", 42)                    // ✅
+printf("%s %d", "age:", 25)         // ✅
+printf("%zu", buf.length)           // ✅ usize
+
+printf("%d", user)                  // ❌ ошибка: User не Scalar
+printf("%d", [1, 2, 3])             // ❌ ошибка: i32[] не Scalar
+printf("%d", null)                  // ❌ ошибка: null не Scalar
+```
+
+**`Scalar` допустим только как тип параметра.** Как тип переменной — ошибка компилятора.
+
+### Platform-specific subset
+
+Platform profile декларирует доступный subset через `declare module "std/libc"`:
+
+```typescript
+// @nes/platform/index.d.tsc — только базовые функции
+declare module "std/libc" {
+    function memcpy(dest: Mut<u8[]>, src: Ref<u8[]>, n: usize): void
+    function memset(dest: Mut<u8[]>, c: u8, n: usize): void
+    function strlen(s: Ref<string>): usize
+    // malloc — не декларируется → ошибка при импорте
+    // printf — не декларируется → cc65 имеет cprintf, не printf
+}
+```
+
+При попытке импортировать недекларированную функцию:
+
+```typescript
+import { malloc } from "std/libc"   // ❌ ошибка: malloc не задекларирован в профиле платформы
+```
+
+## std/avr
+
+AVR-specific модуль — доступен только на платформе `avr`. Предоставляет удобные обёртки над регистрами и периферией.
+
+```typescript
+import { 
+    pinMode, digitalWrite, digitalRead, PinMode,
+    delay, delayMicroseconds,
+    serialBegin, serialWrite, serialRead, serialAvailable,
+    analogRead, analogWrite,
+    interruptEnable, interruptDisable
+} from "std/avr"
+```
+
+### GPIO
+
+```typescript
+enum PinMode { Input, Output, InputPullup }
+
+pinMode(pin: u8, mode: PinMode): void      // настроить пин
+digitalWrite(pin: u8, value: bool): void   // записать в пин
+digitalRead(pin: u8): bool                 // прочитать из пина
+```
+
+### Timing
+
+```typescript
+delay(ms: u32): void                       // задержка в миллисекундах
+delayMicroseconds(us: u16): void           // задержка в микросекундах
+```
+
+### Serial (UART)
+
+```typescript
+serialBegin(baud: u32): void               // инициализировать UART
+serialWrite(data: Ref<u8[]>): void         // отправить данные
+serialRead(): u8                           // прочитать байт
+serialAvailable(): bool                    // есть ли данные
+```
+
+### ADC и PWM
+
+```typescript
+analogRead(pin: u8): u16                   // аналоговое чтение (0-1023)
+analogWrite(pin: u8, value: u8): void      // PWM вывод (0-255)
+```
+
+### Interrupts
+
+```typescript
+interruptEnable(): void                    // включить прерывания (sei)
+interruptDisable(): void                   // выключить прерывания (cli)
+```
+
+### Использование
+
+```typescript
+import { pinMode, digitalWrite, PinMode, delay } from "std/avr"
+
+pinMode(13, PinMode.Output)
+
+while (true) {
+    digitalWrite(13, true)
+    delay(500)
+    digitalWrite(13, false)
+    delay(500)
+}
+```
+
+На других платформах импорт из `std/avr` — ошибка компилятора:
+
+```
+error: std/avr is not available on target "desktop"
+  this module requires platform: avr
+```
+
+## std/embedded
+
+Низкоуровневый доступ для embedded платформ — `Volatile<T>` для MMIO и `pointer<T>` для маппинга адресов.
+
+```typescript
+import { Volatile, pointer } from "std/embedded"
+```
+
+### Volatile\<T\>
+
+Гарантирует что каждое чтение/запись доходит до памяти (не кэшируется в регистр процессора). Транслируется в `volatile T*` в C.
+
+```typescript
+type UartRegs = {
+    dr:        Volatile<u32>   // Data Register
+    sr:        Volatile<u32>   // Status Register
+    _reserved: u32[4]          // пропуск памяти
+    fr:        Volatile<u32>   // Flag Register
+}
+
+const UART0 = pointer<UartRegs>(0x101f1000)
+
+UART0.dr.write(0x41)              // C: *(volatile uint32_t*)0x101f1000 = 0x41
+const status = UART0.fr.read()    // C: *(volatile uint32_t*)0x101f1018
+```
+
+> `Volatile<T>` ≠ `Atomic<T>`: атомики используют инструкции синхронизации которые периферия не понимает. Для MMIO регистров — только `Volatile<T>`.
+
+Две гарантии `Volatile<T>`:
+1. **No cache** — каждое чтение/запись физически идёт на шину
+2. **No reordering** — компилятор не переставляет инструкции относительно друг друга
+
+### pointer\<T\>
+
+Маппинг типа на физический адрес:
+
+```typescript
+const UART0 = pointer<UartRegs>(0x101f1000)
+```
+
+### MMIO-регистры через declare const
+
+Альтернативный способ — декларация регистров напрямую:
+
+```typescript
+// avr/io.d.tsc
+declare const PORTB: Mut<u8>   // read/write register — 0x25
+declare const DDRB:  Mut<u8>   // direction register  — 0x24
+declare const PINB:  Ref<u8>   // read-only input pin — 0x23
+```
+
+Компилятор генерирует volatile C макрос:
+
+```c
+#define PORTB (*(volatile uint8_t*)0x25)
+#define DDRB  (*(volatile uint8_t*)0x24)
+#define PINB  (*(const volatile uint8_t*)0x23)
+```
+
+**Полный пример ATmega328p:**
+
+```typescript
+// @avr/platform/registers.d.tsc
+
+// I/O ports
+declare const PORTB: Mut<u8>   // Port B data
+declare const PORTC: Mut<u8>   // Port C data
+declare const PORTD: Mut<u8>   // Port D data
+
+declare const DDRB: Mut<u8>    // Port B data direction
+declare const DDRC: Mut<u8>    // Port C data direction
+declare const DDRD: Mut<u8>    // Port D data direction
+
+declare const PINB: Ref<u8>    // Port B input pins
+declare const PINC: Ref<u8>    // Port C input pins
+declare const PIND: Ref<u8>    // Port D input pins
+
+// Timer 0
+declare const TCCR0A: Mut<u8>  // Timer/Counter Control Reg A
+declare const TCCR0B: Mut<u8>  // Timer/Counter Control Reg B
+declare const TCNT0: Mut<u8>   // Timer/Counter value
+declare const OCR0A: Mut<u8>   // Output Compare A
+declare const OCR0B: Mut<u8>   // Output Compare B
+
+// Timer 1
+declare const TCCR1A: Mut<u8>
+declare const TCCR1B: Mut<u8>
+declare const TCNT1: Mut<u16>  // 16-bit timer
+declare const OCR1A: Mut<u16>
+declare const ICR1: Mut<u16>
+
+// UART
+declare const UDR0: Mut<u8>    // UART data register
+declare const UCSR0A: Mut<u8>  // UART status A
+declare const UCSR0B: Mut<u8>  // UART status B
+declare const UBRR0: Mut<u16>  // UART baud rate
+
+// ADC
+declare const ADMUX: Mut<u8>   // ADC multiplexer
+declare const ADCSRA: Mut<u8>  // ADC control
+declare const ADCL: Ref<u8>    // ADC result low
+declare const ADCH: Ref<u8>    // ADC result high
+```
+
+**Использование:**
+
+```typescript
+// Включить pin 5 как выход
+DDRB |= (1 << 5)
+
+// Включить светодиод
+PORTB |= (1 << 5)
+
+// Выключить
+PORTB &= ~(1 << 5)
+
+// Прочитать pin
+if (PINB & (1 << 3)) {
+    // pin 3 high
+}
+```
+
+## HAL реализация в platform profile
+
+Platform profile реализует интерфейсы `std/hal` для конкретного железа через `declare module "std/hal"`.
+
+```typescript
+// @avr/platform/hal.d.tsc
+
+declare module "std/hal" {
+    // AVR implementation of GPIO
+
+    function pinMode(pin: u8, mode: PinMode): void {
+        if (pin < 8) {
+            if (mode == PinMode.Output) {
+                DDRD |= (1 << pin)
+            } else {
+                DDRD &= ~(1 << pin)
+                if (mode == PinMode.InputPullup) {
+                    PORTD |= (1 << pin)
+                }
+            }
+        } else if (pin < 14) {
+            const offset = pin - 8
+            if (mode == PinMode.Output) {
+                DDRB |= (1 << offset)
+            } else {
+                DDRB &= ~(1 << offset)
+                if (mode == PinMode.InputPullup) {
+                    PORTB |= (1 << offset)
+                }
+            }
+        }
+    }
+    
+    function digitalWrite(pin: u8, value: bool): void {
+        if (pin < 8) {
+            if (value) PORTD |= (1 << pin)
+            else PORTD &= ~(1 << pin)
+        } else if (pin < 14) {
+            const offset = pin - 8
+            if (value) PORTB |= (1 << offset)
+            else PORTB &= ~(1 << offset)
+        }
+    }
+    
+    function digitalRead(pin: u8): bool {
+        if (pin < 8) return (PIND & (1 << pin)) != 0
+        if (pin < 14) return (PINB & (1 << (pin - 8))) != 0
+        return false
+    }
+}
+```
+
+Библиотеки импортируют интерфейсы из `std/hal`, platform profile предоставляет реализации:
+
+```typescript
+// @mylib/lcd/index.tsc
+import { GPIO, PinMode } from "std/hal"
+
+export class Lcd {
+    constructor(
+        private gpio: GPIO,
+        private rs: u8,
+        private en: u8,
+        private d4: u8,
+        private d5: u8,
+        private d6: u8,
+        private d7: u8
+    ) {}
+    
+    init(): void {
+        this.gpio.pinMode(this.rs, PinMode.Output)
+        this.gpio.pinMode(this.en, PinMode.Output)
+        this.gpio.pinMode(this.d4, PinMode.Output)
+        this.gpio.pinMode(this.d5, PinMode.Output)
+        this.gpio.pinMode(this.d6, PinMode.Output)
+        this.gpio.pinMode(this.d7, PinMode.Output)
+    }
+    
+    print(text: string): void {
+        for (const c of text) {
+            this.writeChar(c)
+        }
+    }
+    
+    private writeChar(c: u8): void {
+        // Use GPIO to send data...
+    }
+}
+```
+
+**Преимущества HAL:**
+
+| Без HAL | С HAL |
+|---------|-------|
+| `PORTB |= (1 << 5)` — AVR-specific | `gpio.digitalWrite(13, true)` — portable |
+| Библиотека знает про регистры | Библиотека абстрагирована от железа |
+| Перенос → переписывание | Перенос → смена platform profile |
+
+**Библиотека `@mylib/lcd` работает на:**
+- AVR (Arduino) — через `@avr/platform`
+- ARM (STM32) — через `@arm/platform`
+- Desktop (тесты) — через `@desktop/platform` mock

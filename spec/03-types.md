@@ -238,10 +238,10 @@ const n64: i64 = n      // неявно — без потерь
   Никакого runtime overhead — только алиасы. `Uint8Array` и `u8[]` взаимозаменяемы.
 
 - Синоним: `number` = `f64` по умолчанию (совместимость с TypeScript-стилем)
-  - Переопределяется через `"defaultNumber"` в `tsc.packages.json`
+  - Переопределяется через `"defaultNumber"` в `tsc.package.json`
   - На 8-bit таргетах (`"target": "avr"` и др.) — warning если встречается `f64`
   ```json
-  // tsc.packages.json — AVR
+  // tsc.package.json — AVR
   { "target": "avr", "mcu": "atmega328p", "defaultNumber": "f32" }
   ```
   ```typescript

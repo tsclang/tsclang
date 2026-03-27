@@ -145,12 +145,12 @@
 | **Import** | ES-синтаксис; namespace-импорт (`import X from "./m"` = namespace); циклические импорты разрешены. |
 | **Порядок инициализации** | Детерминированный порядок init модулей; решение circular deps через forward declarations. |
 | **Точка входа** | 5 правил приоритета: конфиг → `main.tsc` → единственный файл → без export → библиотека. |
-| **Библиотека** | Как объявить проект библиотекой; нет entry point. |
+| **Библиотека** | Как объявить проект библиотекой; нет entry point. Четыре типа проектов: executable, library, C-wrapper, platform profile. |
 | **Генерация C main** | Как TSC генерирует `main()` в C; `async main` запускает event loop. |
 | **.d.tsc файлы** | C interop: `declare type`, `declare opaque type`, `declare function`; три вида деклараций. |
 | **Scalar** | Тип для variadic C-функций (`printf`); `...args: Scalar[]`. |
 | **Импорт C-библиотек** | Бандлированные и кастомные библиотеки; два сценария подключения. |
-| **Path Aliases** | `#` / `~` aliases в `paths` (tsc.packages.json); почему не `@`; wildcard; разрешённые символы; приоритет резолюции. |
+| **Path Aliases** | `#` / `~` aliases в `paths` (tsc.package.json); почему не `@`; wildcard; разрешённые символы; приоритет резолюции. |
 | **Резолюция импортов** | Порядок поиска: alias → локальный файл → stdlib → реестр. |
 | **Declaration Merging** | Расширение деклараций без замены; augmentation паттерн. |
 | **Inline C (`native`)** | Вставка C-кода напрямую в TSC; когда использовать. |
@@ -162,7 +162,7 @@
 |--------|-------|
 | **Формат имён пакетов** | Соглашения именования: `@scope/name`, semver. |
 | **Build Profiles** | debug / release / embedded; пользовательские профили; флаги оптимизации. |
-| **tsc.packages.json** | Главный конфиг: поля верхнего уровня, зависимости, targets. |
+| **tsc.package.json** | Главный конфиг: поля верхнего уровня, зависимости, targets. |
 | **Поля build конфига** | Детальные поля конфигурации сборки. |
 | **Platform Profile** | AVR/Cortex/desktop-специфичные настройки: stack_size, MCU, частота. |
 | **Pipeline сборки** | Шаги: parse → typecheck → IR → ownership → codegen → cmake → build. |
@@ -219,7 +219,7 @@
 | 6  | Блок 7 (целиком) |
 | 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal |
 | 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @interrupt, Volatile, std/sync |
-| 9  | Блок 8: tsc.packages.json, CLI команды (init/build/run) |
+| 9  | Блок 8: tsc.package.json, CLI команды (init/build/run) |
 | 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
 | 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
 | 12 | Блок 9 (целиком); `std/threads` читать как API поверх механизма из фазы 8 |
@@ -320,14 +320,14 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - `Atomic<T>`, `AtomicArray<T>`, `Readonly<T>`
 - `@interrupt`, `Volatile<T>`, `std/sync` (embedded)
 
-### Фаза 9 — CLI core + tsc.packages.json
+### Фаза 9 — CLI core + tsc.package.json
 
 > Фазы 9–14 требуют готового компилятора (фазы 1–8 завершены).
 
 Можно создать проект и скомпилировать его без единой зависимости.
 
-- `tsclang init` — создание проекта, генерация `tsc.packages.json`
-- Чтение и валидация `tsc.packages.json` (поля, targets, platform profile)
+- `tsclang init` — создание проекта, генерация `tsc.package.json`
+- Чтение и валидация `tsc.package.json` (поля, targets, platform profile)
 - `tsclang build` (базовый — только локальный код, без зависимостей)
 - `tsclang run` (базовый)
 

@@ -8,7 +8,7 @@ TSC разделяет конкурентность на три независи
 |----------|-----------|---------|
 | `async/await` | все | стандартный |
 | `std/threads` | OS (desktop/server) | продвинутый |
-| `@interrupt` | embedded (AVR/Cortex) | системный |
+| `@embedded.isr` | embedded (AVR/Cortex) | системный |
 
 ---
 
@@ -31,7 +31,7 @@ TSC код (async/await)
   └─────────────┴──────────────┴──────────────┘
 ```
 
-TSC-код не знает какой runtime под капотом — работает с абстракцией. Runtime задаётся в `tsc.packages.json` через поле `"runtime"`. `std/fs`, `std/net`, `std/ws` зависят от этого runtime.
+TSC-код не знает какой runtime под капотом — работает с абстракцией. Runtime задаётся в `tsc.package.json` через поле `"runtime"`. `std/fs`, `std/net`, `std/ws` зависят от этого runtime.
 
 Единственный event loop, один поток исполнения. `Shared<T>` и `Weak<T>` **не атомарны** — никаких накладных расходов. Narrowing через `if (x != null)` безопасен — между проверкой и использованием никакой другой код не выполняется.
 
@@ -953,7 +953,7 @@ Thread.spawn(() => { process(msg) })  // ✅ — все поля thread-safe
 
 ---
 
-## 3. @interrupt — только Embedded
+## 3. @embedded.isr — только Embedded
 
 ISR — аппаратное прерывание. Не поток, не closure. Никакого захвата контекста.
 
@@ -985,7 +985,18 @@ const status = UART0.fr.read()   // C: *(volatile uint32_t*)0x101f1018 — не 
 1. **No cache** — каждое чтение/запись физически идёт на шину, не кэшируется в регистр процессора
 2. **No reordering** — компилятор не переставляет инструкции чтения/записи `Volatile<T>` относительно друг друга (критично для последовательности инициализации периферии)
 
-### @interrupt
+### @embedded.isr
+
+Функция-прерывание. Только embedded платформы.
+
+Два варианта аргумента:
+
+```typescript
+@embedded.isr("TIMER1_OVF")   // по имени вектора — AVR (avr-libc naming)
+@embedded.isr(14)              // по номеру вектора — ARM Cortex-M (IRQn)
+```
+
+Пример:
 
 ```typescript
 import { Atomic, RmwOrdering } from "std/threads"
@@ -993,7 +1004,7 @@ import { Atomic, RmwOrdering } from "std/threads"
 static readonly irqCount = new Atomic<u32>(0)
 static readonly [tx, rx] = channel<Event>(32)
 
-@interrupt(14)    // номер вектора IRQ
+@embedded.isr(14)   // ARM Cortex-M: IRQ14
 function onTimerInterrupt(): void {
     // Atomic<T> — ok
     irqCount.fetchAdd(1, RmwOrdering.Relaxed)
@@ -1004,21 +1015,56 @@ function onTimerInterrupt(): void {
     // Volatile<T> — ok
     TIMER_REG.sr.write(0x0)   // сброс флага прерывания
 }
+
+@embedded.isr("TIMER1_OVF")   // AVR: именованный вектор
+function onTimerOverflow(): void {
+    irqCount.fetchAdd(1, RmwOrdering.Relaxed)
+}
 ```
 
 Компилятор генерирует платформенный атрибут:
 ```c
-// GCC/Clang (ARM Cortex)
+// GCC/Clang (ARM Cortex) — числовой аргумент
 __attribute__((interrupt("IRQ")))
 void onTimerInterrupt(void) { ... }
 
-// AVR
-ISR(TIMER0_OVF_vect) { ... }
+// AVR — строковый аргумент
+ISR(TIMER1_OVF_vect) {
+    counter++;
+}
 ```
 
 Context saving — полностью на стороне C компилятора через `__attribute__((interrupt))`. TSC не генерирует код сохранения регистров.
 
-### Правила @interrupt
+**Ошибка на desktop:**
+
+```typescript
+@embedded.isr("TIMER1_OVF")  // ❌ error: ISR not supported on "desktop"
+function onTimer(): void {
+    counter++;
+}
+```
+
+**Когда использовать:**
+- Hardware interrupts (timer, UART, external)
+- Альтернатива — native, но менее удобно
+
+**Сравнение с native:**
+
+```typescript
+// ✅ Через @embedded.isr — удобно
+@embedded.isr("TIMER1_OVF")
+function onTimer(): void {
+    counter++;
+}
+
+// ⚠️ Через native — неудобно, разрывает код
+native `ISR(TIMER1_OVF_vect) {`;
+counter++;
+native `}`
+```
+
+### Правила @embedded.isr
 
 | Операция | Разрешено |
 |----------|-----------|
@@ -1068,17 +1114,221 @@ uint8_t sreg = SREG; cli();
 SREG = sreg;  // восстанавливаем флаги (не просто sei())
 ```
 
-> Внутри `interrupts.disable()` те же ограничения что и в `@interrupt`: нет `await`, нет `new`.
+> Внутри `interrupts.disable()` те же ограничения что и в `@embedded.isr`: нет `await`, нет `new`.
 
 ### Итоговая таблица Low-level инструментов
 
 | Задача | TSC синтаксис | Гарантия |
 |--------|---------------|----------|
 | MMIO регистры | `Volatile<T>` | Прямое обращение к шине, no reorder |
-| Обработчик прерывания | `@interrupt(N)` | `__attribute__((interrupt))`, context saved |
+| Обработчик прерывания | `@embedded.isr(N)` / `@embedded.isr("NAME")` | `__attribute__((interrupt))`, context saved |
 | Общее состояние с IRQ | `static Atomic<T>` | Атомарный доступ без гонок |
 | Составные данные с IRQ | `interrupts.disable()` | Критическая секция |
 | Связь IRQ → основной код | `channel.trySend()` | Передача без блокировки |
+
+---
+
+## 4. Embedded-аннотации
+
+Декораторы для fine-grained контроля над поведением на embedded платформах.
+
+### `@embedded.inline`
+
+Принудительный инлайн функции. Без декоратора — решение за C компилятором.
+
+```typescript
+@embedded.inline
+function setBit(reg: Mut<u8>, bit: u8): void {
+    reg |= (1 << bit);
+}
+```
+
+Генерирует:
+```c
+static inline void setBit(volatile uint8_t* reg, uint8_t bit) {
+    *reg |= (1 << bit);
+}
+```
+
+**Когда использовать:**
+- Критичные к производительности участки
+- Очень маленькие функции (set bit, read register)
+- Когда C-компилятор не инлайнит сам
+
+**Альтернатива через native:**
+
+```typescript
+// Макрос в C — тоже inline
+native `#define SET_BIT(reg, bit) ((reg) |= (1 << (bit)))`;
+```
+
+Доступен на всех платформах (desktop, embedded).
+
+### `@embedded.noHeap`
+
+Статическая проверка компилятором: функция не использует heap.
+
+```typescript
+@embedded.noHeap
+function process(data: Ref<u8[]>): i32 {
+    // ❌ ошибка компиляции: new Array использует heap
+    const temp = new Array<u8>(10);
+    
+    // ❌ ошибка: new Map использует heap
+    const map = new Map<string, i32>();
+    
+    // ✅ ok: stack allocation (fixed size)
+    const temp: u8[10] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    
+    // ✅ ok: borrowed reference
+    return data.length;
+}
+```
+
+**Когда использовать:**
+- ISR (прерывания) — heap внутри ISR = crash
+- Функции в no-heap платформах
+- Явное документирование ограничений
+
+**Альтернатива через `declare platform`:**
+
+```typescript
+// В platform profile
+declare platform {
+    heap: false  // Компилятор проверит все new Array/Map
+}
+```
+
+Доступен на всех платформах (desktop, embedded).
+
+### `@signal` — POSIX-сигналы (desktop)
+
+Аналог `@embedded.isr` для desktop — обработка POSIX-сигналов.
+
+```typescript
+@signal("SIGINT")
+function onInterrupt(): void {
+    console.log("Ctrl+C pressed");
+    cleanup()
+    process.exit(0)
+}
+
+@signal("SIGTERM")
+function onTerminate(): void {
+    console.log("Termination requested");
+    gracefulShutdown()
+}
+
+@signal("SIGHUP")
+function onHangup(): void {
+    console.log("SIGHUP received");
+    reloadConfig();
+}
+```
+
+Компилятор регистрирует обработчики в `main()`:
+```c
+void onInterrupt(int sig) {
+    printf("Ctrl+C pressed\n");
+    cleanup();
+    exit(0);
+}
+
+// В main()
+signal(SIGINT, onInterrupt);
+signal(SIGTERM, onTerminate);
+signal(SIGHUP, onHangup);
+```
+
+Поддерживаемые сигналы:
+
+| Сигнал | Когда |
+|--------|-------|
+| `SIGINT` | Ctrl+C |
+| `SIGTERM` | kill (graceful) |
+| `SIGHUP` | Terminal closed / reload config |
+| `SIGUSR1`, `SIGUSR2` | User-defined |
+| `SIGPIPE` | Broken pipe |
+| `SIGALRM` | Timer |
+
+На embedded `@signal` → ошибка компиляции.
+
+### Сводная таблица аннотаций
+
+| Аннотация | Desktop | Embedded | Проверка |
+|-----------|---------|----------|----------|
+| `@embedded.inline` | ✅ | ✅ | — |
+| `@embedded.noHeap` | ✅ | ✅ | Compile-time |
+| `@embedded.isr` | ❌ | ✅ | Compile-time |
+| `@signal` | ✅ | ❌ | Compile-time |
+
+---
+
+## 5. @platform — условная компиляция
+
+Декоратор для платформозависимых реализаций одной функции/класса.
+
+```typescript
+@platform("avr")
+@platform("avr", "arm")   // несколько платформ
+@platform("desktop")
+```
+
+### Правила
+
+| Ситуация | Результат |
+|----------|-----------|
+| Функция без `@platform` | Доступна везде |
+| Функция с `@platform` | Только на указанных платформах |
+| Вызов на неподдерживаемой платформе | Ошибка компиляции |
+
+### Пример: разные реализации
+
+```typescript
+@platform("avr")
+function delay(ms: u16): void {
+    for (let i = 0; i < ms; i++) {
+        _delay_ms(1)
+    }
+}
+
+@platform("arm")
+function delay(ms: u32): void {
+    HAL_Delay(ms)
+}
+
+@platform("desktop")
+async function delay(ms: u32): Promise<void> {
+    await sleep(ms)
+}
+```
+
+Компилятор включает в сборку только реализацию, соответствующую активной платформе. Вызов `delay()` на платформе без соответствующей `@platform`-реализации → ошибка компиляции.
+
+### Структура пакета с несколькими платформами
+
+Разные реализации в разных файлах:
+
+```
+@mylib/gpio/
+  index.tsc       # export { pinMode } from "./platform"
+  avr.tsc         # @platform("avr") implementation
+  arm.tsc         # @platform("arm") implementation
+  desktop.tsc     # @platform("desktop") mock for tests
+```
+
+```typescript
+// index.tsc
+export { pinMode, digitalWrite } from "./platform";
+```
+
+```typescript
+// avr.tsc
+@platform("avr")
+export function pinMode(pin: u8, mode: PinMode): void {
+    native `DDR${pin} |= (1 << ${pin});`
+}
+```
 
 ---
 
@@ -1100,9 +1350,14 @@ SREG = sreg;  // восстанавливаем флаги (не просто se
 │       ├── Readonly<T>: zero-copy immutable sharing   │
 │       └── компилятор проверяет на Thread.spawn       │
 │                                                      │
-│  @interrupt ────── ISR ─────────── embedded only     │
+│  @embedded.isr ─── ISR ─────────── embedded only     │
 │       │                                              │
 │       └── только Volatile<T> + Atomic<T>             │
 │       └── нет захвата контекста                      │
+│                                                      │
+│  @signal ──────── POSIX signal ──── desktop only     │
+│                                                      │
+│  @platform ────── условная компиляция ─── все        │
+│  @embedded.inline / @embedded.noHeap ──── все        │
 └─────────────────────────────────────────────────────┘
 ```
