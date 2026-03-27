@@ -39,7 +39,7 @@
 | **Переменные** | `let` — мутабельная, `const` — иммутабельная; влияет на передачу как `Mut<T>` и вызов `mut`-методов. |
 | **Функции** | Объявление, стрелочные функции, возвращаемые типы, вывод типа. |
 | **Перегрузка функций** | Перегрузка по типам и количеству параметров; C-output через name mangling (`foo_i32`, `foo_string`). |
-| **extern "C" и перегрузка** | `extern "C"` функции не могут быть перегружены — манглинг невозможен. |
+| **Ограничение: extern "C" запрещает перегрузку** | `extern "C"` функции не могут быть перегружены — манглинг невозможен. |
 | **Дефолтные параметры** | Синтаксис и C-output для параметров по умолчанию. |
 | **Семантика передачи значений** | Примитивы копируются, сложные типы — move/borrow в зависимости от аннотации. |
 | **Операторы** | Арифметика, присваивание, сравнения, логика, битовые, прочие; таблица приоритетов. |
@@ -70,6 +70,7 @@
 | **Интерфейсы** | Структурная типизация; fat pointer (vtable) при наличии методов; `implements`. |
 | **instanceof** | Проверка типа через сравнение vtable-адресов O(1); только для interface-переменных. |
 | **Классы** | Номинальная типизация; `mut`-методы; `readonly`-поля; наследование только от `Error`. |
+| **Семантика `this` и доступ к полям** | Правила `self`/`this`; доступ к полям внутри методов; разрешение неоднозначности. |
 | **Date** | Legacy JS-совместимый API (0-indexed месяцы); для нового кода — `std/temporal`. |
 | **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
 | **Clone** | Явное клонирование owned значений; `clone()` метод. |
@@ -90,12 +91,13 @@
 | **Scope Constraint** | Автоматические lifetime ограничения: borrow не может пережить владельца. |
 | **Автоматический Drop** | Детерминированное освобождение в обратном порядке объявления; нет GC. |
 | **Cleanup при throw** | `goto cleanup` паттерн в C-output: O(N+M) вместо дублирования, все указатели NULL-инициализированы. |
-| **Деструктуризация** | Borrow по умолчанию; move при явной аннотации типа; match всегда move. |
-| **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
+| **Доступ к полям и деструктуризация** | Borrow по умолчанию; move при явной аннотации типа; match всегда move. |
+| **Срезы** | `Slice<T>` как zero-copy view на часть массива или строки; правила lifetime. |
 | **Move из массива** | Семантика `arr[i]` как move; borrow через `arr[i]` как `Ref`. |
 | **Мутация коллекции при borrow** | Запрет: активный borrow блокирует мутацию коллекции. |
 | **Возврат borrow из метода** | Lifetime constraint: возвращаемый `Ref` не может пережить `self`. |
 | **Borrows в полях класса** | `Ref<T>` как поле класса запрещён; `Mut<T>` в полях — тоже. |
+| **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
 | **Iterable\<T\>** | Протокол: `iter(): mut () => T | null`; `for...of` → while-цикл; работает на embedded. |
 
 ### Блок 5: Обработка ошибок
@@ -133,14 +135,18 @@
 | **select** | Ожидание нескольких каналов/промисов; type-safe через match; только async-контекст. |
 | **Readonly\<T\>** | Send-safe обёртка для передачи данных в потоки; рекурсивная проверка полей. |
 | **Thread\<T\>** | Типизированный результат `Thread.spawn`; `await t.join()`. |
-| **@interrupt** | Embedded: обработчики прерываний; запреты (no alloc, no throw, no await). |
+| **@embedded.isr** | Embedded: обработчики прерываний (`@embedded.isr`); запреты (no alloc, no throw, no await). |
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
+| **Embedded-аннотации** | `@embedded.inline`, `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
+| **@platform** | Декоратор условной компиляции: платформо-зависимые реализации одной функции/класса. |
+| **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
 ### Блок 7: Модульная система
 
 | Раздел | О чём |
 |--------|-------|
+| **Конвенции** | Соглашения по именованию файлов и модулей. |
 | **Export** | Только именованные экспорты; `export default` запрещён; реэкспорт. |
 | **Import** | ES-синтаксис; namespace-импорт (`import X from "./m"` = namespace); циклические импорты разрешены. |
 | **Порядок инициализации** | Детерминированный порядок init модулей; решение circular deps через forward declarations. |
@@ -149,9 +155,7 @@
 | **Генерация C main** | Как TSC генерирует `main()` в C; `async main` запускает event loop. |
 | **.d.tsc файлы** | C interop: `declare type`, `declare opaque type`, `declare function`; три вида деклараций. |
 | **Scalar** | Тип для variadic C-функций (`printf`); `...args: Scalar[]`. |
-| **Импорт C-библиотек** | Бандлированные и кастомные библиотеки; два сценария подключения. |
 | **Path Aliases** | `#` / `~` aliases в `paths` (tsc.package.json); почему не `@`; wildcard; разрешённые символы; приоритет резолюции. |
-| **Резолюция импортов** | Порядок поиска: alias → локальный файл → stdlib → реестр. |
 | **Declaration Merging** | Расширение деклараций без замены; augmentation паттерн. |
 | **Inline C (`native`)** | Вставка C-кода напрямую в TSC; когда использовать. |
 | **`unsafe {}`** | Отключение проверок TSClang (borrow checker, null checks); эскейп хетч. |
@@ -160,22 +164,30 @@
 
 | Раздел | О чём |
 |--------|-------|
-| **Формат имён пакетов** | Соглашения именования: `@scope/name`, semver. |
 | **Build Profiles** | debug / release / embedded; пользовательские профили; флаги оптимизации. |
 | **tsc.package.json** | Главный конфиг: поля верхнего уровня, зависимости, targets. |
 | **Поля build конфига** | Детальные поля конфигурации сборки. |
 | **Platform Profile** | AVR/Cortex/desktop-специфичные настройки: stack_size, MCU, частота. |
+| **Полная таблица платформ** | Справочная таблица всех поддерживаемых платформ (Desktop, Mobile, Embedded, Retro, Consoles). |
+| **declare library** | Требования библиотеки к платформе: поля `declare library`, проверка совместимости при установке. |
 | **Pipeline сборки** | Шаги: parse → typecheck → IR → ownership → codegen → cmake → build. |
 | **CLI команды** | `build`, `run`, `dev`, `init`, `install`, `update`, `lint`, `format` — описание и флаги. |
 | **tsclang install vs update** | Разница: install фиксирует версии, update обновляет. |
 | **Источники зависимостей** | npm-реестр, git, zip-архив, URL — все варианты вместе. |
-| **Версионирование** | Semver; резолюция конфликтов версий. |
-| **Реестр** | Как работает пакетный реестр TSClang. |
+| **devDependencies** | Зависимости разработки; не попадают в пакет; не устанавливаются с `--production`. |
+| **Версионирование** | Semver-строки (`^`, `~`, `>=`). |
+| **Резолюция semver-зависимостей** | Алгоритм резолюции конфликтов версий; flat dependency tree. |
+| **Flat dependency tree** | Одна версия каждого пакета; конфликты — ошибка компилятора. |
+| **Структура lock-файла** | Формат `tsc.lock`; фиксация точных версий для воспроизводимых сборок. |
+| **Кеш** | Локальный кеш установленных пакетов; инвалидация. |
+| **Consumer-side monomorphization** | Generic-код из зависимостей компилируется в consumer, не в библиотеке. |
+| **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
 
 ### Блок 9: Стандартная библиотека
 
 | Раздел | О чём |
 |--------|-------|
+| **Принципы** | Общие принципы stdlib: что входит, что выносится в реестр, платформенная доступность. |
 | **Error** | Базовый класс `Error { message: string }`; C-output через struct с первым полем. |
 | **Globals** | `console`, `setTimeout/setInterval`, `sleep`, `performance.now`, `process.*` — без импорта. |
 | **Map\<K,V\>** | Hash map с открытой адресацией; ownership для значений; запрещён на embedded. |
@@ -183,6 +195,7 @@
 | **DataView** | Типизированный чтение/запись в Buffer: `getU32`, `setI16` и т.д. |
 | **process.stdin/stdout/stderr** | Стандартные потоки; только desktop/server. |
 | **Совместимость с платформами** | Таблица: что доступно на desktop vs embedded. |
+| **Официальные пакеты в реестре (`@tsc/*`)** | C-wrappers для популярных C-библиотек: sqlite3, openssl, curl, zlib. |
 | **std/io** | Базовые I/O абстракции: `Reader`, `Writer`. |
 | **std/fs** | Файловая система: read, write, stat, watch. |
 | **std/net** | `fetch` (глобальный); HTTP сервер; TCP/UDP сокеты. |
@@ -192,7 +205,12 @@
 | **std/random** | `Random(seed)` (все платформы); `SecureRandom` (desktop); `HardwareRandom` (embedded). |
 | **std/temporal** | PlainDate, PlainTime, PlainDateTime, Instant, Duration, ZonedDateTime, Now. |
 | **std/threads** | Экспорты: Thread, Atomic, AtomicArray, channel, select, Readonly. |
+| **std/hal** | Hardware Abstraction Layer: GPIO, UART, SPI, I2C — платформонезависимые интерфейсы; реализуется в platform profile. |
 | **std/reactive** | `Signal<T>`, `effect`, `computed` — реактивный граф зависимостей. |
+| **std/libc** | Базовые C bindings (printf, malloc, memcpy и др.); subset определяется platform profile. |
+| **std/avr** | AVR-специфичные утилиты: ADC, PWM, sleep, watchdog. |
+| **std/embedded** | Общие embedded утилиты поверх `std/hal`; работают на любой embedded платформе. |
+| **HAL реализация в platform profile** | Как platform profile предоставляет конкретные реализации интерфейсов `std/hal`. |
 
 ### Блок 10: Компилятор
 
@@ -218,7 +236,7 @@
 | 5  | Блок 5 (целиком) |
 | 6  | Блок 7 (целиком) |
 | 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal |
-| 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @interrupt, Volatile, std/sync |
+| 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @embedded.isr, Volatile, std/sync, Embedded-аннотации |
 | 9  | Блок 8: tsc.package.json, CLI команды (init/build/run) |
 | 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
 | 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
@@ -318,7 +336,7 @@ cleanup при throw внутри async; `async main` нуждается в entr
 
 - `std/threads`: `Thread<T>`, `channel<T>`, `select`
 - `Atomic<T>`, `AtomicArray<T>`, `Readonly<T>`
-- `@interrupt`, `Volatile<T>`, `std/sync` (embedded)
+- `@embedded.isr`, `Volatile<T>`, `std/sync`, Embedded-аннотации (embedded)
 
 ### Фаза 9 — CLI core + tsc.package.json
 
