@@ -8,14 +8,15 @@
 |------|-----------|
 | [spec/01-intro.md](spec/01-intro.md) | Зачем, дизайн-философия, overview, установка |
 | [spec/02-syntax.md](spec/02-syntax.md) | Синтаксис, операторы, управляющие конструкции |
-| [spec/03-types.md](spec/03-types.md) | Система типов, generics, классы, enum |
-| [spec/04-memory.md](spec/04-memory.md) | Ownership, borrow checker, замыкания, итераторы |
-| [spec/05-errors.md](spec/05-errors.md) | Обработка ошибок, throws, try/catch |
-| [spec/06-concurrency.md](spec/06-concurrency.md) | Async/await, threads, embedded concurrency |
-| [spec/07-modules.md](spec/07-modules.md) | Модульная система, C interop, .d.tsc |
-| [spec/08-build.md](spec/08-build.md) | Система сборки, CLI, package manager |
-| [spec/09-stdlib.md](spec/09-stdlib.md) | Стандартная библиотека |
-| [spec/10-compiler.md](spec/10-compiler.md) | Архитектура компилятора, IR, методология тестов |
+| [spec/03-types.md](spec/03-types.md) | Базовые типы: числа, строки, null, массивы, Date, конвертация, Clone, Type Aliases |
+| [spec/04-classes.md](spec/04-classes.md) | Классы и объектная система: generics, extension methods, enum, интерфейсы, instanceof, классы |
+| [spec/05-memory.md](spec/05-memory.md) | Ownership, borrow checker, замыкания, итераторы |
+| [spec/06-errors.md](spec/06-errors.md) | Обработка ошибок, throws, try/catch |
+| [spec/07-concurrency.md](spec/07-concurrency.md) | Async/await, threads, embedded concurrency |
+| [spec/08-modules.md](spec/08-modules.md) | Модульная система, C interop, .d.tsc, @platform |
+| [spec/09-build.md](spec/09-build.md) | Типы проектов, система сборки, CLI, package manager |
+| [spec/10-stdlib.md](spec/10-stdlib.md) | Стандартная библиотека |
+| [spec/11-compiler.md](spec/11-compiler.md) | Архитектура компилятора, IR, методология тестов |
 
 ---
 
@@ -54,6 +55,9 @@
 
 ### Блок 3: Система типов
 
+**[spec/03-types.md](spec/03-types.md) — базовые типы:**
+
+
 | Раздел | О чём |
 |--------|-------|
 | **Типизация** | Структурная (`type`, `interface`) vs номинальная (`class`); объектные литералы; `as`; type inference. |
@@ -63,17 +67,22 @@
 | **Строки** | UTF-8 байтовый массив; индексация возвращает `u8`; встроенные методы; `std/string` extensions. |
 | **Специальные типы** | `any`, `never`, `void`, `unknown` — семантика и ограничения. |
 | **Null** | Nullable типы (`T | null`); optional chaining `?.`; `??` оператор. |
+| **Date** | Legacy JS-совместимый API (0-indexed месяцы); для нового кода — `std/temporal`. |
+| **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
+| **Clone** | Явное клонирование owned значений; `clone()` метод. |
+| **Type Aliases** | `type UserId = i32` (opaque/номинальный) vs `type Point = { ... }` (структурный). |
+
+**[spec/04-classes.md](spec/04-classes.md) — классы и объектная система:**
+
+| Раздел | О чём |
+|--------|-------|
 | **Generics** | Монорфизация; bounds через `implements`/`extends`; ownership с generic-параметрами. |
 | **Extension Methods** | Добавление методов к существующим типам через явный импорт; zero-overhead C-output. |
-| **Type Aliases** | `type UserId = i32` (opaque/номинальный) vs `type Point = { ... }` (структурный). |
 | **Enum** | Числовой, строковый, `const enum`; утилиты; switch/match с enum. |
 | **Интерфейсы** | Структурная типизация; fat pointer (vtable) при наличии методов; `implements`. |
 | **instanceof** | Проверка типа через сравнение vtable-адресов O(1); только для interface-переменных. |
 | **Классы** | Номинальная типизация; `mut`-методы; `readonly`-поля; наследование только от `Error`. |
 | **Семантика `this` и доступ к полям** | Правила `self`/`this`; доступ к полям внутри методов; разрешение неоднозначности. |
-| **Date** | Legacy JS-совместимый API (0-indexed месяцы); для нового кода — `std/temporal`. |
-| **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
-| **Clone** | Явное клонирование owned значений; `clone()` метод. |
 
 ### Блок 4: Модель памяти
 
@@ -119,7 +128,7 @@
 
 | Раздел | О чём |
 |--------|-------|
-| **Уровни модели** | Три механизма: async/await (все платформы), threads (desktop), @interrupt (embedded). |
+| **Уровни модели** | Четыре механизма: async/await (все платформы), threads (desktop), @embedded.isr (embedded), аннотации. |
 | **Async runtime** | Event loop → state machines в C → Runtime Interface → libuv / io_uring / poll loop. |
 | **State machine size** | Компилятор минимизирует struct: только live переменные через await; статический анализ stack. |
 | **Promise\<T\>** | Базовый тип async-значения; `.then/.catch/.finally`; как работает под капотом. |
@@ -139,7 +148,6 @@
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
 | **Embedded-аннотации** | `@embedded.inline`, `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
-| **@platform** | Декоратор условной компиляции: платформо-зависимые реализации одной функции/класса. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
 ### Блок 7: Модульная система
@@ -151,7 +159,7 @@
 | **Import** | ES-синтаксис; namespace-импорт (`import X from "./m"` = namespace); циклические импорты разрешены. |
 | **Порядок инициализации** | Детерминированный порядок init модулей; решение circular deps через forward declarations. |
 | **Точка входа** | 5 правил приоритета: конфиг → `main.tsc` → единственный файл → без export → библиотека. |
-| **Библиотека** | Как объявить проект библиотекой; нет entry point. Четыре типа проектов: executable, library, C-wrapper, platform profile. |
+| **Определение проекта как библиотеки** | Как объявить проект библиотекой; нет entry point. |
 | **Генерация C main** | Как TSC генерирует `main()` в C; `async main` запускает event loop. |
 | **.d.tsc файлы** | C interop: `declare type`, `declare opaque type`, `declare function`; три вида деклараций. |
 | **Scalar** | Тип для variadic C-функций (`printf`); `...args: Scalar[]`. |
@@ -159,11 +167,13 @@
 | **Declaration Merging** | Расширение деклараций без замены; augmentation паттерн. |
 | **Inline C (`native`)** | Вставка C-кода напрямую в TSC; когда использовать. |
 | **`unsafe {}`** | Отключение проверок TSClang (borrow checker, null checks); эскейп хетч. |
+| **@platform** | Декоратор условной компиляции: платформо-зависимые реализации одной функции/класса. |
 
 ### Блок 8: Система сборки
 
 | Раздел | О чём |
 |--------|-------|
+| **Типы проектов** | Четыре вида: Executable, TSClang-библиотека, C-wrapper, Platform profile — структуры и tsc.package.json шаблоны. |
 | **Build Profiles** | debug / release / embedded; пользовательские профили; флаги оптимизации. |
 | **tsc.package.json** | Главный конфиг: поля верхнего уровня, зависимости, targets. |
 | **Поля build конфига** | Детальные поля конфигурации сборки. |
@@ -180,7 +190,6 @@
 | **Flat dependency tree** | Одна версия каждого пакета; конфликты — ошибка компилятора. |
 | **Структура lock-файла** | Формат `tsc.lock`; фиксация точных версий для воспроизводимых сборок. |
 | **Кеш** | Локальный кеш установленных пакетов; инвалидация. |
-| **Consumer-side monomorphization** | Generic-код из зависимостей компилируется в consumer, не в библиотеке. |
 | **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
 
 ### Блок 9: Стандартная библиотека
@@ -219,6 +228,7 @@
 | **Фазы компиляции** | Parse → AST → Typecheck → Lower to IR → Ownership Analysis → Codegen. |
 | **IR** | Линейное IR между AST и C: явный порядок операций, простые проверки для borrow checker. |
 | **Методология тестов** | Формат тест-корпуса: входной `.tsc` → ожидаемый C-output или ошибка компилятора. |
+| **Consumer-side monomorphization** | Generic-код из зависимостей компилируется в consumer, не в библиотеке; формат скомпилированной библиотеки. |
 
 ---
 
@@ -230,9 +240,9 @@
 |------|----------------|
 | 0  | Блок 9: Error, Globals |
 | 1  | Блок 2 (кроме match, for-of) |
-| 2  | Блок 3 (кроме строк, массивов, коллекций, Clone) |
-| 3  | Блок 4 + из Блока 3: Строки, Массивы и коллекции, Clone |
-| 4  | Блок 2: match; Блок 3: Классы, Интерфейсы, Extension Methods, instanceof; Блок 4: Замыкания |
+| 2  | Блок 3: 03-types.md (кроме строк, массивов, коллекций, Clone) + 03-classes.md: Enum, Generics |
+| 3  | Блок 4 + из Блока 3 (03-types.md): Строки, Массивы и коллекции, Clone |
+| 4  | Блок 2: match; Блок 3 (03-classes.md): Классы, Интерфейсы, Extension Methods, instanceof; Блок 4: Замыкания |
 | 5  | Блок 5 (целиком) |
 | 6  | Блок 7 (целиком) |
 | 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal |
@@ -241,7 +251,7 @@
 | 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
 | 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
 | 12 | Блок 9 (целиком); `std/threads` читать как API поверх механизма из фазы 8 |
-| 13 | Блок 10: Фазы компиляции, IR, Методология тестов |
+| 13 | Блок 10: Фазы компиляции, IR, Методология тестов, Consumer-side monomorphization |
 | 14 | Блок 8: Реестр |
 
 ### Фаза 0 — Core runtime
@@ -272,9 +282,8 @@
 
 - Type inference
 - `null` / `T | null`
-- Type aliases (`type`, `interface` без методов)
-- Enum
-- Generics — монорфизация (без ownership-aware bounds)
+- Type aliases (`type`, `interface` без методов) — из `03-types.md`
+- Enum, Generics (монорфизация, без ownership-aware bounds) — из `03-classes.md`
 - Числовые автокасты, оператор `as`
 
 ### Фаза 3 — Модель памяти

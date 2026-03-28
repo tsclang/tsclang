@@ -1,5 +1,663 @@
 # TSClang — Система сборки
 
+## Типы проектов
+
+Четыре вида проектов TSClang — отличаются структурой и полями `tsc.package.json`.
+
+## Executable (приложение)
+
+### Структура
+
+```
+myapp/
+  tsc.package.json
+  src/
+    main.tsc
+```
+
+### tsc.package.json
+
+```json
+{
+  "name": "myapp",
+  "version": "1.0.0",
+  "main": "src/main.tsc"
+}
+```
+
+**Обязательные поля:**
+- `name` — имя пакета
+- `version` — версия (semver)
+- `main` — точка входа
+
+### main.tsc
+
+```typescript
+console.log("Hello world");
+```
+
+Top-level код → тело `main()` в C.
+
+## TSClang-библиотека
+
+### Структура
+
+```
+mylib/
+  tsc.package.json
+  index.tsc
+  src/
+    foo.tsc
+    bar.tsc
+```
+
+### tsc.package.json
+
+```json
+{
+  "name": "@myco/mylib",
+  "version": "1.0.0",
+  "type": "library"
+}
+```
+
+**Обязательные поля:**
+- `name`
+- `version`
+- `type: "library"`
+
+### index.tsc
+
+```typescript
+export { foo } from "./src/foo.tsc";
+export { bar } from "./src/bar.tsc";
+```
+
+`index.tsc` — реэкспорт публичного API. Потребитель импортирует:
+```typescript
+import { foo, bar } from "@myco/mylib";
+```
+
+**Примечание:** `"main"` опционален. Если не указан, компилятор ищет `index.tsc` по конвенции.
+
+## C-wrapper (обёртка над C-библиотекой)
+
+### Имя в реестре
+
+Официальные C-wrapper публикуются в scope `@tsc/`:
+
+```
+@tsc/sqlite3    — декларации для SQLite3
+@tsc/openssl    — декларации для OpenSSL
+@tsc/libcurl    — декларации для libcurl
+```
+
+Пользователь может опубликовать альтернативы в своём scope:
+
+```
+@vasya/sqlite3     — альтернативные декларации
+@company/openssl   — корпоративные декларации
+```
+
+### Структура
+
+```
+sqlite3/
+  tsc.package.json
+  index.d.tsc
+```
+
+### tsc.package.json
+
+```json
+{
+  "name": "@tsc/sqlite3",
+  "version": "1.0.0",
+  "type": "library"
+}
+```
+
+### index.d.tsc
+
+```typescript
+declare link {
+    libs: ["sqlite3"];
+    pkg_config: "sqlite3";
+}
+
+declare opaque type SqliteDb {
+    destructor: sqlite3_close;
+}
+
+declare opaque type SqliteStmt {
+    destructor: sqlite3_finalize;
+}
+
+declare function sqlite3_open(path: string): SqliteDb throws SqliteError;
+declare function sqlite3_errmsg(db: Ref<SqliteDb>): Ref<string>;
+
+declare function sqlite3_prepare_v2(
+    db: Ref<SqliteDb>,
+    sql: string,
+    out stmt: Mut<SqliteStmt>
+): i32;
+
+declare function sqlite3_step(stmt: Ref<SqliteStmt>): i32;
+declare function sqlite3_column_int(stmt: Ref<SqliteStmt>, col: i32): i32;
+declare function sqlite3_column_text(stmt: Ref<SqliteStmt>, col: i32): Ref<string>;
+
+declare const SQLITE_OK: i32 = 0;
+declare const SQLITE_ROW: i32 = 100;
+declare const SQLITE_DONE: i32 = 101;
+```
+
+**Содержимое:**
+- `declare link` — информация о линковке (`libs`, `pkg_config`, `c_sources`, `c_includes`)
+- `declare opaque type` — непрозрачные C-типы с деструкторами
+- `declare function` — сигнатуры C-функций
+- `declare const` — константы
+
+**Ownership в FFI:**
+- `T` (без Ref/Mut) — owned, деструктор вызовется автоматически
+- `Ref<T>` — borrowed, деструктор не вызывается
+- `Mut<T>` — mutable borrow
+
+### Импорты в .d.tsc файлах
+
+`.d.tsc` файлы содержат только декларации — они добавляют типы в окружение, но не экспортируют значения.
+
+Для разделения declarations по файлам используется **side-effect import**:
+
+```typescript
+// index.d.tsc
+import "./types.d.tsc";
+import "./functions.d.tsc";
+```
+
+```typescript
+// types.d.tsc
+declare opaque type SqliteDb { destructor: sqlite3_close }
+declare opaque type SqliteStmt { destructor: sqlite3_finalize }
+```
+
+```typescript
+// functions.d.tsc
+declare function sqlite3_open(path: string): SqliteDb throws SqliteError
+declare function sqlite3_step(stmt: Ref<SqliteStmt>): i32
+```
+
+**Side-effect import** (`import "./file"`) загружает декларации в контекст компиляции без экспорта.
+
+Это стандартный паттерн для `.d.tsc`:
+- `declare platform {}` — декларация в глобальное окружение
+- `declare module "std/libc" {}` — декларация в окружение модуля
+- `declare opaque type` / `declare function` — декларации типов и функций
+
+### Локальные декларации
+
+Для переопределения или расширения деклараций библиотек — локальный `.d.tsc` файл и относительный импорт.
+
+**Структура**:
+
+```
+myproject/
+  tsc.package.json
+  src/
+    main.tsc
+  types/
+    sqlite3/
+      sqlite3.d.tsc         ← своя декларация
+      sqlite3-ext.d.tsc     ← расширение (declaration merging)
+```
+
+**Полная замена**:
+
+```typescript
+// types/sqlite3.d.tsc
+declare link {
+    libs: ["sqlite3"]
+    pkg_config: "sqlite3"
+}
+
+declare opaque type SqliteDb {
+    destructor: sqlite3_close
+}
+
+declare function sqlite3_open(path: string): SqliteDb throws SqliteError
+declare function sqlite3_my_custom_func(db: Ref<SqliteDb>): i32
+```
+
+```typescript
+// src/main.tsc
+import { sqlite3_open, sqlite3_my_custom_func } from "./types/sqlite3"
+```
+
+**Расширение (declaration merging)**:
+
+```typescript
+// types/sqlite3-ext.d.tsc
+declare module "@tsc/sqlite3" {
+    function sqlite3_backup_init(
+        dest: Ref<SqliteDb>,
+        src: Ref<SqliteDb>
+    ): SqliteBackup
+}
+```
+
+```typescript
+// src/main.tsc
+import { sqlite3_open } from "@tsc/sqlite3"
+import "../types/sqlite3-ext"  // side-effect import добавляет sqlite3_backup_init
+
+const backup = sqlite3_backup_init(db, db)
+```
+
+### Как работает компиляция
+
+**C-wrapper не компилируется отдельно.** Это metadata, не код.
+
+При компиляции потребителя:
+
+**1. C-output (у потребителя):**
+
+```c
+// build/c/main.c
+#include <stdint.h>
+
+typedef struct SqliteDb SqliteDb;
+typedef struct SqliteStmt SqliteStmt;
+
+extern SqliteDb* sqlite3_open(const char* path);
+extern int sqlite3_prepare_v2(SqliteDb* db, const char* sql, SqliteStmt** stmt);
+extern int sqlite3_step(SqliteStmt* stmt);
+extern const char* sqlite3_column_text(SqliteStmt* stmt, int col);
+```
+
+**2. CMakeLists.txt (у потребителя):**
+
+```cmake
+# из declare link { libs: ["sqlite3"]; pkg_config: "sqlite3" }
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+target_include_directories(myapp PRIVATE ${SQLITE3_INCLUDE_DIRS})
+target_link_libraries(myapp PRIVATE ${SQLITE3_LIBRARIES})
+```
+
+**3. Автоматический cleanup:**
+
+```c
+void myFunction() {
+    SqliteDb* db = sqlite3_open("test.db");
+    SqliteStmt* stmt = NULL;
+    sqlite3_prepare_v2(db, "SELECT ...", &stmt);
+    sqlite3_step(stmt);
+    
+cleanup:  // сгенерировано автоматически
+    if (stmt) sqlite3_finalize(stmt);
+    if (db) sqlite3_close(db);
+}
+```
+
+### Публикация C-wrapper
+
+#### Команда
+
+```bash
+tsclang publish
+```
+
+#### Что проверяется
+
+1. `name` в формате `@scope/package`
+2. `version` в формате semver
+3. `index.d.tsc` существует
+4. Все `declare opaque type` имеют `destructor`
+5. Все `declare function` используют корректные типы
+
+#### Что публикуется
+
+```
+@tsc/sqlite3@1.0.0/
+  tsc.package.json
+  index.d.tsc
+```
+
+Только два файла — никакого C-кода.
+
+#### Использование
+
+**Установка:**
+
+```bash
+tsclang install @tsc/sqlite3
+```
+
+**tsc.package.json потребителя:**
+
+```json
+{
+  "dependencies": {
+    "@tsc/sqlite3": "^1.0.0"
+  }
+}
+```
+
+**Импорт:**
+
+```typescript
+import { sqlite3_open, sqlite3_prepare_v2, sqlite3_step, 
+         sqlite3_column_text, SQLITE_ROW, SqliteDb, SqliteStmt } from "@tsc/sqlite3";
+
+const db = sqlite3_open("test.db");
+
+let stmt: SqliteStmt;
+sqlite3_prepare_v2(db, "SELECT name FROM users", stmt);
+
+while (sqlite3_step(stmt) === SQLITE_ROW) {
+    const name = sqlite3_column_text(stmt, 0);
+    console.log(name);
+}
+```
+
+### Link конфигурация
+
+C-wrapper должен указать, откуда брать C-библиотеку. Конфигурация в `tsc.package.json` в поле `link`.
+
+#### Режимы линковки
+
+| Режим | Описание |
+|-------|----------|
+| `system` | Библиотека установлена в системе (pkg-config, libs) |
+| `bundled` | Исходники/библиотека внутри пакета |
+| `fetch` | Скачать по URL/git при установке |
+
+#### System (системная библиотека)
+
+```json
+{
+  "name": "@tsc/openssl",
+  "version": "1.0.0",
+  "type": "library",
+  "link": {
+    "mode": "system",
+    "pkg_config": "openssl"
+  }
+}
+```
+
+Генерирует в CMakeLists.txt потребителя:
+```cmake
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(OPENSSL REQUIRED openssl)
+target_include_directories(myapp PRIVATE ${OPENSSL_INCLUDE_DIRS})
+target_link_libraries(myapp PRIVATE ${OPENSSL_LIBRARIES})
+```
+
+#### Bundled (исходники в пакете)
+
+```json
+{
+  "name": "@tsc/sqlite3",
+  "version": "1.0.0",
+  "type": "library",
+  "link": {
+    "mode": "bundled",
+    "sources": ["lib/sqlite3.c"],
+    "includes": ["lib"]
+  }
+}
+```
+
+Исходники компилируются вместе с проектом потребителя.
+
+#### Fetch (скачать при установке)
+
+```json
+{
+  "name": "@tsc/sqlite3",
+  "version": "1.0.0",
+  "type": "library",
+  "link": {
+    "mode": "bundled",
+    "fetch": {
+      "url": "https://www.sqlite.org/2024/sqlite-amalgamation-3450000.zip",
+      "strip": 1
+    },
+    "sources": ["sqlite3.c"],
+    "includes": ["."]
+  }
+}
+```
+
+Варианты `fetch`:
+
+| Поле | Описание | Пример |
+|------|----------|--------|
+| `url` | URL архива | `"https://..."` |
+| `git` | Git репозиторий | `"https://github.com/user/repo.git"` |
+| `tag` | Git тег | `"v1.0.0"` |
+| `commit` | Git коммит | `"a1b2c3d"` |
+| `subdir` | Подпапка в репозитории | `"src"` |
+| `strip` | Убрать уровней папок из архива | `1` |
+
+При `tsclang install`:
+1. Скачать по URL/git в кэш
+2. Распаковать
+3. При сборке использовать `sources`
+
+#### Build (сборка исходников)
+
+Для библиотек, требующих сборку (configure/make/cmake):
+
+```json
+{
+  "link": {
+    "mode": "bundled",
+    "fetch": {
+      "git": "https://github.com/example/lib.git",
+      "tag": "v1.0.0"
+    },
+    "build": {
+      "commands": ["./configure", "make"]
+    },
+    "sources": ["lib/libfoo.a"],
+    "includes": ["include"]
+  }
+}
+```
+
+| Тип библиотеки | `build` | Пример |
+|----------------|---------|--------|
+| Amalgamation (один .c) | не нужен | SQLite |
+| Makefile | `["make"]` | простые |
+| CMake | `["cmake -B build", "cmake --build build"]` | сложные |
+| Configure + Make | `["./configure", "make"]` | автоconf |
+
+#### Стандартные платформы для link
+
+#### Embedded с разными чипами
+
+```json
+{
+  "link": {
+    "platforms": {
+      "avr": {
+        "mcus": {
+          "atmega328p": {
+            "sources": ["src/avr/atmega328.c"],
+            "cflags": ["-mmcu=atmega328p", "-DF_CPU=16000000UL"]
+          },
+          "atmega2560": {
+            "sources": ["src/avr/atmega2560.c"],
+            "cflags": ["-mmcu=atmega2560", "-DF_CPU=16000000UL"]
+          }
+        }
+      },
+      "arm": {
+        "mcus": {
+          "stm32f103": {
+            "sources": ["src/arm/stm32f1.c"],
+            "cflags": ["-mcpu=cortex-m3", "-mthumb"]
+          },
+          "stm32f407": {
+            "sources": ["src/arm/stm32f4.c"],
+            "cflags": ["-mcpu=cortex-m4", "-mthumb", "-mfpu=fpv4-sp-d16"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+При сборке проекта с `"target": "avr"`, `"mcu": "atmega328p"` — берётся соответствующая конфигурация.
+
+#### Полный пример
+
+```json
+{
+  "name": "@tsc/openssl",
+  "version": "1.0.0",
+  "type": "library",
+  "link": {
+    "platforms": {
+      "desktop": {
+        "system": {
+          "pkg_config": "openssl"
+        }
+      },
+      "windows": {
+        "system": {
+          "libs": ["libssl", "libcrypto"],
+          "includes": ["C:/OpenSSL/include"]
+        }
+      },
+      "arm": {
+        "mcus": {
+          "stm32f103": {
+            "sources": ["embedded/mbedtls.c"],
+            "includes": ["embedded"]
+          },
+          "stm32f407": {
+            "sources": ["embedded/mbedtls.c"],
+            "includes": ["embedded"],
+            "cflags": ["-mfpu=fpv4-sp-d16"]
+          }
+        }
+      },
+      "avr": {
+        "sources": ["embedded/tinycrypt.c"],
+        "includes": ["embedded"]
+      }
+    }
+  }
+}
+```
+
+#### declare link в index.d.tsc
+
+При наличии `link` в `tsc.package.json`, `declare link` в `index.d.tsc` можно убрать или оставить для документации:
+
+```typescript
+// index.d.tsc — без declare link, всё в tsc.package.json
+
+declare opaque type SqliteDb {
+    destructor: sqlite3_close;
+}
+
+declare function sqlite3_open(path: string): SqliteDb throws SqliteError;
+// ...
+```
+
+## Platform profile
+
+### Структура
+
+```
+platform/
+  tsc.package.json
+  index.d.tsc
+```
+
+### tsc.package.json
+
+```json
+{
+  "name": "@nes/platform",
+  "version": "1.0.0",
+  "type": "platform"
+}
+```
+
+**Обязательные поля:**
+- `name`
+- `version`
+- `type: "platform"`
+
+---
+
+## Разделение ответственности
+
+| Аспект | Кто отвечает |
+|--------|--------------|
+| `toolchain` | Platform profile / Проект |
+| `target` / `mcu` | Проект |
+| `heap`, `fpu`, `stack_size` | Platform profile |
+| `sources`, `cflags`, `libs` | Библиотека (C-wrapper) |
+
+**Библиотека** не определяет:
+- Какой компилятор использовать
+- Параметры платформы
+- Toolchain file
+
+**Platform profile** определяет:
+- Какой toolchain
+- Возможности платформы
+- Доступный subset std/libc
+
+**Проект** выбирает:
+- Какой profile использовать
+- Какой target / mcu
+
+---
+
+## Что НЕ входит в ответственность библиотеки
+
+| Аспект | Ответственность | Где настраивается |
+|--------|-----------------|-------------------|
+| `toolchain` | Проект / Platform profile | `tsc.package.json` проекта или `@scope/platform` |
+| `target` / `mcu` | Проект | `tsc.package.json` → `builds.*.target` |
+| Platform profile | Отдельный пакет | `@nes/platform`, `@spectrum/platform`, локальный `.d.tsc` |
+
+Библиотека декларирует:
+- Какие `sources` / `includes` использовать
+- Какие `cflags` нужны
+- Какие `libs` линковать
+
+Библиотека **не** определяет:
+- Какой компилятор использовать (`avr-gcc`, `cc65`, `clang`)
+- Параметры платформы (`heap`, `fpu`, `stack_size`)
+- Toolchain file для CMake
+
+Это разделяет ответственности:
+- **Библиотека** = "вот мой код, вот мои флаги"
+- **Проект** = "я собираюсь под AVR, использую avr-gcc"
+- **Platform profile** = "для NES нужен cc65 + этот toolchain.cmake"
+
+---
+
+## Сводная таблица
+
+| Аспект | Executable | TSClang-библиотека | C-wrapper | Platform profile |
+|--------|------------|-------------------|-----------|------------------|
+| `"type"` | не указан | `"library"` | `"library"` | `"platform"` |
+| `"name"` | любое | `@scope/name` | `@scope/name` | `@scope/name` |
+| `"main"` | **обязательно** | опционально | опционально | не нужно |
+| Entry файл | `src/main.tsc` | `index.tsc` | `index.d.tsc` | `index.d.tsc` |
+| Содержимое | код + top-level | код + export | только declare, `declare opaque type`, `declare function` | `declare platform {}`, subset std/libc |
+| Публикация | `.exe` | `.tsc` + `.a` | только `.d.tsc` | `.d.tsc` + toolchain |
+
+
 ## Build Profiles
 
 Именованные профили сборки в `tsc.package.json`:
@@ -1246,102 +1904,3 @@ Lock-файл коммитится в репозиторий. `tsclang install` 
 }
 ```
 
-## Consumer-side monomorphization
-
-Дженерики инстанцируются у потребителя, а не в библиотеке.
-
-**Библиотека компилируется один раз** в IR с «дырами» для типов:
-
-```typescript
-// @myco/collections/index.tsc
-export function identity<T>(x: T): T {
-    return x
-}
-
-export class Box<T> {
-    constructor(public value: T) {}
-}
-```
-
-**Кеш библиотеки** содержит IR, не конкретные типы:
-```
-~/.tsclang/cache/@myco/collections@1.0.0/
-  source/
-    index.tsc
-  build/
-    desktop/
-      include/
-        collections.h      // IR с type holes
-      lib/
-        libcollections.a   // скомпилированный IR
-```
-
-**При компиляции потребителя** — компилятор инстанцирует конкретные варианты:
-
-```typescript
-import { identity, Box } from "@myco/collections"
-
-const a = identity(42)           // identity<i32>
-const b = identity("hello")      // identity<string>
-const box = new Box<User>({...}) // Box<User>
-```
-
-**При компиляции проекта:**
-
-1. Загрузить IR библиотеки с type holes
-2. Найти использования: `identity<i32>`, `identity<string>`, `Box<User>`
-3. Инстанцировать код для каждого типа
-
-Генерируемый C:
-```c
-// identity<i32>
-int32_t  identity_i32(int32_t x)   { return x; }
-
-// identity<string>
-String*  identity_string(String* x) { return x; }
-
-// Box<User>
-typedef struct { User* value; } Box_User;
-```
-
-Плюсы:
-- Библиотека компилируется один раз (не для каждого набора типов)
-- Оптимальная производительность — inlining и специализация под конкретный тип
-- В бинарь попадает только используемое
-
-### Формат скомпилированной библиотеки
-
-Скомпилированная TSClang-библиотека в кеше:
-
-```
-@myco/mylib@1.0.0/
-  source/
-    index.tsc
-    src/
-      utils.tsc
-  build/
-    desktop/
-      include/
-        mylib.h
-      lib/
-        libmylib.a
-  metadata.json
-```
-
-**`metadata.json`** — описывает публичный API библиотеки для consumer-side monomorphization:
-
-```json
-{
-  "exports": {
-    "foo": { "layout_hash": "abc123" },
-    "Bar": { "layout_hash": "def456", "size": 16 }
-  },
-  "generics": {
-    "identity": { "params": ["T"] },
-    "Map": { "params": ["K", "V"] }
-  }
-}
-```
-
-- `exports` — конкретные (не generic) экспорты с хешом layout (для инвалидации кеша при изменении структуры)
-- `generics` — generic-экспорты с именами параметров — компилятор потребителя инстанцирует их под конкретные типы
