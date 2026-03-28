@@ -17,6 +17,7 @@
 | [spec/09-build.md](spec/09-build.md) | Типы проектов, система сборки, CLI, package manager |
 | [spec/10-stdlib.md](spec/10-stdlib.md) | Стандартная библиотека |
 | [spec/11-compiler.md](spec/11-compiler.md) | Архитектура компилятора, IR, методология тестов |
+| [spec/12-migration.md](spec/12-migration.md) | Migration guide: TypeScript → TSClang |
 
 ---
 

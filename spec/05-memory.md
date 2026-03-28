@@ -335,6 +335,35 @@ function getLongerOwned(a: Ref<string>, b: Ref<string>): string {
 }
 ```
 
+**Правило 4: `Ref<T>` и `Mut<T>` не могут пережить точку `await`**
+
+Borrow не может оставаться живым через `await` — borrow checker отвергает такой код. Причина: async state machine сохраняет состояние между suspension points, и источник borrow может быть invalidated или moved другой coroutine пока ожидает:
+
+```typescript
+// ❌ Ошибка компилятора: borrow пережил await
+async function bad(arr: i32[]): Promise<void> {
+    const r: Ref<i32> = arr[0]   // borrow из arr
+    await something()            // ← r жив через await — ошибка
+    console.log(r)
+}
+
+// ✅ Clone перед await
+async function ok(arr: i32[]): Promise<void> {
+    const val: i32 = arr[0]      // копия значения (i32 — Copy-тип)
+    await something()
+    console.log(val)
+}
+
+// ✅ Использовать borrow до await, новый borrow после
+async function ok2(arr: i32[]): Promise<void> {
+    console.log(arr[0])          // borrow использован и отпущен до await
+    await something()
+    console.log(arr[0])          // новый borrow после await
+}
+```
+
+Правило действует только для `Ref<T>` и `Mut<T>`. Owned значения (`T`) через `await` переживать могут — они захватываются в state machine struct.
+
 ## Автоматический Drop
 
 Компилятор вставляет `free()` в конце scope владельца:

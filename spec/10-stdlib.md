@@ -653,7 +653,14 @@ s.sliceChars(start, end)   // string — безопасный срез по code
 
 `codePointAt(byteIdx)` и `graphemeAt(byteIdx)` принимают **байтовое смещение** — удобно после `indexOf`: смещение уже известно, сканировать с начала не нужно. Декодирование одного UTF-8 символа — O(1..4 байта).
 
-utf8proc (UAX #29, ~300KB, C-native) — используется для сегментации графемных кластеров. Работает на embedded.
+utf8proc (UAX #29, ~300KB, C-native) — используется для сегментации графемных кластеров. **Недоступен на embedded:** платформы с `flash < 300KB` не могут включить utf8proc. Импорт `graphemes`, `graphemeAt`, `sliceChars` на таких платформах — **ошибка компилятора**:
+
+```
+error: grapheme methods require utf8proc (~300KB) — unavailable on platform "avr-atmega328p" (flash: 32KB)
+  hint: use chars() / codePointAt() for byte-level iteration
+```
+
+Методы без utf8proc (доступны везде): `chars()`, `charCount()`, `codePointAt()`, `indexOf()`, байтовый `slice()`.
 
 ```typescript
 // паттерн: найти подстроку → получить символ по смещению
@@ -719,6 +726,52 @@ format("%05d", 42)                                     // "00042"
 // %o — octal
 // %% — литеральный %
 ```
+
+## std/json
+
+Парсинг и сериализация JSON. На embedded может быть недоступен — зависит от размера flash.
+
+```typescript
+import { JSON } from "std/json"
+```
+
+### Функции
+
+```typescript
+JSON.parse<T>(s: string): T throws ParseError
+JSON.stringify(val: T): string
+JSON.stringify(val: T, indent: i32): string  // pretty-print с отступом indent пробелов
+```
+
+**`JSON.parse<T>`** десериализует строку в тип `T`. Тип `T` должен быть:
+- примитивом (`string`, `bool`, `i32`, `f64`, ...)
+- классом с публичными полями (компилятор генерирует десериализатор)
+- массивом или `Map<string, V>` из поддерживаемых типов
+
+При невалидном JSON бросает `ParseError`:
+
+```typescript
+import { JSON, ParseError } from "std/json"
+
+try {
+    const user = JSON.parse<User>('{"name":"Alice","age":30}')
+    console.log(user.name)  // Alice
+} catch (e: ParseError) {
+    console.log("bad json:", e.message)
+}
+
+const json = JSON.stringify(user)          // '{"name":"Alice","age":30}'
+const pretty = JSON.stringify(user, 2)    // форматированный с отступом 2
+```
+
+**Ограничения типов:**
+- `undefined` отсутствует — поля с `null` в JSON маппятся в `null`
+- Приватные поля класса в JSON не включаются
+- Цикличные ссылки (`Shared<T>` указывающий сам на себя) — runtime error при stringify
+
+**Платформа:**
+- Desktop/server — всегда доступен
+- Embedded — ошибка компилятора при импорте `std/json` на платформах с `flash < 16KB`; использовать минимальный парсер вручную или `@tsc/json-nano` из реестра
 
 ## std/random
 
@@ -1039,6 +1092,43 @@ export function computed<T>(deps: Mut<Signal<any>>[], fn: () => T): Signal<T> {
 ```
 
 > **Отличие от Vue:** в TSClang зависимости указываются явно (`effect([a, b], fn)`). Пропущенная зависимость не вызовет перезапуск — это намеренное ограничение: нет магии, нет interior mutability, чистая библиотека без поддержки компилятора.
+
+### async внутри effect — запрещено
+
+Callback `effect` является **синхронным**. `await` внутри него — **ошибка компилятора**:
+
+```typescript
+// ❌ Ошибка компилятора: await inside effect callback
+effect([store.url], () => {
+    const data = await fetch(store.url.get())  // ← error: await in sync context
+    store.data.set(data)
+})
+```
+
+Причина: `effect` вызывает callback синхронно при регистрации и при каждом изменении зависимости. Реактивный граф не является async-aware — нет механизма подождать завершения асинхронного callback.
+
+**Паттерн async-reactive** — запускать async-логику через `signal.subscribe` и управлять ею вручную:
+
+```typescript
+// ✅ Правильный паттерн: async не внутри effect
+async function loadData(url: string): Promise<void> {
+    const data = await fetch(url)
+    store.data.set(await data.json<ResponseData>())
+}
+
+// Регистрируем синхронный триггер, который запускает async
+effect([store.url], () => {
+    loadData(store.url.get())   // запускаем async, не ждём
+})
+
+// ✅ Или через явный subscribe с AbortController для отмены предыдущего запроса
+let controller: AbortController | null = null
+store.url.subscribe(() => {
+    if (controller != null) controller.abort()
+    controller = new AbortController()
+    loadData(store.url.get(), controller.signal)
+})
+```
 
 ## std/libc
 

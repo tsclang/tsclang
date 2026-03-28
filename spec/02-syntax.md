@@ -184,6 +184,28 @@ class Printer {
 }
 ```
 
+### Приоритет overload resolution
+
+Когда несколько overload подходят для вызова, компилятор выбирает по приоритету:
+
+1. **Exact match** — точное совпадение типов (non-generic)
+2. **Generic с выведенным типом** — generic overload, тип выводится из аргументов
+3. **Implicit widening** — расширение типа (например, `i32` → `f64`)
+
+```typescript
+function foo<T>(x: T): void { ... }   // generic
+function foo(x: i32): void { ... }    // non-generic
+
+foo(42)        // → foo(i32)   — exact match (правило 1), generic игнорируется
+foo<i32>(42)   // → foo<i32>  — явный generic, приоритет игнорируется
+foo("hello")   // → foo<string> — exact match только для generic (правило 2)
+foo(3.14)      // → foo<f64>  — только generic подходит
+```
+
+Явный generic (`foo<i32>(42)`) всегда выбирает generic overload независимо от приоритета.
+
+Если два overload одинакового приоритета одинаково подходят — ошибка компилятора (ambiguous overload).
+
 ## Ограничение: extern "C" запрещает перегрузку
 
 `extern "C"` функции имеют фиксированное C-имя — манглинг невозможен. Перегрузка — ошибка компилятора:

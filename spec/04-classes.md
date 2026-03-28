@@ -99,6 +99,40 @@ user.toJson()   // ✅
 int32_t n = tsc_std_string_charCount(s);   // статический вызов, нет vtable
 ```
 
+**Конфликт двух extensions с одинаковым именем:**
+
+Если два разных модуля экспортируют extension с одинаковым именем для одного типа — это ошибка компилятора при попытке использовать оба одновременно:
+
+```typescript
+// module-a.tsc
+export extension function format(this: string): string { ... }
+
+// module-b.tsc
+export extension function format(this: string): string { ... }
+
+// main.tsc
+import { format } from "./module-a"
+import { format } from "./module-b"   // ❌ ошибка: ambiguous extension 'format' for type 'string'
+                                      //    hint: use 'import { format as fmtA } from "./module-a"'
+```
+
+Разрешение — переименовать при импорте через `as`:
+
+```typescript
+import { format as fmtA } from "./module-a"
+import { format as fmtB } from "./module-b"
+
+"hello".fmtA()   // ✅ явно модуль-a
+"hello".fmtB()   // ✅ явно модуль-b
+```
+
+Импортировать одно имя (второй не импортирован) — ошибки нет:
+
+```typescript
+import { format } from "./module-a"   // ✅ — только один, нет конфликта
+"hello".format()
+```
+
 ## Enum
 
 ### Числовой enum

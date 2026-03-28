@@ -97,6 +97,83 @@ Async stack usage:
 
 Новый синтаксис не требуется — только диагностика компилятора.
 
+### Размер и alignment state machine
+
+**Формула:**
+```
+sizeof(StateMachine) = sizeof(_state) + sum(sizeof(V) for V in live_vars_across_any_await) + padding
+```
+
+где `live_vars_across_any_await` — переменные, живые хотя бы через одну точку `await` (минимизируются компилятором).
+
+**Размер поля `_state` по платформам:**
+
+| Платформа      | Тип `_state` | Размер | Alignment |
+|----------------|-------------|--------|-----------|
+| AVR            | `uint8_t`   | 1 B    | 1 B       |
+| ARM Cortex-M   | `uint32_t`  | 4 B    | 4 B       |
+| x86-64         | `int32_t`   | 4 B    | 8 B       |
+
+Максимальное число состояний (255 для AVR): количество `await`-точек в функции + 2 (STATE_INIT, STATE_DONE). Если функция содержит больше 253 `await` точек — ошибка компилятора на AVR.
+
+**Overhead `async fn throws E`:**
+
+`async` функция с `throws` добавляет к state machine хранение результата ошибки:
+
+```c
+typedef struct {
+    uint8_t        _state;
+    /* живые переменные */
+    bool           _ok;           // результат: успех или ошибка
+    union {
+        ReturnType _value;        // при успехе
+        ErrorType  _error;        // при ошибке
+    };
+} AsyncThrowsTask;
+
+// sizeof = sizeof(_state) + sizeof(live vars) + sizeof(bool) + max(sizeof(T), sizeof(E)) + padding
+```
+
+**Пример расчёта (AVR):**
+
+```typescript
+async function readConfig(): string throws IOError {
+    const fd = await openFile("cfg")    // fd: FileHandle (4 B) — живёт через await
+    const s  = await readAll(fd)        // s: string (8 B) — живёт через return
+    return s
+}
+// StateMachine: _state(1) + fd(4) + s(8) + _ok(1) + max(string,IOError)(8) + padding = ~24 B
+```
+
+### Borrows через await — запрещено
+
+`Ref<T>` и `Mut<T>` не могут пережить точку `await`. Borrow checker отвергает такой код — это следствие того, что owned переменные попадают в state machine struct, а borrows нет (они не могут быть сохранены без гарантии что источник жив):
+
+```typescript
+// ❌ Ошибка: borrow жив через await
+async function bad(data: Buffer): Promise<void> {
+    const header = data.readHeader()  // Ref<Header> — borrow из data
+    await fetchMore()                 // ← header жив через await — ошибка компилятора
+    process(header)
+}
+
+// ✅ Клонировать нужные данные до await
+async function ok(data: Buffer): Promise<void> {
+    const header = data.readHeader().clone()  // owned копия
+    await fetchMore()
+    process(header)
+}
+
+// ✅ Или завершить использование borrow до await
+async function ok2(data: Buffer): Promise<void> {
+    const size = data.readHeader().size   // использовали и отпустили
+    await fetchMore()
+    data.resize(size)
+}
+```
+
+Owned значения (`T`) через `await` переживать могут — захватываются в state machine struct. Только borrows запрещены.
+
 ### Promise<T>
 
 Тип возвращаемого значения `async` функции — `Promise<T>`. Обе записи эквивалентны:
@@ -516,6 +593,47 @@ const result = await Promise.race([
 
 ctrl.abort()   // победитель уже вернул результат, проигравший прекратит работу при следующей await
 ```
+
+---
+
+### AsyncMutex — координация async-функций
+
+Обычный `Mutex` (из `std/sync`) нельзя использовать между async-функциями на одном event loop: `await mutex.lock()` заблокирует event loop навсегда, если другая async-функция уже держит лок — она никогда не получит управление чтобы освободить.
+
+```typescript
+// ❌ Deadlock на event loop:
+import { Mutex } from "std/sync"
+const mutex = new Mutex()
+async function a(): Promise<void> { mutex.lock(); await b(); mutex.unlock() }
+async function b(): Promise<void> { mutex.lock(); ... }  // никогда не выполнится
+```
+
+Для координации async-функций — `AsyncMutex` из `std/async`:
+
+```typescript
+import { AsyncMutex } from "std/async"
+
+const mutex = new AsyncMutex()
+
+async function critical(): Promise<void> {
+    await mutex.lock()   // неблокирующий: сохраняет callback в очередь, отдаёт event loop
+    try {
+        // критическая секция
+        await doWork()
+    } finally {
+        mutex.unlock()
+    }
+}
+
+// Или через runExclusive — автоматический unlock, включая ошибки:
+await mutex.runExclusive(async () => {
+    await doWork()
+})  // unlock гарантирован даже при throw
+```
+
+`AsyncMutex` — честная очередь (FIFO): ждущие корутины пробуждаются по порядку. При `unlock()` следующий ожидающий получает лок на следующей итерации event loop.
+
+**Правило:** `Mutex` (std/sync) — только для синхронного кода и `Thread.spawn`. `AsyncMutex` — для async-функций на event loop. Использование `Mutex.lock()` (блокирующего) в async-контексте — **предупреждение компилятора**.
 
 ---
 
