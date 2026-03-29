@@ -337,7 +337,23 @@ if (shape.vtable == &Circle_Drawable_vtable) {
 
 ## Классы
 
-**Наследования нет** — только композиция. `extends` запрещён, **кроме одного исключения**: `class MyError extends Error` — для ошибок. Полиморфизм — только через `interface` + `implements`.
+**Наследования нет** — только композиция. `extends` запрещён, **кроме одного исключения**: `class MyError extends Error` — прямой наследник `Error`. Цепочки запрещены: `class TimeoutError extends NetworkError` — ошибка компилятора. Полиморфизм — только через `interface` + `implements`.
+
+Для логической группировки ошибок — интерфейс:
+```typescript
+interface INetworkError { code: i32 }
+
+class NetworkError extends Error implements INetworkError { code: i32 }
+class TimeoutError extends Error implements INetworkError {
+    code: i32
+    constructor(msg: string) { super(msg); this.code = 408 }
+}
+
+// группировка через интерфейс:
+function handleNetworkError(e: INetworkError): void { ... }
+```
+
+Это сохраняет flat C-структуры без type_id и делает catch статически типизированным.
 
 ```typescript
 // вместо наследования — композиция

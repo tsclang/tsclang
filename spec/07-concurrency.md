@@ -524,6 +524,35 @@ class AbortError extends Error {
 }
 ```
 
+**Правила `AbortError` и `throws`:**
+
+- `AbortError` **не объявляется в `throws`** — наличие `signal?: AbortSignal` в параметрах уже является декларацией что функция отменяема. Дублировать в `throws` избыточно.
+- Функции **без** `AbortSignal` в параметрах не могут бросить `AbortError` — компилятор это гарантирует.
+- `AbortError` ловится через обычный `catch (e: AbortError)` — когда нужно вернуть default-значение или залогировать отмену.
+- Для cleanup при отмене — `signal.onAbort(callback)`, не `catch`.
+
+```typescript
+// ✅ — AbortError не в throws, signal? уже декларирует отменяемость
+async function loadConfig(path: string, signal?: AbortSignal): Config throws IOError {
+    return await readFile(path)
+}
+
+// поймать отмену — через catch:
+try {
+    const cfg = await loadConfig(path, signal)
+} catch (e: AbortError) {
+    return defaultConfig   // graceful fallback при отмене
+} catch (e: IOError) {
+    throw e
+}
+
+// cleanup при отмене — через onAbort, не catch:
+async function readSocket(fd: i32, signal?: AbortSignal): Buffer {
+    signal?.onAbort(() => close(fd))
+    return await recv(fd)
+}
+```
+
 **Ownership при отмене — cleanup всегда выполняется:**
 
 Когда state machine обнаруживает `signal.aborted`, она не прерывается немедленно — она переходит в режим **unwind**: проходит все cleanup-состояния для живых ресурсов точно так же, как при обычном завершении или ошибке. Owned ресурсы всегда освобождаются:
@@ -1375,18 +1404,22 @@ function onHangup(): void {
 }
 ```
 
-Компилятор регистрирует обработчики в `main()`:
+**Безопасность:** `@signal` реализован через libuv (`uv_signal_t`), а не через прямой `signal()`. Настоящий C signal handler только пишет байт в pipe; callback вызывается в event loop. Поэтому внутри `@signal` хэндлера доступен любой TSClang-код — `console.log`, async-вызовы и др.
+
+C-output:
 ```c
-void onInterrupt(int sig) {
+// callback вызывается в event loop (async-signal-safe)
+static void _onInterrupt(uv_signal_t* handle, int signum) {
     printf("Ctrl+C pressed\n");
     cleanup();
     exit(0);
 }
 
-// В main()
-signal(SIGINT, onInterrupt);
-signal(SIGTERM, onTerminate);
-signal(SIGHUP, onHangup);
+// В main() — регистрация через libuv
+uv_signal_t _sig_int, _sig_term, _sig_hup;
+uv_signal_init(loop, &_sig_int);  uv_signal_start(&_sig_int, _onInterrupt, SIGINT);
+uv_signal_init(loop, &_sig_term); uv_signal_start(&_sig_term, _onTerminate, SIGTERM);
+uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 ```
 
 Поддерживаемые сигналы:

@@ -146,10 +146,11 @@ const x = maybeNull ?? defaultValue  // move maybeNull если не null
 let x = 42           // number (f64)
 let y = 3.14         // number
 
-// TSClang — нужно указать явно если не хочешь дефолт:
-let x = 42           // i32 по умолчанию для целых
-let y = 3.14         // f64 по умолчанию для дробных
+// TSClang — поведение то же самое (number = f64):
+let x = 42           // f64 (через number — как в TypeScript)
+let y = 3.14         // f64
 let z: i64 = 42      // явно i64
+let n: i32 = 42      // явно i32
 let w: f32 = 3.14    // явно f32 — будет усечение!
 ```
 

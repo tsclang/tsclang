@@ -818,6 +818,8 @@ platform/
 - Enum string tables — не генерируются, `.toString()` возвращает номер
 - Трейдофф: меньше кода → меньше flash; но нет type-safe runtime проверок для erased типов
 
+**Borrow checker при `binaryMode: "small"`:** type erasure — это оптимизация кодогенерации, не языковая фича. Borrow checker работает на AST до кодогенерации — с полными типами. Безопасность гарантируется на этапе компиляции. "Нет runtime проверок" означает только что в C-output нет assert/cast проверок — не что borrow checker отключён.
+
 ## Platform Profile
 
 Компилятор должен знать в compile-time: какие функции libc доступны, есть ли heap, сколько бит адрес — чтобы выдавать ошибки заранее, не на этапе линковки.
