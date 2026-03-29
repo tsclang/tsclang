@@ -115,6 +115,125 @@ block state_cleanup:   // при отмене или ошибке
 - Async lowering — чёткое отображение `await` → state transitions
 - Почти 1:1 с C — кодоген тривиальный
 
+## Name mangling
+
+Формальная схема описана в [spec/02-syntax.md](spec/02-syntax.md) (раздел «Name mangling — формальная схема»). Здесь — замечания для реализации компилятора.
+
+**Что реализует компилятор:**
+- Проверка PascalCase для пользовательских типов на этапе парсинга (до typechecking)
+- Проверка зарезервированных префиксов (`ref_`, `mut_`, `arc_`, `opt_`, `arr_`) — ошибка компилятора
+- Вычисление module slug из package name (`tsc.package.json` → поле `name`) + relative file path
+- Формирование mangled name для каждой функции/метода при кодогенерации
+- Флаг `--short-symbols`: опускает module slug для executable-проектов (не библиотек)
+
+**Деманглинг:** грамматика самодостаточна — внешние метаданные не нужны. Деманглер реализуется как отдельный инструмент (или встраивается в debugger-интеграцию).
+
+## Debug Info
+
+### Механизм: `#line` директивы
+
+TSClang компилирует `.tsc` → `.c`, затем C-компилятор (gcc/clang/avr-gcc) генерирует бинарь с DWARF. Чтобы DWARF ссылался на исходные `.tsc` файлы, компилятор вставляет `#line` директивы в debug-билде:
+
+```c
+/* сгенерированный C — debug профиль */
+#line 42 "src/main.tsc"
+int32_t result = myapp_src_main_foo_i32(x);
+
+#line 43 "src/main.tsc"
+myapp_src_main_bar_string(msg);
+```
+
+C-компилятор видит `#line` → записывает в DWARF `src/main.tsc:42` вместо `main.c:17`. GDB, LLDB, OpenOCD читают DWARF и показывают `.tsc` строки. Работает на всех таргетах включая avr-gcc — отдельной настройки не требует.
+
+**`#line` эмитируется только в debug профиле.** В release — не эмитируется:
+
+```json
+{ "profile": "debug" }    // #line включены
+{ "profile": "release" }  // #line отсутствуют, -O2/-O3
+```
+
+### Конфигурация путей
+
+`#line` содержит путь к `.tsc` файлу. Debugger должен его найти. Конфигурируется в `tsc.package.json`:
+
+```json
+{ "debugSourceRoot": "relative" }        // по умолчанию — относительно project root
+{ "debugSourceRoot": "absolute" }        // абсолютный путь — для remote debugging
+{ "debugSourceRoot": "/custom/path" }    // явный базовый путь
+```
+
+По умолчанию `relative` — пути портабельны при передаче проекта. `absolute` нужен для embedded, где GDB-сервер (OpenOCD) запущен на другой машине.
+
+### Что видит разработчик в debugger
+
+Файл и строка — `.tsc`. Имена переменных и типы — C (DWARF описывает сгенерированный C, не TSClang):
+
+```
+(gdb) backtrace
+#0  myapp_src_user_loadUsers () at src/user.tsc:15   ← .tsc строка ✅
+#1  myapp_src_main_main ()       at src/main.tsc:8
+
+(gdb) info locals
+users = 0x20001234                                   ← C pointer
+first = {name = {data = 0x20001250, len = 5}, age = 30}  ← C struct layout
+```
+
+**Closure** — видна как struct с captures:
+```
+_Closure_42 = {ctx = {id = 1, name = ...}}
+```
+
+**Async state machine** — видна как struct, `_state` показывает текущую точку:
+```
+_FetchUser_state = {_state = 1, id = 42, resp = ...}
+// _state = 1 означает «после первого await»
+```
+
+**Mangled names** — функции видны с C-именами (деманглер встроен в `tsclang debug --dap`).
+
+### Embedded (OpenOCD / SWD)
+
+OpenOCD использует GDB-протокол → читает DWARF → `#line` работает без дополнительной настройки. Конфигурация GDB-сервера стандартная, специфики для TSClang нет. Рекомендуется `"debugSourceRoot": "absolute"` для embedded проектов.
+
+### `tsclang debug --dap` — улучшенный debugging
+
+Базовый debugging через `#line` показывает `.tsc` строки, но имена переменных и типы остаются C-шными. `tsclang debug --dap` запускает DAP-сервер (Debug Adapter Protocol), который сидит между IDE и GDB/OpenOCD и улучшает картину:
+
+```
+IDE (VS Code / любая DAP-совместимая)
+    ↕  DAP protocol
+tsclang debug --dap          ← TSClang DAP server
+    ↕  GDB MI protocol
+GDB / LLDB / OpenOCD
+```
+
+DAP-сервер трансформирует ответы до отправки в IDE:
+
+| Без DAP-сервера | С `tsclang debug --dap` |
+|-----------------|------------------------|
+| `myapp_src_user_User_getName` | `User.getName()` |
+| `_Closure_42 = {ctx = ...}` | `[ctx](x) => ... = {ctx = ...}` |
+| `_FetchUser_state._state = 1` | `fetchUser — после первого await` |
+| C struct layout | TSClang типы с оригинальными именами полей |
+
+Запуск:
+```bash
+tsclang debug --dap --port 4711         # desktop: GDB под капотом
+tsclang debug --dap --openocd --port 4711   # embedded: OpenOCD под капотом
+```
+
+VS Code подключается к порту 4711 через стандартный DAP. Отдельного расширения не нужно — DAP поддерживается встроенно.
+
+### Ограничения
+
+| Что | Статус |
+|-----|--------|
+| Файл и строка в debugger | ✅ через `#line` |
+| TSClang имена с DAP-сервером | ✅ через `tsclang debug --dap` |
+| Колонки | ❌ `#line` не поддерживает |
+| TSClang типы без DAP-сервера | ❌ видны C-типы |
+| Embedded (avr-gcc + OpenOCD) | ✅ работает |
+
 ## Методология тестов
 
 Каждый компонент реализуется по одному циклу:
@@ -232,3 +351,212 @@ typedef struct { User* value; } Box_User;
 
 - `exports` — конкретные (не generic) экспорты с хешом layout (для инвалидации кеша при изменении структуры)
 - `generics` — generic-экспорты с именами параметров — компилятор потребителя инстанцирует их под конкретные типы
+
+## Incremental compilation *(roadmap)*
+
+Без incremental compilation каждый ребилд повторяет все generic инстанциации проекта. Для больших проектов с множеством `Map<K,V>`, `Box<T>` и пользовательских generic-типов это критично для DX.
+
+**Планируется три уровня кеширования:**
+
+**1. Кеш generic инстанциаций**
+
+Результат инстанциации `Map<string, User>` → C-код сохраняется с ключом `(generic_ir_hash, type_args)`. При ребилде — если IR библиотеки и типы не изменились, C-код берётся из кеша без повторной инстанциации.
+
+**2. File-level dependency tracking**
+
+Каждый `.tsc` файл компилируется независимо если его зависимости не изменились. Граф зависимостей строится из `import` деклараций. Изменение `utils.tsc` перекомпилирует только файлы импортирующие `utils.tsc`, не весь проект.
+
+**3. IR caching**
+
+Скомпилированный IR каждого модуля кешируется по хешу исходника. `tsclang build` проверяет хеши и пропускает неизменённые модули.
+
+**Инвалидация кеша** — автоматическая при:
+- изменении исходного `.tsc` файла
+- изменении версии зависимости (через `layout_hash` в `metadata.json`)
+- изменении версии компилятора
+
+Явная очистка: `tsclang build --clean`.
+
+## Optimization levels
+
+TSClang генерирует читаемый C и делегирует машинные оптимизации C-компилятору (gcc/clang/avr-gcc). Дублировать десятилетия работы C-компиляторов нет смысла.
+
+### Что делает tsclang на IR-уровне (независимо от уровня оптимизации)
+
+- **Dead code elimination** — функции, типы и импорты недостижимые из entry point не эмитируются в C. Проверяется статически по графу вызовов.
+- **Monomorphization deduplication** — одна generic инстанциация (`Map<string, i32>`) используется в N местах → одна C-функция, не N копий.
+
+Других IR-уровневых оптимизаций tsclang не делает — constant folding, inlining, loop unrolling — всё это задача C-компилятора.
+
+### Что означает `optimize` — флаги C-компилятору
+
+| Уровень | Флаг C-компилятора | Когда использовать |
+|---------|-------------------|-------------------|
+| `O0` | `-O0` | debug — читаемый C, быстрая компиляция, нет оптимизаций |
+| `O1` | `-O1` | базовые оптимизации без увеличения размера бинаря |
+| `O2` | `-O2` | стандартный release — скорость без агрессивного увеличения размера |
+| `O3` | `-O3` | максимальная скорость — больший бинарь, возможен loop unroll/vectorize |
+| `Os` | `-Os` | минимальный размер — для embedded с ограниченным flash |
+
+Дефолт: `O0` в debug профиле, `O2` в release. Для AVR рекомендуется `Os`.
+
+```json
+// tsc.package.json
+{
+  "profiles": {
+    "debug":   { "optimize": "O0" },
+    "release": { "optimize": "O2" },
+    "avr":     { "optimize": "Os" }
+  }
+}
+```
+
+Уровень оптимизации не влияет на корректность генерируемого C — только на флаги переданные C-компилятору.
+
+## Error messages
+
+### Формат
+
+```
+error[TSC-EXXX]: <краткое описание>
+  --> <file>:<line>:<col>
+   |
+<line-1> | <исходный код>
+         | ^^^ <метка что именно не так>
+<line-2> | <исходный код>
+         | --- <метка связанного места>
+   |
+   = hint: <что сделать>
+   = note: <дополнительный контекст> (опционально)
+```
+
+- **Код ошибки** `TSC-EXXX` — стабильный идентификатор, не меняется между версиями компилятора. Можно искать в документации.
+- **Сниппет** — показывает несколько строк вокруг ошибки с `^^^` под проблемным местом и `---` под связанными местами.
+- **hint** — конкретное действие: что изменить. Всегда присутствует для ошибок borrow checker и ownership.
+- **note** — дополнительный контекст когда причина неочевидна (опционально).
+
+Предупреждения используют тот же формат с `warning[TSC-WXXX]`.
+
+---
+
+### Категории ошибок
+
+#### Borrow checker
+
+```
+error[TSC-E042]: cannot borrow `buf` as mutable — already borrowed as immutable
+  --> src/parser.tsc:12:5
+   |
+ 9 |     let r: Ref<Buffer> = buf
+   |                          --- immutable borrow starts here
+12 |     buf.append(data)
+   |     ^^^ mutable borrow attempted here
+13 |     console.log(r)
+   |                 - immutable borrow still used here
+   |
+   = hint: move last use of `r` before line 12, or restructure to avoid overlapping borrows
+```
+
+```
+error[TSC-E043]: use of moved value `user`
+  --> src/main.tsc:8:20
+   |
+ 5 |     let user = new User("Alice")
+ 6 |     register(user)
+   |              ---- value moved here
+ 8 |     console.log(user.name)
+   |                 ^^^^ value used after move
+   |
+   = hint: clone before moving: `register(user.clone())`, or pass as `Ref<User>` if ownership not needed
+```
+
+```
+error[TSC-E044]: `Ref<T>` cannot be stored in a field — lifetime cannot be tracked
+  --> src/parser.tsc:3:5
+   |
+ 3 |     data: Ref<Buffer>
+   |     ^^^^^^^^^^^^^^^^^ field cannot hold a borrow
+   |
+   = hint: pass `Ref<Buffer>` as a method parameter instead (see ownership patterns)
+   = note: borrows in fields require lifetime annotations which TSClang does not support
+```
+
+#### Ownership / await
+
+```
+error[TSC-E051]: borrow does not live long enough — `Ref<T>` cannot cross `await`
+  --> src/handler.tsc:9:5
+   |
+ 7 |     let r: Ref<User> = getUser()
+ 8 |     await fetchData()
+   |     ^^^^^ borrow cannot cross await point
+ 9 |     console.log(r.name)
+   |
+   = hint: clone the value before await: `let name = r.name` or `let u = r.clone()`
+```
+
+#### Типы
+
+```
+error[TSC-E011]: type mismatch — expected `i32`, got `f64`
+  --> src/calc.tsc:5:18
+   |
+ 5 |     let x: i32 = 3.14
+   |                  ^^^^ expected i32
+   |
+   = hint: use explicit cast `3.14 as i32` (truncates) or change type to `f64`
+```
+
+```
+error[TSC-E021]: property `nmae` does not exist on type `User`
+  --> src/main.tsc:7:15
+   |
+ 7 |     console.log(user.nmae)
+   |                      ^^^^ unknown property
+   |
+   = hint: did you mean `name`?
+```
+
+#### Embedded / платформа
+
+```
+error[TSC-E071]: `Shared<T>` is not available on heap:false platforms
+  --> src/sensor.tsc:4:18
+   |
+ 4 |     let shared = new Shared(sensor)
+   |                  ^^^^^^^^^^^^^^^ requires heap allocation
+   |
+   = hint: use owned value or pass as `Ref<T>` parameter
+   = note: current platform profile has `heap: false`
+```
+
+```
+warning[TSC-W081]: i64 on 8-bit target is expensive (8 bytes, up to 8 instructions per operation)
+  --> src/main.tsc:3:5
+   |
+ 3 |     let counter: i64 = 0
+   |                  ^^^ expensive type on AVR
+   |
+   = hint: use i32 if range allows (max i32: 2_147_483_647)
+```
+
+#### Exhaustiveness
+
+```
+error[TSC-E031]: non-exhaustive switch — missing case `Direction.Up`
+  --> src/move.tsc:6:5
+   |
+ 6 |     switch (dir) {
+   |     ^^^^^^^^^^^^^ not all variants covered
+   |
+   = hint: add `case Direction.Up: ...` or `default: assertNever(dir)`
+```
+
+---
+
+### Правила оформления hint
+
+- **Конкретно:** `use r.clone()`, не «исправьте ошибку заимствования»
+- **Один вариант:** если решений несколько — показать наиболее вероятное, остальные в `note`
+- **Без жаргона:** не «lifetime constraint violated», а «borrow still used here»
+- **Указывать строку** когда fix в другом месте: `= hint: move line 13 before line 9`

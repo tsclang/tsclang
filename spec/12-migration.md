@@ -2,6 +2,14 @@
 
 Руководство для разработчиков, переходящих с TypeScript на TSClang.
 
+**Автоматизированная миграция:** `tsclang migrate` *(roadmap — фаза 13)* применяет все механические правки из раздела ниже автоматически. Детали команды — в [spec/09-build.md](spec/09-build.md) (раздел «`tsclang migrate`»).
+
+```bash
+tsclang migrate ./src            # показать что изменится
+tsclang migrate ./src --fix      # применить
+tsclang migrate ./src --check    # CI: завалить сборку если есть несовместимости
+```
+
 ---
 
 ## Автоматические правки (codemod)
@@ -173,6 +181,9 @@ const sub = sliceChars(s, 1, 3)  // codepoints 1..2 ✅
 | `arguments` в функциях | Нет variadic без типов | Явный массив или перегрузка |
 | Closure над `let` в loop | Разные семантики захвата | Явная копия перед замыканием |
 | `typeof x === "object"` | Runtime type checks через union | Exhaustive match по union типу |
+| Regex backreferences `\1` | `std/regex` — NFA, нет backtracking | `@tsc/pcre` если нужны |
+| Regex lookahead `(?=...)` | `std/regex` — NFA, нет backtracking | `@tsc/pcre` если нужны |
+| `RegExp` литерал `/pattern/flags` | Замена на `new Regex(r"pattern")` | `import { Regex } from "std/regex"` |
 
 ---
 

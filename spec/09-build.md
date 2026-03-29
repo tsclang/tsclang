@@ -988,10 +988,26 @@ CMake + toolchain:     реально компилируют под платфо
 Для `known targets` — у компилятора внутренняя таблица:
 
 ```
-avr + atmega328p  → { usize: u16, stack: 2048, flash: 32768, heap: false, ... }
-arm + cortex-m4   → { usize: u32, heap: optional, fpu: true, ... }
-x86-64            → { usize: u64, heap: true, fpu: true, ... }
+avr + atmega328p  → { usize: u16, stack: 2048, flash: 32768, heap: false, async_stack: 256, ... }
+avr + atmega2560  → { usize: u16, stack: 8192, flash: 262144, heap: false, async_stack: 512, ... }
+arm + cortex-m0   → { usize: u32, heap: optional, fpu: false, async_stack: 1024, ... }
+arm + cortex-m4   → { usize: u32, heap: optional, fpu: true, async_stack: 4096, ... }
+x86-64            → { usize: u64, heap: true, fpu: true, async_stack: unlimited, ... }
 ```
+
+**`async_stack`** — максимальный суммарный размер async state machine chain по глубочайшему пути вызовов. Компилятор ошибится если worst-case превышает лимит (см. `--report-stack` в spec/07-concurrency.md).
+
+Обоснование дефолтов:
+
+| MCU | RAM | `async_stack` | Доля RAM | Обоснование |
+|-----|-----|--------------|----------|-------------|
+| ATmega328p | 2 KB | 256 B | 12.5% | Оставляет место для hardware stack (~256B) и глобальных переменных |
+| ATmega2560 | 8 KB | 512 B | 6.25% | Больше RAM — можно глубже, но embedded код обычно плоский |
+| Cortex-M0 | 8–32 KB | 1024 B | ~5% | Типичная глубина async chain на bare-metal ARM |
+| Cortex-M4 | 64–256 KB | 4096 B | ~2% | Достаточно для сложных async пайплайнов |
+| x86-64 | GBs | unlimited | — | Ограничений нет |
+
+Переопределить в platform profile: `declare platform { async_stack: 512 }`. `async_stack: 0` отключает проверку (не рекомендуется).
 
 Для `unknown targets` эту таблицу заменяет `profile`. Если `arch` не в таблице и `profile` не указан → ошибка компилятора:
 *"unknown target arch '6502': specify a platform profile"*
@@ -1524,6 +1540,9 @@ build/avr/
 | `tsclang run` | — | Собрать и запустить |
 | `tsclang dev` | — | Режим отслеживания изменений |
 | `tsclang lint` | `l` | Проверить форматирование |
+| `tsclang migrate` | — | Миграция TypeScript → TSClang *(roadmap)* |
+| `tsclang debug` | — | DAP-сервер для отладки *(roadmap)* |
+| `tsclang lsp` | — | Language Server Protocol сервер для IDE *(roadmap)* |
 
 ```bash
 tsclang b                     # = tsclang build
@@ -1703,6 +1722,91 @@ myapp/
   }
 }
 ```
+
+## `tsclang migrate` *(roadmap — фаза 13)*
+
+Инструмент для однократной миграции TypeScript-проекта в TSClang. Применяет механические преобразования, которые невозможно сделать вручную без ошибок в большом кодебейзе.
+
+```bash
+tsclang migrate [path]           # показать что изменится (dry-run по умолчанию)
+tsclang migrate [path] --fix     # применить изменения на месте
+tsclang migrate [path] --check   # CI-режим: exit 1 если есть несовместимости
+```
+
+`path` — файл, директория или glob. По умолчанию — текущая директория.
+
+**Входные файлы:** `.ts` / `.tsx` (TypeScript-источник)
+**Выходные файлы:** `.tsc` (переименованные + трансформированные, оригиналы не удаляются)
+
+**Что автоматизируется:**
+
+| Трансформация | Пример |
+|--------------|--------|
+| `undefined` → `null` | `x === undefined` → `x == null` |
+| `throw "msg"` → `throw new Error("msg")` | везде |
+| `export default X` → `export { X }` | везде |
+| `x === y` → `x == y` | везде |
+| `x !== y` → `x != y` | везде |
+| Переименование `.ts` → `.tsc` | `user.ts` → `user.tsc` |
+| `import X from "./m"` → `import X from "./m"` | без изменений (уже совместимо) |
+
+**Что НЕ автоматизируется** (требует ручной правки — `--check` выводит список):
+
+- Классовое наследование (`extends` не `Error`) → нет безопасной автозамены
+- `s[i]` строковая индексация → семантика изменилась (u8 вместо string)
+- `for (let x of arr)` → нужен анализ типа элемента
+- Числовые аннотации (`number` → конкретный тип) → зависит от контекста
+- Ownership аннотации → требует понимания flow
+
+**Вывод dry-run:**
+
+```
+tsclang migrate ./src
+
+  src/user.ts → src/user.tsc
+    line 12: throw "not found"  →  throw new Error("not found")
+    line 34: x === undefined    →  x == null
+    line 67: export default User  →  export { User }
+
+  src/api.ts → src/api.tsc
+    line 5:  x !== undefined    →  x != null
+
+  Manual review required (2 files):
+    src/base.ts:15  — class Dog extends Animal (inheritance)
+    src/parser.ts:8 — s[i] string indexing
+
+  3 files to transform, 2 require manual review.
+  Run with --fix to apply automatic changes.
+```
+
+**Позиция в roadmap:** реализуется вместе с фазой 13 (линтер/форматтер) — использует тот же AST и infrastructure.
+
+## `tsclang lsp` *(roadmap)*
+
+LSP-сервер для интеграции с IDE (VS Code, JetBrains, Neovim и любой LSP-совместимый редактор).
+
+```bash
+tsclang lsp           # запустить LSP-сервер (stdio transport)
+tsclang lsp --port 7777   # TCP transport
+```
+
+**Возможности:**
+
+| Функция | Описание |
+|---------|----------|
+| Completions | Автодополнение по типам, методам, импортам |
+| Hover | Тип выражения, документация |
+| Go-to-definition | Переход к объявлению |
+| Find references | Поиск использований |
+| Diagnostics | Ошибки и предупреждения в реальном времени |
+| Rename | Переименование символов |
+| Format | Форматирование через `tsclang lint --fix` |
+
+**Error recovery:** lsp-режим продолжает работу при синтаксических ошибках — парсер вставляет `ErrorNode` в AST и синхронизируется на ближайшей границе (`}`, `;`, `class`, `function`). IDE получает частичный AST и показывает корректные completions в неповреждённых частях файла.
+
+Вторичные ошибки вызванные `ErrorNode` помечаются как cascade и не показываются пользователю — только первичные.
+
+**Позиция в roadmap:** требует стабильного AST и type checker — реализуется после фазы 10 (полная компиляция).
 
 ## Быстрый старт
 

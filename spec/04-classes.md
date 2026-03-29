@@ -473,6 +473,35 @@ class User {
 
 `mut` метод может менять обычные поля, но не `readonly`.
 
+**Value object паттерн** — все поля `readonly`, нет `mut` методов. Класс полностью иммутабелен после конструктора:
+
+```typescript
+class Point {
+    readonly x: f64
+    readonly y: f64
+
+    constructor(x: f64, y: f64) {
+        this.x = x
+        this.y = y
+    }
+
+    distanceTo(other: Ref<Point>): f64 {
+        const dx = this.x - other.x
+        const dy = this.y - other.y
+        return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    translate(dx: f64, dy: f64): Point {
+        return new Point(this.x + dx, this.y + dy)  // новый объект
+    }
+}
+
+const p = new Point(1.0, 2.0)
+p.x = 5.0  // ошибка: readonly
+```
+
+Линтер предупреждает если класс имеет все поля `readonly`, но содержит `mut` метод — скорее всего ошибка.
+
 `move` метод передает поля объекта наружу без лишнего копирования, когда исходный объект больше не нужен. Паттерн `Builder`:
 ```typescript
 class QueryBuilder {

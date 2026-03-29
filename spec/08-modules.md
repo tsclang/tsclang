@@ -474,6 +474,92 @@ warning: native block — C code inserted verbatim, memory management is manual
 
 **Это escape hatch, не стандартный инструмент.** Для всего что можно выразить через `declare function` — используй `.d.tsc`.
 
+### Callbacks и closures в `native {}`
+
+C-библиотеки ожидают функцию-указатель. TSClang closure — это struct с captures + function pointer. Их нельзя совместить напрямую.
+
+**В `.d.tsc` для C callback используется `FnPtr<T>`** — чистый C function pointer без captures:
+
+```typescript
+// .d.tsc
+declare type uv_timer_cb = FnPtr<(handle: Ref<uv_timer_t>) => void>
+
+declare function uv_timer_start(
+    timer: Ref<uv_timer_t>,
+    cb:    uv_timer_cb,
+    timeout: u64,
+    repeat:  u64
+): i32
+```
+
+`FnPtr<T>` принимает только функцию без captures — ошибка компилятора если передать capturing closure:
+
+```typescript
+uv_timer_start(timer, (h) => tick(), 1000, 0)         // ✅ нет captures
+uv_timer_start(timer, [ctx](h) => process(ctx), ...)  // ❌ ошибка: FnPtr не поддерживает captures
+                                                        //    hint: используй native {} для closure bridging
+```
+
+**Для capturing closures — `native {}`** с хелперами компилятора:
+
+Компилятор предоставляет набор C-макросов для boxing/unboxing closures внутри `native {}` блоков. Эти макросы доступны автоматически — без `#include`.
+
+| Макрос | Описание |
+|--------|----------|
+| `TSC_CLOSURE_BOX(closure_var)` | Аллоцировать captures на heap, вернуть `void*` |
+| `TSC_CLOSURE_CALL(ptr)` | Вызвать boxed closure по `void*` |
+| `TSC_CLOSURE_FREE(ptr)` | Освободить boxed closure |
+| `TSC_CLOSURE_FN(ptr)` | Получить function pointer из boxed closure (thunk) |
+
+Пример — `(cb, userdata)` паттерн:
+
+```typescript
+// .d.tsc — объявляем честно как (cb, void*)
+declare function lib_on_event(
+    cb:   FnPtr<(result: i32, ctx: void*) => void>,
+    data: void*
+): void
+
+// usage в wrapper-пакете:
+function onEvent(handler: (result: i32) => void): void {
+    native `
+        void* _boxed = TSC_CLOSURE_BOX(${handler});
+        lib_on_event(TSC_CLOSURE_FN(_boxed), _boxed);
+        // lib сам вызовет TSC_CLOSURE_CALL(_boxed) / TSC_CLOSURE_FREE(_boxed)
+    `
+}
+```
+
+Пример — libuv `handle->data` паттерн:
+
+```typescript
+// std/timer.tsc (внутри stdlib)
+function _startTimer(cb: () => void, ms: u64): void {
+    native `
+        uv_timer_t* _t = (uv_timer_t*)malloc(sizeof(uv_timer_t));
+        uv_timer_init(tsc_uv_loop(), _t);
+        _t->data = TSC_CLOSURE_BOX(${cb});
+        uv_timer_start(_t, _tsc_timer_thunk, ${ms}, 0);
+    `
+}
+
+// thunk объявлен в рантайм-хедере:
+// static void _tsc_timer_thunk(uv_timer_t* h) {
+//     TSC_CLOSURE_CALL(h->data);
+//     TSC_CLOSURE_FREE(h->data);
+//     uv_close((uv_handle_t*)h, free);
+// }
+```
+
+**Правила lifetime для boxed closures:**
+
+- `TSC_CLOSURE_BOX` аллоцирует на heap и перемещает captures — исходная переменная closure после этого invalid
+- `TSC_CLOSURE_FREE` должен быть вызван ровно один раз — двойной вызов UB
+- Borrow checker не отслеживает boxed closure — ответственность на авторе `native {}` блока
+- На платформах с `heap: false` — `TSC_CLOSURE_BOX` вызывает compile error
+
+**Embedded:** на `heap: false` платформах `FnPtr<T>` без captures — единственный способ передать callback в C. Для ISR используется `@embedded.isr`, не `FnPtr<T>`.
+
 ## `unsafe {}` — отключение проверок TSClang
 
 Отключает borrow checker и ownership checks для блока TSClang-кода. Используется когда система типов мешает, но inline C не нужен.

@@ -89,7 +89,46 @@ let parser = new Parser()
 let token = parser.parse(buf, 0)
 ```
 
-Если методов много и многословность неприемлема — использовать `Shared<T>` (ARC, только desktop) или выделить данные в owned поле самого класса.
+Auto-borrow делает pass-through эргономичным — `buf` передаётся без явной аннотации `Ref<>` на callsite:
+
+```typescript
+parser.parse(buf, 0)   // buf автоматически заимствуется как Ref<Buffer>
+parser.skip(buf, 5)    // borrow отпускается после каждого вызова
+```
+
+**Паттерн 2: `{}` блок для тонкого контроля borrow lifetime**
+
+Если нужно явно ограничить продолжительность borrow — обычный блок `{}`. Borrow checker уважает block-level scope без дополнительных ключевых слов:
+
+```typescript
+let buf = new Buffer(input)
+{
+    const ref: Ref<Buffer> = buf   // borrow начинается
+    parser.parse(ref, 0)
+    parser.skip(ref, 5)
+}   // ref dropped — borrow заканчивается
+buf.append(more)   // ✅ — buf снова свободен для мутации
+```
+
+**Паттерн 3: `Shared<T>` (только desktop)**
+
+Если методов много и многословность неприемлема — `Shared<T>` даёт ARC-семантику вместо borrow. Не работает на embedded.
+
+**Паттерн 4: owned поле**
+
+Если данные принадлежат самому объекту — хранить как owned поле, не borrow:
+
+```typescript
+class Parser {
+    data: Buffer   // owned — не borrow
+    constructor(input: u8[]) {
+        this.data = new Buffer(input)
+    }
+    parse(pos: usize): Token { ... }  // доступ через this.data
+}
+```
+
+Цена: `Parser` владеет `Buffer` и не может работать с чужими данными без клонирования.
 
 **Решение для итераторов** — замыкание (см. [Iterable\<T\>](#iterablet--пользовательские-итерируемые-типы)): `Ref<T>` в замыкании разрешён, так как замыкание стековое и не может пережить источник.
 
@@ -363,6 +402,16 @@ async function ok2(arr: i32[]): Promise<void> {
 ```
 
 Правило действует только для `Ref<T>` и `Mut<T>`. Owned значения (`T`) через `await` переживать могут — они захватываются в state machine struct.
+
+**Почему нет автоматического re-borrow после `await`**
+
+Технически компилятор мог бы молча дропать borrow на `await` и восстанавливать его после — в single-threaded async это безопасно (никто не тронет источник пока suspended). Это осознанно не сделано:
+
+- `await` — граница где другие задачи выполняются. Пользователь должен видеть что borrow здесь прерывается — это teachable moment ownership модели.
+- Скрытый re-borrow маскирует факт что `r` после await — уже другой borrow, не тот что до.
+- Явный паттерн (`arr[0]` после await вместо `r`) короче и понятнее.
+
+Авто-reborrow отклонён — запрет полный и явный.
 
 ## Автоматический Drop
 

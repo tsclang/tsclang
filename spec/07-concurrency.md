@@ -746,7 +746,7 @@ struct AtomicArray_i32 {
 
 Только там где есть OS. Потоки работают как **изоляты** — без общей памяти. Связь через каналы с передачей владения или через `Atomic<T>`.
 
-> **`await` внутри `Thread.spawn` — ошибка компилятора.** Поток не имеет event loop. Блокирующие операции (send, recv) вызываются без `await` — они блокируют OS-поток через mutex/condvar.
+> **`await` внутри `Thread.spawn` — ошибка компилятора.** Поток не имеет event loop. Блокирующие операции (send, receive) вызываются без `await` — они блокируют OS-поток через mutex/condvar.
 
 ### channel<T>
 
@@ -760,14 +760,45 @@ const [tx, rx] = channel<Message>(128)   // capacity = 128
 // sender
 await tx.send(msg)   // async-контекст: yield event loop если полный (backpressure)
 tx.send(msg)         // thread-контекст: блокирует OS-поток если полный
-tx.trySend(msg)      // boolean — false если полный, не блокирует (оба контекста)
+tx.trySend(msg)      // boolean — false если полный, не блокирует (async, thread, ISR ✅)
 tx.close()           // закрыть канал; получатель вычитает остаток, затем получает null
 
 // receiver
-const msg = await rx.recv()   // async-контекст: yield event loop пока пуст
-const msg = rx.recv()         // thread-контекст: блокирует OS-поток пока пуст
-rx.tryRecv()                  // Message | null — не блокирует (оба контекста)
+const msg = await rx.receive()   // async-контекст: yield event loop пока пуст
+const msg = rx.receive()         // thread-контекст: блокирует OS-поток пока пуст
+rx.tryReceive()                  // Message | null — не блокирует (async, thread, ISR ✅)
+
+// состояние канала — snapshot (ISR-safe ✅, только для мониторинга и адаптивной логики)
+tx.size       // i32 — текущее кол-во элементов
+tx.capacity   // i32 — максимальная ёмкость
+tx.isFull     // boolean — size == capacity
+tx.isEmpty    // boolean — size == 0
 ```
+
+**ISR-safe операции** (`trySend`, `tryReceive`, `size`, `capacity`, `isFull`, `isEmpty`) не делают системных вызовов и не аллоцируют память — безопасны для вызова из прерываний.
+
+**Адаптивный producer в ISR** — типичный паттерн для робототехники и real-time систем:
+
+```typescript
+// isFull — бинарная адаптация: два режима качества
+@embedded.isr("LIDAR_SCAN")
+function onScan(): void {
+    const resolution = tx.isFull ? Resolution.Low : Resolution.High
+    tx.trySend(captureScan(resolution))   // drop если всё ещё полный
+}
+
+// size — градуальная адаптация: три ступени качества
+@embedded.isr("CAMERA_FRAME")
+function onFrame(): void {
+    const quality = tx.size < tx.capacity / 3  ? Quality.High
+                  : tx.size < tx.capacity * 2/3 ? Quality.Medium
+                  : Quality.Low
+
+    tx.trySend(captureFrame(quality))   // drop если всё ещё полный после адаптации
+}
+```
+
+`size` и `isFull` — snapshot: значение может измениться к моменту следующей инструкции. Для control flow это допустимо (worst case — один кадр не того качества). Для гарантий «exactly once» использовать `trySend()` — он атомарен.
 
 Ownership: `tx.send(msg)` — move `msg` в канал. При удалении канала с непрочитанными элементами компилятор вызывает деструкторы всех оставшихся объектов.
 
@@ -789,12 +820,12 @@ typedef struct {
 
 Ждёт первого готового из нескольких каналов. Ровно одно поле результата non-null.
 
-`select` — только для **async-контекста** (event loop). В `Thread.spawn` `await` запрещён, поэтому `await select(...)` там не скомпилируется автоматически. Из потока используй `rx.recv()` напрямую.
+`select` — только для **async-контекста** (event loop). В `Thread.spawn` `await` запрещён, поэтому `await select(...)` там не скомпилируется автоматически. Из потока используй `rx.receive()` напрямую.
 
 ```typescript
 const result = await select({
-    msg:     rx1.recv(),   // ждём Message
-    err:     errCh.recv(), // ждём AppError
+    msg:     rx1.receive(),   // ждём Message
+    err:     errCh.receive(), // ждём AppError
     timeout: after(500)    // таймаут 500 мс
 })
 
@@ -812,7 +843,7 @@ match (result) {
 
 `after(ms)` — Timer Task в event loop, не полноценный канал (нет аллокации буфера).
 
-Fairness: перед регистрацией callbacks компилятор обходит каналы в случайном порядке через `tryRecv()`. Если хотя бы один готов — возвращает сразу без регистрации в event loop.
+Fairness: перед регистрацией callbacks компилятор обходит каналы в случайном порядке через `tryReceive()`. Если хотя бы один готов — возвращает сразу без регистрации в event loop.
 
 C-output — SelectState:
 ```c
@@ -952,7 +983,7 @@ const result = await t.join()   // из async-контекста — не бло
 // Форма 2: явный канал — для сложных случаев (стриминг, несколько значений, select)
 const [tx, rx] = channel<HeavyResult>(1)
 Thread.spawn(() => { tx.send(heavyComputation()) })
-const result = await rx.recv()
+const result = await rx.receive()
 ```
 
 Под капотом `Thread<T>` — это `channel<T>(1)`, генерируемый компилятором автоматически. Никакой скрытой магии — только удобная обёртка над явным примитивом.
@@ -988,10 +1019,10 @@ await t.join()   // ждём завершения, результата нет
 
 **Async и threads — два намеренно разделённых мира:**
 
-`await` внутри `Thread.spawn` — ошибка компилятора. Поток не имеет event loop. Блокирующие операции (`send`, `recv`, `t.join()`) вызываются без `await` и блокируют OS-поток через mutex/condvar. Канал — единственный bridge между ними:
+`await` внутри `Thread.spawn` — ошибка компилятора. Поток не имеет event loop. Блокирующие операции (`send`, `receive`, `t.join()`) вызываются без `await` и блокируют OS-поток через mutex/condvar. Канал — единственный bridge между ними:
 
 ```
-Event loop:   await rx.recv()  ←──────────────┐  неблокирующий
+Event loop:   await rx.receive()  ←──────────────┐  неблокирующий
                                                │
 Thread:       tx.send(result)  ────────────────┘  блокирующий (если полный)
 ```
@@ -1008,7 +1039,7 @@ async function main(): void {
         tx.send(result)   // move владения в канал
     })
 
-    const result = await rx.recv()   // ждём результат
+    const result = await rx.receive()   // ждём результат
     t.join()
     console.log(result)
 }
@@ -1381,6 +1412,211 @@ signal(SIGHUP, onHangup);
 | `@signal` | ✅ | ❌ | Compile-time |
 
 
+## 5. Async generators — streaming
+
+### AsyncIterator\<T\>
+
+```typescript
+interface AsyncIterator<T> {
+    next(): Promise<T | null>   // null = exhausted (done)
+    close(): Promise<void>      // signal early termination, runs finally blocks
+}
+```
+
+`null` означает конец потока. Следствие: генератор не может `yield null` как данные — compile error.
+
+### async function\*
+
+```typescript
+async function* readLines(path: string): AsyncIterator<string> throws IOError {
+    const fd = await openFile(path)
+    try {
+        while (true) {
+            const line: string | null = await fd.readLine()
+            if (line == null) break
+            yield line   // move semantics — передаёт ownership caller'у
+        }
+    } finally {
+        await fd.close()   // выполняется и при break, и при close()
+    }
+}
+```
+
+`yield expr` — move semantics. Значение перемещается в state machine struct, затем забирается caller'ом через `next()`. Генератор не может использовать значение после `yield`.
+
+**`throws` в async генераторах** — ошибка пробрасывается через `next()`:
+
+```typescript
+async function* gen(): AsyncIterator<string> throws IOError {
+    yield "ok"
+    throw new IOError("fail")   // next() вернёт rejected Promise<string | null>
+}
+```
+
+### for await
+
+```typescript
+for await (const line of readLines("data.txt")) {
+    if (line.startsWith("#")) break   // → вызывает gen.close() → finally
+    process(line)
+}
+// close() вызывается автоматически при: break, throw, нормальном завершении
+```
+
+`for await` — sugar над `AsyncIterator<T>`:
+
+```typescript
+// десахаривается в:
+const _gen = readLines("data.txt")
+try {
+    while (true) {
+        const line = await _gen.next()
+        if (line == null) break
+        // body
+        if (shouldBreak) break
+    }
+} finally {
+    await _gen.close()
+}
+```
+
+### close() семантика
+
+`close()` не прерывает pending `await` — устанавливает флаг. Генератор проверяет флаг после текущего `await`, пропускает следующий `yield`, выполняет `finally`.
+
+```typescript
+// close() вызван пока генератор ждёт fd.readLine()
+// → readLine() завершается нормально
+// → генератор видит флаг close
+// → не делает yield, переходит в finally → fd.close()
+```
+
+Параллельный вызов `next()` (пока предыдущий не завершён) — runtime panic. `for await` гарантирует последовательность автоматически.
+
+### AsyncChannel как AsyncIterator
+
+`AsyncChannel<T>` реализует `AsyncIterator<T>` — можно использовать в `for await`:
+
+```typescript
+const ch = new AsyncChannel<Buffer>(16)
+
+// producer:
+async function producer(): void {
+    for (const chunk of data) await ch.send(chunk)
+    ch.close()
+}
+
+// consumer:
+for await (const chunk of ch) {
+    process(chunk)
+}
+```
+
+### C output
+
+Async generator компилируется в state machine с двумя типами suspension points:
+
+```c
+typedef enum {
+    GEN_STATE_INIT,
+    GEN_STATE_AWAIT_OPEN,      // await openFile
+    GEN_STATE_AWAIT_READLINE,  // await fd.readLine
+    GEN_STATE_YIELDED,         // ожидание следующего next()
+    GEN_STATE_FINALLY,         // await fd.close()
+    GEN_STATE_DONE,
+    GEN_STATE_ERROR
+} ReadLinesState;
+
+typedef struct {
+    ReadLinesState state;
+    FileHandle*    fd;
+    String*        yielded_value;   // значение между yield и next()
+    IOError*       error;
+    bool           close_requested;
+} ReadLinesGen;
+
+// next() принимает callback: (value, done, error, userdata)
+void readlines_next(ReadLinesGen* g,
+    void (*cb)(String* val, bool done, IOError* err, void* ud), void* ud);
+void readlines_close(ReadLinesGen* g, void (*cb)(void* ud), void* ud);
+```
+
+State machine аллоцируется на heap — на `heap: false` платформах `async function*` и `for await` с non-Channel итераторами → **ошибка компилятора**. Для embedded streaming — см. ниже.
+
+### Embedded: альтернативы async generators
+
+На `heap: false` (AVR, bare-metal ARM) async generators недоступны. Streaming реализуется синхронными паттернами:
+
+**Паттерн 1: polling loop** — для медленной периферии:
+
+```typescript
+import { uart } from "std/hal"
+
+while (true) {
+    while (uart.available()) {
+        const byte = uart.read()
+        process(byte)
+    }
+    doOtherWork()
+}
+```
+
+**Паттерн 2: ISR + ring buffer** — для interrupt-driven периферии (UART RX, SPI):
+
+```typescript
+import { Volatile } from "std/embedded"
+import { interruptDisable, interruptEnable } from "std/avr"
+
+// статическая память — не heap, не стек, живёт всё время
+const rxBuf: u8[64] = [0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0, 0]
+const rxHead = new Volatile<u8>(0)   // пишет ISR
+const rxTail = new Volatile<u8>(0)   // читает main loop
+
+@embedded.isr("USART_RX")
+function onUartRx(): void {
+    const next = (rxHead.read() + 1) as u8
+    if (next != rxTail.read()) {   // не переполнен
+        rxBuf[rxHead.read()] = UART.readByte()
+        rxHead.write(next)
+    }
+}
+
+// main loop:
+while (true) {
+    interruptDisable()
+    const head = rxHead.read()
+    interruptEnable()
+
+    while (rxTail.read() != head) {
+        const byte = rxBuf[rxTail.read()]
+        rxTail.write((rxTail.read() + 1) as u8)
+        process(byte)
+    }
+}
+```
+
+`Volatile<T>` гарантирует что компилятор не закэширует чтение в регистре — критично для переменных разделяемых ISR и main loop.
+
+**Паттерн 3: DMA + callback** — для bulk transfers (SPI flash, ADC burst):
+
+```typescript
+const dmaBuf: u8[256] = [0, ...]
+
+dma.read(dmaBuf, 256, (buf: Ref<u8[256]>) => {
+    process(buf)
+    // callback вызывается из ISR завершения DMA
+})
+```
+
+---
+
 ## Итоговая картина
 
 ```
@@ -1388,6 +1624,8 @@ signal(SIGHUP, onHangup);
 │  TSC Concurrency Model                               │
 │                                                      │
 │  async/await ──── event loop ──── все платформы      │
+│       │                                              │
+│       └── async generators / for await ─ heap only  │
 │       │                                              │
 │       └── Shared<T>/Weak<T> не атомарны              │
 │       └── Weak narrowing безопасен                   │
