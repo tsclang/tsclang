@@ -946,8 +946,11 @@ tsclang build nes
   ├─ 2. Прочитать declare platform { heap, fpu, bits... }
   │
   ├─ 3. Проверить код проекта:
-  │      - heap: false → Map<K,V>, Shared<T> → ошибка
-  │      - fpu: false → f32/f64 → предупреждение
+  │      - allocator: "none"   → любой Map/Set/new без стека → ошибка
+  │      - allocator: "static" → Map/Set/new без compile-time capacity → ошибка
+  │      - allocator: "static" → Map/Set с compile-time N → BSS (✅)
+  │      - Shared<T> при allocator: "none"/"static" → ошибка (ARC требует malloc)
+  │      - fpu: false → f32/f64 операции → предупреждение (software float)
   │      - импорт недекларированного std/libc → ошибка
   │
   ├─ 4. Сгенерировать CMakeLists.txt:
@@ -1130,7 +1133,8 @@ Platform profile package включает его в себя:
 declare platform {
     toolchain: "cc65"
     toolchainFile: "toolchain.cmake"  // без ./ → путь внутри пакета профиля
-    heap: false
+    allocator: "static"               // Map/Set/Array с compile-time N → BSS
+    scheduler: "cooperative"
     ...
 }
 ```
@@ -1182,11 +1186,16 @@ set(CMAKE_TOOLCHAIN_FILE ".../tsc_packages/@nes/platform/toolchain.cmake")
 
 // 1. Capabilities — что умеет платформа
 declare platform {
-    heap: false          // нет malloc/free → Shared<T>, Map<K,V>, new на heap → ошибка компилятора
+    allocator: "static"  // нет malloc/free → new без compile-time capacity → ошибка
+                         // new X(N) с compile-time N → статический BSS
+                         // Shared<T> → ошибка (ARC требует malloc)
+    scheduler: "cooperative"  // кооперативный poll loop, без heap
     fpu: false           // нет FPU → f32/f64 через software float → предупреждение
     bits: 8              // usize = u16 (6502 адресует 64 KB)
     address_bits: 16
     stack_size: 256      // байт (6502 stack page) → компилятор считает worst-case stack
+    ram_size: 2048       // 2 KB WRAM (без банкинга)
+    no_recursion: true   // стек 256 байт — рекурсия почти всегда переполнит
 }
 
 // 2. Декларируем subset std/libc — только что cc65 реально предоставляет
@@ -1208,32 +1217,360 @@ declare module "std/libc" {
 |------|-----|----------|
 | `toolchain` | `string` | Имя компилятора (`"cc65"`, `"avr-gcc"`) |
 | `toolchainFile` | `string` | Путь к CMake toolchain file (внутри пакета — без `./`) |
-| `heap` | `bool` | Доступен ли malloc/free |
+| `heap` | `bool` | Доступен ли `malloc`/`free` |
+| `allocator` | `"heap" \| "static" \| "pool" \| "none"` | Стратегия аллокации (см. ниже) |
+| `scheduler` | `"libuv" \| "cooperative" \| "none"` | Планировщик для async/await |
 | `fpu` | `bool` | Есть ли FPU (иначе software float) |
 | `bits` | `u8` | Разрядность CPU (8, 16, 32, 64) |
 | `address_bits` | `u8` | Ширина адреса (влияет на `usize`) |
 | `stack_size` | `u32` | Размер стека в байтах |
+| `ram_size` | `u32` | Общий размер RAM — компилятор проверяет суммарный BSS |
+| `flash_size` | `u32` | Размер Flash/ROM — компилятор проверяет размер кода |
+| `no_recursion` | `bool` | Запретить рекурсию (статический анализ call graph) |
+
+#### Стратегии аллокации (`allocator`)
+
+| Значение | Смысл | `new X()` без capacity | `new X(N)` с compile-time N |
+|----------|-------|------------------------|------------------------------|
+| `"heap"` | стандартный `malloc/free` | ✅ | ✅ |
+| `"static"` | все объекты в BSS, размеры должны быть compile-time | ❌ ошибка | ✅ → BSS |
+| `"pool"` | пользовательский `tsc_alloc`/`tsc_free` из platform profile | ✅ | ✅ |
+| `"none"` | только стек, никаких owned heap-объектов | ❌ ошибка | ❌ ошибка |
+
+> `heap: false` — устаревший эквивалент `allocator: "none"`. Оба поддерживаются для обратной совместимости. Рекомендуется использовать `allocator`.
+
+#### Планировщики async (`scheduler`)
+
+| Значение | Где | Поведение |
+|----------|-----|-----------|
+| `"libuv"` | desktop/server | event loop через libuv / io_uring |
+| `"cooperative"` | embedded | простой round-robin poll loop без heap |
+| `"none"` | bare-metal | `async function` компилируется в state machine, но планировщика нет — пользователь вызывает `resume()` вручную |
 
 **Что компилятор делает с профилем:**
 
 | Флаг | Эффект |
 |------|--------|
-| `heap: false` | `Shared<T>`, `Map<K,V>`, `new` на heap → ошибка компилятора |
+| `allocator: "none"` / `heap: false` | `Shared<T>`, dynamic `new` без compile-time capacity → ошибка |
+| `allocator: "static"` | `new X(N)` с compile-time N → BSS; `new X()` без N → ошибка |
+| `allocator: "pool"` | все аллокации → `tsc_alloc`/`tsc_free`, нет других ограничений |
 | `fpu: false` | `f32`/`f64` операции → предупреждение "будет software float" |
 | `bits: 8`, `address_bits: 16` | `usize` = `u16` |
 | `stack_size: N` | компилятор считает worst-case stack, предупреждает при превышении |
+| `ram_size: N` | компилятор проверяет суммарный BSS + stack ≤ N |
+| `no_recursion: true` | рекурсивный call → ошибка компилятора |
 
 ```typescript
-// target: @nes/platform
+// target: @nes/platform (allocator: "static")
 
 const map = new Map<string, i32>()
-// ❌ ошибка компилятора: Map<K,V> требует heap; платформа: heap: false
+// ❌ ошибка: Map без compile-time capacity; платформа: allocator: "static"
+
+const map = new Map<u8, i32>(64)   // ✅ — 64 слота в BSS
+const arr = new Array<Sprite>(32)  // ✅ — 32 элемента в BSS
 
 import { malloc } from "std/libc"
-// ❌ ошибка компилятора: malloc не задекларирован в профиле платформы
+// ❌ ошибка: malloc не задекларирован в профиле платформы
 
 import { memcpy } from "std/libc"   // ✅
 import { sin } from "std/math"      // ✅ — std/math не требует heap
+```
+
+### Возможности на heap-free платформах
+
+> **`heap: false` / `allocator: "static"` — это не "нет классов и структур данных". Это "нет динамической аллокации во время выполнения". Все возможности языка доступны через статическую аллокацию с compile-time размерами.**
+
+#### Классы и интерфейсы — всегда работают
+
+Классы → C structs. Интерфейсы с методами → struct с vtable (таблица function pointer-ов). Никакого heap не требуется.
+
+```typescript
+// Работает на ZX Spectrum, NES, Arduino Uno, DOS — везде
+
+class Brush {
+    size: u8
+    color: u8
+    constructor(size: u8, color: u8) {
+        this.size = size
+        this.color = color
+    }
+    mut draw(x: u8, y: u8): void {
+        // рисует пиксель с учётом размера кисти
+    }
+}
+
+interface Tool {
+    activate(): void
+    mut handleKey(key: u8): void
+}
+
+class PenTool implements Tool {
+    brush: Brush
+    // ...
+    activate(): void { /* ... */ }
+    mut handleKey(key: u8): void { /* ... */ }
+}
+```
+
+```c
+/* C-output — никакого malloc */
+typedef struct { uint8_t size; uint8_t color; } Brush;
+typedef struct { void (*activate)(void*); void (*handleKey)(void*, uint8_t); } Tool_vtable;
+typedef struct { void* self; const Tool_vtable* vtable; } Tool;
+typedef struct { Brush brush; } PenTool;
+static const Tool_vtable _PenTool_vtable = { PenTool_activate, PenTool_handleKey };
+```
+
+#### Массивы — стек и BSS
+
+```typescript
+// Стек — живёт в текущей функции
+const frame: u8[6144] = [0, ...]   // ZX Spectrum экран 192×32 байт атрибутов
+
+// BSS — живёт всё время программы (@static)
+@static const sprites: Sprite[128] = [...]      // статический спрайтовый буфер
+@static let soundBuf: u8[2048] = [0, ...]       // звуковой буфер для DOS-проигрывателя
+@static const tasks: TaskBlock[8] = [...]       // таблица задач микро-ОС
+```
+
+```c
+/* C-output */
+static Sprite sprites_data[128];
+static Array_Sprite sprites = { sprites_data, 0, 128 };
+
+static uint8_t soundBuf_data[2048];
+static Array_u8 soundBuf = { soundBuf_data, 0, 2048 };
+```
+
+#### Map и Set — статическая хеш-таблица
+
+```typescript
+// allocator: "static" — capacity обязателен
+@static const hotkeys = new Map<u8, Action>(32)      // 32 слота в BSS
+@static const visited = new Set<u16>(256)            // 256 слотов для tile-координат
+```
+
+```c
+/* C-output — open addressing, всё в BSS */
+typedef struct { uint8_t key; bool occupied; Action value; } _hotkeys_Entry;
+static _hotkeys_Entry _hotkeys_data[32];
+static Map_u8_Action hotkeys = { _hotkeys_data, 32, 0 };
+
+typedef struct { uint16_t key; bool occupied; } _visited_Entry;
+static _visited_Entry _visited_data[256];
+static Set_u16 visited = { _visited_data, 256, 0 };
+```
+
+#### Async/Await — state machine без heap
+
+State machine — это C struct. Struct может жить на стеке или в BSS. На embedded компилятор выбирает static allocation:
+
+```typescript
+// scheduler: "cooperative" — Arduino / bare-metal
+
+@static async function blink(): Promise<void> {
+    while (true) {
+        GPIO.write(Pin.LED, true)
+        await sleep(500)
+        GPIO.write(Pin.LED, false)
+        await sleep(500)
+    }
+}
+
+@static async function readSensor(): Promise<void> {
+    while (true) {
+        const val = ADC.read(0)
+        uart.write(val as u8)
+        await sleep(100)
+    }
+}
+
+async function main(): Promise<void> {
+    blink()        // запустить задачу
+    readSensor()   // запустить задачу
+    // планировщик сам переключает между задачами
+}
+```
+
+```c
+/* C-output — кооперативный планировщик, никакого heap */
+typedef struct { uint8_t _state; uint32_t _timer; } _BlinkState;
+typedef struct { uint8_t _state; uint32_t _timer; } _ReadSensorState;
+
+static _BlinkState  _blink_instance;
+static _ReadSensorState _readSensor_instance;
+
+/* планировщик — round-robin poll loop */
+typedef void (*TaskFn)(void*);
+static TaskFn _tasks[8];
+static void*  _task_ctx[8];
+static uint8_t _task_count = 0;
+
+void tsc_scheduler_tick(void) {
+    for (uint8_t i = 0; i < _task_count; i++) {
+        _tasks[i](_task_ctx[i]);
+    }
+}
+
+int main(void) {
+    blink_start(&_blink_instance);
+    readSensor_start(&_readSensor_instance);
+    while (1) { tsc_scheduler_tick(); }
+}
+```
+
+#### Генераторы — state machine на стеке
+
+```typescript
+// Генераторы — это state machine. Никакого heap.
+
+function* range(start: i32, end: i32): Generator<i32> {
+    for (let i = start; i < end; i++) {
+        yield i
+    }
+}
+
+// Использование — struct на стеке, не на heap
+for (const x of range(0, 10)) {
+    console.log(x)
+}
+```
+
+```c
+/* C-output */
+typedef struct { int32_t i; int32_t end; uint8_t _state; } _RangeGen;
+
+static bool range_next(_RangeGen* g, int32_t* out) {
+    switch (g->_state) {
+    case 0: g->_state = 1; /* fall through */
+    case 1:
+        if (g->i >= g->end) return false;
+        *out = g->i++;
+        return true;
+    }
+    return false;
+}
+
+/* for (const x of range(0, 10)) → */
+{
+    _RangeGen _gen = { .i = 0, .end = 10, ._state = 0 };  /* стек! */
+    int32_t x;
+    while (range_next(&_gen, &x)) {
+        printf("%d\n", x);
+    }
+}
+```
+
+#### Реальные примеры
+
+**Графический редактор для ZX Spectrum:**
+
+```typescript
+// tsc.package.json: { "builds": { "spectrum": { "arch": "z80", "profile": "@spectrum/platform" } } }
+// declare platform { allocator: "static", scheduler: "none", ram_size: 49152, ... }
+
+import { screen, attr } from "@spectrum/ula"
+
+class Canvas {
+    @static readonly pixels: u8[6144]  // 192×256 пикселей
+    @static readonly attrs: u8[768]    // 24×32 атрибутов цвета
+
+    mut clear(): void {
+        this.pixels.fill(0)
+        this.attrs.fill(0x38)  // white on black
+    }
+
+    mut drawPixel(x: u8, y: u8, ink: u8): void {
+        const byte = (y >> 3) * 32 + (x >> 3) as usize
+        const bit  = 7 - (x & 7) as u8
+        this.pixels[byte] = (this.pixels[byte] | (1 << bit)) as u8
+        screen.update(this.pixels, this.attrs)
+    }
+}
+
+@static const tools = new Map<u8, Tool>(8)   // ≤8 инструментов, стек-таблица
+@static let canvas = new Canvas()
+
+function main(): void {
+    canvas.clear()
+    tools.set(0x01, new PenTool(canvas))
+    tools.set(0x02, new FillTool(canvas))
+
+    while (true) {
+        const key = keyboard.read()
+        const tool = tools.get(key)
+        if (tool != null) tool.activate()
+    }
+}
+```
+
+**Микро-ОС для Arduino Uno (2 KB RAM):**
+
+```typescript
+// declare platform { allocator: "static", scheduler: "cooperative",
+//                   ram_size: 2048, stack_size: 512, no_recursion: true }
+
+class Process {
+    readonly name: string
+    priority: u8
+    mut run(): void { /* переопределяется в наследнике */ }
+}
+
+@static const scheduler = new Array<Process>(8)  // максимум 8 процессов
+
+@static async function ledBlink(): Promise<void> {
+    while (true) {
+        GPIO.write(13, true)
+        await sleep(500)
+        GPIO.write(13, false)
+        await sleep(500)
+    }
+}
+
+@static async function serialMonitor(): Promise<void> {
+    while (true) {
+        if (uart.available()) {
+            const b = uart.readByte()
+            uart.writeByte(b)  // echo
+        }
+        await sleep(1)  // yield
+    }
+}
+```
+
+**Эмулятор NES на ESP32:**
+
+```typescript
+// ESP32: allocator: "heap", scheduler: "cooperative", ram_size: 524288
+// Heap есть, но структуры всё равно фиксированные — NES имеет фиксированные размеры
+
+class CPU6502 {
+    a: u8; x: u8; y: u8; sp: u8; pc: u16; flags: u8
+    @static readonly ram: u8[2048]       // внутренняя RAM NES (2 KB)
+    mut step(): u8 { /* execute one instruction */ }
+}
+
+class PPU {
+    @static readonly vram: u8[2048]      // video RAM
+    @static readonly oam: u8[256]        // Object Attribute Memory (64 спрайта × 4 байта)
+    @static readonly palette: u8[32]     // палитра
+    mut tick(cycles: u8): void { /* рендер */ }
+}
+
+@static let cpu = new CPU6502()
+@static let ppu = new PPU()
+
+async function main(): Promise<void> {
+    cpu.reset()
+    ppu.reset()
+    while (true) {
+        const cycles = cpu.step()
+        ppu.tick(cycles)
+        if (ppu.frameReady) {
+            await screen.flush(ppu.framebuffer)
+        }
+    }
+}
 ```
 
 **Платформо-специфичные API** — отдельные `.d.tsc`-пакеты, TSClang про них ничего не знает:
@@ -1376,11 +1713,14 @@ tsclang publish
 declare platform {
     toolchain: "cc65"
     toolchainFile: "toolchain.cmake"
-    heap: false
+    allocator: "static"  // Map/Set/Array с compile-time N → BSS; без N → ошибка
+    scheduler: "cooperative"
     fpu: false
     bits: 8
     address_bits: 16
     stack_size: 256
+    ram_size: 2048
+    no_recursion: true
 }
 
 declare module "std/libc" {
@@ -1397,11 +1737,13 @@ declare module "std/libc" {
 declare platform {
     toolchain: "z88dk"
     toolchainFile: "toolchain.cmake"
-    heap: false
+    allocator: "static"
+    scheduler: "cooperative"
     fpu: false
     bits: 8
     address_bits: 16
     stack_size: 512
+    ram_size: 49152  // 48 KB RAM (без ROM)
 }
 
 declare module "std/libc" {
@@ -1417,11 +1759,13 @@ declare module "std/libc" {
 // @sega/platform/index.d.tsc
 declare platform {
     toolchain: "m68k-elf-gcc"
-    heap: false
+    allocator: "static"  // 64 KB Work RAM — heap возможен, но не стандартен
+    scheduler: "cooperative"
     fpu: false
     bits: 32
     address_bits: 24
     stack_size: 4096
+    ram_size: 65536  // 64 KB Work RAM
 }
 
 declare module "std/libc" {

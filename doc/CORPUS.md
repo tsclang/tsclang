@@ -608,7 +608,7 @@ input.tsc:1:
 - [R] `x.next = y` — retain (refcount++)
 - [R] `Weak<T>` в поле — не увеличивает refcount
 - [R] обращение к Weak → `T | null` (может быть освобождён)
-- [E] `Shared<T>` на `heap: false` платформе → ошибка
+- [E] `Shared<T>` на `allocator: "none"` / `allocator: "static"` → ошибка (ARC требует malloc/free)
 
 ### goto cleanup pattern
 
@@ -683,8 +683,12 @@ input.tsc:1:
 - [R] enum как ключ: `Map<Direction, string>`
 - [R] i32 как ключ: `Map<i32, string>`
 - [E] класс как ключ: `Map<User, string>` → ошибка
-- [E] `Map` на embedded → ошибка
-- [F] C-output: open-addressing hash map struct
+- [E] `new Map<u8, i32>()` без capacity на `allocator: "static"` → ошибка
+- [R] `@static const m = new Map<u8, i32>(32)` на `allocator: "static"` → BSS
+- [R] вставка сверх capacity → runtime panic
+- [E] `Map` на `allocator: "none"` → ошибка
+- [F] C-output: open-addressing hash map struct (heap)
+- [F] C-output: static open-addressing hash map в BSS
 
 ### Set<T>
 
@@ -697,7 +701,10 @@ input.tsc:1:
 - [R] for-of по Set (порядок вставки)
 - [R] дублирование: повторный `add` не увеличивает size
 - [R] `Set<i32>` — примитивный тип
-- [E] `Set` на embedded → ошибка
+- [E] `new Set<u8>()` без capacity на `allocator: "static"` → ошибка
+- [R] `@static const s = new Set<u8>(16)` на `allocator: "static"` → BSS
+- [R] вставка сверх capacity → runtime panic
+- [E] `Set` на `allocator: "none"` → ошибка
 
 ### Date
 
@@ -1058,13 +1065,20 @@ input.tsc:1:
 
 ### async main / event loop
 
-- [R] `async function main()` → event loop на desktop
-- [F] C-output: `tsc_event_loop_run(tsc_main)`
+- [R] `async function main()` → event loop на desktop (`scheduler: "libuv"`)
+- [F] C-output desktop: `tsc_event_loop_run(tsc_main)`
+- [R] `async function main()` + `scheduler: "cooperative"` → poll loop на embedded
+- [F] C-output embedded: round-robin `tsc_scheduler_tick()` в `while(1)`
+- [R] `@static async function task()` → state machine в BSS (embedded)
+- [F] C-output: `static _TaskState _task_instance` без `malloc`
+- [E] `async function` без `@static` на `allocator: "static"` → ошибка
+- [R] несколько `@static async` задач — кооперативное переключение через `await`
+- [E] `scheduler: "none"` + `await` без ручного `resume()` → предупреждение
 
 ### Рекурсивные async
 
-- [R] рекурсивная async — предупреждение + heap allocation
-- [E] рекурсивная async на embedded → ошибка
+- [R] рекурсивная async — предупреждение + heap allocation (desktop)
+- [E] рекурсивная async на `allocator: "static"` / `"none"` → ошибка
 
 ### AbortSignal
 
@@ -1083,7 +1097,9 @@ input.tsc:1:
 - [R] `return` завершает генератор досрочно
 - [R] `throw` внутри генератора — ошибка видна в `for await`
 - [R] генератор с owned значениями (move через yield)
-- [E] `await` внутри `for await` тела на embedded → ошибка
+- [E] `async function*` без `@static` на `allocator: "static"` → ошибка
+- [R] `@static async function*` на `allocator: "static"` → state machine в BSS
+- [R] синхронный `function*` — всегда стек, работает на любой платформе
 
 ---
 
@@ -1268,9 +1284,44 @@ input.tsc:1:
 ### Platform Profile
 
 - [R] AVR target: `mcu: "atmega328p"`, `freq: 16000000`
-- [E] AVR + `Map` → ошибка (heap allocation)
-- [E] AVR + `async` without event loop impl → ошибка
 - [F] CMakeLists.txt для AVR использует avr-gcc
+
+#### allocator: "static"
+
+- [E] `new Map<u8, i32>()` без capacity на `allocator: "static"` → ошибка
+- [R] `@static const m = new Map<u8, i32>(32)` → BSS, нет malloc
+- [F] C-output: статическая hash-таблица в BSS
+- [E] `new Array<Sprite>()` без capacity → ошибка
+- [R] `@static const sprites = new Array<Sprite>(64)` → BSS
+- [F] C-output: `static Sprite sprites_data[64]; static Array_Sprite sprites = {...}`
+- [E] `new Shared<Node>()` → ошибка (ARC требует malloc)
+- [R] класс без heap (`class Brush { size: u8; color: u8 }`) → на стеке, ok
+- [R] интерфейс с vtable на стеке → ok (vtable — static const, не malloc)
+
+#### allocator: "none"
+
+- [E] любой `new X()` создающий heap-объект → ошибка
+- [R] `let n: Node = { x: 0, y: 0 }` — value type на стеке → ok
+- [R] фиксированный массив `const buf: u8[256] = [...]` → ok
+
+#### scheduler: "cooperative"
+
+- [R] `@static async function` → state machine в BSS, не malloc
+- [F] C-output: `static _TaskState _task_instance` + poll loop в `main()`
+- [R] две `@static async` задачи — кооперативное переключение через `await`
+- [E] `async function` без `@static` при `allocator: "static"` → ошибка
+- [E] `async function*` без `@static` при `allocator: "static"` → ошибка
+- [R] `@static function*` (sync generator) → state machine на стеке, ok
+
+#### no_recursion: true
+
+- [E] прямая рекурсия `function f() { f() }` → ошибка
+- [E] взаимная рекурсия `f() → g() → f()` → ошибка (статический анализ call graph)
+
+#### ram_size / stack_size
+
+- [E] суммарный BSS + stack > `ram_size` → ошибка компилятора с отчётом о превышении
+- [E] worst-case stack > `stack_size` → предупреждение
 
 ---
 

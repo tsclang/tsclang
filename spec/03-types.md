@@ -1082,6 +1082,29 @@ s.forEach((v) => { ... });
 for (const v of s.values()) { ... }
 ```
 
+#### Set на embedded
+
+Аналогично `Map<K,V>`: на `allocator: "static"` обязателен compile-time capacity:
+
+```typescript
+// Работает на NES, ZX Spectrum, Arduino — с @static
+@static const visitedTiles = new Set<u16>(256)   // 256 тайлов в BSS
+@static const activeKeys   = new Set<u8>(8)      // 8 одновременно нажатых клавиш
+
+visitedTiles.add(0x0102)        // добавить тайл
+visitedTiles.has(0x0102)        // проверить
+visitedTiles.delete(0x0102)     // удалить
+```
+
+```c
+/* C-output — static hash set, всё в BSS */
+typedef struct { uint16_t key; bool occupied; } _visitedTiles_Entry;
+static _visitedTiles_Entry _visitedTiles_data[256];
+static Set_u16 visitedTiles = { _visitedTiles_data, 256, 0 };
+```
+
+Переполнение → runtime panic: `set overflow: capacity 256 exceeded`.
+
 ### Object
 
 Статические методы для работы с объектами. Ключи — compile-time константы, возвращаются как копии. Значения — Ref для сложных типов, copy для примитивов:

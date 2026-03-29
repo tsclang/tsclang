@@ -1653,7 +1653,43 @@ void readlines_next(ReadLinesGen* g,
 void readlines_close(ReadLinesGen* g, void (*cb)(void* ud), void* ud);
 ```
 
-State machine аллоцируется на heap — на `heap: false` платформах `async function*` и `for await` с non-Channel итераторами → **ошибка компилятора**. Для embedded streaming — см. ниже.
+State machine аллоцируется на heap по умолчанию. На `allocator: "static"` — используй `@static`, тогда struct генератора идёт в BSS:
+
+```typescript
+// Работает на Arduino, AVR, bare-metal ARM — без heap!
+@static function* adcSampler(channel: u8): Generator<u16> {
+    while (true) {
+        yield ADC.read(channel)
+    }
+}
+
+// Использование — struct на BSS, не на heap
+const sampler = adcSampler(0)   // _AdcSamplerGen размещается @static
+for (const sample of sampler) {
+    uart.write(sample as u8)
+    if (sample > 900) break
+}
+```
+
+```c
+/* C-output */
+typedef struct { uint8_t channel; uint8_t _state; } _AdcSamplerGen;
+static _AdcSamplerGen _adcSampler_instance;   /* BSS, не heap */
+
+static bool adcSampler_next(_AdcSamplerGen* g, uint16_t* out) {
+    switch (g->_state) {
+    case 0: g->_state = 1;
+    case 1:
+        *out = ADC_read(g->channel);
+        return true;
+    }
+    return false;
+}
+```
+
+На `allocator: "none"` — `async function*` с heap-аллокацией → ошибка компилятора. Без `@static` и без `allocator: "none"` также ошибка. `@static` обязателен при `allocator: "static"`.
+
+Обычные (синхронные) генераторы (`function*` без `async`) всегда работают на стеке — heap не требуется ни на каких платформах.
 
 ### Embedded: альтернативы async generators
 
