@@ -417,7 +417,39 @@ let s = val as string;                   // явный cast обязателен
 
 - `void` нельзя использовать как тип переменной — только возвращаемый тип
 - `any` = `void*` в C, **неявно nullable** — `void*` может быть `NULL`; писать `any | null` избыточно и запрещено (ошибка компилятора)
-- `any` отключает borrow checker — **управление памятью ручное**, утечки на совести разработчика; использовать только на границах C interop
+- `any` отключает borrow checker — **управление памятью ручное**, компилятор не генерирует деструкторы для `any`; использовать только на границах C interop
+
+**Ownership-контракт `any` — ответственность разработчика, не компилятора:**
+- Передача `T` → `any` параметр: компилятор не знает владеет ли C-функция объектом — разработчик должен знать контракт библиотеки
+- `any` как return type: требует немедленного `as T`; ownership (owned vs borrow) определяет разработчик исходя из документации C-функции
+- Компилятор не предупреждает об утечках через `any` — это осознанный unsafe
+
+```typescript
+// .d.tsc — any как void* для C interop
+declare function sqlite3_column_blob(stmt: Ref<SqliteStmt>, col: i32): any
+declare function qsort(base: any, n: usize, size: usize, cmp: any): void
+
+// .tsc — cast сразу при получении из C
+const blob = sqlite3_column_blob(stmt, 0) as Ref<u8[]>  // borrow — SQLite владеет памятью
+```
+
+**Где `any` допустим:**
+
+| Контекст | Допустимость |
+|----------|-------------|
+| `.d.tsc` параметры и return type | ✅ — это и есть `void*` для C interop |
+| `.tsc` код: `val as T` cast | ✅ — немедленный cast при получении из C |
+| `.tsc` код: переменная типа `any` | ⚠️ code smell — используй `Ref<T>` или `Mut<T>` |
+| `.tsc` код: передача `any` между функциями | ❌ ошибка компилятора |
+
+Для C callback-паттернов с userdata `any` — правильный выбор:
+```typescript
+// ✅ userdata/context в C callbacks — any уместен
+declare function lib_on_event(
+    cb:   (result: i32, ctx: any) => void,
+    data: any
+): void
+```
 
 ```typescript
 // void + throws — Result без value-поля в C

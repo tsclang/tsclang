@@ -151,11 +151,41 @@ declare const SQLITE_ROW: i32 = 100;
 declare const SQLITE_DONE: i32 = 101;
 ```
 
-**Содержимое:**
-- `declare link` — информация о линковке (`libs`, `pkg_config`, `c_sources`, `c_includes`)
-- `declare opaque type` — непрозрачные C-типы с деструкторами
-- `declare function` — сигнатуры C-функций
-- `declare const` — константы
+**Содержимое — только декларации, тела запрещены:**
+
+| Разрешено | Запрещено |
+|-----------|-----------|
+| `declare function` | функции с телом `{ ... }` |
+| `declare const` | `let` / `const` с инициализацией |
+| `declare opaque type` | классы с методами |
+| `declare link` | `native {}` блоки |
+| `declare type` | обычный код |
+
+```typescript
+// ✅ корректно
+declare function sqlite3_open(path: string): SqliteDb throws SqliteError
+declare const SQLITE_OK: i32 = 0
+
+// ❌ ошибка компилятора
+declare function sqlite3_open(path: string): SqliteDb {
+    // error: .d.tsc cannot contain function bodies
+    // hint: move implementation to a .tsc wrapper file
+}
+```
+
+Для inline C wrapper — обычный `.tsc` файл:
+```typescript
+// sqlite3-wrapper.tsc (НЕ .d.tsc)
+import { sqlite3_open, SqliteDb } from "./sqlite3.d"
+
+export function openSafe(path: string): SqliteDb throws IOError {
+    native `
+        ${SqliteDb} db = sqlite3_open(${path});
+        if (!db) tsc_throw(IOError, "failed to open database");
+        ${return} db;
+    `
+}
+```
 
 **Ownership в FFI:**
 - `T` (без Ref/Mut) — owned, деструктор вызовется автоматически

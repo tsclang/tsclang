@@ -72,6 +72,34 @@ try {
 }
 ```
 
+**Exhaustive handling внутри union catch** — через `match` или `instanceof`:
+
+```typescript
+// match — exhaustive, _ не нужен (компилятор знает все типы из union)
+try {
+    fetch("https://...")
+} catch (e: IOError | NetworkError) {
+    match (e) {
+        IOError { message }   => console.log("io:", message),
+        NetworkError { code } => console.log("net:", code),
+        // _ запрещён — компилятор предупреждает: unreachable pattern
+    }
+}
+
+// instanceof — narrowing с else
+try {
+    fetch("https://...")
+} catch (e: IOError | NetworkError) {
+    if (e instanceof IOError) {
+        console.log("io:", e.message)   // e: IOError
+    } else {
+        console.log("net:", e.code)     // e: NetworkError
+    }
+}
+```
+
+Диспатч в обоих случаях компилируется через `_kind` из Result-struct — без `type_id` в Error, без vtable.
+
 ## Union errors
 
 Функция может бросать несколько типов ошибок:

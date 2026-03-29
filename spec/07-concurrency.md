@@ -1167,6 +1167,21 @@ const status = UART0.fr.read()   // C: *(volatile uint32_t*)0x101f1018 — не 
 
 Функция-прерывание. Только embedded платформы.
 
+**Сигнатура:** всегда `(): void` — без параметров, без возвращаемого значения, без `throws`. Любое отклонение — ошибка компилятора:
+```typescript
+@embedded.isr(14)
+function handler(): void { ... }          // ✅
+
+@embedded.isr(14)
+function handler(x: i32): void { ... }   // ❌ параметры запрещены
+
+@embedded.isr(14)
+function handler(): i32 { ... }          // ❌ return type должен быть void
+
+@embedded.isr(14)
+function handler(): void throws IOError { ... }  // ❌ throws запрещён
+```
+
 Два варианта аргумента:
 
 ```typescript
@@ -1179,16 +1194,20 @@ const status = UART0.fr.read()   // C: *(volatile uint32_t*)0x101f1018 — не 
 ```typescript
 import { Atomic, RmwOrdering } from "std/threads"
 
+// type — stack-allocated struct, не class (нет heap)
+type TimerEvent = { irq: u32; tick: u32 }
+
 static readonly irqCount = new Atomic<u32>(0)
-static readonly [tx, rx] = channel<Event>(32)
+static readonly [tx, rx] = channel<TimerEvent>(32)
 
 @embedded.isr(14)   // ARM Cortex-M: IRQ14
 function onTimerInterrupt(): void {
     // Atomic<T> — ok
     irqCount.fetchAdd(1, RmwOrdering.Relaxed)
 
-    // channel trySend — ok (не блокирует)
-    tx.trySend(new Event(14))
+    // type-литерал — stack allocation, не heap
+    const ev: TimerEvent = { irq: 14, tick: irqCount.load(RmwOrdering.Relaxed) }
+    tx.trySend(ev)   // non-blocking
 
     // Volatile<T> — ok
     TIMER_REG.sr.write(0x0)   // сброс флага прерывания
@@ -1248,12 +1267,72 @@ native `}`
 |----------|-----------|
 | `Atomic<T>` / `AtomicArray<T>` | ✅ |
 | `Volatile<T>` (MMIO) | ✅ |
-| `tx.trySend()` | ✅ (не блокирует) |
+| `tx.trySend()` / `rx.tryReceive()` | ✅ (не блокирует) |
+| Примитивы на стеке (`i32`, `u8`, etc.) | ✅ |
+| `type`-литералы на стеке (`{ field: u32 }`) | ✅ (stack allocation) |
+| Модульные переменные (`static`, `const`, `let` на уровне модуля) | ✅ (статическая память) |
+| Фиксированные массивы `T[N]` | ✅ (стек) |
 | `await` | ❌ ошибка компилятора |
 | `new` (heap allocation) | ❌ ошибка компилятора |
-| `await tx.send()` (блокирующий) | ❌ ошибка компилятора |
-| Owned / `Shared<T>` / `Ref<T>` | ❌ ошибка компилятора |
-| Обычные переменные программы | ❌ ошибка компилятора |
+| `tx.send()` / `rx.receive()` (блокирующие) | ❌ ошибка компилятора |
+| `Shared<T>` / `Weak<T>` | ❌ ошибка компилятора |
+| String concatenation | ❌ ошибка компилятора (heap) |
+| `Map`, `Set` операции | ❌ ошибка компилятора (heap) |
+| `throw` / `throws` | ❌ ошибка компилятора |
+| `interrupts.disable()` внутри ISR | ❌ ошибка компилятора (прерывания уже отключены) |
+| Два `@embedded.isr` с одним вектором | ❌ ошибка компилятора (duplicate vector) |
+
+**Почему heap запрещён в ISR:**
+1. **Safety** — аллокация может завершиться OOM → crash системы
+2. **Determinism** — heap имеет непредсказуемое время → нарушение real-time
+3. **Atomicity** — аллокатор использует блокировки → deadlock внутри ISR
+4. **Stack** — аллокация требует стекового пространства, ISR работает на ограниченном стеке
+
+Ошибка компилятора:
+```
+error[TSC-E081]: heap allocation in ISR context
+  --> src/handler.tsc:5:10
+    |
+  5 |     const ev = new Event(14)
+    |                ^^^^^^^^^^^^^ heap allocation forbidden in ISR
+    |
+    = hint: use pre-allocated buffer or static data structure
+    = note: use global buffer or channel + trySend instead
+```
+
+**Правильные паттерны:**
+
+```typescript
+// ✅ Примитив на стеке + канал
+const _sensorChannel = channel<u16>(32)
+
+@embedded.isr(14)
+function handler(): void {
+    const reading: u16 = ADC.read()       // примитив — стек, не heap
+    _sensorChannel.trySend(reading)       // non-blocking
+}
+
+// ✅ Глобальный статический буфер
+const _buffer: u8[64] = [0, ...]
+let _bufferLen: i32 = 0
+
+@embedded.isr("UART_RX")
+function uartRx(): void {
+    if (_bufferLen < 64) {
+        _buffer[_bufferLen++] = UART.read()
+    }
+}
+
+// ✅ Atomic счётчик
+const _counter = new Atomic<u32>(0)
+
+@embedded.isr("TIMER1_OVF")
+function timerOverflow(): void {
+    _counter.fetchAdd(1, RmwOrdering.Relaxed)
+}
+```
+
+**Вызов функций из ISR:** компилятор проверяет только прямые операции внутри ISR-функции. Если вызываемая функция внутри делает `new` или `await` — ошибка выдаётся на месте нарушения, не на месте вызова. Ответственность за ISR-safety вызываемых функций — на разработчике.
 
 `std/threads` на embedded targets — ошибка компилятора (нет OS).
 

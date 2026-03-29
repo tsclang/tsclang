@@ -75,7 +75,15 @@ s.charCount()   // ❌ ошибка компилятора: method charCount not
 
 **Правила:**
 - `this` — первый параметр, указывает расширяемый тип; не передаётся явно при вызове
-- Встроенные методы типа имеют **приоритет** над extension — shadowing built-in невозможен (ошибка компилятора)
+- Методы типа имеют **приоритет** над extension — переопределить существующий метод невозможен (ошибка компилятора). Распространяется на: методы классов, методы задекларированные в `.d.tsc` (`declare function`)
+  ```typescript
+  class User {
+      format(): string { return "class" }
+  }
+  export extension function format(this: User): string { return "ext" }
+  // ❌ error: extension 'format' conflicts with existing method on User
+  //    hint: rename extension or use different method name
+  ```
 - Extension виден только в файлах где он импортирован — **нет глобального загрязнения**
 - Работает для любого типа: `string`, `i32`, пользовательских `type`/`interface`/`class`
 
@@ -563,6 +571,11 @@ console.log(p1);  // ошибка: p1 перемещён в line
 
 - Поля **с дефолтом** → параметр со значением по умолчанию
 - Поля **без дефолта** → обязательный параметр (в порядке объявления)
+- `private` поля **с дефолтом** → авто-инициализируются тем дефолтом, в параметры конструктора не включаются
+- `private` поля **без дефолта** → ошибка компилятора: нет способа инициализировать без явного конструктора
+- Для `class X extends Error`: авто-конструктор добавляет `message: string` первым параметром и вызывает `super(message)` автоматически
+
+Явный `constructor`: компилятор проверяет что все поля без дефолта инициализированы на всех путях выполнения (definite assignment analysis).
 
 ```typescript
 class User {

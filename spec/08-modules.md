@@ -109,6 +109,49 @@ int main() {
   // кто инициализируется первым?
   ```
 
+## Module-level переменные
+
+Переменные объявленные вне функций и классов — module-level. Компилируются в статическую память C.
+
+```typescript
+const MAX_CONNECTIONS: i32 = 100      // compile-time constant
+let requestCount: i32 = 0             // mutable global
+const defaultUser = new User("guest") // owned, инициализация при старте
+```
+
+**C-представление:**
+
+| TSClang | C | Инициализация |
+|---------|---|---------------|
+| `const x: i32 = 5` | `static const int32_t x = 5` | compile-time |
+| `let x: i32 = 0` | `static int32_t x = 0` | compile-time |
+| `const arr: i32[4] = [...]` | `static int32_t arr[4] = {...}` | compile-time |
+| `const x = new Foo()` | `static Foo* x = NULL` | в `_init()` при старте |
+
+**Thread safety:** мутабельный `let` на уровне модуля небезопасен для многопоточного доступа — ошибка компилятора если `Thread.spawn` захватывает такую переменную. Используй `Atomic<T>`:
+```typescript
+let counter = 0                     // ⚠️ ошибка если Thread.spawn захватывает
+const counter = new Atomic<i32>(0)  // ✅ thread-safe
+```
+
+**`heap: false` платформы:** module-level owned объекты (`new`, `Shared<T>`) запрещены — нет heap. Используй value types или фиксированные массивы:
+```typescript
+// AVR (heap: false)
+const config = new Config()         // ❌ heap allocation запрещён
+const config: Config = { ... }      // ✅ value type — статическая память
+const buf: u8[256] = [0, ...]       // ✅ фиксированный массив — статическая память
+```
+
+**Паттерны по сценарию:**
+
+| Сценарий | Решение |
+|----------|---------|
+| Конфигурация | `const CONFIG = { ... }` (value type) |
+| Счётчик/флаг (многопоток) | `const n = new Atomic<T>(0)` |
+| Singleton (desktop) | `const instance = new Foo()` |
+| Singleton (embedded) | функция-геттер + статический буфер |
+| Буфер (embedded) | `const buf: u8[N] = [...]` |
+
 ## Path Aliases
 
 Path aliases — короткие имена для путей, избавляют от `../../..` в импортах:
