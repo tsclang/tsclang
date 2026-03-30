@@ -336,14 +336,35 @@ input.tsc:1:
 - [R] тип выводится из возврата функции
 - [R] тип выводится из аргумента при вызове
 
-### Числовые автокасты (widening без потерь)
+### Числовые автокасты — механизм 1: type-level widening
 
-- [R] i32 → i64 (неявно)
-- [R] u32 → u64 (неявно)
-- [R] i32 → f64 (неявно)
-- [R] f32 → f64 (неявно)
-- [E] i64 → f64 (с потерей точности) без `as` → ошибка
-- [E] i32 → f32 без `as` → ошибка
+- [R] `i32 → i64` неявно (same-sign)
+- [R] `u32 → u64` неявно (same-sign)
+- [R] `i32 → f64` неявно
+- [R] `u32 → f64` неявно
+- [R] `f32 → f64` неявно
+- [R] `u8 → i16` неявно (cross-sign: все u8 помещаются в i16)
+- [R] `u16 → i32` неявно (cross-sign)
+- [R] `u32 → i64` неявно (cross-sign)
+- [R] `let a: u32 = x; let b: i64 = a + 1` — works via type-level
+- [E] `u64 → i64` без `as` → ошибка (u64 max > i64 max)
+- [E] `i64 → u32` без `as` → ошибка (отрицательные не помещаются)
+- [E] `i64 → f64` без `as` → ошибка (потеря точности)
+- [E] `i32 → f32` без `as` → ошибка (потеря точности)
+
+### Числовые автокасты — механизм 2: const literal analysis
+
+- [R] `const a: i32 = -1; const b: u32 = 2; const c: f64 = a + b` → ok (шаг 1: i32 вмещает оба)
+- [R] `const a: i64 = 1; const b: u32 = 2; const c: f64 = a + b` → ok (шаг 1: u32 вмещает оба)
+- [R] `const a: i64 = 1; const b: u32 = 2; const c: u32 = a + b` → ok (результат 3 в u32)
+- [E] `const a: i32 = -1; const b: u32 = 3_000_000_000; const c: f64 = a + b` → ошибка (шаг 1: i32 не вмещает 3G, u32 не вмещает -1; шаг 2: наибольший u32 не вмещает -1)
+- [E] `const a: i64 = 3_000_000_000; const b: u32 = 2_000_000_000; const c: u32 = a + b` → ошибка (шаг 1: u32 вмещает оба; сумма 5G > u32 max — шаг 5)
+- [R] `const a: i64 = 200; const b: u32 = 100; const c: u8 = a + b` → ошибка (шаг 5: результат 300 не в u8)
+
+### Числовые автокасты — механизм 3: let требует явный as
+
+- [E] `let a: i64 = 1; let b: u32 = 2; const c: f64 = a + b` → ошибка (i64 + u32, нет type-level widening)
+- [R] `let a: i64 = 1; let b: u32 = 2; const c: f64 = (a + (b as i64)) as f64` → ok
 
 ### Оператор `as` — числовые касты
 
@@ -1489,6 +1510,99 @@ input.tsc:1:
 
 ---
 
+## Phase 13 — Декораторы
+
+### Базовое применение
+
+- [F] метод-декоратор без `before()`/`after()` (только `return desc`) — метод без изменений
+- [F] `@log` на методе — `before()` + `after()` → C-wrapper с `printf` вокруг тела
+- [F] `@log` на двух разных методах одного класса — два независимых wrapper'а
+- [F] декоратор возвращает `void` — корректно, метод без изменений
+- [F] класс-декоратор — модифицирует `ClassDesc`, C-output отражает изменения
+- [F] свойство-декоратор (`@minLength(3)`) — генерирует setter с проверкой и getter
+- [F] параметр-декоратор (`@isUUID`) — генерирует проверку на входе метода
+- [F] standalone-функция-декоратор (`@log` на `function`) — wrapper вокруг функции
+
+### Фабрики
+
+- [F] `@minLength(3)` — фабрика возвращает анонимную стрелку, comptime-аргумент инлайнится
+- [F] `@minLength(3) @minLength(5)` — оба в setter-цепочку, порядок снизу вверх
+- [F] фабрика с несколькими аргументами — все захватываются как comptime
+
+### Порядок применения
+
+- [F] `@A @B method` — C-wrapper: A оборачивает B (A внешний, B внутренний)
+- [F] `@timing @guard @log method` — три уровня вложенности, `@timing` всегда выполняется
+- [F] `@log @static method` — встроенный `@static` применяется в последней фазе независимо от позиции
+- [F] `@static @log method` — результат идентичен предыдущему
+
+### `cls.addField()` и `cls.addMethod()`
+
+- [F] `cls.addField('_cache', 'Map<string, any>')` — поле добавлено в C-структуру
+- [F] `@memoize` — `addField` + `before()`/`after()` + `ctx.self.field()` → корректный C
+- [F] `cls.addMethod('helper', ...)` — метод добавлен, видим снаружи
+- [F] `@logAllMethods @addHelper class` — `logAllMethods` видит метод, добавленный `addHelper`
+- [E] `@addHelper @logAllMethods class` — `logAllMethods` выполняется первым, не видит `helper()` → без ошибки (ожидаемое поведение)
+- [E] коллизия имён в `addField` — два декоратора добавляют поле с одним именем → ошибка компилятора
+- [E] коллизия имён в `addMethod` — аналогично
+
+### `ctx.self.field<T>()`
+
+- [F] `ctx.self.field<i32>('count')` → `self->count` в C
+- [E] поле не существует — `ctx.self.field<i32>('missing')` → ошибка: unknown field
+- [E] тип не совпадает — `ctx.self.field<string>('count')` где `count: i32` → ошибка: type mismatch
+- [E] runtime-строка в `field()` → ошибка: compile-time string required
+
+### Async-методы
+
+- [F] `@timing` на async-методе — `start` продвинуто в SM struct, `before` = STATE_INIT, `after` = STATE_DONE
+- [F] `@guard` на async-методе — ранний выход в STATE_INIT
+- [F] `@log @timing` на async — два SM struct поля, два уровня обёртки
+
+### Дженерики
+
+- [F] `@log` на методе дженерик-класса — работает без изменений (`ctx.args: any[]`)
+- [F] `@validate<P, R>` с generics на методе — строгая типизация `ctx.args`
+- [E] `@validatePositive` на методе с generic return — `isGenericReturn === true` → `throw` → ошибка компилятора с текстом из декоратора
+
+### Comptime-метаданные
+
+- [F] `desc.meta.set<RouteInfo>('route', { method: 'GET', path: '/users' })` — compile-time only, в C-output нет следов
+- [F] `desc.meta.get<RouteInfo>('route')` в том же декораторе — возвращает ожидаемое значение
+- [F] два `meta.set` с одним ключом — побеждает выполнившийся позже
+
+### Перегрузка для метода и standalone
+
+- [F] `@log` на методе (первая перегрузка) и `@log` на standalone-функции (вторая) — оба работают корректно
+
+### Экспорт / импорт
+
+- [F] `export decorator function log` в одном файле, `import { log }` в другом — применяется корректно
+
+### Модель выполнения — ошибки
+
+- [E] захват рантайм-объекта в `before()` → `cannot capture runtime value 'logger' in desc.before()`
+- [E] `throw` в теле декоратора → compile-time ошибка с текстом из `throw`
+- [E] вызов рантайм-функции из декоратора → ошибка компилятора на месте вызова
+- [E] circular dependency декораторов (A вызывает B, B вызывает A) → ошибка компиляции
+
+### Платформенные ошибки
+
+- [E] `@log` с `console.log` на платформе `avr` → ошибка указывает на место применения (`@log`), не на реализацию
+- [E] `cls.addField('buf', 'Array<u8>')` (heap-тип) на `allocator: "none"` → двойная ошибка: на `addField()` + примечание на месте применения
+
+### Встроенные декораторы — ошибки позиции
+
+- [E] `@readonly` на методе → `@readonly can only be applied to properties`
+- [E] `@static` на параметре → `@static cannot be applied to parameters`
+
+### Применение не туда — ошибки
+
+- [E] метод-декоратор применён к standalone-функции → ошибка с именем декоратора и ожидаемым таргетом
+- [E] параметр-декоратор применён к классу → ошибка
+
+---
+
 ## Инварианты компилятора (cross-cutting)
 
 Эти тесты применяются ко всем фазам:
@@ -1500,3 +1614,5 @@ input.tsc:1:
 - [R] hint присутствует в каждом сообщении borrow checker
 - [F] `#line` директивы в debug режиме
 - [F] `#line` директивы отсутствуют в release режиме
+
+---

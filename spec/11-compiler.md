@@ -3,10 +3,37 @@
 ## Фазы компиляции
 
 ```
-Parse → AST → Typecheck → Lower to IR → Ownership Analysis → Codegen
-                                 ↑              ↑
-                            Flatten CFG    Borrow checker / ARC injection
+Parse → AST → Decorator pass → Typecheck → Lower to IR → Ownership Analysis → Codegen
+                                                  ↑              ↑
+                                             Flatten CFG    Borrow checker / ARC injection
 ```
+
+## Decorator pass
+
+Выполняется после парсинга, до проверки типов. Подробно описан в [13-decorators.md](13-decorators.md).
+
+**Алгоритм:**
+
+1. Обойти все классы и функции в порядке объявления
+2. Для каждого декорированного узла — вычислить декораторы сверху вниз (фабрики вызываются)
+3. Применить полученные функции снизу вверх — каждая получает и возвращает дескриптор
+4. Модифицированный дескриптор заменяет оригинальный узел в AST
+5. После обхода всех узлов — AST модифицирован, переходим к Typecheck
+
+**Ограничения фазы:**
+
+| Операция | Разрешено |
+|----------|-----------|
+| Читать `cls.name`, `desc.params`, `desc.returnType` | ✓ |
+| Вызывать `desc.before()`, `desc.after()` | ✓ |
+| Вызывать `cls.addField()`, `cls.addMethod()` | ✓ |
+| Читать `meta` других классов | ✗ — порядок обхода не гарантирован |
+| Вызывать рантайм-функции | ✗ — рантайма ещё нет |
+| Читать типы полей добавленных другим декоратором | ✗ — если тот ещё не выполнился |
+
+Ошибки decorator pass — compile-time ошибки, останавливают компиляцию до Typecheck.
+
+---
 
 ## IR (Intermediate Representation)
 

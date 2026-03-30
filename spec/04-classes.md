@@ -633,3 +633,12 @@ class Config {
 let c = new Config();         // ошибка: конструктор private
 let c = Config.create();      // ok
 ```
+
+---
+
+## Декораторы
+
+Классы, методы, свойства и параметры могут быть декорированы через `decorator function`.
+Декораторы выполняются в compile time и модифицируют AST до проверки типов.
+
+См. [13-decorators.md](13-decorators.md) — полная спецификация.
