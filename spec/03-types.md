@@ -1277,6 +1277,48 @@ function sort(arr: Mut<i32[]>, cmp: Comparator<i32>): void { ... }
 
 - `type Point = { ... }` — гарантированно `typedef struct`, методы запрещены; `interface Point { ... }` без методов — тоже `typedef struct`, но методы можно добавить позже
 - `type UserId = i32` — compile-time алиас примитива, нового C типа нет; `UserId` и `i32` взаимозаменяемы
-- `T | null` — единственный допустимый union; любой non-nullable union (`string | i32`, `A | B`) — **ошибка компилятора**
+- `T | null` — единственный допустимый runtime union; любой non-nullable runtime union (`string | i32`, `A | B`) — **ошибка компилятора**
 - Для полиморфизма — class-иерархия (`abstract class`) или discriminated union через enum
+
+## String Literal Union
+
+String literal union — **compile-time концепция**. В runtime не существует — компилируется в C enum.
+
+```typescript
+type Dir = "north" | "south" | "east" | "west"
+type Status = "ok" | "error" | "pending"
+
+let d: Dir = "north"   // ok
+d = "up"               // ошибка компилятора: "up" не входит в Dir
+```
+
+```c
+typedef enum { Dir_north, Dir_south, Dir_east, Dir_west } Dir;
+
+static const char* const Dir_values[] = {
+    [Dir_north] = "north",
+    [Dir_south] = "south",
+    [Dir_east]  = "east",
+    [Dir_west]  = "west"
+};
+```
+
+**Конверсия в string — явная:**
+
+```typescript
+const s1 = d.toString()   // "north" — читаемо
+const s2 = d as string    // "north" — кратко
+```
+
+Автоконверт запрещён — в C это скрытый `Dir_values[d]`, overhead должен быть виден в коде.
+
+**Где разрешён string literal union:**
+
+| Позиция | Разрешено |
+|---------|-----------|
+| `type` alias | ✅ |
+| Тип параметра функции | ✅ |
+| Generic параметр (`keyof`, `Pick`, `Record`) | ✅ |
+| Runtime union с другим типом (`Dir \| i32`) | ❌ |
+| Автоконверт в `string` | ❌ |
 

@@ -1461,6 +1461,141 @@ static bool range_next(_RangeGen* g, int32_t* out) {
 }
 ```
 
+Явный вызов `gen.next()` / `gen.value` вместо `for...of` — для случаев когда нужен контроль над итерацией:
+
+```typescript
+function* counter(max: i32): Generator<i32> {
+    for (let i = 0; i < max; i++) {
+        yield i
+    }
+}
+
+const gen = counter(10)
+while (gen.next()) {
+    console.log(gen.value)
+}
+```
+
+```c
+typedef struct {
+    int32_t state;
+    int32_t i;
+    int32_t max;
+    int32_t value;
+} counter_gen;
+
+bool counter_next(counter_gen* g) {
+    switch (g->state) {
+        case 0:
+            g->i = 0;
+            // fallthrough
+        case 1:
+            if (g->i >= g->max) {
+                g->state = 0xFF;
+                return false;
+            }
+            g->value = g->i;
+            g->i++;
+            g->state = 1;
+            return true;
+        case 0xFF:
+            return false;
+    }
+}
+
+// Использование
+counter_gen gen = {0, 0, 10, 0};
+while (counter_next(&gen)) {
+    printf("%d\n", gen.value);
+}
+```
+
+**Размер:** `sizeof(counter_gen)` = 16 байт. На стеке или `@static`.
+
+#### Классы без heap: `@embedded.inline` и `@embedded.pool(N)`
+
+Обычный `new` требует heap. На embedded — два встроенных декоратора:
+
+**`@embedded.inline`** — value-тип. Объект живёт на стеке как C struct, без указателя и vtable:
+
+```typescript
+@embedded.inline
+class Point { x: i16; y: i16 }
+
+let p = Point(10, 20)   // не new — value, как struct
+p.x = 15
+```
+
+```c
+typedef struct { int16_t x, y; } Point;
+Point p = {10, 20};
+p.x = 15;
+```
+
+**`@embedded.pool(N)`** — статический пул на N экземпляров. `new` берёт слот из пула:
+
+```typescript
+@embedded.pool(16)
+class Sprite {
+    x: i16; y: i16; bitmap: u8[8]
+    constructor(x: i16, y: i16) { ... }
+}
+
+// Автоматически — компилятор возвращает слот при выходе из scope
+{
+    const s = new Sprite(10, 20)
+    s.move(5, 0)
+}  // ← слот возвращён автоматически
+
+// Вручную — если нужно освободить раньше (объект "убит" в игре)
+const s = new Sprite(10, 20)
+if (s.isOutOfBounds()) {
+    drop(s)  // явный возврат слота, s больше недоступен
+}
+```
+
+```c
+static Sprite _sprites_pool[16];
+static uint8_t _sprites_used[16] = {0};
+
+Sprite* Sprite_new(int16_t x, int16_t y) {
+    for (int i = 0; i < 16; i++) {
+        if (!_sprites_used[i]) {
+            _sprites_used[i] = 1;
+            _sprites_pool[i].x = x;
+            _sprites_pool[i].y = y;
+            return &_sprites_pool[i];
+        }
+    }
+    return NULL;  // пул полон
+}
+
+// Возврат слота — не free() памяти, просто сброс флага
+void Sprite_pool_release(Sprite* s) {
+    _sprites_used[s - _sprites_pool] = 0;
+}
+
+// Автоматический вызов при выходе из scope (оба случая генерируют одинаковый C)
+{
+    Sprite* s = Sprite_new(10, 20);
+    Sprite_move(s, 5, 0);
+    Sprite_pool_release(s);   // вставлено компилятором
+}
+
+// drop(s) → тот же Sprite_pool_release(s), но явно в коде
+```
+
+`new` на `allocator: "none"` без `@embedded.pool` → ошибка компилятора.
+`@embedded.pool(N)` на desktop — работает, но обычно не нужен.
+
+| Декоратор | Где живёт объект | `new` |
+|-----------|-----------------|-------|
+| `@embedded.inline` | стек (value-тип) | не используется |
+| `@embedded.pool(N)` | BSS (статический пул) | берёт слот из пула |
+| *(нет декоратора)* | heap | требует `allocator: "heap"` |
+
+---
+
 #### Реальные примеры
 
 **Графический редактор для ZX Spectrum:**

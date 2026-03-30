@@ -246,7 +246,91 @@ function lookup(key: u8): i32 | null {
 
 O(N) поиск — приемлемо для маленьких таблиц. Всё на стеке, heap не нужен.
 
-**Когда ни один паттерн не подходит** — использовать `new Map<K,V>(N)` с `allocator: "static"`. Если платформа имеет `allocator: "none"` и ни один паттерн не укладывается — пересмотреть размер таблицы или перейти на `allocator: "static"`.
+**Паттерн 4: `HashMap<K, V, N>` — хеш-таблица фиксированного размера**
+
+Для `allocator: "none"` когда нужен O(1) поиск по runtime-ключам и N > 16.
+Open addressing с linear probing, вся память в BSS:
+
+```typescript
+import { HashMap } from "std/embedded"
+
+const map = new HashMap<string, i32, 32>()
+map.set("health", 100)
+map.set("ammo", 50)
+
+const hp = map.get("health")   // i32 | null
+```
+
+```c
+typedef struct {
+    const char* keys[32];
+    int32_t     values[32];
+    uint8_t     used[32];
+} HashMap_string_i32_32;
+
+void HashMap_set(HashMap_string_i32_32* m, const char* key, int32_t val) {
+    uint8_t hash = djb2(key) % 32;
+    while (m->used[hash] && strcmp(m->keys[hash], key) != 0) {
+        hash = (hash + 1) % 32;  // linear probing
+    }
+    m->keys[hash] = key;
+    m->values[hash] = val;
+    m->used[hash] = 1;
+}
+
+int32_t* HashMap_get(HashMap_string_i32_32* m, const char* key) {
+    uint8_t hash = djb2(key) % 32;
+    for (int i = 0; i < 32; i++) {
+        if (m->used[hash] && strcmp(m->keys[hash], key) == 0) {
+            return &m->values[hash];
+        }
+        hash = (hash + 1) % 32;
+    }
+    return NULL;
+}
+// sizeof = 32 * (ptr + 4 + 1) = 224 байта на AVR (ptr=2)
+```
+
+**Паттерн 5: `StaticMap` — compile-time perfect hash**
+
+Встроенный класс. Ключи обязаны быть compile-time константами — runtime ключи → ошибка компилятора.
+Компилятор генерирует perfect hash switch — O(1), нет struct overhead:
+
+```typescript
+const opcodes = new StaticMap({
+    "LDA": 0xA9,
+    "STA": 0x8D,
+    "JMP": 0x4C,
+    "NOP": 0xEA,
+})
+
+const opcode = opcodes.get("LDA")   // 0xA9
+```
+
+```c
+uint8_t opcodes_get(const char* key) {
+    switch (key[0] | (key[1] << 8) | (key[2] << 16)) {
+        case 'L'|('D'<<8)|('A'<<16): return 0xA9;
+        case 'S'|('T'<<8)|('A'<<16): return 0x8D;
+        case 'J'|('M'<<8)|('P'<<16): return 0x4C;
+        case 'N'|('O'<<8)|('P'<<16): return 0xEA;
+        default: return 0xFF;
+    }
+}
+```
+
+**Сводная таблица:**
+
+| Паттерн | Ключи | Поиск | Heap | Применение |
+|---------|-------|-------|------|-----------|
+| `switch` | compile-time | O(1) | нет | коды команд, enum |
+| массив по индексу | плотный integer | O(1) | нет | channel ID, port |
+| массив пар | runtime, N ≤ 16 | O(N) | нет | маленькие таблицы |
+| `HashMap<K,V,N>` | runtime, N > 16 | O(1) | нет | игровые объекты, конфиг |
+| `StaticMap` | compile-time | O(1) | нет | opcode tables, hotkeys |
+| `new Map<K,V>(N)` | runtime | O(1) | нет (static) | `allocator: "static"` |
+
+**Когда ни один паттерн не подходит** — пересмотреть размер таблицы или перейти на `allocator: "static"`.
 
 ## Buffer
 
@@ -1468,6 +1552,138 @@ error: std/avr is not available on target "desktop"
 ```
 
 ## std/embedded
+
+Инструменты для embedded платформ: низкоуровневый доступ к памяти, структуры данных без heap, кооперативный планировщик.
+
+```typescript
+import { Volatile, pointer, HashMap, Tasks } from "std/embedded"
+```
+
+### HashMap\<K, V, N\>
+
+Хеш-таблица фиксированного размера. Вся память в BSS, никакого heap. Open addressing с linear probing.
+
+```typescript
+import { HashMap } from "std/embedded"
+
+const map = new HashMap<string, i32, 32>()
+map.set("health", 100)
+map.set("ammo", 50)
+
+const hp = map.get("health")   // i32 | null
+```
+
+```c
+typedef struct {
+    const char* keys[32];
+    int32_t     values[32];
+    uint8_t     used[32];
+} HashMap_string_i32_32;
+
+void HashMap_set(HashMap_string_i32_32* m, const char* key, int32_t val) {
+    uint8_t hash = djb2(key) % 32;
+    while (m->used[hash] && strcmp(m->keys[hash], key) != 0) {
+        hash = (hash + 1) % 32;
+    }
+    m->keys[hash] = key;
+    m->values[hash] = val;
+    m->used[hash] = 1;
+}
+
+int32_t* HashMap_get(HashMap_string_i32_32* m, const char* key) {
+    uint8_t hash = djb2(key) % 32;
+    for (int i = 0; i < 32; i++) {
+        if (m->used[hash] && strcmp(m->keys[hash], key) == 0)
+            return &m->values[hash];
+        hash = (hash + 1) % 32;
+    }
+    return NULL;
+}
+// sizeof = N * (ptr + sizeof(V) + 1) байт
+```
+
+### Tasks\<N\>
+
+Кооперативный round-robin планировщик. Фиксированный пул слотов в BSS, никакого heap.
+Используй `@static const tasks` — доступен из любой задачи без передачи параметров.
+
+```typescript
+import { Tasks } from "std/embedded"
+
+@static const tasks = new Tasks<8>()
+
+@static async function musicTask(): Promise<void> {
+    await playMusic()
+    tasks.remove(musicTask)
+    tasks.add(blinkTask)
+}
+
+@static async function blinkTask(): Promise<void> {
+    while (true) {
+        GPIO.write(Pin.LED, true)
+        await sleep(500)
+        GPIO.write(Pin.LED, false)
+        await sleep(500)
+    }
+}
+
+@static async function inputTask(): Promise<void> {
+    while (true) {
+        if (keyboard.available()) handleKey(keyboard.read())
+        await sleep(10)
+    }
+}
+
+async function main(): Promise<void> {
+    tasks.add(musicTask)
+    tasks.add(blinkTask)
+    tasks.add(inputTask)
+    tasks.run()
+}
+```
+
+**API:**
+
+```typescript
+tasks.add(fn)     // добавить задачу
+tasks.remove(fn)  // удалить задачу
+tasks.run()       // запустить бесконечный loop (blocking)
+tasks.stop()      // остановить loop
+```
+
+**Правила:**
+- `N` — compile-time константа, все слоты резервируются в BSS
+- Превышение N → ошибка компилятора
+- Задача завершилась (дошла до конца) — слот освобождается автоматически
+- `tasks.add` во время `run()` — корректно, задача подхватится на следующем тике
+- `@static` обязателен для задач на `allocator: "static"` / `"none"`
+
+**C-output:**
+
+```c
+typedef struct {
+    TaskFn  fns[8];
+    void*   ctx[8];
+    uint8_t active[8];
+    uint8_t count;
+} Tasks_8;
+
+static Tasks_8 _tasks;
+
+void Tasks_run(Tasks_8* t) {
+    while (1) {
+        for (uint8_t i = 0; i < t->count; i++) {
+            if (t->active[i]) t->fns[i](t->ctx[i]);
+        }
+    }
+}
+```
+
+**Память:** `Tasks<N>` = N × 5 байт в BSS (на AVR). `Tasks<8>` = 40 байт.
+
+---
+
+### Volatile\<T\>
 
 Низкоуровневый доступ для embedded платформ — `Volatile<T>` для MMIO и `pointer<T>` для маппинга адресов.
 

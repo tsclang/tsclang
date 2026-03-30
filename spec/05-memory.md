@@ -284,7 +284,45 @@ function qux(u: Shared<User>): void {
 
 `Shared<T>` — строго read-only (матрица: `Shared<T>` → `Mut<T>` = ❌). Это намеренное ограничение.
 
-**На embedded** `Shared<T>` нет вообще — нет heap, нет ARC. Глобальное мутабельное состояние — отдельная тема (`static`).
+**На embedded** `Shared<T>` нет вообще — нет heap, нет ARC. Глобальное мутабельное состояние — через `@static let`.
+
+## `@static let` — мутабельное глобальное состояние
+
+`@static let` объявляет переменную с `'static` lifetime — живёт всю программу, размещается в BSS.
+
+```typescript
+@static let tasks = new Tasks<8>()
+@static let counter: i32 = 0
+```
+
+**Правила borrow checker для `@static let`:**
+
+Множественный `Mut<T>` к одному `@static let` **разрешён** — объект живёт всю программу, dangling pointer невозможен:
+
+```typescript
+@static let tasks = new Tasks<8>()
+
+tasks.add(blinkTask)   // ok — Mut<Tasks<8>>
+tasks.add(inputTask)   // ok — второй Mut<Tasks<8>> к тому же объекту
+```
+
+Это отличается от обычных переменных где два одновременных `Mut<T>` — ошибка компилятора.
+
+**Гонки данных — ответственность разработчика:**
+
+| Контекст | `@static let` мутация | Безопасность |
+|----------|----------------------|--------------|
+| Single-thread | разрешено | гонок нет |
+| `async/await` (без потоков) | разрешено | один поток, event loop |
+| Embedded (любой allocator) | разрешено | нет потоков по природе |
+| `std/threads` | требует `Atomic<T>` или синхронизацию | иначе ошибка компилятора |
+
+При использовании `std/threads` компилятор обнаруживает `@static let` с не-атомарным типом и требует явной синхронизации:
+
+```typescript
+@static let counter: i32 = 0
+Thread.spawn(() => { counter++ })  // ошибка: @static let 'counter' accessed from thread — use Atomic<i32>
+```
 
 **На desktop** event loop однопоточный. `Shared<T>` с мутацией нужен только при `Thread.spawn`. Реальные кейсы и их решения:
 

@@ -435,6 +435,53 @@ async function pong(): void { await ping() }
 
 На **embedded** рекурсивная async функция — ошибка компилятора с подсказкой переписать через явный стек (`u8[]` или `i32[]`) или итеративно.
 
+#### `@embedded.stack(name, N)` — явный стек для async-рекурсии
+
+Встроенный декоратор. Создаёт статический стек размером N в BSS. `@embedded.stack` — компаньон для случаев когда рекурсия необходима: обход деревьев, парсинг, DFS:
+
+```typescript
+@embedded.stack("nodes", 64)
+async function traverse(root: Ref<Node>): Promise<void> {
+    while (!@embedded.stack_empty("nodes")) {
+        const n = @embedded.stack_pop<Ref<Node>>("nodes")
+        await process(n)
+        if (n.left)  @embedded.stack_push("nodes", n.left)
+        if (n.right) @embedded.stack_push("nodes", n.right)
+    }
+}
+```
+
+```c
+// C-output — стек в статической памяти
+static Node* nodes_stack[64];
+static uint8_t nodes_stack_top = 0;
+
+void traverse_poll(Traverse_SM* sm) {
+    switch (sm->_state) {
+        case 0:
+            nodes_stack[nodes_stack_top++] = sm->root;
+            sm->_state = 1; break;
+        case 1:
+            if (nodes_stack_top == 0) { sm->_state = 0xFF; return; }
+            sm->n = nodes_stack[--nodes_stack_top];
+            process_poll(&sm->n_state);
+            sm->_state = 2; break;
+        // ...
+    }
+}
+```
+
+Размер N — compile-time константа. Переполнение → паника в runtime.
+
+#### Дополнительные ограничения async на embedded
+
+| Конструкция | Desktop | Embedded |
+|-------------|---------|----------|
+| Рекурсивная async | ✅ heap | ❌ ошибка → используй `@embedded.stack` |
+| `Ref<T>` через `await` | ❌ всегда | ❌ всегда |
+| `Promise.all` / `Promise.race` | ✅ | ❌ требует heap |
+| `@static async function` | работает | обязателен при `allocator: "static"` |
+
 ### Отмена задач — AbortSignal
 
 Кооперативная отмена async операций. Компилятор вставляет проверку флага автоматически — разработчик пишет только бизнес-логику.
@@ -1691,6 +1738,34 @@ static bool adcSampler_next(_AdcSamplerGen* g, uint16_t* out) {
 
 Обычные (синхронные) генераторы (`function*` без `async`) всегда работают на стеке — heap не требуется ни на каких платформах.
 
+#### `@embedded.singleton` — единственный экземпляр генератора
+
+Семантически эквивалентен `@static function*`, но явно выражает намерение: один экземпляр state machine на всю программу, живёт в BSS.
+
+```typescript
+@embedded.singleton
+function* scanline(): Generator<u8[256]> {
+    while (true) {
+        yield renderLine()
+    }
+}
+```
+
+```c
+// C-output — статическая state machine
+static struct {
+    uint8_t state;
+    uint8_t line[256];
+} scanline_gen;
+
+bool scanline_next(void) {
+    renderLine(scanline_gen.line);
+    return true;  // бесконечный
+}
+```
+
+`@embedded.singleton` применяется только к `function*` — ошибка компилятора на любом другом таргете.
+
 ### Embedded: альтернативы async generators
 
 На `heap: false` (AVR, bare-metal ARM) async generators недоступны. Streaming реализуется синхронными паттернами:
@@ -1762,6 +1837,71 @@ dma.read(dmaBuf, 256, (buf: Ref<u8[256]>) => {
     // callback вызывается из ISR завершения DMA
 })
 ```
+
+---
+
+## 6. Кооперативная многозадачность через генераторы
+
+Паттерн для "параллельного" выполнения нескольких задач без потоков и без OS.
+Каждая задача — генератор, `yield` уступает управление следующей. Round-robin loop тикает все задачи по очереди.
+
+Работает на любой платформе. На embedded — основной способ многозадачности.
+
+```typescript
+function* inputTask(): Generator<void> {
+    while (true) {
+        if (keyboard.available()) {
+            handleKey(keyboard.read())
+        }
+        yield
+    }
+}
+
+function* logicTask(): Generator<void> {
+    while (true) {
+        updateLogic()
+        yield
+    }
+}
+
+function* renderTask(): Generator<void> {
+    while (true) {
+        renderScreen()
+        yield
+    }
+}
+
+function main(): void {
+    const tasks = [inputTask(), logicTask(), renderTask()]
+    while (true) {
+        for (const t of tasks) t.next()
+    }
+}
+```
+
+```c
+// C-output — три state machine, round-robin без heap
+static InputTask_state input_task;
+static LogicTask_state logic_task;
+static RenderTask_state render_task;
+
+void main(void) {
+    while (1) {
+        InputTask_next(&input_task);
+        LogicTask_next(&logic_task);
+        RenderTask_next(&render_task);
+    }
+}
+```
+
+**Размер:** каждая task ≈ 4–16 байт (зависит от живых переменных через `yield`).
+
+| Подход | Heap | Сложность | Применение |
+|--------|------|-----------|-----------|
+| Sync polling | нет | низкая | простой loop, одна задача |
+| **Generators round-robin** | нет | средняя | несколько задач, embedded и desktop |
+| Async/Await + runtime | нужен | высокая | desktop/server |
+| Threads | нужен | высокая | CPU-bound, OS |
 
 ---
 
