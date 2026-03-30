@@ -263,10 +263,9 @@ interface MethodCtx<Params extends any[] = any[], Return = any> {
 }
 
 interface MethodDesc<Params extends any[] = any[], Return = any> {
-  params:          ParamDesc[];
-  returnType:      string;
-  isAsync:         boolean;
-  isGenericReturn: boolean;    // true если returnType — параметр типа
+  params:     ParamDesc[];
+  returnType: string;
+  isAsync:    boolean;
 
   before(fn: (ctx: MethodCtx<Params, Return>) => void): void;
   after(fn: (ctx: MethodCtx<Params, Return>) => void): void;
@@ -325,10 +324,9 @@ interface PropDesc {
 
 ```ts
 interface ParamDesc {
-  name:      string;
-  type:      string;
-  index:     number;
-  isGeneric: boolean;  // true если тип — параметр типа
+  name:  string;
+  type:  string;
+  index: number;
 
   addTransform<T = unknown>(fn: (value: T) => T): void;  // T выводится из типа параметра при применении
   addCheck<T = unknown>(fn: (value: T) => void): void;
@@ -347,11 +345,10 @@ interface FunctionCtx<Params extends any[] = any[], Return = any> {
 }
 
 interface FunctionDesc<Params extends any[] = any[], Return = any> {
-  name:            string;
-  params:          ParamDesc[];
-  returnType:      string;
-  isAsync:         boolean;
-  isGenericReturn: boolean;
+  name:       string;
+  params:     ParamDesc[];
+  returnType: string;
+  isAsync:    boolean;
 
   before(fn: (ctx: FunctionCtx<Params, Return>) => void): void;
   after(fn: (ctx: FunctionCtx<Params, Return>) => void): void;
@@ -522,30 +519,16 @@ decorator function timing(cls: ClassDesc, key: string, desc: MethodDesc): Method
 Когда декоратор применяется к методу дженерик-класса, `desc.returnType` содержит
 строковое имя параметра типа (`"T"`), не конкретный тип. Параметр типа не привязан.
 
-Компилятор не запрещает декораторы на дженерик-классах принудительно.
-Декоратор сам решает через comptime-флаги:
-
-```ts
-interface MethodDesc<...> {
-  isGenericReturn: boolean;   // true если returnType — параметр типа
-  // ...
-}
-
-interface ParamDesc {
-  isGeneric: boolean;         // true если тип параметра — параметр типа
-  // ...
-}
-```
-
 Декораторы, не зависящие от конкретных типов (`@log`, `@timing`, `@guard`),
 работают с дженерик-классами без изменений.
 
-Декораторы, зависящие от конкретного типа, явно проверяют и выбрасывают:
+Декораторы, зависящие от конкретного типа, используют **generic-ограничение на декораторе** —
+компилятор сам не даст применить его к несовместимому типу:
 
 ```ts
-decorator function validatePositive(cls: ClassDesc, key: string, desc: MethodDesc): MethodDesc {
-  if (desc.isGenericReturn)
-    throw new Error(`@validatePositive requires concrete return type, got generic`);
+decorator function validatePositive<P extends any[], R extends number>(
+  cls: ClassDesc, key: string, desc: MethodDesc<P, R>
+): MethodDesc<P, R> {
   desc.after((ctx) => {
     if (ctx.result < 0) throw new RangeError(`${key} must return positive value`);
   });
@@ -553,17 +536,17 @@ decorator function validatePositive(cls: ClassDesc, key: string, desc: MethodDes
 }
 
 class Container<T> {
-  @validatePositive   // error: @validatePositive requires concrete return type, got generic
+  @validatePositive   // error: R=T does not satisfy constraint 'number'
   get(): T { ... }
 }
 
 class Counter {
-  @validatePositive   // OK — returnType === "number"
+  @validatePositive   // OK — R=number satisfies 'number'
   get(): number { ... }
 }
 ```
 
-**Будущее:** `desc.returnType` сейчас строка — планируется `TypeRef` API.
+`desc.returnType: string` — для сообщений об ошибках и кодогенерации. Структурное сравнение типов через generic-ограничения, не через инспекцию строки.
 
 ---
 
