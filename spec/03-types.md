@@ -1322,3 +1322,208 @@ const s2 = d as string    // "north" — кратко
 | Runtime union с другим типом (`Dir \| i32`) | ❌ |
 | Автоконверт в `string` | ❌ |
 
+## Utility Types
+
+Utility types — **compile-time type operators**. В C не существуют: компилятор разворачивает их в конкретные struct/enum на этапе type checking.
+
+### Generic functions — правило А+Б
+
+```typescript
+// ✅ А: type alias — всегда разрешён
+type UserName = Pick<User, "name">
+type PartialConfig = Partial<Config>
+
+// ✅ Б: utility type в позиции параметра generic function
+function log<T>(obj: Pick<T, "name">): void {
+    print(obj.name)
+}
+function merge<T>(base: T, patch: Partial<T>): T { ... }
+
+// ❌ utility type в return type generic function
+function pick<T, K extends keyof T>(obj: T, key: K): Pick<T, K>
+// ошибка: Pick с runtime-key в return type невозможен в C
+```
+
+Запрет на return type с generic key — потому что `{ [key]: obj[key] }` невозможно в C (нет динамического доступа к полям).
+
+### keyof
+
+`keyof T` — compile-time оператор, возвращает string literal union ключей типа. Работает только внутри utility types и type aliases.
+
+```typescript
+type User = { name: string; age: i32 }
+
+keyof User  // → "name" | "age"
+```
+
+Не может использоваться в runtime выражениях.
+
+### Partial\<T\>
+
+Все поля становятся optional.
+
+```typescript
+type User = { name: string; age: i32 }
+type PartialUser = Partial<User>
+// → { name?: string; age?: i32 }
+```
+
+```c
+typedef struct {
+    opt_string name;  // bool has_value + string
+    opt_i32    age;
+} PartialUser;
+```
+
+### Required\<T\>
+
+Все поля становятся обязательными. Обратный к `Partial`.
+
+```typescript
+type User = { name?: string; age?: i32 }
+type RequiredUser = Required<User>
+// → { name: string; age: i32 }
+```
+
+### Readonly\<T\>
+
+Все поля становятся константными.
+
+```typescript
+type User = { name: string; age: i32 }
+type ReadonlyUser = Readonly<User>
+```
+
+```c
+typedef struct {
+    const char* const name;
+    const int32_t     age;
+} ReadonlyUser;
+```
+
+### NonNullable\<T\>
+
+Убирает `null` из типа.
+
+```typescript
+type T  = string | null
+type NN = NonNullable<T>  // → string
+```
+
+### Pick\<T, K\>
+
+Выбирает подмножество полей. `K` — string literal или literal union (не переменная).
+
+```typescript
+type User = { name: string; age: i32; email: string }
+type UserName    = Pick<User, "name">
+// → { name: string }
+
+type UserContact = Pick<User, "name" | "email">
+// → { name: string; email: string }
+```
+
+### Omit\<T, K\>
+
+Исключает поля. Обратный к `Pick`.
+
+```typescript
+type UserPublic  = Omit<User, "passwordHash">
+type UserMinimal = Omit<User, "age" | "email">
+```
+
+### Record\<K, V\>
+
+| K | Результат |
+|---|-----------|
+| Literal union (`"x" \| "y"`) | `typedef struct` |
+| `enum` | `typedef struct` |
+| `string` | `Map<string, V>` (runtime) |
+
+```typescript
+type Coords  = Record<"x" | "y", f64>       // → struct { f64 x; f64 y; }
+type Point3D = Record<Axis, f64>             // → struct по enum Axis
+type StrMap  = Record<string, i32>           // → Map<string, i32>
+```
+
+```c
+// Record<"x" | "y", f64>
+typedef struct { double x; double y; } Coords;
+
+// Record<Axis, f64>  (enum Axis { X, Y, Z })
+typedef struct { double x; double y; double z; } Point3D;
+```
+
+### ReturnType\<T\>
+
+Извлекает return type функции. `T` — function type или `typeof function`.
+
+```typescript
+function foo(): string { ... }
+type R = ReturnType<typeof foo>  // → string
+```
+
+### Parameters\<T\>
+
+Параметры функции как tuple.
+
+```typescript
+function foo(x: i32, y: string): void { ... }
+type P = Parameters<typeof foo>  // → [i32, string]
+```
+
+### Awaited\<T\>
+
+Unwrap async/Promise типа (рекурсивно).
+
+```typescript
+async function fetchData(): Promise<User> { ... }
+type U = Awaited<ReturnType<typeof fetchData>>  // → User
+type B = Awaited<Promise<Promise<i32>>>         // → i32
+```
+
+### Не поддерживаемые
+
+| Utility | Причина |
+|---------|---------|
+| `Extract<T, U>` | Требует conditional types |
+| `Exclude<T, U>` | Требует conditional types |
+| `InstanceType<T>` | Нет constructor type concept |
+| `ThisParameterType<T>` | Нет OOP `this` semantics |
+| `Uppercase<T>` / `Lowercase<T>` | Template literal types |
+
+### Примеры
+
+```typescript
+// Partial для конфигурации со значениями по умолчанию
+type Config = { host: string; port: i32; timeout: i32 }
+
+function createConfig(overrides: Partial<Config>): Config {
+    return {
+        host:    overrides.host    ?? "localhost",
+        port:    overrides.port    ?? 8080,
+        timeout: overrides.timeout ?? 30000
+    }
+}
+
+// Pick для публичного API
+type User = { id: i32; name: string; email: string; passwordHash: string }
+type PublicUser = Pick<User, "id" | "name" | "email">
+
+function getUser(id: i32): PublicUser { ... }
+
+// Record для векторов
+type Vec3 = Record<"x" | "y" | "z", f64>
+
+function normalize(v: Vec3): Vec3 {
+    const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+    return { x: v.x / len, y: v.y / len, z: v.z / len }
+}
+
+// Utility type в параметре generic function (Вариант Б)
+function merge<T>(base: T, patch: Partial<T>): T {
+    // компилятор знает конкретный T на call site
+    ...
+}
+```
+
