@@ -450,6 +450,122 @@ input.tsc:1:
 - [R] usize → i64 (неявно)
 - [E] usize → i32 без `as` → ошибка
 
+### String Literal Union
+
+- [R] `type Dir = "north" | "south" | "east" | "west"` — объявление
+- [F] C-output: `typedef enum { Dir_north, Dir_south, ... } Dir` + `Dir_values[]` в rodata
+- [R] присвоение валидного значения: `let d: Dir = "north"` → ok
+- [E] присвоение невалидного значения: `d = "up"` → ошибка компилятора
+- [R] явная конверсия `.toString()` → строка из rodata
+- [R] явная конверсия `as string` → идентично `.toString()`
+- [E] неявная конверсия в string (без `.toString()` / `as string`) → ошибка
+- [E] `Dir | i32` — runtime union разных типов → ошибка
+- [R] string literal union как generic параметр: `Pick<T, "name" | "email">`
+- [R] string literal union как тип параметра функции: `function move(dir: Dir): void`
+- [F] switch по Dir → exhaustive, все варианты как C enum cases
+
+### Tuples
+
+#### Базовые
+
+- [F] `let pair: [i32, string] = [1, "hello"]` → `typedef struct { int32_t _0; String _1; } tuple_i32_string`
+- [R] индексация `pair[0]` → i32, `pair[1]` → string
+- [R] деструктуризация `const [a, b] = pair` → a: i32, b: string
+- [R] деструктуризация с пропуском `const [x, , z] = triple`
+- [F] C-output: именованная инициализация `{ ._0 = 1, ._1 = ... }`
+
+#### Labeled
+
+- [F] `type Point = [x: f64, y: f64]` → struct с полями `_0`, `_1`
+- [R] `p[0]` и `p.x` → одинаковый C-код (`p._0`)
+- [E] partial labels `[x: f64, f64]` → ошибка
+- [E] reserved label `[length: i32]` → ошибка
+- [R] ошибка создания с labels: `missing element 'port' at index 1`
+
+#### Readonly
+
+- [R] `let t: readonly [i32, string]` — создание
+- [E] `t[0] = 5` → ошибка: cannot assign to readonly tuple element
+- [F] C-output: `const` поля в struct
+
+#### Optional
+
+- [R] `type Config = [string, i32?]` — второй элемент optional
+- [R] `let a: Config = ["localhost"]` → ok, `a[1]` → `null`
+- [R] `let b: Config = ["localhost", 8080]` → ok
+- [E] `[i32?, string]` → ошибка: optional not at end
+- [F] C-output: `opt_i32` поле
+
+#### Rest
+
+- [R] `type Strings = [string, ...string[]]` — объявление
+- [R] создание с разным количеством элементов — ok
+- [F] C-output: struct с `pointer + tail_len`, не growable array
+- [R] spread runtime-массива в rest-tuple → ok, `items.length = tail_len`
+- [E] spread runtime-массива в фиксированный tuple → ошибка компилятора
+- [E] два rest элемента `[...A[], ...B[]]` → ошибка
+- [E] optional + rest `[A, B?, ...C[]]` → ошибка
+- [E] rest не в конце `[...A[], B]` → ошибка
+
+#### Spread
+
+- [R] `const copy: [f64, f64, f64] = [...p]` — копирование tuple
+- [R] `const triple: [f64, f64, f64] = [...pair, 3.0]` — spread фиксированного tuple
+
+#### Ownership
+
+- [R] `const [user, name] = t` — move, t невалиден после
+- [R] `function f(t: Ref<[User, string]>): void` — деструктуризация Ref даёт Ref<User>, Ref<string>
+
+### Utility Types
+
+#### Базовые
+
+- [F] `type PartialUser = Partial<User>` → struct с `opt_*` полями в C
+- [F] `type RequiredUser = Required<PartialUser>` → struct без `opt_*`
+- [F] `type ReadonlyUser = Readonly<User>` → struct с `const` полями
+- [F] `type NN = NonNullable<string | null>` → `string`
+
+#### Pick / Omit
+
+- [F] `type UserName = Pick<User, "name">` → struct с одним полем
+- [F] `type UserContact = Pick<User, "name" | "email">` → struct с двумя полями
+- [E] `Pick<User, "missing">` — несуществующее поле → ошибка компилятора
+- [F] `type UserPublic = Omit<User, "passwordHash">` → struct без поля
+- [F] `type Minimal = Omit<User, "age" | "email">` → struct с оставшимися полями
+- [E] `Omit<User, "missing">` → ошибка компилятора
+
+#### Record
+
+- [F] `type Coords = Record<"x" | "y", f64>` → `typedef struct { double x; double y; } Coords`
+- [F] `type P3 = Record<Axis, f64>` (Axis — enum) → struct по всем вариантам enum
+- [F] `type SM = Record<string, i32>` → `Map<string, i32>` (runtime)
+- [E] `Record<i32, string>` — нелитеральный numeric ключ → ошибка
+
+#### ReturnType / Parameters / Awaited
+
+- [F] `type R = ReturnType<typeof foo>` → тип return value функции
+- [F] `type P = Parameters<typeof foo>` → tuple типов параметров
+- [F] `type U = Awaited<Promise<User>>` → `User`
+- [F] `type B = Awaited<Promise<Promise<i32>>>` → `i32` (recursive unwrap)
+- [E] `ReturnType<i32>` — не function type → ошибка
+
+#### keyof
+
+- [F] `keyof User` внутри type alias → string literal union ключей
+- [E] `keyof User` в runtime-выражении → ошибка
+
+#### Generic functions — правило А+Б
+
+- [F] `function log<T>(obj: Pick<T, "name">): void` — utility type в параметре → ok
+- [F] `function merge<T>(base: T, patch: Partial<T>): T` — Partial в параметре → ok
+- [E] `function pick<T, K extends keyof T>(obj: T, key: K): Pick<T, K>` — Pick с runtime-key в return type → ошибка
+
+#### Неподдерживаемые
+
+- [E] `Extract<T, U>` → ошибка: conditional types не поддерживаются
+- [E] `Exclude<T, U>` → ошибка: conditional types не поддерживаются
+
 ---
 
 ## Phase 3 — Модель памяти
@@ -740,6 +856,13 @@ input.tsc:1:
 - [R] `d.toString()` → строка
 - [R] `d.getDay()` → 0..6 (0 = воскресенье)
 - [F] C-output: struct + unix timestamp
+
+### @static let — borrow checker
+
+- [R] `@static let s = new Sensor()` — объект в BSS, lifetime static
+- [R] два `Mut<T>` к одному `@static let` объекту — разрешено (dangling pointer невозможен)
+- [R] `@static let` внутри async функции — разрешено
+- [E] `@static let` + `Thread.spawn` без `Atomic<T>` → ошибка: требуется `Atomic<T>` при std/threads
 
 ---
 
@@ -1122,6 +1245,29 @@ input.tsc:1:
 - [R] `@static async function*` на `allocator: "static"` → state machine в BSS
 - [R] синхронный `function*` — всегда стек, работает на любой платформе
 
+### @embedded.singleton
+
+- [R] `@embedded.singleton class Led` — эквивалент `@static function*`, единственный экземпляр
+- [F] C-output: `static Led _led_instance` в BSS, нет malloc
+- [E] `new Led()` на классе с `@embedded.singleton` → ошибка: используй `Led.instance()`
+- [R] `Led.instance()` → возвращает `Mut<Led>`
+
+### @embedded.stack
+
+- [R] `@embedded.stack("fib", 16) async function fib(n: i32)` — стек из 16 state machine frames в BSS
+- [F] C-output: `static FibState _fib_stack[16]` + index
+- [E] `@embedded.stack` без `async` → ошибка: только для async функций
+- [E] рекурсия глубже N → runtime panic (stack overflow)
+- [R] `@embedded.stack` + `@static` — разрешено
+
+### Кооперативная многозадачность
+
+- [R] два `@static async function*` генератора, поочерёдный poll — корректный C
+- [R] ручной планировщик: poll каждого генератора в цикле `while(true)`
+- [F] C-output: два state machine struct в BSS, poll без malloc
+- [R] генератор с `yield` возвращает управление планировщику
+- [R] генератор завершён (`done === true`) — планировщик его пропускает
+
 ---
 
 ## Phase 8 — Threads и низкоуровневая конкурентность
@@ -1344,6 +1490,26 @@ input.tsc:1:
 - [E] суммарный BSS + stack > `ram_size` → ошибка компилятора с отчётом о превышении
 - [E] worst-case stack > `stack_size` → предупреждение
 
+### @embedded.inline
+
+- [R] `@embedded.inline class Vec2 { x: f32; y: f32 }` — value type, нет heap
+- [F] C-output: `typedef struct { float x; float y; } Vec2` — без указателя, без vtable
+- [R] передача по значению: копируется целиком (как C struct)
+- [R] вложенный `@embedded.inline` внутри другого — рекурсивно разворачивается
+- [E] `@embedded.inline` класс с методами (кроме простых getter/setter) → ошибка
+- [E] `@embedded.inline` на non-embedded платформе → предупреждение (игнорируется)
+
+### @embedded.pool
+
+- [R] `@embedded.pool(16) class Sprite` — статический пул из 16 слотов в BSS
+- [F] C-output: `static Sprite _sprite_pool[16]` + битовая маска занятых слотов
+- [R] `Sprite.alloc()` → `Sprite | null` (null если пул заполнен)
+- [R] автоматическое освобождение слота при выходе из scope (ownership)
+- [R] явный `drop(s)` — досрочное освобождение слота
+- [F] C-output для alloc: поиск свободного слота через битовую маску
+- [E] `@embedded.pool` без числового аргумента → ошибка
+- [E] `@embedded.pool` на non-embedded платформе → предупреждение (игнорируется)
+
 ---
 
 ## Phase 12 — Стандартная библиотека
@@ -1507,6 +1673,41 @@ input.tsc:1:
 - [R] `avr.watchdogReset()` — сброс watchdog
 - [R] `ADC.read(channel)` → u16
 - [R] `PWM.setDuty(channel, duty)`
+
+### std/embedded — HashMap
+
+- [R] `import { HashMap } from "std/embedded"`
+- [R] `new HashMap<string, i32>(64)` — статический пул на 64 записи
+- [F] C-output: struct-of-arrays layout (`keys[]`, `values[]`, `used[]`) — лучший packing для AVR
+- [R] `.set(key, value)` — добавление/обновление
+- [R] `.get(key)` → `V | null`
+- [R] `.has(key)` → bool
+- [R] `.delete(key)`
+- [R] djb2 hash + linear probing — корректная работа при коллизиях
+- [E] превышение capacity → runtime panic
+- [E] `HashMap` на платформе без `std/embedded` → ошибка
+
+### std/embedded — StaticMap
+
+- [R] `import { StaticMap } from "std/embedded"` (или глобально встроен)
+- [R] `new StaticMap({ "LDA": 0xA9, "STA": 0x8D })` — compile-time известные ключи
+- [F] C-output: `switch` с perfect hash — без поиска в runtime
+- [R] `.get(key)` → `V | null` — обращение через switch
+- [E] ключ не строковый литерал или literal union → ошибка компилятора
+- [E] динамический ключ в StaticMap → ошибка: требуется compile-time строка
+
+### std/embedded — Tasks
+
+- [R] `import { Tasks } from "std/embedded"`
+- [R] `new Tasks<4>()` — кооперативный планировщик на 4 задачи
+- [R] `tasks.add("led", ledTask)` — регистрация задачи-генератора
+- [R] `tasks.run()` — запуск планировщика (бесконечный цикл poll)
+- [R] `tasks.stop("led")` — остановка задачи по имени
+- [F] C-output: массив из N state machine указателей в BSS, poll loop без malloc
+- [R] `@static const tasks = new Tasks<4>()` — глобальный доступ из любой задачи
+- [R] задача обращается к `tasks` через замыкание — корректный C
+- [E] `Tasks` с `allocator: "none"` без `@static` → ошибка
+- [E] добавить больше задач чем N → runtime panic
 
 ---
 

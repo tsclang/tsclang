@@ -18,6 +18,7 @@
 | [spec/10-stdlib.md](spec/10-stdlib.md) | Стандартная библиотека |
 | [spec/11-compiler.md](spec/11-compiler.md) | Архитектура компилятора, IR, методология тестов |
 | [spec/12-migration.md](spec/12-migration.md) | Migration guide: TypeScript → TSClang |
+| [spec/13-decorators.md](spec/13-decorators.md) | Декораторы: синтаксис, Descriptor API, встроенные декораторы, codegen |
 
 ---
 
@@ -70,8 +71,11 @@
 | **Null** | Nullable типы (`T | null`); optional chaining `?.`; `??` оператор. |
 | **Date** | Legacy JS-совместимый API (0-indexed месяцы); для нового кода — `std/temporal`. |
 | **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
+| **Tuples** | Фиксированный кортеж `[A, B, C]`; labeled (dot-access); readonly; optional элементы; rest `...T[]`; C-output — struct. |
 | **Clone** | Явное клонирование owned значений; `clone()` метод. |
 | **Type Aliases** | `type UserId = i32` (opaque/номинальный) vs `type Point = { ... }` (структурный). |
+| **String Literal Union** | Compile-time only; компилируется в C enum + rodata таблицу строк; явная конверсия в string. |
+| **Utility Types** | Compile-time type operators: Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited; правило А+Б для generic functions. |
 
 **[spec/04-classes.md](spec/04-classes.md) — классы и объектная система:**
 
@@ -107,6 +111,7 @@
 | **Мутация коллекции при borrow** | Запрет: активный borrow блокирует мутацию коллекции. |
 | **Возврат borrow из метода** | Lifetime constraint: возвращаемый `Ref` не может пережить `self`. |
 | **Borrows в полях класса** | `Ref<T>` как поле класса запрещён; `Mut<T>` в полях — тоже. |
+| **@static let** | Объект в BSS (static lifetime); несколько `Mut<T>` разрешены; при std/threads требует `Atomic<T>`. |
 | **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
 | **Iterable\<T\>** | Протокол: `iter(): mut () => T | null`; `for...of` → while-цикл; работает на embedded. |
 
@@ -148,7 +153,10 @@
 | **@embedded.isr** | Embedded: обработчики прерываний (`@embedded.isr`); запреты (no alloc, no throw, no await). |
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
-| **Embedded-аннотации** | `@embedded.inline`, `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
+| **Embedded-аннотации** | `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
+| **@embedded.singleton** | Единственный экземпляр класса в BSS; `Cls.instance()` → `Mut<Cls>`; нет malloc. |
+| **@embedded.stack** | Статический стек для async-рекурсии на embedded: N frame slots в BSS. |
+| **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
 ### Блок 7: Модульная система
@@ -180,6 +188,8 @@
 | **Поля build конфига** | Детальные поля конфигурации сборки. |
 | **Platform Profile** | AVR/Cortex/desktop-специфичные настройки: stack_size, MCU, частота. |
 | **Полная таблица платформ** | Справочная таблица всех поддерживаемых платформ (Desktop, Mobile, Embedded, Retro, Consoles). |
+| **@embedded.inline** | Value type без heap и vtable; копируется как C struct; рекурсивное разворачивание. |
+| **@embedded.pool(N)** | Статический пул N слотов в BSS; `Cls.alloc()` → `Cls \| null`; release через ownership или `drop()`. |
 | **declare library** | Требования библиотеки к платформе: поля `declare library`, проверка совместимости при установке. |
 | **Pipeline сборки** | Шаги: parse → typecheck → IR → ownership → codegen → cmake → build. |
 | **CLI команды** | `build`, `run`, `dev`, `init`, `install`, `update`, `lint`, `format` — описание и флаги. |
@@ -219,8 +229,23 @@
 | **std/reactive** | `Signal<T>`, `effect`, `computed` — реактивный граф зависимостей. |
 | **std/libc** | Базовые C bindings (printf, malloc, memcpy и др.); subset определяется platform profile. |
 | **std/avr** | AVR-специфичные утилиты: ADC, PWM, sleep, watchdog. |
-| **std/embedded** | Общие embedded утилиты поверх `std/hal`; работают на любой embedded платформе. |
+| **std/embedded** | Общие embedded утилиты поверх `std/hal`: `HashMap<K,V,N>` (struct-of-arrays, djb2+linear probing), `StaticMap` (perfect hash switch), `Tasks<N>` (кооперативный планировщик). |
 | **HAL реализация в platform profile** | Как platform profile предоставляет конкретные реализации интерфейсов `std/hal`. |
+
+### Блок 11: Декораторы
+
+| Раздел | О чём |
+|--------|-------|
+| **Decorator pass** | Выполняется после парсинга, до typecheck; алгоритм обхода и порядок применения. |
+| **Синтаксис** | `decorator function`, фабрики, перегрузки для class/method/prop/param/function. |
+| **Descriptor API** | `ClassDesc`, `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc` — поля и методы каждого. |
+| **cls.addField / addMethod** | Добавление полей и методов в класс из декоратора; порядок видимости; конфликты имён. |
+| **ctx.self.field\<T\>()** | Compile-time доступ к полям экземпляра из wrapper-кода декоратора. |
+| **Встроенные декораторы** | `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated` — семантика и приоритет. |
+| **Порядок применения** | Снизу вверх; фабрики вызываются сверху вниз; `@static` всегда последним. |
+| **Comptime-метаданные** | `meta.set<T>()`, `meta.get<T>()` — compile-time аннотации; в C-output не попадают. |
+| **Codegen** | Wrapper-функции в C; async state machine wrap; платформенные ошибки с указанием на место применения. |
+| **Generics в декораторах** | Generic constraints вместо TypeRef; `R extends number` паттерн. |
 
 ### Блок 10: Компилятор
 
@@ -241,19 +266,20 @@
 |------|----------------|
 | 0  | Блок 9: Error, Globals |
 | 1  | Блок 2 (кроме match, for-of) |
-| 2  | Блок 3: 03-types.md (кроме строк, массивов, коллекций, Clone) + 03-classes.md: Enum, Generics |
-| 3  | Блок 4 + из Блока 3 (03-types.md): Строки, Массивы и коллекции, Clone |
+| 2  | Блок 3: 03-types.md (кроме строк, массивов, коллекций, Clone) + 03-classes.md: Enum, Generics + String Literal Union + Utility Types |
+| 3  | Блок 4 + из Блока 3 (03-types.md): Строки, Массивы и коллекции, Clone + @static let |
 | 4  | Блок 2: match; Блок 3 (03-classes.md): Классы, Интерфейсы, Extension Methods, instanceof; Блок 4: Замыкания |
 | 5  | Блок 5 (целиком) |
 | 6  | Блок 7 (целиком) |
-| 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal |
-| 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @embedded.isr, Volatile, std/sync, Embedded-аннотации |
+| 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal + @embedded.singleton + @embedded.stack + Кооперативная многозадачность |
+| 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @embedded.isr, Volatile, std/sync, Embedded-аннотации + Блок 8: @embedded.inline + @embedded.pool |
 | 9  | Блок 8: tsc.package.json, CLI команды (init/build/run) |
 | 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
 | 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
 | 12 | Блок 9 (целиком); `std/threads` читать как API поверх механизма из фазы 8 |
-| 13 | Блок 10: Фазы компиляции, IR, Методология тестов, Consumer-side monomorphization |
-| 14 | Блок 8: Реестр |
+| 13 | Блок 11 (Декораторы): синтаксис, Descriptor API, встроенные декораторы, codegen |
+| 14 | Блок 10: Фазы компиляции, IR, Методология тестов, Consumer-side monomorphization |
+| 15 | Блок 8: Реестр |
 
 ### Фаза 0 — Core runtime
 
@@ -286,6 +312,9 @@
 - Type aliases (`type`, `interface` без методов) — из `03-types.md`
 - Enum, Generics (монорфизация, без ownership-aware bounds) — из `03-classes.md`
 - Числовые автокасты, оператор `as`
+- String Literal Union (compile-time → C enum + rodata)
+- Utility Types (Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited)
+- Tuples (`[A, B, C]`, labeled, readonly, optional, rest)
 
 ### Фаза 3 — Модель памяти
 
@@ -303,6 +332,7 @@ Borrow checker работает; C-output безопасен по памяти. 
 - `Iterable<T>` протокол (`iter(): mut () => T | null`)
 - `for-of` → while-цикл через `Iterable<T>`
 - Generics апгрейд: монорфизация из фазы 2 расширяется для корректной обработки move-семантики при T = owned type (string, массив, класс)
+- `@static let` — borrow checker rules (multiple `Mut<T>` allowed; std/threads exception)
 
 ### Фаза 4 — Объектная модель
 
@@ -339,6 +369,9 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - `AbortSignal`
 - `async main` / event loop integration
 - Stack safety анализ на embedded
+- `@embedded.singleton` (единственный экземпляр в BSS)
+- `@embedded.stack(name, N)` (статический стек для async-рекурсии)
+- Кооперативная многозадачность через генераторы (общий паттерн)
 
 ### Фаза 8 — Threads и низкоуровневая конкурентность
 
@@ -347,6 +380,8 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - `std/threads`: `Thread<T>`, `channel<T>`, `select`
 - `Atomic<T>`, `AtomicArray<T>`, `Readonly<T>`
 - `@embedded.isr`, `Volatile<T>`, `std/sync`, Embedded-аннотации (embedded)
+- `@embedded.inline` (value type без heap/vtable)
+- `@embedded.pool(N)` (статический пул слотов в BSS)
 
 ### Фаза 9 — CLI core + tsc.package.json
 
@@ -383,9 +418,19 @@ cleanup при throw внутри async; `async main` нуждается в entr
 
 ### Фаза 12 — Стандартная библиотека
 
-Строится поверх всего предыдущего. Детали определяются по ходу реализации.
+Строится поверх всего предыдущего. Включает `std/embedded` с `HashMap<K,V,N>`, `StaticMap`, `Tasks<N>`. Детали определяются по ходу реализации.
 
-### Фаза 13 — Линтер и форматтер
+### Фаза 13 — Декораторы
+
+- Decorator pass (после парсинга, до typecheck)
+- `decorator function` синтаксис
+- Descriptor API: `ClassDesc`, `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc`
+- `cls.addField()`, `cls.addMethod()`, `ctx.self.field<T>()`
+- Встроенные декораторы: `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated`
+- Порядок применения (снизу вверх), comptime-метаданные (`meta`)
+- Codegen: wrapper-функции, async state machine wrap
+
+### Фаза 14 — Линтер и форматтер
 
 > Большая отдельная система, детали не определены. Вернёмся позже.
 
@@ -393,7 +438,7 @@ cleanup при throw внутри async; `async main` нуждается в entr
 Полноценный rule-based линтер поверх заглушки из фазы 11.
 Включает `tsclang lint` (все правила) и `tsclang lint -fix` (авто-исправление).
 
-### Фаза 14 — Реестр пакетов
+### Фаза 15 — Реестр пакетов
 
 > Большая отдельная система, детали не определены. Вернёмся позже.
 
