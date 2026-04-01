@@ -566,6 +566,31 @@ input.tsc:1:
 - [E] `Extract<T, U>` → ошибка: conditional types не поддерживаются
 - [E] `Exclude<T, U>` → ошибка: conditional types не поддерживаются
 
+#### Object.fromEntries\<T\>
+
+- [F] `Object.fromEntries<{ a: i32; b: i32 }>([["a",1],["b",2]])` — literal keys совпадают → ok
+- [E] `Object.fromEntries<{ a: i32; c: i32 }>([["a",1],["b",2]])` — нет ключа "c" → compile error
+- [F] `Object.fromEntries<T>(entries)` с runtime-ключами → компилируется, но runtime panic при несовпадении
+- [F] аналог `Object.entries` → `fromEntries<T>` → идентичный объект
+
+#### Строковые методы
+
+- [F] `s.lastIndexOf("l")` → байтовое смещение последнего вхождения
+- [F] `s.at(-1)` → последний байт; `s.at(0)` → первый байт
+- [F] `s.at(100)` при `len = 5` → null (out of range)
+- [F] `s.search(/\d+/)` → смещение первого совпадения (с `import { ... } from "std/string"`)
+- [F] `s.match(/(\w+)/)` → string[] с группами первого совпадения | null
+- [F] `s.matchAll(/(\d+)/g)` → `string[][]` — все совпадения сразу, не итератор
+- [F] `s.replaceAll(/l+/g, "r")` → замена всех regex-совпадений
+- [E] `s.search(/...)` без импорта `std/string` → ошибка компилятора
+
+#### Number.toFixed / toPrecision
+
+- [F] `(3.14159 as f64).toFixed(2)` → `"3.14"`
+- [F] `(3.14159 as f64).toPrecision(4)` → `"3.142"`
+- [E] `(42 as i32).toFixed(2)` → ошибка: только f32/f64
+- [E] `pi.toFixed(n)` где `n` — переменная → ошибка: только compile-time literal
+
 ---
 
 ## Phase 3 — Модель памяти
@@ -836,6 +861,15 @@ input.tsc:1:
 - [R] `s.size` — количество элементов
 - [R] `s.clear()` — очистить
 - [R] for-of по Set (порядок вставки)
+- [R] `s.forEach(v => ...)` — итерация
+- [R] `for (const v of s.values())` — итератор значений
+- [R] `for (const v of s.keys())` — синоним values(), для совместимости
+- [R] `for (const [v, v2] of s.entries())` — пары [value, value]
+- [R] `s.union(other)` → новый Set
+- [R] `s.intersection(other)` → только общие элементы
+- [R] `s.difference(other)` → элементы s которых нет в other
+- [R] `s.symmetricDifference(other)` → элементы только в одном
+- [R] `s.isSubsetOf(other)`, `s.isSupersetOf(other)`, `s.isDisjointFrom(other)` → boolean
 - [R] дублирование: повторный `add` не увеличивает size
 - [R] `Set<i32>` — примитивный тип
 - [E] `new Set<u8>()` без capacity на `allocator: "static"` → ошибка
@@ -1040,6 +1074,11 @@ input.tsc:1:
 ### Ограничения
 
 - [E] `throw` внутри `@interrupt` обработчика → ошибка
+
+### error.stack
+
+- [F] `e.stack` на desktop → строка `"ErrorType at file.tsc:42"`
+- [E] `e.stack` на embedded → ошибка компилятора: недоступно на embedded
 
 ---
 
@@ -1267,6 +1306,21 @@ input.tsc:1:
 - [F] C-output: два state machine struct в BSS, poll без malloc
 - [R] генератор с `yield` возвращает управление планировщику
 - [R] генератор завершён (`done === true`) — планировщик его пропускает
+
+### Generator.return / throw
+
+- [R] `gen.return(val)` — завершает генератор, возвращает val как последнее значение
+- [R] `gen.return(val)` — `finally`-блок выполняется до завершения
+- [R] `gen.throw(new IOError("x"))` — генератор получает ошибку в точке следующего yield
+- [R] генератор перехватывает `throw` через `try/catch` — продолжает работу
+- [F] синхронный `Generator<T>` — те же методы без Promise
+
+### AbortSignal.any / addEventListener
+
+- [F] `AbortSignal.any([s1, s2])` — срабатывает при первом отменённом из двух
+- [F] `AbortSignal.any([timeout, userCancel])` — combined signal, передаётся в fetch
+- [R] `signal.addEventListener("abort", cb)` — JS-совместимый синтаксис, аналог `onAbort`
+- [E] `signal.addEventListener("load", cb)` → ошибка компилятора: только "abort"
 
 ---
 
@@ -1708,6 +1762,47 @@ input.tsc:1:
 - [R] задача обращается к `tasks` через замыкание — корректный C
 - [E] `Tasks` с `allocator: "none"` без `@static` → ошибка
 - [E] добавить больше задач чем N → runtime panic
+
+### std/url
+
+- [R] `new URL("https://example.com/path?foo=bar")` — разбор всех компонентов
+- [R] `u.protocol`, `u.host`, `u.pathname`, `u.search`, `u.hash`, `u.origin`
+- [R] `u.searchParams.get("foo")` → "bar"
+- [R] `u.searchParams.set("k", "v")` + `u.searchParams.toString()` — обновлённая строка
+- [R] `u.searchParams.delete("foo")` + `has("foo")` → false
+- [R] итерация `for (const [k, v] of u.searchParams)`
+- [R] `new URL("/other", "https://example.com")` → абсолютный URL
+- [R] `new URLSearchParams("a=1&b=2")` — standalone без URL
+- [R] `new URL(str)` на embedded — работает (только разбор строки, no heap)
+- [E] `u.searchParams.set(...)` на `allocator: "none"` → ошибка: требует аллокатор
+
+### std/blob / std/formdata
+
+- [F] `new Blob([buf], { type: "image/png" })` → `{ Buffer data, String type }`
+- [F] `new File([buf], "photo.png", { type: "image/png" })` → blob + name
+- [R] `b.size` — байт в data
+- [R] `b.arrayBuffer()` → Buffer (те же байты, zero-copy)
+- [R] `b.text()` → string (UTF-8 интерпретация)
+- [R] `b.toString()` → string (синоним text(); работает в template literal)
+- [R] `b.slice(0, 50)` → новый Blob с view на часть данных
+- [R] `b.slice(0, 50, "text/plain")` → Blob с другим MIME-типом
+- [F] `new FormData()` + `fd.append("name", "Alice")` — string-поле
+- [F] `fd.append("data", buf)` — Buffer-поле
+- [F] `fd.append("file", file)` — File-поле с именем
+- [R] `fd.get("name")` → "Alice"; `fd.has("name")` → true; `fd.delete("name")`
+- [R] `fd.set("name", "Bob")` — перезаписывает поле (не дублирует)
+- [R] `fd.append("tag", "a"); fd.append("tag", "b"); fd.getAll("tag")` → `["a", "b"]`
+- [R] итерация `for (const [name, value] of fd)`
+- [R] `await req.formData()` — разбор multipart/form-data тела запроса
+- [R] `await res.blob()` — Buffer + Content-Type → Blob из HTTP-ответа
+- [E] `import { Blob } from "std/blob"` на embedded → ошибка компилятора
+
+### console.time / performance.mark
+
+- [R] `console.time("label")` + работа + `console.timeEnd("label")` → вывод в stderr
+- [R] `performance.mark("start")` + `performance.mark("end")` + `performance.measure("label", "start", "end")` → entry с duration
+- [R] `console.trace("msg")` → `"msg (file.tsc:42)"` в stderr
+- [E] `console.trace(...)` на embedded → ошибка компилятора
 
 ---
 

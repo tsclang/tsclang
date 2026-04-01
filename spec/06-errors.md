@@ -19,6 +19,29 @@ function fetch(url: string): Response throws IOError | NetworkError { ... }
 
 Без `throws` — функция не может содержать `throw` (ошибка компилятора).
 
+## Error — базовый класс
+
+Все ошибки наследуют от `Error`:
+
+```typescript
+class Error {
+    readonly message: string   // человекочитаемое описание
+    readonly stack:   string   // упрощённый трейс (только desktop)
+}
+```
+
+**`error.stack`** — только desktop/server. Содержит `__FILE__:__LINE__` точки `throw`. Полный call stack недоступен (нет рантайм-стека в C-output):
+
+```typescript
+try {
+    throw new IOError("not found")
+} catch (e: IOError) {
+    console.log(e.stack)   // "IOError at src/main.tsc:42"
+}
+```
+
+На embedded `error.stack` — ошибка компилятора при обращении.
+
 ## throw
 
 Бросается экземпляр класса-наследника `Error`:

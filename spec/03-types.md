@@ -283,7 +283,13 @@ const s5 = "Age: " + age;    // "Age: 30"
 
 // as — НЕ работает для конвертации в строку:
 const bad = age as string;   // ошибка компилятора
+
+// 4. Форматированный вывод числа с плавающей точкой
+const s6 = pi.toFixed(2);      // "3.14"   — фиксированное количество знаков после запятой
+const s7 = pi.toPrecision(4);  // "3.142"  — полное количество значимых цифр
 ```
+
+`toFixed` и `toPrecision` — только для `f32` и `f64`. Аргумент — числовой литерал в compile-time (не переменная).
 
 ### Строка → число
 
@@ -467,7 +473,20 @@ s.padEnd(len, fill?)         // string
 s.repeat(n)                  // string
 s.charAt(i)                  // string — s[i..i+1] по байтовому смещению
 s.charCodeAt(i)              // u8 — байт по смещению (синоним s[i])
+s.lastIndexOf(sub)           // i32 — байтовое смещение последнего вхождения, -1 если не найдено
+s.at(i)                      // u8 | null — байт по смещению, отрицательные индексы считаются с конца
 ```
+
+Методы, требующие `import { ... } from "std/string"`:
+
+```typescript
+s.search(regex)              // i32 — байтовое смещение первого совпадения, -1 если не найдено
+s.match(regex)               // string[] | null — все группы первого совпадения
+s.matchAll(regex)            // string[][] — все совпадения (не ленивый итератор, возвращает массив сразу)
+s.replaceAll(regex, replace) // string — замена всех совпадений по regex (string-вариант доступен без импорта)
+```
+
+`matchAll` возвращает `string[][]`, а не `IterableIterator` как в JS — упрощённая семантика, полный результат вычисляется сразу.
 
 ## Специальные типы
 
@@ -910,6 +929,28 @@ const result = arr
   присвоение `arr.capacity = n` — ошибка компилятора с подсказкой: `use arr.reallocate(n) instead`
 - `arr.sort(cmp?: (Ref<T>, Ref<T>) => i32)` — сортировка на месте; без аргумента — по умолчанию (`<`); возвращает `Self`
 - `arr.reverse()` — разворот на месте; возвращает `Self`
+- `arr.shift()` — удалить и вернуть первый элемент как owned `T | null`; O(n) — сдвигает остальные элементы
+- `arr.unshift(item)` — добавить элемент в начало; move semantics; O(n); возвращает `Self`
+- `arr.splice(start: i32, deleteCount?: i32, ...items: T[])` — удалить `deleteCount` элементов начиная с `start`, вставить `items`; возвращает удалённые элементы как owned `T[]`; отрицательный `start` — от конца
+  ```typescript
+  let arr: i32[] = [1, 2, 3, 4, 5]
+  const removed = arr.splice(1, 2, 10, 20)  // removed = [2, 3], arr = [1, 10, 20, 4, 5]
+  arr.splice(0, 0, 0)                        // вставка без удаления: arr = [0, 1, 10, 20, 4, 5]
+  ```
+- `arr.join(sep?: string): string` — объединить элементы в строку через разделитель; **требует `T implements { toString(): string }`**; все примитивы и `string` удовлетворяют автоматически
+  ```typescript
+  [1, 2, 3].join(", ")   // "1, 2, 3"
+  [1, 2, 3].join()       // "1,2,3" — дефолтный разделитель ","
+  ```
+- `arr.set(src: Ref<T[]>, offset?: usize)` — скопировать элементы из `src` в `arr` начиная с `offset`; C-output: `memcpy`; bounds check в runtime
+- `arr.forEach(f: (Ref<T>) => void)` — итерация без результата; callback получает `Ref<T>`
+- `arr.keys(): Iterator<usize>` — итератор индексов
+- `arr.values(): Iterator<Ref<T>>` — итератор значений (borrow)
+- `arr.entries(): Iterator<[usize, Ref<T>]>` — итератор пар [index, value]
+
+**Статические:**
+- `Array.from<T>(src: Iterable<T>): T[]` — создать из iterable; клонирует элементы если `T: Clone`
+- `Array.of<T>(...items: T[]): T[]` — создать из аргументов; сахар над литералом
 
 ### Функциональные и поисковые методы
 
@@ -920,12 +961,24 @@ Callback получает `Ref<T>` — borrow элемента, не ownership. 
 - `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
 - `arr.find(f: (Ref<T>) => bool): Ref<T> | null` — borrow первого совпадения; время жизни привязано к источнику
 - `arr.findIndex(f: (Ref<T>) => bool): i32` — индекс первого совпадения, `-1` если не найден
+- `arr.findLast(f: (Ref<T>) => bool): Ref<T> | null` — borrow последнего совпадения; симметрично `find`
+- `arr.findLastIndex(f: (Ref<T>) => bool): i32` — индекс последнего совпадения, `-1` если не найден
 - `arr.some(f: (Ref<T>) => bool): bool` — `true` если хотя бы один элемент проходит фильтр
 - `arr.every(f: (Ref<T>) => bool): bool` — `true` если все элементы проходят фильтр
 - `arr.includes(item: Ref<T>): bool` — поиск по значению через `==`
 - `arr.indexOf(item: Ref<T>): i32` — индекс первого вхождения, `-1` если не найден
+- `arr.lastIndexOf(item: Ref<T>): i32` — индекс последнего вхождения, `-1` если не найден
 - `arr.slice(start?: i32, end?: i32): T[]` — новый массив из **клонов** элементов `start..end-1`; **требует `T: Clone`**; отрицательные индексы от конца; без аргументов — клон всего массива
 - `arr.concat(other: Ref<T[]>): T[]` — новый массив = клон `arr` + клон `other`; **требует `T: Clone`**
+- `arr.flat(): U[]` — разгладить вложенность на 1 уровень: `T[][]` → `T[]`; **требует `T: Clone`**; на embedded запрещён (heap)
+- `arr.flatMap<U>(f: (Ref<T>) => U[]): U[]` — map + flat(1); эквивалент `arr.map(f).flat()`; на embedded запрещён
+- `arr.toSorted(cmp?: (Ref<T>, Ref<T>) => i32): T[]` — новый отсортированный массив; оригинал не меняется; **требует `T: Clone`**
+- `arr.toReversed(): T[]` — новый перевёрнутый массив; оригинал не меняется; **требует `T: Clone`**
+- `arr.toSpliced(start: i32, deleteCount?: i32, ...items: T[]): T[]` — новый массив с применённым splice; оригинал не меняется; **требует `T: Clone`**
+- `arr.with(index: i32, value: T): T[]` — новый массив с заменённым элементом по индексу; оригинал не меняется; **требует `T: Clone`**
+- `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
+- `arr.reduceRight<U>(f: (U, Ref<T>) => U, init: U): U` — то же, но справа налево
+- `arr.groupBy<K>(f: (Ref<T>) => K): Map<K, T[]>` — сгруппировать элементы по ключу; **требует `T: Clone`**; возвращает `Map<K, T[]>`
 
 ```typescript
 const nums: i32[] = [1, 2, 3, 4, 5]
@@ -1150,6 +1203,8 @@ for (const v of s) {
 }
 s.forEach((v) => { ... });
 for (const v of s.values()) { ... }
+for (const v of s.keys()) { ... }         // синоним values() — для совместимости с Map API
+for (const [v, v2] of s.entries()) { ... } // пары [value, value] — для совместимости с Map API
 ```
 
 #### Set на embedded
@@ -1196,6 +1251,32 @@ Object.entries(obj) // [string, i32][]   — всё copy
 for (const k of Object.keys(obj)) { ... }
 for (const v of Object.values(obj)) { ... }
 for (const [k, v] of Object.entries(obj)) { ... }
+```
+
+### Object.fromEntries\<T\>
+
+Обратная операция к `Object.entries` — создаёт структурный тип из массива пар `[key, value]`:
+
+```typescript
+const entries: [string, i32][] = [["a", 1], ["b", 2]]
+const obj = Object.fromEntries<{ a: i32; b: i32 }>(entries)
+obj.a  // 1
+obj.b  // 2
+```
+
+Компилятор знает тип через дженерик-параметр (аналогично `JSON.parse<T>`):
+- Если ключи — строковые литералы, компилятор проверяет соответствие набора ключей типу `T` в compile-time.
+- Если ключи — переменные, проверка невозможна: несоответствие вызывает **runtime panic**.
+
+```typescript
+// Compile-time check — OK или ошибка:
+const literal: [string, i32][] = [["a", 1], ["b", 2]]
+Object.fromEntries<{ a: i32; b: i32 }>(literal)   // OK — ключи совпадают
+Object.fromEntries<{ a: i32; c: i32 }>(literal)   // compile error — нет ключа "c"
+
+// Runtime panic при несовпадении ключей:
+const keys = getKeysFromSomewhere()
+Object.fromEntries<{ a: i32; b: i32 }>(keys.map(k => [k, 0]))  // panic если ключ не "a" или "b"
 ```
 
 ## Tuples

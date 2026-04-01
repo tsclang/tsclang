@@ -670,6 +670,23 @@ const result = await Promise.race([
 ctrl.abort()   // победитель уже вернул результат, проигравший прекратит работу при следующей await
 ```
 
+**`AbortSignal.any`** — объединяет несколько сигналов в один: срабатывает когда хотя бы один из них отменён:
+
+```typescript
+const deadline = AbortSignal.timeout(5000)
+const userCancel = controller.signal
+
+const combined = AbortSignal.any([deadline, userCancel])
+await fetch(url, { signal: combined })
+```
+
+**`signal.addEventListener("abort", cb)`** — альтернатива `signal.onAbort(cb)`, JS-совместимый синтаксис. Принимает только `"abort"` как тип события, остальные — ошибка компилятора:
+
+```typescript
+signal.addEventListener("abort", () => cleanup())  // OK
+signal.addEventListener("load", () => ...)         // compile error: unknown event type
+```
+
 ---
 
 ### AsyncMutex — координация async-функций
@@ -1651,6 +1668,38 @@ try {
 ```
 
 Параллельный вызов `next()` (пока предыдущий не завершён) — runtime panic. `for await` гарантирует последовательность автоматически.
+
+### return(value) и throw(error)
+
+`AsyncIterator<T>` поддерживает принудительное завершение и инъекцию ошибки:
+
+```typescript
+interface AsyncIterator<T> {
+    next():                Promise<T | null>
+    close():              Promise<void>         // graceful stop, выполняет finally
+    return(value: T):     Promise<T | null>     // завершить, отдав последнее значение
+    throw(error: Error):  Promise<T | null>     // инъекция ошибки в точке yield
+}
+```
+
+`return(value)` — завершает генератор, устанавливает флаг `close`, возвращает `value` как последнее yielded значение. Все `finally`-блоки выполняются.
+
+`throw(error)` — инъектирует ошибку: генератор получит её в точке ожидания следующего `next()` как брошенное исключение. Если генератор не поймает — пробрасывается наружу.
+
+```typescript
+const gen = readLines("data.txt")
+gen.throw(new IOError("injected"))   // генератор увидит ошибку при следующем yield
+```
+
+Синхронный `Generator<T>` (без `async`) имеет аналогичный интерфейс без `Promise`:
+
+```typescript
+interface Generator<T> {
+    next():               T | null
+    return(value: T):     T | null
+    throw(error: Error):  T | null
+}
+```
 
 ### AsyncChannel как AsyncIterator
 
