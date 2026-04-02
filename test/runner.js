@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // TSClang test runner
-// Three-level pipeline: tsclang→C comparison → gcc compile → binary run
+// Supports three input types: .tsc, .json (config), .sh (CLI)
+// Three test kinds: [R] run, [F] fragment (C-compare only), [E] compiler error
 
-import { readdir, readFile, stat, mkdir, rm, copyFile } from 'fs/promises';
+import { readdir, readFile, mkdir, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { spawn } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
@@ -25,21 +26,31 @@ const red    = s => c('31', s);
 const yellow = s => c('33', s);
 const dim    = s => c('2',  s);
 const bold   = s => c('1',  s);
+const cyan   = s => c('36', s);
 
 // ---------------------------------------------------------------------------
 // CLI args
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
-const filterArg  = args.find(a => !a.startsWith('--'));
+const filterArg   = args.find(a => !a.startsWith('--'));
 const flagVerbose = args.includes('--verbose') || args.includes('-v');
 const flagHelp    = args.includes('--help')    || args.includes('-h');
+const flagFail    = args.includes('--fail-fast');
+const flagNoGcc   = args.includes('--no-gcc');
 
 if (flagHelp) {
-  console.log(`Usage: node test/runner.js [filter] [--verbose]
+  console.log(`Usage: node test/runner.js [filter] [options]
 
-  filter     substring match against test path
-  --verbose  print full diff on failure
-  --help     show this message
+  filter        substring match against test path (e.g. "phase1", "let/bool")
+  --verbose     print full diff on failure
+  --fail-fast   stop after first failure
+  --no-gcc      skip gcc compile/run steps (C-compare only)
+  --help        show this message
+
+Examples:
+  node test/runner.js phase1
+  node test/runner.js let/bool-false --verbose
+  node test/runner.js phase9 --no-gcc
 `);
   process.exit(0);
 }
@@ -59,8 +70,22 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+function runShell(script, opts = {}) {
+  return new Promise(resolve => {
+    const shell = process.platform === 'win32' ? 'cmd' : 'sh';
+    const shellArgs = process.platform === 'win32' ? ['/c', script] : ['-c', script];
+    const proc = spawn(shell, shellArgs, { ...opts, shell: false });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', d => { stdout += d; });
+    proc.stderr?.on('data', d => { stderr += d; });
+    proc.on('error', err => resolve({ code: 1, stdout, stderr: err.message }));
+    proc.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
+  });
+}
+
 // ---------------------------------------------------------------------------
-// C normalization
+// C normalization (trailing whitespace + extra blank lines)
 // ---------------------------------------------------------------------------
 function normalizeC(src) {
   return src
@@ -71,231 +96,339 @@ function normalizeC(src) {
     .trim();
 }
 
+function normalizeOut(s) {
+  return s.replace(/\r\n/g, '\n').trimEnd();
+}
+
 // ---------------------------------------------------------------------------
 // Test discovery
 // ---------------------------------------------------------------------------
+
+// Detect which input file a test dir has
+function detectInput(testDir) {
+  if (existsSync(join(testDir, 'input.tsc')))  return 'tsc';
+  if (existsSync(join(testDir, 'input.json'))) return 'json';
+  if (existsSync(join(testDir, 'input.sh')))   return 'sh';
+  return null;
+}
+
 async function walkDir(dir) {
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
   const results = [];
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     const full = join(dir, e.name);
-    // skip non-test dirs (e.g. dirs named after phases without input.tsc)
-    const sub = await readdir(full, { withFileTypes: true });
-    const hasInput = sub.some(f => f.isFile() && f.name === 'input.tsc');
-    if (hasInput) {
+    if (detectInput(full)) {
       results.push(full);
     } else {
-      // recurse deeper
-      const deeper = await walkDir(full);
-      results.push(...deeper);
+      results.push(...await walkDir(full));
     }
   }
   return results;
 }
 
-// Classify test by presence of expected files
+// Classify test by input type + present expected files
 async function classifyTest(testDir) {
-  const hasC    = existsSync(join(testDir, 'expected.c'));
-  const hasOut  = existsSync(join(testDir, 'expected.out'));
-  const hasErr  = existsSync(join(testDir, 'expected.error'));
+  const inputType = detectInput(testDir);
+  if (!inputType) return null;
 
-  if (hasErr) return 'E';       // [E] Error — compiler must fail
-  if (hasC && hasOut) return 'R'; // [R] Runnable — compile + run
-  if (hasC) return 'F';          // [F] Fragment — C comparison only
-  return null; // no expected files → skip
+  const hasC   = existsSync(join(testDir, 'expected.c'));
+  const hasOut = existsSync(join(testDir, 'expected.out'));
+  const hasErr = existsSync(join(testDir, 'expected.error'));
+
+  if (hasErr) return { kind: 'E', inputType };
+
+  if (inputType === 'tsc') {
+    if (hasC && hasOut) return { kind: 'R', inputType };
+    if (hasC)           return { kind: 'F', inputType };
+    return null; // tsc test with no expected files — skip
+  }
+
+  // json / sh tests: only need expected.out or expected.error
+  if (hasOut) return { kind: 'R', inputType };
+  return null;
 }
 
-// Relative path for display
 function relPath(p) {
-  return p.replace(ROOT + '/', '').replace(ROOT + '\\', '');
+  return p.replace(ROOT + '/', '').replace(ROOT + '\\', '').replace(/\\/g, '/');
+}
+
+// ---------------------------------------------------------------------------
+// gcc helper
+// ---------------------------------------------------------------------------
+let gccAvailable = null;
+async function checkGcc() {
+  if (gccAvailable !== null) return gccAvailable;
+  const r = await run('gcc', ['--version']);
+  gccAvailable = r.code === 0;
+  return gccAvailable;
+}
+
+async function gccCompile(cFile, outBin) {
+  const compileArgs = [cFile, '-o', outBin];
+  if (existsSync(RUNTIME_INC)) compileArgs.push(`-I${RUNTIME_INC}`);
+  compileArgs.push('-Wall', '-Wextra', '-std=c11', '-lm');
+  return run('gcc', compileArgs);
+}
+
+// ---------------------------------------------------------------------------
+// Check tsclang binary exists
+// ---------------------------------------------------------------------------
+let tsclangAvailable = null;
+function checkTsclang() {
+  if (tsclangAvailable !== null) return tsclangAvailable;
+  tsclangAvailable = existsSync(TSCLANG_BIN);
+  return tsclangAvailable;
 }
 
 // ---------------------------------------------------------------------------
 // Test execution
 // ---------------------------------------------------------------------------
 async function runTest(testDir) {
-  const kind = await classifyTest(testDir);
-  if (!kind) return { status: 'skip', testDir, reason: 'no expected files' };
+  const cls = await classifyTest(testDir);
+  if (!cls) return { status: 'skip', testDir, reason: 'no expected files' };
 
-  // Create isolated temp dir
-  const tmpBase = join(tmpdir(), `tsclang-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmpBase = join(tmpdir(), `tsclang-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tmpBase, { recursive: true });
 
   try {
-    return await executeTest(testDir, kind, tmpBase);
+    return await executeTest(testDir, cls, tmpBase);
   } finally {
-    await rm(tmpBase, { recursive: true, force: true });
+    await rm(tmpBase, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-async function executeTest(testDir, kind, tmpBase) {
+async function executeTest(testDir, { kind, inputType }, tmpBase) {
+  switch (inputType) {
+    case 'tsc':  return executeTscTest(testDir, kind, tmpBase);
+    case 'json': return executeJsonTest(testDir, kind, tmpBase);
+    case 'sh':   return executeShTest(testDir, kind, tmpBase);
+    default:     return { status: 'skip', testDir, reason: `unknown input type: ${inputType}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// .tsc tests — full compiler pipeline
+// ---------------------------------------------------------------------------
+async function executeTscTest(testDir, kind, tmpBase) {
+  if (!checkTsclang()) {
+    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
+  }
+
   const inputSrc = join(testDir, 'input.tsc');
 
-  // ------------------------------------------------------------------
   // Step 1: Run tsclang
-  // ------------------------------------------------------------------
   const tscResult = await run(
     process.execPath,
     [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase],
   );
 
   if (kind === 'E') {
-    // Compiler should have failed
     if (tscResult.code === 0) {
-      return {
-        status: 'fail',
-        testDir,
-        step: 'compiler-exit',
-        message: 'Expected compiler error but it exited 0',
-        detail: tscResult.stdout,
-      };
+      return fail(testDir, 'compiler-exit', 'Expected compiler error but exited 0', tscResult.stdout || tscResult.stderr);
     }
-    // Check that all lines from expected.error appear in stderr
-    const expected = await readFile(join(testDir, 'expected.error'), 'utf8');
-    const expectedLines = expected.split('\n').map(l => l.trim()).filter(Boolean);
-    const stderr = tscResult.stderr;
-    const missing = expectedLines.filter(line => !stderr.includes(line));
-    if (missing.length > 0) {
-      return {
-        status: 'fail',
-        testDir,
-        step: 'error-check',
-        message: `Missing in stderr:\n${missing.map(l => '  ' + l).join('\n')}`,
-        detail: `stderr was:\n${stderr}`,
-      };
-    }
-    return { status: 'pass', testDir };
+    return checkErrorOutput(testDir, tscResult.stderr + tscResult.stdout);
   }
 
-  // For [R] and [F]: compiler should succeed
   if (tscResult.code !== 0) {
-    return {
-      status: 'fail',
-      testDir,
-      step: 'tsclang',
-      message: `tsclang exited ${tscResult.code}`,
-      detail: tscResult.stderr || tscResult.stdout,
-    };
+    return fail(testDir, 'tsclang', `tsclang exited ${tscResult.code}`, tscResult.stderr || tscResult.stdout);
   }
 
-  // ------------------------------------------------------------------
   // Step 2: Compare C output
-  // ------------------------------------------------------------------
-  // Output file name: input.tsc → input.c
   const stem = basename(inputSrc, extname(inputSrc));
   const generatedC = join(tmpBase, stem + '.c');
 
   if (!existsSync(generatedC)) {
-    return {
-      status: 'fail',
-      testDir,
-      step: 'c-output',
-      message: `Expected C file not found: ${generatedC}`,
-      detail: `tsclang stdout: ${tscResult.stdout}`,
-    };
+    return fail(testDir, 'c-output', `Expected C file not found: ${generatedC}`, `tsclang stdout: ${tscResult.stdout}`);
   }
 
-  const [actualCRaw, expectedCRaw] = await Promise.all([
-    readFile(generatedC, 'utf8'),
-    readFile(join(testDir, 'expected.c'), 'utf8'),
-  ]);
+  const cCompareResult = await compareCOutput(testDir, generatedC);
+  if (cCompareResult) return cCompareResult;
 
-  const actualC   = normalizeC(actualCRaw);
-  const expectedC = normalizeC(expectedCRaw);
-
-  if (actualC !== expectedC) {
-    return {
-      status: 'fail',
-      testDir,
-      step: 'c-compare',
-      message: 'C output mismatch',
-      detail: diffSummary(expectedC, actualC),
-    };
+  if (kind === 'F' || flagNoGcc) {
+    if (flagNoGcc) return pass(testDir);
+    // [F]: verify C compiles
+    if (!await checkGcc()) return { status: 'skip', testDir, reason: 'gcc not found' };
+    const gccCheck = await gccCompile(generatedC, join(tmpBase, 'frag_bin'));
+    if (gccCheck.code !== 0) return fail(testDir, 'gcc', 'C does not compile', gccCheck.stderr);
+    return pass(testDir);
   }
 
-  if (kind === 'F') {
-    // Fragment: verify C compiles but don't run
-    const gccCheck = await gccCompile(generatedC, join(tmpBase, 'frag_check'));
-    if (gccCheck.code !== 0) {
-      return {
-        status: 'fail',
-        testDir,
-        step: 'gcc',
-        message: 'C does not compile',
-        detail: gccCheck.stderr,
-      };
-    }
-    return { status: 'pass', testDir };
-  }
-
-  // ------------------------------------------------------------------
-  // Step 3: Compile generated C with gcc  ([R] only)
-  // ------------------------------------------------------------------
+  // Step 3+4: Compile and run [R]
+  if (!await checkGcc()) return { status: 'skip', testDir, reason: 'gcc not found' };
   const binary = join(tmpBase, 'test_bin');
   const gccResult = await gccCompile(generatedC, binary);
+  if (gccResult.code !== 0) return fail(testDir, 'gcc', 'C does not compile', gccResult.stderr);
 
-  if (gccResult.code !== 0) {
-    return {
-      status: 'fail',
-      testDir,
-      step: 'gcc',
-      message: 'C does not compile',
-      detail: gccResult.stderr,
-    };
+  return runAndCompare(testDir, binary, []);
+}
+
+// ---------------------------------------------------------------------------
+// .json tests — config validation
+// ---------------------------------------------------------------------------
+async function executeJsonTest(testDir, kind) {
+  if (!checkTsclang()) {
+    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
   }
 
-  // ------------------------------------------------------------------
-  // Step 4: Run binary and compare stdout
-  // ------------------------------------------------------------------
-  const runResult = await run(binary, []);
+  const inputJson = join(testDir, 'input.json');
+
+  const tscResult = await run(
+    process.execPath,
+    [TSCLANG_BIN, 'validate-config', inputJson],
+  );
+
+  if (kind === 'E') {
+    if (tscResult.code === 0) {
+      return fail(testDir, 'config-exit', 'Expected config error but exited 0', tscResult.stdout);
+    }
+    return checkErrorOutput(testDir, tscResult.stderr + tscResult.stdout);
+  }
+
+  if (tscResult.code !== 0) {
+    return fail(testDir, 'config-validate', `validate-config exited ${tscResult.code}`, tscResult.stderr);
+  }
+
   const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
+  const actual = normalizeOut(tscResult.stdout);
+  const expected = normalizeOut(expectedOut);
+  if (actual !== expected) {
+    return fail(testDir, 'output', 'stdout mismatch', diffSummary(expected, actual));
+  }
+  return pass(testDir);
+}
 
-  const actualOut   = runResult.stdout.replace(/\r\n/g, '\n').trimEnd();
-  const expectedOut2 = expectedOut.replace(/\r\n/g, '\n').trimEnd();
-
-  if (actualOut !== expectedOut2) {
-    return {
-      status: 'fail',
-      testDir,
-      step: 'run',
-      message: 'stdout mismatch',
-      detail: diffSummary(expectedOut2, actualOut),
-    };
+// ---------------------------------------------------------------------------
+// .sh tests — CLI commands
+// ---------------------------------------------------------------------------
+async function executeShTest(testDir, kind, tmpBase) {
+  if (!checkTsclang()) {
+    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
   }
 
+  const script = await readFile(join(testDir, 'input.sh'), 'utf8');
+
+  // Substitute TSCLANG_BIN in the script so `tsclang` calls work
+  const patchedScript = script.replace(/\btsclang\b/g, `node ${JSON.stringify(TSCLANG_BIN)}`);
+
+  const result = await runShell(patchedScript, { cwd: tmpBase });
+
+  if (kind === 'E') {
+    if (result.code === 0) {
+      return fail(testDir, 'sh-exit', 'Expected failure but shell exited 0', result.stdout);
+    }
+    return checkErrorOutput(testDir, result.stderr + result.stdout);
+  }
+
+  if (result.code !== 0) {
+    return fail(testDir, 'sh-run', `shell exited ${result.code}`, result.stderr || result.stdout);
+  }
+
+  const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
+  const actual = normalizeOut(result.stdout);
+  const expected = normalizeOut(expectedOut);
+  if (actual !== expected) {
+    return fail(testDir, 'output', 'stdout mismatch', diffSummary(expected, actual));
+  }
+  return pass(testDir);
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+async function checkErrorOutput(testDir, combined) {
+  const expected = await readFile(join(testDir, 'expected.error'), 'utf8');
+  const expectedLines = expected.split('\n').map(l => l.trim()).filter(Boolean);
+  const missing = expectedLines.filter(line => !combined.includes(line));
+  if (missing.length > 0) {
+    return fail(
+      testDir,
+      'error-check',
+      `Missing in output:\n${missing.map(l => '  ' + l).join('\n')}`,
+      `actual output:\n${combined.slice(0, 500)}`
+    );
+  }
+  return pass(testDir);
+}
+
+async function compareCOutput(testDir, generatedCPath) {
+  const [actualRaw, expectedRaw] = await Promise.all([
+    readFile(generatedCPath, 'utf8'),
+    readFile(join(testDir, 'expected.c'), 'utf8'),
+  ]);
+  const actual   = normalizeC(actualRaw);
+  const expected = normalizeC(expectedRaw);
+  if (actual !== expected) {
+    return fail(testDir, 'c-compare', 'C output mismatch', diffSummary(expected, actual));
+  }
+  return null; // no error
+}
+
+async function runAndCompare(testDir, binary, runArgs) {
+  const runResult = await run(binary, runArgs);
+  const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
+  const actual   = normalizeOut(runResult.stdout);
+  const expected = normalizeOut(expectedOut);
+  if (actual !== expected) {
+    return fail(testDir, 'run', 'stdout mismatch', diffSummary(expected, actual));
+  }
+  return pass(testDir);
+}
+
+function pass(testDir) {
   return { status: 'pass', testDir };
 }
 
-// ---------------------------------------------------------------------------
-// gcc helper
-// ---------------------------------------------------------------------------
-async function gccCompile(cFile, outBin) {
-  const args = [cFile, '-o', outBin];
-  if (existsSync(RUNTIME_INC)) args.push(`-I${RUNTIME_INC}`);
-  args.push('-Wall', '-Wextra', '-std=c11');
-  return run('gcc', args);
+function fail(testDir, step, message, detail = '') {
+  return { status: 'fail', testDir, step, message, detail };
 }
 
 // ---------------------------------------------------------------------------
-// Minimal diff: show first 5 differing lines
+// Minimal diff: show first 8 differing lines
 // ---------------------------------------------------------------------------
 function diffSummary(expected, actual) {
   const expLines = expected.split('\n');
   const actLines = actual.split('\n');
   const maxLen = Math.max(expLines.length, actLines.length);
   const diffs = [];
-  for (let i = 0; i < maxLen && diffs.length < 8; i++) {
+  for (let i = 0; i < maxLen && diffs.length < 24; i++) {
     const e = expLines[i] ?? '<missing>';
     const a = actLines[i] ?? '<missing>';
     if (e !== a) {
       diffs.push(`  line ${i + 1}:`);
-      diffs.push(`    - ${e}`);
-      diffs.push(`    + ${a}`);
+      diffs.push(`    ${red('-')} ${e}`);
+      diffs.push(`    ${green('+')} ${a}`);
     }
   }
-  const extra = maxLen > 8 ? `  ... and more` : '';
+  if (diffs.length === 0 && expected !== actual) {
+    diffs.push('  (trailing whitespace or line-ending difference)');
+  }
+  const extra = maxLen > 8 ? `  ${dim('... and more')}` : '';
   return diffs.join('\n') + (extra ? '\n' + extra : '');
+}
+
+// ---------------------------------------------------------------------------
+// Result printer
+// ---------------------------------------------------------------------------
+function printResult(r) {
+  const label = relPath(r.testDir).padEnd(62);
+  if (r.status === 'pass') {
+    console.log(`  ${green('✓')} ${dim(label)}`);
+  } else if (r.status === 'fail') {
+    console.log(`  ${red('✗')} ${label} ${dim('[' + r.step + ']')}`);
+    if (flagVerbose && r.detail) {
+      const indented = r.detail.split('\n').map(l => '    ' + l).join('\n');
+      console.log(indented);
+    }
+  } else {
+    console.log(`  ${yellow('-')} ${dim(label + ' (skip: ' + r.reason + ')')}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,81 +436,90 @@ function diffSummary(expected, actual) {
 // ---------------------------------------------------------------------------
 async function main() {
   console.log(bold('TSClang Test Runner'));
-  console.log(dim(`doc: ${DOC_DIR}`));
+  console.log(dim(`doc:      ${DOC_DIR}`));
+  console.log(dim(`tsclang:  ${checkTsclang() ? green('found') : yellow('not built')}`));
+  console.log(dim(`gcc:      ${await checkGcc() ? green('found') : yellow('not found')}`));
+  if (flagNoGcc) console.log(dim('mode:     ' + yellow('--no-gcc (skip compile/run)')));
   console.log('');
 
-  // Discover tests
   let testDirs = await walkDir(DOC_DIR);
   testDirs.sort();
 
-  // Apply filter
   if (filterArg) {
     const needle = filterArg.toLowerCase();
-    testDirs = testDirs.filter(d => d.toLowerCase().includes(needle));
+    testDirs = testDirs.filter(d => d.toLowerCase().replace(/\\/g, '/').includes(needle));
     if (testDirs.length === 0) {
       console.log(yellow(`No tests match filter: "${filterArg}"`));
       process.exit(0);
     }
-    console.log(dim(`Filter: "${filterArg}" → ${testDirs.length} test(s)`));
-    console.log('');
+    console.log(dim(`Filter: "${filterArg}" → ${testDirs.length} test(s)\n`));
+  } else {
+    console.log(dim(`Found ${testDirs.length} test(s)\n`));
   }
 
-  console.log(dim(`Found ${testDirs.length} test(s)\n`));
+  // Group by phase for display
+  let lastPhase = '';
 
-  // Run all tests (concurrent, capped at 8)
-  const CONCURRENCY = 8;
   const results = [];
+  const CONCURRENCY = 8;
+
   for (let i = 0; i < testDirs.length; i += CONCURRENCY) {
     const batch = testDirs.slice(i, i + CONCURRENCY);
     const batchResults = await Promise.all(batch.map(runTest));
-    results.push(...batchResults);
 
     for (const r of batchResults) {
+      // Phase header
+      const phase = relPath(r.testDir).split('/')[0];
+      if (phase !== lastPhase) {
+        console.log(cyan(`\n  ${phase}`));
+        lastPhase = phase;
+      }
       printResult(r);
+      results.push(r);
+
+      if (flagFail && r.status === 'fail') {
+        console.log(red('\n  Stopped (--fail-fast)\n'));
+        printSummary(results);
+        process.exit(1);
+      }
     }
   }
 
-  // Summary
-  const passed  = results.filter(r => r.status === 'pass').length;
-  const failed  = results.filter(r => r.status === 'fail').length;
-  const skipped = results.filter(r => r.status === 'skip').length;
-
   console.log('');
-  console.log(bold('Results:'));
-  if (passed)  console.log(`  ${green(`✓ ${passed} passed`)}`);
-  if (failed)  console.log(`  ${red(`✗ ${failed} failed`)}`);
-  if (skipped) console.log(`  ${yellow(`- ${skipped} skipped`)}`);
+  printSummary(results);
 
-  if (failed > 0) {
+  const failed = results.filter(r => r.status === 'fail');
+  if (failed.length > 0) {
     console.log('');
     console.log(bold('Failures:'));
-    for (const r of results.filter(r => r.status === 'fail')) {
+    for (const r of failed) {
       console.log(`\n  ${red('✗')} ${relPath(r.testDir)}`);
-      console.log(`    step: ${r.step}`);
-      console.log(`    ${r.message}`);
-      if ((flagVerbose || true) && r.detail) {
+      console.log(`    ${dim('step:')} ${r.step}`);
+      const msgLines = r.message.split('\n').map((l, i) => i === 0 ? '    ' + l : '      ' + l);
+      console.log(msgLines.join('\n'));
+      if (r.detail) {
         const indented = r.detail.split('\n').map(l => '    ' + l).join('\n');
         console.log(indented);
       }
     }
   }
 
-  process.exit(failed > 0 ? 1 : 0);
+  process.exit(failed.length > 0 ? 1 : 0);
 }
 
-function printResult(r) {
-  const label = relPath(r.testDir).padEnd(60);
-  if (r.status === 'pass') {
-    console.log(`  ${green('✓')} ${dim(label)}`);
-  } else if (r.status === 'fail') {
-    console.log(`  ${red('✗')} ${label} ${dim('[' + r.step + ']')}`);
-  } else {
-    console.log(`  ${yellow('-')} ${dim(label + ' (skip)')}`);
-  }
+function printSummary(results) {
+  const passed  = results.filter(r => r.status === 'pass').length;
+  const failed  = results.filter(r => r.status === 'fail').length;
+  const skipped = results.filter(r => r.status === 'skip').length;
+
+  console.log(bold('Results:'));
+  if (passed)  console.log(`  ${green(`✓ ${passed} passed`)}`);
+  if (failed)  console.log(`  ${red(`✗ ${failed} failed`)}`);
+  if (skipped) console.log(`  ${yellow(`- ${skipped} skipped`)}`);
 }
 
 main().catch(err => {
   console.error(red('Runner error: ' + err.message));
-  console.error(err.stack);
+  if (flagVerbose) console.error(err.stack);
   process.exit(2);
 });
