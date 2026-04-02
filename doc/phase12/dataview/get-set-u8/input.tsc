@@ -1,0 +1,5 @@
+import { DataView } from "std/buffer";
+const buf = new Buffer(4);
+const dv = new DataView(buf);
+dv.setU8(0, 0xFF);
+console.log(dv.getU8(0));

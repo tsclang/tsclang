@@ -1,0 +1,22 @@
+interface Shape {
+    area(): f64;
+}
+class Circle {
+    radius: f64;
+    area(): f64 { return 3.14 * this.radius * this.radius; }
+}
+class Rect {
+    w: f64;
+    h: f64;
+    area(): f64 { return this.w * this.h; }
+}
+function describe(s: Shape): void {
+    if (s instanceof Circle) {
+        console.log("circle");
+    } else {
+        console.log("rect");
+    }
+}
+let c = new Circle();
+c.radius = 2.0;
+describe(c as Shape);

@@ -1,0 +1,4 @@
+let m = new Map<string, i32>();
+m.set("a", 1);
+console.log(m.has("a"));
+console.log(m.has("b"));

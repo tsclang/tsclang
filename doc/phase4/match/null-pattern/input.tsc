@@ -1,0 +1,6 @@
+let x: i32 | null = null;
+const msg = match x {
+    null => "nothing",
+    _ => "value",
+};
+console.log(msg);

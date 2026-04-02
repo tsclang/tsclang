@@ -1,0 +1,4 @@
+function foo(a: i32, b: f64): void {
+    console.log("ok");
+}
+foo(1, 2.0);

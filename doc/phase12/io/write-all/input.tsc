@@ -1,0 +1,5 @@
+import { writeAll, process } from "std/io";
+const data: u8[] = [72, 105, 10];
+async function run(): void {
+    await writeAll(process.stdout, data);
+}

@@ -1,0 +1,4 @@
+#[profile(allocator: "static", scheduler: "cooperative")]
+@static function* blink(): Generator<void> {
+    yield;
+}

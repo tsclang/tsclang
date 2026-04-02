@@ -1,0 +1,4 @@
+const x: i32 = 42;
+const f: f64 = x as f64;
+const back: i32 = f as i32;
+console.log(back);

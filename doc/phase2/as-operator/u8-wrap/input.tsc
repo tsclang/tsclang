@@ -1,0 +1,2 @@
+const x = 300 as u8;
+console.log(x);

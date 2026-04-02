@@ -1,0 +1,10 @@
+class MyError extends Error {
+    constructor(msg: string) {
+        super(msg);
+    }
+}
+try {
+    throw new MyError("oops");
+} catch (e: MyError) {
+    console.log(e.message);
+}

@@ -1,0 +1,4 @@
+import { Duration } from "std/temporal";
+const d = Duration.from({ hours: 2, minutes: 30 });
+console.log(d.hours);
+console.log(d.minutes);

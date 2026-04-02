@@ -1,0 +1,4 @@
+import { Random } from "std/random";
+const r1 = new Random(123);
+const r2 = new Random(123);
+console.log(r1.nextI32() == r2.nextI32());

@@ -1,0 +1,10 @@
+class ErrA { message: string; }
+class ErrB { message: string; }
+function fail(): void throws ErrA | ErrB {
+    throw new ErrA("a");
+}
+try {
+    fail();
+} catch (e: ErrA | ErrB) {
+    console.log("caught");
+}

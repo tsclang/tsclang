@@ -1,0 +1,4 @@
+class ThreadErr { message: string; }
+const t = spawn throws ThreadErr {
+    throw new ThreadErr("fail");
+};

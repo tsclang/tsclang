@@ -1,0 +1,8 @@
+async function fetch(): string {
+    return "data";
+}
+async function process(): string {
+    const raw = await fetch();
+    const result = raw + "!";
+    return result;
+}

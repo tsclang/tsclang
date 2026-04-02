@@ -1,0 +1,10 @@
+#include "runtime.h"
+#include "std/random.h"
+
+int main(void) {
+    TSC_INIT();
+    TscRandom r1 = tsc_random_create(123);
+    TscRandom r2 = tsc_random_create(123);
+    printf("%s\n", tsc_random_next_i32(&r1) == tsc_random_next_i32(&r2) ? "true" : "false");
+    return 0;
+}

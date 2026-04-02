@@ -1,0 +1,4 @@
+const s: string = "hello";
+for (const ch of s) {
+    console.log(ch);
+}

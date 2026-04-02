@@ -1,0 +1,2 @@
+const nl: u8 = '\n';
+console.log(nl);

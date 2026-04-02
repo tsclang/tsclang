@@ -1,0 +1,6 @@
+enum Dir { North, South, East, West }
+const d: Dir = Dir.North;
+const s = match(d) {
+    Dir.North => "N",
+    Dir.South => "S",
+};

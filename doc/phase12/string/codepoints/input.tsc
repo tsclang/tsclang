@@ -1,0 +1,5 @@
+import { String } from "std/string";
+const s: string = "abc";
+for (const cp of s.codePoints()) {
+    console.log(cp);
+}

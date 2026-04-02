@@ -1,0 +1,3 @@
+#[target(avr)]
+@embedded.pool(2) class Token { id: u8; }
+const t = Token.alloc();

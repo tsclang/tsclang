@@ -1,0 +1,16 @@
+function strict(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(x: i32) {
+        if (x < 0) throw new Error("negative");
+        return orig.apply(this, [x]);
+    };
+    return desc;
+}
+class Math {
+    @strict
+    sqrt(x: i32): i32 {
+        return x;
+    }
+}
+const m = new Math();
+console.log(m.sqrt(-1));

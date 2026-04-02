@@ -1,0 +1,7 @@
+let m = new Map<string, i32>();
+m.set("x", 10);
+m.set("y", 20);
+for (const [k, v] of m.entries()) {
+    console.log(k);
+    console.log(v);
+}

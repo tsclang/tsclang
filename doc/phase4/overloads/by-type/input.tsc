@@ -1,0 +1,8 @@
+function process(x: i32): string {
+    return "int: " + x.toString();
+}
+function process(x: string): string {
+    return "str: " + x;
+}
+console.log(process(42));
+console.log(process("hello"));

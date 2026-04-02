@@ -1,0 +1,2 @@
+const n = i32.tryParse("abc");
+console.log(n);

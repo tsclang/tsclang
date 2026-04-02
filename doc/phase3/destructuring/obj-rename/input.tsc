@@ -1,0 +1,7 @@
+class Pt { x: f64; y: f64; }
+const p = new Pt();
+p.x = 1.0;
+p.y = 2.0;
+const { x: a, y: b } = p;
+console.log(a);
+console.log(b);

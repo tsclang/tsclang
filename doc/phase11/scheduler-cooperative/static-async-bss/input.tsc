@@ -1,0 +1,4 @@
+#[profile(allocator: "static", scheduler: "cooperative")]
+@static async function ledBlink(): void {
+    console.log("blink");
+}

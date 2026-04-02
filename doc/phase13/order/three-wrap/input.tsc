@@ -1,0 +1,38 @@
+function A(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        console.log("A-before");
+        const r = orig.apply(this, args);
+        console.log("A-after");
+        return r;
+    };
+    return desc;
+}
+function B(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        console.log("B-before");
+        const r = orig.apply(this, args);
+        console.log("B-after");
+        return r;
+    };
+    return desc;
+}
+function C(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        console.log("C-before");
+        const r = orig.apply(this, args);
+        console.log("C-after");
+        return r;
+    };
+    return desc;
+}
+class Svc {
+    @A @B @C
+    run(): void {
+        console.log("run");
+    }
+}
+const s = new Svc();
+s.run();

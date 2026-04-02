@@ -1,0 +1,5 @@
+#[target(avr)]
+@embedded.inline class Vec2 { x: f32; y: f32; }
+let v = new Vec2();
+v.x = 1.0;
+v.y = 2.0;

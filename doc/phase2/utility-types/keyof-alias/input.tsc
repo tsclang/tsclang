@@ -1,0 +1,4 @@
+interface User { name: string; age: i32; }
+type UserKey = keyof User;
+const k: UserKey = "name";
+console.log(k);

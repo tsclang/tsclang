@@ -1,0 +1,7 @@
+class Config {
+    debug: bool;
+    maxRetries: i32;
+}
+const config: Config = { debug: true, maxRetries: 3 };
+console.log(config.debug);
+console.log(config.maxRetries);

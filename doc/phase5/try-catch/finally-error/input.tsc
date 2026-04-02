@@ -1,0 +1,11 @@
+class AppError { message: string; }
+function fail(): void throws AppError {
+    throw new AppError("boom");
+}
+try {
+    fail();
+} catch (e: AppError) {
+    console.log("caught");
+} finally {
+    console.log("finally");
+}

@@ -1,0 +1,8 @@
+enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+console.log(Direction.North);
+console.log(Direction.West);

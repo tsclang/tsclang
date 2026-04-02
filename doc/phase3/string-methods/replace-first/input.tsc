@@ -1,0 +1,3 @@
+const s: string = "hello hello";
+const r = s.replace("hello", "world");
+console.log(r);

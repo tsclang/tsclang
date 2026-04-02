@@ -1,0 +1,2 @@
+const x: i32 = 1_000_000;
+console.log(x);

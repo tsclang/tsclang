@@ -1,0 +1,8 @@
+class Err { message: string; }
+function fn(): i32 throws Err {
+    try {
+        throw new Err("a");
+    } finally {
+        return 42;
+    }
+}

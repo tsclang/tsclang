@@ -1,0 +1,7 @@
+interface User {
+    name: string;
+    age: i32;
+}
+type ReadonlyUser = Readonly<User>;
+const u: ReadonlyUser = { name: "Bob", age: 25 };
+console.log(u.name);

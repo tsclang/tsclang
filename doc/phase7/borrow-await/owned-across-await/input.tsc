@@ -1,0 +1,12 @@
+class Data {
+    value: i32;
+}
+async function fetch(): Data {
+    let d = new Data();
+    d.value = 42;
+    return d;
+}
+async function run(): void {
+    const d = await fetch();
+    console.log(d.value);
+}

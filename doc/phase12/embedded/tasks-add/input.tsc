@@ -1,0 +1,7 @@
+#[target(avr)]
+import { Tasks } from "std/embedded";
+const tasks = new Tasks<2>();
+function* ledTask(): Generator<void> {
+    yield;
+}
+tasks.add("led", ledTask);

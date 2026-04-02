@@ -1,0 +1,4 @@
+import { Writer } from "std/io";
+function emit(w: Writer, data: u8[]): void {
+    w.write(data);
+}

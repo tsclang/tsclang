@@ -1,0 +1,1 @@
+ConfigError: tsc.package.json: library projects must not have a 'main' entry point

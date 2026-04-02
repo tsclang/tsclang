@@ -1,0 +1,10 @@
+class Box {
+    x: i32;
+}
+let b = new Box();
+b.x = 1;
+function mutate(m: Mut<Box>): void { m.x = 2; }
+function read(r: Ref<Box>): i32 { return r.x; }
+const r = read(b);
+mutate(b);
+console.log(r);

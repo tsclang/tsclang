@@ -1,0 +1,4 @@
+let a = new Atomic<i32>(5);
+const ok = a.compareExchange(5, 10);
+console.log(ok);
+console.log(a.load());

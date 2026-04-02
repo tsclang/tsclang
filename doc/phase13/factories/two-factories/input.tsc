@@ -1,0 +1,26 @@
+function prefix(p: string) {
+    return function(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+        const orig = desc.value;
+        desc.value = function(s: string) {
+            return orig.apply(this, [p + s]);
+        };
+        return desc;
+    };
+}
+function suffix(s: string) {
+    return function(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+        const orig = desc.value;
+        desc.value = function(v: string) {
+            return orig.apply(this, [v + s]);
+        };
+        return desc;
+    };
+}
+class Fmt {
+    @prefix("[") @suffix("]")
+    format(s: string): void {
+        console.log(s);
+    }
+}
+const f = new Fmt();
+f.format("hello");

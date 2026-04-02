@@ -1,0 +1,6 @@
+import { HttpServer } from "std/net";
+const server = new HttpServer({ port: 9000 });
+server.get("/:id", (req, res) => {
+    const id = req.params["id"];
+    res.text(id);
+});

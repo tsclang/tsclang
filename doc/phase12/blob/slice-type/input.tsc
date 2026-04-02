@@ -1,0 +1,3 @@
+import { Blob } from "std/blob";
+const b = new Blob([0xAB, 0xCD], "application/octet-stream");
+console.log(b.type);

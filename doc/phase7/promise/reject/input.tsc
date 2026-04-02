@@ -1,0 +1,2 @@
+class AppError { message: string; }
+const p = Promise.reject<i32>(new AppError("fail"));

@@ -1,0 +1,7 @@
+const s: string = "bad";
+const n: f64 | null = tryParseFloat(s);
+if (n == null) {
+    console.log("null");
+} else {
+    console.log(n);
+}

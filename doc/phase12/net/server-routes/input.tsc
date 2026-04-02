@@ -1,0 +1,6 @@
+import { HttpServer } from "std/net";
+const server = new HttpServer({ port: 3000 });
+server.post("/data", (req, res) => {
+    res.json("{\"ok\":true}");
+});
+server.listen();

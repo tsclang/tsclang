@@ -1,0 +1,6 @@
+function calc(x: i32, y: i32 = 2, z: i32 = 3): i32 {
+    return x + y + z;
+}
+console.log(calc(1));
+console.log(calc(1, 10));
+console.log(calc(1, 10, 20));

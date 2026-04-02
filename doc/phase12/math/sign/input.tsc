@@ -1,0 +1,4 @@
+import { Math } from "std/math";
+console.log(Math.sign(-5.0));
+console.log(Math.sign(0.0));
+console.log(Math.sign(3.0));

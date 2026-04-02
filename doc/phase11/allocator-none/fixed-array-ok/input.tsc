@@ -1,0 +1,3 @@
+#[profile(allocator: "none")]
+const buf: u8[256] = [0];
+console.log(buf.length);

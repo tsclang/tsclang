@@ -1,0 +1,5 @@
+function getValue() {
+    return 100;
+}
+const x = getValue();
+console.log(x);

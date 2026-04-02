@@ -1,0 +1,3 @@
+#[target(avr)]
+import { PWM } from "std/avr";
+PWM.setDuty(0, 128);

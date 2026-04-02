@@ -1,0 +1,8 @@
+let i: i32 = 0
+while (true) {
+    if (i == 2) {
+        break
+    }
+    console.log(i)
+    i++
+}

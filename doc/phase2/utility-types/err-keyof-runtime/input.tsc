@@ -1,0 +1,2 @@
+interface User { name: string; }
+const keys = keyof User;

@@ -1,0 +1,3 @@
+class A { x: i32; }
+class B extends A { y: i32; }
+class C extends B { z: i32; }

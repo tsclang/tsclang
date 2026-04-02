@@ -1,0 +1,4 @@
+function add(x: i32, y: i32 = 10): i32 {
+    return x + y;
+}
+console.log(add(5, 3));

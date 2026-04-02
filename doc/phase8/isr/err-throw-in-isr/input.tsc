@@ -1,0 +1,7 @@
+class MyError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+@embedded.isr("TIMER1_COMPA")
+function handler(): void {
+    throw new MyError("bad");
+}

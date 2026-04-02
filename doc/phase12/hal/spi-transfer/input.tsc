@@ -1,0 +1,3 @@
+#[target(avr)]
+import { SPI } from "std/hal";
+const result = SPI.transfer(0xAB);

@@ -1,0 +1,1 @@
+TypeError: Non-exhaustive match on enum 'Dir': missing cases 'East', 'West'

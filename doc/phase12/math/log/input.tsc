@@ -1,0 +1,3 @@
+import { Math } from "std/math";
+const v = Math.log(2.718281828);
+console.log(v);

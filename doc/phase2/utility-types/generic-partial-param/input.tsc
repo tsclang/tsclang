@@ -1,0 +1,3 @@
+function merge<T>(base: T, patch: Partial<T>): T {
+    return base;
+}

@@ -1,0 +1,2 @@
+cannot assign to 'const' variable 'x'
+input.tsc:2:

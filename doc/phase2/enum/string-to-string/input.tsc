@@ -1,0 +1,2 @@
+enum Status { Ok = "OK" }
+console.log(Status.Ok.toString());

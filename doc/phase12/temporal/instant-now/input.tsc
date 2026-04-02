@@ -1,0 +1,3 @@
+import { Instant } from "std/temporal";
+const now = Instant.now();
+console.log(now.epochNanoseconds > 0);

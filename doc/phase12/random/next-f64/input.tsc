@@ -1,0 +1,4 @@
+import { Random } from "std/random";
+const rng = new Random(0);
+const v = rng.nextF64();
+console.log(v >= 0.0 && v < 1.0);

@@ -1,0 +1,1 @@
+TypeError: 'new Map<u8, i32>()' requires a capacity argument when allocator is "static"; use 'new Map<u8, i32>(N)'

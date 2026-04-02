@@ -1,0 +1,3 @@
+import { ZonedDateTime } from "std/temporal";
+const zdt = ZonedDateTime.now("UTC");
+console.log(zdt.timeZone);

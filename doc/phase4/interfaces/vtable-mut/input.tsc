@@ -1,0 +1,21 @@
+interface Counter {
+    increment(): void;
+    get(): i32;
+}
+class SimpleCounter {
+    value: i32;
+    increment(): void {
+        this.value += 1;
+    }
+    get(): i32 {
+        return this.value;
+    }
+}
+function tick(c: Mut<Counter>): void {
+    c.increment();
+}
+let sc = new SimpleCounter();
+sc.value = 0;
+tick(sc);
+tick(sc);
+console.log(sc.get());

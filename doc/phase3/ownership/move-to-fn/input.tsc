@@ -1,0 +1,9 @@
+class Buffer {
+    data: string;
+}
+function consume(buf: Buffer): void {
+    console.log(buf.data);
+}
+let b = new Buffer();
+b.data = "hello";
+consume(b);

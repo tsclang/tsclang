@@ -1,0 +1,4 @@
+import { Regex } from "std/string";
+const r = new Regex("o");
+const result = r.replaceAll("hello world", "0");
+console.log(result);

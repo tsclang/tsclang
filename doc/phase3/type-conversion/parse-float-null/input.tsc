@@ -1,0 +1,2 @@
+const x = parseFloat("abc");
+console.log(x);

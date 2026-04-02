@@ -1,0 +1,4 @@
+let x: i32 | null = 5;
+if (x != null) {
+    console.log(x + 1);
+}

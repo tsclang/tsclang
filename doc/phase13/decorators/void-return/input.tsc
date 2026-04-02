@@ -1,0 +1,17 @@
+function trace(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        console.log("enter");
+        orig.apply(this, args);
+        console.log("exit");
+    };
+    return desc;
+}
+class Worker {
+    @trace
+    doWork(): void {
+        console.log("work");
+    }
+}
+const w = new Worker();
+w.doWork();

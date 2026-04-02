@@ -1,0 +1,3 @@
+function bad(): never {
+    console.log("oops");
+}

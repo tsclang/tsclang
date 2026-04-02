@@ -1,0 +1,2 @@
+const n: usize = 100;
+const m: i32 = n;

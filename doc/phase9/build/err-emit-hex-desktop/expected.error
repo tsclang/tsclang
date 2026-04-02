@@ -1,0 +1,1 @@
+ConfigError: --emit hex requires an embedded target (avr); desktop target does not support hex output

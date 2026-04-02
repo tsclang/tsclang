@@ -1,0 +1,1 @@
+const enum Pin { PA0 = 0, PA1 = 1 }

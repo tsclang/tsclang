@@ -1,0 +1,3 @@
+import { Math } from "std/math";
+const x = Math.sqrt(16.0);
+console.log(x);

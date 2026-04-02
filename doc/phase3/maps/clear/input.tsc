@@ -1,0 +1,5 @@
+let m = new Map<string, i32>();
+m.set("a", 1);
+m.set("b", 2);
+m.clear();
+console.log(m.size);

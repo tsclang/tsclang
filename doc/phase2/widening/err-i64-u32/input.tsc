@@ -1,0 +1,2 @@
+const a: i64 = 10;
+const b: u32 = a;

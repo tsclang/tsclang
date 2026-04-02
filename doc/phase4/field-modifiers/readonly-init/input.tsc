@@ -1,0 +1,11 @@
+class Config {
+    readonly host: string;
+    readonly port: i32;
+    constructor(host: string, port: i32) {
+        this.host = host;
+        this.port = port;
+    }
+}
+const c = new Config("localhost", 8080);
+console.log(c.host);
+console.log(c.port);

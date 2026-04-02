@@ -1,0 +1,6 @@
+class Config {
+    readonly port: i32;
+    constructor(p: i32) { this.port = p; }
+}
+const c = new Config(80);
+c.port = 443;

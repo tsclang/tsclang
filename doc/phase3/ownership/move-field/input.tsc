@@ -1,0 +1,7 @@
+class Owner {
+    name: string;
+}
+let o = new Owner();
+o.name = "Alice";
+let n = o.name;
+console.log(n);

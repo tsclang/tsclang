@@ -1,0 +1,6 @@
+interface User {
+    name: string;
+    age: i32;
+}
+type PartialUser = Partial<User>;
+const u: PartialUser = {};

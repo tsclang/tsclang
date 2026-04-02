@@ -1,0 +1,10 @@
+class Data {
+    x: i32;
+}
+let d = new Shared<Data>();
+d.x = 99;
+let w = new Weak<Data>(d);
+let strong = w.upgrade();
+if (strong != null) {
+    console.log(strong.x);
+}

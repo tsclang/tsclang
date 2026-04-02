@@ -1,0 +1,7 @@
+class AppError {
+    message: string;
+    stack: string;
+}
+function fail(): void throws AppError {
+    throw new AppError("oops");
+}

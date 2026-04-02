@@ -1,0 +1,4 @@
+type UserId = i32;
+const id: UserId = 42;
+const n: i32 = id;
+console.log(n);

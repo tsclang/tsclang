@@ -1,0 +1,19 @@
+function minLength(min: i32) {
+    return function(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+        const orig = desc.value;
+        desc.value = function(s: string) {
+            if (s.length < min) console.log("too short");
+            else return orig.apply(this, [s]);
+        };
+        return desc;
+    };
+}
+class Validator {
+    @minLength(3)
+    check(s: string): void {
+        console.log("ok: " + s);
+    }
+}
+const v = new Validator();
+v.check("hi");
+v.check("hello");

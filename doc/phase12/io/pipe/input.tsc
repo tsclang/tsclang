@@ -1,0 +1,4 @@
+import { pipe, process } from "std/io";
+async function run(): void {
+    await pipe(process.stdin, process.stdout);
+}

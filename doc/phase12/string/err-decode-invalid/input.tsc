@@ -1,0 +1,3 @@
+import { decodeUtf8 } from "std/string";
+const bytes: u8[] = [0xFF, 0xFE];
+const s = decodeUtf8(bytes);

@@ -1,0 +1,3 @@
+function passthrough(x: any): any {
+    return x;
+}

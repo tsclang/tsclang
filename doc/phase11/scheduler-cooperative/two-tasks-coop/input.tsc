@@ -1,0 +1,3 @@
+#[profile(allocator: "static", scheduler: "cooperative")]
+@static async function taskA(): void { console.log("A"); }
+@static async function taskB(): void { console.log("B"); }

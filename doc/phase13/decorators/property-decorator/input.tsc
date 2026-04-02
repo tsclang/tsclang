@@ -1,0 +1,9 @@
+function readonly(target: any, key: string): void {
+    Object.defineProperty(target, key, { writable: false });
+}
+class Entity {
+    @readonly
+    id: i32 = 1;
+}
+const e = new Entity();
+console.log(e.id);

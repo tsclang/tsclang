@@ -1,0 +1,11 @@
+class AppError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+function fail(): void throws AppError {
+    throw new AppError("boom");
+}
+try {
+    fail();
+} catch (e: AppError) {
+    console.log(e.message);
+}

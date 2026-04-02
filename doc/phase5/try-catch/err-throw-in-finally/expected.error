@@ -1,0 +1,1 @@
+TypeError: Cannot throw inside a finally block

@@ -1,0 +1,5 @@
+type P = [f64, f64, f64];
+const p: P = [1.0, 2.0, 3.0];
+const copy: P = [...p];
+console.log(copy[0]);
+console.log(copy[2]);

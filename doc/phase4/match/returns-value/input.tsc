@@ -1,0 +1,8 @@
+enum Color { Red, Green, Blue }
+const c: Color = Color.Green;
+const name = match(c) {
+    Color.Red => "red",
+    Color.Green => "green",
+    Color.Blue => "blue",
+};
+console.log(name);

@@ -1,0 +1,4 @@
+type SM = Record<string, i32>;
+let m: SM = new Map<string, i32>();
+m.set("x", 5);
+console.log(m.get("x"));

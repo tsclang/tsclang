@@ -1,0 +1,5 @@
+const prefix: string = "Hello";
+const greet = (name: string): string => {
+    return prefix + ", " + name;
+};
+console.log(greet("World"));

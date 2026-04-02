@@ -1,0 +1,3 @@
+const s: string = "hello world";
+const sub: Ref<string> = s[6..11];
+console.log(sub);

@@ -1,0 +1,6 @@
+class User { name: string; age: i32; }
+let user = new User();
+user.name = "Alice";
+user.age = 30;
+const { name: n }: User = user;
+console.log(n);

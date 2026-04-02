@@ -1,0 +1,7 @@
+interface User {
+    name: string;
+    age?: i32;
+}
+type RequiredUser = Required<User>;
+const u: RequiredUser = { name: "Alice", age: 30 };
+console.log(u.age);

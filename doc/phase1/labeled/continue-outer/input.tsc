@@ -1,0 +1,12 @@
+let sum: i32 = 0;
+let i: i32 = 0;
+outer: while (i < 3) {
+    let j: i32 = 0;
+    while (j < 3) {
+        j++;
+        if (j == 2) { continue outer; }
+        sum += 1;
+    }
+    i++;
+}
+console.log(sum);

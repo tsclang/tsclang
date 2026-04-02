@@ -1,0 +1,6 @@
+function fill(arr: Mut<i32[]>): void {
+    arr[0] = 99;
+}
+let nums: i32[] = [1, 2, 3];
+fill(nums);
+console.log(nums[0]);

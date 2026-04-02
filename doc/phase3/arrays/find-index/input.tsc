@@ -1,0 +1,2 @@
+const arr: i32[] = [1, 5, 3, 8];
+console.log(arr.findIndex(x => x > 4));

@@ -1,0 +1,1 @@
+type E = Extract<string | i32, string>;

@@ -1,0 +1,3 @@
+const s: string = "hello";
+const all: Ref<string> = s[..];
+console.log(all);

@@ -1,0 +1,2 @@
+const counter = new Atomic<i32>(0);
+console.log(counter.load(LoadOrdering.Acquire));

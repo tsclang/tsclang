@@ -1,0 +1,4 @@
+#[profile(allocator: "static", scheduler: "cooperative")]
+@static async function task(): void {
+    console.log("tick");
+}

@@ -1,0 +1,1 @@
+native(`some_undefined_type *p = NULL;`);

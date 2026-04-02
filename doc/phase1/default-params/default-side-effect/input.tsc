@@ -1,0 +1,8 @@
+let counter: i32 = 0;
+function inc(): i32 {
+    counter = counter + 1;
+    return counter;
+}
+function foo(x: i32 = inc()): void {
+    console.log(x);
+}

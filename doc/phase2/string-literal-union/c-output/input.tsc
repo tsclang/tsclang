@@ -1,0 +1,1 @@
+type Dir = "north" | "south";

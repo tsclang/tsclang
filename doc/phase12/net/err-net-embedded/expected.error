@@ -1,0 +1,1 @@
+TypeError: 'std/net' is not available on embedded targets

@@ -1,0 +1,5 @@
+function fn(x: i32): void;
+function fn(x: i32): void;
+function fn(x: i32): void {
+    console.log(x);
+}

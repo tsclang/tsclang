@@ -1,0 +1,7 @@
+function log(msg: string): void;
+function log(msg: string, level: i32): void;
+function log(msg: string, level: i32 = 0): void {
+    console.log(msg);
+}
+log("hello");
+log("world", 1);

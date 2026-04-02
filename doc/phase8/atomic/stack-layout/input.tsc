@@ -1,0 +1,3 @@
+let a = new Atomic<i32>(0);
+let b = new Atomic<i32>(1);
+a.store(b.load());

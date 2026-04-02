@@ -1,0 +1,6 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+function readFile(path: string): string throws IOError {
+    throw new IOError("not found");
+}

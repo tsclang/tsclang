@@ -1,0 +1,5 @@
+#[profile(stack_size: 64)]
+function deep(x: i32): i32 {
+    let buf: i32[32] = [0];
+    return buf[0] + x;
+}

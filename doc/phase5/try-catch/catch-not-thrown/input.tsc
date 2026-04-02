@@ -1,0 +1,12 @@
+class AppError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+function ok(): i32 throws AppError {
+    return 42;
+}
+try {
+    const x = ok();
+    console.log(x);
+} catch (e: AppError) {
+    console.log("error");
+}

@@ -1,0 +1,1 @@
+"type" alias cannot contain methods; use "interface" instead

@@ -1,0 +1,9 @@
+class FileError {
+    message: string;
+}
+class NetworkError {
+    message: string;
+}
+function fetch(url: string): string throws FileError | NetworkError {
+    throw new NetworkError("timeout");
+}

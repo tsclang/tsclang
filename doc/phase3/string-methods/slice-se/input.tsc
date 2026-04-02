@@ -1,0 +1,3 @@
+const s: string = "hello world";
+const sub = s.slice(0, 5);
+console.log(sub);

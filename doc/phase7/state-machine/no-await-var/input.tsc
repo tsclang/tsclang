@@ -1,0 +1,4 @@
+async function simple(): i32 {
+    const x: i32 = 5;
+    return x * 2;
+}

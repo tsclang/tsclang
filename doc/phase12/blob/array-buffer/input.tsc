@@ -1,0 +1,4 @@
+import { Blob } from "std/blob";
+const b = new Blob([10, 20]);
+const buf = b.arrayBuffer();
+console.log(buf.length);

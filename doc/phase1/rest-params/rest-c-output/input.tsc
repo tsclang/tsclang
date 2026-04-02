@@ -1,0 +1,8 @@
+function join(sep: i32, ...nums: i32[]): i32 {
+    let result: i32 = 0;
+    for (let i: i32 = 0; i < nums.length; i++) {
+        result = result + nums[i] + sep;
+    }
+    return result;
+}
+console.log(join(0, 10, 20, 30));

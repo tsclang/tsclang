@@ -1,0 +1,6 @@
+class Data { value: i32; }
+let d = new Data();
+d.value = 1;
+spawn {
+    d.value = 2;
+};

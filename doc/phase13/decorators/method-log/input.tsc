@@ -1,0 +1,17 @@
+decorator function log(desc: MethodDesc): MethodDesc {
+    desc.before(() => {
+        console.log("before");
+    });
+    desc.after(() => {
+        console.log("after");
+    });
+    return desc;
+}
+class Svc {
+    @log
+    run(): void {
+        console.log("running");
+    }
+}
+const s = new Svc();
+s.run();

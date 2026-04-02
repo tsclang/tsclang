@@ -1,0 +1,5 @@
+import { HttpServer } from "std/net";
+const server = new HttpServer({ port: 8080 });
+server.get("/", (req, res) => {
+    res.text("hello");
+});

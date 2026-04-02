@@ -1,0 +1,5 @@
+let m = new Map<string, i32>();
+m.set("a", 10);
+const removed = m.delete("a");
+console.log(removed);
+console.log(m.size);

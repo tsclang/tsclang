@@ -1,0 +1,10 @@
+#[target(avr)]
+async function a(): void { }
+async function b(): void { }
+async function c(): void { }
+async function d(): void { }
+async function e(): void { }
+async function f(): void { }
+async function g(): void { }
+async function h(): void { }
+async function i(): void { }

@@ -1,0 +1,1 @@
+TypeError: @embedded.inline class 'Bad' cannot have non-trivial methods; remove 'compute()' or use a regular class

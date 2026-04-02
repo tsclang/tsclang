@@ -1,0 +1,2 @@
+#[profile(allocator: "static", scheduler: "cooperative")]
+async function* gen(): AsyncGenerator<i32> { yield 1; }

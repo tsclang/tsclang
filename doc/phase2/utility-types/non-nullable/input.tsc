@@ -1,0 +1,4 @@
+type MaybeStr = string | null;
+type NN = NonNullable<MaybeStr>;
+const s: NN = "hello";
+console.log(s);

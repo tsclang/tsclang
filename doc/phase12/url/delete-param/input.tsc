@@ -1,0 +1,4 @@
+import { URL } from "std/url";
+const u = new URL("https://example.com/?a=1&b=2");
+u.searchParams.delete("a");
+console.log(u.search);

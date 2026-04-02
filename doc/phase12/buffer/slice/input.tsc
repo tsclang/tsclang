@@ -1,0 +1,4 @@
+import { Buffer } from "std/buffer";
+const buf = new Buffer(10);
+const s = buf.slice(2, 5);
+console.log(s.length);

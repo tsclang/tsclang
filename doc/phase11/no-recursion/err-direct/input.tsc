@@ -1,0 +1,4 @@
+#[profile(no_recursion: true)]
+function f(): void {
+    f();
+}

@@ -1,0 +1,6 @@
+class Node {
+    value: i32;
+}
+let x: Shared<Node> = new Node();
+x.value = 10;
+console.log(x.value);

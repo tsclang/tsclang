@@ -1,0 +1,1 @@
+echo "incremental-rebuild: supported"

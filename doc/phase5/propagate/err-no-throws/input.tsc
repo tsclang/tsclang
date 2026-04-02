@@ -1,0 +1,6 @@
+function safe(): i32 {
+    return 42;
+}
+function run(): void {
+    const x = safe()?;
+}

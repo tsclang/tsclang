@@ -1,0 +1,11 @@
+function sealed(target: any): any {
+    target._sealed = true;
+    return target;
+}
+@sealed
+class Config {
+    debug: bool;
+}
+const c = new Config();
+c.debug = false;
+console.log(c.debug);

@@ -1,0 +1,10 @@
+type Dir = "north" | "south";
+const d: Dir = "south";
+switch (d) {
+    case "north":
+        console.log("N");
+        break;
+    case "south":
+        console.log("S");
+        break;
+}

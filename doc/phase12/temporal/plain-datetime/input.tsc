@@ -1,0 +1,6 @@
+import { PlainDate, PlainTime, PlainDateTime } from "std/temporal";
+const d = PlainDate.from(2024, 1, 1);
+const t = PlainTime.from(12, 0, 0);
+const dt = PlainDateTime.from(d, t);
+console.log(dt.year);
+console.log(dt.hour);

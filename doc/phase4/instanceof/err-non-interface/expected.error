@@ -1,0 +1,1 @@
+TypeError: 'instanceof' requires an interface type on the right-hand side, got 'Bar'

@@ -1,0 +1,4 @@
+type Broken = {
+    x: i32;
+    getX(): i32;
+};

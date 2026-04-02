@@ -1,0 +1,4 @@
+const a: i32 = 2;
+const b: i32 = 3;
+const msg = `${a} + ${b} = ${a + b}`;
+console.log(msg);

@@ -1,0 +1,4 @@
+async function foo(): Promise<void> {
+    const x: i32 = 42;
+    await x;
+}

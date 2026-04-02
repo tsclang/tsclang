@@ -1,0 +1,8 @@
+class Err { message: string; }
+function fn(): void throws Err {
+    try {
+        throw new Err("a");
+    } finally {
+        throw new Err("b");
+    }
+}

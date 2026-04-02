@@ -1,0 +1,5 @@
+type Config = [string, i32?];
+let a: Config = ["localhost"];
+let b: Config = ["localhost", 8080];
+console.log(a[0]);
+console.log(b[1]);

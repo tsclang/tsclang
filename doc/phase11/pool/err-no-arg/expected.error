@@ -1,0 +1,1 @@
+TypeError: @embedded.pool requires a numeric capacity argument; use @embedded.pool(N)

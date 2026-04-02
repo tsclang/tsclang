@@ -1,0 +1,5 @@
+import { Reader } from "std/io";
+function consume(r: Reader): void {
+    const buf: u8[] = new u8[64];
+    const n = r.read(buf);
+}

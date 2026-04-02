@@ -1,0 +1,5 @@
+import { PlainDate } from "std/temporal";
+const d1 = PlainDate.from(2024, 1, 1);
+const d2 = PlainDate.from(2024, 1, 11);
+const dur = d1.until(d2);
+console.log(dur.days);

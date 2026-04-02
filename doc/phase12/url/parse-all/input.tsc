@@ -1,0 +1,7 @@
+import { URL } from "std/url";
+const u = new URL("https://example.com/path?foo=bar#section");
+console.log(u.protocol);
+console.log(u.host);
+console.log(u.pathname);
+console.log(u.search);
+console.log(u.hash);

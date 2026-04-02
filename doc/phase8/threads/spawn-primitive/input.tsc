@@ -1,0 +1,4 @@
+const x: i32 = 42;
+spawn {
+    console.log(x);
+};

@@ -1,0 +1,5 @@
+import { DataView } from "std/buffer";
+const buf = new Buffer(8);
+const dv = new DataView(buf);
+dv.setU32LE(0, 0xDEADBEEF);
+console.log(dv.getU32LE(0));

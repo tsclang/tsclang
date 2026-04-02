@@ -1,0 +1,2 @@
+type Fields = "name" | "age";
+type UserPick = Pick<User, Fields>;

@@ -1,0 +1,7 @@
+class Node {
+    value: i32;
+}
+let a = new Node();
+a.value = 42;
+let b = a;
+console.log(b.value);

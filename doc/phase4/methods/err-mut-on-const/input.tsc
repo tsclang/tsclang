@@ -1,0 +1,6 @@
+class Counter {
+    value: i32;
+    mut inc(): void { this.value = this.value + 1; }
+}
+const c = new Counter();
+c.inc();

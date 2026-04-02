@@ -1,0 +1,7 @@
+{
+  "name": "myapp",
+  "version": "1.0.0",
+  "main": "src/main.tsc",
+  "type": "executable",
+  "targets": ["x86_64-linux", "avr"]
+}

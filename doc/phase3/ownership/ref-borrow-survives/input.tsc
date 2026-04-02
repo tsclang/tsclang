@@ -1,0 +1,10 @@
+function sum(data: Ref<i32[]>): i32 {
+    let total: i32 = 0;
+    for (let i: i32 = 0; i < data.length; i++) {
+        total = total + data[i];
+    }
+    return total;
+}
+const data: i32[] = [1, 2, 3];
+console.log(sum(data));
+console.log(data.length);

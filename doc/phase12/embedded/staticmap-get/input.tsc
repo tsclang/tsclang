@@ -1,0 +1,4 @@
+import { StaticMap } from "std/embedded";
+const opcodes = new StaticMap({ "LDA": 0xA9, "STA": 0x8D });
+const op = opcodes.get("LDA");
+if (op != null) console.log(op);

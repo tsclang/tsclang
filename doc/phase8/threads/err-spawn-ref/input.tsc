@@ -1,0 +1,5 @@
+function foo(arr: Ref<i32[]>): void {
+    Thread.spawn(() => {
+        console.log(arr.length);
+    });
+}

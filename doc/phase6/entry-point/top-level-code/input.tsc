@@ -1,0 +1,3 @@
+console.log("start");
+const x: i32 = 42;
+console.log(x);

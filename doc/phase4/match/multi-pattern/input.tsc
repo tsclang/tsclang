@@ -1,0 +1,6 @@
+const n: i32 = 2;
+const s = match n {
+    1 | 2 | 3 => "low",
+    _ => "high",
+};
+console.log(s);

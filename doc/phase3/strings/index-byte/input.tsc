@@ -1,0 +1,3 @@
+const s: string = "ABC";
+const b: u8 = s[0];
+console.log(b);

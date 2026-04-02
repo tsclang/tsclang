@@ -1,0 +1,7 @@
+import { String } from "std/string";
+const s: string = "hi";
+let count: i32 = 0;
+for (const g of s.graphemes()) {
+    count += 1;
+}
+console.log(count);

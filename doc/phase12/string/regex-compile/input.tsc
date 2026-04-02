@@ -1,0 +1,3 @@
+import { Regex } from "std/string";
+const r = new Regex("hello");
+console.log(r.test("say hello world"));

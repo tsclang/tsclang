@@ -1,0 +1,2 @@
+const arr: i32[] = [5, 10, 15];
+console.log(arr[2]);

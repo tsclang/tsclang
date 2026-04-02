@@ -1,0 +1,4 @@
+class Obj { x: i32; }
+function take(r: Ref<Obj>): void {
+    const o: Obj = r;
+}

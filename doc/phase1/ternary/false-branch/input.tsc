@@ -1,0 +1,2 @@
+const x: i32 = false ? 10 : 20;
+console.log(x);

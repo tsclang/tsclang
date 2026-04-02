@@ -1,0 +1,4 @@
+import { Random } from "std/random";
+const rng = new Random(1);
+const v = rng.range(1, 6);
+console.log(v >= 1 && v <= 6);

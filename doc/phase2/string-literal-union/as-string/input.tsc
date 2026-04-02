@@ -1,0 +1,4 @@
+type Dir = "north" | "south";
+const d: Dir = "south";
+const s: string = d as string;
+console.log(s);

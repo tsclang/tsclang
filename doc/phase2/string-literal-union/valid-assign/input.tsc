@@ -1,0 +1,4 @@
+type Dir = "north" | "south";
+let d: Dir = "north";
+d = "south";
+console.log(d);

@@ -1,0 +1,4 @@
+interface User { name: string; age: i32; email: string; }
+type UserContact = Pick<User, "name" | "email">;
+const u: UserContact = { name: "Bob", email: "bob@x.com" };
+console.log(u.email);

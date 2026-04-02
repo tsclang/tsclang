@@ -1,0 +1,4 @@
+import { Regex } from "std/string";
+const r = new Regex("world");
+const result = r.replace("hello world", "TSClang");
+console.log(result);

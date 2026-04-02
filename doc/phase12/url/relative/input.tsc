@@ -1,0 +1,4 @@
+import { URL } from "std/url";
+const base = new URL("https://example.com/base/");
+const u = new URL("../other", base);
+console.log(u.pathname);

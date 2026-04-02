@@ -1,0 +1,6 @@
+import { Signal, computed } from "std/reactive";
+const x = new Signal<i32>(1);
+const bad = computed(() => {
+    x.set(99);
+    return x.get();
+});

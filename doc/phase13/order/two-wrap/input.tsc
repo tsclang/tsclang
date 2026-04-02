@@ -1,0 +1,16 @@
+decorator function A(desc: MethodDesc): MethodDesc {
+    desc.before(() => { console.log("A-before"); });
+    desc.after(() => { console.log("A-after"); });
+    return desc;
+}
+decorator function B(desc: MethodDesc): MethodDesc {
+    desc.before(() => { console.log("B-before"); });
+    desc.after(() => { console.log("B-after"); });
+    return desc;
+}
+class Foo {
+    @A @B
+    run(): void { console.log("run"); }
+}
+const f = new Foo();
+f.run();

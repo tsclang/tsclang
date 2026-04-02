@@ -1,0 +1,5 @@
+class User { name: string; }
+type U = Awaited<Promise<User>>;
+const u: U = new User();
+u.name = "Alice";
+console.log(u.name);

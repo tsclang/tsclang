@@ -1,0 +1,3 @@
+let x: i32;
+x = 99;
+console.log(x);

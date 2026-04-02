@@ -1,0 +1,7 @@
+const x: i32 = 10;
+async function run(): void {
+    const t = spawn {
+        console.log(x);
+    };
+    await t.join();
+}

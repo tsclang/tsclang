@@ -1,0 +1,5 @@
+#[profile(allocator: "static")]
+class Brush { size: u8; color: u8; }
+let b = new Brush();
+b.size = 2;
+b.color = 0xFF;

@@ -1,0 +1,1 @@
+TypeError: Ambiguous overload for 'fn': duplicate signature '(x: i32)'

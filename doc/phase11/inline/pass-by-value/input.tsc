@@ -1,0 +1,10 @@
+#[target(avr)]
+@embedded.inline class Point { x: i32; y: i32; }
+function move(p: Point, dx: i32): Point {
+    p.x += dx;
+    return p;
+}
+let p = new Point();
+p.x = 0;
+p.y = 0;
+let q = move(p, 5);

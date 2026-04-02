@@ -1,0 +1,4 @@
+@embedded.isr("TIMER1_COMPA")
+function timer1Handler(): void {
+    // handle interrupt
+}

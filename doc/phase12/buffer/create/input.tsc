@@ -1,0 +1,2 @@
+const buf = new Buffer(1024);
+console.log(buf.length);

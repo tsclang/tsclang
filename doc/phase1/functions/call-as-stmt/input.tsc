@@ -1,0 +1,4 @@
+function doSomething(): void {
+    console.log("done");
+}
+doSomething();

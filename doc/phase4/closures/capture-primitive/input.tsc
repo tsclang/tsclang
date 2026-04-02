@@ -1,0 +1,3 @@
+const base: i32 = 10;
+const add = (x: i32) => base + x;
+console.log(add(5));

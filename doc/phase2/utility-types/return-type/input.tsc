@@ -1,0 +1,6 @@
+function getAge(): i32 {
+    return 42;
+}
+type R = ReturnType<typeof getAge>;
+const x: R = 10;
+console.log(x);

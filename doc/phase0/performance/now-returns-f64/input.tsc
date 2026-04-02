@@ -1,0 +1,2 @@
+const t: f64 = performance.now()
+console.log(t >= 0.0)

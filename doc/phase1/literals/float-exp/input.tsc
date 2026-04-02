@@ -1,0 +1,2 @@
+console.log(1e3);
+console.log(2.5e-2);

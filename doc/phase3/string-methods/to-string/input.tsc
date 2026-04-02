@@ -1,0 +1,3 @@
+const s: string = "hello";
+const s2 = s.toString();
+console.log(s2);

@@ -1,0 +1,2 @@
+const result: i32 = ((x: i32) => x * 3)(7);
+console.log(result);

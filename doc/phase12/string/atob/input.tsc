@@ -1,0 +1,3 @@
+import { atob } from "std/string";
+const decoded = atob("aGVsbG8=");
+console.log(decoded);

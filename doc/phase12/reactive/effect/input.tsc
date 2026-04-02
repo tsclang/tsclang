@@ -1,0 +1,6 @@
+import { Signal, effect } from "std/reactive";
+const x = new Signal<i32>(1);
+effect(() => {
+    console.log(x.get());
+});
+x.set(2);

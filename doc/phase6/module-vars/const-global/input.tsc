@@ -1,0 +1,2 @@
+const MAX: i32 = 100;
+console.log(MAX);

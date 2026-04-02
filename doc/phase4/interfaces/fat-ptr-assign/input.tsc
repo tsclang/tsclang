@@ -1,0 +1,7 @@
+interface Drawable { draw(): void; }
+class Circle implements Drawable {
+    draw(): void { console.log("circle"); }
+}
+let c = new Circle();
+let shape: Drawable = c;
+shape.draw();

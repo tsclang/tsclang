@@ -1,0 +1,4 @@
+async function run(): void {
+    await sleep(100);
+    console.log("after sleep");
+}

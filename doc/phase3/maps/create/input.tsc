@@ -1,0 +1,2 @@
+const m = new Map<string, i32>();
+console.log(m.size);

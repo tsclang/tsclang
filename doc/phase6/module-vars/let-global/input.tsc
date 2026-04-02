@@ -1,0 +1,7 @@
+let count: i32 = 0;
+function inc(): void {
+    count = count + 1;
+}
+inc();
+inc();
+console.log(count);
