@@ -1,0 +1,5 @@
+#[target(avr)]
+import { I2C } from "std/hal";
+const data: u8[] = [0x01, 0x02];
+I2C.write(0x48, data);
+const rx = I2C.read(0x48, 2);

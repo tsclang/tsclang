@@ -1,0 +1,11 @@
+class Counter {
+    value: i32;
+    mut increment(): void {
+        this.value = this.value + 1;
+    }
+}
+let c = new Counter();
+c.value = 0;
+c.increment();
+c.increment();
+console.log(c.value);

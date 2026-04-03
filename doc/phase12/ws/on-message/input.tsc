@@ -1,0 +1,5 @@
+import { WebSocket } from "std/ws";
+const ws = new WebSocket("ws://localhost:8080");
+ws.onMessage((msg: string) => {
+    console.log(msg);
+});

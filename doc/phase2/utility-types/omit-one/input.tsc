@@ -1,0 +1,4 @@
+interface User { name: string; age: i32; passwordHash: string; }
+type UserPublic = Omit<User, "passwordHash">;
+const u: UserPublic = { name: "Alice", age: 30 };
+console.log(u.name);

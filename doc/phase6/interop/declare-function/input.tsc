@@ -1,0 +1,2 @@
+declare function sin(x: f64): f64;
+console.log(sin(0.0));

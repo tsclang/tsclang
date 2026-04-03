@@ -1,0 +1,1 @@
+Record key must be a string literal union or string enum, not i32

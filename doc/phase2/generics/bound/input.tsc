@@ -1,0 +1,5 @@
+function getId<T implements { id: i32 }>(obj: T): i32 {
+    return obj.id;
+}
+const user = { id: 7, name: "Alice" };
+console.log(getId(user));

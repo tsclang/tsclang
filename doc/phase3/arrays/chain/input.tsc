@@ -1,0 +1,5 @@
+let arr: i32[] = new Array<i32>(50);
+arr.resize(10, 0).fill(7, 0, 5);
+console.log(arr[0]);
+console.log(arr[4]);
+console.log(arr[5]);

@@ -1,0 +1,2 @@
+const x = -1 as u32;
+console.log(x);

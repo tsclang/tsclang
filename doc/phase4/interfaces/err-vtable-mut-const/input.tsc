@@ -1,0 +1,10 @@
+interface Mutable {
+    set(v: i32): void;
+}
+class Box {
+    value: i32;
+    set(v: i32): void { this.value = v; }
+}
+const b = new Box();
+function mutate(m: Mut<Mutable>): void { m.set(99); }
+mutate(b);

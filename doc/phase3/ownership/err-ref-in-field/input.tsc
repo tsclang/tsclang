@@ -1,0 +1,3 @@
+class Container {
+    ptr: Ref<i32[]>;
+}

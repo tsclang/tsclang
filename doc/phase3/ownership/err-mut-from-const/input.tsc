@@ -1,0 +1,5 @@
+function fill(arr: Mut<i32[]>): void {
+    arr[0] = 99;
+}
+const nums: i32[] = [1, 2, 3];
+fill(nums);

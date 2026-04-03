@@ -1,0 +1,4 @@
+const pair: [i32, string] = [42, "answer"];
+const [a, b] = pair;
+console.log(a);
+console.log(b);

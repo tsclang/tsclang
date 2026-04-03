@@ -1,0 +1,5 @@
+import { HashMap } from "std/embedded";
+const m = new HashMap<string, i32>(16);
+m.set("a", 42);
+const v = m.get("a");
+if (v != null) console.log(v);

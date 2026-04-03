@@ -1,0 +1,9 @@
+class Node {
+    value: i32;
+    next: Weak<Node> | null;
+}
+let n = new Shared<Node>();
+n.value = 1;
+n.next = null;
+let w = new Weak<Node>(n);
+console.log(n.value);

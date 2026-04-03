@@ -1,0 +1,7 @@
+async function delay(): i32 {
+    return 10;
+}
+async function run(): i32 {
+    const x = await delay();
+    return x + 1;
+}

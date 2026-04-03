@@ -1,0 +1,19 @@
+let callCount: i32 = 0;
+function counted(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        callCount += 1;
+        return orig.apply(this, args);
+    };
+    return desc;
+}
+class Svc {
+    @counted
+    run(): void {
+        console.log("run");
+    }
+}
+const s = new Svc();
+s.run();
+s.run();
+console.log(callCount);

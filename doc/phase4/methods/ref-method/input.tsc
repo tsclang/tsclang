@@ -1,0 +1,11 @@
+class Point {
+    x: f64;
+    y: f64;
+    distSquared(): f64 {
+        return this.x * this.x + this.y * this.y;
+    }
+}
+const p = new Point();
+p.x = 3.0;
+p.y = 4.0;
+console.log(p.distSquared());

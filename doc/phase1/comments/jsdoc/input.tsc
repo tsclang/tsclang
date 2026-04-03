@@ -1,0 +1,2 @@
+/** @param x описание */
+console.log("ok");

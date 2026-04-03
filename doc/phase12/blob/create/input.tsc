@@ -1,0 +1,5 @@
+import { Blob } from "std/blob";
+const buf = new Buffer(3);
+buf[0] = 72; buf[1] = 105; buf[2] = 0;
+const b = new Blob([buf], { type: "text/plain" });
+console.log(b.size);

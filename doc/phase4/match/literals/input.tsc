@@ -1,0 +1,7 @@
+const x: i32 = 5;
+const result = match x {
+    0 => "zero",
+    1..4 => "small",
+    _ => "other",
+};
+console.log(result);

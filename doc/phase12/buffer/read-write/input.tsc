@@ -1,0 +1,3 @@
+const buf = new Buffer(4);
+buf[0] = 42;
+console.log(buf[0]);

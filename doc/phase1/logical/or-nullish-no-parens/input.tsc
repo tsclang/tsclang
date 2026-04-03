@@ -1,0 +1,4 @@
+let a: i32 = 1;
+let b: i32 = 2;
+let c: i32 = 3;
+let x = a || b ?? c;

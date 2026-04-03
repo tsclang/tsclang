@@ -1,0 +1,1 @@
+TypeError: 'new Array<Sprite>()' requires a capacity argument when allocator is "static"; use 'new Array<Sprite>(N)'

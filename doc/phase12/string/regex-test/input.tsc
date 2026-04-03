@@ -1,0 +1,4 @@
+import { Regex } from "std/string";
+const r = new Regex("^\d+$");
+console.log(r.test("123"));
+console.log(r.test("abc"));

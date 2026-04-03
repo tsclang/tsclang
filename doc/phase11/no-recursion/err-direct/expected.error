@@ -1,0 +1,1 @@
+TypeError: Direct recursion detected in 'f()': recursion is forbidden when no_recursion is true

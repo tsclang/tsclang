@@ -1,0 +1,2 @@
+const enum Pin { PA0, PA1 }
+const v = Pin.fromValue(0);

@@ -1,0 +1,3 @@
+import { encodeUtf8 } from "std/string";
+const bytes = encodeUtf8("hi");
+console.log(bytes.length);

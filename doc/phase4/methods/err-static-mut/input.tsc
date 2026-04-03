@@ -1,0 +1,3 @@
+class Foo {
+    static mut bar(): void {}
+}

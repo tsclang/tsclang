@@ -1,0 +1,5 @@
+#[target(avr)]
+@embedded.inline class Bad {
+    x: i32;
+    compute(): i32 { return this.x * 2; }
+}

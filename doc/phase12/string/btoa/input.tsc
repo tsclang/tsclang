@@ -1,0 +1,3 @@
+import { btoa } from "std/string";
+const encoded = btoa("hello");
+console.log(encoded);

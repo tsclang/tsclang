@@ -1,0 +1,3 @@
+import { StaticMap } from "std/embedded";
+const key = "LDA";
+const m = new StaticMap({ [key]: 0xA9 });

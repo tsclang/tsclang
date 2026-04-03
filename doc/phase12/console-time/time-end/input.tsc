@@ -1,0 +1,7 @@
+console.time("op");
+let x: i32 = 0;
+for (let i: i32 = 0; i < 1000; i++) {
+    x = x + i;
+}
+console.timeEnd("op");
+console.log(x);

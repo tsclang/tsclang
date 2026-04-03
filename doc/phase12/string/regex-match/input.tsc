@@ -1,0 +1,6 @@
+import { Regex } from "std/string";
+const r = new Regex("(\w+)");
+const m = r.match("hello");
+if (m != null) {
+    console.log(m[0]);
+}

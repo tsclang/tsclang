@@ -1,0 +1,1 @@
+"Shared<T>" requires a heap allocator; "none" allocator does not support ARC

@@ -1,0 +1,2 @@
+interface User { name: string; }
+type Bad = Omit<User, "missing">;

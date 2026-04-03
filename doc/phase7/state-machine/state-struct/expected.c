@@ -1,0 +1,14 @@
+#include "runtime.h"
+
+typedef struct {
+    int32_t _state;
+    String url;
+    String result;
+    bool _done;
+    String _result;
+} fetch_state;
+
+int main(void) {
+    TSC_INIT();
+    return 0;
+}

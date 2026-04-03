@@ -1,0 +1,11 @@
+class Err { message: string; }
+async function fail(): void throws Err {
+    throw new Err("boom");
+}
+async function run(): void {
+    try {
+        await fail();
+    } catch (e: Err) {
+        console.log("caught");
+    }
+}

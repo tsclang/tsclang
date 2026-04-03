@@ -1,0 +1,9 @@
+class Data {
+    value: i32;
+}
+let d = new Data();
+d.value = 42;
+const getVal = (): i32 => {
+    return d.value;
+};
+console.log(getVal());

@@ -1,0 +1,13 @@
+class FileError { message: string; }
+class NetworkError { message: string; }
+function risky(flag: bool): void throws FileError | NetworkError {
+    if (flag) throw new FileError("file");
+    else throw new NetworkError("net");
+}
+try {
+    risky(true);
+} catch (e: FileError) {
+    console.log("file err");
+} catch (e: NetworkError) {
+    console.log("net err");
+}

@@ -1,0 +1,5 @@
+type Dir = "north" | "south" | "east" | "west";
+function move(dir: Dir): void {
+    console.log(dir.toString());
+}
+move("east");

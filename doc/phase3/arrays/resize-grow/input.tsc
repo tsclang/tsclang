@@ -1,0 +1,4 @@
+let arr: i32[] = [1, 2];
+arr.resize(4, 99);
+console.log(arr.length);
+console.log(arr[3]);

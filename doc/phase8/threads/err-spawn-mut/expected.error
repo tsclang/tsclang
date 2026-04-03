@@ -1,0 +1,1 @@
+TypeError: Cannot capture mutable variable 'x' by reference in a spawn block; use Shared<T> or Atomic<T>

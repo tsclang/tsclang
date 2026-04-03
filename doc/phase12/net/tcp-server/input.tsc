@@ -1,0 +1,4 @@
+import { net } from "std/net";
+net.listen(9090, (sock) => {
+    sock.close();
+});

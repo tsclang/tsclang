@@ -1,0 +1,2 @@
+const arr: i32[] = [2, 4, 6];
+console.log(arr.every(x => x % 2 == 0));

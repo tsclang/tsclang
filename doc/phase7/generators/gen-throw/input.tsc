@@ -1,0 +1,5 @@
+class GenErr { message: string; }
+function* safe(): Generator<i32> throws GenErr {
+    yield 1;
+    throw new GenErr("oops");
+}

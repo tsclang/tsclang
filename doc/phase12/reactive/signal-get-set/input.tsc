@@ -1,0 +1,4 @@
+import { Signal } from "std/reactive";
+const count = new Signal<i32>(0);
+count.set(42);
+console.log(count.get());

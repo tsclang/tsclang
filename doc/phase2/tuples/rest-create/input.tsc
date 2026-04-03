@@ -1,0 +1,3 @@
+type Row = [i32, ...i32[]];
+let r: Row = [10, 20, 30, 40];
+console.log(r[0]);

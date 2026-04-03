@@ -1,0 +1,3 @@
+let counter = new Atomic<i32>(0);
+counter.store(42);
+console.log(counter.load());

@@ -1,0 +1,2 @@
+import { GPIO } from "std/hal";
+GPIO.output(1);

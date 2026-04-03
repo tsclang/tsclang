@@ -1,0 +1,5 @@
+class Foo {
+    private x: i32;
+}
+const f = new Foo();
+console.log(f.x);

@@ -1,0 +1,8 @@
+const score: i32 = 75;
+const grade = match score {
+    90..100 => "A",
+    70..89 => "B",
+    50..69 => "C",
+    _ => "F",
+};
+console.log(grade);

@@ -1,0 +1,5 @@
+let x: i32 = 10;
+unsafe {
+    let ptr = &x as *i32;
+    console.log(*ptr);
+}

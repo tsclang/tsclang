@@ -1,0 +1,5 @@
+type Point = { x: f64; y: f64 };
+function dist(p: Point): f64 {
+    return p.x * p.x + p.y * p.y;
+}
+console.log(dist({ x: 3.0, y: 4.0 }));

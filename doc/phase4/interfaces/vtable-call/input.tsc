@@ -1,0 +1,15 @@
+interface Drawable {
+    draw(): void;
+}
+class Circle {
+    radius: f64;
+    draw(): void {
+        console.log("circle");
+    }
+}
+function render(d: Drawable): void {
+    d.draw();
+}
+let c = new Circle();
+c.radius = 1.0;
+render(c);

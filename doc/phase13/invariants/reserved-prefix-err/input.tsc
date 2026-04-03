@@ -1,0 +1,3 @@
+class ref_User {
+    x: i32;
+}

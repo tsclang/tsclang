@@ -1,0 +1,11 @@
+class Builder {
+    value: i32;
+    set(v: i32): Builder {
+        this.value = v;
+        return this;
+    }
+}
+let b = new Builder();
+b.value = 0;
+b = b.set(42);
+console.log(b.value);

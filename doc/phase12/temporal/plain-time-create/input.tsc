@@ -1,0 +1,4 @@
+import { PlainTime } from "std/temporal";
+const t = PlainTime.from(14, 30, 0);
+console.log(t.hour);
+console.log(t.minute);

@@ -1,0 +1,4 @@
+#[profile(allocator: "none")]
+class Node { x: i32; y: i32; }
+let n: Node = { x: 0, y: 0 };
+console.log(n.x);

@@ -1,0 +1,8 @@
+#[target(avr)]
+import { Tasks } from "std/embedded";
+const tasks = new Tasks<1>();
+function* blink(): Generator<void> {
+    yield;
+}
+tasks.add("blink", blink);
+tasks.run();

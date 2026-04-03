@@ -1,0 +1,1 @@
+ConfigError: Version conflict: 'shared-dep' required as '^1.0.0' by pkgA and '^2.0.0' by pkgB; incompatible (flat tree)

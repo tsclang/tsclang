@@ -1,0 +1,3 @@
+class myClass {
+    x: i32;
+}

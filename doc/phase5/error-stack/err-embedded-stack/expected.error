@@ -1,0 +1,1 @@
+TypeError: Error stack traces are not supported on embedded targets (avr)

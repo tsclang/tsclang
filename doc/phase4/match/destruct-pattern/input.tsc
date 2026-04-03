@@ -1,0 +1,7 @@
+const pair: [i32, string] = [1, "one"];
+const desc = match(pair) {
+    [1, _] => "starts with one",
+    [2, _] => "starts with two",
+    _ => "other",
+};
+console.log(desc);

@@ -1,0 +1,4 @@
+interface User { name: string; age: i32; email: string; role: string; }
+type Minimal = Omit<User, "age" | "email">;
+const u: Minimal = { name: "X", role: "admin" };
+console.log(u.role);

@@ -1,0 +1,7 @@
+const a: i32[] = [1, 2];
+const b: i32[] = [3, 4];
+const c: i32[] = [...a, ...b];
+console.log(c[0]);
+console.log(c[1]);
+console.log(c[2]);
+console.log(c[3]);

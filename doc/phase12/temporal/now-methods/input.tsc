@@ -1,0 +1,5 @@
+import { Now } from "std/temporal";
+const d = Now.plainDate("UTC");
+console.log(d.year > 2020);
+const i = Now.instant();
+console.log(i.epochNanoseconds > 0);

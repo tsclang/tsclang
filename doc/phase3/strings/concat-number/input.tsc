@@ -1,0 +1,3 @@
+const age: i32 = 30;
+const msg = "age: " + age;
+console.log(msg);

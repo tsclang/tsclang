@@ -1,0 +1,1 @@
+TypeError: Class 'Foo' does not implement interface 'Printable': missing method 'debug'

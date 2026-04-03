@@ -1,0 +1,2 @@
+let t: readonly [i32, string] = [10, "hello"];
+t[0] = 5;

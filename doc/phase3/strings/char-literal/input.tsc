@@ -1,0 +1,2 @@
+const c: u8 = 'A';
+console.log(c);

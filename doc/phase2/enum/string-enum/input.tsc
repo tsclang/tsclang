@@ -1,0 +1,6 @@
+enum Status {
+    Ok = "OK",
+    Fail = "FAIL",
+}
+console.log(Status.Ok.toString());
+console.log(Status.Fail.toString());

@@ -1,0 +1,12 @@
+interface Drawable {
+    draw(): void;
+}
+class Circle implements Drawable {
+    radius: f64;
+    draw(): void {
+        console.log("circle");
+    }
+}
+let c = new Circle();
+c.radius = 5.0;
+c.draw();

@@ -1,0 +1,8 @@
+class Point {
+    x: f64;
+    y: f64;
+}
+const p = new Point();
+p.x = 1.0;
+p.y = 2.0;
+console.log(p.x);

@@ -1,0 +1,1 @@
+TypeError: Cannot capture 'Data' by move into spawn block; use Shared<Data> for shared ownership across threads

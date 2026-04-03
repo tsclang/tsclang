@@ -1,0 +1,20 @@
+function clamp(min: i32, max: i32) {
+    return function(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+        const orig = desc.value;
+        desc.value = function(x: i32) {
+            const v = x < min ? min : (x > max ? max : x);
+            return orig.apply(this, [v]);
+        };
+        return desc;
+    };
+}
+class Calc {
+    @clamp(0, 100)
+    set(x: i32): void {
+        console.log(x);
+    }
+}
+const c = new Calc();
+c.set(-5);
+c.set(50);
+c.set(150);

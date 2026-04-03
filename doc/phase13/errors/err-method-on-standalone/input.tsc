@@ -1,0 +1,3 @@
+decorator function methodOnly(desc: MethodDesc): MethodDesc { return desc; }
+@methodOnly
+function foo(): void {}

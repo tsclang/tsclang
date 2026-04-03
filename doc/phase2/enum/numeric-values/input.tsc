@@ -1,0 +1,4 @@
+enum Dir { North, South, East, West }
+const vals = Dir.values();
+console.log(vals[0]);
+console.log(vals[3]);

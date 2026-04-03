@@ -1,0 +1,4 @@
+const triple: [i32, i32, i32] = [1, 2, 3];
+const [x, , z] = triple;
+console.log(x);
+console.log(z);

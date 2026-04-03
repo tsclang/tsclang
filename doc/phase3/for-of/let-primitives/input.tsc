@@ -1,0 +1,5 @@
+let arr: i32[] = [10, 20, 30];
+for (let item of arr) {
+    item = item + 1;
+    console.log(item);
+}

@@ -1,0 +1,10 @@
+interface Printable {
+    print(): void;
+    debug(): void;
+}
+class Foo {
+    print(): void { console.log("foo"); }
+}
+function show(p: Printable): void { p.print(); }
+let f = new Foo();
+show(f);

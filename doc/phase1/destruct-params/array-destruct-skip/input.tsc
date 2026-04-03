@@ -1,0 +1,5 @@
+function third([, , c]: i32[]): i32 {
+    return c;
+}
+const arr: i32[] = [1, 2, 7];
+console.log(third(arr));

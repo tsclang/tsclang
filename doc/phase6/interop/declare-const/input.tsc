@@ -1,0 +1,2 @@
+declare const SQLITE_OK: i32 = 0;
+console.log(SQLITE_OK);

@@ -1,0 +1,7 @@
+class Foo { x: i32; }
+class Bar { y: i32; }
+let f = new Foo();
+f.x = 1;
+if (f instanceof Bar) {
+    console.log("yes");
+}

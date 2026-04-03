@@ -1,0 +1,11 @@
+class Animal {
+    name: string;
+}
+class Dog extends Animal {
+    breed: string;
+}
+let d = new Dog();
+d.name = "Rex";
+d.breed = "Labrador";
+console.log(d.name);
+console.log(d.breed);

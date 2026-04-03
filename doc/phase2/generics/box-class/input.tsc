@@ -1,0 +1,11 @@
+class Box<T> {
+    value: T;
+    constructor(v: T) {
+        this.value = v;
+    }
+    get(): T {
+        return this.value;
+    }
+}
+const b = new Box<i32>(42);
+console.log(b.get());

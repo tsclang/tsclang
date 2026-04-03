@@ -1,0 +1,8 @@
+class Err { message: string; }
+function get(): i32 throws Err {
+    return 42;
+}
+function run(): void throws Err {
+    const x = get()!;
+    console.log(x);
+}

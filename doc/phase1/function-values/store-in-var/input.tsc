@@ -1,0 +1,5 @@
+function double(x: i32): i32 {
+    return x * 2;
+}
+const fn = double;
+console.log(fn(5));

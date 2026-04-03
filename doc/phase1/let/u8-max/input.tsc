@@ -1,0 +1,2 @@
+let x: u8 = 255;
+console.log(x);

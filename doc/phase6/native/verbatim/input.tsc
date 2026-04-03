@@ -1,0 +1,1 @@
+native "printf(\"hello from C\n\");";

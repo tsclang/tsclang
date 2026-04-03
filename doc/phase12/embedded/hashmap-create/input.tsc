@@ -1,0 +1,3 @@
+import { HashMap } from "std/embedded";
+const m = new HashMap<string, i32>(64);
+console.log(m.has("x"));

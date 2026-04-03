@@ -1,0 +1,6 @@
+function wrap<T>(x: T): T {
+    return x;
+}
+const a = wrap<i32>(10);
+const b = wrap(20);
+console.log(a + b);

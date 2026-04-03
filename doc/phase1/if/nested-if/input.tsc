@@ -1,0 +1,7 @@
+if (true) {
+    if (false) {
+        console.log("inner-then")
+    } else {
+        console.log("inner-else")
+    }
+}

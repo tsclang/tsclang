@@ -1,0 +1,2 @@
+let x: i16 = 32767;
+console.log(x);

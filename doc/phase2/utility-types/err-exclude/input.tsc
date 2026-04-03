@@ -1,0 +1,1 @@
+type E = Exclude<string | i32, i32>;

@@ -1,0 +1,7 @@
+console.time("op");
+let sum: i32 = 0;
+for (let i: i32 = 0; i < 100; i++) {
+    sum += i;
+}
+console.timeEnd("op");
+console.trace("done");

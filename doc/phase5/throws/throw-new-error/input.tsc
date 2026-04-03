@@ -1,0 +1,9 @@
+class ParseError {
+    message: string;
+}
+function parse(s: string): i32 throws ParseError {
+    if (s == "bad") {
+        throw new ParseError("invalid input");
+    }
+    return 0;
+}

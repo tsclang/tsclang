@@ -1,0 +1,7 @@
+enum Dir { North, South, East }
+const d: Dir = Dir.East;
+switch (d) {
+    case Dir.North:
+        console.log("N");
+        break;
+}

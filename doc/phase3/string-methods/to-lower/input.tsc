@@ -1,0 +1,2 @@
+const s: string = "WORLD";
+console.log(s.toLowerCase());

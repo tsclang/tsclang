@@ -1,0 +1,4 @@
+function logName<T>(obj: Pick<T, "name">): void {
+    console.log(obj.name);
+}
+logName({ name: "Alice", age: 30 });

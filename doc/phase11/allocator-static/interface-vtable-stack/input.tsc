@@ -1,0 +1,7 @@
+#[profile(allocator: "static")]
+interface Drawable { draw(): void; }
+class Icon {
+    draw(): void { }
+}
+let icon = new Icon();
+const d: Drawable = icon as Drawable;

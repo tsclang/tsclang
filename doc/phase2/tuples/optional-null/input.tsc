@@ -1,0 +1,3 @@
+type Config = [string, i32?];
+let a: Config = ["localhost"];
+console.log(a[1]);

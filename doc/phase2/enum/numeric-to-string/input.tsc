@@ -1,0 +1,2 @@
+enum Dir { North, South }
+console.log(Dir.North.toString());

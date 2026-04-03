@@ -1,0 +1,7 @@
+const ch = new Channel<i32>(3);
+ch.send(1);
+ch.send(2);
+ch.close();
+while (!ch.isEmpty()) {
+    console.log(ch.receive());
+}

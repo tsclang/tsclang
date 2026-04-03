@@ -1,0 +1,6 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+function foo(): void {
+    throw new IOError("bad");
+}

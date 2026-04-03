@@ -1,0 +1,1 @@
+const x = (42 as i32).toFixed(2);

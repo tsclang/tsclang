@@ -1,0 +1,7 @@
+#[target(avr)]
+async function fetch(): void { }
+
+#[isr(TIMER1_COMPA)]
+async function onTimer(): void {
+    await fetch();
+}

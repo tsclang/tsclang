@@ -1,0 +1,1 @@
+ConfigError: tsc.package.json: unknown key 'unknownKey' in builds.desktop

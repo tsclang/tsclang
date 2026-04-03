@@ -1,0 +1,5 @@
+#[target(avr)]
+@embedded.pool(8) class Bullet {
+    x: u8;
+    active: bool;
+}

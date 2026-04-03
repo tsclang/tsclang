@@ -1,0 +1,10 @@
+decorator function log(desc: FunctionDesc): FunctionDesc {
+    desc.before(() => { console.log("before"); });
+    desc.after(() => { console.log("after"); });
+    return desc;
+}
+@log
+function greet(name: string): void {
+    console.log(name);
+}
+greet("Alice");

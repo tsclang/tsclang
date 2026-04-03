@@ -1,0 +1,1 @@
+@embedded.inline class Vec2 { x: f32; y: f32; }

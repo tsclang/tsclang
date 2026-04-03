@@ -1,0 +1,6 @@
+let x: i32 = 99;
+switch (x) {
+    case 1:
+        console.log("one");
+        break;
+}

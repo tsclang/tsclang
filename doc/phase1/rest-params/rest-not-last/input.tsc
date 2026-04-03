@@ -1,0 +1,3 @@
+function f(...args: i32[], x: i32): void {
+    console.log(x);
+}

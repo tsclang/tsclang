@@ -1,0 +1,2 @@
+let x: u16 = 65535;
+console.log(x);

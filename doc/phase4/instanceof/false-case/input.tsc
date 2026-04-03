@@ -1,0 +1,15 @@
+interface Animal {
+    speak(): void;
+}
+class Dog {
+    speak(): void { console.log("woof"); }
+}
+class Cat {
+    speak(): void { console.log("meow"); }
+}
+let a: Animal = new Dog() as Animal;
+if (a instanceof Cat) {
+    console.log("cat");
+} else {
+    console.log("not cat");
+}

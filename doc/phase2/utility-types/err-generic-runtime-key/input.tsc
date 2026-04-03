@@ -1,0 +1,3 @@
+function pick<T, K extends keyof T>(obj: T, key: K): Pick<T, K> {
+    return obj;
+}

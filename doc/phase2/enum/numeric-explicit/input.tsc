@@ -1,0 +1,6 @@
+enum Color {
+    Red = 1,
+    Green = 5,
+    Blue = 10,
+}
+console.log(Color.Green);

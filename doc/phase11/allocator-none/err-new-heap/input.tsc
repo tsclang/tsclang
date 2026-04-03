@@ -1,0 +1,3 @@
+#[profile(allocator: "none")]
+class Node { value: i32; }
+let n = new Node();

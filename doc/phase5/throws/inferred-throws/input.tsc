@@ -1,0 +1,9 @@
+class MyError {
+    message: string;
+}
+function risky(): void throws MyError {
+    throw new MyError("oops");
+}
+function wrapper(): void throws MyError {
+    risky();
+}

@@ -1,0 +1,5 @@
+const s: string = "xyz";
+const n: i32 | null = tryParseInt(s);
+if (n == null) {
+    console.log("null");
+}

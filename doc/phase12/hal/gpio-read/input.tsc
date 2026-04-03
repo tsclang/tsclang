@@ -1,0 +1,4 @@
+#[target(avr)]
+import { GPIO } from "std/hal";
+GPIO.input(2);
+const v = GPIO.read(2);

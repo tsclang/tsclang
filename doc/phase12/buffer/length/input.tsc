@@ -1,0 +1,3 @@
+import { Buffer } from "std/buffer";
+const buf = new Buffer(256);
+console.log(buf.length);

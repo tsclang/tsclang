@@ -1,0 +1,3 @@
+#[target(avr)]
+import { avr, SleepMode } from "std/avr";
+avr.sleep(SleepMode.Idle);

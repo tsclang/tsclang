@@ -1,0 +1,2 @@
+let arr: i32[] = new Array(10);
+console.log(arr.capacity);

@@ -1,0 +1,5 @@
+import { readAll, process } from "std/io";
+async function run(): void {
+    const data = await readAll(process.stdin);
+    console.log(data.length);
+}

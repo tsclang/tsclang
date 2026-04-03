@@ -1,0 +1,7 @@
+class Box {
+    x: i32;
+}
+let b = new Box();
+b.x = 1;
+const fn = (): i32 => b.x;
+console.log(b.x);

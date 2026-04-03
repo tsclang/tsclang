@@ -1,0 +1,1 @@
+const reg: Volatile<u32> = 0x40020000 as Volatile<u32>;

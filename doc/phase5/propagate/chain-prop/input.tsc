@@ -1,0 +1,12 @@
+class Err { message: string; }
+function step1(): i32 throws Err {
+    return 1;
+}
+function step2(x: i32): i32 throws Err {
+    return x + 1;
+}
+function run(): i32 throws Err {
+    const a = step1()?;
+    const b = step2(a)?;
+    return b;
+}

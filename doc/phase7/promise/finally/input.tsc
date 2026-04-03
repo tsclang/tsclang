@@ -1,0 +1,10 @@
+async function work(): void {
+    console.log("working");
+}
+async function run(): void {
+    try {
+        await work();
+    } finally {
+        console.log("done");
+    }
+}

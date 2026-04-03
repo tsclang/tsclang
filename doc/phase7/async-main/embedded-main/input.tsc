@@ -1,0 +1,4 @@
+#[target(avr)]
+async function main(): void {
+    console.log("boot");
+}

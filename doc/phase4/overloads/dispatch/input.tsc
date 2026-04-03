@@ -1,0 +1,9 @@
+function process(x: i32): string;
+function process(x: f64): string;
+function process(x: i32 | f64): string {
+    return "processed";
+}
+const a = process(42);
+const b = process(3.14);
+console.log(a);
+console.log(b);

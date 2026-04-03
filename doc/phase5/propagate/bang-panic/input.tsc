@@ -1,0 +1,8 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+function readFile(path: string): string throws IOError {
+    throw new IOError("fail");
+}
+const content = readFile("x.txt")!;
+console.log(content);

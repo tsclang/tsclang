@@ -1,0 +1,2 @@
+const n: usize = 42;
+console.log(n);

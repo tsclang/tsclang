@@ -1,0 +1,16 @@
+#include "runtime.h"
+
+typedef struct { uint8_t *data; size_t length; } Buffer;
+typedef struct { uint8_t *data; size_t length; } DataView;
+
+int main(void) {
+    TSC_INIT();
+    uint8_t _buf_data_0[4] = {0};
+    const Buffer buf = {.data = _buf_data_0, .length = 4};
+    DataView dv = {.data = buf.data, .length = buf.length};
+    dv.data[0] = 0x01;
+    dv.data[1] = 0x00;
+    uint16_t _v16; memcpy(&_v16, dv.data + 0, 2);
+    printf("%u\n", (uint16_t)_v16);
+    return 0;
+}

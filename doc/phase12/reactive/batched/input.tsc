@@ -1,0 +1,13 @@
+import { Signal, effect, batch } from "std/reactive";
+const a = new Signal<i32>(1);
+const b = new Signal<i32>(2);
+let calls: i32 = 0;
+effect(() => {
+    a.get(); b.get();
+    calls += 1;
+});
+batch(() => {
+    a.set(10);
+    b.set(20);
+});
+console.log(calls);

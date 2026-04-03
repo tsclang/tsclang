@@ -1,0 +1,5 @@
+function max(a: i32, b: i32): i32 {
+    if (a > b) { return a; }
+    return b;
+}
+console.log(max(3, 7));

@@ -1,0 +1,2 @@
+const s = String(42);
+console.log(s);

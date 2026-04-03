@@ -1,0 +1,10 @@
+class User {
+    name: string;
+    age: i32;
+}
+const user = new User();
+user.name = "Alice";
+user.age = 30;
+const { name, age } = user;
+console.log(name);
+console.log(age);

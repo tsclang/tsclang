@@ -1,0 +1,1 @@
+const obj = Object.fromEntries<{ a: i32; c: i32 }>([["a", 1], ["b", 2]]);

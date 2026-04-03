@@ -1,0 +1,4 @@
+const id = setTimeout(() => {
+    console.log("never");
+}, 1000);
+clearTimeout(id);

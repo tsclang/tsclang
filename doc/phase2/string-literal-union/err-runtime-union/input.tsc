@@ -1,0 +1,1 @@
+type Mixed = "north" | i32;

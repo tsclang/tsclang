@@ -1,0 +1,5 @@
+async function foo(arr: Ref<i32[]>): Promise<void> {
+    const x = arr[0];
+    await sleep(10);
+    console.log(x);
+}

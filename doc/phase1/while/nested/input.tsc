@@ -1,0 +1,9 @@
+let i: i32 = 0
+while (i < 2) {
+    let j: i32 = 0
+    while (j < 2) {
+        console.log(i, j)
+        j++
+    }
+    i++
+}

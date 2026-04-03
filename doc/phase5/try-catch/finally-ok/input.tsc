@@ -1,0 +1,11 @@
+class AppError { message: string; }
+function ok(): void throws AppError {
+    // no throw
+}
+try {
+    ok();
+} catch (e: AppError) {
+    console.log("error");
+} finally {
+    console.log("done");
+}

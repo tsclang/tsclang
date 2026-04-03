@@ -1,0 +1,4 @@
+type Point = [x: f64, y: f64];
+const p: Point = [3.0, 4.0];
+console.log(p[0]);
+console.log(p.x);

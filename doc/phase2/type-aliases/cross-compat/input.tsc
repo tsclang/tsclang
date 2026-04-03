@@ -1,0 +1,5 @@
+type Pt1 = { x: f64; y: f64 };
+type Pt2 = { x: f64; y: f64 };
+const a: Pt1 = { x: 1.0, y: 2.0 };
+const b: Pt2 = a;
+console.log(b.x);

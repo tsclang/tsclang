@@ -1,0 +1,2 @@
+let x: i32 = 2147483647;
+console.log(x);

@@ -1,0 +1,9 @@
+class Box {
+    x: i32;
+}
+let b = new Box();
+b.x = 1;
+function take(m: Mut<Box>): void { m.x = 2; }
+function take2(m: Mut<Box>): void { m.x = 3; }
+take(b);
+take2(b);

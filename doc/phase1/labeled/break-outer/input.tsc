@@ -1,0 +1,14 @@
+let found: bool = false;
+let i: i32 = 0;
+outer: while (i < 3) {
+    let j: i32 = 0;
+    while (j < 3) {
+        if (i == 1 && j == 1) {
+            found = true;
+            break outer;
+        }
+        j++;
+    }
+    i++;
+}
+console.log(found);

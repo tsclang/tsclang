@@ -1,0 +1,3 @@
+type Strings = [string, ...string[]];
+let s: Strings = ["first", "second", "third"];
+console.log(s[0]);

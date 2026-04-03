@@ -1,0 +1,7 @@
+function double(x: i32): i32 {
+    return x * 2;
+}
+function apply(f: (i32) => i32, x: i32): i32 {
+    return f(x);
+}
+console.log(apply(double, 7));

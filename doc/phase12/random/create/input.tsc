@@ -1,0 +1,4 @@
+import { Random } from "std/random";
+const r = new Random(42);
+const x = r.nextI32();
+console.log(typeof x);

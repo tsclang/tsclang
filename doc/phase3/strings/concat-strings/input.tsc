@@ -1,0 +1,4 @@
+const a: string = "hello";
+const b: string = " world";
+const c = a + b;
+console.log(c);

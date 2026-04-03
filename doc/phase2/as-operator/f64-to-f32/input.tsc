@@ -1,0 +1,3 @@
+const a: f64 = 1.5;
+const b: f32 = a as f32;
+console.log(b);

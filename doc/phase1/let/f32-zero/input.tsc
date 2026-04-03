@@ -1,0 +1,2 @@
+let x: f32 = 0.0;
+console.log(x);

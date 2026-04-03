@@ -1,0 +1,14 @@
+class Counter {
+    value: i32;
+}
+function increment(c: Mut<Counter>): void {
+    c.value += 1;
+}
+function read(c: Ref<Counter>): i32 {
+    return c.value;
+}
+let cnt = new Counter();
+cnt.value = 0;
+increment(cnt);
+increment(cnt);
+console.log(read(cnt));

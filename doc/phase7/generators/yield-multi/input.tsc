@@ -1,0 +1,9 @@
+function* multi(): Generator<string> {
+    yield "a";
+    yield "b";
+    yield "c";
+}
+const g = multi();
+console.log(g.next().value);
+console.log(g.next().value);
+console.log(g.next().value);

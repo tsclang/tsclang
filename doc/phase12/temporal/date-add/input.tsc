@@ -1,0 +1,5 @@
+import { PlainDate, Duration } from "std/temporal";
+const d = PlainDate.from(2024, 1, 1);
+const dur = Duration.from({ days: 10 });
+const result = d.add(dur);
+console.log(result.day);

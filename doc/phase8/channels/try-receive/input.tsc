@@ -1,0 +1,5 @@
+const ch = new Channel<i32>(1);
+const r = ch.tryReceive();
+if (r == null) {
+    console.log("empty");
+}

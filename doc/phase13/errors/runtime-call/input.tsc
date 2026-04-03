@@ -1,0 +1,18 @@
+function validate(min: i32) {
+    return function(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+        const orig = desc.value;
+        desc.value = function(x: i32) {
+            if (x < min) throw new Error("too small");
+            return orig.apply(this, [x]);
+        };
+        return desc;
+    };
+}
+class Calc {
+    @validate(0)
+    sqrt(x: i32): i32 {
+        return x;
+    }
+}
+const c = new Calc();
+console.log(c.sqrt(4));

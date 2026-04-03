@@ -1,0 +1,19 @@
+interface Named {
+    getName(): string;
+}
+interface Aged {
+    getAge(): i32;
+}
+class Person {
+    name: string;
+    age: i32;
+    getName(): string { return this.name; }
+    getAge(): i32 { return this.age; }
+}
+function greet(n: Named): void {
+    console.log(n.getName());
+}
+let p = new Person();
+p.name = "Alice";
+p.age = 30;
+greet(p);

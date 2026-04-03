@@ -1,0 +1,3 @@
+const s: string = "hello";
+const c = s.at(-1);
+console.log(c);

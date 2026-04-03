@@ -1,0 +1,2 @@
+const n: i32 = 42;
+const s: string = n as string;

@@ -1,0 +1,11 @@
+decorator function noop(desc: MethodDesc): MethodDesc {
+    return desc;
+}
+class Foo {
+    @noop
+    greet(): void {
+        console.log("hello");
+    }
+}
+const f = new Foo();
+f.greet();

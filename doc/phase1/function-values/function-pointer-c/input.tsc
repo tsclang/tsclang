@@ -1,0 +1,5 @@
+function square(x: i32): i32 {
+    return x * x;
+}
+const fns: ((i32) => i32)[] = [square];
+console.log(fns[0](4));

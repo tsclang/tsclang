@@ -1,0 +1,6 @@
+class User {
+    name: string;
+}
+const user = new User();
+user.name = "Alice";
+const ref = user as Ref<User>;

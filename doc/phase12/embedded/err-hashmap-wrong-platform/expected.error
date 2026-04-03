@@ -1,0 +1,1 @@
+TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation

@@ -1,0 +1,3 @@
+let a: i32 | null = null;
+let b: i32 | null = null;
+const c = a || b ?? 0;

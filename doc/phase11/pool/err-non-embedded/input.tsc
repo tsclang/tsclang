@@ -1,0 +1,1 @@
+@embedded.pool(16) class Sprite { x: i32; }

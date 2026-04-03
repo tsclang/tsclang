@@ -1,0 +1,9 @@
+#include "runtime.h"
+
+int main(void) {
+    TSC_INIT();
+    const String s = STR_LIT("3.14");
+    const double n = tsc_parse_f64(s);
+    printf("%g\n", n);
+    return 0;
+}

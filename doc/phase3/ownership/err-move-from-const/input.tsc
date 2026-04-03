@@ -1,0 +1,4 @@
+class Obj { x: i32; }
+const o = new Obj();
+o.x = 1;
+const p = o;

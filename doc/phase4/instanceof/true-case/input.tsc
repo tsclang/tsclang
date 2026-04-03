@@ -1,0 +1,12 @@
+interface Shape {
+    area(): f64;
+}
+class Circle {
+    radius: f64;
+    area(): f64 { return 3.14 * this.radius * this.radius; }
+}
+let c = new Circle();
+c.radius = 1.0;
+if (c instanceof Circle) {
+    console.log("is circle");
+}

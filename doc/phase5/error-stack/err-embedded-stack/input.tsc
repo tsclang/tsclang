@@ -1,0 +1,5 @@
+#[target(avr)]
+class AppError {
+    message: string;
+    stack: string;
+}

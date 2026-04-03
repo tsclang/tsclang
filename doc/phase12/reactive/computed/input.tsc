@@ -1,0 +1,6 @@
+import { Signal, computed } from "std/reactive";
+const x = new Signal<i32>(5);
+const doubled = computed(() => x.get() * 2);
+console.log(doubled.get());
+x.set(10);
+console.log(doubled.get());

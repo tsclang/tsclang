@@ -1,0 +1,8 @@
+class Obj {
+    x: i32;
+    consume(): Obj {
+        return this;
+    }
+}
+const o = new Obj();
+o.consume();

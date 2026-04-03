@@ -1,0 +1,5 @@
+import { URL } from "std/url";
+const u = new URL("https://example.com/?x=1&y=2");
+for (const [k, v] of u.searchParams) {
+    console.log(k);
+}

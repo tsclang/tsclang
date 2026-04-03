@@ -1,0 +1,16 @@
+function log(target: any, method: string, desc: PropertyDescriptor): PropertyDescriptor {
+    const orig = desc.value;
+    desc.value = function(...args: any[]) {
+        console.log("log");
+        return orig.apply(this, args);
+    };
+    return desc;
+}
+class Svc {
+    @log
+    static create(): Svc {
+        console.log("create");
+        return new Svc();
+    }
+}
+Svc.create();

@@ -1,0 +1,5 @@
+#[target(avr)]
+import { UART } from "std/hal";
+UART.init({ baud: 9600 });
+UART.write(0x41);
+const b = UART.read();

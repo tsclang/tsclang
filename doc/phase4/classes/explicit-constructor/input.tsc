@@ -1,0 +1,11 @@
+class Point {
+    x: f64;
+    y: f64;
+    constructor(x: f64, y: f64) {
+        this.x = x;
+        this.y = y;
+    }
+}
+const p = new Point(3.0, 4.0);
+console.log(p.x);
+console.log(p.y);

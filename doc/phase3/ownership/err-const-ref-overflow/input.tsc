@@ -1,0 +1,8 @@
+class Node {
+    value: i32;
+}
+function getRef(): Ref<Node> {
+    let n = new Node();
+    n.value = 42;
+    return n;
+}
