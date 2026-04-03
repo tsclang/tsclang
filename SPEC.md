@@ -43,6 +43,7 @@
 | **Функции** | Объявление, стрелочные функции, возвращаемые типы, вывод типа. |
 | **Перегрузка функций** | Перегрузка по типам и количеству параметров; C-output через name mangling (`foo_i32`, `foo_string`). |
 | **Ограничение: extern "C" запрещает перегрузку** | `extern "C"` функции не могут быть перегружены — манглинг невозможен. |
+| **Name mangling — формальная схема** | Полная EBNF-схема кодирования типов в C-имена: кодирование примитивов, пользовательских типов, методов, module slug, коллизии имён. |
 | **Дефолтные параметры** | Синтаксис и C-output для параметров по умолчанию. |
 | **Семантика передачи значений** | Примитивы копируются, сложные типы — move/borrow в зависимости от аннотации. |
 | **Операторы** | Арифметика, присваивание, сравнения, логика, битовые, прочие; таблица приоритетов. |
@@ -143,6 +144,7 @@
 | **async main** | Entry point с event loop; top-level `await`. |
 | **Рекурсивные async** | Ограничения; риски стека на embedded. |
 | **AbortSignal** | Отмена задач; `atomic_bool` на desktop vs `bool` на embedded; callbacks через event loop. |
+| **AsyncMutex** | Честная FIFO-очередь для координации async-функций на event loop; отличие от `Mutex` (std/sync, только для thread-контекста). |
 | **Threads (std/threads)** | OS-потоки; блокирующая модель; изолированы от event loop. |
 | **Atomic\<T\>** | Атомарные операции; два layout: stack (без escape) и heap (с refcount). |
 | **AtomicArray\<T\>** | Массив с атомарным доступом к элементам. |
@@ -156,6 +158,7 @@
 | **Embedded-аннотации** | `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
 | **@embedded.singleton** | Единственный экземпляр класса в BSS; `Cls.instance()` → `Mut<Cls>`; нет malloc. |
 | **@embedded.stack** | Статический стек для async-рекурсии на embedded: N frame slots в BSS. |
+| **Async generators** | `async function*` + `for await`: потоковая обработка данных; backpressure; C-output как state machine; недоступны на `heap: false`. |
 | **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
@@ -222,6 +225,11 @@
 | **std/ws** | WebSocket клиент и сервер. |
 | **std/math** | Математические константы (π, e, ...) и функции (sin, cos, sqrt, ...). |
 | **std/string** | Unicode extension methods; Regex; кодирование (base64, utf8); форматирование. |
+| **std/json** | `JSON.parse` / `JSON.stringify`; типобезопасный разбор через generics. |
+| **std/url** | `URL` класс: парсинг, поля (hostname, pathname, searchParams и др.). |
+| **std/blob** | Immutable blob байтовых данных; источник для FormData и fetch body. |
+| **std/formdata** | `FormData` для multipart/form-data запросов; интеграция с `std/net`. |
+| **std/regex** | NFA-движок для регулярных выражений; PCRE через опциональный `@tsc/pcre`. |
 | **std/random** | `Random(seed)` (все платформы); `SecureRandom` (desktop); `HardwareRandom` (embedded). |
 | **std/temporal** | PlainDate, PlainTime, PlainDateTime, Instant, Duration, ZonedDateTime, Now. |
 | **std/threads** | Экспорты: Thread, Atomic, AtomicArray, channel, select, Readonly. |
@@ -229,32 +237,45 @@
 | **std/reactive** | `Signal<T>`, `effect`, `computed` — реактивный граф зависимостей. |
 | **std/libc** | Базовые C bindings (printf, malloc, memcpy и др.); subset определяется platform profile. |
 | **std/avr** | AVR-специфичные утилиты: ADC, PWM, sleep, watchdog. |
-| **std/embedded** | Общие embedded утилиты поверх `std/hal`: `HashMap<K,V,N>` (struct-of-arrays, djb2+linear probing), `StaticMap` (perfect hash switch), `Tasks<N>` (кооперативный планировщик). |
+| **std/embedded** | Общие embedded утилиты поверх `std/hal`: `HashMap<K,V,N>` (struct-of-arrays, djb2+linear probing), `StaticMap` (perfect hash switch), `Tasks<N>` (кооперативный планировщик), `pointer<T>` (raw-указатель), `Volatile<T>` (MMIO-регистры), `MMIO` через `declare const`. |
 | **HAL реализация в platform profile** | Как platform profile предоставляет конкретные реализации интерфейсов `std/hal`. |
 
 ### Блок 11: Декораторы
 
 | Раздел | О чём |
 |--------|-------|
-| **Decorator pass** | Выполняется после парсинга, до typecheck; алгоритм обхода и порядок применения. |
-| **Синтаксис** | `decorator function`, фабрики, перегрузки для class/method/prop/param/function. |
-| **Descriptor API** | `ClassDesc`, `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc` — поля и методы каждого. |
-| **cls.addField / addMethod** | Добавление полей и методов в класс из декоратора; порядок видимости; конфликты имён. |
-| **ctx.self.field\<T\>()** | Compile-time доступ к полям экземпляра из wrapper-кода декоратора. |
-| **Встроенные декораторы** | `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated` — семантика и приоритет. |
+| **Философия** | Compile-time трансформации AST; не рантайм; ограничения на embedded. |
+| **Синтаксис применения** | Места применения: class/method/prop/param/function; с аргументами и без. |
+| **Определение декоратора** | `decorator function` синтаксис; перегрузки для разных мест применения; фабрики. |
+| **Модель выполнения** | `before()` / `after()` вызовы; захват переменных в замыканиях. |
 | **Порядок применения** | Снизу вверх; фабрики вызываются сверху вниз; `@static` всегда последним. |
+| **Встроенные comptime-типы** | `TypeRef`, `TypeSet`, `FuncRef`, `FieldRef` — типы для generic-параметров декораторов. |
+| **Дескрипторный API** | `ClassDesc` (+ `addField`, `addMethod`), `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc`, `SelfRef` (`ctx.self.field<T>()`), `MetaStore`. |
 | **Comptime-метаданные** | `meta.set<T>()`, `meta.get<T>()` — compile-time аннотации; в C-output не попадают. |
-| **Codegen** | Wrapper-функции в C; async state machine wrap; платформенные ошибки с указанием на место применения. |
-| **Generics в декораторах** | Generic constraints вместо TypeRef; `R extends number` паттерн. |
+| **Декораторы на async-методах** | State machine wrap; проброс AbortSignal; ограничения на захват `Mut<T>`. |
+| **Дженерики и декораторы** | Generic constraints вместо TypeRef; `R extends number` паттерн. |
+| **Доступ к параметрам метода** | `ctx.args` — доступ к аргументам; `ctx.result` — к возвращаемому значению в `after()`. |
+| **Декоратор и платформа** | Heap-аллокации в декораторах; поле `allocator`; ошибка на `heap: false`. |
+| **Экспорт и импорт** | Как экспортировать декоратор из модуля и импортировать в другой. |
+| **Паттерны** | Готовые паттерны: мемоизация через `cls.addField`, logging, validation. |
+| **Фазы компилятора** | Когда декоратор-пасс выполняется относительно typecheck и ownership analysis. |
+| **Модель кодогенерации** | Цепочка wrapper-функций в C; именование; компиляция `ctx.self.field<T>(name)`. |
+| **C-вывод** | Примеры итогового C-output: `@log` на методе, `@timing` на async, `@minLength` на свойстве. |
 
 ### Блок 10: Компилятор
 
 | Раздел | О чём |
 |--------|-------|
-| **Фазы компиляции** | Parse → AST → Typecheck → Lower to IR → Ownership Analysis → Codegen. |
-| **IR** | Линейное IR между AST и C: явный порядок операций, простые проверки для borrow checker. |
+| **Фазы компиляции** | Parse → AST → Decorator pass → Typecheck → Lower to IR → Ownership Analysis → Codegen. |
+| **Decorator pass** | Позиция декоратор-пасса в pipeline: после парсинга, до typecheck; алгоритм обхода. |
+| **IR** | Линейное IR между AST и C: explicit order, basic blocks, phi nodes; async lowering в IR. |
+| **Name mangling** | Compiler-side реализация манглинга: генерация уникальных C-имён, разрешение коллизий между модулями. |
+| **Debug Info** | `#line` директивы для сохранения соответствия `.tsc` ↔ `.c`; конфигурация путей; `tsclang debug --dap`; embedded (OpenOCD/SWD). |
 | **Методология тестов** | Формат тест-корпуса: входной `.tsc` → ожидаемый C-output или ошибка компилятора. |
 | **Consumer-side monomorphization** | Generic-код из зависимостей компилируется в consumer, не в библиотеке; формат скомпилированной библиотеки. |
+| **Incremental compilation** | *(roadmap)* Граф зависимостей + IR-кеш; инвалидация по хешу файла. |
+| **Optimization levels** | `-O0` / `-O1` / `-Os`; что делает TSClang на IR-уровне vs что передаётся C-компилятору. |
+| **Error messages** | Формат `file:line:col: error[EXXX]: message`; категории ошибок; правила оформления hint. |
 
 ---
 
@@ -271,14 +292,14 @@
 | 4  | Блок 2: match; Блок 3 (03-classes.md): Классы, Интерфейсы, Extension Methods, instanceof; Блок 4: Замыкания |
 | 5  | Блок 5 (целиком) |
 | 6  | Блок 7 (целиком) |
-| 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal + @embedded.singleton + @embedded.stack + Кооперативная многозадачность |
+| 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal, AsyncMutex + Async generators + @embedded.singleton + @embedded.stack + Кооперативная многозадачность |
 | 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @embedded.isr, Volatile, std/sync, Embedded-аннотации + Блок 8: @embedded.inline + @embedded.pool |
 | 9  | Блок 8: tsc.package.json, CLI команды (init/build/run) |
 | 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
 | 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
 | 12 | Блок 9 (целиком); `std/threads` читать как API поверх механизма из фазы 8 |
-| 13 | Блок 11 (Декораторы): синтаксис, Descriptor API, встроенные декораторы, codegen |
-| 14 | Блок 10: Фазы компиляции, IR, Методология тестов, Consumer-side monomorphization |
+| 13 | Блок 11 (Декораторы): синтаксис, Модель выполнения, Дескрипторный API (SelfRef, MetaStore), Comptime-типы, async-методы, паттерны, кодогенерация, C-вывод |
+| 14 | Блок 10: Фазы компиляции, IR, Name mangling, Debug Info, Optimization levels, Error messages, Методология тестов, Consumer-side monomorphization |
 | 15 | Блок 8: Реестр |
 
 ### Фаза 0 — Core runtime
@@ -367,8 +388,10 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - State machine кодогенерация
 - `Promise<T>`, комбинаторы (`all`, `race`, `any`, `allSettled`)
 - `AbortSignal`
+- `AsyncMutex` (FIFO-очередь для async-координации)
 - `async main` / event loop integration
 - Stack safety анализ на embedded
+- `async function*` + `for await` (async generators, только heap-платформы)
 - `@embedded.singleton` (единственный экземпляр в BSS)
 - `@embedded.stack(name, N)` (статический стек для async-рекурсии)
 - Кооперативная многозадачность через генераторы (общий паттерн)
@@ -423,12 +446,18 @@ cleanup при throw внутри async; `async main` нуждается в entr
 ### Фаза 13 — Декораторы
 
 - Decorator pass (после парсинга, до typecheck)
-- `decorator function` синтаксис
-- Descriptor API: `ClassDesc`, `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc`
-- `cls.addField()`, `cls.addMethod()`, `ctx.self.field<T>()`
+- `decorator function` синтаксис; фабрики; перегрузки по месту применения
+- Модель выполнения: `before()` / `after()`; захват переменных
+- Встроенные comptime-типы: `TypeRef`, `TypeSet`, `FuncRef`, `FieldRef`
+- Descriptor API: `ClassDesc` (`addField`, `addMethod`), `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc`, `SelfRef`, `MetaStore`
+- `ctx.self.field<T>(name)` — compile-time доступ к полям экземпляра
+- `ctx.args` / `ctx.result` — доступ к параметрам и результату
 - Встроенные декораторы: `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated`
 - Порядок применения (снизу вверх), comptime-метаданные (`meta`)
-- Codegen: wrapper-функции, async state machine wrap
+- Async-методы: state machine wrap, AbortSignal проброс
+- Дженерики в декораторах: generic constraints
+- Декоратор и платформа: ограничения на `heap: false`
+- Кодогенерация: цепочка wrapper-функций, именование, C-output
 
 ### Фаза 14 — Линтер и форматтер
 
