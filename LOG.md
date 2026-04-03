@@ -21,14 +21,15 @@
 
 > Минимальная инфраструктура: console, базовый Error, заглушки для отладки кодогенерации.
 
-- [ ] `console.log` / `console.error` / `console.warn` / `console.debug`
-- [ ] `performance.now()` → `f64`
-- [ ] Базовый `Error` (хардкод в компиляторе): `new Error("msg")`, `.message`
-- [ ] `runtime.h` — минимальный заголовочный файл для C-output
+- [x] `console.log` / `console.error` / `console.warn` / `console.debug`
+- [x] `performance.now()` → `f64`
+- [x] Базовый `Error` (хардкод в компиляторе): `new Error("msg")`, `.message`
+- [x] `runtime.h` — минимальный заголовочный файл для C-output
 
 ### Лог
 
 > 2026-04-02: написан черновой codegen с обработкой `console.*` и `throw`; тесты ещё не проходят из-за проблемы с путями в runner.js
+> 2026-04-03: подключён bin/index.js (CLI); исправлен consoleCall (строковые литералы в format, String struct → %.*s); исправлен visitClassDecl (multi-line struct, TscError base); добавлен new Error(); исправлен inferType для Member(.message) и New(Error). Исправлен test runner для Windows+MSYS2 (gcc через bash --login). Phase 0: **15/15 ✓**
 
 ---
 
@@ -380,7 +381,7 @@
 
 | Фаза | Название | Статус |
 |------|----------|--------|
-| 0  | Core runtime | `[ ]` |
+| 0  | Core runtime | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | `[~]` |
 | 2  | Система типов | `[ ]` |
 | 3  | Модель памяти | `[ ]` |

@@ -58,6 +58,18 @@ Examples:
 // ---------------------------------------------------------------------------
 // Subprocess helper
 // ---------------------------------------------------------------------------
+// On Windows, MSYS2 gcc requires its own bash environment to work (cc1.exe needs
+// the MSYS2 runtime). We detect the MSYS2 bash and use it for gcc and shell tests.
+const MSYS2_BASH = process.platform === 'win32'
+  ? (() => { try { return existsSync('C:\\msys64\\usr\\bin\\bash.exe') ? 'C:\\msys64\\usr\\bin\\bash.exe' : null; } catch { return null; } })()
+  : null;
+
+// Convert Windows path → MSYS2 path (C:\foo\bar → /c/foo/bar)
+function toMsysPath(p) {
+  if (process.platform !== 'win32') return p;
+  return p.replace(/^([A-Za-z]):\\/, (_, d) => '/' + d.toLowerCase() + '/').replace(/\\/g, '/');
+}
+
 function run(cmd, args, opts = {}) {
   return new Promise(resolve => {
     const proc = spawn(cmd, args, { ...opts, shell: false });
@@ -71,10 +83,13 @@ function run(cmd, args, opts = {}) {
 }
 
 function runShell(script, opts = {}) {
+  // Use MSYS2 bash on Windows so Unix shell scripts work
+  const sh     = MSYS2_BASH ?? (process.platform === 'win32' ? 'cmd' : 'sh');
+  const shArgs = MSYS2_BASH ? ['--login', '-c', script]
+    : process.platform === 'win32' ? ['/c', script]
+    : ['-c', script];
   return new Promise(resolve => {
-    const shell = process.platform === 'win32' ? 'cmd' : 'sh';
-    const shellArgs = process.platform === 'win32' ? ['/c', script] : ['-c', script];
-    const proc = spawn(shell, shellArgs, { ...opts, shell: false });
+    const proc = spawn(sh, shArgs, { ...opts, shell: false });
     let stdout = '';
     let stderr = '';
     proc.stdout?.on('data', d => { stdout += d; });
@@ -165,12 +180,26 @@ function relPath(p) {
 let gccAvailable = null;
 async function checkGcc() {
   if (gccAvailable !== null) return gccAvailable;
-  const r = await run('gcc', ['--version']);
-  gccAvailable = r.code === 0;
+  // On Windows with MSYS2 bash: test that gcc can actually compile, not just --version
+  if (MSYS2_BASH) {
+    const r = await runShell('gcc --version');
+    gccAvailable = r.code === 0;
+  } else {
+    const r = await run('gcc', ['--version']);
+    gccAvailable = r.code === 0;
+  }
   return gccAvailable;
 }
 
 async function gccCompile(cFile, outBin) {
+  if (MSYS2_BASH) {
+    // On Windows: run gcc via MSYS2 bash so cc1.exe has the correct runtime environment
+    const inc  = existsSync(RUNTIME_INC) ? `-I${toMsysPath(RUNTIME_INC)}` : '';
+    const src  = toMsysPath(cFile);
+    const out  = toMsysPath(outBin);
+    const cmd  = `gcc ${src} -o ${out} ${inc} -Wall -Wextra -std=c11 -lm`;
+    return runShell(cmd);
+  }
   const compileArgs = [cFile, '-o', outBin];
   if (existsSync(RUNTIME_INC)) compileArgs.push(`-I${RUNTIME_INC}`);
   compileArgs.push('-Wall', '-Wextra', '-std=c11', '-lm');
@@ -371,7 +400,10 @@ async function compareCOutput(testDir, generatedCPath) {
 }
 
 async function runAndCompare(testDir, binary, runArgs) {
-  const runResult = await run(binary, runArgs);
+  // On Windows: run compiled binary via MSYS2 bash to handle path and DLL issues
+  const runResult = MSYS2_BASH
+    ? await runShell(`"${toMsysPath(binary)}"`)
+    : await run(binary, runArgs);
   const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
   const actual   = normalizeOut(runResult.stdout);
   const expected = normalizeOut(expectedOut);

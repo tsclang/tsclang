@@ -96,7 +96,7 @@ class Context {
       case 'TypeAlias':   break; // type-only, no C output
       case 'FuncDecl':    this.visitFuncDecl(node, true); break;
       case 'FuncOverload': break; // skip overload signatures
-      case 'VarDecl':     this.visitGlobalVar(node); break;
+      case 'VarDecl':     this.visitStmtInMain(node); break;
       case 'Noop':        break;
       default:
         // Top-level expression (e.g. console.log at top level)
@@ -113,17 +113,17 @@ class Context {
     const methods = members.filter(m => m.kind === 'Method');
     this.classes.set(name, { fields, methods, superClass });
 
-    // typedef struct
-    let structBody = '';
-    if (superClass) structBody += `    ${superClass} _base;\n`;
+    // Map TSClang base class names → C names
+    const cBase = superClass === 'Error' ? 'TscError' : superClass;
+
+    // typedef struct (multi-line)
+    this.addTop(`typedef struct {`);
+    if (cBase) this.addTop(`    ${cBase} _base;`);
     for (const f of fields) {
-      const ctype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
-      structBody += `    ${ctype} ${f.name};\n`;
-    }
-    this.addTop(`typedef struct { ${fields.map(f => {
       const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
-      return `${ct} ${f.name}`;
-    }).join('; ')};${superClass ? ' /* extends ' + superClass + ' */' : ''} } ${name};`);
+      this.addTop(`    ${ct} ${f.name};`);
+    }
+    this.addTop(`} ${name};`);
     this.addTop('');
 
     // Constructor if present
@@ -288,25 +288,33 @@ class Context {
   }
 
   visitStmt(node, lines, depth) {
-    const ind = (d = depth) => ' '.repeat(this.indent * (d + 1));
+    const I = ' '.repeat(this.indent * depth);  // indentation at current depth
+    const p = (s) => lines.push(I + s);          // push with current-depth indent
     if (!node) return;
 
     switch (node.kind) {
       case 'VarDecl': {
         const { varKind, name, typeAnn, init } = node;
-        let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
+        let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'double');
+        // Untyped number literals default to double (number = f64)
+        if (!typeAnn && init && init.kind === 'Literal' && init.litType === 'number') ctype = 'double';
         const qualifier = varKind === 'const' ? 'const ' : '';
         if (init) {
           // Special: arrow function → capture as function pointer
           if (init.kind === 'Arrow') {
             const lambdaName = this.hoistArrow(init, ctype, name);
-            lines.push(`${qualifier}${ctype} (*${name})(${this.arrowParamTypes(init)}) = ${lambdaName};`);
+            p(`${qualifier}${ctype} (*${name})(${this.arrowParamTypes(init)}) = ${lambdaName};`);
           } else {
-            const initC = this.exprToC(init, lines, depth);
-            lines.push(`${qualifier}${ctype} ${name} = ${initC};`);
+            let initC = this.exprToC(init, lines, depth);
+            // Coerce integer literal to double when target type is double
+            if ((ctype === 'double' || ctype === 'float') && init.kind === 'Literal' && init.litType === 'number'
+                && !init.value.includes('.') && !init.value.includes('e') && !init.value.includes('E')) {
+              initC += '.0';
+            }
+            p(`${qualifier}${ctype} ${name} = ${initC};`);
           }
         } else {
-          lines.push(`${qualifier}${ctype} ${name} = {0};`);
+          p(`${qualifier}${ctype} ${name} = {0};`);
         }
         this.define(name, { ctype, varKind });
         break;
@@ -317,14 +325,14 @@ class Context {
         const initC = this.exprToC(init, lines, depth);
         const tmpName = `_obj_${this.tempCount++}`;
         const objType = this.inferType(init);
-        lines.push(`${objType} ${tmpName} = ${initC};`);
+        p(`${objType} ${tmpName} = ${initC};`);
         for (const { name, alias, defaultVal } of pattern) {
           const qual = varKind === 'const' ? 'const ' : '';
           if (defaultVal) {
             const dC = this.exprToC(defaultVal, lines, depth);
-            lines.push(`${qual}int32_t ${alias} = (${tmpName}.${name} != 0) ? ${tmpName}.${name} : ${dC};`);
+            p(`${qual}int32_t ${alias} = (${tmpName}.${name} != 0) ? ${tmpName}.${name} : ${dC};`);
           } else {
-            lines.push(`${qual}int32_t ${alias} = ${tmpName}.${name};`);
+            p(`${qual}int32_t ${alias} = ${tmpName}.${name};`);
           }
           this.define(alias, { ctype: 'int32_t', varKind });
         }
@@ -335,15 +343,15 @@ class Context {
         const { varKind, pattern, init } = node;
         const initC = this.exprToC(init, lines, depth);
         const tmpName = `_arr_${this.tempCount++}`;
-        lines.push(`__auto_type ${tmpName} = ${initC};`);
+        p(`__auto_type ${tmpName} = ${initC};`);
         for (let i = 0; i < pattern.length; i++) {
           const elem = pattern[i];
           if (!elem) continue;
           const qual = varKind === 'const' ? 'const ' : '';
           if (elem.rest) {
-            lines.push(`/* rest: ${elem.name} */`);
+            p(`/* rest: ${elem.name} */`);
           } else {
-            lines.push(`${qual}int32_t ${elem.name} = ${tmpName}._${i};`);
+            p(`${qual}int32_t ${elem.name} = ${tmpName}._${i};`);
             this.define(elem.name, { ctype: 'int32_t', varKind });
           }
         }
@@ -352,36 +360,36 @@ class Context {
 
       case 'ExprStmt': {
         const c = this.exprToC(node.expr, lines, depth);
-        if (c && c !== '') lines.push(`${c};`);
+        if (c && c !== '') p(`${c};`);
         break;
       }
 
       case 'Return': {
         if (node.value) {
           const c = this.exprToC(node.value, lines, depth);
-          lines.push(`return ${c};`);
+          p(`return ${c};`);
         } else {
-          lines.push('return;');
+          p('return;');
         }
         break;
       }
 
       case 'If': {
         const testC = this.exprToC(node.test, lines, depth);
-        lines.push(`if (${testC}) {`);
+        p(`if (${testC}) {`);
         this.visitStmtOrBlock(node.consequent, lines, depth + 1);
         if (node.alternate) {
-          lines.push('} else {');
+          p('} else {');
           this.visitStmtOrBlock(node.alternate, lines, depth + 1);
         }
-        lines.push('}');
+        p('}');
         break;
       }
 
       case 'Block': {
-        lines.push('{');
+        p('{');
         this.visitBlock(node, lines, depth + 1);
-        lines.push('}');
+        p('}');
         break;
       }
 
@@ -400,121 +408,130 @@ class Context {
         }
         const testC = node.test ? this.exprToC(node.test, lines, depth) : '';
         const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
-        lines.push(`for (${initC}; ${testC}; ${updC}) {`);
+        p(`for (${initC}; ${testC}; ${updC}) {`);
         this.visitStmtOrBlock(node.body, lines, depth + 1);
-        lines.push('}');
+        p('}');
         break;
       }
 
       case 'ForOf': {
         const iterC = this.exprToC(node.iterable, lines, depth);
         const ivar = `_i_${this.tempCount++}`;
-        // Determine element type from binding
         let elemType = 'int32_t';
         if (node.binding.kind === 'Ident') {
           if (node.binding.typeAnn) elemType = this.resolveType(node.binding.typeAnn);
         }
         const qual = node.varKind === 'const' ? 'const ' : '';
         const bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
+        const II = ' '.repeat(this.indent * (depth + 1));
 
-        lines.push(`for (size_t ${ivar} = 0; ${ivar} < ${iterC}.length; ${ivar}++) {`);
+        p(`for (size_t ${ivar} = 0; ${ivar} < ${iterC}.length; ${ivar}++) {`);
         if (bindName) {
-          lines.push(`    ${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
+          lines.push(`${II}${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
           this.define(bindName, { ctype: elemType, varKind: node.varKind });
         } else if (node.binding.kind === 'ArrayPattern') {
-          // [k, v] destructure
           for (let i = 0; i < node.binding.elems.length; i++) {
             const elem = node.binding.elems[i];
             if (!elem) continue;
-            lines.push(`    ${qual}int32_t ${elem.name} = ${iterC}.data[${ivar}]._${i};`);
+            lines.push(`${II}${qual}int32_t ${elem.name} = ${iterC}.data[${ivar}]._${i};`);
             this.define(elem.name, { ctype: 'int32_t', varKind: node.varKind });
           }
         }
         this.visitStmtOrBlock(node.body, lines, depth + 1);
-        lines.push('}');
+        p('}');
         break;
       }
 
       case 'ForIn': {
-        // Iterating object keys — not common in TSClang, emit warning comment
-        lines.push(`/* for-in not supported */`);
+        p(`/* for-in not supported */`);
         break;
       }
 
       case 'While': {
         const testC = this.exprToC(node.test, lines, depth);
-        lines.push(`while (${testC}) {`);
+        p(`while (${testC}) {`);
         this.visitStmtOrBlock(node.body, lines, depth + 1);
-        lines.push('}');
+        p('}');
         break;
       }
 
       case 'DoWhile': {
         const testC = this.exprToC(node.test, lines, depth);
-        lines.push('do {');
+        p('do {');
         this.visitStmtOrBlock(node.body, lines, depth + 1);
-        lines.push(`} while (${testC});`);
+        p(`} while (${testC});`);
         break;
       }
 
-      case 'Break':    lines.push('break;'); break;
-      case 'Continue': lines.push('continue;'); break;
+      case 'Break':    p('break;'); break;
+      case 'Continue': p('continue;'); break;
 
       case 'Throw': {
-        // In TSClang, throw becomes returning a Result with error
         const errC = this.exprToC(node.value, lines, depth);
-        lines.push(`/* throw */ fprintf(stderr, "Error\\n"); exit(1); (void)(${errC});`);
+        p(`/* throw */ fprintf(stderr, "Error\\n"); exit(1); (void)(${errC});`);
         break;
       }
 
       case 'TryCatch': {
         this.visitBlock(node.body, lines, depth);
-        // catches handled at semantic level; for now just emit the blocks
         for (const c of node.catches) {
-          lines.push(`/* catch (${c.param}: ${c.typeAnn ? this.resolveType(c.typeAnn) : 'any'}) */`);
+          p(`/* catch (${c.param}: ${c.typeAnn ? this.resolveType(c.typeAnn) : 'any'}) */`);
           this.visitBlock(c.body, lines, depth);
         }
         if (node.finally) {
-          lines.push('/* finally */');
+          p('/* finally */');
           this.visitBlock(node.finally, lines, depth);
         }
         break;
       }
 
       case 'Switch': {
-        const discC = this.exprToC(node.discriminant, lines, depth);
-        lines.push(`switch (${discC}) {`);
-        for (const c of node.cases) {
-          if (c.test) lines.push(`    case ${this.exprToC(c.test, lines, depth)}:`);
-          else        lines.push('    default:');
-          for (const s of c.body) this.visitStmt(s, lines, depth + 1);
+        const discType = this.inferType(node.discriminant);
+        if (discType === 'double' || discType === 'float') {
+          throw new Error(`cannot switch on type 'f64'`);
         }
-        lines.push('}');
+        for (let ci = 0; ci < node.cases.length; ci++) {
+          const c = node.cases[ci];
+          if (c.body.length === 0) continue;
+          const last = c.body[c.body.length - 1];
+          const isTerminator = last.kind === 'Break' || last.kind === 'Return' ||
+                               last.kind === 'Throw' || last.kind === 'Continue';
+          if (!isTerminator && ci < node.cases.length - 1) {
+            throw new Error(`implicit fallthrough`);
+          }
+        }
+        const discC = this.exprToC(node.discriminant, lines, depth);
+        const IS = ' '.repeat(this.indent * (depth + 1));
+        p(`switch (${discC}) {`);
+        for (const c of node.cases) {
+          if (c.test) lines.push(`${IS}case ${this.exprToC(c.test, lines, depth)}:`);
+          else        lines.push(`${IS}default:`);
+          for (const s of c.body) this.visitStmt(s, lines, depth + 2);
+        }
+        p('}');
         break;
       }
 
       case 'Native': {
-        // Inline C snippet
-        lines.push(node.content);
+        p(node.content);
         break;
       }
 
       case 'Unsafe': {
-        lines.push('{');
+        p('{');
         this.visitBlock(node.body, lines, depth + 1);
-        lines.push('}');
+        p('}');
         break;
       }
 
       case 'Spawn': {
-        // stub
-        lines.push('/* spawn block — not yet implemented */');
+        p('/* spawn block — not yet implemented */');
         break;
       }
 
       case 'Noop': break;
       default:
-        lines.push(`/* unhandled stmt: ${node.kind} */`);
+        p(`/* unhandled stmt: ${node.kind} */`);
     }
   }
 
@@ -648,6 +665,13 @@ class Context {
   // Binary
   // ----------------------------------------------------------------
   binaryToC(node, lines, depth) {
+    // ** uses pow() from math.h
+    if (node.op === '**') {
+      this.includes.add('#include <math.h>');
+      const l = this.exprToC(node.left, lines, depth);
+      const r = this.exprToC(node.right, lines, depth);
+      return `pow(${l}, ${r})`;
+    }
     const l = this.exprToC(node.left, lines, depth);
     const r = this.exprToC(node.right, lines, depth);
     const opMap = {
@@ -699,6 +723,12 @@ class Context {
   // Assignment
   // ----------------------------------------------------------------
   assignToC(node, lines, depth) {
+    if (node.left.kind === 'Ident') {
+      const sym = this.lookup(node.left.name);
+      if (sym && sym.varKind === 'const') {
+        throw new Error(`cannot assign to 'const' variable '${node.left.name}'`);
+      }
+    }
     const l = this.exprToC(node.left, lines, depth);
     const r = this.exprToC(node.right, lines, depth);
     return `${l} ${node.op} ${r}`;
@@ -784,25 +814,31 @@ class Context {
   }
 
   consoleCall(method, args, lines, depth) {
-    const file = (method === 'error' || method === 'warn' || method === 'debug') ? 'stderr' : 'stdout';
-    const printFn = file === 'stderr' ? 'fprintf(stderr, ' : 'printf(';
+    const isErr = method === 'error' || method === 'warn' || method === 'debug';
 
     if (args.length === 0) {
-      return `${printFn === 'printf(' ? 'printf' : 'fprintf(stderr'}("\\n")`;
+      return isErr ? 'fprintf(stderr, "\\n")' : 'printf("\\n")';
     }
 
-    // Build format string + args
     const fmtParts = [];
     const fmtArgs  = [];
 
     for (const arg of args) {
-      const expr = arg.expr;
-      const cexpr = this.exprToC(expr, lines, depth);
+      const expr  = arg.expr;
       const ctype = this.inferType(expr);
 
+      // String literal → embed value directly in format string (no separate arg)
+      if (expr.kind === 'Literal' && expr.litType === 'string') {
+        fmtParts.push(expr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%'));
+        continue;
+      }
+
+      const cexpr = this.exprToC(expr, lines, depth);
+
       if (ctype === 'String') {
-        fmtParts.push('%s');
-        fmtArgs.push(`${cexpr}.data`);
+        // String struct → length-bounded print
+        fmtParts.push('%.*s');
+        fmtArgs.push(`(int)${cexpr}.length`, `${cexpr}.data`);
       } else if (ctype === 'bool') {
         fmtParts.push('%s');
         fmtArgs.push(`(${cexpr}) ? "true" : "false"`);
@@ -831,10 +867,11 @@ class Context {
     }
 
     const fmt = '"' + fmtParts.join(' ') + '\\n"';
+    if (fmtArgs.length === 0) {
+      return isErr ? `fprintf(stderr, ${fmt})` : `printf(${fmt})`;
+    }
     const allArgs = [fmt, ...fmtArgs].join(', ');
-
-    if (file === 'stderr') return `fprintf(stderr, ${allArgs})`;
-    return `printf(${allArgs})`;
+    return isErr ? `fprintf(stderr, ${allArgs})` : `printf(${allArgs})`;
   }
 
   mathCall(prop, args, lines, depth) {
@@ -949,6 +986,12 @@ class Context {
   newToC(node, lines, depth) {
     const { name, args } = node;
     const argsC = this.argsToC(args, lines, depth);
+
+    // new Error("msg") → (TscError){ .message = STR_LIT("msg") }
+    if (name === 'Error') {
+      const msgArg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `(TscError){ .message = ${msgArg} }`;
+    }
 
     // new Map<K,V>() → tsc_map_create_K_V()
     if (name === 'Map') {
@@ -1129,8 +1172,9 @@ class Context {
         return 'bool';
       }
       case 'Member': {
-        if (node.prop === 'length') return 'size_t';
-        if (node.prop === 'data')   return 'const char *';
+        if (node.prop === 'length')  return 'size_t';
+        if (node.prop === 'data')    return 'const char *';
+        if (node.prop === 'message') return 'String';
         return 'int32_t';
       }
       case 'Call': {
@@ -1139,7 +1183,7 @@ class Context {
         }
         return 'int32_t';
       }
-      case 'New':  return node.name;
+      case 'New':  return node.name === 'Error' ? 'TscError' : node.name;
       case 'ObjLit': return 'int32_t';
       case 'ArrayLit': {
         const first = node.elems.find(e => !e.spread);

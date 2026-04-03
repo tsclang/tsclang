@@ -76,7 +76,6 @@ export function inferLiteralCType(node) {
   if (node.litType === 'string')  return 'String';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
-  const v = node.value;
-  if (v.includes('.') || v.includes('e') || v.includes('E')) return 'double';
-  return 'int32_t';
+  // All number literals default to double (number = f64 in TSClang)
+  return 'double';
 }

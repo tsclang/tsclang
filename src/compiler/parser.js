@@ -302,12 +302,24 @@ export function parse(tokens, filename = '<input>') {
     return { kind: 'FuncDecl', name, params, returnType, throwsTypes, body, async: true, generator, decorators };
   }
 
+  function isSideEffectFree(node) {
+    if (!node) return true;
+    if (node.kind === 'Literal') return true;
+    if (node.kind === 'Ident') return true;
+    if (node.kind === 'Unary') return isSideEffectFree(node.expr);
+    if (node.kind === 'Binary') return isSideEffectFree(node.left) && isSideEffectFree(node.right);
+    if (node.kind === 'Member') return isSideEffectFree(node.object);
+    return false; // Call, New, Assign, etc.
+  }
+
   function parseParams() {
     eat(TK.LPAREN);
     const params = [];
+    let hadRest = false;
     while (cur().type !== TK.RPAREN) {
+      if (hadRest) err('rest parameter must be the last parameter');
       let rest = false;
-      if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
+      if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; hadRest = true; }
       const name = eat(TK.IDENT).value;
       let typeAnn = null;
       let optional = false;
@@ -319,6 +331,15 @@ export function parse(tokens, filename = '<input>') {
       if (cur().type !== TK.RPAREN) tryEat(TK.COMMA);
     }
     eat(TK.RPAREN);
+    if (params.filter(p => p.rest).length > 1) err('only one rest parameter is allowed');
+    // Check: default params must come at end (no required param after a default param)
+    let hadDefault = false;
+    for (const p of params) {
+      if (p.defaultVal !== null) {
+        hadDefault = true;
+        if (!isSideEffectFree(p.defaultVal)) err('default parameter expression must be side-effect free');
+      } else if (hadDefault && !p.rest) err('default parameter must be at end');
+    }
     return params;
   }
 
@@ -530,9 +551,7 @@ export function parse(tokens, filename = '<input>') {
     let init = null;
     if (cur().type !== TK.SEMI) {
       if (cur().type === TK.IDENT && ['let','const','var'].includes(cur().value)) {
-        init = parseVarDecl(eat(TK.IDENT).value);
-        // VarDecl already ate semi — undo: we need the semi eaten by for
-        // Actually parseVarDecl calls eatSemi which is optional, so we're fine
+        init = parseVarDecl(cur().value); // parseVarDecl eats the keyword itself
       } else {
         init = { kind: 'ExprStmt', expr: parseExpr() };
         eatSemi();
@@ -670,8 +689,13 @@ export function parse(tokens, filename = '<input>') {
   function parseAssign() {
     const left = parseTernary();
     const op = cur().value;
-    if ([TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.SLASHEQ, TK.AMPEQ, TK.PIPEEQ].includes(cur().type) ||
-        (cur().type === TK.IDENT && cur().value === 'as')) {
+    const assignOps = [
+      TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.SLASHEQ,
+      TK.AMPEQ, TK.PIPEEQ, TK.PERCENTEQ, TK.CARETEQ,
+      TK.LSHIFTEQ, TK.RSHIFTEQ, TK.RSHIFTUEQ,
+      TK.AMP2EQ, TK.PIPE2EQ,
+    ];
+    if (assignOps.includes(cur().type) || (cur().type === TK.IDENT && cur().value === 'as')) {
       if (cur().type === TK.IDENT && cur().value === 'as') {
         eat(TK.IDENT);
         const castType = parseTypeAnnotation();
@@ -711,17 +735,36 @@ export function parse(tokens, filename = '<input>') {
   ];
 
   function parseBinary(level) {
-    if (level >= binaryLevels.length) return parseUnary();
+    if (level >= binaryLevels.length) return parsePow();
     const [ops] = binaryLevels[level];
     let left = parseBinary(level + 1);
     while (ops.includes(cur().type) ||
            (cur().type === TK.IDENT && (cur().value === 'instanceof' || cur().value === 'in') && level === 6)) {
       const op = cur().value;
+      // Disallow mixing || and ?? without parentheses
+      if (op === '??' && left.kind === 'Binary' && (left.op === '||' || left.op === '&&')) {
+        err(`|| and ?? cannot be mixed without parentheses`);
+      }
+      if ((op === '||' || op === '&&') && left.kind === 'Binary' && left.op === '??') {
+        err(`|| and ?? cannot be mixed without parentheses`);
+      }
       pos++;
       const right = parseBinary(level + 1);
       left = { kind: 'Binary', op, left, right };
     }
     return left;
+  }
+
+  // ** is right-associative, higher precedence than unary... actually lower than unary in JS
+  // x ** y === x ** y, -x ** y is a SyntaxError in JS but we allow it as -(x**y)
+  function parsePow() {
+    const base = parseUnary();
+    if (cur().type === TK.STARSTAR) {
+      pos++;
+      const exp = parsePow(); // right-associative
+      return { kind: 'Binary', op: '**', left: base, right: exp };
+    }
+    return base;
   }
 
   function parseOr() { return parseBinary(0); }

@@ -26,9 +26,12 @@ export const TK = {
   BANG:  '!',  AMP2:   '&&', PIPE2: '||', QUEST2: '??',
   PLUS2: '++', MINUS2: '--',
   PLUSEQ: '+=', MINUSEQ: '-=', STAREQ: '*=', SLASHEQ: '/=',
-  AMPEQ: '&=',  PIPEEQ: '|=',
+  AMPEQ: '&=',  PIPEEQ: '|=',  PERCENTEQ: '%=', CARETEQ: '^=',
+  LSHIFTEQ: '<<=', RSHIFTEQ: '>>=', RSHIFTUEQ: '>>>=',
+  AMP2EQ: '&&=', PIPE2EQ: '||=',
+  STARSTAR: '**',
   AMP:   '&',  PIPE:   '|',  CARET: '^',  TILDE: '~',
-  LSHIFT:'<<', RSHIFT: '>>',
+  LSHIFT:'<<', RSHIFT: '>>', RSHIFTU: '>>>',
   QUEST: '?',
   HASH:  '#',
   AT:    '@',
@@ -152,27 +155,37 @@ export function lex(src, filename = '<input>') {
     advance(); // consume ch
     const rest = ch + (src[i] ?? '') + (src[i+1] ?? '');
 
-    if (rest.startsWith('...')) { i += 2; col += 2; tokens.push(new Token(TK.SPREAD,  '...', startLine, startCol)); continue; }
-    if (rest.startsWith('=>'))  { i += 1; col += 1; tokens.push(new Token(TK.ARROW,   '=>',  startLine, startCol)); continue; }
-    if (rest.startsWith('===')) { i += 2; col += 2; tokens.push(new Token(TK.EQEQEQ,  '===', startLine, startCol)); continue; }
-    if (rest.startsWith('!==')) { i += 2; col += 2; tokens.push(new Token(TK.BANGEQEQ,'!==', startLine, startCol)); continue; }
-    if (rest.startsWith('=='))  { i += 1; col += 1; tokens.push(new Token(TK.EQEQ,    '==',  startLine, startCol)); continue; }
-    if (rest.startsWith('!='))  { i += 1; col += 1; tokens.push(new Token(TK.BANGEQ,  '!=',  startLine, startCol)); continue; }
-    if (rest.startsWith('<='))  { i += 1; col += 1; tokens.push(new Token(TK.LTE,     '<=',  startLine, startCol)); continue; }
-    if (rest.startsWith('>='))  { i += 1; col += 1; tokens.push(new Token(TK.GTE,     '>=',  startLine, startCol)); continue; }
-    if (rest.startsWith('<<'))  { i += 1; col += 1; tokens.push(new Token(TK.LSHIFT,  '<<',  startLine, startCol)); continue; }
-    if (rest.startsWith('>>'))  { i += 1; col += 1; tokens.push(new Token(TK.RSHIFT,  '>>',  startLine, startCol)); continue; }
-    if (rest.startsWith('&&'))  { i += 1; col += 1; tokens.push(new Token(TK.AMP2,    '&&',  startLine, startCol)); continue; }
-    if (rest.startsWith('||'))  { i += 1; col += 1; tokens.push(new Token(TK.PIPE2,   '||',  startLine, startCol)); continue; }
-    if (rest.startsWith('??'))  { i += 1; col += 1; tokens.push(new Token(TK.QUEST2,  '??',  startLine, startCol)); continue; }
-    if (rest.startsWith('++'))  { i += 1; col += 1; tokens.push(new Token(TK.PLUS2,   '++',  startLine, startCol)); continue; }
-    if (rest.startsWith('--'))  { i += 1; col += 1; tokens.push(new Token(TK.MINUS2,  '--',  startLine, startCol)); continue; }
-    if (rest.startsWith('+='))  { i += 1; col += 1; tokens.push(new Token(TK.PLUSEQ,  '+=',  startLine, startCol)); continue; }
-    if (rest.startsWith('-='))  { i += 1; col += 1; tokens.push(new Token(TK.MINUSEQ, '-=',  startLine, startCol)); continue; }
-    if (rest.startsWith('*='))  { i += 1; col += 1; tokens.push(new Token(TK.STAREQ,  '*=',  startLine, startCol)); continue; }
-    if (rest.startsWith('/='))  { i += 1; col += 1; tokens.push(new Token(TK.SLASHEQ, '/=',  startLine, startCol)); continue; }
-    if (rest.startsWith('&='))  { i += 1; col += 1; tokens.push(new Token(TK.AMPEQ,   '&=',  startLine, startCol)); continue; }
-    if (rest.startsWith('|='))  { i += 1; col += 1; tokens.push(new Token(TK.PIPEEQ,  '|=',  startLine, startCol)); continue; }
+    if (rest.startsWith('...')) { i += 2; col += 2; tokens.push(new Token(TK.SPREAD,    '...',  startLine, startCol)); continue; }
+    if (rest.startsWith('=>'))  { i += 1; col += 1; tokens.push(new Token(TK.ARROW,    '=>',   startLine, startCol)); continue; }
+    if (rest.startsWith('===')) { i += 2; col += 2; tokens.push(new Token(TK.EQEQEQ,   '===',  startLine, startCol)); continue; }
+    if (rest.startsWith('!==')) { i += 2; col += 2; tokens.push(new Token(TK.BANGEQEQ, '!==',  startLine, startCol)); continue; }
+    if (rest.startsWith('=='))  { i += 1; col += 1; tokens.push(new Token(TK.EQEQ,     '==',   startLine, startCol)); continue; }
+    if (rest.startsWith('!='))  { i += 1; col += 1; tokens.push(new Token(TK.BANGEQ,   '!=',   startLine, startCol)); continue; }
+    if (rest.startsWith('<='))  { i += 1; col += 1; tokens.push(new Token(TK.LTE,      '<=',   startLine, startCol)); continue; }
+    if (rest.startsWith('>='))  { i += 1; col += 1; tokens.push(new Token(TK.GTE,      '>=',   startLine, startCol)); continue; }
+    if (rest.startsWith('<<=')) { i += 2; col += 2; tokens.push(new Token(TK.LSHIFTEQ, '<<=',  startLine, startCol)); continue; }
+    if (rest.startsWith('<<'))  { i += 1; col += 1; tokens.push(new Token(TK.LSHIFT,   '<<',   startLine, startCol)); continue; }
+    if (rest.startsWith('>>>=')){ i += 3; col += 3; tokens.push(new Token(TK.RSHIFTUEQ,'>>>=', startLine, startCol)); continue; }
+    if (rest.startsWith('>>>')) { i += 2; col += 2; tokens.push(new Token(TK.RSHIFTU,  '>>>',  startLine, startCol)); continue; }
+    if (rest.startsWith('>>=')) { i += 2; col += 2; tokens.push(new Token(TK.RSHIFTEQ, '>>=',  startLine, startCol)); continue; }
+    if (rest.startsWith('>>'))  { i += 1; col += 1; tokens.push(new Token(TK.RSHIFT,   '>>',   startLine, startCol)); continue; }
+    if (rest.startsWith('&&=')) { i += 2; col += 2; tokens.push(new Token(TK.AMP2EQ,   '&&=',  startLine, startCol)); continue; }
+    if (rest.startsWith('&&'))  { i += 1; col += 1; tokens.push(new Token(TK.AMP2,     '&&',   startLine, startCol)); continue; }
+    if (rest.startsWith('||=')) { i += 2; col += 2; tokens.push(new Token(TK.PIPE2EQ,  '||=',  startLine, startCol)); continue; }
+    if (rest.startsWith('||'))  { i += 1; col += 1; tokens.push(new Token(TK.PIPE2,    '||',   startLine, startCol)); continue; }
+    if (rest.startsWith('??'))  { i += 1; col += 1; tokens.push(new Token(TK.QUEST2,   '??',   startLine, startCol)); continue; }
+    if (rest.startsWith('++'))  { i += 1; col += 1; tokens.push(new Token(TK.PLUS2,    '++',   startLine, startCol)); continue; }
+    if (rest.startsWith('--'))  { i += 1; col += 1; tokens.push(new Token(TK.MINUS2,   '--',   startLine, startCol)); continue; }
+    if (rest.startsWith('+='))  { i += 1; col += 1; tokens.push(new Token(TK.PLUSEQ,   '+=',   startLine, startCol)); continue; }
+    if (rest.startsWith('-='))  { i += 1; col += 1; tokens.push(new Token(TK.MINUSEQ,  '-=',   startLine, startCol)); continue; }
+    if (rest.startsWith('**=')) { i += 2; col += 2; tokens.push(new Token(TK.STAREQ,   '**=',  startLine, startCol)); continue; }
+    if (rest.startsWith('**'))  { i += 1; col += 1; tokens.push(new Token(TK.STARSTAR,  '**',   startLine, startCol)); continue; }
+    if (rest.startsWith('*='))  { i += 1; col += 1; tokens.push(new Token(TK.STAREQ,   '*=',   startLine, startCol)); continue; }
+    if (rest.startsWith('/='))  { i += 1; col += 1; tokens.push(new Token(TK.SLASHEQ,  '/=',   startLine, startCol)); continue; }
+    if (rest.startsWith('%='))  { i += 1; col += 1; tokens.push(new Token(TK.PERCENTEQ,'%=',   startLine, startCol)); continue; }
+    if (rest.startsWith('&='))  { i += 1; col += 1; tokens.push(new Token(TK.AMPEQ,    '&=',   startLine, startCol)); continue; }
+    if (rest.startsWith('|='))  { i += 1; col += 1; tokens.push(new Token(TK.PIPEEQ,   '|=',   startLine, startCol)); continue; }
+    if (rest.startsWith('^='))  { i += 1; col += 1; tokens.push(new Token(TK.CARETEQ,  '^=',   startLine, startCol)); continue; }
 
     // Single char
     const singleMap = {
