@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    const double x = 100.0;
-    printf("%g\n", x);
+    const int32_t x = 100;
+    printf("%d\n", x);
     return 0;
 }

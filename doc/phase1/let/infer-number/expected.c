@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    double x = 42.0;
-    printf("%g\n", x);
+    int32_t x = 42;
+    printf("%d\n", x);
     return 0;
 }

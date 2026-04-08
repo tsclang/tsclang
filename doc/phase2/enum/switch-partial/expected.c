@@ -9,7 +9,7 @@ int main(void) {
     Dir d = Dir_East;
     switch (d) {
         case Dir_North:
-            printf("%s\n", "N");
+            printf("N\n");
             break;
     }
     return 0;

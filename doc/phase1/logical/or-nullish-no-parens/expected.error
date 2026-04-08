@@ -1,2 +1,2 @@
-|| and ?? cannot be mixed without parentheses
+"||" and "??" require parentheses when mixed
 input.tsc:4:

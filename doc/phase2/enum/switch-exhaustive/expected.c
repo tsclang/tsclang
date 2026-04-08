@@ -9,10 +9,10 @@ int main(void) {
     Dir d = Dir_South;
     switch (d) {
         case Dir_North:
-            printf("%s\n", "N");
+            printf("N\n");
             break;
         case Dir_South:
-            printf("%s\n", "S");
+            printf("S\n");
             break;
     }
     return 0;

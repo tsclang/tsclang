@@ -8,10 +8,10 @@ int main(void) {
     const Dir d = Dir_south;
     switch (d) {
         case Dir_north:
-            printf("%s\n", "N");
+            printf("N\n");
             break;
         case Dir_south:
-            printf("%s\n", "S");
+            printf("S\n");
             break;
     }
     return 0;

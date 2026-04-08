@@ -52,12 +52,18 @@ export function mangleType(typeNode) {
     if (name === 'Shared') return 'shared_' + mangleType(typeArgs[0]);
     if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0]);
     if (typeArgs.length === 0) {
-      return PRIMITIVE_MAP[name] ? toCType(name).replace(/[^a-zA-Z0-9]/g, '_') : name;
+      // Use the TSClang name directly (i32, f64, etc.) not the C type (int32_t, double)
+      return PRIMITIVE_MAP[name] ? name : name;
     }
     return name + '_' + typeArgs.map(mangleType).join('_');
   }
   if (typeNode.kind === 'TypeArray')  return 'arr_' + mangleType(typeNode.element);
   if (typeNode.kind === 'TypeUnion')  return typeNode.types.map(mangleType).join('_or_');
+  if (typeNode.kind === 'TypeFunc') {
+    const parts = typeNode.params.map(mangleType);
+    parts.push(mangleType(typeNode.ret));
+    return 'fn_' + parts.join('_');
+  }
   return 'unknown';
 }
 
@@ -65,7 +71,9 @@ export function mangleType(typeNode) {
 export function mangleParams(params) {
   const parts = [];
   for (const p of params) {
-    if (p.rest) { parts.push('rest_' + (p.typeAnn ? mangleType(p.typeAnn) : 'any')); continue; }
+    if (p.rest) continue;       // rest params are not included in name mangling
+    if (p.destructArr) continue; // destructured params are not included in name mangling
+    if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'any') continue; // any params not mangled
     if (p.typeAnn) parts.push(mangleType(p.typeAnn));
   }
   return parts.length ? '_' + parts.join('_') : '';
@@ -76,6 +84,7 @@ export function inferLiteralCType(node) {
   if (node.litType === 'string')  return 'String';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
-  // All number literals default to double (number = f64 in TSClang)
-  return 'double';
+  const v = node.value;
+  if (v.includes('.') || v.includes('e') || v.includes('E')) return 'double';
+  return 'int32_t';
 }

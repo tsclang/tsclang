@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    uint64_t x = 0;
+    uint64_t x = 0U;
     printf("%llu\n", (unsigned long long)x);
     return 0;
 }

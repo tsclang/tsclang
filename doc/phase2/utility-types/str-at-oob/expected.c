@@ -1,7 +1,5 @@
 #include "runtime.h"
 
-typedef struct { bool has_value; uint8_t value; } opt_u8;
-
 int main(void) {
     TSC_INIT();
     const String s = STR_LIT("hello");

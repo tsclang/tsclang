@@ -28,7 +28,8 @@ export const TK = {
   PLUSEQ: '+=', MINUSEQ: '-=', STAREQ: '*=', SLASHEQ: '/=',
   AMPEQ: '&=',  PIPEEQ: '|=',  PERCENTEQ: '%=', CARETEQ: '^=',
   LSHIFTEQ: '<<=', RSHIFTEQ: '>>=', RSHIFTUEQ: '>>>=',
-  AMP2EQ: '&&=', PIPE2EQ: '||=',
+  AMP2EQ: '&&=', PIPE2EQ: '||=', QUEST2EQ: '??=',
+  QUESTDOT: '?.',
   STARSTAR: '**',
   AMP:   '&',  PIPE:   '|',  CARET: '^',  TILDE: '~',
   LSHIFT:'<<', RSHIFT: '>>', RSHIFTU: '>>>',
@@ -121,6 +122,12 @@ export function lex(src, filename = '<input>') {
       if (ch === '0' && (peek() === 'x' || peek() === 'X')) {
         num += advance() + advance(); // 0x
         while (i < src.length && /[0-9a-fA-F_]/.test(cur())) num += advance();
+      } else if (ch === '0' && (peek() === 'b' || peek() === 'B')) {
+        num += advance() + advance(); // 0b
+        while (i < src.length && /[01_]/.test(cur())) num += advance();
+      } else if (ch === '0' && (peek() === 'o' || peek() === 'O')) {
+        num += advance() + advance(); // 0o
+        while (i < src.length && /[0-7_]/.test(cur())) num += advance();
       } else {
         while (i < src.length && (cur() >= '0' && cur() <= '9' || cur() === '_')) num += advance();
         if (i < src.length && cur() === '.' && peek() >= '0' && peek() <= '9') {
@@ -153,7 +160,7 @@ export function lex(src, filename = '<input>') {
 
     // Multi-char operators
     advance(); // consume ch
-    const rest = ch + (src[i] ?? '') + (src[i+1] ?? '');
+    const rest = ch + (src[i] ?? '') + (src[i+1] ?? '') + (src[i+2] ?? '');
 
     if (rest.startsWith('...')) { i += 2; col += 2; tokens.push(new Token(TK.SPREAD,    '...',  startLine, startCol)); continue; }
     if (rest.startsWith('=>'))  { i += 1; col += 1; tokens.push(new Token(TK.ARROW,    '=>',   startLine, startCol)); continue; }
@@ -173,7 +180,9 @@ export function lex(src, filename = '<input>') {
     if (rest.startsWith('&&'))  { i += 1; col += 1; tokens.push(new Token(TK.AMP2,     '&&',   startLine, startCol)); continue; }
     if (rest.startsWith('||=')) { i += 2; col += 2; tokens.push(new Token(TK.PIPE2EQ,  '||=',  startLine, startCol)); continue; }
     if (rest.startsWith('||'))  { i += 1; col += 1; tokens.push(new Token(TK.PIPE2,    '||',   startLine, startCol)); continue; }
+    if (rest.startsWith('??=')) { i += 2; col += 2; tokens.push(new Token(TK.QUEST2EQ, '??=',  startLine, startCol)); continue; }
     if (rest.startsWith('??'))  { i += 1; col += 1; tokens.push(new Token(TK.QUEST2,   '??',   startLine, startCol)); continue; }
+    if (rest.startsWith('?.'))  { i += 1; col += 1; tokens.push(new Token(TK.QUESTDOT, '?.',   startLine, startCol)); continue; }
     if (rest.startsWith('++'))  { i += 1; col += 1; tokens.push(new Token(TK.PLUS2,    '++',   startLine, startCol)); continue; }
     if (rest.startsWith('--'))  { i += 1; col += 1; tokens.push(new Token(TK.MINUS2,   '--',   startLine, startCol)); continue; }
     if (rest.startsWith('+='))  { i += 1; col += 1; tokens.push(new Token(TK.PLUSEQ,   '+=',   startLine, startCol)); continue; }

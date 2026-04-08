@@ -2,6 +2,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("count: %d\n", 3);
+    printf("count: %g\n", 3.0);
     return 0;
 }

@@ -2,6 +2,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", 42);
+    printf("%g\n", 42.0);
     return 0;
 }
