@@ -1,0 +1,7 @@
+@packed
+class Header {
+    magic: u8;
+    version: u8;
+    length: u32;
+    flags: u16;
+}

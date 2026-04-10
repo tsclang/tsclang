@@ -1,0 +1,6 @@
+@packed
+@align(16)
+class Bad {
+    x: i32;
+    y: i32;
+}

@@ -880,7 +880,8 @@ platform/
 | Target | usize | heap | fpu | std/ |
 |--------|-------|------|-----|------|
 | `desktop` | `u64` | ✅ | ✅ | полный |
-| `arm` (Cortex-M) | `u32` | ✅/❌ | ✅/❌ | без io/fs/net/threads |
+| `arm` (Cortex-M0/M1) | `u32` | ✅/❌ | ❌ | без io/fs/net/threads |
+| `arm` (Cortex-M4+) | `u32` | ✅/❌ | ✅/❌ | без io/fs/net/threads |
 | `avr` | `u16` | ❌ | ❌ | math, libc partial |
 | `wasm32` | `u32` | ✅ | ✅ | ограниченный |
 | `dos` | `u32` | ✅ | ❌ | libc почти полный |

@@ -99,11 +99,16 @@ export default {
     const cls = this.classes.get(name);
     if (cls) {
       const hasCtor = cls.methods?.some(m => m.name === 'constructor');
+      // Suppress const for class instances unless ALL fields are readonly
+      const allReadonly = cls.fields?.length > 0 &&
+        cls.fields.every(f => f.modifiers?.includes('readonly'));
+      if (!allReadonly) this._lastSuppressConst = true;
       if (hasCtor) return `${name}_new(${argsC})`;
       return `{0}`;
     }
 
     // Unknown: zero-init struct
+    this._lastSuppressConst = true;
     return `(${name}){0}`;
   },
 
@@ -216,6 +221,17 @@ export default {
     }
     if (node.kind === 'Call') {
       if (node.callee.kind === 'Ident' && node.callee.name === 'String') return true;
+      // User-defined function call that heap-allocates its String return value
+      if (node.callee.kind === 'Ident') {
+        const sym = this.lookup(node.callee.name);
+        if (sym?.ctype === 'String') {
+          // Check the mangled name (accounting for overloads)
+          const funcName = sym.funcName ?? node.callee.name;
+          if (this._heapStringFuncs?.has(funcName)) return true;
+          // Check overloads
+          if (sym.overloads?.some(o => this._heapStringFuncs?.has(o.funcName))) return true;
+        }
+      }
       if (node.callee.kind === 'Member') {
         const prop = node.callee.prop;
         // Methods that return heap-allocated String

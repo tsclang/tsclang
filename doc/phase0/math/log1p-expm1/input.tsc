@@ -1,0 +1,2 @@
+console.log(Math.log1p(0.0));
+console.log(Math.expm1(0.0));

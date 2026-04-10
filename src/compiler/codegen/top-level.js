@@ -75,7 +75,13 @@ export default {
       case 'Enum':        this.visitEnum(node); break;
       case 'TypeAlias':   this.visitTypeAlias(node); break;
       case 'FuncDecl':    this.visitFuncDecl(node, true); break;
-      case 'FuncOverload': break; // skip overload signatures
+      case 'FuncOverload':
+        // Collect signatures; implementation FuncDecl will emit them
+        if (!this._pendingOverloads) this._pendingOverloads = new Map();
+        { const _sigs = this._pendingOverloads.get(node.name) ?? [];
+          _sigs.push(node);
+          this._pendingOverloads.set(node.name, _sigs); }
+        break;
       case 'VarDecl':     this.visitStmtInMain(node); break;
       case 'Noop':        break;
       default:
@@ -97,7 +103,8 @@ export default {
     }
     const fields = members.filter(m => m.kind === 'Field');
     const methods = members.filter(m => m.kind === 'Method');
-    this.classes.set(name, { fields, methods, superClass });
+    // Register as struct (isStruct:true allows const qualifier in VarDecl)
+    this.classes.set(name, { fields, methods, superClass, isStruct: true });
 
     // Map TSClang base class names → C names
     const cBase = superClass === 'Error' ? 'TscError' : superClass;
@@ -105,17 +112,21 @@ export default {
     // Check if this class is used as Shared<T> or Weak<T>
     const arcInfo = this._arcClasses?.get(name);
 
-    // Simple class (no methods, no base) → single-line struct
-    if (!cBase && methods.length === 0) {
-      const userFieldParts = fields.map(f => {
+    // All-static class with no fields → no struct needed (just a namespace)
+    const allStatic = methods.length > 0 && methods.every(m => m.modifiers.includes('static'));
+    const hasUserFields = fields.length > 0 || cBase;
+
+    if (!allStatic || hasUserFields) {
+      // Build field list (single-line struct always)
+      const userFieldParts = [];
+      if (cBase) userFieldParts.push(`${cBase} _base;`);
+      for (const f of fields) {
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
-        // Pointer types: attach * to name (Node *next; not Node * next;)
-        if (ct.endsWith(' *')) return `${ct.slice(0, -2)} *${f.name};`;
-        return `${ct} ${f.name};`;
-      });
+        if (ct.endsWith(' *')) userFieldParts.push(`${ct.slice(0, -2)} *${f.name};`);
+        else userFieldParts.push(`${ct} ${f.name};`);
+      }
 
       if (arcInfo) {
-        // Build arc fields
         const arcPre = arcInfo.refFirst ? [
           ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
           ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
@@ -125,13 +136,11 @@ export default {
           ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
         ];
         const allFields = [...arcPre, ...userFieldParts, ...arcPost];
-        // Check self-referential (any field resolves to contain 'name *')
         const isSelfRef = fields.some(f => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         if (isSelfRef) {
-          // Forward declaration needed for self-referential struct
           this.addTop(`typedef struct ${name} ${name};`);
           this.addTop(`struct ${name} { ${allFields.join(' ')} };`);
         } else {
@@ -141,51 +150,92 @@ export default {
         this.addTop(`typedef struct { ${userFieldParts.join(' ')} } ${name};`);
       }
       this.addTop('');
-    } else {
-      // typedef struct (multi-line)
-      this.addTop(`typedef struct {`);
-      if (cBase) this.addTop(`    ${cBase} _base;`);
-      for (const f of fields) {
-        const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
-        this.addTop(`    ${ct} ${f.name};`);
-      }
-      this.addTop(`} ${name};`);
-      this.addTop('');
     }
 
     // Constructor if present
     const ctor = methods.find(m => m.name === 'constructor');
     if (ctor) {
-      this.emitMethod(name, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: name }, false);
+      this.emitMethod(name, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: name }, true);
     }
 
-    // Methods
+    // Methods: emit with explicit-implements style (void *_self) when class has 'implements'
+    const explicitImplements = node.implements_ ?? [];
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       const isStatic = m.modifiers.includes('static');
-      this.emitMethod(name, m, isStatic);
+      this.emitMethod(name, m, isStatic, explicitImplements);
+    }
+
+    // Emit vtable constants for each explicitly implemented interface
+    for (const ifaceName of explicitImplements) {
+      this.emitVtableConstant(name, ifaceName);
     }
   },
 
-  emitMethod(className, m, isStatic) {
+  emitVtableConstant(className, ifaceName) {
+    const ifaceDef = this.interfaces.get(ifaceName);
+    if (!ifaceDef) return;
+    const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    const vtableName = `${className}_${ifaceName}_vtable`;
+    const entries = ifaceMethods.map(m => {
+      return `    .${m.name} = ${className}_${m.name}`;
+    }).join(',\n');
+    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map(m => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
+    this.addTop('');
+  },
+
+  emitMethod(className, m, isStatic, explicitImplements = []) {
     if (!m.body) return; // abstract / overload
-    const suffix = mangleParams(m.params);
+    // Methods are NOT mangled by param types (class prefix already disambiguates)
     const retType = m.returnTypeOverride ?? (m.returnType ? this.resolveType(m.returnType) : 'void');
-    const nameMangled = isStatic
-      ? `${className}_${m.name}${suffix}`
-      : `${className}_${m.name}${suffix}`;
+    const nameMangled = `${className}_${m.name}`;
+
+    const isMut = m.modifiers?.includes('mut');
+    // Move-method: returns the class itself by value → self passed by value
+    const isMoveMethod = !isStatic && m.name !== 'new' && retType === className;
+
+    // Interface-implements style: method takes (void *_self) for explicit implements
+    const isIfaceMethod = !isStatic && m.name !== 'new' && explicitImplements.length > 0;
+
+    // Emit body first so we can inspect it for self-mutation
+    const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut);
+
+    // Determine whether method mutates self
+    const mutatesself = isMut || lines.some(l => /self->[\w]+ *=/.test(l));
 
     const params = [];
-    if (!isStatic && m.name !== 'new') params.push(`${className} *self`);
+    if (!isStatic && m.name !== 'new') {
+      if (isMoveMethod) {
+        params.push(`${className} self`);
+      } else if (isIfaceMethod) {
+        // Interface-style: void *_self
+        params.push(`void *_self`);
+      } else if (mutatesself) {
+        params.push(`${className} *self`);
+      } else {
+        params.push(`const ${className} *self`);
+      }
+    }
     for (const p of m.params) {
       if (p.name === 'this') continue;
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
       params.push(`${ct} ${p.name}`);
     }
 
-    const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className);
-    this.addTop(`static ${retType} ${nameMangled}(${params.join(', ')}) {`);
-    for (const l of lines) this.addTop('    ' + l);
+    // For iface-style methods: always prepend self cast (vtable requires void *_self signature)
+    let finalLines = lines;
+    if (isIfaceMethod) {
+      finalLines = [`${className} *self = (${className} *)_self;`, `(void)self;`, ...lines];
+    }
+
+    // Register method in class so call sites can resolve it
+    const cls = this.classes.get(className);
+    if (cls) {
+      if (!cls._methodNames) cls._methodNames = new Map();
+      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isMoveMethod, isIfaceMethod });
+    }
+    this.addTop(`static ${retType} ${nameMangled}(${params.join(', ') || 'void'}) {`);
+    for (const l of finalLines) this.addTop('    ' + l);
     this.addTop('}');
     this.addTop('');
   },
@@ -220,17 +270,17 @@ export default {
 
     if (methods.length === 0) return;
 
-    // vtable typedef
-    const vtableLines = methods.map(m => {
+    // vtable typedef (single-line)
+    const vtableFields = methods.map(m => {
       const ret = m.returnType ? this.resolveType(m.returnType) : 'void';
       const params = m.params.map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
-      return `    ${ret} (*${m.name})(void *self${params ? ', ' + params : ''});`;
+      return `${ret} (*${m.name})(void *self${params ? ', ' + params : ''});`;
     });
-    this.addTop(`typedef struct {`);
-    for (const l of vtableLines) this.addTop(l);
-    this.addTop(`} ${name}_vtable;`);
+    this.addTop(`typedef struct { ${vtableFields.join(' ')} } ${name}_vtable;`);
     this.addTop(`typedef struct { void *self; const ${name}_vtable *vtable; } ${name};`);
-    this.addTop('');
+    // Push blank directly so it appears between interface typedefs and following class typedefs
+    this.typedefs.push('');
+    this._lastAddedToTypedefs = true;
   },
 
   // ----------------------------------------------------------------
@@ -550,6 +600,35 @@ export default {
   visitFuncDecl(node, isTopLevel = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
+
+    // If there are pending overload signatures for this function, emit one C function per signature
+    const pendingSigs = name ? this._pendingOverloads?.get(name) : null;
+    if (pendingSigs?.length) {
+      this._pendingOverloads.delete(name);
+      const implRetType = returnType ? this.resolveType(returnType) : 'void';
+      const allOverloads = [];
+      for (const sig of pendingSigs) {
+        // Build a synthetic node with this signature's params but the implementation's body
+        const sigSuffix = mangleParams(sig.params);
+        const sigCname = `${name}${sigSuffix}`;
+        const synth = { ...node, params: sig.params, _monoName: sigCname };
+        this.visitFuncDecl(synth, isTopLevel);
+        allOverloads.push({ funcName: sigCname, params: sig.params });
+      }
+      // Register all overloads in scope for call-site dispatch
+      if (name) {
+        this.define(name, {
+          ctype: implRetType,
+          funcName: allOverloads[0].funcName,
+          params: allOverloads[0].params,
+          overloads: allOverloads,
+          _overloadsInitialized: true,
+          returnType,
+        });
+      }
+      return;
+    }
+
     // Generic function: store as template, emit on demand at call sites
     if (typeParams?.length > 0) {
       // Check: Pick<T, K> in return type where K is a generic param → error
@@ -611,10 +690,37 @@ export default {
       return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
 
-    // Define before body for recursion support
-    if (name) this.define(name, { ctype: retType, funcName: cname, params, returnType });
+    // Define before body for recursion support.
+    // For overloads: store all variants keyed by param count, and keep the first definition
+    // as a sentinel so that callToC can resolve by arg count.
+    if (name) {
+      const existing = this.lookup(name);
+      if (existing && existing.funcName !== cname) {
+        // This is an overload: add to the overloads map
+        if (!existing.overloads) existing.overloads = [];
+        existing.overloads.push({ funcName: cname, params });
+        // Also add the first definition as overload if not already done
+        if (!existing._overloadsInitialized) {
+          existing.overloads.unshift({ funcName: existing.funcName, params: existing.params });
+          existing._overloadsInitialized = true;
+        }
+      } else {
+        this.define(name, { ctype: retType, funcName: cname, params, returnType });
+      }
+    }
 
     const lines = this.emitFuncBody(name, body, params, retType);
+    // Track whether this function heap-allocates String return values
+    if (retType === 'String') {
+      const heapOps = ['tsc_string_concat','tsc_string_repeat','tsc_string_replace',
+                       'tsc_string_pad','tsc_string_to_','tsc_i32_to_string','tsc_f64_to_string',
+                       'tsc_i64_to_string','tsc_u32_to_string','tsc_u64_to_string',
+                       'tsc_bool_to_string','tsc_char_to_string'];
+      const heapsString = lines.some(l => l.trimStart().startsWith('return ') &&
+                                          heapOps.some(op => l.includes(op)));
+      if (!this._heapStringFuncs) this._heapStringFuncs = new Set();
+      if (heapsString) this._heapStringFuncs.add(cname);
+    }
     // Special C syntax when return type is a function pointer: RET (*NAME(PARAMS))(FP_PARAMS)
     let funcSig;
     if (returnType?.kind === 'TypeFunc') {
@@ -636,7 +742,7 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(funcName, body, params, retType, className = null) {
+  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false) {
     const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType };
     this.inFunction = true;
     this.currentFuncName = funcName;
@@ -649,10 +755,12 @@ export default {
     // For constructors: declare 'self' as value; for instance methods: as pointer
     const isCtor = className && (funcName === 'new' || funcName === 'constructor');
     if (className) {
-      this.define('self', { ctype: className, isPointer: !isCtor });
+      // move-method: self passed by value → use as value (not pointer)
+      const selfIsPointer = !isCtor && !isMoveMethod;
+      this.define('self', { ctype: className, isPointer: selfIsPointer });
       // 'this' keyword in source → 'self' in C; also define 'this' for Member lookup
-      this.define('this', { ctype: className, isPointer: !isCtor });
-      if (isCtor) lines.push(`${className} self;`);
+      this.define('this', { ctype: className, isPointer: selfIsPointer });
+      if (isCtor) lines.push(`${className} self = {0};`);
     }
     for (const p of params) {
       if (p.rest) {

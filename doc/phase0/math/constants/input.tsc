@@ -1,0 +1,8 @@
+console.log(Math.PI > 3.14);
+console.log(Math.E > 2.71);
+console.log(Math.SQRT2 > 1.41);
+console.log(Math.SQRT1_2 > 0.70);
+console.log(Math.LN2 > 0.69);
+console.log(Math.LN10 > 2.30);
+console.log(Math.LOG2E > 1.44);
+console.log(Math.LOG10E > 0.43);

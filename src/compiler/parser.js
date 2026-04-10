@@ -634,7 +634,7 @@ export function parse(tokens, filename = '<input>') {
     while (cur().type !== TK.RBRACE) {
       const memberDecorators = parseDecorators();
       const modifiers = [];
-      while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override'].includes(cur().value)) {
+      while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override','mut'].includes(cur().value)) {
         modifiers.push(eat(TK.IDENT).value);
       }
       let generator = false;

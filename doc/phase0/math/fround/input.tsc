@@ -1,0 +1,2 @@
+const x: f32 = Math.fround(1.5);
+console.log(x);

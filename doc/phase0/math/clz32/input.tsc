@@ -1,0 +1,2 @@
+console.log(Math.clz32(1));
+console.log(Math.clz32(0x80000000));

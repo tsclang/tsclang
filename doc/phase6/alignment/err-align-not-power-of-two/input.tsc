@@ -1,0 +1,4 @@
+@align(3)
+class Bad {
+    x: i32;
+}

@@ -1,0 +1,2 @@
+console.log(Math.SQRT1_2 > 0.7);
+console.log(Math.SQRT1_2 < 0.8);

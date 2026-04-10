@@ -280,6 +280,12 @@ export default {
             if (structDef?.fields) {
               const field = structDef.fields.find(f => (f.name ?? f) === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
+              // Check inherited fields from superClass
+              if (structDef.superClass) {
+                const baseDef = this.classes.get(structDef.superClass);
+                const baseField = baseDef?.fields?.find(f => (f.name ?? f) === node.prop);
+                if (baseField?.typeAnn) return this.resolveType(baseField.typeAnn);
+              }
             }
             // Labeled tuple access: p.x → type of field with label 'x'
             if (structDef?.isTuple) {
@@ -320,7 +326,11 @@ export default {
           const obj = node.callee.object;
           const prop = node.callee.prop;
           if (obj.kind === 'Ident' && obj.name === 'performance') return 'double';
-          if (obj.kind === 'Ident' && obj.name === 'Math') return 'double';
+          if (obj.kind === 'Ident' && obj.name === 'Math') {
+            if (prop === 'clz32' || prop === 'imul') return 'int32_t';
+            if (prop === 'fround') return 'float';
+            return 'double';
+          }
           if (obj.kind === 'Ident' && obj.name === 'console') return 'void';
           if (prop === 'at') return 'opt_u8';
           if (prop === 'toFixed' || prop === 'toPrecision') return 'String';
@@ -430,6 +440,16 @@ export default {
             const etId = this.cTypeToIdent(cT);
             if (node.callee.prop === 'parse') return cT;
             if (node.callee.prop === 'tryParse') return `opt_${etId}`;
+          }
+        }
+        // Generic method call on class instance: look up method return type
+        if (node.callee.kind === 'Member') {
+          const obj2 = node.callee.object;
+          const sym2 = obj2.kind === 'Ident' ? this.lookup(obj2.name) : null;
+          const cls2 = sym2 ? this.classes.get(sym2.ctype) : null;
+          if (cls2?.methods) {
+            const m2 = cls2.methods.find(m => m.name === node.callee.prop);
+            if (m2?.returnType) return this.resolveType(m2.returnType);
           }
         }
         if (node.callee.kind === 'Ident') {

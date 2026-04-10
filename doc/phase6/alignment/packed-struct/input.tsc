@@ -1,0 +1,6 @@
+@packed
+class Packet {
+    type: u8;
+    length: u16;
+    checksum: u32;
+}

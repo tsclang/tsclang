@@ -49,6 +49,18 @@ export default {
       }
 
       case 'Member': {
+        // Math constants: Math.PI, Math.E, Math.SQRT2, etc.
+        if (node.object.kind === 'Ident' && node.object.name === 'Math') {
+          const mathConsts = {
+            PI: 'M_PI', E: 'M_E', LN2: 'M_LN2', LN10: 'M_LN10',
+            SQRT2: 'M_SQRT2', SQRT1_2: 'M_SQRT1_2',
+            LOG2E: 'M_LOG2E', LOG10E: 'M_LOG10E',
+          };
+          if (mathConsts[node.prop]) {
+            this.includes.add('#include <math.h>');
+            return mathConsts[node.prop];
+          }
+        }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
         // Rest param: .length → args_count
         if (sym?.rest && node.prop === 'length') {
@@ -79,6 +91,14 @@ export default {
           }
         }
         const isPtr = sym?.isPointer;
+        // Inherited field access: if prop not in own fields, check base class
+        const symCls = sym ? this.classes.get(sym.ctype) : null;
+        if (symCls?.superClass && symCls.fields && !symCls.fields.some(f => f.name === node.prop)) {
+          const baseCls = this.classes.get(symCls.superClass);
+          if (baseCls?.fields?.some(f => f.name === node.prop)) {
+            return isPtr ? `${objC}->_base.${node.prop}` : `${objC}._base.${node.prop}`;
+          }
+        }
         return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
       }
 

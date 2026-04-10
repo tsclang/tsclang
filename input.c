@@ -1,8 +1,8 @@
 #include "runtime.h"
-
-typedef struct { TscError _base; } IOError;
+#include <math.h>
 
 int main(void) {
     TSC_INIT();
+    printf("%g\n", sqrt(9.0));
     return 0;
 }

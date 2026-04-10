@@ -1084,6 +1084,16 @@ input.tsc:1:
 
 ## Phase 6 — Модульная система
 
+### Выравнивание структур (`@packed`, `@align`)
+
+- [F] `@packed class` → `__attribute__((packed))` в C-output
+- [F] `@align(16) class` → `__attribute__((aligned(16)))` в C-output
+- [F] `@packed` с несколькими полями → все поля без padding
+- [F] `@align(4)` с несколькими полями → выравнивание на 4 байта
+- [E] `@packed` и `@align(N)` на одном классе → ошибка компилятора
+- [E] `@align(3)` — не степень двойки → ошибка компилятора
+- [E] `@align(0)` → ошибка компилятора
+
 ### export
 
 - [R] `export function f()` — используется в другом файле
@@ -1571,24 +1581,40 @@ input.tsc:1:
 ### std/math
 
 - [R] `Math.PI`, `Math.E`, `Math.LN2`, `Math.LN10`, `Math.SQRT2`
+- [R] `Math.SQRT1_2` — 1/√2 ≈ 0.707
 - [R] `Math.abs(-5)` → 5
 - [R] `Math.floor(3.7)` → 3
 - [R] `Math.ceil(3.2)` → 4
 - [R] `Math.round(3.5)` → 4
 - [R] `Math.trunc(3.9)` → 3
 - [R] `Math.sqrt(9.0)` → 3.0
+- [R] `Math.cbrt(27.0)` → 3.0
 - [R] `Math.pow(2.0, 10.0)` → 1024.0
+- [R] `Math.hypot(3.0, 4.0)` → 5.0
 - [R] `Math.log(Math.E)` → ~1.0
 - [R] `Math.log2(8.0)` → 3.0
 - [R] `Math.log10(1000.0)` → 3.0
+- [R] `Math.log1p(0.0)` → 0.0
+- [R] `Math.exp(1.0)` → e
+- [R] `Math.expm1(0.0)` → 0.0
 - [R] `Math.sin(0.0)` → 0.0
 - [R] `Math.cos(0.0)` → 1.0
 - [R] `Math.tan(0.0)` → 0.0
+- [R] `Math.asin(0.0)` → 0.0, `Math.acos(1.0)` → 0.0, `Math.atan(0.0)` → 0.0
+- [R] `Math.atan2(1.0, 1.0)` → PI/4
+- [R] `Math.sinh(0.0)` → 0.0
+- [R] `Math.cosh(0.0)` → 1.0
+- [R] `Math.tanh(0.0)` → 0.0
+- [R] `Math.asinh(0.0)` → 0.0
+- [R] `Math.acosh(1.0)` → 0.0
+- [R] `Math.atanh(0.0)` → 0.0
 - [R] `Math.min(3, 5)` → 3
 - [R] `Math.max(3, 5)` → 5
 - [R] `Math.clamp(x, min, max)`
 - [R] `Math.sign(-5)` → -1
-- [R] `Math.hypot(3.0, 4.0)` → 5.0
+- [R] `Math.clz32(1)` → 31
+- [R] `Math.imul(3, 4)` → 12; `Math.imul(0xFFFFFFFF, 5)` → -5 (overflow)
+- [R] `Math.fround(1.5)` → 1.5 (f32)
 - [F] C-output: прямой вызов `<math.h>` функций
 
 ### std/string

@@ -26,6 +26,23 @@ export default {
       return `${objC2}.${callee.prop}(${this.argsToC(args, lines, depth)})`;
     }
 
+    // super(args) in constructor → initialize base struct
+    if (callee.kind === 'Ident' && callee.name === 'super') {
+      const selfSym = this.lookup('self');
+      const cls = selfSym ? this.classes.get(selfSym.ctype) : null;
+      const superClass = cls?.superClass;
+      if (superClass === 'Error') {
+        // super(msg) → self._base.message = msg
+        const msgC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        return `self._base.message = ${msgC}`;
+      } else if (superClass) {
+        // super(args) → self._base = BaseClass_new(args)
+        const argsC = this.argsToC(args, lines, depth);
+        return `self._base = ${superClass}_new(${argsC})`;
+      }
+      return '/* super */';
+    }
+
     // console.log / console.error / console.warn / console.debug
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
       return this.consoleCall(callee.prop, args, lines, depth);
@@ -210,8 +227,35 @@ export default {
     let sym = null;
     if (callee.kind === 'Ident') {
       sym = this.lookup(callee.name);
-      // funcPtr variables hold the name directly; functions use their mangled name
-      calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
+      // Overload resolution: if there are multiple overloads, pick by arg count then type
+      if (sym?.overloads && sym.overloads.length > 0) {
+        const argCount = args.filter(a => !a.spread).length;
+        // First filter by arg count
+        const countMatches = sym.overloads.filter(o => o.params.filter(p => !p.rest).length === argCount);
+        let match;
+        if (countMatches.length === 1) {
+          match = countMatches[0];
+        } else if (countMatches.length > 1) {
+          // Multiple count matches: pick by type
+          match = countMatches.find(o =>
+            args.every((a, i) => {
+              const p = o.params[i];
+              if (!p?.typeAnn) return true;
+              const expectedCtype = this.resolveType(p.typeAnn);
+              const actualCtype = this.inferType(a.expr);
+              return expectedCtype === actualCtype || expectedCtype.includes(actualCtype) || actualCtype.includes(expectedCtype);
+            })
+          ) ?? countMatches[0];
+        } else {
+          match = sym.overloads[sym.overloads.length - 1]; // fallback to last
+        }
+        calleeC = match.funcName;
+        // Use matched params for rest/default filling below
+        sym = { ...sym, funcName: calleeC, params: match.params };
+      } else {
+        // funcPtr variables hold the name directly; functions use their mangled name
+        calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
+      }
     } else {
       calleeC = this.exprToC(callee, lines, depth);
     }
@@ -575,21 +619,40 @@ export default {
     const a1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
     const a2 = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
     const map = {
+      // rounding
       abs: `fabs(${a0})`, floor: `floor(${a0})`, ceil: `ceil(${a0})`,
       round: `round(${a0})`, trunc: `trunc(${a0})`,
-      sqrt: `sqrt(${a0})`, pow: `pow(${a0}, ${a1})`,
-      log: `log(${a0})`, log2: `log2(${a0})`, log10: `log10(${a0})`,
-      sin: `sin(${a0})`, cos: `cos(${a0})`, tan: `tan(${a0})`,
-      min: `fmin(${a0}, ${a1})`, max: `fmax(${a0}, ${a1})`,
+      // arithmetic
+      sqrt: `sqrt(${a0})`, cbrt: `cbrt(${a0})`, pow: `pow(${a0}, ${a1})`,
       hypot: `hypot(${a0}, ${a1})`,
+      // trigonometry
+      sin: `sin(${a0})`, cos: `cos(${a0})`, tan: `tan(${a0})`,
+      asin: `asin(${a0})`, acos: `acos(${a0})`, atan: `atan(${a0})`,
+      atan2: `atan2(${a0}, ${a1})`,
+      // hyperbolic
+      sinh: `sinh(${a0})`, cosh: `cosh(${a0})`, tanh: `tanh(${a0})`,
+      asinh: `asinh(${a0})`, acosh: `acosh(${a0})`, atanh: `atanh(${a0})`,
+      // logarithms / exponents
+      log: `log(${a0})`, log2: `log2(${a0})`, log10: `log10(${a0})`,
+      log1p: `log1p(${a0})`,
+      exp: `exp(${a0})`, expm1: `expm1(${a0})`,
+      // utilities
+      min: `fmin(${a0}, ${a1})`, max: `fmax(${a0}, ${a1})`,
       clamp: `(${a0} < ${a1} ? ${a1} : (${a0} > ${a2} ? ${a2} : ${a0}))`,
       sign: `((${a0} > 0.0) - (${a0} < 0.0) + 0.0)`,
+      clz32: `(int32_t)__builtin_clz((uint32_t)(${a0}))`,
+      imul: `(int32_t)((int32_t)(${a0}) * (int32_t)(${a1}))`,
+      fround: `(float)(${a0})`,
+      random: `tsc_math_random()`,
     };
-    if (prop === 'PI')   return 'M_PI';
-    if (prop === 'E')    return 'M_E';
-    if (prop === 'LN2')  return 'M_LN2';
-    if (prop === 'LN10') return 'log(10.0)';
-    if (prop === 'SQRT2') return 'M_SQRT2';
+    if (prop === 'PI')     return 'M_PI';
+    if (prop === 'E')      return 'M_E';
+    if (prop === 'LN2')    return 'M_LN2';
+    if (prop === 'LN10')   return 'log(10.0)';
+    if (prop === 'SQRT2')  return 'M_SQRT2';
+    if (prop === 'SQRT1_2') return 'M_SQRT1_2';
+    if (prop === 'LOG2E')  return 'M_LOG2E';
+    if (prop === 'LOG10E') return 'M_LOG10E';
     return map[prop] ?? `/* Math.${prop} */(${a0})`;
   },
 
@@ -850,9 +913,25 @@ export default {
       }
     }
 
-    // Generic method: obj.method(args) → ObjType_method(&obj, args)
+    // Static method call: ClassName.method(args) → ClassName_method(args)
+    if (baseObject.kind === 'Ident' && this.classes.has(baseObject.name)) {
+      const classDef = this.classes.get(baseObject.name);
+      const methodInfo = classDef?._methodNames?.get(prop);
+      if (methodInfo?.isStatic) {
+        return `${methodInfo.nameMangled}(${argsC})`;
+      }
+    }
+
+    // Generic method: obj.method(args) → ObjType_method(&obj, args) or ObjType_method(obj, args)
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (classSym?.ctype && this.classes.has(classSym.ctype)) {
+      const classDef2 = this.classes.get(classSym.ctype);
+      const methodInfo2 = classDef2?._methodNames?.get(prop);
+      if (methodInfo2?.isMoveMethod) {
+        // Move-method: pass self by value
+        return `${methodInfo2.nameMangled}(${objC}${argsC ? ', ' + argsC : ''})`;
+      }
+      // Regular method: pass &obj
       return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
     }
 

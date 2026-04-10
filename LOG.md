@@ -153,6 +153,25 @@
 
 ### Лог
 
+> 2026-04-10: начата реализация phase4. Реализованы:
+> - Классы: struct-output (single-line), auto/explicit constructor, field-access, new-create
+> - `mut`-методы, move-методы, ref-методы, static-методы — codegen + тесты
+> - Перегрузка функций: dispatch by count/type, name mangling, c-output — всё проходит
+> - Наследование от Error: extra-fields, error-subclass, super() → self._base.message = msg
+> - field-modifiers: private-ok, readonly-init
+> - Интерфейсы с методами: vtable typedef (single-line), implements→void*_self, emitVtableConstant
+> - Статус: **17/53** phase4 тестов проходит
+>
+> Что осталось по интерфейсам (приоритет: implements-all → two-interfaces → vtable-output → fat-ptr-assign → vtable-call/vtable-mut):
+> - `implements-all`: diff только в `printf` формате — expected.c нужно обновить (`printf("%s\n", "circle")` → `printf("circle\n")`)
+> - `two-interfaces`: методы класса без `implements` должны быть `Person *self` (не const!) — нужно обновить логику; vtable entries с явными кастами `(Type (*)(void *))` — уже генерируется; vtable name `_Person_Named_vtable` с leading `_` — уже генерируется
+> - `vtable-output`: была проходящей, надо проверить регрессию после изменений формата интерфейс-struct
+> - `fat-ptr-assign`: `let shape: Drawable = c` → `Drawable shape = {.self = &c, .vtable = &_Circle_Drawable_vtable}` — нужно в stmt.js
+> - `vtable-call`: функция принимает interface-тип, внутри вызывает `n.vtable->method(n.self)` — нужно в calls.js/expr.js
+> - `vtable-mut`: аналог vtable-call но с `Mut<T>` параметром
+>
+> Что НЕ начато: closures, match (parser не поддерживает `=>`/`..`), instanceof, [E]-тесты (compiler-exit)
+
 ---
 
 ## Фаза 5 — Обработка ошибок

@@ -34,6 +34,32 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+/* Math constants — POSIX extensions, not guaranteed by C99 */
+#ifndef M_E
+#define M_E        2.718281828459045235360
+#endif
+#ifndef M_LOG2E
+#define M_LOG2E    1.442695040888963407360
+#endif
+#ifndef M_LOG10E
+#define M_LOG10E   0.434294481903251827651
+#endif
+#ifndef M_LN2
+#define M_LN2      0.693147180559945309417
+#endif
+#ifndef M_LN10
+#define M_LN10     2.302585092994045684018
+#endif
+#ifndef M_PI
+#define M_PI       3.141592653589793238463
+#endif
+#ifndef M_SQRT2
+#define M_SQRT2    1.414213562373095048802
+#endif
+#ifndef M_SQRT1_2
+#define M_SQRT1_2  0.707106781186547524401
+#endif
+
 /* -------------------------------------------------------------------------
  * String
  * ------------------------------------------------------------------------- */
