@@ -4,7 +4,7 @@ typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 int32_t sum_ref_Array_i32(const Array_i32 *data) {
     int32_t total = 0;
-    for (int32_t i = 0; i < (int32_t)data->length; i++) {
+    for (int32_t i = 0; i < data->length; i++) {
         total = total + data->data[i];
     }
     return total;

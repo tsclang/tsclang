@@ -244,6 +244,14 @@ export function parse(tokens, filename = '<input>') {
 
     let t = { kind: 'TypeRef', name, typeArgs };
 
+    // Fixed-size array suffix: T[N]
+    if (cur().type === TK.LBRACK && peek().type === TK.NUMBER) {
+      eat(TK.LBRACK);
+      const sizeTok = eat(TK.NUMBER);
+      eat(TK.RBRACK);
+      return { kind: 'TypeFixedArray', element: t, size: parseInt(sizeTok.value, 10) };
+    }
+
     // Array suffix: T[]
     while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
       eat(TK.LBRACK); eat(TK.RBRACK);
@@ -410,6 +418,7 @@ export function parse(tokens, filename = '<input>') {
     if (cur().type === TK.LBRACE) {
       const pattern = parseObjectPattern();
       let typeAnn = null;
+      if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
       eatSemi();
@@ -418,6 +427,7 @@ export function parse(tokens, filename = '<input>') {
     if (cur().type === TK.LBRACK) {
       const pattern = parseArrayPattern();
       let typeAnn = null;
+      if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
       eatSemi();
@@ -1087,9 +1097,24 @@ export function parse(tokens, filename = '<input>') {
         expr = { kind: 'OptChain', object: expr, prop };
       } else if (cur().type === TK.LBRACK) {
         eat(TK.LBRACK);
-        const index = parseExpr();
-        eat(TK.RBRACK);
-        expr = { kind: 'Index', object: expr, index };
+        // Range slice: [..], [start..], [..end], [start..end]
+        if (cur().type === TK.DOTDOT) {
+          eat(TK.DOTDOT);
+          const end = cur().type !== TK.RBRACK ? parseExpr() : null;
+          eat(TK.RBRACK);
+          expr = { kind: 'RangeIndex', object: expr, start: null, end };
+        } else {
+          const startExpr = parseExpr();
+          if (cur().type === TK.DOTDOT) {
+            eat(TK.DOTDOT);
+            const end = cur().type !== TK.RBRACK ? parseExpr() : null;
+            eat(TK.RBRACK);
+            expr = { kind: 'RangeIndex', object: expr, start: startExpr, end };
+          } else {
+            eat(TK.RBRACK);
+            expr = { kind: 'Index', object: expr, index: startExpr };
+          }
+        }
       } else if (cur().type === TK.LPAREN) {
         const args = parseCallArgs();
         expr = { kind: 'Call', callee: expr, args };
@@ -1157,8 +1182,13 @@ export function parse(tokens, filename = '<input>') {
     // Literals
     if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value }; }
     if (t.type === TK.STRING) { pos++; return { kind: 'Literal', litType: 'string', value: t.value }; }
+    if (t.type === TK.CHAR)   { pos++; return { kind: 'Literal', litType: 'char',   value: t.value }; }
     if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value }; }
     if (t.type === TK.NULL)   { pos++; return { kind: 'Literal', litType: 'null',   value: 'null' }; }
+    if (t.type === TK.TEMPLATE) {
+      pos++;
+      return { kind: 'TemplateLit', parts: t.parts };
+    }
 
     // Grouped / arrow function
     if (t.type === TK.LPAREN) return parseParenOrArrow();

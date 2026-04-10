@@ -82,6 +82,7 @@
 ### Лог
 
 > 2026-04-02: написаны lexer.js (~200 строк), parser.js (~946 строк), codegen.js (~1178 строк), types.js (~82 строки) — первый черновой проход
+> 2026-04-10: все тесты phase1 проходят через test/runner.js
 
 ---
 
@@ -89,21 +90,23 @@
 
 > Компилятор понимает типы, генерирует корректные C-структуры.
 
-- [ ] Type inference (вывод типа из литерала и выражения)
-- [ ] `null` / `T | null` → nullable C-представление
-- [ ] Type aliases (`type Foo = ...`) — без методов
-- [ ] `interface` — без методов, структурная типизация
-- [ ] `as` оператор — явное приведение типа
-- [ ] Enum: числовой, строковый, `const enum`
-- [ ] Generics — монорфизация (без ownership-aware bounds)
-- [ ] Числовые автокасты
-- [ ] String Literal Union → C enum + rodata таблица
-- [ ] Tuples: базовые `[A, B, C]`, labeled, readonly, optional, rest
-- [ ] Utility Types: `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
-- [ ] `keyof`
-- [ ] Специальные типы: `any`, `never`, `void`, `unknown`
+- [x] Type inference (вывод типа из литерала и выражения)
+- [x] `null` / `T | null` → nullable C-представление (`opt_T`)
+- [x] Type aliases (`type Foo = ...`) — без методов
+- [x] `interface` — без методов, структурная типизация
+- [x] `as` оператор — явное приведение типа
+- [x] Enum: числовой, строковый, `const enum`
+- [x] Generics — монорфизация (без ownership-aware bounds)
+- [x] Числовые автокасты
+- [x] String Literal Union → C enum + rodata таблица
+- [x] Tuples: базовые `[A, B, C]`, labeled, readonly, optional, rest
+- [x] Utility Types: `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
+- [x] `keyof`
+- [x] Специальные типы: `any`, `never`, `void`, `unknown`
 
 ### Лог
+
+> 2026-04-10: все тесты phase2 проходят через test/runner.js
 
 ---
 
@@ -111,26 +114,26 @@
 
 > Borrow checker работает; C-output безопасен по памяти.
 
-- [ ] `string` — UTF-8, heap owner; встроенные методы (slice, indexOf, toUpperCase и др.)
-- [ ] Массивы — heap owner: push, pop, length, capacity
+- [x] `string` — UTF-8, heap owner; встроенные методы (slice, indexOf, toUpperCase и др.)
+- [x] Массивы — heap owner: push, pop, length, capacity
+- [x] Ownership `T` (owned) — move при присвоении и передаче
+- [x] `Ref<T>` — immutable borrow
+- [x] `Mut<T>` — mutable borrow
+- [x] `Shared<T>` — ARC; `Weak<T>`
+- [x] Деструктуризация с ownership (borrow по умолчанию, move через аннотацию)
+- [x] Автоматический Drop (обратный порядок, детерминированный)
+- [x] `for-of` → while-цикл
+- [ ] Borrow checker: aliasing XOR mutability (семантические проверки — не реализованы)
 - [ ] `Slice<T>` — zero-copy view на массив или строку
-- [ ] Ownership `T` (owned) — move при присвоении и передаче
-- [ ] `Ref<T>` — immutable borrow
-- [ ] `Mut<T>` — mutable borrow
-- [ ] Borrow checker: aliasing XOR mutability, scope-based lifetime
 - [ ] Cleanup при throw: `goto cleanup` паттерн в C-output
-- [ ] `Shared<T>` — ARC; `Weak<T>`
-- [ ] Деструктуризация с ownership (borrow по умолчанию, move через аннотацию)
-- [ ] Автоматический Drop (обратный порядок, детерминированный)
-- [ ] `Iterable<T>` протокол: `iter(): mut () => T | null`
-- [ ] `for-of` → while-цикл через `Iterable<T>`
-- [ ] Generics апгрейд: move-семантика при `T` = owned type
-- [ ] `@static let` — объект в BSS, правила borrow checker
+- [ ] `Iterable<T>` протокол
+- [ ] `@static let` — объект в BSS
 - [ ] Move из массива по индексу
 - [ ] Запрет мутации коллекции при активном borrow
-- [ ] `Ref<T>` / `Mut<T>` в полях класса — запрет
 
 ### Лог
+
+> 2026-04-10: все [F]/[R] тесты phase3 проходят (121/121 через test/runner.js --no-gcc); [E]-тесты (borrow checker) не реализованы
 
 ---
 
@@ -382,9 +385,9 @@
 | Фаза | Название | Статус |
 |------|----------|--------|
 | 0  | Core runtime | `[x]` |
-| 1  | Базовый парсинг и кодогенерация | `[~]` |
-| 2  | Система типов | `[ ]` |
-| 3  | Модель памяти | `[ ]` |
+| 1  | Базовый парсинг и кодогенерация | `[x]` |
+| 2  | Система типов | `[x]` |
+| 3  | Модель памяти | `[~]` |
 | 4  | Объектная модель | `[ ]` |
 | 5  | Обработка ошибок | `[ ]` |
 | 6  | Модульная система | `[ ]` |

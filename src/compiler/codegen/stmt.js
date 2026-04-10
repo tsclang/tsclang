@@ -81,6 +81,93 @@ export default {
           break;
         }
 
+        // String.split() → special multi-statement form: String *parts; int32_t parts_len; tsc_string_split(...)
+        if (!typeAnn && init?.kind === 'Call' &&
+            init.callee?.kind === 'Member' && init.callee?.prop === 'split') {
+          const splitObjType = this.inferType(init.callee.object);
+          if (splitObjType === 'String') {
+            const objC = this.exprToC(init.callee.object, lines, depth);
+            const sepC = init.args[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
+            const lenName = `${name}_len`;
+            p(`String *${name};`);
+            p(`int32_t ${lenName};`);
+            p(`tsc_string_split(${objC}, ${sepC}, &${name}, &${lenName});`);
+            this.define(name, { ctype: 'String *', varKind, isArray: false, isSplitResult: true, lenName });
+            this._registerCleanup(`tsc_string_array_free(${name}, ${lenName})`);
+            break;
+          }
+        }
+
+        // new Shared<T>() → arc alloc
+        if (!typeAnn && init?.kind === 'New' && init.name === 'Shared') {
+          const tArg = init.typeArgs?.[0];
+          if (tArg?.kind === 'TypeRef') {
+            const innerType = tArg.name;
+            p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
+            this._registerCleanup(`tsc_arc_release(${name})`);
+            break;
+          }
+        }
+
+        // new Weak<T>(src) → weak create
+        if (!typeAnn && init?.kind === 'New' && init.name === 'Weak') {
+          const tArg = init.typeArgs?.[0];
+          if (tArg?.kind === 'TypeRef') {
+            const innerType = tArg.name;
+            const argC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'NULL';
+            p(`${innerType} *${name} = tsc_weak_create(${argC});`);
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isWeak: true, derefType: innerType });
+            this._registerCleanup(`tsc_weak_release(${name})`);
+            break;
+          }
+        }
+
+        // let x: Shared<T> = new T() → arc alloc with explicit field init
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && init?.kind === 'New' && init.name !== 'Shared') {
+          const tArg = typeAnn.typeArgs?.[0];
+          if (tArg?.kind === 'TypeRef') {
+            const innerType = tArg.name;
+            const structDef = this.classes.get(innerType);
+            p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
+            p(`${name}->_refcount = 1;`);
+            if (structDef?.fields) {
+              for (const f of structDef.fields) {
+                const fname = typeof f === 'string' ? f : f.name;
+                p(`${name}->${fname} = 0;`);
+              }
+            }
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
+            this._registerCleanup(`tsc_arc_release((void **)&${name})`);
+            break;
+          }
+        }
+
+        // w.upgrade() → weak upgrade (result needs arc_release inside null-check)
+        if (!typeAnn && init?.kind === 'Call' &&
+            init.callee?.kind === 'Member' && init.callee.prop === 'upgrade') {
+          const weakSym2 = init.callee.object?.kind === 'Ident' ? this.lookup(init.callee.object.name) : null;
+          if (weakSym2?.isWeak) {
+            const innerType2 = weakSym2.derefType;
+            const weakC2 = this.exprToC(init.callee.object, lines, depth);
+            p(`${innerType2} *${name} = tsc_weak_upgrade(${weakC2});`);
+            this.define(name, { ctype: `${innerType2} *`, varKind, isPointer: true, isSharedUpgrade: true, derefType: innerType2 });
+            break;
+          }
+        }
+
+        // let b = a where a is Shared → arc retain
+        if (!typeAnn && init?.kind === 'Ident') {
+          const initSym3 = this.lookup(init.name);
+          if (initSym3?.isShared) {
+            const innerType3 = initSym3.derefType;
+            p(`${innerType3} *${name} = tsc_arc_retain(${init.name});`);
+            this.define(name, { ctype: `${innerType3} *`, varKind, isPointer: true, isShared: true, derefType: innerType3 });
+            this._registerCleanup(`tsc_arc_release(${name})`);
+            break;
+          }
+        }
+
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'never') {
           throw new Error(`"never" cannot be used as a variable type`);
         }
@@ -93,7 +180,7 @@ export default {
           const v = init.value;
           ctype = (v.includes('.') || v.includes('e') || v.includes('E')) ? 'double' : 'int32_t';
         }
-        // ObjLit with named fields and no type annotation → anonymous struct
+        // ObjLit with named fields and no type annotation → defer as individual consts (expanded at destructuring)
         if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {
           if (!this._anonStructCount) this._anonStructCount = 0;
           const anonName = `_anon_${this._anonStructCount++}`;
@@ -101,16 +188,19 @@ export default {
             const ft = this.inferType(p.value);
             return { name: p.key, typeAnn: { kind: 'TypeRef', name: ft, typeArgs: [] }, _ctype: ft };
           });
-          const fieldDecls = fields.map(f => `${f._ctype} ${f.name};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${anonName};`);
+          // Defer emission: don't create typedef or variable yet — expand at destructuring time
+          if (!this._deferredAnons) this._deferredAnons = new Map();
+          this._deferredAnons.set(name, { fields, init });
+          this.define(name, { ctype: anonName, varKind, initNode: init, deferredAnon: true });
           this.classes.set(anonName, { isStruct: true, fields });
-          ctype = anonName;
+          break;
         }
         // Regular (non-const) enums, opt types, and structs don't use const qualifier in C
         const enumDef2 = this.classes.get(ctype);
         const isGenericClassInst = !enumDef2 && this._genericClasses &&
           [...this._genericClasses.keys()].some(n => ctype.startsWith(n + '_'));
-        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || ctype.startsWith('opt_') || ctype.startsWith('_anon_') || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst;
+        // opt_ types suppress const only when inferred (no type annotation); with explicit T|null annotation, keep const
+        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst;
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
         // Optional type (opt_T): handle null/value init
@@ -129,10 +219,14 @@ export default {
             }
           }
           // Non-negative at() index: mark as potentially OOB (null check when printing)
-          // Must be read AFTER exprToC(init) which sets _lastAtNonNeg
+          // Must be read AFTER exprToC(init) which sets _lastAtNonNeg / _lastPopEmpty / _lastOptIsNull
           const atNonNeg = this._lastAtNonNeg ?? false;
           this._lastAtNonNeg = undefined;
-          this.define(name, { ctype, varKind, optIsNull: isNullInit || atNonNeg });
+          const emptyPop = this._lastPopEmpty ?? false;
+          this._lastPopEmpty = undefined;
+          const parsedNull = this._lastOptIsNull ?? false;
+          this._lastOptIsNull = undefined;
+          this.define(name, { ctype, varKind, optIsNull: isNullInit || atNonNeg || emptyPop || parsedNull });
           break;
         }
 
@@ -147,17 +241,76 @@ export default {
           break;
         }
 
-        // TypeArray of primitive with ArrayLit init → plain C array (no const — C arrays can't be reassigned anyway)
-        if (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind !== 'TypeFunc' && init) {
+        // TypeFixedArray → C stack array: int32_t arr[N] = {elems}
+        if (typeAnn?.kind === 'TypeFixedArray') {
           const et = this.resolveType(typeAnn.element);
-          if (init.kind === 'ArrayLit') {
+          const size = typeAnn.size;
+          if (init?.kind === 'ArrayLit') {
             const elems = this.arrayLitToC(init, et, lines, depth);
-            p(`${et} ${name}[] = {${elems.join(', ')}};`);
-          } else {
+            if (elems.length !== size) {
+              throw new Error(`array literal has ${elems.length} elements but type ${this.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
+            }
+            p(`${et} ${name}[${size}] = {${elems.join(', ')}};`);
+          } else if (init) {
             const initC = this.exprToC(init, lines, depth);
-            p(`${et} ${name}[] = ${initC};`);
+            p(`${et} ${name}[${size}] = ${initC};`);
+          } else {
+            p(`${et} ${name}[${size}] = {0};`);
           }
-          this.define(name, { ctype: et, isArray: true, arraySize: init.kind === 'ArrayLit' ? this.arrayLitSize(init) : -1, varKind, initNode: init });
+          this.define(name, { ctype: et, isArray: true, arraySize: size, isFixedArray: true, varKind });
+          break;
+        }
+
+        // TypeArray → managed Array_T struct
+        if (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind !== 'TypeFunc') {
+          const et = this.resolveType(typeAnn.element);
+          const arrName = `Array_${this.cTypeToIdent(et)}`;
+          this._ensureArrayStruct(arrName, et);
+          const elemIdent = this.cTypeToIdent(et);
+
+          if (!init || (init.kind === 'ArrayLit' && init.elems.length === 0)) {
+            // Empty array literal or no init
+            p(`${qualifier}${arrName} ${name} = {.data = NULL, .length = 0, .capacity = 0};`);
+          } else if (init.kind === 'ArrayLit') {
+            const litVar = `_lit_${this.tempCount++}`;
+            const elems = this.arrayLitToC(init, et, lines, depth);
+            p(`${et} ${litVar}[] = {${elems.join(', ')}};`);
+            p(`${qualifier}${arrName} ${name} = {.data = ${litVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
+          } else {
+            this._newArrayElemHint = et; // hint for new Array(N) without type args
+            const initC = this.exprToC(init, lines, depth);
+            this._newArrayElemHint = null;
+            p(`${qualifier}${arrName} ${name} = ${initC};`);
+            // Register cleanup if heap-allocated (new Array or method returning new array)
+            const heapKeywords = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
+                                  'tsc_array_concat', 'tsc_array_slice'];
+            if (heapKeywords.some(k => initC.includes(k))) {
+              this._registerCleanup(`tsc_array_free_${elemIdent}(&${name})`);
+            }
+          }
+          this.define(name, { ctype: arrName, elemType: elemIdent, arrElemCType: et, isArray: true,
+                              arraySize: init?.kind === 'ArrayLit' ? this.arrayLitSize(init) : undefined, varKind });
+          break;
+        }
+
+        // Inferred Array_T type (no typeAnn, e.g. result of arr.filter/map/concat/slice)
+        if (!typeAnn && ctype?.startsWith('Array_') && init) {
+          const elemIdent = ctype.slice(6); // Array_i32 → i32
+          const etC2 = this._arrIdentToCType(elemIdent);
+          const heapKeywords = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
+                                'tsc_array_concat', 'tsc_array_slice'];
+          const initC = this.exprToC(init, lines, depth);
+          const isHeap = heapKeywords.some(k => initC.includes(k));
+          const suppressConst2 = this._lastSuppressConst;
+          this._lastSuppressConst = undefined;
+          if (isHeap) {
+            p(`${ctype} ${name} = ${initC};`);
+            this._registerCleanup(`tsc_array_free_${elemIdent}(&${name})`);
+          } else {
+            const effQual2 = suppressConst2 ? '' : qualifier;
+            p(`${this.varDecl(effQual2, ctype, name)} = ${initC};`);
+          }
+          this.define(name, { ctype, elemType: elemIdent, arrElemCType: etC2, isArray: true, varKind });
           break;
         }
 
@@ -263,6 +416,13 @@ export default {
               break;
             }
             p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
+            // Move semantics: let b = structVar → zero out source
+            { const initSym2 = this.lookup(init.name);
+              const structDef2 = this.classes.get(ctype);
+              if (initSym2?.varKind === 'let' && structDef2?.fields) {
+                p(`${init.name} = (${ctype}){0};`);
+              }
+            }
           } else if (init.kind === 'ObjLit' && enumDef2?.isPartial) {
             // Partial<T> ObjLit: expand { name: "Alice" } → { .has_name = true, .name = ..., .has_age = false }
             const provided = new Map();
@@ -295,7 +455,7 @@ export default {
               break;
             }
             let initC;
-            if (init.kind === 'Literal' && init.litType === 'number') {
+            if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);
             } else {
               // For binary expressions with mixed integer types in const context:
@@ -311,8 +471,10 @@ export default {
                 // widen operands individually to avoid overflow before cast
                 initC = this.binaryWidened(init, ctype, lines, depth);
               } else {
-                // Evaluate init first — this may throw (e.g. mixed let int types in binary)
+                // Set expected type hint for context-sensitive calls (e.g. parseFloat with f64 annotation)
+                this._expectedType = ctype;
                 initC = this.exprToC(init, lines, depth);
+                this._expectedType = undefined;
               }
               // Implicit type conversion checks for typed assignments (skip if already handled by mixedBinary)
               if (typeAnn && mixedBinary === null) {
@@ -352,7 +514,32 @@ export default {
                 initC = `*(${qualCast}${ctype} *)&${initC}`;
               }
             }
-            p(`${this.varDecl(qualifier, ctype, name)} = ${initC};`);
+            // Heap-allocated map: register free call
+            if (ctype.startsWith('Map_') && initC.includes('tsc_map_create')) {
+              const mapSuffix = ctype.slice(4);
+              p(`${this.varDecl(qualifier, ctype, name)} = ${initC};`);
+              this._registerCleanup(`tsc_map_free_${mapSuffix}(&${name})`);
+              this._lastArrayElemReturn = undefined;
+              this._lastSuppressConst = undefined;
+            // Heap-allocated string: emit as non-const and register cleanup
+            } else if (ctype === 'String' && this._isHeapStringInit(init)) {
+              p(`String ${name} = ${initC};`);
+              this._registerCleanup(`tsc_string_free(${name})`);
+            } else {
+              // Suppress const if flagged by array element return or parse() result
+              const effQual = (this._lastArrayElemReturn || this._lastSuppressConst) ? '' : qualifier;
+              this._lastArrayElemReturn = undefined;
+              this._lastSuppressConst = undefined;
+              p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
+              // Move semantics: let b = structVar → zero out source
+              if (init.kind === 'Ident') {
+                const initSym2 = this.lookup(init.name);
+                const structDef2 = this.classes.get(ctype);
+                if (initSym2?.varKind === 'let' && structDef2?.fields) {
+                  p(`${init.name} = (${ctype}){0};`);
+                }
+              }
+            }
           }
         } else {
           // No initializer: declare without init
@@ -363,18 +550,101 @@ export default {
         if (varKind === 'const' && init?.kind === 'Literal' && init.litType === 'number') {
           try { constValue = BigInt(init.value.replace(/_/g, '')); } catch(_) {}
         }
-        this.define(name, { ctype, varKind, constValue, initNode: init });
+        const isStringRef = typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Ref' &&
+                            typeAnn.typeArgs?.[0]?.name === 'string';
+        this.define(name, { ctype, varKind, constValue, initNode: init,
+                            ...(isStringRef ? { isStringRef: true } : {}) });
         break;
       }
 
       case 'VarDestructObj': {
-        const { varKind, pattern, init } = node;
+        const { varKind, pattern, typeAnn, init } = node;
+        const qual = varKind === 'const' ? 'const ' : '';
+        const objType = this.inferType(init);
+        const structDef = this.classes.get(objType);
+
+        // Deferred anon struct (from ObjLit Ident): expand props directly
+        if (init.kind === 'Ident') {
+          const _dSym = this.lookup(init.name);
+          if (_dSym?.deferredAnon && this._deferredAnons?.has(init.name)) {
+            const _dAnon = this._deferredAnons.get(init.name);
+            const propMap2 = new Map((_dAnon.init.props ?? []).map(pr => [pr.key, pr.value]));
+            for (const { name: fname } of _dAnon.fields) {
+              const propVal2 = propMap2.get(fname);
+              const propC2 = propVal2 ? this.exprToC(propVal2, lines, depth) : '0';
+              const propType2 = propVal2 ? this.inferType(propVal2) : 'int32_t';
+              p(`${qual}${propType2} _obj_${fname} = ${propC2};`);
+              this.define(`_obj_${fname}`, { ctype: propType2, varKind });
+            }
+            for (const { name: fname, alias, defaultVal } of pattern) {
+              const propType2 = this.lookup(`_obj_${fname}`)?.ctype ?? 'int32_t';
+              if (defaultVal) {
+                const dC2 = this.exprToC(defaultVal, lines, depth);
+                p(`${qual}${propType2} ${alias} = (_obj_${fname} != 0) ? _obj_${fname} : ${dC2};`);
+              } else {
+                p(`${qual}${propType2} ${alias} = _obj_${fname};`);
+              }
+              this.define(alias, { ctype: propType2, varKind });
+            }
+            break;
+          }
+        }
+
+        // ObjLit init: expand props directly as _obj_field variables (no anonymous struct)
+        if (init.kind === 'ObjLit') {
+          const propMap = new Map((init.props ?? []).map(pr => [pr.key, pr.value]));
+          // First pass: emit temp vars for each prop
+          for (const { name } of pattern) {
+            const propVal = propMap.get(name);
+            const propC = propVal ? this.exprToC(propVal, lines, depth) : '0';
+            const propType = propVal ? this.inferType(propVal) : 'int32_t';
+            p(`${qual}${propType} _obj_${name} = ${propC};`);
+            this.define(`_obj_${name}`, { ctype: propType, varKind });
+          }
+          // Second pass: bind destructured names
+          for (const { name, alias, defaultVal } of pattern) {
+            const propType = this.lookup(`_obj_${name}`)?.ctype ?? 'int32_t';
+            if (defaultVal) {
+              const dC = this.exprToC(defaultVal, lines, depth);
+              p(`${qual}${propType} ${alias} = (_obj_${name} != 0) ? _obj_${name} : ${dC};`);
+            } else {
+              p(`${qual}${propType} ${alias} = _obj_${name};`);
+            }
+            this.define(alias, { ctype: propType, varKind });
+          }
+          break;
+        }
+
+        // Ident init with type annotation: move semantics (copy fields + zero-out source)
+        if (typeAnn && init.kind === 'Ident' && structDef?.fields) {
+          const srcName = init.name;
+          for (const { name, alias } of pattern) {
+            const field = structDef.fields.find(f => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
+            p(`${fieldCType} ${alias} = ${srcName}.${name};`);
+            this.define(alias, { ctype: fieldCType, varKind });
+          }
+          p(`${srcName} = (${objType}){0};`);
+          break;
+        }
+
+        // Ident init with known struct fields: emit pointer borrows
+        if (init.kind === 'Ident' && structDef?.fields) {
+          const srcName = init.name;
+          for (const { name, alias } of pattern) {
+            const field = structDef.fields.find(f => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
+            p(`${qual}${fieldCType} *${alias} = &${srcName}.${name};`);
+            this.define(alias, { ctype: `${fieldCType} *`, varKind, isPointer: true, derefType: fieldCType });
+          }
+          break;
+        }
+
+        // Fallback: copy to temp and access
         const initC = this.exprToC(init, lines, depth);
         const tmpName = `_obj_${this.tempCount++}`;
-        const objType = this.inferType(init);
         p(`${objType} ${tmpName} = ${initC};`);
         for (const { name, alias, defaultVal } of pattern) {
-          const qual = varKind === 'const' ? 'const ' : '';
           if (defaultVal) {
             const dC = this.exprToC(defaultVal, lines, depth);
             p(`${qual}int32_t ${alias} = (${tmpName}.${name} != 0) ? ${tmpName}.${name} : ${dC};`);
@@ -402,6 +672,26 @@ export default {
             p(`${qual}${ctype} ${elem.name} = ${initC}._${i};`);
             this.define(elem.name, { ctype, varKind });
           }
+        } else if (initType?.startsWith('Array_')) {
+          // Array_T destructuring: const [first, ...rest] = arr
+          const elemIdent = initType.slice(6); // Array_i32 → i32
+          const elemCType = this._arrIdentToCType(elemIdent);
+          const srcC = this.exprToC(init, lines, depth);
+          const nonRestCount = pattern.filter(e => e && !e.rest).length;
+          let idx = 0;
+          for (const elem of pattern) {
+            if (!elem) { idx++; continue; }
+            if (elem.rest) {
+              // Rest: sub-array slice
+              p(`${qual}${initType} ${elem.name} = {.data = ${srcC}.data + ${idx}, .length = ${srcC}.length - ${idx}, .capacity = 0};`);
+              this.define(elem.name, { ctype: initType, elemType: elemIdent, arrElemCType: elemCType, isArray: true, varKind });
+            } else {
+              // Regular element: direct index
+              p(`${qual}${elemCType} ${elem.name} = ${srcC}.data[${idx}];`);
+              this.define(elem.name, { ctype: elemCType, varKind });
+              idx++;
+            }
+          }
         } else {
           const initC = this.exprToC(init, lines, depth);
           const tmpName = `_arr_${this.tempCount++}`;
@@ -427,6 +717,11 @@ export default {
           if ((c.startsWith('{') && c.endsWith('}')) || c.startsWith('if (')) p(c);
           else p(`${c};`);
         }
+        // Flush post-statement cleanups (e.g. temp strings from console.log(n.toString()))
+        if (this._postStmtCleanups?.length) {
+          for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
+          this._postStmtCleanups = [];
+        }
         break;
       }
 
@@ -444,6 +739,7 @@ export default {
         // Detect narrowing: if (x != null) → narrow x to x.value inside block
         const isNullLit = (n) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
         let narrowVar = null;
+        let upgradeReleaseVar = null;
         if (node.test.kind === 'Binary' && (node.test.op === '!=' || node.test.op === '!==')) {
           const nullSide = isNullLit(node.test.right) ? 'right' : isNullLit(node.test.left) ? 'left' : null;
           if (nullSide) {
@@ -451,6 +747,7 @@ export default {
             if (optSide.kind === 'Ident') {
               const sym = this.lookup(optSide.name);
               if (sym?.ctype?.startsWith('opt_')) narrowVar = optSide.name;
+              else if (sym?.isSharedUpgrade) upgradeReleaseVar = optSide.name;
             }
           }
         }
@@ -465,10 +762,20 @@ export default {
         if (hasBraces) {
           p(`if (${testC}) {`);
           this.visitBlock(node.consequent, lines, depth + 1);
+          if (upgradeReleaseVar) {
+            const innerI = ' '.repeat(this.indent * (depth + 1));
+            lines.push(`${innerI}tsc_arc_release(${upgradeReleaseVar});`);
+          }
         } else if (node.consequent.kind === 'ExprStmt') {
           // Inline: if (cond) expr;
           const exprC = this.exprToC(node.consequent.expr, lines, depth);
           p(`if (${testC}) ${exprC};`);
+        } else if (node.consequent.kind === 'Continue') {
+          p(`if (${testC}) continue;`);
+        } else if (node.consequent.kind === 'Break') {
+          p(`if (${testC}) break;`);
+        } else if (node.consequent.kind === 'Return' && !node.consequent.value) {
+          p(`if (${testC}) return;`);
         } else {
           p(`if (${testC}) {`);
           this.visitStmt(node.consequent, lines, depth + 1);
@@ -535,15 +842,60 @@ export default {
       }
 
       case 'ForOf': {
-        const iterC = this.exprToC(node.iterable, lines, depth);
-        const ivar = `_i_${this.tempCount++}`;
-        let elemType = 'int32_t';
-        if (node.binding.kind === 'Ident') {
-          if (node.binding.typeAnn) elemType = this.resolveType(node.binding.typeAnn);
-        }
         const qual = node.varKind === 'const' ? 'const ' : '';
-        const bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
         const II = ' '.repeat(this.indent * (depth + 1));
+
+        // Special case: for (const [k, v] of m.entries()) → unpack MapEntry fields
+        if (node.iterable.kind === 'Call' &&
+            node.iterable.callee?.kind === 'Member' &&
+            node.iterable.callee?.prop === 'entries' &&
+            node.binding.kind === 'ArrayPattern') {
+          const mapObj = node.iterable.callee.object;
+          const mapSym = mapObj.kind === 'Ident' ? this.lookup(mapObj.name) : null;
+          const mapType = mapSym?.ctype ?? this.inferType(mapObj);
+          if (mapType?.startsWith('Map_')) {
+            const mapSuffix = mapType.slice(4);
+            const parts = mapSuffix.split('_');
+            const kIdent = parts[0];
+            const vIdent = parts.slice(1).join('_');
+            const kCType = this._arrIdentToCType(kIdent);
+            const vCType = this._arrIdentToCType(vIdent);
+            this._ensureMapEntry(mapSuffix, kCType, vCType);
+            const entryName = `MapEntry_${mapSuffix}`;
+            const arrType = `Array_${entryName}`;
+            const mapObjC = this.exprToC(mapObj, lines, depth);
+            const entTmpName = `_entries_${this.tempCount++}`;
+            const ivar = `_i_${this.loopCount++}`;
+            p(`${arrType} ${entTmpName} = tsc_map_entries_${mapSuffix}(&${mapObjC});`);
+            p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmpName}.length; ${ivar}++) {`);
+            const [kElem, vElem] = node.binding.elems;
+            if (kElem) {
+              lines.push(`${II}${qual}${kCType} ${kElem.name} = ${entTmpName}.data[${ivar}].key;`);
+              this.define(kElem.name, { ctype: kCType, varKind: node.varKind });
+            }
+            if (vElem) {
+              lines.push(`${II}${qual}${vCType} ${vElem.name} = ${entTmpName}.data[${ivar}].value;`);
+              this.define(vElem.name, { ctype: vCType, varKind: node.varKind });
+            }
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            p('}');
+            break;
+          }
+        }
+
+        const iterC = this.exprToC(node.iterable, lines, depth);
+        const ivar = `_i_${this.loopCount++}`;
+        // Infer element type: explicit annotation > array symbol > string char > default i32
+        let elemType = 'int32_t';
+        const iterSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+        if (node.binding.kind === 'Ident' && node.binding.typeAnn) {
+          elemType = this.resolveType(node.binding.typeAnn);
+        } else if (iterSym?.arrElemCType) {
+          elemType = iterSym.arrElemCType;
+        } else if (iterSym?.ctype === 'String') {
+          elemType = 'char';
+        }
+        const bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
 
         p(`for (size_t ${ivar} = 0; ${ivar} < ${iterC}.length; ${ivar}++) {`);
         if (bindName) {

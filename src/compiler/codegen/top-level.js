@@ -15,6 +15,52 @@ export default {
         this._fromEntriesConsumed.set(stmt.init.args[0].expr.name, null);
       }
     }
+
+    // Pre-scan: find Shared<T> and Weak<T> usage to know which classes need _refcount/_weakcount
+    this._arcClasses = new Map();
+    const _scanArc = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(_scanArc); return; }
+      if (n.kind === 'New' && (n.name === 'Shared' || n.name === 'Weak')) {
+        const tArg = n.typeArgs?.[0];
+        if (tArg?.kind === 'TypeRef') {
+          const info = this._arcClasses.get(tArg.name) ?? {};
+          if (n.name === 'Shared') { info.shared = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+          if (n.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+          this._arcClasses.set(tArg.name, info);
+        }
+      }
+      if (n.kind === 'VarDecl') {
+        const _checkTypeAnn = (ta) => {
+          if (!ta) return;
+          if (ta.kind === 'TypeRef' && (ta.name === 'Shared' || ta.name === 'Weak')) {
+            const tArg = ta.typeArgs?.[0];
+            if (tArg?.kind === 'TypeRef') {
+              const info = this._arcClasses.get(tArg.name) ?? {};
+              if (ta.name === 'Shared') { info.shared = true; info.refFirst = false; }
+              if (ta.name === 'Weak') { info.weak = true; info.refFirst = false; }
+              this._arcClasses.set(tArg.name, info);
+            }
+          }
+        };
+        _checkTypeAnn(n.typeAnn);
+      }
+      // Also scan TypeRef fields for Weak<T>
+      if (n.kind === 'TypeRef' && n.name === 'Weak') {
+        const tArg = n.typeArgs?.[0];
+        if (tArg?.kind === 'TypeRef') {
+          const info = this._arcClasses.get(tArg.name) ?? {};
+          info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true;
+          this._arcClasses.set(tArg.name, info);
+        }
+      }
+      for (const key of Object.keys(n)) {
+        const child = n[key];
+        if (child && typeof child === 'object') _scanArc(child);
+      }
+    };
+    for (const node of ast.body) _scanArc(node);
+
     for (const node of ast.body) this.visitTopLevel(node);
   },
 
@@ -56,13 +102,44 @@ export default {
     // Map TSClang base class names → C names
     const cBase = superClass === 'Error' ? 'TscError' : superClass;
 
+    // Check if this class is used as Shared<T> or Weak<T>
+    const arcInfo = this._arcClasses?.get(name);
+
     // Simple class (no methods, no base) → single-line struct
     if (!cBase && methods.length === 0) {
-      const fieldParts = fields.map(f => {
+      const userFieldParts = fields.map(f => {
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+        // Pointer types: attach * to name (Node *next; not Node * next;)
+        if (ct.endsWith(' *')) return `${ct.slice(0, -2)} *${f.name};`;
         return `${ct} ${f.name};`;
       });
-      this.addTop(`typedef struct { ${fieldParts.join(' ')} } ${name};`);
+
+      if (arcInfo) {
+        // Build arc fields
+        const arcPre = arcInfo.refFirst ? [
+          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
+          ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
+        ] : [];
+        const arcPost = arcInfo.refFirst ? [] : [
+          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
+          ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
+        ];
+        const allFields = [...arcPre, ...userFieldParts, ...arcPost];
+        // Check self-referential (any field resolves to contain 'name *')
+        const isSelfRef = fields.some(f => {
+          const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
+          return ct.includes(name + ' *') || ct.includes(name + '*');
+        });
+        if (isSelfRef) {
+          // Forward declaration needed for self-referential struct
+          this.addTop(`typedef struct ${name} ${name};`);
+          this.addTop(`struct ${name} { ${allFields.join(' ')} };`);
+        } else {
+          this.addTop(`typedef struct { ${allFields.join(' ')} } ${name};`);
+        }
+      } else {
+        this.addTop(`typedef struct { ${userFieldParts.join(' ')} } ${name};`);
+      }
       this.addTop('');
     } else {
       // typedef struct (multi-line)
@@ -516,10 +593,9 @@ export default {
         // ...args: T[] → T *args, int32_t args_count (unwrap the array type)
         let et = 'int32_t';
         if (p.typeAnn) {
-          const resolved = this.resolveType(p.typeAnn);
-          // If resolved is Array_X, extract element type; otherwise use as-is
+          // Unwrap element type without emitting Array struct typedef
           if (p.typeAnn.kind === 'TypeArray') et = this.resolveType(p.typeAnn.element);
-          else et = resolved;
+          else et = this.resolveType(p.typeAnn);
         }
         return `${et} *${p.name}, int32_t ${p.name}_count`;
       }
@@ -597,7 +673,8 @@ export default {
           this.define(slot.name, { ctype: et });
         }
       } else if (p.typeAnn) {
-        this.define(p.name, { ctype: this.resolveType(p.typeAnn) });
+        const _ct = this.resolveType(p.typeAnn);
+        this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*') });
       }
     }
     this.visitBlock(body, lines, 0);

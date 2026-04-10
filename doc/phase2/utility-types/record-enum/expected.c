@@ -3,7 +3,6 @@
 typedef enum { Axis_X = 0, Axis_Y = 1, Axis_Z = 2 } Axis;
 static const Axis Axis_values[] = { Axis_X, Axis_Y, Axis_Z };
 static const char *Axis_names[] = { "X", "Y", "Z" };
-
 typedef struct { double X; double Y; double Z; } P3;
 
 int main(void) {

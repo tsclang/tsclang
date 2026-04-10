@@ -20,6 +20,19 @@ export default {
         // Function reference (not a func-ptr variable): use mangled name
         const sym = this.lookup(node.name);
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
+        // Deferred anon struct used outside destructuring: materialize now
+        if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
+          const { fields, init: _init } = this._deferredAnons.get(node.name);
+          const ctype = sym.ctype;
+          const fieldDecls = fields.map(f => `${f._ctype} ${f.name};`).join(' ');
+          this.addTop(`typedef struct { ${fieldDecls} } ${ctype};`);
+          this.addTop('');
+          const initParts = (_init.props ?? []).map(pr => `.${pr.key} = ${this.exprToC(pr.value, lines, depth)}`);
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}${ctype} ${node.name} = {${initParts.join(', ')}};`);
+          sym.deferredAnon = false;
+          this._deferredAnons.delete(node.name);
+        }
         return node.name;
       }
 
@@ -57,21 +70,108 @@ export default {
           }
         }
         const objC = this.exprToC(node.object, lines, depth);
+        // String.bytes → Slice_u8 {.ptr = data, .length = length}
+        if (node.prop === 'bytes') {
+          const objType3 = this.inferType(node.object);
+          if (objType3 === 'String') {
+            this._ensureSliceU8Struct();
+            return `{.ptr = (uint8_t *)${objC}.data, .length = ${objC}.length}`;
+          }
+        }
         const isPtr = sym?.isPointer;
         return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
       }
 
       case 'Index': {
-        // Tuple index access: pair[0] → pair._0
         const objType = this.inferType(node.object);
         const tupleDef = this.classes.get(objType);
+        // Tuple index access: pair[0] → pair._0
         if (tupleDef?.isTuple && node.index.kind === 'Literal' && node.index.litType === 'number') {
           const objC = this.exprToC(node.object, lines, depth);
           return `${objC}._${node.index.value}`;
         }
         const obj = this.exprToC(node.object, lines, depth);
+        // Detect negative literal index: -1 or -(literal)
+        const negLitVal = (idx) => {
+          if (idx.kind === 'Literal' && idx.litType === 'number' && parseFloat(idx.value) < 0)
+            return Math.abs(parseFloat(idx.value));
+          if (idx.kind === 'Unary' && idx.op === '-' && idx.expr.kind === 'Literal' && idx.expr.litType === 'number')
+            return parseFloat(idx.expr.value);
+          return null;
+        };
+        const negVal = negLitVal(node.index);
+        const isNegLit = negVal !== null;
+        // Pointer to Array (Ref<T[]>): const Array_X * → obj->data[i]
+        const _ptrArr = objType?.match(/^(?:const )?Array_(\w+) \*$/);
+        if (_ptrArr) {
+          if (isNegLit) return `${obj}->data[${obj}->length - ${negVal}]`;
+          const idx = this.exprToC(node.index, lines, depth);
+          return `${obj}->data[${idx}]`;
+        }
+        // Array_T indexing: arr[i] → arr.data[i], arr[-1] → arr.data[arr.length - 1]
+        if (objType?.startsWith('Array_')) {
+          if (isNegLit) {
+            return `${obj}.data[${obj}.length - ${negVal}]`;
+          }
+          const idx = this.exprToC(node.index, lines, depth);
+          // Compile-time OOB: literal index >= known array size → use checked access
+          const arrSym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+          if (node.index.kind === 'Literal' && arrSym?.arraySize != null) {
+            const idxVal = parseFloat(node.index.value);
+            if (!isNaN(idxVal) && idxVal >= arrSym.arraySize) {
+              const elemIdent = arrSym.elemType ?? objType.slice(6);
+              return `tsc_array_get_checked_${elemIdent}(${obj}, ${idx})`;
+            }
+          }
+          return `${obj}.data[${idx}]`;
+        }
+        // String indexing: s[i] → (uint8_t)s.data[i], s[-1] → (uint8_t)s.data[s.length - 1]
+        if (objType === 'String') {
+          if (isNegLit) {
+            const n = negVal;
+            return `(uint8_t)${obj}.data[${obj}.length - ${n}]`;
+          }
+          const idx = this.exprToC(node.index, lines, depth);
+          return `(uint8_t)${obj}.data[${idx}]`;
+        }
         const idx = this.exprToC(node.index, lines, depth);
         return `${obj}[${idx}]`;
+      }
+
+      case 'RangeIndex': {
+        // s[start..end], s[..], s[6..], s[..5] — string/array slice
+        const obj = this.exprToC(node.object, lines, depth);
+        const objType2 = this.inferType(node.object);
+        const start = node.start ? this.exprToC(node.start, lines, depth) : null;
+        const end   = node.end   ? this.exprToC(node.end,   lines, depth) : null;
+        // Compute length as literal if both bounds are numeric literals
+        const litLen = (startNode, endNode) => {
+          if (startNode && endNode &&
+              startNode.kind === 'Literal' && startNode.litType === 'number' &&
+              endNode.kind === 'Literal' && endNode.litType === 'number') {
+            return String(parseFloat(endNode.value) - parseFloat(startNode.value));
+          }
+          return null;
+        };
+        if (objType2 === 'String') {
+          const dataExpr   = start ? `${obj}.data + ${start}` : `${obj}.data`;
+          const staticLen  = litLen(node.start, node.end);
+          const lenExpr    = staticLen ? staticLen :
+                             (start && end)  ? `${end} - ${start}` :
+                             (start && !end) ? `${obj}.length - ${start}` :
+                             (end && !start) ? end : `${obj}.length`;
+          return `{.data = ${dataExpr}, .length = ${lenExpr}, .capacity = 0}`;
+        }
+        // Array range: arr[start..end] → same struct init
+        const dataExpr = start ? `${obj}.data + ${start}` : `${obj}.data`;
+        const lenExpr  = (start && end)  ? `${end} - ${start}` :
+                         (start && !end) ? `${obj}.length - ${start}` :
+                         (end && !start) ? end : `${obj}.length`;
+        return `{.data = ${dataExpr}, .length = ${lenExpr}, .capacity = 0}`;
+      }
+
+      case 'TemplateLit': {
+        return this._templateToC(node, lines, depth);
       }
 
       case 'Call': {
@@ -121,6 +221,13 @@ export default {
             const exprC = this.exprToC(node.expr, lines, depth);
             return `STR_LIT_RUNTIME(${exprType}_values[(int)${exprC}])`;
           }
+          // Numeric type → string: cannot use "as", must use ".toString()"
+          const numericTypes = ['int32_t','int64_t','int8_t','int16_t',
+                                'uint8_t','uint16_t','uint32_t','uint64_t',
+                                'float','double','size_t','bool'];
+          if (numericTypes.includes(exprType)) {
+            throw new Error(`cannot cast ${this.ctypeToTsName(exprType)} to string using "as"; use ".toString()"`);
+          }
         }
         const exprC = this.exprToC(node.expr, lines, depth);
         const ct = this.resolveType(node.castType);
@@ -156,8 +263,28 @@ export default {
   // ----------------------------------------------------------------
   // Literals
   // ----------------------------------------------------------------
+  // Unescape a char literal value to numeric code
+  _charCode(raw) {
+    if (raw === '\\n') return 10;
+    if (raw === '\\t') return 9;
+    if (raw === '\\r') return 13;
+    if (raw === '\\0') return 0;
+    if (raw === '\\\\') return 92;
+    if (raw === "\\'") return 39;
+    if (raw === '\\"') return 34;
+    if (raw.startsWith('\\x')) return parseInt(raw.slice(2), 16);
+    if (raw.startsWith('\\u')) return parseInt(raw.slice(2), 16);
+    if (raw.length === 1) {
+      const code = raw.charCodeAt(0);
+      if (code > 127) throw new Error('character literal must be a single ASCII byte');
+      return code;
+    }
+    throw new Error('character literal must be a single ASCII byte');
+  },
+
   literalToC(node) {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
+    if (node.litType === 'char')   return String(this._charCode(node.value)) + 'U';
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';
     const v = node.value;
@@ -169,6 +296,12 @@ export default {
 
   // Emit a number literal with the correct suffix for the given target C type
   literalToCTyped(node, ctype) {
+    // Char literals: convert to numeric value
+    if (node.litType === 'char') {
+      const code = this._charCode(node.value);
+      if (ctype === 'uint8_t' || ctype === 'char') return code + 'U';
+      return String(code);
+    }
     let v = node.value;
     // Convert 0o (octal) → C octal 0NNN format
     if (v.startsWith('0o') || v.startsWith('0O')) v = '0' + v.slice(2);
@@ -411,7 +544,13 @@ export default {
     }
     // String concat via +
     if (node.op === '+' && this.isStringExpr(node.left)) {
-      return `tsc_string_concat(${l}, ${r})`;
+      const rType = this.inferType(node.right);
+      let rC = r;
+      if (rType !== 'String') {
+        const etIdent = this.cTypeToIdent(rType);
+        rC = `tsc_${etIdent}_to_string(${r})`;
+      }
+      return `tsc_string_concat(${l}, ${rC})`;
     }
     return `${l} ${op} ${r}`;
   },
@@ -446,6 +585,18 @@ export default {
   // Assignment
   // ----------------------------------------------------------------
   assignToC(node, lines, depth) {
+    // Prevent assignment to arr.length or arr.capacity
+    if (node.left.kind === 'Member' && node.left.object.kind === 'Ident') {
+      const arrSym = this.lookup(node.left.object.name);
+      if (arrSym?.isArray) {
+        if (node.left.prop === 'length') {
+          throw new Error(`cannot assign to "length"; use "${node.left.object.name}.resize(n)" instead`);
+        }
+        if (node.left.prop === 'capacity') {
+          throw new Error(`cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead`);
+        }
+      }
+    }
     // Check readonly tuple assignment: t[n] = ...
     if (node.left.kind === 'Index' && node.left.object.kind === 'Ident') {
       const sym = this.lookup(node.left.object.name);

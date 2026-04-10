@@ -57,7 +57,7 @@ export function mangleType(typeNode) {
     }
     return name + '_' + typeArgs.map(mangleType).join('_');
   }
-  if (typeNode.kind === 'TypeArray')  return 'arr_' + mangleType(typeNode.element);
+  if (typeNode.kind === 'TypeArray')  return 'Array_' + mangleType(typeNode.element);
   if (typeNode.kind === 'TypeUnion')  return typeNode.types.map(mangleType).join('_or_');
   if (typeNode.kind === 'TypeFunc') {
     const parts = typeNode.params.map(mangleType);
@@ -82,6 +82,7 @@ export function mangleParams(params) {
 // Infer C type from a literal node
 export function inferLiteralCType(node) {
   if (node.litType === 'string')  return 'String';
+  if (node.litType === 'char')    return 'uint8_t';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
   const v = node.value;

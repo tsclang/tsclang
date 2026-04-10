@@ -17,6 +17,9 @@ export const TK = {
   COMMA:  ',',  DOT:    '.',
   ARROW:  '=>',
   SPREAD: '...',
+  DOTDOT: '..',
+  CHAR:   'CHAR',
+  TEMPLATE: 'TEMPLATE',
 
   // Operators
   PLUS:  '+',  MINUS:  '-',  STAR:  '*',  SLASH: '/',  PERCENT: '%',
@@ -102,8 +105,38 @@ export function lex(src, filename = '<input>') {
       continue;
     }
 
-    // String literal (single or double quote, template literal)
-    if (ch === '"' || ch === "'" || ch === '`') {
+    // Template literal (backtick)
+    if (ch === '`') {
+      advance(); // consume `
+      const parts = [];
+      let str = '';
+      while (i < src.length && cur() !== '`') {
+        if (cur() === '\\') { advance(); str += '\\' + advance(); }
+        else if (cur() === '$' && peek() === '{') {
+          parts.push({ kind: 'str', value: str }); str = '';
+          advance(); advance(); // skip ${
+          let depth = 1, exprSrc = '';
+          while (i < src.length && depth > 0) {
+            if (cur() === '{') depth++;
+            else if (cur() === '}') { depth--; if (depth === 0) break; }
+            const ec = cur(); if (ec === '\n') line++; i++; col++; exprSrc += ec;
+          }
+          if (i >= src.length) err('Unterminated template expression');
+          advance(); // consume }
+          parts.push({ kind: 'expr', src: exprSrc });
+        } else { str += advance(); }
+      }
+      if (i >= src.length) err('Unterminated template literal');
+      advance(); // consume closing `
+      parts.push({ kind: 'str', value: str });
+      const tmplTok = new Token(TK.TEMPLATE, '', startLine, startCol);
+      tmplTok.parts = parts;
+      tokens.push(tmplTok);
+      continue;
+    }
+
+    // String literal (double or single quote)
+    if (ch === '"' || ch === "'") {
       const quote = advance();
       let str = '';
       while (i < src.length && cur() !== quote) {
@@ -112,7 +145,12 @@ export function lex(src, filename = '<input>') {
       }
       if (i >= src.length) err('Unterminated string');
       advance(); // closing quote
-      tokens.push(new Token(TK.STRING, str, startLine, startCol));
+      // Single-quoted strings are char literals
+      if (quote === "'") {
+        tokens.push(new Token(TK.CHAR, str, startLine, startCol));
+      } else {
+        tokens.push(new Token(TK.STRING, str, startLine, startCol));
+      }
       continue;
     }
 
@@ -163,6 +201,7 @@ export function lex(src, filename = '<input>') {
     const rest = ch + (src[i] ?? '') + (src[i+1] ?? '') + (src[i+2] ?? '');
 
     if (rest.startsWith('...')) { i += 2; col += 2; tokens.push(new Token(TK.SPREAD,    '...',  startLine, startCol)); continue; }
+    if (rest.startsWith('..') && ch === '.') { i += 1; col += 1; tokens.push(new Token(TK.DOTDOT, '..', startLine, startCol)); continue; }
     if (rest.startsWith('=>'))  { i += 1; col += 1; tokens.push(new Token(TK.ARROW,    '=>',   startLine, startCol)); continue; }
     if (rest.startsWith('===')) { i += 2; col += 2; tokens.push(new Token(TK.EQEQEQ,   '===',  startLine, startCol)); continue; }
     if (rest.startsWith('!==')) { i += 2; col += 2; tokens.push(new Token(TK.BANGEQEQ, '!==',  startLine, startCol)); continue; }

@@ -15,12 +15,25 @@ export default {
       const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
       const k = kt ? this.cTypeToIdent(kt) : 'string';
       const v = vt ? this.cTypeToIdent(vt) : 'i32';
+      const suffix = `${k}_${v}`;
+      // Emit Map_K_V struct only when the target type is Map_* (not TscMap_* from runtime.h)
+      if (!this._expectedType?.startsWith('TscMap_')) {
+        this._ensureMapStruct(suffix);
+      }
       return `tsc_map_create_${k}_${v}()`;
     }
 
-    // new Array<T>() or []
+    // new Array<T>(N) or new Array(N) — heap-allocated array
     if (name === 'Array') {
-      return `tsc_array_create()`;
+      // Determine element type from type args or annotation context
+      let et = 'int32_t';
+      if (node.typeArgs?.[0]) et = this.resolveType(node.typeArgs[0]);
+      else if (this._newArrayElemHint) et = this._newArrayElemHint;
+      const elemIdent = this.cTypeToIdent(et);
+      const arrName = `Array_${elemIdent}`;
+      this._ensureArrayStruct(arrName, et);
+      const capArg = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+      return `tsc_array_create_${elemIdent}(${capArg})`;
     }
 
     // new Shared<T>()
@@ -104,8 +117,9 @@ export default {
     // Name uses the mangled return type (e.g. _lambda_0_i32)
     const retSuffix = this.cTypeToIdent(ret);
     const name = `_lambda_${n}_${retSuffix}`;
-    const paramStrs = (node.params ?? []).map(p => {
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
+    const paramStrs = (node.params ?? []).map((p, i) => {
+      const hinted = this._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
       return `${ct} ${p.name}`;
     });
     const lines = [];
@@ -124,7 +138,20 @@ export default {
 
   inferArrowReturn(node) {
     if (node.returnType) return this.resolveType(node.returnType);
-    if (node.body.kind !== 'Block') return this.inferType(node.body);
+    if (node.body.kind !== 'Block') {
+      // Push lambda params into scope for type inference
+      if (node.params?.length && this._lambdaParamHint) {
+        this.pushScope();
+        for (let i = 0; i < node.params.length; i++) {
+          const p = node.params[i];
+          const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (this._lambdaParamHint[i] ?? 'void *');
+          this.define(p.name, { ctype: ct });
+        }
+      }
+      const t = this.inferType(node.body);
+      if (node.params?.length && this._lambdaParamHint) this.popScope();
+      return t;
+    }
     return 'void';
   },
 
@@ -147,8 +174,9 @@ export default {
         // Expand spread from known array
         const sym = e.expr?.kind === 'Ident' ? this.lookup(e.expr.name) : null;
         if (sym?.isArray && sym.arraySize >= 0) {
+          const useData = sym.ctype?.startsWith('Array_');
           for (let i = 0; i < sym.arraySize; i++) {
-            result.push(`${e.expr.name}[${i}]`);
+            result.push(useData ? `${e.expr.name}.data[${i}]` : `${e.expr.name}[${i}]`);
           }
         } else {
           result.push(`/* ...${this.exprToC(e.expr, lines, depth)} */`);
@@ -173,5 +201,97 @@ export default {
       }
     }
     return count;
+  },
+
+  // Returns true if the expression will produce a heap-allocated String
+  _isHeapStringInit(node) {
+    if (!node) return false;
+    if (node.kind === 'Binary' && node.op === '+') {
+      const lt = this.inferType(node.left);
+      const rt = this.inferType(node.right);
+      return lt === 'String' || rt === 'String';
+    }
+    if (node.kind === 'TemplateLit') {
+      return node.parts.some(p => p.kind === 'expr');
+    }
+    if (node.kind === 'Call') {
+      if (node.callee.kind === 'Ident' && node.callee.name === 'String') return true;
+      if (node.callee.kind === 'Member') {
+        const prop = node.callee.prop;
+        // Methods that return heap-allocated String
+        const heapStringProps = new Set([
+          'toString', 'toLowerCase', 'toUpperCase', 'trim', 'trimStart', 'trimEnd',
+          'repeat', 'replace', 'replaceAll', 'padStart', 'padEnd', 'charAt',
+          'slice', 'substring', 'concat',
+        ]);
+        if (heapStringProps.has(prop)) {
+          const objType = this.inferType(node.callee.object);
+          // String.toString() is a no-op — not heap allocated
+          if (prop === 'toString' && objType === 'String') return false;
+          // Only heap if called on a String object
+          if (objType === 'String') return true;
+          // toString() on any non-string type is also heap
+          if (prop === 'toString') return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  // Expand a TemplateLit node into a C expression (concat or format)
+  _templateToC(node, lines, depth) {
+    const parts = node.parts; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
+    const hasSubs = parts.some(p => p.kind === 'expr');
+    if (!hasSubs) {
+      // Plain string, no substitutions
+      const text = parts.map(p => p.value ?? '').join('');
+      return `STR_LIT("${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
+    }
+
+    // Parse and compile each expression part
+    const compiled = parts.map(p => {
+      if (p.kind === 'str') return { kind: 'str', value: p.value };
+      // Re-parse the expression source
+      const toks = this._lex(p.src, this.filename);
+      const ast = this._parse(toks);
+      const exprNode = ast.body[0]?.expr ?? ast.body[0];
+      const t = this.inferType(exprNode);
+      const c = this.exprToC(exprNode, lines, depth);
+      return { kind: 'expr', t, c };
+    });
+
+    // If all expressions are strings → use tsc_string_concat chain
+    const allStrings = compiled.every(p => p.kind === 'str' || p.t === 'String');
+    if (allStrings) {
+      const pieces = [];
+      for (const p of compiled) {
+        if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${p.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`); }
+        else pieces.push(p.c);
+      }
+      if (pieces.length === 0) return 'STR_LIT("")';
+      if (pieces.length === 1) return pieces[0];
+      return pieces.reduce((acc, p) => `tsc_string_concat(${acc}, ${p})`);
+    }
+
+    // Mixed types → use tsc_string_format
+    let fmt = '';
+    const fmtArgs = [];
+    for (const p of compiled) {
+      if (p.kind === 'str') {
+        fmt += p.value.replace(/%/g, '%%');
+      } else {
+        const t = p.t, c = p.c;
+        if (t === 'int32_t' || t === 'int16_t' || t === 'int8_t') { fmt += '%d'; fmtArgs.push(c); }
+        else if (t === 'uint32_t' || t === 'uint16_t' || t === 'uint8_t') { fmt += '%u'; fmtArgs.push(c); }
+        else if (t === 'int64_t')  { fmt += '%lld'; fmtArgs.push(`(long long)${c}`); }
+        else if (t === 'uint64_t') { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
+        else if (t === 'double')   { fmt += '%g'; fmtArgs.push(c); }
+        else if (t === 'float')    { fmt += '%g'; fmtArgs.push(`(double)${c}`); }
+        else if (t === 'bool')     { fmt += '%s'; fmtArgs.push(`(${c}) ? "true" : "false"`); }
+        else if (t === 'String')   { fmt += '%.*s'; fmtArgs.push(`(int)${c}.length, ${c}.data`); }
+        else                       { fmt += '%d'; fmtArgs.push(c); }
+      }
+    }
+    return `tsc_string_format("${fmt}", ${fmtArgs.join(', ')})`;
   }
 };

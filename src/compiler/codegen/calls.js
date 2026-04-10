@@ -123,18 +123,70 @@ export default {
       return `tsc_clear_timeout(${id})`;
     }
 
-    // parseFloat / tryParseFloat / tryParseInt
+    // parseFloat / tryParseFloat / parseInt / tryParseInt
+    // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number
+    const _setOptIsNullHint = (argNode) => {
+      if (argNode?.kind === 'Literal' && argNode.litType === 'string') {
+        this._lastOptIsNull = isNaN(parseFloat(argNode.value));
+      }
+    };
     if (callee.kind === 'Ident' && callee.name === 'parseFloat') {
-      return `tsc_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
+      // With explicit f64 type annotation, use panic version returning double
+      if (this._expectedType === 'double') {
+        return `tsc_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
+      }
+      this._ensureOptStruct('opt_f64', 'double');
+      _setOptIsNullHint(args[0]?.expr);
+      return `tsc_parse_float(${this.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'tryParseFloat') {
+      this._ensureOptStruct('opt_f64', 'double');
+      _setOptIsNullHint(args[0]?.expr);
       return `tsc_try_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'parseInt') {
-      return `tsc_parse_i32(${this.exprToC(args[0].expr, lines, depth)})`;
+      this._ensureOptStruct('opt_i32', 'int32_t');
+      _setOptIsNullHint(args[0]?.expr);
+      return `tsc_parse_int(${this.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'tryParseInt') {
+      this._ensureOptStruct('opt_i32', 'int32_t');
+      _setOptIsNullHint(args[0]?.expr);
       return `tsc_try_parse_i32(${this.exprToC(args[0].expr, lines, depth)})`;
+    }
+
+    // String(n) constructor → tsc_T_to_string(n)
+    if (callee.kind === 'Ident' && callee.name === 'String' && args.length === 1) {
+      const argNode = args[0].expr;
+      const argType = this.inferType(argNode);
+      const argIdent = this.cTypeToIdent(argType);
+      const argC = this.exprToC(argNode, lines, depth);
+      return `tsc_${argIdent}_to_string(${argC})`;
+    }
+
+    // i32.parse(s), i32.tryParse(s), f64.parse(s), f64.tryParse(s)
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const typeName = callee.object.name;
+      const primitiveMap = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
+                              'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
+                              'f32':'float','f64':'double' };
+      if (typeName in primitiveMap) {
+        const ctype = primitiveMap[typeName];
+        const ident = this.cTypeToIdent(ctype);
+        if (callee.prop === 'parse') {
+          const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          this._lastSuppressConst = true; // parse() panics; result is non-const in C
+          return `tsc_${ident}_parse(${argC})`;
+        }
+        if (callee.prop === 'tryParse') {
+          this._ensureOptStruct(`opt_${ident}`, ctype);
+          if (args[0]?.expr?.kind === 'Literal' && args[0].expr.litType === 'string') {
+            this._lastOptIsNull = isNaN(parseFloat(args[0].expr.value));
+          }
+          const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_${ident}_try_parse(${argC})`;
+        }
+      }
     }
 
     // sleep()
@@ -231,6 +283,21 @@ export default {
           const initC = this.exprToC(a.expr, lines, depth);
           return `(${paramType})${initC}`;
         }
+        // Array struct arg to destructured array param (int32_t *_arr): pass .data
+        if (param.destructArr) {
+          const argSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          if (argSym?.ctype?.startsWith('Array_')) {
+            return `${this.exprToC(a.expr, lines, depth)}.data`;
+          }
+        }
+        // Ref<T>/Mut<T> param: pass &var
+        if (param.typeAnn?.kind === 'TypeRef' &&
+            (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut')) {
+          const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          const argC2 = this.exprToC(a.expr, lines, depth);
+          if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
+          return argC2;
+        }
         return this.exprToC(a.expr, lines, depth);
       });
       return `${calleeC}(${coercedArgs.join(', ')})`;
@@ -291,15 +358,58 @@ export default {
         continue;
       }
 
+      // Pointer-borrow types from struct destructuring (const T *field = &obj.field)
+      if (ctype?.endsWith(' *') && !ctype.startsWith('void') && !ctype.startsWith('const char')) {
+        const sym = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+        const derefType = sym?.derefType ?? ctype.replace(/^(const )?/, '').replace(/ \*$/, '');
+        if (derefType === 'String') {
+          fmtParts.push('%s');
+          fmtArgs.push(`${cexpr}->data`);
+        } else if (derefType === 'double' || derefType === 'float') {
+          fmtParts.push('%g');
+          fmtArgs.push(`*${cexpr}`);
+        } else if (derefType === 'int64_t') {
+          fmtParts.push('%lld');
+          fmtArgs.push(`(long long)*${cexpr}`);
+        } else if (derefType === 'bool') {
+          fmtParts.push('%s');
+          fmtArgs.push(`*${cexpr} ? "true" : "false"`);
+        } else {
+          fmtParts.push('%d');
+          fmtArgs.push(`*${cexpr}`);
+        }
+        continue;
+      }
+
       if (ctype === 'String') {
-        fmtParts.push('%s');
-        fmtArgs.push(`${cexpr}.data`);
+        const strSym = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+        if (strSym?.isStringRef) {
+          fmtParts.push('%.*s');
+          fmtArgs.push(`(int)${cexpr}.length`, `${cexpr}.data`);
+        } else if (this._isHeapStringInit(expr)) {
+          // Inline heap string (e.g., n.toString()): store in temp, printf, free
+          const tmp = `_tmp_${this.tempCount++}`;
+          const I = ' '.repeat(this.indent * depth);
+          const cexprStr = cexpr;
+          lines.push(`${I}String ${tmp} = ${cexprStr};`);
+          if (!this._postStmtCleanups) this._postStmtCleanups = [];
+          this._postStmtCleanups.push(`${I}tsc_string_free(${tmp});`);
+          fmtParts.push('%s');
+          fmtArgs.push(`${tmp}.data`);
+        } else {
+          fmtParts.push('%s');
+          fmtArgs.push(`${cexpr}.data`);
+        }
       } else if (ctype === 'const char *' || ctype === 'char *') {
         fmtParts.push('%s');
         fmtArgs.push(cexpr);
       } else if (ctype === 'bool') {
         fmtParts.push('%s');
-        fmtArgs.push(`${(expr.kind === 'Member' || expr.kind === 'Index') ? cexpr : '(' + cexpr + ')'} ? "true" : "false"`);
+        // Wrap in parens only when needed to disambiguate: identifiers, unary, binary, ternary, assign
+        // Function calls (Call) and member accesses don't need parens
+        const needsParens = expr.kind === 'Ident' || expr.kind === 'Unary' ||
+                            expr.kind === 'Binary' || expr.kind === 'Ternary' || expr.kind === 'Assign';
+        fmtArgs.push(`${needsParens ? `(${cexpr})` : cexpr} ? "true" : "false"`);
       } else if (ctype === 'double') {
         fmtParts.push('%g');
         fmtArgs.push(cexpr);
@@ -328,6 +438,23 @@ export default {
         fmtParts.push('%zu');
         fmtArgs.push(cexpr);
       } else {
+        // Optional reference type (opt_ref_T): { bool has_value; T *value; }
+        if (ctype.startsWith('opt_ref_')) {
+          const innerIdent = ctype.slice(8); // "i32" from "opt_ref_i32"
+          const identToCType3 = { 'i8':'int8_t', 'i16':'int16_t', 'i32':'int32_t', 'i64':'int64_t',
+                                   'u8':'uint8_t', 'u16':'uint16_t', 'u32':'uint32_t', 'u64':'uint64_t',
+                                   'f32':'float', 'f64':'double', 'bool':'bool', 'usize':'size_t' };
+          const innerCType = identToCType3[innerIdent] ?? innerIdent;
+          // No-value sentinel: -1 for int, etc.
+          if (innerCType === 'double' || innerCType === 'float') {
+            fmtParts.push('%g');
+            fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1.0`);
+          } else {
+            fmtParts.push('%d');
+            fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`);
+          }
+          continue;
+        }
         // Optional type (opt_T)
         if (ctype.startsWith('opt_')) {
           const innerIdent = ctype.slice(4); // e.g., "i32" from "opt_i32"
@@ -357,7 +484,9 @@ export default {
             // For inline call expressions, create a temp var first (but not for simple Ident/Index/Member)
             let valExpr = cexpr;
             if (expr.kind === 'Call') {
-              const tmp = `_at_${this.tempCount++}`;
+              const _calleeProp = expr.callee?.kind === 'Member' ? expr.callee.prop : null;
+              const _tmpPfx = _calleeProp === 'at' ? '_at_' : '_v_';
+              const tmp = `${_tmpPfx}${this.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               valExpr = tmp;
             }
@@ -465,45 +594,146 @@ export default {
   },
 
   methodCall(callee, args, lines, depth) {
-    const objC = this.exprToC(callee.object, lines, depth);
+    // Handle method chain: arr.resize(10, 0).fill(7, 0, 5)
+    // When callee.object is itself a Call, emit it as a statement and use the base object
+    let baseObject = callee.object;
+    if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
+      const I = ' '.repeat(this.indent * depth);
+      while (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
+        const innerC = this.callToC(baseObject, lines, depth);
+        lines.push(`${I}${innerC};`);
+        baseObject = baseObject.callee.object;
+      }
+    }
+    const objC = this.exprToC(baseObject, lines, depth);
     const prop  = callee.prop;
-    const argsC = this.argsToC(args, lines, depth);
 
-    // Array methods
-    const arrMethods = {
-      push: () => {
-        const elemC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
-        const sym = callee.object.kind === 'Ident' ? this.lookup(callee.object.name) : null;
-        const et = sym?.elemType ?? 'i32';
-        return `tsc_array_push_${et}(&${objC}, ${elemC})`;
-      },
-      pop:    () => `tsc_array_pop(&${objC})`,
-      length: () => `${objC}.length`,
-      slice:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `{.data = ${objC}.data + ${a[0]??0}, .length = ${a[1]??0} - ${a[0]??0}}`; },
-      join:   () => { const sep = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(",")'; return `tsc_array_join(&${objC}, ${sep})`; },
-      indexOf:() => { const v = this.exprToC(args[0].expr, lines, depth); return `tsc_array_index_of(&${objC}, ${v})`; },
-      includes:()=>{ const v = this.exprToC(args[0].expr, lines, depth); return `tsc_array_includes(&${objC}, ${v})`; },
-      map:    () => `tsc_array_map(&${objC}, ${argsC})`,
-      filter: () => `tsc_array_filter(&${objC}, ${argsC})`,
-      forEach:() => `tsc_array_foreach(&${objC}, ${argsC})`,
-      reverse:() => `tsc_array_reverse(&${objC})`,
-      sort:   () => `tsc_array_sort(&${objC}, ${argsC})`,
-      fill:   () => { const v = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'; return `memset(${objC}.data, ${v}, ${objC}.length)`; },
-      find:   () => `tsc_array_find(&${objC}, ${argsC})`,
-      every:  () => `tsc_array_every(&${objC}, ${argsC})`,
-      some:   () => `tsc_array_some(&${objC}, ${argsC})`,
-      keys:   () => `tsc_array_keys(&${objC})`,
-      values: () => `tsc_array_values(&${objC})`,
-      entries:() => `tsc_array_entries(&${objC})`,
-      flat:   () => `tsc_array_flat(&${objC})`,
-      reduce: () => `tsc_array_reduce(&${objC}, ${argsC})`,
+    // Determine array element type from symbol
+    const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    const et    = sym?.elemType ?? 'i32';           // identifier suffix, e.g. 'i32'
+    const etC   = sym?.arrElemCType ?? 'int32_t';   // C type, e.g. 'int32_t'
+
+    // Helper: extract output type from lambda name _lambda_N_TYPE
+    const lambdaOutET = (argsC) => {
+      const m = argsC.match(/_lambda_\d+_(\w+)/);
+      return m ? m[1] : et;
     };
+
+    // Set lambda param type hint for array callback methods
+    const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_');
+    const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce']);
+    if (isArrayObj && arrayCallbackProps.has(prop)) {
+      // sort comparator has 2 params; reduce has (acc, x) both same type
+      this._lambdaParamHint = (prop === 'reduce' || prop === 'sort') ? [etC, etC] : [etC];
+    }
+    const argsC = this.argsToC(args, lines, depth);
+    this._lambdaParamHint = null;
+    if (isArrayObj) {
+      switch (prop) {
+        case 'push': {
+          const elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
+          if (baseObject.kind === 'Ident') {
+            this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
+            if (sym) sym.arraySize = undefined; // size unknown after push
+          }
+          return `tsc_array_push_${et}(&${objC}, ${elemC})`;
+        }
+        case 'pop': {
+          this._ensureOptStruct(`opt_${et}`, etC);
+          if (sym?.arraySize === 0) this._lastPopEmpty = true;
+          return `tsc_array_pop_${et}(&${objC})`;
+        }
+        case 'remove': {
+          const idxC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          this._lastArrayElemReturn = true; // suppress const for the returned element
+          return `tsc_array_remove_${et}(&${objC}, ${idxC})`;
+        }
+        case 'length':   return `${objC}.length`;
+        case 'capacity': return `${objC}.capacity`;
+        case 'sort': {
+          const fnC = args.length ? argsC : 'NULL';
+          return `tsc_array_sort_${et}(&${objC}, ${fnC})`;
+        }
+        case 'reverse':    return `tsc_array_reverse_${et}(&${objC})`;
+        case 'fill': {
+          const v     = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const start = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const end   = args[2] ? this.exprToC(args[2].expr, lines, depth) : `(int32_t)${objC}.length`;
+          return `tsc_array_fill_${et}(&${objC}, ${v}, ${start}, ${end})`;
+        }
+        case 'resize': {
+          const nNode = args[0]?.expr;
+          const nC    = nNode ? this.exprToC(nNode, lines, depth) : '0';
+          const fillC = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          // Register cleanup only if new size likely exceeds current (may heap-alloc)
+          if (baseObject.kind === 'Ident') {
+            const nLit = nNode?.kind === 'Literal' ? parseFloat(nNode.value) : NaN;
+            const curSize = sym?.arraySize ?? NaN;
+            if (isNaN(nLit) || isNaN(curSize) || nLit > curSize) {
+              this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
+            }
+            if (sym) sym.arraySize = isNaN(nLit) ? undefined : nLit; // update tracked size
+          }
+          return `tsc_array_resize_${et}(&${objC}, ${nC}, ${fillC})`;
+        }
+        case 'reallocate': {
+          const capNode = args[0]?.expr;
+          const capC = capNode ? this.exprToC(capNode, lines, depth) : '0';
+          if (baseObject.kind === 'Ident') {
+            const capLit = capNode?.kind === 'Literal' ? parseFloat(capNode.value) : NaN;
+            const curSize = sym?.arraySize ?? NaN;
+            if (isNaN(capLit) || isNaN(curSize) || capLit > curSize) {
+              this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
+            }
+            if (sym) sym.arraySize = undefined; // capacity changed, size unknown
+          }
+          return `tsc_array_reallocate_${et}(&${objC}, ${capC})`;
+        }
+        case 'filter':  return `tsc_array_filter_${et}(${objC}, ${argsC})`;
+        case 'forEach': return `tsc_array_foreach_${et}(${objC}, ${argsC})`;
+        case 'map': {
+          const outET = lambdaOutET(argsC);
+          return `tsc_array_map_${et}_${outET}(${objC}, ${argsC})`;
+        }
+        case 'reduce': {
+          const initExpr = args[1]?.expr;
+          const outET = initExpr ? this.cTypeToIdent(this.inferType(initExpr)) : et;
+          return `tsc_array_reduce_${et}_${outET}(${objC}, ${argsC})`;
+        }
+        case 'every':    return `tsc_array_every_${et}(${objC}, ${argsC})`;
+        case 'some':     return `tsc_array_some_${et}(${objC}, ${argsC})`;
+        case 'find': {
+          this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+          return `tsc_array_find_${et}(${objC}, ${argsC})`;
+        }
+        case 'findIndex': return `(int)tsc_array_find_index_${et}(${objC}, ${argsC})`;
+        case 'indexOf':  return `(int)tsc_array_index_of_${et}(${objC}, ${argsC})`;
+        case 'includes': return `tsc_array_includes_${et}(${objC}, ${argsC})`;
+        case 'concat':   return `tsc_array_concat_${et}(${objC}, ${argsC})`;
+        case 'slice': {
+          const s = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const e = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(int32_t)${objC}.length`;
+          return `tsc_array_slice_${et}(${objC}, ${s}, ${e})`;
+        }
+        case 'join': {
+          const sep = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(",")';
+          return `tsc_array_join_${et}(${objC}, ${sep})`;
+        }
+        case 'keys':    return `tsc_array_keys_${et}(${objC})`;
+        case 'values':  return `tsc_array_values_${et}(${objC})`;
+        case 'entries': return `tsc_array_entries_${et}(${objC})`;
+        case 'flat':    return `tsc_array_flat_${et}(${objC})`;
+      }
+    }
+
+    // (legacy arrMethods fallback — only reached for non-array objects with same prop names)
+    const arrMethods = {};
 
     // String methods
     const strMethods = {
       length:     () => `${objC}.length`,
       slice:      () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${objC}, ${a[0]??0}, ${a[1]??'(int32_t)'+objC+'.length'})`; },
-      indexOf:      () => `tsc_string_index_of(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      indexOf:      () => `(int)tsc_string_index_of(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       lastIndexOf:  () => `(int)tsc_string_last_index_of(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       at:           () => {
         // s.at(n) → tsc_string_at(s, n) returning opt_u8
@@ -531,31 +761,53 @@ export default {
       padEnd:     () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${objC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
       repeat:     () => `tsc_string_repeat(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       charAt:     () => `tsc_string_char_at(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      charCodeAt: () => `tsc_string_char_code_at(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      charCodeAt: () => { const idxC = this.exprToC(args[0].expr, lines, depth); return `(unsigned)(uint8_t)${objC}.data[${idxC}]`; },
       concat:     () => `tsc_string_concat(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      codePoints: () => `tsc_codepoints(${objC})`,
-      graphemes:  () => `tsc_graphemes(${objC})`,
+      codePoints:  () => `tsc_codepoints(${objC})`,
+      graphemes:   () => `tsc_graphemes(${objC})`,
+      replaceAll:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${objC}, ${a[0]}, ${a[1]})`; },
+      substring:   () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_substring(${objC}, ${a[0]}, ${a[1]??objC+'.length'})`; },
+      trimStart:   () => `tsc_string_trim_start(${objC})`,
+      trimEnd:     () => `tsc_string_trim_end(${objC})`,
     };
 
-    // TscMap_* methods → explicit C function calls
-    const objType2 = (callee.object.kind === 'Ident' ? this.lookup(callee.object.name)?.ctype : null)
-      ?? this.inferType(callee.object);
-    if (objType2?.startsWith('TscMap_')) {
-      const mapSuffix = objType2.slice(7); // e.g., "string_i32"
-      if (prop === 'set') return `tsc_map_set_${mapSuffix}(&${objC}, ${argsC})`;
-      if (prop === 'get') return `tsc_map_get_${mapSuffix}(&${objC}, ${argsC})`;
-      if (prop === 'has') return `tsc_map_has_${mapSuffix}(&${objC}, ${argsC})`;
-      if (prop === 'delete') return `tsc_map_delete_${mapSuffix}(&${objC}, ${argsC})`;
-      if (prop === 'size') return `(int32_t)${objC}._count`;
+    // Map_* methods → explicit C function calls
+    const objType2 = (baseObject.kind === 'Ident' ? this.lookup(baseObject.name)?.ctype : null)
+      ?? this.inferType(baseObject);
+    const _mapSfx2 = this._mapSuffix(objType2);
+    if (_mapSfx2) {
+      const mapSuffix = _mapSfx2; // e.g., "string_i32"
+      const mapVarName = baseObject.kind === 'Ident' ? baseObject.name : null;
+      if (prop === 'set') {
+        // Track that this map variable has had at least one set call
+        if (mapVarName) {
+          if (!this._mapHasSetCalls) this._mapHasSetCalls = new Set();
+          this._mapHasSetCalls.add(mapVarName);
+        }
+        return `tsc_map_set_${mapSuffix}(&${objC}, ${argsC})`;
+      }
+      if (prop === 'get' || prop === 'delete') {
+        // If no set calls were made on this map variable, the result is definitely null
+        if (mapVarName) {
+          const hasSet = this._mapHasSetCalls?.has(mapVarName) ?? false;
+          this._lastOptIsNull = !hasSet;
+        }
+        if (prop === 'get')    return `tsc_map_get_${mapSuffix}(&${objC}, ${argsC})`;
+        if (prop === 'delete') return `tsc_map_delete_${mapSuffix}(&${objC}, ${argsC})`;
+      }
+      if (prop === 'has')    return `tsc_map_has_${mapSuffix}(&${objC}, ${argsC})`;
+      if (prop === 'clear')  return `tsc_map_clear_${mapSuffix}(&${objC})`;
+      if (prop === 'keys') {
+        this._lastSuppressConst = true; // keys() returns heap array — suppress const qualifier
+        return `tsc_map_keys_${mapSuffix}(&${objC})`;
+      }
+      if (prop === 'entries') return `tsc_map_entries_${mapSuffix}(&${objC})`;
     }
-
-    // Map methods
-    const mapMethods = ['set','get','has','delete','keys','values','entries','size','forEach','clear'];
 
     // Float methods: toFixed, toPrecision
     const numMethods = {
       toFixed: () => {
-        const objType = this.inferType(callee.object);
+        const objType = this.inferType(baseObject);
         if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
           throw new Error(`"toFixed()" is only available on f32/f64`);
         const nArg = args[0]?.expr;
@@ -579,15 +831,29 @@ export default {
       },
     };
 
-    if (arrMethods[prop]) return arrMethods[prop]();
-    if (strMethods[prop]) return strMethods[prop]();
-    if (numMethods[prop]) return numMethods[prop]();
+    const hasOwn = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+    if (hasOwn(arrMethods, prop) && arrMethods[prop]) return arrMethods[prop]();
+    if (hasOwn(strMethods, prop) && strMethods[prop]) return strMethods[prop]();
+    if (hasOwn(numMethods, prop) && numMethods[prop]) return numMethods[prop]();
+
+    // toString() dispatch by object type
+    if (prop === 'toString') {
+      const objType5 = (baseObject.kind === 'Ident' ? this.lookup(baseObject.name)?.ctype : null)
+                       ?? this.inferType(baseObject);
+      // String.toString() is a no-op
+      if (objType5 === 'String') return objC;
+      // numeric.toString() → tsc_T_to_string(x)
+      if (objType5 && !objType5.startsWith('Array_') && !this._mapSuffix(objType5) &&
+          !objType5.startsWith('opt_') && objType5 !== 'void') {
+        const etId5 = this.cTypeToIdent(objType5);
+        return `tsc_${etId5}_to_string(${objC})`;
+      }
+    }
 
     // Generic method: obj.method(args) → ObjType_method(&obj, args)
-    const sym = callee.object.kind === 'Ident' ? this.lookup(callee.object.name) : null;
-    if (sym?.ctype && this.classes.has(sym.ctype)) {
-      const suffix = args.length ? '_' + args.map(a => this.inferType(a.expr)).join('_') : '';
-      return `${sym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
+    const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (classSym?.ctype && this.classes.has(classSym.ctype)) {
+      return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
     }
 
     // Fallback: obj.method(args)
@@ -598,10 +864,13 @@ export default {
     const parts = [];
     for (const a of args) {
       if (a.spread) {
-        // Expand spread from a known C array: arr → arr[0], arr[1], ...
-        const sym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
-        if (sym?.isArray && sym.arraySize >= 0) {
-          for (let i = 0; i < sym.arraySize; i++) parts.push(`${a.expr.name}[${i}]`);
+        // Expand spread from a known array: arr → arr.data[0], arr.data[1], ...
+        const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+        if (spreadSym?.isArray && spreadSym.arraySize >= 0) {
+          const n = a.expr.name;
+          const useData = spreadSym.ctype?.startsWith('Array_');
+          for (let i = 0; i < spreadSym.arraySize; i++)
+            parts.push(useData ? `${n}.data[${i}]` : `${n}[${i}]`);
         } else {
           parts.push(`/* ...${this.exprToC(a.expr, lines, depth)} */`);
         }
