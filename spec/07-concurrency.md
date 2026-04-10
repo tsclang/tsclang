@@ -1437,6 +1437,154 @@ SREG = sreg;  // восстанавливаем флаги (не просто se
 
 > Внутри `interrupts.disable()` те же ограничения что и в `@embedded.isr`: нет `await`, нет `new`.
 
+### EmbeddedSignal — мост ISR → async
+
+`channel<T>` подходит для передачи данных из ISR в async-код, но для простых событий без полезной нагрузки (ADC готов, таймер сработал, кнопка нажата) он избыточен: занимает буфер и требует обёртку.
+
+`EmbeddedSignal` — нулевой overhead: один `volatile bool` в BSS.
+
+```typescript
+import { EmbeddedSignal } from "std/embedded"
+
+// статически выделяется в BSS — не heap
+const adcReady = new EmbeddedSignal()
+
+@embedded.isr("ADC_vect")
+function adc_isr(): void {
+    ADCSRA  // сброс флага прерывания (читаем регистр)
+    adcReady.set()    // ✅ ISR-safe: просто volatile bool = true
+}
+
+async function readADC(): u16 {
+    ADCSRA |= (1 << 6)         // запускаем преобразование
+    await adcReady.wait()      // ждём сигнала от ISR
+    return ADCL | (ADCH << 8)
+}
+```
+
+C-output:
+
+```c
+// BSS — один volatile bool
+static volatile bool _sig_adcReady = false;
+
+// ISR — один store
+ISR(ADC_vect) {
+    (void)ADCSRA;
+    _sig_adcReady = true;
+}
+
+// State machine poll для readADC
+bool readADC_poll(ReadADC_SM* sm) {
+    switch (sm->_state) {
+    case 0:
+        ADCSRA |= (1 << 6);
+        sm->_state = 1;
+        return false;
+    case 1:
+        if (!_sig_adcReady) return false;   // ещё не готово — выходим
+        _sig_adcReady = false;              // auto-reset
+        sm->_result = ADCL | (ADCH << 8);
+        sm->_state = 0xFF;
+        return true;
+    }
+}
+```
+
+Никакого heap, никакого рантайма. Главный цикл просто опрашивает state machines:
+
+```c
+// main loop (кооперативный планировщик):
+while (1) {
+    readADC_poll(&sm_readADC);
+    processData_poll(&sm_processData);
+    // ...
+}
+```
+
+**API:**
+
+```typescript
+class EmbeddedSignal {
+    set(): void         // ISR-safe: устанавливает флаг (volatile store)
+    wait(): Promise<void>  // async: опрашивает флаг; auto-reset при срабатывании
+    clear(): void       // ручной сброс (если нужен без await)
+    readonly isSet: bool   // ISR-safe: проверка без ожидания
+}
+```
+
+**Правила:**
+- `new EmbeddedSignal()` компилируется в один бит в `volatile uint32_t` в BSS — без heap
+- `await signal.wait()` разрешён только в `async` функции
+- `signal.set()` / `signal.isSet` / `signal.clear()` разрешены в ISR
+- Один `EmbeddedSignal` на одно событие: если несколько ISR могут сигналить — использовать `channel<T>` или отдельный signal на каждый
+
+#### Оптимизация: автоматическая битовая упаковка
+
+Компилятор собирает все `EmbeddedSignal` в модуле и упаковывает их в один `volatile uint32_t` (bank). Каждый сигнал — один бит. Это даёт быструю проверку в главном цикле: **один `if` на все 32 события разом**.
+
+Если сигналов больше 32 — компилятор автоматически добавляет второй bank. Синтаксис TSC не меняется.
+
+**C-output для трёх сигналов:**
+
+```c
+// Один volatile uint32_t вместо трёх volatile bool
+static volatile uint32_t _sig_bank_0 = 0;
+#define _SIG_adcReady    (1u << 0)
+#define _SIG_timerTick   (1u << 1)
+#define _SIG_buttonPress (1u << 2)
+
+// ISR: set-only — один OR, атомарно на большинстве платформ
+ISR(ADC_vect)       { _sig_bank_0 |= _SIG_adcReady;    }
+ISR(TIMER1_OVF_vect){ _sig_bank_0 |= _SIG_timerTick;   }
+ISR(INT0_vect)      { _sig_bank_0 |= _SIG_buttonPress;  }
+
+// Главный цикл — быстрый путь
+void main_loop(void) {
+    while (1) {
+        if (!_sig_bank_0) continue;   // ← нет событий — пропускаем ВСЁ
+
+        // Snapshot-and-clear: атомарный снимок
+        // AVR: cli/sei (8 тактов); Cortex-M: LDREX/STREX (без блокировки прерываний)
+        uint32_t pending = _tsc_signal_snapshot(&_sig_bank_0);
+
+        if (pending & _SIG_adcReady)    readADC_poll(&sm_readADC);
+        if (pending & _SIG_timerTick)   onTimer_poll(&sm_onTimer);
+        if (pending & _SIG_buttonPress) onButton_poll(&sm_onButton);
+    }
+}
+```
+
+Платформенная реализация `_tsc_signal_snapshot`:
+
+```c
+// AVR: прерывания на 2 инструкции
+static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
+    uint8_t sreg = SREG; cli();
+    uint32_t v = *bank; *bank = 0;
+    SREG = sreg;
+    return v;
+}
+
+// ARM Cortex-M: lock-free (LDREX/STREX)
+static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
+    uint32_t v;
+    do { v = __LDREX(bank); } while (__STREX(0, bank));
+    return v;
+}
+```
+
+**Выгода:** на системе в режиме ожидания (idle) — ни одного лишнего вызова `poll()`. Экономия тактов и потребления батареи пропорциональна числу задач.
+
+**Когда что использовать:**
+
+| Сценарий | Инструмент |
+|----------|-----------|
+| ISR → флаг "событие произошло" | `EmbeddedSignal` |
+| ISR → передача данных (ADC value, UART byte) | `channel<T>.trySend()` |
+| ISR → разделяемый счётчик | `Atomic<T>.fetchAdd()` |
+| ISR → сложная составная структура | `interrupts.disable()` + глобальная переменная |
+
 ### Итоговая таблица Low-level инструментов
 
 | Задача | TSC синтаксис | Гарантия |
@@ -1445,7 +1593,8 @@ SREG = sreg;  // восстанавливаем флаги (не просто se
 | Обработчик прерывания | `@embedded.isr(N)` / `@embedded.isr("NAME")` | `__attribute__((interrupt))`, context saved |
 | Общее состояние с IRQ | `static Atomic<T>` | Атомарный доступ без гонок |
 | Составные данные с IRQ | `interrupts.disable()` | Критическая секция |
-| Связь IRQ → основной код | `channel.trySend()` | Передача без блокировки |
+| Сигнал ISR → async (нет данных) | `EmbeddedSignal` | бит в `uint32_t`, auto-reset, быстрый idle |
+| Данные ISR → async (поток) | `channel.trySend()` | Передача без блокировки |
 
 ---
 
