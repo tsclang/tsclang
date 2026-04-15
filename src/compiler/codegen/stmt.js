@@ -1227,13 +1227,50 @@ export default {
       }
 
       case 'Native': {
-        p(node.content);
+        let nativeOut = '';
+        if (node.templateParts) {
+          // native(`... ${expr} ...`) — interpolate expressions
+          for (const part of node.templateParts) {
+            if (part.kind === 'str') {
+              nativeOut += part.value;
+            } else if (part.kind === 'expr') {
+              // Re-parse the expression source (same as _templateToC in misc.js)
+              const toks = this._lex(part.src, this.filename);
+              const ast = this._parse(toks);
+              const exprNode = ast.body[0]?.expr ?? ast.body[0];
+              nativeOut += this.exprToC(exprNode, lines, depth);
+            }
+          }
+        } else {
+          // native "..." — verbatim string, unescape escaped quotes
+          nativeOut = node.content.replace(/\\"/g, '"');
+        }
+        // Check for undeclared types used as pointer bases: word * varname
+        const knownCTypes = new Set([
+          'int', 'char', 'void', 'float', 'double', 'bool', 'long', 'short', 'unsigned',
+          'int8_t', 'int16_t', 'int32_t', 'int64_t',
+          'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+          'size_t', 'ssize_t', 'ptrdiff_t', 'uintptr_t', 'intptr_t',
+          'String', 'TscError',
+        ]);
+        const ptrPattern = /\b([a-zA-Z_]\w*)\s*\*/g;
+        let m;
+        while ((m = ptrPattern.exec(nativeOut)) !== null) {
+          const typeName = m[1];
+          if (!knownCTypes.has(typeName) && !this.classes.has(typeName) && !this.interfaces.has(typeName)) {
+            throw new Error(`TypeError: Native block references undeclared type '${typeName}'; declare it or use @[native_type]`);
+          }
+        }
+        p(nativeOut);
         break;
       }
 
       case 'Unsafe': {
         p('{');
+        const prevUnsafe = this._inUnsafe;
+        this._inUnsafe = true;
         this.visitBlock(node.body, lines, depth + 1);
+        this._inUnsafe = prevUnsafe;
         p('}');
         break;
       }

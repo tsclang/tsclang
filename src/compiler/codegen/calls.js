@@ -59,6 +59,11 @@ export default {
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'process' &&
         callee.prop === 'exit') {
+      const embeddedTargets = ['avr', 'arm', 'stm32'];
+      if (embeddedTargets.includes(this._targetName)) {
+        throw new Error(`"process.exit" is not available on embedded targets`);
+      }
+      this.includes.add('#include <stdlib.h>');
       const code = args.length ? this.exprToC(args[0].expr, lines, depth) : '0';
       return `exit(${code})`;
     }
@@ -507,9 +512,9 @@ export default {
         fmtArgs.push(cexpr);
       } else if (ctype === 'bool') {
         fmtParts.push('%s');
-        // Wrap in parens only when needed to disambiguate: identifiers, unary, binary, ternary, assign
-        // Function calls (Call) and member accesses don't need parens
-        const needsParens = expr.kind === 'Ident' || expr.kind === 'Unary' ||
+        // Wrap in parens: identifiers, member accesses, unary, binary, ternary, assign
+        // Function calls (Call) don't need parens
+        const needsParens = expr.kind === 'Ident' || expr.kind === 'Member' || expr.kind === 'Unary' ||
                             expr.kind === 'Binary' || expr.kind === 'Ternary' || expr.kind === 'Assign';
         fmtArgs.push(`${needsParens ? `(${cexpr})` : cexpr} ? "true" : "false"`);
       } else if (ctype === 'double') {

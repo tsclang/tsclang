@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include <stdlib.h>
 
 int main(void) {
     TSC_INIT();

@@ -211,22 +211,24 @@
 
 ## Фаза 6 — Модульная система
 
-- [ ] `import` / `export` (только именованные; `export default` — ошибка)
-- [ ] Реэкспорт
-- [ ] Namespace-импорт
-- [ ] Циклические импорты — разрешены через forward declarations
-- [ ] Порядок инициализации модулей (детерминированный)
-- [ ] Точка входа (5 правил приоритета: конфиг → `main.tsc` → ...)
-- [ ] Генерация C `main()` и `async main` + event loop
-- [ ] C interop: `extern "C"`, `.d.tsc` файлы
-- [ ] `Scalar` тип для variadic C-функций
-- [ ] Path aliases (`#` / `~` в `paths`)
-- [ ] Declaration merging
-- [ ] `native` — inline C
-- [ ] `unsafe {}` — отключение проверок TSClang
+- [x] `export` (только именованные; `export default` — ошибка компилятора)
+- [x] Точка входа: генерация `int main()` / `int main(int argc, char **argv)`
+- [x] C interop: `declare const` / `declare function` — генерирует extern-объявления
+- [x] `native` — inline C (строки и шаблонные строки с интерполяцией)
+- [x] `unsafe {}` — отключение проверок TSClang (raw pointer `&`/`*`)
+- [x] `@packed` / `@align(N)` декораторы на классах → `__attribute__`
+- [x] `process.exit(code)` — `exit()` с `#include <stdlib.h>`; ошибка на embedded
+- [x] `process.argv` → `int main(int argc, char **argv)` + `tsc_make_argv`
+- [x] `#[target(name)]` — мета-аннотация цели (embedded-check)
+- [x] Модульные переменные: `static` только если используются из функции
+- [ ] `import` / реэкспорт / namespace-импорт
+- [ ] Циклические импорты (forward declarations)
+- [ ] Path aliases (`#` / `~`)
 - [ ] `@platform` — условная компиляция
 
 ### Лог
+
+> 2026-04-15: реализована фаза 6 — модульная система (базовый набор). Парсер: pointer types (`*T`), unary `&`/`*`, `native(...)`, `declare const/function`. Codegen: `export function` (без `static` в C), `declare` → extern-объявления, `native` с шаблонной интерполяцией (re-parse через `_lex`/`_parse`), `unsafe {}` с `_inUnsafe` флагом, `@packed`/`@align` → `__attribute__`, `process.exit` → `exit()` + stdlib, `process.argv` → `tsc_make_argv` + `Array_string` (определена в runtime.h), pre-scan функций для определения нужности static-globals. **Статус: 23/23 phase6 ✓**
 
 ---
 

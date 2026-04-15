@@ -93,8 +93,12 @@ class Context {
     _pushSection(this.topLevel);
 
     if (this.mainStmts.length > 0 || true) {
-      parts.push('int main(void) {');
+      const mainSig = this._useArgcArgv ? 'int main(int argc, char **argv)' : 'int main(void)';
+      parts.push(`${mainSig} {`);
       parts.push(`${this.ind()}TSC_INIT();`);
+      if (this._useArgcArgv) {
+        parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
+      }
       parts.push(...this.mainStmts.map(s => this.ind() + s));
       // Emit cleanup in reverse registration order (LIFO)
       for (let i = this._mainCleanup.length - 1; i >= 0; i--) {

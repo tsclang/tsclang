@@ -23,6 +23,7 @@ export default {
         if (sym?._movedIntoClosureLine !== undefined) {
           throw new Error(`TypeError: Use of moved value: '${node.name}' was moved into closure on line ${sym._movedIntoClosureLine}`);
         }
+        if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
         // Deferred anon struct used outside destructuring: materialize now
         if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
@@ -53,6 +54,11 @@ export default {
       }
 
       case 'Member': {
+        // process.argv → _argv (array built in main from argc/argv)
+        if (node.object.kind === 'Ident' && node.object.name === 'process' && node.prop === 'argv') {
+          this._useArgcArgv = true;
+          return '_argv';
+        }
         // Math constants: Math.PI, Math.E, Math.SQRT2, etc.
         if (node.object.kind === 'Ident' && node.object.name === 'Math') {
           const mathConsts = {
@@ -250,7 +256,7 @@ export default {
           if (p.computed) return `/* computed key */`;
           return `.${p.key} = ${this.exprToC(p.value, lines, depth)}`;
         });
-        return `{${props.join(', ')}}`;
+        return props.length > 0 ? `{ ${props.join(', ')} }` : `{}`;
       }
 
       case 'Arrow': {
@@ -279,6 +285,10 @@ export default {
           if (numericTypes.includes(exprType)) {
             throw new Error(`cannot cast ${this.ctypeToTsName(exprType)} to string using "as"; use ".toString()"`);
           }
+        }
+        // Pointer cast (as *T): just return the inner expr — type annotation only, no C cast needed
+        if (node.castType.kind === 'TypePointer') {
+          return this.exprToC(node.expr, lines, depth);
         }
         const exprC = this.exprToC(node.expr, lines, depth);
         const ct = this.resolveType(node.castType);
@@ -658,6 +668,13 @@ export default {
   // Unary
   // ----------------------------------------------------------------
   unaryToC(node, lines, depth) {
+    if (node.op === '&' || node.op === '*') {
+      if (!this._inUnsafe) {
+        throw new Error(`TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'`);
+      }
+      const e = this.exprToC(node.expr, lines, depth);
+      return node.op === '&' ? `&${e}` : `*${e}`;
+    }
     const e = this.exprToC(node.expr, lines, depth);
     switch (node.op) {
       case '!':     return `!${e}`;

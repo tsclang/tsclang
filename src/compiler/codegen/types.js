@@ -86,6 +86,11 @@ export default {
       return name;
     }
 
+    if (typeNode.kind === 'TypePointer') {
+      const pointee = this.resolveType(typeNode.pointee);
+      return `${pointee} *`;
+    }
+
     if (typeNode.kind === 'TypeArray') {
       // Function pointer arrays use native C array syntax, not Array_T struct
       if (typeNode.element?.kind === 'TypeFunc') return 'void *';
@@ -518,6 +523,17 @@ export default {
       case 'Unary': {
         if (node.op === '!') return 'bool';
         if (node.op === '-' || node.op === '~') return this.inferType(node.expr);
+        if (node.op === '*') {
+          // Dereference: type of *ptr is the pointee type
+          const ptrType = this.inferType(node.expr);
+          if (ptrType.endsWith(' *')) return ptrType.slice(0, -2);
+          return 'int32_t';
+        }
+        if (node.op === '&') {
+          // Address-of: type of &x is x's type followed by *
+          const baseType = this.inferType(node.expr);
+          return `${baseType} *`;
+        }
         return this.inferType(node.expr);
       }
       default: return 'int32_t';

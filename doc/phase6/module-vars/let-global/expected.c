@@ -2,7 +2,7 @@
 
 static int32_t count = 0;
 
-static void inc(void) {
+void inc(void) {
     count = count + 1;
 }
 

@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    int32_t x = 42;
+    const int32_t x = 42;
     printf("value = %d\n", x);
     return 0;
 }

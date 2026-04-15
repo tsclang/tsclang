@@ -536,6 +536,22 @@ static inline double tsc_parse_f64(String s) {
 #define tsc_parse_float(s) tsc_try_parse_f64(s)
 
 /* -------------------------------------------------------------------------
+ * process.argv support
+ * ------------------------------------------------------------------------- */
+typedef struct { String *data; size_t length; size_t capacity; } Array_string;
+
+static inline Array_string tsc_make_argv(int argc, char **argv) {
+    size_t n = (size_t)(argc > 0 ? argc : 0);
+    String *data = (String *)malloc(n * sizeof(String));
+    for (size_t i = 0; i < n; i++) {
+        data[i].data = argv[i];
+        data[i].length = strlen(argv[i]);
+        data[i].capacity = 0;
+    }
+    return (Array_string){ .data = data, .length = n, .capacity = n };
+}
+
+/* -------------------------------------------------------------------------
  * Array functions — GCC statement-expression macros so they can reference
  * Array_T and opt_T types defined AFTER #include "runtime.h".
  * -------------------------------------------------------------------------

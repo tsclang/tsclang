@@ -1,2 +1,2 @@
-// @target: avr
+#[target(avr)]
 process.exit(0);

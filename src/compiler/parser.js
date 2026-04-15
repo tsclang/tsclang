@@ -111,6 +111,13 @@ export function parse(tokens, filename = '<input>') {
       }
     }
 
+    // Pointer type: *T
+    if (cur().type === TK.STAR) {
+      eat(TK.STAR);
+      const pointee = parseTypeSingle();
+      return { kind: 'TypePointer', pointee };
+    }
+
     // String literal type: "north"
     if (cur().type === TK.STRING) {
       const val = eat(TK.STRING).value;
@@ -353,7 +360,7 @@ export function parse(tokens, filename = '<input>') {
     if (t.type === TK.IDENT && t.value === 'native') return parseNative();
     if (t.type === TK.IDENT && t.value === 'unsafe') return parseUnsafe();
     if (t.type === TK.IDENT && t.value === 'spawn')  return parseSpawn();
-    if (t.type === TK.IDENT && t.value === 'declare') { skipDeclaration(); return { kind: 'Noop' }; }
+    if (t.type === TK.IDENT && t.value === 'declare') return parseDeclare();
     if (t.type === TK.LBRACE) return parseBlock();
 
     // Labeled statement: IDENT: stmt
@@ -371,10 +378,31 @@ export function parse(tokens, filename = '<input>') {
     return { kind: 'ExprStmt', expr, line: exprLine };
   }
 
-  function skipDeclaration() {
-    // skip until semicolon or block
+  function parseDeclare() {
+    eat(TK.IDENT, 'declare');
+    if (cur().type === TK.IDENT && (cur().value === 'const' || cur().value === 'let')) {
+      const varKind = eat(TK.IDENT).value;
+      const name = eat(TK.IDENT).value;
+      eat(TK.COLON);
+      const typeAnn = parseTypeAnnotation();
+      let init = null;
+      if (tryEat(TK.EQ)) init = parseExpr();
+      eatSemi();
+      return { kind: 'DeclareConst', name, typeAnn, init };
+    }
+    if (cur().type === TK.IDENT && cur().value === 'function') {
+      eat(TK.IDENT, 'function');
+      const name = eat(TK.IDENT).value;
+      const params = parseParams();
+      let returnType = null;
+      if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
+      eatSemi();
+      return { kind: 'DeclareFunction', name, params, returnType };
+    }
+    // Skip unknown declare forms
     while (!done() && cur().type !== TK.SEMI && cur().type !== TK.RBRACE) pos++;
     tryEat(TK.SEMI);
+    return { kind: 'Noop' };
   }
 
   function parseImport() {
@@ -930,6 +958,30 @@ export function parse(tokens, filename = '<input>') {
 
   function parseNative() {
     eat(TK.IDENT, 'native');
+    // native(`...`) call-style with template literal
+    if (cur().type === TK.LPAREN) {
+      eat(TK.LPAREN);
+      let node;
+      if (cur().type === TK.TEMPLATE) {
+        const tmpl = cur();
+        pos++;
+        node = { kind: 'Native', content: null, templateParts: tmpl.parts };
+      } else {
+        const content = eat(TK.STRING).value;
+        node = { kind: 'Native', content };
+      }
+      eat(TK.RPAREN);
+      eatSemi();
+      return node;
+    }
+    // native `...` bare template literal
+    if (cur().type === TK.TEMPLATE) {
+      const tmpl = cur();
+      pos++;
+      eatSemi();
+      return { kind: 'Native', content: null, templateParts: tmpl.parts };
+    }
+    // native "..." verbatim string
     const content = eat(TK.STRING).value;
     eatSemi();
     return { kind: 'Native', content };
@@ -1056,6 +1108,8 @@ export function parse(tokens, filename = '<input>') {
     if (cur().type === TK.TILDE) { pos++; return { kind: 'Unary', op: '~',     expr: parseUnary() }; }
     if (cur().type === TK.PLUS2) { pos++; return { kind: 'Unary', op: '++pre', expr: parseUnary() }; }
     if (cur().type === TK.MINUS2){ pos++; return { kind: 'Unary', op: '--pre', expr: parseUnary() }; }
+    if (cur().type === TK.AMP)   { pos++; return { kind: 'Unary', op: '&',     expr: parseUnary() }; }
+    if (cur().type === TK.STAR)  { pos++; return { kind: 'Unary', op: '*',     expr: parseUnary() }; }
     if (cur().type === TK.IDENT && cur().value === 'typeof')  { pos++; return { kind: 'Typeof',  expr: parseUnary() }; }
     if (cur().type === TK.IDENT && cur().value === 'await')   { pos++; return { kind: 'Await',   expr: parseUnary() }; }
     if (cur().type === TK.IDENT && cur().value === 'yield') {

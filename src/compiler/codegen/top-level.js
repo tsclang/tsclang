@@ -188,6 +188,22 @@ export default {
       }
     }
 
+    // Pre-scan: collect variable names referenced by top-level functions
+    // These must become static globals (accessible from function scope)
+    this._funcRefVars = new Set();
+    const _collectIdents = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(_collectIdents); return; }
+      if (node.kind === 'Ident') { this._funcRefVars.add(node.name); return; }
+      for (const v of Object.values(node)) {
+        if (v && typeof v === 'object') _collectIdents(v);
+      }
+    };
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind === 'FuncDecl' && n.body) _collectIdents(n.body);
+    }
+
     for (const node of ast.body) this.visitTopLevel(node);
   },
 
@@ -196,12 +212,19 @@ export default {
     switch (node.kind) {
       case 'ProfileAnnotation': break; // ignore for now
       case 'Import':  break; // stdlib handled via includes
-      case 'Export':  this.visitTopLevel(node.decl); break;
+      case 'Export':
+        if (node.default) throw new Error('"export default" is not allowed; use named exports only');
+        if (node.decl?.kind === 'FuncDecl') {
+          this.visitFuncDecl(node.decl, true, true); // isExported=true → no static
+        } else {
+          this.visitTopLevel(node.decl);
+        }
+        break;
       case 'ClassDecl':   this.visitClassDecl(node); break;
       case 'Interface':   this.visitInterface(node); break;
       case 'Enum':        this.visitEnum(node); break;
       case 'TypeAlias':   this.visitTypeAlias(node); break;
-      case 'FuncDecl':    this.visitFuncDecl(node, true); break;
+      case 'FuncDecl':    this.visitFuncDecl(node, true, false); break; // not exported → static
       case 'FuncOverload':
         // Collect signatures; implementation FuncDecl will emit them
         if (!this._pendingOverloads) this._pendingOverloads = new Map();
@@ -219,12 +242,71 @@ export default {
           _sigs.push(node);
           this._pendingOverloads.set(node.name, _sigs); }
         break;
-      case 'VarDecl':     this.visitStmtInMain(node); break;
+      case 'VarDecl': {
+        // process.argv assignment → alias _argv in scope, emit in main
+        if (node.init?.kind === 'Member' &&
+            node.init.object?.kind === 'Ident' && node.init.object.name === 'process' &&
+            node.init.prop === 'argv') {
+          this._useArgcArgv = true;
+          // Array_string is predefined in runtime.h (no need to emit typedef)
+          if (!this._emittedArrayStructs) this._emittedArrayStructs = new Set();
+          this._emittedArrayStructs.add('Array_string');
+          this.define(node.name, { ctype: 'Array_string', varKind: node.varKind, _cAlias: '_argv' });
+          break;
+        }
+        // Make it a static global only if referenced by a top-level function body
+        // (required for C correctness — function can't access main() locals)
+        const needsStatic = this._funcRefVars?.has(node.name);
+        if (needsStatic) {
+          // Module-level variable → static global (not inside main)
+          const varLines = [];
+          this.visitStmt(node, varLines, 0);
+          for (const line of varLines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            this.topLevel.push('static ' + trimmed);
+          }
+          this.topLevel.push('');
+        } else {
+          // Runtime-init variable → stays inside main()
+          this.visitStmtInMain(node);
+        }
+        break;
+      }
+      case 'DeclareConst':    this.visitDeclareConst(node); break;
+      case 'DeclareFunction': this.visitDeclareFunction(node); break;
       case 'Noop':        break;
       default:
         // Top-level expression (e.g. console.log at top level)
         this.visitStmtInMain(node);
     }
+  },
+
+  visitDeclareConst(node) {
+    const { name, typeAnn, init } = node;
+    const ct = this.resolveType(typeAnn);
+    const initC = init ? this.exprToC(init, [], 0) : '0';
+    this.topLevel.push(`static const ${ct} ${name} = ${initC};`);
+    this.topLevel.push('');
+    // Register in scope so later references work
+    this.define(name, { ctype: ct, varKind: 'const' });
+  },
+
+  visitDeclareFunction(node) {
+    const { name, params, returnType } = node;
+    const retC = returnType ? this.resolveType(returnType) : 'void';
+    const paramParts = (params ?? []).map(p => {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
+    });
+    const paramStr = paramParts.length > 0 ? paramParts.join(', ') : 'void';
+    // Try to include a known library for well-known math functions
+    const mathFuncs = new Set(['sin','cos','tan','asin','acos','atan','atan2','sqrt','pow','exp','log','log2','log10','floor','ceil','fabs','fmod','hypot']);
+    if (mathFuncs.has(name)) this.includes.add('#include <math.h>');
+    this.topLevel.push(`extern ${retC} ${name}(${paramStr});`);
+    this.topLevel.push('');
+    // Register in scope
+    this.define(name, { ctype: retC, varKind: 'const', funcName: name, params: node.params ?? [] });
   },
 
   // ----------------------------------------------------------------
@@ -237,6 +319,24 @@ export default {
       if (!this._genericClasses) this._genericClasses = new Map();
       this._genericClasses.set(name, node);
       return;
+    }
+
+    // Process @packed and @align decorators
+    const packedDec = decorators?.find(d => d.name === 'packed');
+    const alignDec  = decorators?.find(d => d.name === 'align');
+    if (packedDec && alignDec) {
+      throw new Error('@packed and @align cannot be used together');
+    }
+    let structAttr = '';
+    if (packedDec) {
+      structAttr = ' __attribute__((packed))';
+    } else if (alignDec) {
+      const alignVal = alignDec.args?.[0];
+      const alignN = alignVal?.kind === 'Literal' ? Number(alignVal.value) : 0;
+      if (!alignN || (alignN & (alignN - 1)) !== 0) {
+        throw new Error('@align argument must be a power of two');
+      }
+      structAttr = ` __attribute__((aligned(${alignN})))`;
     }
 
     const allFields_ = members.filter(m => m.kind === 'Field');
@@ -302,7 +402,7 @@ export default {
       } else {
         // C does not allow empty structs; use a dummy field when no user fields exist
         const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
-        this.addTop(`typedef struct { ${fieldContent} } ${name};`);
+        this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${name};`);
       }
 
       // For throws classes: emit _new function directly to typedefs (so it appears between
@@ -815,7 +915,7 @@ export default {
   // ----------------------------------------------------------------
   // Functions
   // ----------------------------------------------------------------
-  visitFuncDecl(node, isTopLevel = false) {
+  visitFuncDecl(node, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
@@ -1021,9 +1121,9 @@ export default {
       const fpParams = returnType.params.map(pt => this.resolveType(pt)).join(', ') || 'void';
       funcSig = `${fpRet} (*${cname}(${paramStrs.join(', ') || 'void'}))(${fpParams})`;
     } else {
-      const prefix = isNever ? '_Noreturn ' : '';
+      const neverPrefix = isNever ? '_Noreturn ' : '';
       const retSep = retType.endsWith('*') ? '' : ' ';
-      funcSig = `${prefix}${retType}${retSep}${cname}(${paramStrs.join(', ') || 'void'})`;
+      funcSig = `${neverPrefix}${retType}${retSep}${cname}(${paramStrs.join(', ') || 'void'})`;
     }
     // Add blank line before function if there's preceding content without a trailing blank
     if (this.topLevel.length > 0 && this.topLevel[this.topLevel.length - 1] !== '') {
