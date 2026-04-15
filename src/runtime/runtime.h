@@ -147,6 +147,18 @@ _Noreturn static inline void tsc_throw(String msg) {
     exit(1);
 }
 
+/* tsc_panic — used for '!' non-null assertion failure in non-throws context */
+_Noreturn static inline void tsc_panic(String msg) {
+    fprintf(stderr, "panic: %.*s\n", (int)msg.length, msg.data);
+    exit(1);
+}
+
+/* tsc_capture_stack — capture call stack as string (stub for desktop) */
+static inline String tsc_capture_stack(void) {
+    static const char _tsc_stack_stub[] = "(stack trace not available)";
+    return (String){ .data = _tsc_stack_stub, .length = sizeof(_tsc_stack_stub) - 1, .capacity = 0 };
+}
+
 /* Numeric-to-string conversions (used by optional chaining x?.toString()) */
 static inline String tsc_i32_to_string(int32_t v) {
     static char _tsc_i32_buf[32];
@@ -420,13 +432,67 @@ static inline void tsc_string_array_free(String *parts, int32_t len) {
  * Non-opt versions are regular static inline functions.
  * Opt-returning versions are GCC statement-expression macros because
  * opt_T types are typedef'd AFTER #include "runtime.h" in generated files.
+ *
+ * All parse functions support 0x (hex), 0b (binary), 0o (octal) prefixes
+ * in addition to plain decimal / float notation.
  * ------------------------------------------------------------------------- */
+
+/* Helper: parse integer from null-terminated string with 0x/0b/0o prefix support.
+ * Returns 1 on success, 0 on failure. Result written to *out. */
+static inline int _tsc_parse_prefixed_i64(const char *b, int64_t *out) {
+    if (b[0] == '0' && (b[1] == 'x' || b[1] == 'X')) {
+        char *e; long long v = strtoll(b, &e, 16);
+        if (e == b || *e != '\0') return 0;
+        *out = (int64_t)v; return 1;
+    }
+    if (b[0] == '0' && (b[1] == 'b' || b[1] == 'B')) {
+        if (b[2] == '\0') return 0;
+        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 2);
+        if (e == s || *e != '\0') return 0;
+        *out = (int64_t)v; return 1;
+    }
+    if (b[0] == '0' && (b[1] == 'o' || b[1] == 'O')) {
+        if (b[2] == '\0') return 0;
+        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 8);
+        if (e == s || *e != '\0') return 0;
+        *out = (int64_t)v; return 1;
+    }
+    /* decimal: allow float-like input (parseInt("3.14") → 3), truncate fraction */
+    char *e; double dv = strtod(b, &e);
+    if (e == b) return 0;
+    *out = (int64_t)dv; return 1;
+}
+
+/* Helper: parse double from null-terminated string with 0x/0b/0o prefix support.
+ * Returns 1 on success, 0 on failure. Result written to *out. */
+static inline int _tsc_parse_prefixed_f64(const char *b, double *out) {
+    if (b[0] == '0' && (b[1] == 'x' || b[1] == 'X')) {
+        char *e; long long v = strtoll(b, &e, 16);
+        if (e == b || *e != '\0') return 0;
+        *out = (double)v; return 1;
+    }
+    if (b[0] == '0' && (b[1] == 'b' || b[1] == 'B')) {
+        if (b[2] == '\0') return 0;
+        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 2);
+        if (e == s || *e != '\0') return 0;
+        *out = (double)v; return 1;
+    }
+    if (b[0] == '0' && (b[1] == 'o' || b[1] == 'O')) {
+        if (b[2] == '\0') return 0;
+        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 8);
+        if (e == s || *e != '\0') return 0;
+        *out = (double)v; return 1;
+    }
+    char *e; double v = strtod(b, &e);
+    if (e == b) return 0;
+    *out = v; return 1;
+}
 
 static inline int32_t tsc_i32_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     memcpy(buf, s.data, n); buf[n] = '\0';
-    char *end; long v = strtol(buf, &end, 10);
-    if (end == buf || (*end != '\0' && *end != '.')) {
+    int64_t v = 0;
+    if (!_tsc_parse_prefixed_i64(buf, &v)) {
         fprintf(stderr, "Parse error: '%s' is not a valid integer\n", buf); exit(1);
     }
     return (int32_t)v;
@@ -435,8 +501,10 @@ static inline int32_t tsc_i32_parse(String s) {
 static inline double tsc_parse_f64(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     memcpy(buf, s.data, n); buf[n] = '\0';
-    char *end; double v = strtod(buf, &end);
-    if (end == buf) { fprintf(stderr, "Parse error: not a valid number\n"); exit(1); }
+    double v = 0;
+    if (!_tsc_parse_prefixed_f64(buf, &v)) {
+        fprintf(stderr, "Parse error: '%s' is not a valid number\n", buf); exit(1);
+    }
     return v;
 }
 
@@ -445,8 +513,8 @@ static inline double tsc_parse_f64(String s) {
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
     memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
-    char *_e_; long _v_ = strtol(_b_, &_e_, 10); \
-    (opt_i32){ .has_value = (_e_ != _b_ && *_e_ == '\0'), .value = (int32_t)_v_ }; \
+    int64_t _v_ = 0; int _ok_ = _tsc_parse_prefixed_i64(_b_, &_v_); \
+    (opt_i32){ .has_value = _ok_, .value = (int32_t)_v_ }; \
 })
 #define tsc_try_parse_i32(s) tsc_i32_try_parse(s)
 
@@ -454,16 +522,16 @@ static inline double tsc_parse_f64(String s) {
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
     memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
-    char *_e_; long _v_ = strtol(_b_, &_e_, 10); \
-    (opt_i32){ .has_value = (_e_ != _b_), .value = (int32_t)_v_ }; \
+    int64_t _v_ = 0; int _ok_ = _tsc_parse_prefixed_i64(_b_, &_v_); \
+    (opt_i32){ .has_value = _ok_, .value = (int32_t)_v_ }; \
 })
 
 #define tsc_try_parse_f64(s) ({ \
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
     memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
-    char *_e_; double _v_ = strtod(_b_, &_e_); \
-    (opt_f64){ .has_value = (_e_ != _b_), .value = _v_ }; \
+    double _v_ = 0; int _ok_ = _tsc_parse_prefixed_f64(_b_, &_v_); \
+    (opt_f64){ .has_value = _ok_, .value = _v_ }; \
 })
 #define tsc_parse_float(s) tsc_try_parse_f64(s)
 

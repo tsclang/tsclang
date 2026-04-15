@@ -14,7 +14,11 @@ export default {
         if (inner === 'String') return 'String'; // string slice borrows are struct-by-value
         return `const ${inner} *`;
       }
-      if (name === 'Mut')    return `${this.resolveType(typeArgs[0])} *`;
+      if (name === 'Mut') {
+        const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
+        if (innerName && this.interfaces.has(innerName)) return this.resolveType(typeArgs[0]); // fat-ptr by value
+        return `${this.resolveType(typeArgs[0])} *`;
+      }
       if (name === 'Shared') return `${this.resolveType(typeArgs[0])} *`;
       if (name === 'Weak')   return `${this.resolveType(typeArgs[0])} *`;
       if (name === 'Array' || name === 'ReadonlyArray') {
@@ -451,13 +455,22 @@ export default {
             const m2 = cls2.methods.find(m => m.name === node.callee.prop);
             if (m2?.returnType) return this.resolveType(m2.returnType);
           }
+          // Interface method call: look up interface method return type
+          if (sym2) {
+            const ifaceDef = this.interfaces.get(sym2.ctype);
+            if (ifaceDef) {
+              const m3 = ifaceDef.find(m => m.kind === 'MethodSig' && m.name === node.callee.prop);
+              if (m3?.returnType) return this.resolveType(m3.returnType);
+            }
+          }
         }
         if (node.callee.kind === 'Ident') {
           const n2 = node.callee.name;
           if (n2 === 'parseInt' || n2 === 'tryParseInt') return 'opt_i32';
-          if (n2 === 'parseFloat' || n2 === 'tryParseFloat') return 'opt_f64';
+          if (n2 === 'parseFloat' || n2 === 'tryParseFloat' || n2 === 'Number') return 'opt_f64';
           if (n2 === 'String') return 'String';
           const sym = this.lookup(n2);
+          if (sym?.isClosure && sym.closureRetType) return sym.closureRetType;
           if (sym) return sym.ctype;
         }
         return 'int32_t';

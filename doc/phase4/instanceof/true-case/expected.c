@@ -5,7 +5,7 @@ typedef struct { void *self; const Shape_vtable *vtable; } Shape;
 
 typedef struct { double radius; } Circle;
 
-static double Circle_area(Circle *self) {
+static double Circle_area(const Circle *self) {
     return 3.14 * self->radius * self->radius;
 }
 

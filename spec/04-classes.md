@@ -703,6 +703,44 @@ class Bad { ... }
 
 TSClang генерирует C, а не машинный код. `__attribute__((packed))` указывает C-компилятору (avr-gcc, arm-gcc) самостоятельно генерировать корректный код для платформы — побайтовые load'ы там, где это необходимо.
 
+Поведение компилятора зависит от `unaligned_access` в Platform Profile:
+
+| `unaligned_access` | Что делает компилятор |
+|-------------------|----------------------|
+| `true` (desktop x86-64, Cortex-M4+) | Обращения к полям `@packed`-структуры остаются прямыми. C-компилятор знает о `__attribute__((packed))` и сгенерирует корректный код сам. |
+| `false` (AVR, Cortex-M0) | Доступ к многобайтовым полям `@packed`-структуры через `tsc_read_unaligned_u16` / `tsc_read_unaligned_u32` helper'ы — побайтовая сборка без UB. |
+
+```typescript
+// @packed на платформе с unaligned_access: false (AVR, Cortex-M0)
+
+@packed
+class Packet {
+    type: u8
+    length: u16   // невыровненный u16!
+    checksum: u32 // невыровненный u32!
+}
+
+// C-output на AVR (unaligned_access: false):
+// uint16_t len = tsc_read_unaligned_u16(&p.length);
+// uint32_t crc = tsc_read_unaligned_u32(&p.checksum);
+
+// C-output на desktop (unaligned_access: true):
+// uint16_t len = p.length;   // прямой доступ — CPU справится
+// uint32_t crc = p.checksum;
+```
+
+`unaligned_access` задаётся в `declare platform {}` Platform Profile, а не в `tsc.package.json` — это свойство железа, не проекта:
+
+```typescript
+// @avr/platform/index.d.tsc
+declare platform {
+    bits: 8
+    fpu: false
+    heap: false
+    unaligned_access: false   // AVR: невыровненный доступ вызывает undefined behaviour
+}
+```
+
 ### Диагностика padding
 
 В режиме `debug` компилятор предупреждает о неэффективных структурах:

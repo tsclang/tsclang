@@ -1,0 +1,6 @@
+const a = Number("3.14");
+const b = Number("0xFF");
+const c = Number("abc");
+console.log(a);
+console.log(b);
+console.log(c);

@@ -850,6 +850,24 @@ platform/
 
 **Borrow checker при `binaryMode: "small"`:** type erasure — это оптимизация кодогенерации, не языковая фича. Borrow checker работает на AST до кодогенерации — с полными типами. Безопасность гарантируется на этапе компиляции. "Нет runtime проверок" означает только что в C-output нет assert/cast проверок — не что borrow checker отключён.
 
+## platformSettings
+
+Проектные настройки, влияющие на кодогенерацию поверх платформенного профиля. Задаются в `tsc.package.json` верхнего уровня (не внутри `builds`).
+
+```json
+{
+  "platformSettings": {
+    "defaultAlignment": 16
+  }
+}
+```
+
+| Поле | Тип | Дефолт | Описание |
+|------|-----|--------|----------|
+| `defaultAlignment` | `number` (степень двойки) | платформенный дефолт | Глобальное выравнивание всех struct по умолчанию. Применяется ко всем структурам, у которых нет явного `@align(N)` или `@packed`. Полезно для SIMD-проектов (`defaultAlignment: 16` → все structs `__attribute__((aligned(16)))`). |
+
+> **Отличие от `declare platform { ... }`**: `platformSettings.defaultAlignment` — решение разработчика проекта поверх платформенного умолчания. `declare platform` описывает возможности железа (независимые от решения разработчика). Например, `unaligned_access` — свойство CPU, а не выбор проекта; поэтому оно в `declare platform`, не в `platformSettings`.
+
 ## Platform Profile
 
 Компилятор должен знать в compile-time: какие функции libc доступны, есть ли heap, сколько бит адрес — чтобы выдавать ошибки заранее, не на этапе линковки.
@@ -877,14 +895,14 @@ platform/
 
 Компилятор знает стандартные платформы:
 
-| Target | usize | heap | fpu | std/ |
-|--------|-------|------|-----|------|
-| `desktop` | `u64` | ✅ | ✅ | полный |
-| `arm` (Cortex-M0/M1) | `u32` | ✅/❌ | ❌ | без io/fs/net/threads |
-| `arm` (Cortex-M4+) | `u32` | ✅/❌ | ✅/❌ | без io/fs/net/threads |
-| `avr` | `u16` | ❌ | ❌ | math, libc partial |
-| `wasm32` | `u32` | ✅ | ✅ | ограниченный |
-| `dos` | `u32` | ✅ | ❌ | libc почти полный |
+| Target | usize | heap | fpu | unaligned_access | std/ |
+|--------|-------|------|-----|-----------------|------|
+| `desktop` | `u64` | ✅ | ✅ | `true` | полный |
+| `arm` (Cortex-M0/M1) | `u32` | ✅/❌ | ❌ | `false` | без io/fs/net/threads |
+| `arm` (Cortex-M4+) | `u32` | ✅/❌ | ✅/❌ | `true` | без io/fs/net/threads |
+| `avr` | `u16` | ❌ | ❌ | `false` | math, libc partial |
+| `wasm32` | `u32` | ✅ | ✅ | `true` | ограниченный |
+| `dos` | `u32` | ✅ | ❌ | `true` | libc почти полный |
 
 Для built-in профилей поле `profile` не нужно — достаточно `target`.
 
@@ -1228,6 +1246,7 @@ declare module "std/libc" {
 | `ram_size` | `u32` | Общий размер RAM — компилятор проверяет суммарный BSS |
 | `flash_size` | `u32` | Размер Flash/ROM — компилятор проверяет размер кода |
 | `no_recursion` | `bool` | Запретить рекурсию (статический анализ call graph) |
+| `unaligned_access` | `bool` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур. x86-64: `true`; ARM Cortex-M0, AVR: `false` |
 
 #### Стратегии аллокации (`allocator`)
 
@@ -1857,6 +1876,7 @@ declare platform {
     stack_size: 256
     ram_size: 2048
     no_recursion: true
+    unaligned_access: false  // 6502 не поддерживает невыровненный доступ
 }
 
 declare module "std/libc" {

@@ -61,6 +61,133 @@ export default {
     };
     for (const node of ast.body) _scanArc(node);
 
+    // Pre-scan: detect inheritance chains > 1 level (must fire before per-class non-Error check)
+    {
+      const classDecls = {};
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'ClassDecl' && !n.typeParams?.length) classDecls[n.name] = n;
+      }
+      for (const [name, n] of Object.entries(classDecls)) {
+        if (!n.superClass) continue;
+        const parent = classDecls[n.superClass];
+        if (parent?.superClass) {
+          throw new Error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
+        }
+      }
+    }
+
+    // Pre-scan: detect target annotation (embedded vs desktop)
+    this._targetName = 'desktop';
+    for (const node of ast.body) {
+      if (node.kind === 'ProfileAnnotation') {
+        const m = node.content.match(/target\((\w+)\)/);
+        if (m) this._targetName = m[1];
+      }
+    }
+
+    // Pre-scan: collect all classes used in throws clauses → _throwsClasses
+    // Also collect union groups for _new determination
+    this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
+    const _throwsUnions = []; // each element = array of class names from one throws clause
+    // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
+    const _flattenThrowsNames = (throwsTypes) => {
+      const names = [];
+      for (const t of throwsTypes ?? []) {
+        if (t.kind === 'TypeRef') names.push(t.name);
+        else if (t.kind === 'TypeUnion') {
+          for (const inner of t.types) { if (inner.kind === 'TypeRef') names.push(inner.name); }
+        }
+      }
+      return names;
+    };
+    const _collectThrows = (throwsTypes) => {
+      if (!throwsTypes?.length) return;
+      const names = _flattenThrowsNames(throwsTypes);
+      for (const n of names) {
+        if (!this._throwsClasses.has(n)) this._throwsClasses.set(n, { hasMessage: false, hasStack: false, needsNew: false });
+      }
+      if (names.length > 0) _throwsUnions.push(names);
+    };
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind === 'FuncDecl') _collectThrows(n.throwsTypes);
+      if (n?.kind === 'ClassDecl') {
+        for (const m of (n.members ?? [])) {
+          if (m.kind === 'Method') _collectThrows(m.throwsTypes);
+        }
+      }
+    }
+    // Determine hasMessage/hasStack for each throws class; also check all classes for embedded stack
+    const _embeddedTargets = ['avr', 'arm', 'stm32'];
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind === 'ClassDecl') {
+        const fields = (n.members ?? []).filter(m => m.kind === 'Field');
+        const hasStack = fields.some(f => f.name === 'stack');
+        // Any class with 'stack' field on embedded target → error
+        if (hasStack && _embeddedTargets.includes(this._targetName)) {
+          throw new Error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
+        }
+        const info = this._throwsClasses.get(n.name);
+        if (info) {
+          info.hasMessage = fields.some(f => f.name === 'message');
+          info.hasStack = hasStack;
+        }
+      }
+    }
+    // Determine needsNew: walk AST for throw new X() nodes
+    const _thrownClasses = new Set();
+    const _walkThrows = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(_walkThrows); return; }
+      if (n.kind === 'Throw' && n.value?.kind === 'New') _thrownClasses.add(n.value.name);
+      for (const k of Object.keys(n)) {
+        if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkThrows(v); }
+      }
+    };
+    for (const node of ast.body) _walkThrows(node);
+    // For each union: if any member thrown → all get needsNew
+    for (const union of _throwsUnions) {
+      if (union.some(name => _thrownClasses.has(name))) {
+        for (const name of union) {
+          const info = this._throwsClasses.get(name);
+          if (info) info.needsNew = true;
+        }
+      }
+    }
+
+    // Pre-scan: collect all Result typedefs needed, grouped by errKey
+    // Map: errKey → [{ retCtype, retIdent, resultName }]
+    this._resultTypesByErrKey = new Map();
+    this._emittedResultErrKeys = new Set();
+    const _basicTypeMap = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
+      'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
+      'f32':'float','f64':'double','bool':'bool','string':'String',
+      'void':'void','usize':'size_t','char':'char' };
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind !== 'FuncDecl' || !n.throwsTypes?.length) continue;
+      const throwsNames = _flattenThrowsNames(n.throwsTypes);
+      if (!throwsNames.length) continue;
+      const errKey = throwsNames.join('_');
+      let retCtype;
+      if (!n.returnType || (n.returnType.kind === 'TypeRef' && n.returnType.name === 'void')) {
+        retCtype = 'void';
+      } else if (n.returnType.kind === 'TypeRef') {
+        retCtype = _basicTypeMap[n.returnType.name] ?? n.returnType.name;
+      } else {
+        retCtype = 'void';
+      }
+      const retIdent = this.cTypeToIdent(retCtype);
+      const resultName = `Result_${retIdent}_${errKey}`;
+      if (!this._resultTypesByErrKey.has(errKey)) this._resultTypesByErrKey.set(errKey, []);
+      const list = this._resultTypesByErrKey.get(errKey);
+      if (!list.some(r => r.resultName === resultName)) {
+        list.push({ retCtype, retIdent, resultName });
+      }
+    }
+
     for (const node of ast.body) this.visitTopLevel(node);
   },
 
@@ -79,6 +206,16 @@ export default {
         // Collect signatures; implementation FuncDecl will emit them
         if (!this._pendingOverloads) this._pendingOverloads = new Map();
         { const _sigs = this._pendingOverloads.get(node.name) ?? [];
+          // Check for duplicate/ambiguous signature
+          const newSig = (node.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+          const dupSig = _sigs.find(s => {
+            const sig = (s.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+            return sig === newSig;
+          });
+          if (dupSig) {
+            const paramDesc = (node.params ?? []).map(p => `${p.name}: ${p.typeAnn?.name ?? '?'}`).join(', ');
+            throw new Error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
+          }
           _sigs.push(node);
           this._pendingOverloads.set(node.name, _sigs); }
         break;
@@ -101,13 +238,29 @@ export default {
       this._genericClasses.set(name, node);
       return;
     }
-    const fields = members.filter(m => m.kind === 'Field');
+
+    const allFields_ = members.filter(m => m.kind === 'Field');
     const methods = members.filter(m => m.kind === 'Method');
+    const throwsInfo = this._throwsClasses?.get(name);
+    const isThrowsClass = !!throwsInfo;
+
+    // For throws classes: replace 'message' field with TscError _base
+    let fields = allFields_;
+    let effectiveSuperClass = superClass;
+    if (isThrowsClass) {
+      // Always treat as if extending Error (TscError _base)
+      effectiveSuperClass = 'Error';
+      // Remove 'message' field — it's replaced by _base.message via TscError
+      fields = allFields_.filter(f => f.name !== 'message');
+    }
+
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
-    this.classes.set(name, { fields, methods, superClass, isStruct: true });
+    const implements_ = node.implements_ ?? [];
+    this.classes.set(name, { fields, methods, superClass: effectiveSuperClass, isStruct: true, implements_,
+      ...(isThrowsClass ? { _isThrowsClass: true } : {}) });
 
     // Map TSClang base class names → C names
-    const cBase = superClass === 'Error' ? 'TscError' : superClass;
+    const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
 
     // Check if this class is used as Shared<T> or Weak<T>
     const arcInfo = this._arcClasses?.get(name);
@@ -135,26 +288,73 @@ export default {
           ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
           ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
         ];
-        const allFields = [...arcPre, ...userFieldParts, ...arcPost];
+        const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
         const isSelfRef = fields.some(f => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         if (isSelfRef) {
           this.addTop(`typedef struct ${name} ${name};`);
-          this.addTop(`struct ${name} { ${allFields.join(' ')} };`);
+          this.addTop(`struct ${name} { ${allArcFields.join(' ')} };`);
         } else {
-          this.addTop(`typedef struct { ${allFields.join(' ')} } ${name};`);
+          this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${name};`);
         }
       } else {
-        this.addTop(`typedef struct { ${userFieldParts.join(' ')} } ${name};`);
+        // C does not allow empty structs; use a dummy field when no user fields exist
+        const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
+        this.addTop(`typedef struct { ${fieldContent} } ${name};`);
       }
-      this.addTop('');
+
+      // For throws classes: emit _new function directly to typedefs (so it appears between
+      // the struct typedef and the Result typedefs emitted in visitFuncDecl).
+      if (isThrowsClass && throwsInfo.needsNew) {
+        const hasStack = throwsInfo.hasStack;
+        let newBody = `${name} s = {0}; s._base.message = msg;`;
+        if (hasStack) newBody += ` s.stack = tsc_capture_stack();`;
+        newBody += ` return s;`;
+        this.typedefs.push(`static ${name} ${name}_new(String msg) { ${newBody} }`);
+        this.typedefs.push('');  // blank after _new, before Result typedef
+        this._lastAddedToTypedefs = false;  // next addTop('') won't be swallowed
+      } else {
+        this.addTop('');  // blank after struct (no _new)
+      }
+    }
+
+    // For throws classes: skip normal constructor handling (we emitted _new above)
+    if (isThrowsClass) {
+      // Emit non-constructor methods only
+      const explicitImplements = node.implements_ ?? [];
+      for (const m of methods) {
+        if (m.name === 'constructor') continue;
+        const isStatic = m.modifiers.includes('static');
+        this.emitMethod(name, m, isStatic, explicitImplements);
+      }
+      for (const ifaceName of explicitImplements) this.emitVtableConstant(name, ifaceName);
+      return;
     }
 
     // Constructor if present
     const ctor = methods.find(m => m.name === 'constructor');
     if (ctor) {
+      // Check that all fields are unconditionally assigned in the constructor
+      if (fields.length > 0 && ctor.body) {
+        const unconditional = new Set();
+        const stmts = ctor.body.body ?? ctor.body;
+        for (const stmt of stmts) {
+          if (stmt.kind === 'ExprStmt' &&
+              stmt.expr?.kind === 'Assign' &&
+              stmt.expr.left?.kind === 'Member' &&
+              stmt.expr.left.object?.kind === 'Ident' &&
+              stmt.expr.left.object.name === 'this') {
+            unconditional.add(stmt.expr.left.prop);
+          }
+        }
+        for (const f of fields) {
+          if (!unconditional.has(f.name)) {
+            throw new Error(`field "${f.name}" may not be initialized on all paths in constructor`);
+          }
+        }
+      }
       this.emitMethod(name, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: name }, true);
     }
 
@@ -172,10 +372,18 @@ export default {
     }
   },
 
-  emitVtableConstant(className, ifaceName) {
+  emitVtableConstant(className, ifaceName, classNode = null) {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
     const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    // Verify all interface methods are implemented
+    const classDef = this.classes.get(className);
+    for (const im of ifaceMethods) {
+      const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
+      if (!methodExists) {
+        throw new Error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
+      }
+    }
     const vtableName = `${className}_${ifaceName}_vtable`;
     const entries = ifaceMethods.map(m => {
       return `    .${m.name} = ${className}_${m.name}`;
@@ -186,6 +394,12 @@ export default {
 
   emitMethod(className, m, isStatic, explicitImplements = []) {
     if (!m.body) return; // abstract / overload
+
+    // Error: static methods cannot be mut
+    if (isStatic && m.modifiers?.includes('mut')) {
+      throw new Error(`"static" methods cannot be "mut"`);
+    }
+
     // Methods are NOT mangled by param types (class prefix already disambiguates)
     const retType = m.returnTypeOverride ?? (m.returnType ? this.resolveType(m.returnType) : 'void');
     const nameMangled = `${className}_${m.name}`;
@@ -201,7 +415,11 @@ export default {
     const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut);
 
     // Determine whether method mutates self
-    const mutatesself = isMut || lines.some(l => /self->[\w]+ *=/.test(l));
+    const mutatesself = isMut || lines.some(l =>
+      /self->[\w]+ *[+\-*\/|&^%]?=(?!=)/.test(l) ||
+      /self->[\w]+\+\+/.test(l) ||
+      /self->[\w]+--/.test(l)
+    );
 
     const params = [];
     if (!isStatic && m.name !== 'new') {
@@ -232,7 +450,7 @@ export default {
     const cls = this.classes.get(className);
     if (cls) {
       if (!cls._methodNames) cls._methodNames = new Map();
-      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isMoveMethod, isIfaceMethod });
+      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isExplicitMut: isMut, isMoveMethod, isIfaceMethod });
     }
     this.addTop(`static ${retType} ${nameMangled}(${params.join(', ') || 'void'}) {`);
     for (const l of finalLines) this.addTop('    ' + l);
@@ -656,7 +874,74 @@ export default {
       retType = 'void';
     }
     const suffix = node._monoName ? '' : mangleParams(params);
-    const cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
+    let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
+
+    // Throws function handling
+    const throwsTypes = node.throwsTypes ?? [];
+    let throwsCtx = null;
+    if (throwsTypes.length > 0) {
+      // Flatten throwsTypes (handles TypeUnion: throws A | B → [A, B])
+      const throwsNames = (() => {
+        const names = [];
+        for (const t of throwsTypes) {
+          if (t.kind === 'TypeRef') names.push(t.name);
+          else if (t.kind === 'TypeUnion') {
+            for (const inner of t.types) { if (inner.kind === 'TypeRef') names.push(inner.name); }
+          }
+        }
+        return names;
+      })();
+      const errKey = throwsNames.join('_');
+      const isVoid = retType === 'void';
+      const retIdent = this.cTypeToIdent(retType);
+      const resultType = `Result_${retIdent}_${errKey}`;
+
+      // Rename 'ok' → 'ok_fn' to avoid C ambiguity
+      if (cname === 'ok') cname = 'ok_fn';
+
+      // Emit all Result typedefs for this errKey (first time only)
+      if (!this._emittedResultErrKeys.has(errKey)) {
+        this._emittedResultErrKeys.add(errKey);
+        if (throwsNames.length > 1) {
+          // Union error: emit _ErrTag + _ErrUnion + blank + all Results + blank
+          const tagEntries = throwsNames.map((n, i) => `_Err_${n} = ${i}`).join(', ');
+          this.addTop(`typedef enum { ${tagEntries} } _ErrTag_${errKey};`);
+          this.addTop(`typedef struct {`);
+          this.addTop(`    _ErrTag_${errKey} tag;`);
+          this.addTop(`    union { ${throwsNames.map((n, i) => `${n} _${i};`).join(' ')} };`);
+          this.addTop(`} _ErrUnion_${errKey};`);
+          this.typedefs.push('');  // blank between _ErrUnion and Result typedefs
+        }
+        // Emit all Result types for this errKey (in pre-scan order)
+        const resultList = this._resultTypesByErrKey.get(errKey) ?? [];
+        for (const r of resultList) {
+          if (throwsNames.length > 1) {
+            // Union: multi-line Result
+            const valPart = r.retCtype === 'void' ? 'int _dummy' : `${r.retCtype} value`;
+            this.addTop(`typedef struct {`);
+            this.addTop(`    bool ok;`);
+            this.addTop(`    union { ${valPart}; _ErrUnion_${errKey} error; };`);
+            this.addTop(`} ${r.resultName};`);
+          } else {
+            // Single: single-line Result
+            const valPart = r.retCtype === 'void' ? 'int _dummy' : `${r.retCtype} value`;
+            this.addTop(`typedef struct { bool ok; union { ${valPart}; ${throwsNames[0]} error; }; } ${r.resultName};`);
+          }
+        }
+        if (throwsNames.length > 1) this.typedefs.push('');  // blank after union Result typedefs
+      }
+
+      // Build throwsCtx for function body
+      throwsCtx = {
+        resultType,
+        throwsNames,
+        errKey,
+        isVoid,
+        origRetType: retType,
+      };
+      // Replace retType with Result type
+      retType = resultType;
+    }
 
     // never return type: body must end with throw/abort
     if (isNever && body) {
@@ -705,11 +990,19 @@ export default {
           existing._overloadsInitialized = true;
         }
       } else {
-        this.define(name, { ctype: retType, funcName: cname, params, returnType });
+        const symExtra = throwsCtx ? {
+          _isThrowsFunc: true,
+          _resultType: throwsCtx.resultType,
+          _resultIsVoid: throwsCtx.isVoid,
+          _resultValueType: throwsCtx.origRetType,
+          _resultErrKey: throwsCtx.errKey,
+          _resultErrTypes: throwsCtx.throwsNames,
+        } : {};
+        this.define(name, { ctype: retType, funcName: cname, params, returnType, ...symExtra });
       }
     }
 
-    const lines = this.emitFuncBody(name, body, params, retType);
+    const lines = this.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx);
     // Track whether this function heap-allocates String return values
     if (retType === 'String') {
       const heapOps = ['tsc_string_concat','tsc_string_repeat','tsc_string_replace',
@@ -742,11 +1035,12 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false) {
-    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType };
+  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null) {
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx };
     this.inFunction = true;
     this.currentFuncName = funcName;
     this.currentFuncReturnType = retType;
+    this._throwsCtx = throwsCtx; // null for non-throws, ctx object for throws functions
     const lines = [];
     this._currentFuncLines = lines;
     this._funcDepth = 0;
@@ -787,11 +1081,19 @@ export default {
     }
     this.visitBlock(body, lines, 0);
     if (isCtor) lines.push('return self;');
+    // For void throws functions: add implicit {.ok=true} return if last stmt isn't a return
+    if (throwsCtx?.isVoid) {
+      const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+      if (!lastNonEmpty?.trim().startsWith('return ')) {
+        lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
+      }
+    }
     this.popScope();
 
     this.inFunction = saved.inFunction;
     this.currentFuncName = saved.funcName;
     this.currentFuncReturnType = saved.retType;
+    this._throwsCtx = saved.throwsCtx;
     return lines;
   }
 };

@@ -6,7 +6,7 @@ static const char *Color_names[] = { "Red", "Green", "Blue" };
 
 int main(void) {
     TSC_INIT();
-    const Color c = Color_Green;
+    Color c = Color_Green;
     String name;
     if (c == Color_Red) { name = STR_LIT("red"); }
     else if (c == Color_Green) { name = STR_LIT("green"); }

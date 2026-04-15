@@ -1,0 +1,2 @@
+const x = parseInt("0b1010");
+console.log(x);

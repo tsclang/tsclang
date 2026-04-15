@@ -14,6 +14,7 @@ int main(void) {
     Result_void_AppError _res_0 = fail();
     if (!_res_0.ok) {
         AppError e = _res_0.error;
+        (void)e;
         printf("caught\n");
     }
     printf("finally\n");

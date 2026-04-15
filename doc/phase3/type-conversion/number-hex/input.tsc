@@ -1,0 +1,6 @@
+const x = Number("0xFF");
+const y = Number("0b1010");
+const z = Number("0o77");
+console.log(x);
+console.log(y);
+console.log(z);

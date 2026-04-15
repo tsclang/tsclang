@@ -407,6 +407,7 @@ export function parse(tokens, filename = '<input>') {
   }
 
   function parseVarDecl(kind, decorators = []) {
+    const startLine = cur().line;
     eat(TK.IDENT, kind);
     // const enum Foo { ... }
     if (kind === 'const' && cur().type === TK.IDENT && cur().value === 'enum') {
@@ -449,7 +450,7 @@ export function parse(tokens, filename = '<input>') {
     if (tryEat(TK.EQ)) init = parseExpr();
     if (optionalVar && !init) init = { kind: 'Literal', litType: 'null', value: 'null' };
     eatSemi();
-    return { kind: 'VarDecl', varKind: kind, name, typeAnn, init, decorators };
+    return { kind: 'VarDecl', varKind: kind, name, typeAnn, init, decorators, line: startLine };
   }
 
   function parseObjectPattern() {
@@ -512,8 +513,10 @@ export function parse(tokens, filename = '<input>') {
     let throwsTypes = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
-      throwsTypes.push(parseTypeAnnotation());
-      while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+      if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
+        throwsTypes.push(parseTypeAnnotation());
+        while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+      }
     }
     // Overload signature (no body)
     if (cur().type === TK.SEMI) { eat(TK.SEMI); return { kind: 'FuncOverload', name, params, returnType }; }
@@ -533,8 +536,10 @@ export function parse(tokens, filename = '<input>') {
     let throwsTypes = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
-      throwsTypes.push(parseTypeAnnotation());
-      while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+      if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
+        throwsTypes.push(parseTypeAnnotation());
+        while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+      }
     }
     const body = cur().type === TK.LBRACE ? parseBlock() : null;
     return { kind: 'FuncDecl', name, params, returnType, throwsTypes, body, async: true, generator, decorators };
@@ -658,8 +663,10 @@ export function parse(tokens, filename = '<input>') {
         let throwsTypes = [];
         if (cur().type === TK.IDENT && cur().value === 'throws') {
           eat(TK.IDENT);
-          throwsTypes.push(parseTypeAnnotation());
-          while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+          if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
+            throwsTypes.push(parseTypeAnnotation());
+            while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+          }
         }
         let body = null;
         if (cur().type === TK.LBRACE) body = parseBlock();
@@ -1176,8 +1183,108 @@ export function parse(tokens, filename = '<input>') {
     return args;
   }
 
+  function parseMatchPattern() {
+    // Parse a single (possibly OR-combined) match pattern
+    const parseSinglePattern = () => {
+      const t = cur();
+      // Wildcard
+      if (t.type === TK.IDENT && t.value === '_') { pos++; return { kind: 'MatchWild' }; }
+      // Null
+      if (t.type === TK.NULL) { pos++; return { kind: 'MatchNull' }; }
+      // Array/tuple destructuring [p1, p2, ...]
+      if (t.type === TK.LBRACK) {
+        eat(TK.LBRACK);
+        const elements = [];
+        while (cur().type !== TK.RBRACK) {
+          elements.push(parseSinglePattern());
+          tryEat(TK.COMMA);
+        }
+        eat(TK.RBRACK);
+        return { kind: 'MatchTuple', elements };
+      }
+      // Negative number literal
+      if (t.type === TK.MINUS && peek().type === TK.NUMBER) {
+        eat(TK.MINUS);
+        const numTok = eat(TK.NUMBER);
+        const lo = '-' + numTok.value;
+        if (cur().type === TK.DOTDOT) {
+          eat(TK.DOTDOT);
+          const hiNeg = cur().type === TK.MINUS ? (eat(TK.MINUS), true) : false;
+          const hi = (hiNeg ? '-' : '') + eat(TK.NUMBER).value;
+          return { kind: 'MatchRange', lo, hi };
+        }
+        return { kind: 'MatchLit', value: lo, litType: 'number' };
+      }
+      // Number literal (possibly range)
+      if (t.type === TK.NUMBER) {
+        const lo = eat(TK.NUMBER).value;
+        if (cur().type === TK.DOTDOT) {
+          eat(TK.DOTDOT);
+          const hiNeg = cur().type === TK.MINUS ? (eat(TK.MINUS), true) : false;
+          const hi = (hiNeg ? '-' : '') + eat(TK.NUMBER).value;
+          return { kind: 'MatchRange', lo, hi };
+        }
+        return { kind: 'MatchLit', value: lo, litType: 'number' };
+      }
+      // String literal
+      if (t.type === TK.STRING) {
+        pos++;
+        return { kind: 'MatchLit', value: t.value, litType: 'string' };
+      }
+      // Identifier: wildcard _, enum case Foo.Bar, or bare enum value
+      if (t.type === TK.IDENT) {
+        const name = eat(TK.IDENT).value;
+        if (cur().type === TK.DOT) {
+          eat(TK.DOT);
+          const member = eat(TK.IDENT).value;
+          return { kind: 'MatchEnum', enumName: name, caseName: member, path: `${name}.${member}` };
+        }
+        return { kind: 'MatchIdent', name };
+      }
+      err(`Unexpected token in match pattern: ${t.type} "${t.value}"`);
+    };
+
+    // Collect OR-joined patterns
+    const first = parseSinglePattern();
+    if (cur().type !== TK.PIPE) return first;
+    const patterns = [first];
+    while (cur().type === TK.PIPE) {
+      eat(TK.PIPE);
+      patterns.push(parseSinglePattern());
+    }
+    return { kind: 'MatchOr', patterns };
+  }
+
+  function parseMatch() {
+    eat(TK.IDENT); // eat 'match'
+    let discriminant;
+    let hasParens = false;
+    if (cur().type === TK.LPAREN) {
+      hasParens = true;
+      eat(TK.LPAREN);
+      discriminant = parseExpr();
+      eat(TK.RPAREN);
+    } else {
+      discriminant = parsePrimary();
+    }
+    eat(TK.LBRACE);
+    const cases = [];
+    while (cur().type !== TK.RBRACE) {
+      const pattern = parseMatchPattern();
+      eat(TK.ARROW);
+      const body = parseExpr();
+      tryEat(TK.COMMA);
+      cases.push({ pattern, body });
+    }
+    eat(TK.RBRACE);
+    return { kind: 'Match', discriminant, cases, hasParens };
+  }
+
   function parsePrimary() {
     const t = cur();
+
+    // Match expression
+    if (t.type === TK.IDENT && t.value === 'match') return parseMatch();
 
     // Literals
     if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value }; }

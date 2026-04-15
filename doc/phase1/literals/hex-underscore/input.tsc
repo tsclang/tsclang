@@ -1,0 +1,4 @@
+const mask: u32 = 0xFF_FF_FF_FF;
+const flags: u16 = 0b1010_0101;
+console.log(mask);
+console.log(flags);

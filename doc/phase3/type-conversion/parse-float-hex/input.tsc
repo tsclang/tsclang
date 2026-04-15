@@ -1,0 +1,6 @@
+const x = parseFloat("0xFF");
+const y = parseFloat("0b1010");
+const z = parseFloat("0o77");
+console.log(x);
+console.log(y);
+console.log(z);

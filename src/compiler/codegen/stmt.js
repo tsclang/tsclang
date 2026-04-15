@@ -21,6 +21,18 @@ export default {
       case 'VarDecl': {
         const { varKind, name, typeAnn, init } = node;
 
+        // Match expression: const x = match { ... }
+        if (init?.kind === 'Match') {
+          this.emitMatchVarDecl(node, lines, depth);
+          break;
+        }
+
+        // Propagate/NonNull: const x = throwsFunc()?  or  const x = throwsFunc()!
+        if (init?.kind === 'Propagate' || init?.kind === 'NonNull') {
+          this.emitPropagateVarDecl(node, lines, depth);
+          break;
+        }
+
         // Object.fromEntries<{a: T, b: U}>(array) → compile-time struct init
         if (init?.kind === 'Call' &&
             init.callee?.kind === 'Member' &&
@@ -173,6 +185,49 @@ export default {
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
           throw new Error(`"void" can only be used as a return type`);
+        }
+        // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
+        if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {
+          const ifaceName = typeAnn.name;
+          // Unwrap `as Interface` cast if present
+          const innerInit = (init?.kind === 'Cast' &&
+            init.castType?.kind === 'TypeRef' && init.castType.name === ifaceName)
+            ? init.expr : init;
+          // new Foo() → create temp var, then fat-ptr
+          if (innerInit?.kind === 'New' && this.classes.has(innerInit.name) && !this.interfaces.has(innerInit.name)) {
+            const className = innerInit.name;
+            const classDef = this.classes.get(className);
+            const tempName = `_${innerInit.name.toLowerCase()}_${this.tempCount++}`;
+            const initC = this.exprToC(innerInit, lines, depth);
+            p(`${className} ${tempName} = ${initC};`);
+            this.define(tempName, { ctype: className, varKind: 'let' });
+            const hasExplicit = classDef?.implements_?.includes(ifaceName);
+            const vtableName = hasExplicit
+              ? `${className}_${ifaceName}_vtable`
+              : `_${className}_${ifaceName}_vtable`;
+            if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
+            p(`${ifaceName} ${name} = { .self = &${tempName}, .vtable = &${vtableName} };`);
+            this.define(name, { ctype: ifaceName, varKind });
+            break;
+          }
+        }
+        // Fat-pointer assignment: let x: Interface = concreteVar
+        if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name) && init?.kind === 'Ident') {
+          const ifaceName = typeAnn.name;
+          const argName = init.name;
+          const argSym = this.lookup(argName);
+          const argClass = argSym?.ctype ? this.classes.get(argSym.ctype) : null;
+          if (argClass && !this.interfaces.has(argSym.ctype)) {
+            const className = argSym.ctype;
+            const hasExplicit = argClass.implements_?.includes(ifaceName);
+            const vtableName = hasExplicit
+              ? `${className}_${ifaceName}_vtable`
+              : `_${className}_${ifaceName}_vtable`;
+            if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
+            p(`${ifaceName} ${name} = {.self = &${argName}, .vtable = &${vtableName}};`);
+            this.define(name, { ctype: ifaceName, varKind });
+            break;
+          }
         }
         let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'double');
         // Untyped number literals: integer → int32_t, float/decimal → double
@@ -401,8 +456,20 @@ export default {
         }
 
         if (init) {
-          // Special: arrow function → capture as function pointer
+          // Special: arrow function → closure struct or function pointer
           if (init.kind === 'Arrow') {
+            const closure = this.hoistClosure(init, name);
+            if (closure) {
+              p(`${closure.closureName} ${name} = {.env = ${closure.envInit}, .fn = ${closure.fnName}};`);
+              this.define(name, { ctype: closure.closureName, isClosure: true, closureRetType: closure.ret, varKind });
+              // Mark captured variables as moved (0-indexed line number for error messages)
+              const closureLine = (node.line ?? 1) - 1;
+              for (const [nm] of closure.capturedVars) {
+                const capSym = this.lookup(nm);
+                if (capSym) capSym._movedIntoClosureLine = closureLine;
+              }
+              break;
+            }
             const lambdaName = this.hoistArrow(init, ctype, name);
             // Function pointers don't use const qualifier on the return type
             p(`${ctype} (*${name})(${this.arrowParamTypes(init)}) = ${lambdaName};`);
@@ -711,6 +778,24 @@ export default {
       }
 
       case 'ExprStmt': {
+        const expr = node.expr;
+        // Auto-propagate calls to throws functions inside a throws function
+        if (this._throwsCtx && expr.kind === 'Call') {
+          const callee = expr.callee;
+          const sym = callee.kind === 'Ident' ? this.lookup(callee.name) : null;
+          if (sym?._isThrowsFunc) {
+            const ctx = this._throwsCtx;
+            const resName = `_res_${this.tempCount++}`;
+            const callC = this.exprToC(expr, lines, depth);
+            p(`${sym._resultType} ${resName} = ${callC};`);
+            p(`if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+            if (this._postStmtCleanups?.length) {
+              for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
+              this._postStmtCleanups = [];
+            }
+            break;
+          }
+        }
         const c = this.exprToC(node.expr, lines, depth);
         if (c && c !== '') {
           // Block-form assignments (&&=, ||=, ??=) already include semicolons
@@ -726,11 +811,25 @@ export default {
       }
 
       case 'Return': {
-        if (node.value) {
-          const c = this.exprToC(node.value, lines, depth);
-          p(`return ${c};`);
+        // Error: return inside finally block
+        if (this._inFinallyBlock) {
+          throw new Error('TypeError: Cannot return inside a finally block');
+        }
+        if (this._throwsCtx) {
+          const ctx = this._throwsCtx;
+          if (node.value) {
+            const c = this.exprToC(node.value, lines, depth);
+            p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
+          } else {
+            p(`return (${ctx.resultType}){.ok = true};`);
+          }
         } else {
-          p('return;');
+          if (node.value) {
+            const c = this.exprToC(node.value, lines, depth);
+            p(`return ${c};`);
+          } else {
+            p('return;');
+          }
         }
         break;
       }
@@ -754,7 +853,7 @@ export default {
         const testC = this.exprToC(node.test, lines, depth);
         const alt = node.alternate;
         // Single statement consequent (no braces)?
-        const hasBraces = node.consequent.kind === 'Block';
+        let hasBraces = node.consequent.kind === 'Block';
         if (narrowVar) {
           if (!this._narrowedVars) this._narrowedVars = new Set();
           this._narrowedVars.add(narrowVar);
@@ -779,7 +878,8 @@ export default {
         } else {
           p(`if (${testC}) {`);
           this.visitStmt(node.consequent, lines, depth + 1);
-          p('}');
+          // Do NOT emit '}' here — it's emitted by the alt section or the no-alt close below
+          hasBraces = true;  // treat as if braces were used, so alt/no-alt handling closes correctly
         }
         if (alt) {
           // else if: collapse into single line
@@ -801,8 +901,7 @@ export default {
             }
             p('}');
           } else {
-            if (hasBraces) p('} else {');
-            else p('} else {');  // wrap single stmt else in braces too
+            p('} else {');
             this.visitStmtOrBlock(alt, lines, depth + 1);
             p('}');
           }
@@ -984,27 +1083,104 @@ export default {
       }
 
       case 'Throw': {
-        // throw new Error(msg) → tsc_throw(msg)
         const val = node.value;
-        if (val?.kind === 'New' && val.name === 'Error' && val.args?.length === 1) {
-          const msgC = this.exprToC(val.args[0].expr ?? val.args[0], lines, depth);
-          p(`tsc_throw(${msgC});`);
+        // Error: throw inside finally block
+        if (this._inFinallyBlock) {
+          throw new Error('TypeError: Cannot throw inside a finally block');
+        }
+        // Error: throw string literal
+        if (val?.kind === 'Literal' && val.litType === 'string') {
+          throw new Error('can only throw Error instances, not string');
+        }
+        // Error: throw in function without throws declaration
+        if (!this._throwsCtx && this.inFunction) {
+          throw new Error(`function "${this.currentFuncName}" throws but does not declare "throws"`);
+        }
+
+        if (this._throwsCtx) {
+          const ctx = this._throwsCtx;
+          if (val?.kind === 'New') {
+            const errClass = val.name;
+            const msgArg = val.args?.[0];
+            const msgC = msgArg ? this.exprToC(msgArg.expr ?? msgArg, lines, depth) : 'STR_LIT("")';
+            if (ctx.throwsNames.length === 1) {
+              // Single error type
+              p(`return (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+            } else {
+              // Union error type
+              const idx = ctx.throwsNames.indexOf(errClass);
+              const errUnionName = `_ErrUnion_${ctx.errKey}`;
+              p(`${errUnionName} _err = {.tag = _Err_${errClass}, ._${idx} = ${errClass}_new(${msgC})};`);
+              p(`return (${ctx.resultType}){.ok = false, .error = _err};`);
+            }
+          } else {
+            const errC = this.exprToC(val, lines, depth);
+            p(`return (${ctx.resultType}){.ok = false, .error = ${errC}};`);
+          }
         } else {
-          const errC = this.exprToC(val, lines, depth);
-          p(`tsc_throw(${errC});`);
+          // Not in throws function — fall back to tsc_throw
+          if (val?.kind === 'New' && val.name === 'Error' && val.args?.length === 1) {
+            const msgC = this.exprToC(val.args[0].expr ?? val.args[0], lines, depth);
+            p(`tsc_throw(${msgC});`);
+          } else {
+            const errC = this.exprToC(val, lines, depth);
+            p(`tsc_throw(${errC});`);
+          }
         }
         break;
       }
 
       case 'TryCatch': {
-        this.visitBlock(node.body, lines, depth);
-        for (const c of node.catches) {
-          p(`/* catch (${c.param}: ${c.typeAnn ? this.resolveType(c.typeAnn) : 'any'}) */`);
-          this.visitBlock(c.body, lines, depth);
-        }
-        if (node.finally) {
-          p('/* finally */');
-          this.visitBlock(node.finally, lines, depth);
+        const tryStmts = node.body?.body ?? node.body ?? [];
+
+        // Check if try body contains a call to a throws function
+        const _findThrowsFuncCall = (stmts) => {
+          for (const s of stmts) {
+            if (s.kind === 'ExprStmt' && s.expr?.kind === 'Call') {
+              const callee = s.expr.callee;
+              const sym = callee.kind === 'Ident' ? this.lookup(callee.name) : null;
+              if (sym?._isThrowsFunc) return s;
+            }
+            if (s.kind === 'VarDecl' && s.init?.kind === 'Call') {
+              const callee = s.init.callee;
+              const sym = callee?.kind === 'Ident' ? this.lookup(callee.name) : null;
+              if (sym?._isThrowsFunc) return s;
+            }
+          }
+          return null;
+        };
+        const throwsFuncCallStmt = _findThrowsFuncCall(tryStmts);
+
+        if (throwsFuncCallStmt) {
+          // New Result-based pattern
+          this._emitTryCatchResult(node, tryStmts, throwsFuncCallStmt, lines, depth);
+        } else {
+          // Old embedded pattern (for throw new X() directly inside try)
+          for (const s of tryStmts) {
+            const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
+            if (isThrowNew) {
+              const val = s.value;
+              const errClass = val.name;
+              const errVarName = `_err_${this.tempCount++}`;
+              const errC = this.exprToC(val, lines, depth);
+              p(`${errClass} ${errVarName} = ${errC};`);
+              for (const c of node.catches) {
+                if (!c.typeAnn || c.typeAnn.name === errClass) {
+                  this.pushScope();
+                  this.define(c.param, { ctype: errClass, _alias: errVarName });
+                  this.visitBlock(c.body, lines, depth);
+                  this.popScope();
+                }
+              }
+            } else {
+              this.visitStmt(s, lines, depth);
+            }
+          }
+          if (node.finally) {
+            this._inFinallyBlock = true;
+            this.visitBlock(node.finally, lines, depth);
+            this._inFinallyBlock = false;
+          }
         }
         break;
       }
@@ -1076,6 +1252,289 @@ export default {
   visitStmtOrBlock(node, lines, depth) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
-  }
+  },
+
+  // -----------------------------------------------------------------------
+  // Match expression used as VarDecl initializer: const x = match { ... }
+  // -----------------------------------------------------------------------
+  emitMatchVarDecl(node, lines, depth) {
+    const { varKind, name, typeAnn, init } = node;
+    const { discriminant, cases, hasParens } = init;
+    const I = ' '.repeat(this.indent * depth);
+    const p = (s) => lines.push(I + s);
+
+    // Determine discriminant C expression and type
+    const discC = this.exprToC(discriminant, lines, depth);
+    const discType = this.inferType(discriminant);
+
+    // Determine result type from first arm body
+    const resultType = typeAnn
+      ? this.resolveType(typeAnn)
+      : (cases.length > 0 ? this.inferType(cases[0].body) : 'int32_t');
+    const qualifier = (varKind === 'const') ? '' : '';  // match result var is never const
+    p(`${resultType} ${name};`);
+    this.define(name, { ctype: resultType, varKind: 'let' });
+
+    // Check if discriminant is an enum type
+    const enumDef = this.classes.get(discType);
+    const isEnum = enumDef?.isEnum && !enumDef?.isConst && !enumDef?.isStringLiteralUnion;
+
+    // For enum discriminants: check exhaustiveness
+    if (isEnum) {
+      const allValues = (enumDef.members ?? []).map(m => m.name);
+      const coveredEnumCases = new Set();
+      let hasWild = false;
+      for (const c of cases) {
+        if (c.pattern.kind === 'MatchWild') hasWild = true;
+        if (c.pattern.kind === 'MatchEnum') coveredEnumCases.add(c.pattern.caseName);
+      }
+      if (!hasWild) {
+        const missing = allValues.filter(v => !coveredEnumCases.has(v));
+        if (missing.length > 0) {
+          throw new Error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map(v => `'${v}'`).join(', ')}`);
+        }
+      }
+    }
+
+    // Emit match as switch (enum, non-parens) or if/else chain
+    if (isEnum && !hasParens) {
+      // Switch/case form
+      p(`switch (${discC}) {`);
+      for (const c of cases) {
+        const bodyC = this.exprToC(c.body, lines, depth);
+        if (c.pattern.kind === 'MatchEnum') {
+          p(`    case ${c.pattern.enumName}_${c.pattern.caseName}: ${name} = ${bodyC}; break;`);
+        } else if (c.pattern.kind === 'MatchWild') {
+          p(`    default: ${name} = ${bodyC}; break;`);
+        }
+      }
+      p('}');
+    } else {
+      // if/else chain form
+      for (let i = 0; i < cases.length; i++) {
+        const c = cases[i];
+        const bodyC = this.exprToC(c.body, lines, depth);
+        const isLast = i === cases.length - 1;
+        const prefix = i === 0 ? 'if' : 'else if';
+
+        if (isLast && (c.pattern.kind === 'MatchWild' || (isEnum && c.pattern.kind === 'MatchEnum'))) {
+          // Last case: emit as else
+          p(`else { ${name} = ${bodyC}; }`);
+        } else {
+          const cond = this._matchPatternCond(c.pattern, discC, discType, enumDef);
+          if (cond === null) {
+            // Wildcard not at last position (just emit as else)
+            p(`else { ${name} = ${bodyC}; }`);
+          } else {
+            p(`${prefix} (${cond}) { ${name} = ${bodyC}; }`);
+          }
+        }
+      }
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // Result-based TryCatch emission
+  // -----------------------------------------------------------------------
+  _emitTryCatchResult(node, tryStmts, callStmt, lines, depth) {
+    const I = ' '.repeat(this.indent * depth);
+    const p = (s) => lines.push(I + s);
+    const II = ' '.repeat(this.indent * (depth + 1));
+
+    // Determine if this is a void ExprStmt call or a VarDecl call
+    const isVoidCall = callStmt.kind === 'ExprStmt';
+    const callExpr = isVoidCall ? callStmt.expr : callStmt.init;
+    const varName = isVoidCall ? null : callStmt.name;
+    const varKind = isVoidCall ? null : callStmt.varKind;
+
+    // Get callee symbol for result type info
+    const callee = callExpr.callee;
+    const calleeSym = callee.kind === 'Ident' ? this.lookup(callee.name) : null;
+    const resultType = calleeSym?._resultType ?? 'int';
+    const isResultVoid = calleeSym?._resultIsVoid ?? true;
+
+    // Emit: ResultType _res_N = call();
+    const resName = `_res_${this.tempCount++}`;
+    const callC = this.exprToC(callExpr, lines, depth);
+    p(`${resultType} ${resName} = ${callC};`);
+
+    const catches = node.catches ?? [];
+    const isUnionError = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
+
+    if (isVoidCall || isResultVoid) {
+      // Simple: if (!ok) { catch }
+      p(`if (!${resName}.ok) {`);
+      this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+      p('}');
+    } else {
+      // Non-void: value is used; check if there are subsequent statements
+      const callIdx = tryStmts.indexOf(callStmt);
+      const restStmts = tryStmts.slice(callIdx + 1);
+      if (restStmts.length === 0) {
+        // No rest stmts: if (!ok) { catch }
+        p(`if (!${resName}.ok) {`);
+        this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+        p('}');
+      } else {
+        // Rest stmts: if (ok) { var = value; rest... } else { catch }
+        p(`if (${resName}.ok) {`);
+        const valType = calleeSym?._resultValueType ?? 'int32_t';
+        const qualifier = (varKind === 'const' && valType !== 'String') ? 'const ' : '';
+        lines.push(`${II}${qualifier}${valType} ${varName} = ${resName}.value;`);
+        this.pushScope();
+        this.define(varName, { ctype: valType, varKind });
+        for (const s of restStmts) this.visitStmt(s, lines, depth + 1);
+        this.popScope();
+        p('} else {');
+        this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+        p('}');
+      }
+    }
+
+    // Finally block (always emitted, never inside if)
+    if (node.finally) {
+      this._inFinallyBlock = true;
+      this.visitBlock(node.finally, lines, depth);
+      this._inFinallyBlock = false;
+    }
+  },
+
+  _emitCatchBodies(catches, resName, calleeSym, lines, depth) {
+    const I = ' '.repeat(this.indent * depth);
+    const II = ' '.repeat(this.indent * (depth + 1));
+    const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
+
+    if (catches.length === 0) return;
+
+    if (catches.length === 1) {
+      const c = catches[0];
+      // Union catch clause: catch (e: ErrA | ErrB) — no binding, just body
+      const isUnionCatch = c.typeAnn?.kind === 'TypeUnion';
+      if (isUnionCatch) {
+        this.pushScope();
+        this.visitBlock(c.body, lines, depth);
+        this.popScope();
+      } else {
+        const errClass = c.typeAnn?.name ?? 'void';
+        const errExpr = isUnion
+          ? `${resName}.error._${calleeSym?._resultErrTypes?.indexOf(errClass) ?? 0}`
+          : `${resName}.error`;
+        lines.push(`${I}${errClass} ${c.param} = ${errExpr};`);
+        // Suppress unused-variable warning if param not referenced in body
+        const bodyStr = JSON.stringify(c.body);
+        if (!bodyStr.includes(`"name":"${c.param}"`)) lines.push(`${I}(void)${c.param};`);
+        this.pushScope();
+        this.define(c.param, { ctype: errClass });
+        this.visitBlock(c.body, lines, depth);
+        this.popScope();
+      }
+    } else {
+      // Multiple catch clauses → union tag dispatch (if/else if chain)
+      for (let i = 0; i < catches.length; i++) {
+        const c = catches[i];
+        const errClass = c.typeAnn?.name ?? 'void';
+        if (i === 0) {
+          lines.push(`${I}if (${resName}.error.tag == _Err_${errClass}) {`);
+        } else {
+          lines.push(`${I}} else if (${resName}.error.tag == _Err_${errClass}) {`);
+        }
+        lines.push(`${II}${errClass} ${c.param} = ${resName}.error._${i};`);
+        this.pushScope();
+        this.define(c.param, { ctype: errClass });
+        this.visitBlock(c.body, lines, depth + 1);
+        this.popScope();
+      }
+      lines.push(`${I}}`);
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
+  // -----------------------------------------------------------------------
+  emitPropagateVarDecl(node, lines, depth) {
+    const { varKind, name, typeAnn, init } = node;
+    const I = ' '.repeat(this.indent * depth);
+    const p = (s) => lines.push(I + s);
+
+    const isProp = init.kind === 'Propagate';
+    const innerExpr = init.expr; // the inner Call (or other) expression
+
+    // Get callee symbol
+    const callee = innerExpr?.callee;
+    const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
+
+    if (!calleeSym?._isThrowsFunc) {
+      if (isProp) {
+        const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
+        throw new Error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+      }
+      // NonNull on non-throws: just emit normally
+      const c = this.exprToC(innerExpr, lines, depth);
+      const ctype = typeAnn ? this.resolveType(typeAnn) : this.inferType(innerExpr);
+      const qualifier = (varKind === 'const' && ctype !== 'String') ? 'const ' : '';
+      p(`${qualifier}${ctype} ${name} = ${c};`);
+      this.define(name, { ctype, varKind });
+      return;
+    }
+
+    // Throws function: emit Result-based propagation
+    const resultType = calleeSym._resultType;
+    const resName = `_res_${this.tempCount++}`;
+    const callC = this.exprToC(innerExpr, lines, depth);
+    p(`${resultType} ${resName} = ${callC};`);
+
+    if (this._throwsCtx) {
+      // Inside a throws function: propagate error
+      p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+    } else {
+      // Outside throws function: panic on error (!), error on ? (already caught above)
+      p(`if (!${resName}.ok) { tsc_panic(${resName}.error._base.message); }`);
+    }
+
+    // Bind the value
+    const valueType = calleeSym._resultValueType ?? 'int32_t';
+    const qualifier = (varKind === 'const' && valueType !== 'String') ? 'const ' : '';
+    p(`${qualifier}${valueType} ${name} = ${resName}.value;`);
+    this.define(name, { ctype: valueType, varKind });
+  },
+
+  // Generate a C condition expression for a match pattern
+  _matchPatternCond(pattern, discC, discType, enumDef) {
+    switch (pattern.kind) {
+      case 'MatchWild': return null; // becomes else
+      case 'MatchNull': return `!${discC}.has_value`;
+      case 'MatchLit': {
+        if (pattern.litType === 'string') return `tsc_string_eq(${discC}, STR_LIT("${pattern.value}"))`;
+        return `${discC} == ${pattern.value}`;
+      }
+      case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} <= ${pattern.hi}`;
+      case 'MatchEnum': return `${discC} == ${pattern.enumName}_${pattern.caseName}`;
+      case 'MatchIdent': {
+        // Bare identifier: check if it's a known enum value or treat as wildcard
+        if (enumDef) {
+          const allValues = enumDef.values?.map(v => typeof v === 'string' ? v : v.name) ?? [];
+          if (allValues.includes(pattern.name)) return `${discC} == ${discType}_${pattern.name}`;
+        }
+        return null; // treat as wildcard
+      }
+      case 'MatchOr': {
+        const parts = pattern.patterns.map(p => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
+        return parts.join(' || ');
+      }
+      case 'MatchTuple': {
+        // Check each non-wildcard element against the corresponding tuple field
+        const conds = [];
+        for (let i = 0; i < pattern.elements.length; i++) {
+          const el = pattern.elements[i];
+          if (el.kind === 'MatchWild') continue;
+          const fieldC = `${discC}._${i}`;
+          const cond = this._matchPatternCond(el, fieldC, null, null);
+          if (cond) conds.push(cond);
+        }
+        return conds.length > 0 ? conds.join(' && ') : '1';
+      }
+      default: return '1';
+    }
+  },
 
 };

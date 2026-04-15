@@ -8,7 +8,7 @@ typedef struct { double radius; } Circle;
 static void Circle_draw(void *_self) {
     Circle *self = (Circle *)_self;
     (void)self;
-    printf("%s\n", "circle");
+    printf("circle\n");
 }
 
 static const Drawable_vtable Circle_Drawable_vtable = { .draw = Circle_draw };

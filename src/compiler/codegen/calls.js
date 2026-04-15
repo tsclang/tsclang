@@ -140,11 +140,17 @@ export default {
       return `tsc_clear_timeout(${id})`;
     }
 
-    // parseFloat / tryParseFloat / parseInt / tryParseInt
-    // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number
+    // parseFloat / tryParseFloat / parseInt / tryParseInt / Number
+    // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number.
+    // Supports 0x/0b/0o prefixes (runtime handles them; JS parseFloat/parseInt don't, so we check manually).
     const _setOptIsNullHint = (argNode) => {
       if (argNode?.kind === 'Literal' && argNode.litType === 'string') {
-        this._lastOptIsNull = isNaN(parseFloat(argNode.value));
+        const s = argNode.value;
+        if (/^0x[0-9a-fA-F]+$/i.test(s) || /^0b[01]+$/i.test(s) || /^0o[0-7]+$/i.test(s)) {
+          this._lastOptIsNull = false; // prefixed integer literals always parse successfully
+        } else {
+          this._lastOptIsNull = isNaN(parseFloat(s));
+        }
       }
     };
     if (callee.kind === 'Ident' && callee.name === 'parseFloat') {
@@ -170,6 +176,12 @@ export default {
       this._ensureOptStruct('opt_i32', 'int32_t');
       _setOptIsNullHint(args[0]?.expr);
       return `tsc_try_parse_i32(${this.exprToC(args[0].expr, lines, depth)})`;
+    }
+    // Number(s) → alias for parseFloat(s) → f64 | null
+    if (callee.kind === 'Ident' && callee.name === 'Number' && args.length === 1) {
+      this._ensureOptStruct('opt_f64', 'double');
+      _setOptIsNullHint(args[0]?.expr);
+      return `tsc_try_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
     }
 
     // String(n) constructor → tsc_T_to_string(n)
@@ -197,9 +209,7 @@ export default {
         }
         if (callee.prop === 'tryParse') {
           this._ensureOptStruct(`opt_${ident}`, ctype);
-          if (args[0]?.expr?.kind === 'Literal' && args[0].expr.litType === 'string') {
-            this._lastOptIsNull = isNaN(parseFloat(args[0].expr.value));
-          }
+          _setOptIsNullHint(args[0]?.expr);
           const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
           return `tsc_${ident}_try_parse(${argC})`;
         }
@@ -260,6 +270,13 @@ export default {
       calleeC = this.exprToC(callee, lines, depth);
     }
 
+    // Closure call: name(args) → name.fn(&name.env, args)
+    if (sym?.isClosure && callee.kind === 'Ident') {
+      const argsC = this.argsToC(args, lines, depth);
+      const callArgs = argsC ? `&${callee.name}.env, ${argsC}` : `&${callee.name}.env`;
+      return `${callee.name}.fn(${callArgs})`;
+    }
+
     // Check for any-typed params: cannot pass typed value as any
     if (sym?.params) {
       for (let i = 0; i < sym.params.length && i < args.length; i++) {
@@ -310,6 +327,7 @@ export default {
     // (only when no spread args — spread needs argsToC expansion)
     const hasSpreadArgs = args.some(a => a.spread);
     if (symParams && !hasSpreadArgs) {
+      const I = ' '.repeat(this.indent * depth);
       const coercedArgs = args.map((a, i) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
@@ -334,13 +352,53 @@ export default {
             return `${this.exprToC(a.expr, lines, depth)}.data`;
           }
         }
-        // Ref<T>/Mut<T> param: pass &var
+        // Interface param (or Mut<Interface>): wrap concrete class arg in fat pointer
+        // Also handle `c as Shape` cast — unwrap to the inner ident
+        const ifaceName = this._getIfaceParamName(param.typeAnn);
+        const rawArgExpr = (ifaceName && a.expr.kind === 'Cast' &&
+          a.expr.castType?.kind === 'TypeRef' && a.expr.castType.name === ifaceName)
+          ? a.expr.expr : a.expr;
+        if (ifaceName && this.interfaces.has(ifaceName) && rawArgExpr.kind === 'Ident') {
+          const a2 = { ...a, expr: rawArgExpr };
+          a = a2;
+          const argName = a.expr.name;
+          // Check: cannot pass const variable as Mut<Interface>
+          if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut') {
+            const argVarInfo = this.lookup(argName);
+            if (argVarInfo?.varKind === 'const') {
+              const mutIfaceName = param.typeAnn.typeArgs?.[0]?.name ?? ifaceName;
+              throw new Error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
+            }
+          }
+          const argSym3 = this.lookup(argName);
+          const argClass = argSym3?.ctype ? this.classes.get(argSym3.ctype) : null;
+          if (argClass && !this.interfaces.has(argSym3.ctype)) {
+            // Concrete class: wrap in fat pointer
+            const className = argSym3.ctype;
+            const hasExplicit = argClass.implements_?.includes(ifaceName);
+            const vtableName = hasExplicit
+              ? `${className}_${ifaceName}_vtable`
+              : `_${className}_${ifaceName}_vtable`;
+            if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
+            const fatName = `_${param.name}_${argName}`;
+            // Reuse existing fat-ptr variable if already declared in scope
+            if (!this.lookup(fatName)) {
+              lines.push(`${I}${ifaceName} ${fatName} = { .self = &${argName}, .vtable = &${vtableName} };`);
+              this.define(fatName, { ctype: ifaceName });
+            }
+            return fatName;
+          }
+        }
+        // Ref<T>/Mut<T> param: pass &var (for non-interface inner types)
         if (param.typeAnn?.kind === 'TypeRef' &&
             (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut')) {
-          const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
-          const argC2 = this.exprToC(a.expr, lines, depth);
-          if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
-          return argC2;
+          const innerName2 = param.typeAnn.typeArgs?.[0]?.name;
+          if (!innerName2 || !this.interfaces.has(innerName2)) {
+            const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+            const argC2 = this.exprToC(a.expr, lines, depth);
+            if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
+            return argC2;
+          }
         }
         return this.exprToC(a.expr, lines, depth);
       });
@@ -922,14 +980,29 @@ export default {
       }
     }
 
+    // Interface fat-pointer method call: obj.method(args) → obj.vtable->method(obj.self, args)
+    const ifaceSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (ifaceSym?.ctype && this.interfaces.has(ifaceSym.ctype)) {
+      const ifaceArgsC = argsC ? `, ${argsC}` : '';
+      return `${objC}.vtable->${prop}(${objC}.self${ifaceArgsC})`;
+    }
+
     // Generic method: obj.method(args) → ObjType_method(&obj, args) or ObjType_method(obj, args)
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (classSym?.ctype && this.classes.has(classSym.ctype)) {
       const classDef2 = this.classes.get(classSym.ctype);
       const methodInfo2 = classDef2?._methodNames?.get(prop);
       if (methodInfo2?.isMoveMethod) {
+        // Error: move-method on const binding
+        if (classSym.varKind === 'const') {
+          throw new Error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+        }
         // Move-method: pass self by value
         return `${methodInfo2.nameMangled}(${objC}${argsC ? ', ' + argsC : ''})`;
+      }
+      // Error: explicitly mut method on const binding
+      if (methodInfo2?.isExplicitMut && classSym.varKind === 'const') {
+        throw new Error(`cannot call "mut" method on const binding`);
       }
       // Regular method: pass &obj
       return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
@@ -958,6 +1031,50 @@ export default {
       }
     }
     return parts.join(', ');
+  },
+
+  // Get the interface name from a type annotation (handles plain Interface and Mut<Interface>)
+  _getIfaceParamName(typeAnn) {
+    if (!typeAnn || typeAnn.kind !== 'TypeRef') return null;
+    if (this.interfaces.has(typeAnn.name)) return typeAnn.name;
+    if ((typeAnn.name === 'Mut' || typeAnn.name === 'Ref') && typeAnn.typeArgs?.[0]?.kind === 'TypeRef') {
+      const inner = typeAnn.typeArgs[0].name;
+      if (this.interfaces.has(inner)) return inner;
+    }
+    return null;
+  },
+
+  // Register an implicit (Pattern B) vtable constant for lazy emission before main
+  _ensureImplicitVtable(className, ifaceName) {
+    if (!this._emittedImplicitVtables) this._emittedImplicitVtables = new Set();
+    const key = `${className}_${ifaceName}`;
+    if (this._emittedImplicitVtables.has(key)) return;
+    this._emittedImplicitVtables.add(key);
+
+    const ifaceDef = this.interfaces.get(ifaceName);
+    if (!ifaceDef) return;
+    const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    // Verify class implements all interface methods
+    const classDef = this.classes.get(className);
+    for (const im of ifaceMethods) {
+      const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
+      if (!methodExists) {
+        throw new Error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
+      }
+    }
+    const vtableName = `_${className}_${ifaceName}_vtable`;
+
+    const entries = ifaceMethods.map(m => {
+      const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
+      return `    .${m.name} = (${retType} (*)(void *))${className}_${m.name}`;
+    });
+    // Emit vtable directly to topLevel so it precedes any function that references it
+    this.topLevel.push(
+      `static const ${ifaceName}_vtable ${vtableName} = {`,
+      ...entries.map(e => e + ','),
+      `};`,
+      ``
+    );
   }
 
 };

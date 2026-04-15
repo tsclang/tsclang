@@ -1,0 +1,2 @@
+const x = parseInt("0o77");
+console.log(x);

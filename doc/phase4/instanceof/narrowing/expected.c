@@ -6,11 +6,17 @@ typedef struct { void *self; const Shape_vtable *vtable; } Shape;
 typedef struct { double radius; } Circle;
 typedef struct { double w; double h; } Rect;
 
-static double Circle_area(Circle *self) { return 3.14 * self->radius * self->radius; }
-static double Rect_area(Rect *self) { return self->w * self->h; }
+static double Circle_area(const Circle *self) {
+    return 3.14 * self->radius * self->radius;
+}
 
-static const Shape_vtable _Circle_Shape_vtable = { .area = (double (*)(void *))Circle_area };
-static const Shape_vtable _Rect_Shape_vtable = { .area = (double (*)(void *))Rect_area };
+static double Rect_area(const Rect *self) {
+    return self->w * self->h;
+}
+
+static const Shape_vtable _Circle_Shape_vtable = {
+    .area = (double (*)(void *))Circle_area,
+};
 
 void describe_Shape(Shape s) {
     if (s.vtable == &_Circle_Shape_vtable) {

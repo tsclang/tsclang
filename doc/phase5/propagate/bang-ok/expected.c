@@ -1,7 +1,6 @@
 #include "runtime.h"
 
 typedef struct { TscError _base; } Err;
-
 typedef struct { bool ok; union { int32_t value; Err error; }; } Result_i32_Err;
 typedef struct { bool ok; union { int _dummy; Err error; }; } Result_void_Err;
 

@@ -19,6 +19,10 @@ export default {
         }
         // Function reference (not a func-ptr variable): use mangled name
         const sym = this.lookup(node.name);
+        // Check for use-after-move-into-closure
+        if (sym?._movedIntoClosureLine !== undefined) {
+          throw new Error(`TypeError: Use of moved value: '${node.name}' was moved into closure on line ${sym._movedIntoClosureLine}`);
+        }
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
         // Deferred anon struct used outside destructuring: materialize now
         if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
@@ -62,6 +66,29 @@ export default {
           }
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+        // Error subclass: e.message → _err_0._base.message (parent fields via _base)
+        if (sym?._alias && sym?.ctype) {
+          const errClass = this.classes.get(sym.ctype);
+          const isOwnField = errClass?.fields?.some(f => f.name === node.prop);
+          if (!isOwnField) {
+            // Field is on parent (TscError._base): route through _alias._base.prop
+            return `${sym._alias}._base.${node.prop}`;
+          }
+          return `${sym._alias}.${node.prop}`;
+        }
+        // Check private field access from outside the class
+        if (sym?.ctype) {
+          const classDef = this.classes.get(sym.ctype);
+          const field = classDef?.fields?.find(f => f.name === node.prop);
+          if (field?.modifiers?.includes('private')) {
+            // We are inside the class if 'this' or 'self' in scope has the same ctype
+            const thisSym = this.lookup('this') ?? this.lookup('self');
+            const inMethod = thisSym?.ctype === sym.ctype;
+            if (!inMethod) {
+              throw new Error(`"${node.prop}" is private and not accessible from outside the class`);
+            }
+          }
+        }
         // Rest param: .length → args_count
         if (sym?.rest && node.prop === 'length') {
           return sym.countVar ?? `${node.object.name}_count`;
@@ -98,6 +125,10 @@ export default {
           if (baseCls?.fields?.some(f => f.name === node.prop)) {
             return isPtr ? `${objC}->_base.${node.prop}` : `${objC}._base.${node.prop}`;
           }
+        }
+        // Throws class: .message → ._base.message
+        if (symCls?._isThrowsClass && node.prop === 'message') {
+          return isPtr ? `${objC}->_base.message` : `${objC}._base.message`;
         }
         return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
       }
@@ -443,6 +474,41 @@ export default {
   },
 
   binaryToC(node, lines, depth) {
+    // instanceof: obj instanceof TypeName
+    if (node.op === 'instanceof') {
+      const typeName = node.right.kind === 'Ident' ? node.right.name : null;
+      if (!typeName) throw new Error(`TypeError: 'instanceof' right-hand side must be a type name`);
+      const objSym2 = node.left.kind === 'Ident' ? this.lookup(node.left.name) : null;
+      if (!this.interfaces.has(typeName)) {
+        // Class on RHS: only valid when LHS is that same class (always-true compile-time check)
+        if (this.classes.has(typeName) && objSym2?.ctype === typeName) return '1';
+        // LHS is an interface fat-ptr and RHS is a concrete class: vtable compare
+        if (this.classes.has(typeName) && objSym2?.ctype && this.interfaces.has(objSym2.ctype)) {
+          const ifaceName = objSym2.ctype;
+          const className = typeName;
+          const classDef = this.classes.get(className);
+          const hasExplicit = classDef?.implements_?.includes(ifaceName);
+          const vtableName = hasExplicit ? `${className}_${ifaceName}_vtable` : `_${className}_${ifaceName}_vtable`;
+          if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
+          const objC2 = this.exprToC(node.left, lines, depth);
+          return `${objC2}.vtable == &${vtableName}`;
+        }
+        throw new Error(`TypeError: 'instanceof' requires an interface type on the right-hand side, got '${typeName}'`);
+      }
+      // Interface instanceof: compare vtable pointer (obj must be concrete class)
+      const objC = this.exprToC(node.left, lines, depth);
+      if (objSym2?.ctype && this.classes.has(objSym2.ctype)) {
+        const className = objSym2.ctype;
+        const classDef = this.classes.get(className);
+        const hasExplicit = classDef?.implements_?.includes(typeName);
+        const vtableName = hasExplicit ? `${className}_${typeName}_vtable` : `_${className}_${typeName}_vtable`;
+        if (!hasExplicit) this._ensureImplicitVtable(className, typeName);
+        return `${objC}.vtable == &${vtableName}`;
+      }
+      // Fallback
+      return `${objC}.vtable != NULL`;
+    }
+
     // Optional type comparisons: opt_T != null → opt.has_value, opt_T == null → !opt.has_value
     if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
       const isNull = (n) => n.kind === 'Literal' && n.litType === 'null';
@@ -581,6 +647,10 @@ export default {
       const sym = this.lookup(node.name);
       return sym?.ctype === 'String';
     }
+    // Binary + whose left is a string → the result is also String
+    if (node.kind === 'Binary' && node.op === '+') return this.isStringExpr(node.left);
+    // Template literal, Call returning string, etc.
+    if (node.kind === 'Call') return this.inferType(node) === 'String';
     return false;
   },
 
@@ -614,6 +684,20 @@ export default {
         }
         if (node.left.prop === 'capacity') {
           throw new Error(`cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead`);
+        }
+      }
+      // Check readonly field write outside constructor
+      const objSym = this.lookup(node.left.object.name);
+      if (objSym?.ctype) {
+        const classDef = this.classes.get(objSym.ctype);
+        const field = classDef?.fields?.find(f => f.name === node.left.prop);
+        if (field?.modifiers?.includes('readonly')) {
+          // We are inside the constructor if currentFuncName is 'new' (before mangling) and self.ctype matches
+          const thisSym = this.lookup('this') ?? this.lookup('self');
+          const inCtor = this.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
+          if (!inCtor) {
+            throw new Error(`cannot assign to readonly field "${node.left.prop}" outside the constructor`);
+          }
         }
       }
     }

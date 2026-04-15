@@ -309,5 +309,121 @@ export default {
       }
     }
     return `tsc_string_format("${fmt}", ${fmtArgs.join(', ')})`;
-  }
+  },
+
+  // ----------------------------------------------------------------
+  // Closure helpers
+  // ----------------------------------------------------------------
+
+  // Walk an AST node and collect all Ident references that are free variables
+  // (defined in outer scope, not in params or locally defined within the body).
+  _findFreeVars(body, paramNames) {
+    const params = new Set(paramNames);
+    const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
+    const captured = new Map(); // name → symInfo
+    const seen = new Set();
+
+    const walk = (n, localDefs) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(x => walk(x, localDefs)); return; }
+      if (n.kind === 'Ident') {
+        const nm = n.name;
+        if (!params.has(nm) && !localDefs.has(nm) && !builtins.has(nm) && !seen.has(nm)) {
+          const sym = this.lookup(nm);
+          if (sym) { seen.add(nm); captured.set(nm, sym); }
+        }
+        return;
+      }
+      const inner = new Set(localDefs);
+      if (n.kind === 'VarDecl') inner.add(n.name);
+      for (const key of Object.keys(n)) {
+        if (key === 'kind') continue;
+        const child = n[key];
+        if (child && typeof child === 'object') walk(child, inner);
+      }
+    };
+    walk(body, new Set());
+    return captured;
+  },
+
+  // Generate closure structs and fn for an Arrow, returning closure metadata.
+  // Returns null if no captures (use regular hoistArrow).
+  hoistClosure(arrowNode, varName) {
+    const paramNames = (arrowNode.params ?? []).map(p => p.name);
+    const captured = this._findFreeVars(arrowNode.body, paramNames);
+    if (captured.size === 0) return null; // no closure needed
+
+    const n = this.closureCount++;
+    const closureName = `_closure_${n}`;
+    const envName = `${closureName}_env`;
+    const fnName = `${closureName}_fn`;
+
+    // Determine return type
+    let ret = arrowNode.returnType ? this.resolveType(arrowNode.returnType) : this.inferArrowReturn(arrowNode);
+
+    // Build env struct fields
+    const envFields = [];
+    for (const [nm, sym] of captured) {
+      const ct = sym.ctype ?? 'void *';
+      if (ct.endsWith(' *')) envFields.push(`${ct.slice(0,-2)} *${nm};`);
+      else envFields.push(`${ct} ${nm};`);
+    }
+    // Use addLambda for all closure items to preserve ordering (env → fn → closure struct)
+    this.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
+    this.addLambda('');
+
+    // Build fn params (env + explicit params)
+    const paramStrs = [`${envName} *env`];
+    for (const p of (arrowNode.params ?? [])) {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
+      paramStrs.push(`${ct} ${p.name}`);
+    }
+
+    // Build fn body — push captured vars into scope mapped to env->nm
+    this.pushScope();
+    for (const [nm, sym] of captured) {
+      this.define(nm, { ...sym, _closureEnvVar: nm });
+    }
+    for (const p of (arrowNode.params ?? [])) {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
+      this.define(p.name, { ctype: ct });
+    }
+    const bodyLines = [];
+    if (arrowNode.body.kind === 'Block') {
+      this.visitBlock(arrowNode.body, bodyLines, 0);
+    } else {
+      const c = this.exprToC(arrowNode.body, bodyLines, 0);
+      bodyLines.push(`return ${c};`);
+    }
+    this.popScope();
+
+    // Replace captured var references: nm → env->nm
+    const finalLines = bodyLines.map(l => {
+      let result = l;
+      for (const nm of captured.keys()) {
+        result = result.replace(new RegExp(`\\b${nm}\\b`, 'g'), `env->${nm}`);
+      }
+      return result;
+    });
+
+    this.addLambda(`static ${ret} ${fnName}(${paramStrs.join(', ')}) {`);
+    for (const l of finalLines) this.addLambda('    ' + l);
+    this.addLambda('}');
+    this.addLambda('');
+
+    // Build closure struct typedef
+    const paramTypes = (arrowNode.params ?? []).map(p =>
+      p.typeAnn ? this.resolveType(p.typeAnn) : 'void *'
+    );
+    const fnPtrDecl = paramTypes.length > 0
+      ? `${ret} (*fn)(${envName} *, ${paramTypes.join(', ')})`
+      : `${ret} (*fn)(${envName} *)`;
+    this.addLambda(`typedef struct { ${envName} env; ${fnPtrDecl}; } ${closureName};`);
+    this.addLambda('');
+
+    // Build env initializer
+    const envInit = '{' + [...captured.keys()].map(nm => `.${nm} = ${nm}`).join(', ') + '}';
+
+    return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured };
+  },
 };

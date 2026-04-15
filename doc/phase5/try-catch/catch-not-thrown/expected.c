@@ -16,7 +16,7 @@ int main(void) {
     } else {
         AppError e = _res_0.error;
         (void)e;
-        printf("%s\n", "error");
+        printf("error\n");
     }
     return 0;
 }

@@ -1,12 +1,7 @@
 #include "runtime.h"
 
 typedef struct { TscError _base; String stack; } AppError;
-static AppError AppError_new(String msg) {
-    AppError s = {0};
-    s._base.message = msg;
-    s.stack = tsc_capture_stack();
-    return s;
-}
+static AppError AppError_new(String msg) { AppError s = {0}; s._base.message = msg; s.stack = tsc_capture_stack(); return s; }
 
 typedef struct { bool ok; union { int _dummy; AppError error; }; } Result_void_AppError;
 

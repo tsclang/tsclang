@@ -12,7 +12,6 @@ int main(void) {
     TSC_INIT();
     const String prefix = STR_LIT("Hello");
     _closure_0 greet = {.env = {.prefix = prefix}, .fn = _closure_0_fn};
-    String _r = greet.fn(&greet.env, STR_LIT("World"));
-    printf("%s\n", _r.data);
+    printf("%s\n", greet.fn(&greet.env, STR_LIT("World")).data);
     return 0;
 }

@@ -1,0 +1,3 @@
+const a: i32 = 0o777;
+const b: u16 = a as u16;
+console.log(b);

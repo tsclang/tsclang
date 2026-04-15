@@ -2,11 +2,13 @@
 
 typedef struct { void (*draw)(void *self); } Drawable_vtable;
 typedef struct { void *self; const Drawable_vtable *vtable; } Drawable;
+
 typedef struct { int _dummy; } Circle;
 
 static void Circle_draw(void *_self) {
-    (void)_self;
-    printf("%s\n", "circle");
+    Circle *self = (Circle *)_self;
+    (void)self;
+    printf("circle\n");
 }
 
 static const Drawable_vtable Circle_Drawable_vtable = { .draw = Circle_draw };

@@ -18,7 +18,6 @@ typedef struct {
 } Result_string_FileError_NetworkError;
 
 Result_string_FileError_NetworkError fetch_string(String url) {
-    (void)url;
     _ErrUnion_FileError_NetworkError _err = {.tag = _Err_NetworkError, ._1 = NetworkError_new(STR_LIT("timeout"))};
     return (Result_string_FileError_NetworkError){.ok = false, .error = _err};
 }

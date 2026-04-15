@@ -6,7 +6,6 @@ static IOError IOError_new(String msg) { IOError s = {0}; s._base.message = msg;
 typedef struct { bool ok; union { String value; IOError error; }; } Result_string_IOError;
 
 Result_string_IOError readFile_string(String path) {
-    (void)path;
     return (Result_string_IOError){.ok = false, .error = IOError_new(STR_LIT("fail"))};
 }
 
