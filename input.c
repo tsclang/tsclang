@@ -1,15 +1,12 @@
 #include "runtime.h"
 
-static int32_t count = 0;
-
-void inc(void) {
-    count = count + 1;
-}
+typedef struct { int32_t value; int32_t _refcount; } Node;
 
 int main(void) {
     TSC_INIT();
-    inc();
-    inc();
-    printf("%d\n", count);
+    Node *x = tsc_arc_alloc(sizeof(Node));
+    x->_refcount = 1;
+    x->value = 0;
+    tsc_arc_release((void **)&x);
     return 0;
 }

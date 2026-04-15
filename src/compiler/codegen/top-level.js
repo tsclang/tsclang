@@ -77,12 +77,15 @@ export default {
       }
     }
 
-    // Pre-scan: detect target annotation (embedded vs desktop)
+    // Pre-scan: detect target and allocator annotations
     this._targetName = 'desktop';
+    this._allocatorName = 'default';
     for (const node of ast.body) {
       if (node.kind === 'ProfileAnnotation') {
-        const m = node.content.match(/target\((\w+)\)/);
-        if (m) this._targetName = m[1];
+        const mTarget = node.content.match(/target\((\w+)\)/);
+        if (mTarget) this._targetName = mTarget[1];
+        const mAlloc = node.content.match(/allocator\((\w+)\)/);
+        if (mAlloc) this._allocatorName = mAlloc[1];
       }
     }
 
@@ -191,17 +194,45 @@ export default {
     // Pre-scan: collect variable names referenced by top-level functions
     // These must become static globals (accessible from function scope)
     this._funcRefVars = new Set();
-    const _collectIdents = (node) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { node.forEach(_collectIdents); return; }
-      if (node.kind === 'Ident') { this._funcRefVars.add(node.name); return; }
-      for (const v of Object.values(node)) {
-        if (v && typeof v === 'object') _collectIdents(v);
-      }
-    };
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
-      if (n?.kind === 'FuncDecl' && n.body) _collectIdents(n.body);
+      if ((n?.kind === 'FuncDecl' || n?.kind === 'ExtensionFunc') && n.body) {
+        // Exclude parameter names — they shadow globals and must not trigger promotion
+        const localNames = new Set();
+        const srcParams = n.kind === 'ExtensionFunc'
+          ? [{ name: 'this' }, ...(n.params ?? [])]
+          : (n.params ?? []);
+        for (const p of srcParams) {
+          if (p?.name) localNames.add(p.name);
+          if (p?.destructObj) for (const k of Object.keys(p.destructObj)) localNames.add(k);
+          if (p?.destructArr) for (const s of p.destructArr) if (s?.name) localNames.add(s.name);
+        }
+        // Collect idents from body, skipping shadowed param names
+        // Also skip nested function bodies (they have their own scopes)
+        const _collect = (nd, outerLocals) => {
+          if (!nd || typeof nd !== 'object') return;
+          if (Array.isArray(nd)) { nd.forEach(x => _collect(x, outerLocals)); return; }
+          if (nd.kind === 'Ident') {
+            if (!outerLocals.has(nd.name)) this._funcRefVars.add(nd.name);
+            return;
+          }
+          // Nested function: collect with its own param scope merged
+          if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') {
+            const inner = new Set(outerLocals);
+            for (const p of (nd.params ?? [])) {
+              if (p?.name) inner.add(p.name);
+            }
+            if (nd.body) _collect(nd.body, inner);
+            return;
+          }
+          // VarDecl: add declared name to local scope for subsequent siblings
+          // (we don't track declaration order here — just collect all idents)
+          for (const v of Object.values(nd)) {
+            if (v && typeof v === 'object') _collect(v, outerLocals);
+          }
+        };
+        _collect(n.body, localNames);
+      }
     }
 
     for (const node of ast.body) this.visitTopLevel(node);
@@ -216,6 +247,8 @@ export default {
         if (node.default) throw new Error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
           this.visitFuncDecl(node.decl, true, true); // isExported=true → no static
+        } else if (node.decl?.kind === 'ExtensionFunc') {
+          this.visitExtensionFunc(node.decl);
         } else {
           this.visitTopLevel(node.decl);
         }
@@ -273,6 +306,7 @@ export default {
         }
         break;
       }
+      case 'ExtensionFunc': this.visitExtensionFunc(node); break;
       case 'DeclareConst':    this.visitDeclareConst(node); break;
       case 'DeclareFunction': this.visitDeclareFunction(node); break;
       case 'Noop':        break;
@@ -374,6 +408,10 @@ export default {
       const userFieldParts = [];
       if (cBase) userFieldParts.push(`${cBase} _base;`);
       for (const f of fields) {
+        // Ref<T>/Mut<T> cannot be stored in class fields
+        if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
+          throw new Error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
+        }
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         if (ct.endsWith(' *')) userFieldParts.push(`${ct.slice(0, -2)} *${f.name};`);
         else userFieldParts.push(`${ct} ${f.name};`);
@@ -1176,7 +1214,8 @@ export default {
         }
       } else if (p.typeAnn) {
         const _ct = this.resolveType(p.typeAnn);
-        this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*') });
+        const _isRef = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Ref';
+        this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef });
       }
     }
     this.visitBlock(body, lines, 0);
@@ -1195,5 +1234,56 @@ export default {
     this.currentFuncReturnType = saved.retType;
     this._throwsCtx = saved.throwsCtx;
     return lines;
+  },
+
+  visitExtensionFunc(node) {
+    const { name, thisType, params, returnType, body } = node;
+    const thisCType = this.resolveType(thisType);
+    const thisIdent = this.cTypeToIdent(thisCType);
+
+    // Check for conflict with existing class method
+    if (thisType.kind === 'TypeRef' && this.classes.has(thisType.name)) {
+      const cls = this.classes.get(thisType.name);
+      if (cls._methodNames?.has(name)) {
+        throw new Error(`TypeError: extension '${name}' conflicts with existing method on ${thisType.name}`);
+      }
+    }
+
+    const cFuncName = `_ext_${thisIdent}_${name}`;
+    const retCType = returnType ? this.resolveType(returnType) : 'void';
+
+    // Build param list: _self first, then rest
+    const paramParts = [`${thisCType} _self`];
+    for (const p of params) {
+      const pt = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      paramParts.push(`${pt} ${p.name}`);
+    }
+
+    // Emit function
+    this.addTop(`${retCType} ${cFuncName}(${paramParts.join(', ')}) {`);
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType };
+    this.inFunction = true;
+    this.currentFuncName = cFuncName;
+    this.currentFuncReturnType = retCType;
+    this.pushScope();
+    this.define('this', { ctype: thisCType, _cAlias: '_self' });
+    for (const p of params) {
+      const pt = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      this.define(p.name, { ctype: pt });
+    }
+    const lines = [];
+    this.visitBlock(body, lines, 0);
+    this.popScope();
+    this.inFunction = saved.inFunction;
+    this.currentFuncName = saved.funcName;
+    this.currentFuncReturnType = saved.retType;
+    for (const l of lines) this.addTop(`    ${l}`);
+    this.addTop('}');
+    this.addTop('');
+
+    // Register extension for call resolution
+    if (!this._extensions) this._extensions = new Map();
+    const key = `${thisIdent}.${name}`;
+    this._extensions.set(key, { cFuncName, thisCType, thisIdent, retCType });
   }
 };

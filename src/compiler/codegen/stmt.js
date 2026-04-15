@@ -135,6 +135,11 @@ export default {
           }
         }
 
+        // Borrow check: Shared<T> requires a heap allocator
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
+          throw new Error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+        }
+
         // let x: Shared<T> = new T() → arc alloc with explicit field init
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && init?.kind === 'New' && init.name !== 'Shared') {
           const tArg = typeAnn.typeArgs?.[0];
@@ -185,6 +190,9 @@ export default {
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
           throw new Error(`"void" can only be used as a return type`);
+        }
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
+          throw new Error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
         if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {
@@ -482,10 +490,28 @@ export default {
               this.define(name, { ctype: sym.ctype, funcPtr: true, varKind, funcName: sym.funcName });
               break;
             }
-            p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
-            // Move semantics: let b = structVar → zero out source
+            // Move semantics borrow check (before emit, but set _moved AFTER)
             { const initSym2 = this.lookup(init.name);
               const structDef2 = this.classes.get(ctype);
+              if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                if (initSym2?.varKind === 'const') {
+                  throw new Error(`cannot move out of "const" binding`);
+                }
+                if (initSym2?.isRefParam) {
+                  throw new Error(`cannot move out of "Ref<T>" borrow`);
+                }
+              }
+            }
+            p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
+            // Move semantics: mark source moved and zero out
+            { const initSym2 = this.lookup(init.name);
+              const structDef2 = this.classes.get(ctype);
+              if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                if (initSym2) {
+                  initSym2._moved = true;
+                  initSym2._movedLine = node.line;
+                }
+              }
               if (initSym2?.varKind === 'let' && structDef2?.fields) {
                 p(`${init.name} = (${ctype}){0};`);
               }
@@ -597,13 +623,43 @@ export default {
               const effQual = (this._lastArrayElemReturn || this._lastSuppressConst) ? '' : qualifier;
               this._lastArrayElemReturn = undefined;
               this._lastSuppressConst = undefined;
+              // Borrow check before emit (with typeAnn path)
+              if (init.kind === 'Ident') {
+                const initSym2pre = this.lookup(init.name);
+                const structDef2pre = this.classes.get(ctype);
+                if (structDef2pre?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                  if (initSym2pre?.varKind === 'const') {
+                    throw new Error(`cannot move out of "const" binding`);
+                  }
+                  if (initSym2pre?.isRefParam) {
+                    throw new Error(`cannot move out of "Ref<T>" borrow`);
+                  }
+                }
+              }
               p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
-              // Move semantics: let b = structVar → zero out source
+              // Move semantics: mark source moved and zero out (after emit)
               if (init.kind === 'Ident') {
                 const initSym2 = this.lookup(init.name);
                 const structDef2 = this.classes.get(ctype);
-                if (initSym2?.varKind === 'let' && structDef2?.fields) {
-                  p(`${init.name} = (${ctype}){0};`);
+                if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                  if (initSym2) {
+                    initSym2._moved = true;
+                    initSym2._movedLine = node.line;
+                  }
+                  if (initSym2?.varKind === 'let' && structDef2?.fields) {
+                    p(`${init.name} = (${ctype}){0};`);
+                  }
+                }
+              } else if (init.kind === 'Member' && init.object.kind === 'Ident') {
+                // Field move: let d = obj.field → mark field as moved
+                const objSym = this.lookup(init.object.name);
+                const objDef = objSym ? this.classes.get(objSym.ctype) : null;
+                const fieldType = objDef?.fields?.find(f => f.name === init.prop);
+                if (fieldType && (fieldType.typeAnn?.name === 'string' || this.classes.has(this.resolveType(fieldType.typeAnn ?? {})))) {
+                  if (!objSym._movedFields) objSym._movedFields = new Set();
+                  objSym._movedFields.add(init.prop);
+                  objSym._movedFieldLine = objSym._movedFieldLine ?? {};
+                  objSym._movedFieldLine[init.prop] = node.line;
                 }
               }
             }
@@ -814,6 +870,17 @@ export default {
         // Error: return inside finally block
         if (this._inFinallyBlock) {
           throw new Error('TypeError: Cannot return inside a finally block');
+        }
+        // Error: returning Ref to local variable (lifetime overflow)
+        if (this.currentFuncReturnType?.startsWith('const ') &&
+            this.currentFuncReturnType?.includes(' *') &&
+            node.value?.kind === 'Ident') {
+          // Check if return type is Ref<T> (i.e., const T * from resolveType)
+          // and the returned value is a local (non-param) variable
+          const retSym = this.lookup(node.value.name);
+          if (retSym && !retSym.isPointer && !retSym.isRefParam && !retSym.funcName) {
+            throw new Error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
+          }
         }
         if (this._throwsCtx) {
           const ctx = this._throwsCtx;

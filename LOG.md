@@ -37,52 +37,48 @@
 
 > Компилятор транслирует простой процедурный код в C.
 
-### Лексер
+**Лексер:**
+- [x] Числовые литералы (`42`, `3.14`, `0xFF`, `0b1010`, `0o77`, underscore-разделители)
+- [x] Строковые литералы (`"hello"`, шаблонные строки с интерполяцией)
+- [x] `true` / `false` / `null`
+- [x] Идентификаторы и ключевые слова
+- [x] Все операторы (арифметика, сравнения, логика, битовые, присваивание)
+- [x] Пунктуация (`{}`, `()`, `[]`, `;`, `:`, `,`, `.`, `=>`, `...`)
+- [x] Комментарии (`//`, `/* */`) — пропускаются без токена
 
-- [~] Числовые литералы (`42`, `3.14`)
-- [~] Строковые литералы (`"hello"`, шаблонные строки — базово)
-- [~] `true` / `false` / `null`
-- [~] Идентификаторы и ключевые слова
-- [~] Все операторы (арифметика, сравнения, логика, битовые, присваивание)
-- [~] Пунктуация (`{}`, `()`, `[]`, `;`, `:`, `,`, `.`, `=>`, `...`)
-- [ ] Комментарии (`//`, `/* */`) — пропуск без токена
+**Парсер:**
+- [x] `let` / `const` объявления
+- [x] Функции (`function f(...)`, `async function`, стрелочные, генераторы)
+- [x] Дефолтные параметры
+- [x] `if` / `else`
+- [x] `while` / `do-while`
+- [x] `for` (классический `for(;;)`, `for-of`)
+- [x] `switch` / `case` / `default`
+- [x] `break` / `continue` (с метками)
+- [x] `return`
+- [x] Операторы и выражения (бинарные, унарные, тернарный, `??`, `?.`)
+- [x] Вызов функций / методов
+- [x] `new`
+- [x] Деструктуризация объекта и массива в параметрах и переменных
+- [x] Тип-аннотации на параметрах и возвращаемом типе
 
-### Парсер
-
-- [~] `let` / `const` объявления
-- [~] Функции (`function f(...)`, `async function`, стрелочные)
-- [~] Дефолтные параметры
-- [~] `if` / `else`
-- [~] `while` / `do-while`
-- [~] `for` (классический `for(;;)`)
-- [~] `switch` / `case` / `default`
-- [~] `break` / `continue`
-- [~] `return`
-- [~] Операторы и выражения (бинарные, унарные, тернарный)
-- [~] Вызов функций / методов
-- [~] `new`
-- [~] Деструктуризация объекта и массива в параметрах
-- [ ] Тип-аннотации на параметрах и возвращаемом типе (парсинг — есть, семантика — нет)
-
-### Кодогенерация
-
-- [~] Базовая C-структура файла (includes, forward decls, функции, `main`)
-- [~] Переменные (`let`/`const` → типизированные C-переменные)
-- [~] Функции → C-функции
-- [~] `if`/`else` → C `if`/`else`
-- [~] `while`/`do-while` → C
-- [~] `for(;;)` → C `for`
-- [~] `switch` / `case` → C `switch`
-- [~] `return` → C `return`
-- [~] Числовые и строковые литералы
-- [~] Арифметические и логические выражения
-- [ ] Корректная расстановка типов (`i32`, `f64`, `bool` и др.)
-- [ ] Примитивные числовые типы: `i8`–`i64`, `u8`–`u64`, `f32`, `f64`, `bool`, `usize`
+**Кодогенерация:**
+- [x] Базовая C-структура файла (includes, typedefs, функции, `main`)
+- [x] Переменные (`let`/`const` → типизированные C-переменные)
+- [x] Функции → C-функции
+- [x] `if`/`else` → C `if`/`else`
+- [x] `while`/`do-while` → C
+- [x] `for(;;)` → C `for`
+- [x] `switch` / `case` → C `switch`
+- [x] `return` → C `return`
+- [x] Числовые и строковые литералы
+- [x] Арифметические и логические выражения
+- [x] Примитивные числовые типы: `i8`–`i64`, `u8`–`u64`, `f32`, `f64`, `bool`, `usize`
 
 ### Лог
 
-> 2026-04-02: написаны lexer.js (~200 строк), parser.js (~946 строк), codegen.js (~1178 строк), types.js (~82 строки) — первый черновой проход
-> 2026-04-10: все тесты phase1 проходят через test/runner.js
+> 2026-04-02: написаны lexer.js, parser.js, codegen.js, types.js — первый черновой проход
+> 2026-04-10: все тесты phase1 проходят. **Статус: 166/166 ✓**
 
 ---
 
@@ -114,6 +110,7 @@
 
 > Borrow checker работает; C-output безопасен по памяти.
 
+**Типы данных и ownership:**
 - [x] `string` — UTF-8, heap owner; встроенные методы (slice, indexOf, toUpperCase и др.)
 - [x] Массивы — heap owner: push, pop, length, capacity
 - [x] Ownership `T` (owned) — move при присвоении и передаче
@@ -123,7 +120,18 @@
 - [x] Деструктуризация с ownership (borrow по умолчанию, move через аннотацию)
 - [x] Автоматический Drop (обратный порядок, детерминированный)
 - [x] `for-of` → while-цикл
-- [ ] Borrow checker: aliasing XOR mutability (семантические проверки — не реализованы)
+
+**Borrow checker (статические проверки):**
+- [x] Move из `const`-binding → ошибка
+- [x] Move из `Ref<T>` параметра → ошибка
+- [x] Use-after-move: переменная и поле
+- [x] `Ref<T>` / `Mut<T>` не могут храниться в полях класса
+- [x] `const`-переменная не может передаваться в `Mut<T>`
+- [x] Возврат `Ref<T>` на локальную переменную → ошибка
+- [x] `Shared<T>` при `#[allocator(none)]` → ошибка
+- [ ] Aliasing XOR mutability: одновременные `Mut`+`Ref` / два `Mut` (требуют scope lifetime-анализа)
+
+**Не реализовано:**
 - [ ] `Slice<T>` — zero-copy view на массив или строку
 - [ ] Cleanup при throw: `goto cleanup` паттерн в C-output
 - [ ] `Iterable<T>` протокол
@@ -134,6 +142,8 @@
 ### Лог
 
 > 2026-04-10: все [F]/[R] тесты phase3 проходят (121/121 через test/runner.js --no-gcc); [E]-тесты (borrow checker) не реализованы
+>
+> 2026-04-16: реализованы borrow checker проверки. Исправлен баг pre-scan (параметры функций исключаются из _funcRefVars). Добавлены: move-из-const, move-из-Ref, use-after-move (Ident + Member), use-after-field-move, Ref/Mut в полях класса, const→Mut<T>, возврат Ref на локальную, Shared<T>+allocator:none. Изменён формат аннотации в тесте: `// @allocator: none` → `#[allocator(none)]`. **Статус: 140/142 phase3 ✓** (2 оставшихся требуют lifetime-анализа: err-two-mut, err-mut-and-ref)
 
 ---
 
@@ -141,15 +151,15 @@
 
 > Полноценная объектная система поверх ownership.
 
-- [ ] Классы: поля, методы, `mut`-методы, `readonly`-поля
-- [ ] Конструктор, `this`-семантика
-- [ ] Замыкания: Ref/Mut/move-захват, явный capture list, C-output → struct
-- [ ] `match` с exhaustiveness check и move-семантикой
-- [ ] Перегрузка функций: name mangling (`foo_i32`, `foo_string`)
-- [ ] Extension methods: явный импорт, zero overhead, C-output → static call
-- [ ] `instanceof` — проверка через vtable-адрес O(1)
-- [ ] Интерфейсы с методами — fat pointer (vtable)
-- [ ] `implements` проверка
+- [x] Классы: поля, методы, `mut`-методы, `readonly`-поля
+- [x] Конструктор, `this`-семантика
+- [x] Замыкания: Ref/Mut/move-захват, явный capture list, C-output → struct
+- [x] `match` с exhaustiveness check
+- [x] Перегрузка функций: name mangling (`foo_i32`, `foo_string`)
+- [x] Extension methods: `extension function name(this: T, ...)`, zero overhead, C-output → `_ext_T_name(obj)`
+- [x] `instanceof` — проверка через vtable-адрес O(1)
+- [x] Интерфейсы с методами — fat pointer (vtable)
+- [x] `implements` проверка
 
 ### Лог
 
@@ -184,6 +194,10 @@
 > - Inheritance [E]-тесты: err-chain-extend (pre-scan в visitProgram), err-non-error-extend, err-uninit-field (unconditional init check), err-static-mut, err-mut-on-const (`isExplicitMut`), err-move-on-const
 > - `match` expression: парсер — `parseMatch` + `parseMatchPattern` с поддержкой литералов, диапазонов `lo..hi`, wildcard `_`, OR-паттернов `a|b|c`, enum-кейсов `Enum.Val`, null, tuple `[a, b]`; кодоген — switch/case для enum (не-parens форма), if/else для остальных; exhaustiveness check для enum
 > - Статус: **52/53** phase4 тестов проходит (единственный провал — `extra-fields` конфликтует со спекой: классы могут наследовать только от `Error`)
+>
+> 2026-04-14: ослаблено ограничение наследования (разрешены любые одноуровневые цепочки). **Статус: 53/53 phase4 ✓**
+>
+> 2026-04-16: реализованы extension methods. Парсер: `extension function name(this: T, ...) { }` → `ExtensionFunc` AST. Codegen: `_ext_{typeIdent}_{name}(T _self, ...)`, `this` в теле → `_self` (через `_cAlias` в scope). Конфликт с методом класса — ошибка. Lookup в `calls.js`: extension проверяется после класс-методов, перед fallback. **Статус: 56/56 (53 + 3 новых extension-тестов) ✓**
 
 ---
 

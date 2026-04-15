@@ -1,0 +1,15 @@
+class Point {
+    x: i32;
+    y: i32;
+    constructor(x: i32, y: i32) {
+        this.x = x;
+        this.y = y;
+    }
+}
+
+extension function manhattanDistance(this: Point): i32 {
+    return this.x + this.y;
+}
+
+const p = new Point(3, 4);
+console.log(p.manhattanDistance());

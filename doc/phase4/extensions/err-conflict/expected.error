@@ -1,0 +1,1 @@
+TypeError: extension 'bar' conflicts with existing method on Foo

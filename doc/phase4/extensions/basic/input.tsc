@@ -1,0 +1,6 @@
+extension function double(this: i32): i32 {
+    return this * 2;
+}
+
+const n: i32 = 5;
+console.log(n.double());

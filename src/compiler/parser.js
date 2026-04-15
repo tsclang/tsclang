@@ -330,6 +330,7 @@ export function parse(tokens, filename = '<input>') {
     if (t.type === TK.IDENT && t.value === 'const')  return parseVarDecl('const', decorators);
     if (t.type === TK.IDENT && t.value === 'var')    return parseVarDecl('var', decorators);
     if (t.type === TK.IDENT && t.value === 'function')  return parseFunctionDecl(decorators);
+    if (t.type === TK.IDENT && t.value === 'extension') return parseExtensionFunc();
     if (t.type === TK.IDENT && t.value === 'async')  return parseAsyncDecl(decorators);
     if (t.type === TK.IDENT && t.value === 'class')  return parseClassDecl(decorators);
     if (t.type === TK.IDENT && t.value === 'interface') return parseInterface();
@@ -550,6 +551,32 @@ export function parse(tokens, filename = '<input>') {
     if (cur().type === TK.SEMI) { eat(TK.SEMI); return { kind: 'FuncOverload', name, params, returnType }; }
     const body = parseBlock();
     return { kind: 'FuncDecl', name, params, returnType, throwsTypes, body, generator, decorators, typeParams };
+  }
+
+  function parseExtensionFunc() {
+    eat(TK.IDENT, 'extension');
+    eat(TK.IDENT, 'function');
+    const name = eat(TK.IDENT).value;
+    // params: first param must be (this: Type)
+    eat(TK.LPAREN);
+    eat(TK.IDENT, 'this');
+    eat(TK.COLON);
+    const thisType = parseTypeAnnotation();
+    let params = [];
+    if (tryEat(TK.COMMA)) {
+      while (cur().type !== TK.RPAREN) {
+        const pname = eat(TK.IDENT).value;
+        let typeAnn = null;
+        if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
+        params.push({ name: pname, typeAnn });
+        tryEat(TK.COMMA);
+      }
+    }
+    eat(TK.RPAREN);
+    let returnType = null;
+    if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
+    const body = parseBlock();
+    return { kind: 'ExtensionFunc', name, thisType, params, returnType, body };
   }
 
   function parseAsyncDecl(decorators = []) {

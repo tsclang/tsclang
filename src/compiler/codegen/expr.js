@@ -9,9 +9,15 @@ export default {
         if (node.name === 'keyof') throw new Error(`"keyof" can only be used in type position`);
         const kw = {
           'true': 'true', 'false': 'false', 'null': 'NULL',
-          'undefined': 'NULL', 'this': 'self',
+          'undefined': 'NULL',
         };
         if (kw[node.name] !== undefined) return kw[node.name];
+        // 'this' keyword: check scope first (extension methods alias it to '_self')
+        if (node.name === 'this') {
+          const thisSym = this.lookup('this');
+          if (thisSym?._cAlias) return thisSym._cAlias;
+          return 'self';
+        }
         // Narrowed optional variable: x → x.value inside if(x != null) block
         if (this._narrowedVars?.has(node.name)) {
           const sym2 = this.lookup(node.name);
@@ -19,6 +25,10 @@ export default {
         }
         // Function reference (not a func-ptr variable): use mangled name
         const sym = this.lookup(node.name);
+        // Check for use-after-move
+        if (sym?._moved) {
+          throw new Error(`use of moved value: "${node.name}" was moved on the previous line`);
+        }
         // Check for use-after-move-into-closure
         if (sym?._movedIntoClosureLine !== undefined) {
           throw new Error(`TypeError: Use of moved value: '${node.name}' was moved into closure on line ${sym._movedIntoClosureLine}`);
@@ -72,6 +82,15 @@ export default {
           }
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+        // Check for use of moved variable (e.g. a.value after let b = a)
+        if (sym?._moved) {
+          throw new Error(`use of moved value: "${node.object.name}" was moved on the previous line`);
+        }
+        // Check for use of moved field (field move tracking)
+        if (sym?._movedFields?.has(node.prop)) {
+          const movedLine = sym._movedFieldLine?.[node.prop];
+          throw new Error(`TypeError: Use of moved value: '${node.object.name}.${node.prop}' was moved on line ${movedLine}`);
+        }
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)
         if (sym?._alias && sym?.ctype) {
           const errClass = this.classes.get(sym.ctype);

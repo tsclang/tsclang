@@ -357,6 +357,14 @@ export default {
             return `${this.exprToC(a.expr, lines, depth)}.data`;
           }
         }
+        // Borrow check: cannot pass const variable as Mut<T>
+        if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut' &&
+            a.expr.kind === 'Ident') {
+          const argSym = this.lookup(a.expr.name);
+          if (argSym?.varKind === 'const') {
+            throw new Error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+          }
+        }
         // Interface param (or Mut<Interface>): wrap concrete class arg in fat pointer
         // Also handle `c as Shape` cast — unwrap to the inner ident
         const ifaceName = this._getIfaceParamName(param.typeAnn);
@@ -1009,11 +1017,31 @@ export default {
       if (methodInfo2?.isExplicitMut && classSym.varKind === 'const') {
         throw new Error(`cannot call "mut" method on const binding`);
       }
-      // Regular method: pass &obj
-      return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
+      if (methodInfo2) {
+        // Known class method: pass &obj
+        return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
+      }
+      // Method not found on class — fall through to extension lookup
+    }
+
+    // Extension method: obj.method(args) → _ext_{typeIdent}_{method}(obj, args)
+    if (this._extensions) {
+      const objType = this.inferType(baseObject);
+      if (objType) {
+        const typeIdent = this.cTypeToIdent(objType);
+        const extKey = `${typeIdent}.${prop}`;
+        const ext = this._extensions.get(extKey);
+        if (ext) {
+          return `${ext.cFuncName}(${objC}${argsC ? ', ' + argsC : ''})`;
+        }
+      }
     }
 
     // Fallback: obj.method(args)
+    // For class objects without an explicit method map entry, use ClassName_prop convention
+    if (classSym?.ctype && this.classes.has(classSym.ctype)) {
+      return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
+    }
     return `${objC}.${prop}(${argsC})`;
   },
 

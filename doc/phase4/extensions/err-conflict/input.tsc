@@ -1,0 +1,7 @@
+class Foo {
+    bar(): i32 { return 1; }
+}
+
+extension function bar(this: Foo): i32 {
+    return 2;
+}
