@@ -62,10 +62,14 @@ export const KEYWORDS = new Set([
 
 export class Token {
   constructor(type, value, line, col) {
-    this.type  = type;
-    this.value = value;
-    this.line  = line;
-    this.col   = col;
+    this.type   = type;
+    this.value  = value;
+    this.line   = line;
+    this.col    = col;
+    // endCol: exclusive end column in source (col + raw token length).
+    // For most single-line tokens value.length == raw length.
+    // String/char tokens exclude the surrounding quotes — endCol is approximate.
+    this.endCol = col + (value ? value.length : 0);
   }
   toString() { return `Token(${this.type}, ${JSON.stringify(this.value)}, ${this.line}:${this.col})`; }
 }

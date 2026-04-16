@@ -39,7 +39,7 @@ export default {
     // new Shared<T>()
     if (name === 'Shared') {
       if (this._allocatorName === 'none') {
-        throw new Error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+        throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
       }
       const t = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
       return `tsc_arc_alloc(sizeof(${t}))`;

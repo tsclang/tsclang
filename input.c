@@ -1,12 +1,11 @@
 #include "runtime.h"
 
-typedef struct { int32_t value; int32_t _refcount; } Node;
+typedef struct { double x; double y; } Point;
 
 int main(void) {
     TSC_INIT();
-    Node *x = tsc_arc_alloc(sizeof(Node));
-    x->_refcount = 1;
-    x->value = 0;
-    tsc_arc_release((void **)&x);
+    const Point p = { .x = 1.0, .y = 2.0 };
+    printf("%g\n", p.x);
+    printf("%g\n", p.y);
     return 0;
 }

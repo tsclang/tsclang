@@ -4,17 +4,23 @@
 import { PRIMITIVE_MAP, toCType, fmtSpec, mangleType, mangleParams, inferLiteralCType } from './types.js';
 import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
+import { TscError } from './error.js';
 
-export function codegen(ast, filename = 'input') {
-  const ctx = new Context(filename);
+// Returns { c: string, warnings: TscError[] }
+// opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
+export function codegen(ast, filename = 'input', src = null, opts = {}) {
+  const ctx = new Context(filename, src);
+  if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   ctx.visitProgram(ast);
-  return ctx.emit();
+  return { c: ctx.emit(), warnings: ctx._warnings };
 }
 
 // ============================================================
 class Context {
-  constructor(filename) {
+  constructor(filename, src = null) {
     this.filename = filename;
+    this.src = src;           // full source text (for error snippets)
+    this._currentNode = null; // updated at entry of exprToC / visitStmt
     this.includes = new Set(['#include "runtime.h"']);
     this.typedefs = [];    // struct typedefs (emitted first)
     this.topLevel = [];    // named function definitions (emitted after lambdas)
@@ -44,6 +50,13 @@ class Context {
     this._mainCleanup = [];
     this._cleanupSet = new Set();
 
+    // Collected warnings (printed after compilation, don't abort)
+    this._warnings = [];
+
+    // Collected errors (DiagnosticBag — filled by visitProgram)
+    this._errors = [];
+    this._maxErrors = 10; // increased by --all-errors
+
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
     this._parse = _parse;
@@ -60,6 +73,46 @@ class Context {
       if (this.scopes[i].has(name)) return this.scopes[i].get(name);
     }
     return null;
+  }
+
+  // Throw a positioned TscError.
+  // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
+  // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }
+  error(msg, node, opts = {}) {
+    const n = node ?? this._currentNode;
+    const legacy = Array.isArray(opts);
+    throw new TscError(msg, {
+      filename: this.filename,
+      line:   n?.line   ?? null,
+      col:    n?.col    ?? null,
+      endCol: n?.endCol ?? null,
+      src:    this.src,
+      notes:  legacy ? opts          : (opts.notes ?? []),
+      label:  legacy ? null          : (opts.label ?? null),
+      spans:  legacy ? []            : (opts.spans ?? []),
+      help:   legacy ? []            : (opts.help  ?? []),
+      code:   legacy ? null          : (opts.code  ?? null),
+    });
+  }
+
+  // Collect a warning diagnostic (does not throw).
+  // opts — same shape as error(): string[] (legacy notes) or { label, spans, help, notes, code }
+  warn(msg, node, opts = {}) {
+    const n = node ?? this._currentNode;
+    const legacy = Array.isArray(opts);
+    this._warnings.push(new TscError(msg, {
+      kind:   'warning',
+      filename: this.filename,
+      line:   n?.line   ?? null,
+      col:    n?.col    ?? null,
+      endCol: n?.endCol ?? null,
+      src:    this.src,
+      notes:  legacy ? opts          : (opts.notes ?? []),
+      label:  legacy ? null          : (opts.label ?? null),
+      spans:  legacy ? []            : (opts.spans ?? []),
+      help:   legacy ? []            : (opts.help  ?? []),
+      code:   legacy ? null          : (opts.code  ?? null),
+    }));
   }
 
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main scope

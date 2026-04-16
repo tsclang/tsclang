@@ -8,7 +8,7 @@ export default {
     // Check for ambiguous overload (non-generic version exists in scope)
     const existing = this.lookup(name);
     if (existing?.funcName) {
-      throw new Error(`ambiguous call: both generic and non-generic overload match`);
+      throw this.error(`ambiguous call: both generic and non-generic overload match`);
     }
 
     // Build substitution map: T → concrete C type

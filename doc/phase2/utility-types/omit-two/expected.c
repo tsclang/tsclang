@@ -5,7 +5,7 @@ typedef struct { String name; String role; } Minimal;
 
 int main(void) {
     TSC_INIT();
-    const Minimal u = {.name = STR_LIT("X"), .role = STR_LIT("admin")};
+    const Minimal u = { .name = STR_LIT("X"), .role = STR_LIT("admin") };
     printf("%s\n", u.role.data);
     return 0;
 }

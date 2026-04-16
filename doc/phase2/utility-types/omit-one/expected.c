@@ -5,7 +5,7 @@ typedef struct { String name; int32_t age; } UserPublic;
 
 int main(void) {
     TSC_INIT();
-    const UserPublic u = {.name = STR_LIT("Alice"), .age = 30};
+    const UserPublic u = { .name = STR_LIT("Alice"), .age = 30 };
     printf("%s\n", u.name.data);
     return 0;
 }

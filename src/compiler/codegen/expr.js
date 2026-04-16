@@ -2,11 +2,12 @@
 export default {
   exprToC(node, lines = [], depth = 0) {
     if (!node) return '0';
+    this._currentNode = node;
     switch (node.kind) {
       case 'Literal': return this.literalToC(node);
 
       case 'Ident': {
-        if (node.name === 'keyof') throw new Error(`"keyof" can only be used in type position`);
+        if (node.name === 'keyof') throw this.error(`"keyof" can only be used in type position`, node);
         const kw = {
           'true': 'true', 'false': 'false', 'null': 'NULL',
           'undefined': 'NULL',
@@ -27,11 +28,22 @@ export default {
         const sym = this.lookup(node.name);
         // Check for use-after-move
         if (sym?._moved) {
-          throw new Error(`use of moved value: "${node.name}" was moved on the previous line`);
+          const ms = sym._movedSourceNode;
+          throw this.error(`use of moved value: "${node.name}"`, node, {
+            label: 'use of moved value',
+            spans: ms?.line != null ? [{
+              line: ms.line, col: ms.col, endCol: ms.endCol,
+              char: '-', label: 'value moved here',
+            }] : [],
+            code: 'E002',
+          });
         }
         // Check for use-after-move-into-closure
         if (sym?._movedIntoClosureLine !== undefined) {
-          throw new Error(`TypeError: Use of moved value: '${node.name}' was moved into closure on line ${sym._movedIntoClosureLine}`);
+          throw this.error(`use of moved value: '${node.name}' was moved into closure on line ${sym._movedIntoClosureLine}`, node, {
+            label: 'use of moved value',
+            code: 'E002',
+          });
         }
         if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
@@ -84,12 +96,27 @@ export default {
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
         // Check for use of moved variable (e.g. a.value after let b = a)
         if (sym?._moved) {
-          throw new Error(`use of moved value: "${node.object.name}" was moved on the previous line`);
+          const ms = sym._movedSourceNode;
+          throw this.error(`use of moved value: "${node.object.name}"`, node, {
+            label: 'use of moved value',
+            spans: ms?.line != null ? [{
+              line: ms.line, col: ms.col, endCol: ms.endCol,
+              char: '-', label: 'value moved here',
+            }] : [],
+            code: 'E002',
+          });
         }
         // Check for use of moved field (field move tracking)
         if (sym?._movedFields?.has(node.prop)) {
-          const movedLine = sym._movedFieldLine?.[node.prop];
-          throw new Error(`TypeError: Use of moved value: '${node.object.name}.${node.prop}' was moved on line ${movedLine}`);
+          const ms = sym._movedFieldSourceNode?.[node.prop];
+          throw this.error(`use of moved value: '${node.object.name}.${node.prop}'`, node, {
+            label: 'use of moved value',
+            spans: ms?.line != null ? [{
+              line: ms.line, col: ms.col, endCol: ms.endCol,
+              char: '-', label: 'value moved here',
+            }] : [],
+            code: 'E006',
+          });
         }
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)
         if (sym?._alias && sym?.ctype) {
@@ -110,7 +137,7 @@ export default {
             const thisSym = this.lookup('this') ?? this.lookup('self');
             const inMethod = thisSym?.ctype === sym.ctype;
             if (!inMethod) {
-              throw new Error(`"${node.prop}" is private and not accessible from outside the class`);
+              throw this.error(`"${node.prop}" is private and not accessible from outside the class`, node);
             }
           }
         }
@@ -287,7 +314,7 @@ export default {
       case 'Cast': {
         const ownershipTypes = ['Ref', 'Mut', 'Shared', 'Weak', 'Box', 'Arc', 'Rc'];
         if (node.castType.kind === 'TypeRef' && ownershipTypes.includes(node.castType.name)) {
-          throw new Error(`cannot use "as" for ownership types`);
+          throw this.error(`cannot use "as" for ownership types`, node);
         }
         // String literal union → string: use values array
         if (node.castType.kind === 'TypeRef' && node.castType.name === 'string') {
@@ -302,7 +329,7 @@ export default {
                                 'uint8_t','uint16_t','uint32_t','uint64_t',
                                 'float','double','size_t','bool'];
           if (numericTypes.includes(exprType)) {
-            throw new Error(`cannot cast ${this.ctypeToTsName(exprType)} to string using "as"; use ".toString()"`);
+            throw this.error(`cannot cast ${this.ctypeToTsName(exprType)} to string using "as"; use ".toString()"`, node);
           }
         }
         // Pointer cast (as *T): just return the inner expr — type annotation only, no C cast needed
@@ -356,10 +383,10 @@ export default {
     if (raw.startsWith('\\u')) return parseInt(raw.slice(2), 16);
     if (raw.length === 1) {
       const code = raw.charCodeAt(0);
-      if (code > 127) throw new Error('character literal must be a single ASCII byte');
+      if (code > 127) throw this.error('character literal must be a single ASCII byte');
       return code;
     }
-    throw new Error('character literal must be a single ASCII byte');
+    throw this.error('character literal must be a single ASCII byte');
   },
 
   literalToC(node) {
@@ -449,7 +476,7 @@ export default {
         const typeMin = { 'uint32_t': 0n, 'uint8_t': 0n, 'uint16_t': 0n,
                           'int32_t': -2147483648n, 'int64_t': -9223372036854775808n };
         if (targetCtype in typeMax && (result > typeMax[targetCtype] || result < typeMin[targetCtype])) {
-          throw new Error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`);
+          throw this.error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`, node);
         }
       }
       const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
@@ -463,7 +490,7 @@ export default {
       const u32Node = lt === 'uint32_t' ? node.left : node.right;
       const u32Val = this.constVal(u32Node);
       if (u32Val !== null && u32Val > 2147483647n) {
-        throw new Error(`cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges`);
+        throw this.error(`cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges`, node);
       }
       const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int32_t' ? [lC, `(int32_t)${rC}`] : [`(int32_t)${lC}`, rC];
@@ -479,7 +506,7 @@ export default {
         const result = node.op === '+' ? lv + rv : node.op === '-' ? lv - rv :
                        node.op === '*' ? lv * rv : node.op === '/' ? lv / rv : lv % rv;
         if (result > typeMax[targetCtype] || result < typeMin[targetCtype]) {
-          throw new Error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`);
+          throw this.error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`, node);
         }
       }
     }
@@ -506,7 +533,7 @@ export default {
     // instanceof: obj instanceof TypeName
     if (node.op === 'instanceof') {
       const typeName = node.right.kind === 'Ident' ? node.right.name : null;
-      if (!typeName) throw new Error(`TypeError: 'instanceof' right-hand side must be a type name`);
+      if (!typeName) throw this.error(`TypeError: 'instanceof' right-hand side must be a type name`, node);
       const objSym2 = node.left.kind === 'Ident' ? this.lookup(node.left.name) : null;
       if (!this.interfaces.has(typeName)) {
         // Class on RHS: only valid when LHS is that same class (always-true compile-time check)
@@ -522,7 +549,7 @@ export default {
           const objC2 = this.exprToC(node.left, lines, depth);
           return `${objC2}.vtable == &${vtableName}`;
         }
-        throw new Error(`TypeError: 'instanceof' requires an interface type on the right-hand side, got '${typeName}'`);
+        throw this.error(`TypeError: 'instanceof' requires an interface type on the right-hand side, got '${typeName}'`, node);
       }
       // Interface instanceof: compare vtable pointer (obj must be concrete class)
       const objC = this.exprToC(node.left, lines, depth);
@@ -559,7 +586,7 @@ export default {
         const rC = this.exprToC(node.right, lines, depth);
         // Error: || mixed with ?? requires parens
         if (node.right?.kind === 'Binary' && (node.right.op === '||' || node.right.op === '??')) {
-          throw new Error(`"||" and "??" require parentheses when mixed`);
+          throw this.error(`"||" and "??" require parentheses when mixed`, node);
         }
         return `${lC}.has_value ? ${lC}.value : ${rC}`;
       }
@@ -568,7 +595,7 @@ export default {
     // Error: || and ?? mixed without parens
     if (node.op === '||') {
       if (node.right?.kind === 'Binary' && node.right.op === '??') {
-        throw new Error(`"||" and "??" require parentheses when mixed`);
+        throw this.error(`"||" and "??" require parentheses when mixed`, node);
       }
     }
 
@@ -624,7 +651,7 @@ export default {
           const rightIsLet = node.right.kind === 'Ident' && this.lookup(node.right.name)?.varKind === 'let';
           if (leftIsLet || rightIsLet) {
             const [tsA, tsB] = [a,b].map(t => this.ctypeToTsName(t));
-            throw new Error(`cannot add ${tsA} and ${tsB}: no implicit widening for let variables, use "as"`);
+            throw this.error(`cannot add ${tsA} and ${tsB}: no implicit widening for let variables, use "as"`, node);
           }
         }
       }
@@ -689,7 +716,7 @@ export default {
   unaryToC(node, lines, depth) {
     if (node.op === '&' || node.op === '*') {
       if (!this._inUnsafe) {
-        throw new Error(`TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'`);
+        throw this.error(`TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'`, node);
       }
       const e = this.exprToC(node.expr, lines, depth);
       return node.op === '&' ? `&${e}` : `*${e}`;
@@ -716,10 +743,10 @@ export default {
       const arrSym = this.lookup(node.left.object.name);
       if (arrSym?.isArray) {
         if (node.left.prop === 'length') {
-          throw new Error(`cannot assign to "length"; use "${node.left.object.name}.resize(n)" instead`);
+          throw this.error(`cannot assign to "length"; use "${node.left.object.name}.resize(n)" instead`, node);
         }
         if (node.left.prop === 'capacity') {
-          throw new Error(`cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead`);
+          throw this.error(`cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead`, node);
         }
       }
       // Check readonly field write outside constructor
@@ -732,7 +759,7 @@ export default {
           const thisSym = this.lookup('this') ?? this.lookup('self');
           const inCtor = this.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
           if (!inCtor) {
-            throw new Error(`cannot assign to readonly field "${node.left.prop}" outside the constructor`);
+            throw this.error(`cannot assign to readonly field "${node.left.prop}" outside the constructor`, node);
           }
         }
       }
@@ -741,13 +768,16 @@ export default {
     if (node.left.kind === 'Index' && node.left.object.kind === 'Ident') {
       const sym = this.lookup(node.left.object.name);
       const tupleDef = sym?.ctype ? this.classes.get(sym.ctype) : null;
-      if (tupleDef?.readonly) throw new Error('cannot assign to readonly tuple element');
+      if (tupleDef?.readonly) throw this.error('cannot assign to readonly tuple element', node);
     }
     if (node.left.kind === 'Ident') {
       const sym = this.lookup(node.left.name);
       if (sym && sym.varKind === 'const') {
-        const loc = node.line ? `\n${this.filename}.tsc:${node.line}:` : '';
-        throw new Error(`cannot assign to 'const' variable '${node.left.name}'${loc}`);
+        throw this.error(`cannot assign to 'const' variable '${node.left.name}'`, node, {
+          label: 'cannot assign to const',
+          help: [`change \`const\` to \`let\` if this variable needs to be mutable`],
+          code: 'E001',
+        });
       }
       // String literal union: convert string literal to enum value
       if (sym && node.right?.kind === 'Literal' && node.right.litType === 'string') {
@@ -755,7 +785,7 @@ export default {
         if (enumDef?.isStringLiteralUnion) {
           const val = node.right.value;
           if (!enumDef.members.includes(val)) {
-            throw new Error(`"${val}" is not a valid value for type ${sym.ctype}`);
+            throw this.error(`"${val}" is not a valid value for type ${sym.ctype}`, node);
           }
           const l = this.exprToC(node.left, lines, depth);
           return `${l} ${node.op} ${sym.ctype}_${val}`;

@@ -125,7 +125,7 @@ export default {
       const hasNull = allLeaves.length !== nonNull.length;
       if (hasNull && nonNull.length === 1) {
         const inner = this.resolveType(nonNull[0]);
-        if (inner === 'void *') throw new Error(`any is already nullable, "any | null" is redundant`);
+        if (inner === 'void *') throw this.error(`any is already nullable, "any | null" is redundant`);
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
         const optName = `opt_${this.cTypeToIdent(inner)}`;

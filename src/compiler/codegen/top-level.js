@@ -72,7 +72,7 @@ export default {
         if (!n.superClass) continue;
         const parent = classDecls[n.superClass];
         if (parent?.superClass) {
-          throw new Error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
+          throw this.error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
         }
       }
     }
@@ -130,7 +130,7 @@ export default {
         const hasStack = fields.some(f => f.name === 'stack');
         // Any class with 'stack' field on embedded target → error
         if (hasStack && _embeddedTargets.includes(this._targetName)) {
-          throw new Error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
+          throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
         }
         const info = this._throwsClasses.get(n.name);
         if (info) {
@@ -235,7 +235,24 @@ export default {
       }
     }
 
-    for (const node of ast.body) this.visitTopLevel(node);
+    for (const node of ast.body) {
+      try {
+        this.visitTopLevel(node);
+      } catch (e) {
+        if (e?.isTscError) {
+          this._errors.push(e);
+          if (this._errors.length >= this._maxErrors) break;
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (this._errors.length > 0) {
+      const bag = new Error('compilation failed');
+      bag.isTscErrorBag = true;
+      bag.errors = this._errors;
+      throw bag;
+    }
   },
 
   visitTopLevel(node) {
@@ -244,7 +261,7 @@ export default {
       case 'ProfileAnnotation': break; // ignore for now
       case 'Import':  break; // stdlib handled via includes
       case 'Export':
-        if (node.default) throw new Error('"export default" is not allowed; use named exports only');
+        if (node.default) throw this.error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
           this.visitFuncDecl(node.decl, true, true); // isExported=true → no static
         } else if (node.decl?.kind === 'ExtensionFunc') {
@@ -270,7 +287,7 @@ export default {
           });
           if (dupSig) {
             const paramDesc = (node.params ?? []).map(p => `${p.name}: ${p.typeAnn?.name ?? '?'}`).join(', ');
-            throw new Error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
+            throw this.error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
           }
           _sigs.push(node);
           this._pendingOverloads.set(node.name, _sigs); }
@@ -359,7 +376,7 @@ export default {
     const packedDec = decorators?.find(d => d.name === 'packed');
     const alignDec  = decorators?.find(d => d.name === 'align');
     if (packedDec && alignDec) {
-      throw new Error('@packed and @align cannot be used together');
+      throw this.error('@packed and @align cannot be used together');
     }
     let structAttr = '';
     if (packedDec) {
@@ -368,7 +385,7 @@ export default {
       const alignVal = alignDec.args?.[0];
       const alignN = alignVal?.kind === 'Literal' ? Number(alignVal.value) : 0;
       if (!alignN || (alignN & (alignN - 1)) !== 0) {
-        throw new Error('@align argument must be a power of two');
+        throw this.error('@align argument must be a power of two');
       }
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
@@ -410,7 +427,7 @@ export default {
       for (const f of fields) {
         // Ref<T>/Mut<T> cannot be stored in class fields
         if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
-          throw new Error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
+          throw this.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
         }
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         if (ct.endsWith(' *')) userFieldParts.push(`${ct.slice(0, -2)} *${f.name};`);
@@ -489,7 +506,7 @@ export default {
         }
         for (const f of fields) {
           if (!unconditional.has(f.name)) {
-            throw new Error(`field "${f.name}" may not be initialized on all paths in constructor`);
+            throw this.error(`field "${f.name}" may not be initialized on all paths in constructor`);
           }
         }
       }
@@ -519,7 +536,7 @@ export default {
     for (const im of ifaceMethods) {
       const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
       if (!methodExists) {
-        throw new Error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
+        throw this.error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
       }
     }
     const vtableName = `${className}_${ifaceName}_vtable`;
@@ -535,7 +552,7 @@ export default {
 
     // Error: static methods cannot be mut
     if (isStatic && m.modifiers?.includes('mut')) {
-      throw new Error(`"static" methods cannot be "mut"`);
+      throw this.error(`"static" methods cannot be "mut"`);
     }
 
     // Methods are NOT mangled by param types (class prefix already disambiguates)
@@ -657,7 +674,7 @@ export default {
     } else if (typeAnn?.kind === 'TypeObject') {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
       const hasMethod = typeAnn.fields.some(f => f.isMethod);
-      if (hasMethod) throw new Error(`"type" alias cannot contain methods; use "interface" instead`);
+      if (hasMethod) throw this.error(`"type" alias cannot contain methods; use "interface" instead`);
       const fields = typeAnn.fields.map(f => {
         const ct = this.resolveType(f.typeAnn);
         return `${ct} ${f.name};`;
@@ -678,7 +695,7 @@ export default {
           const pickedNames = this.getStringLiteralMembers(utArgs[1]);
           for (const pn of pickedNames) {
             if (!fields.some(f => f.name === pn))
-              throw new Error(`field "${pn}" does not exist in ${baseTypeName}`);
+              throw this.error(`field "${pn}" does not exist in ${baseTypeName}`);
           }
           // Multi-pick: "name" | "age" → both picked
           const picked = fields.filter(f => pickedNames.length > 0 ? pickedNames.includes(f.name) : true);
@@ -693,7 +710,7 @@ export default {
           const omitNames = this.getStringLiteralMembers(utArgs[1]);
           for (const on of omitNames) {
             if (!fields.some(f => f.name === on))
-              throw new Error(`field "${on}" does not exist in ${baseTypeName}`);
+              throw this.error(`field "${on}" does not exist in ${baseTypeName}`);
           }
           const kept = fields.filter(f => !omitNames.includes(f.name));
           const fieldDecls = kept.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
@@ -774,11 +791,11 @@ export default {
             const v = this.cTypeToIdent(valCtype);
             this._typeAliases.set(name, `TscMap_${k}_${v}`);
           } else {
-            throw new Error(`Record key must be a string literal union or string enum, not ${keyTypeNode.name ?? keyCtype}`);
+            throw this.error(`Record key must be a string literal union or string enum, not ${keyTypeNode.name ?? keyCtype}`);
           }
         }
       } else if (utName === 'Exclude' || utName === 'Extract') {
-        throw new Error(`conditional types are not supported`);
+        throw this.error(`conditional types are not supported`);
       } else if (utName === 'ReturnType' && utArgs.length >= 1) {
         // ReturnType<typeof fn> → fn's return type
         const arg = utArgs[0];
@@ -793,7 +810,7 @@ export default {
             this._typeAliases.set(name, 'void');
           }
         } else {
-          throw new Error(`ReturnType argument must be a function type`);
+          throw this.error(`ReturnType argument must be a function type`);
         }
       } else if (utName === 'Parameters' && utArgs.length >= 1) {
         // Parameters<typeof fn> → tuple type of fn's params
@@ -849,7 +866,7 @@ export default {
       const hasString = allMembers.some(t => t.kind === 'TypeLiteral' && t.litKind === 'string');
       const hasNonString = allMembers.some(t => !(t.kind === 'TypeLiteral' && t.litKind === 'string'));
       if (hasString && hasNonString) {
-        throw new Error(`string literal union cannot be mixed with non-string types`);
+        throw this.error(`string literal union cannot be mixed with non-string types`);
       }
       if (!this._typeAliases) this._typeAliases = new Map();
       // For nullable unions (T | null), compute opt name without emitting typedef yet
@@ -992,7 +1009,7 @@ export default {
         const keyArg = returnType.typeArgs[1];
         const typeParamNames = new Set(typeParams.map(tp => tp.name));
         if (keyArg.kind === 'TypeRef' && typeParamNames.has(keyArg.name)) {
-          throw new Error(`Pick with runtime key in return type is not supported`);
+          throw this.error(`Pick with runtime key in return type is not supported`);
         }
       }
       if (!this._genericFuncs) this._genericFuncs = new Map();
@@ -1086,7 +1103,7 @@ export default {
       const stmts = body.kind === 'Block' ? body.body : [body];
       const last = stmts[stmts.length - 1];
       if (!last || last.kind !== 'Throw') {
-        throw new Error(`function with return type "never" must not return`);
+        throw this.error(`function with return type "never" must not return`);
       }
     }
 
@@ -1245,7 +1262,7 @@ export default {
     if (thisType.kind === 'TypeRef' && this.classes.has(thisType.name)) {
       const cls = this.classes.get(thisType.name);
       if (cls._methodNames?.has(name)) {
-        throw new Error(`TypeError: extension '${name}' conflicts with existing method on ${thisType.name}`);
+        throw this.error(`TypeError: extension '${name}' conflicts with existing method on ${thisType.name}`);
       }
     }
 

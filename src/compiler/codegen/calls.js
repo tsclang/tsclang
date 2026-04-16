@@ -61,7 +61,7 @@ export default {
         callee.prop === 'exit') {
       const embeddedTargets = ['avr', 'arm', 'stm32'];
       if (embeddedTargets.includes(this._targetName)) {
-        throw new Error(`"process.exit" is not available on embedded targets`);
+        throw this.error(`"process.exit" is not available on embedded targets`);
       }
       this.includes.add('#include <stdlib.h>');
       const code = args.length ? this.exprToC(args[0].expr, lines, depth) : '0';
@@ -90,7 +90,7 @@ export default {
         const enumName = callee.object.object.kind === 'Ident' ? callee.object.object.name : null;
         const enumDef = enumName ? this.classes.get(enumName) : null;
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw new Error(`"toString()" is not available on const enum`);
+          if (enumDef.isConst) throw this.error(`"toString()" is not available on const enum`);
           const memberC = `${enumName}_${callee.object.prop}`;
           if (enumDef.isStringEnum) return `${enumName}_strings[(int)${memberC}]`;
           return `${enumName}_names[(int)${memberC}]`;
@@ -100,7 +100,7 @@ export default {
       if (callee.prop === 'values' && callee.object.kind === 'Ident') {
         const enumDef = this.classes.get(callee.object.name);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw new Error(`"values()" is not available on const enum`);
+          if (enumDef.isConst) throw this.error(`"values()" is not available on const enum`);
           return `${callee.object.name}_values`;
         }
       }
@@ -109,7 +109,7 @@ export default {
         const enumName = callee.object.name;
         const enumDef = this.classes.get(enumName);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw new Error(`"fromValue()" is not available on const enum`);
+          if (enumDef.isConst) throw this.error(`"fromValue()" is not available on const enum`);
           const n = enumDef.members.length;
           const helperName = `${enumName}_fromValue`;
           // Emit helper if not already emitted
@@ -290,7 +290,7 @@ export default {
           const argType = this.inferType(args[i].expr);
           if (argType !== 'void *' && argType !== null && argType !== undefined) {
             const tsType = this.ctypeToTsName(argType);
-            throw new Error(`cannot pass ${tsType} as "any": any is opaque across function boundaries`);
+            throw this.error(`cannot pass ${tsType} as "any": any is opaque across function boundaries`);
           }
         }
       }
@@ -341,7 +341,7 @@ export default {
         if (paramEnumDef?.isStringLiteralUnion && a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           const val = a.expr.value;
           if (!paramEnumDef.members.includes(val)) {
-            throw new Error(`"${val}" is not a valid value for type ${paramType}`);
+            throw this.error(`"${val}" is not a valid value for type ${paramType}`);
           }
           return `${paramType}_${val}`;
         }
@@ -362,7 +362,7 @@ export default {
             a.expr.kind === 'Ident') {
           const argSym = this.lookup(a.expr.name);
           if (argSym?.varKind === 'const') {
-            throw new Error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+            throw this.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
           }
         }
         // Interface param (or Mut<Interface>): wrap concrete class arg in fat pointer
@@ -380,7 +380,7 @@ export default {
             const argVarInfo = this.lookup(argName);
             if (argVarInfo?.varKind === 'const') {
               const mutIfaceName = param.typeAnn.typeArgs?.[0]?.name ?? ifaceName;
-              throw new Error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
+              throw this.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
             }
           }
           const argSym3 = this.lookup(argName);
@@ -943,10 +943,10 @@ export default {
       toFixed: () => {
         const objType = this.inferType(baseObject);
         if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
-          throw new Error(`"toFixed()" is only available on f32/f64`);
+          throw this.error(`"toFixed()" is only available on f32/f64`);
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
-          throw new Error(`"toFixed()" argument must be a compile-time literal`);
+          throw this.error(`"toFixed()" argument must be a compile-time literal`);
         const n = nArg.value;
         const buf = `_buf_${this.tempCount++}`;
         lines.push(`char ${buf}[64];`);
@@ -956,7 +956,7 @@ export default {
       toPrecision: () => {
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
-          throw new Error(`"toPrecision()" argument must be a compile-time literal`);
+          throw this.error(`"toPrecision()" argument must be a compile-time literal`);
         const n = nArg.value;
         const buf = `_buf_${this.tempCount++}`;
         lines.push(`char ${buf}[64];`);
@@ -1008,14 +1008,14 @@ export default {
       if (methodInfo2?.isMoveMethod) {
         // Error: move-method on const binding
         if (classSym.varKind === 'const') {
-          throw new Error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+          throw this.error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
         }
         // Move-method: pass self by value
         return `${methodInfo2.nameMangled}(${objC}${argsC ? ', ' + argsC : ''})`;
       }
       // Error: explicitly mut method on const binding
       if (methodInfo2?.isExplicitMut && classSym.varKind === 'const') {
-        throw new Error(`cannot call "mut" method on const binding`);
+        throw this.error(`cannot call "mut" method on const binding`);
       }
       if (methodInfo2) {
         // Known class method: pass &obj
@@ -1092,7 +1092,7 @@ export default {
     for (const im of ifaceMethods) {
       const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
       if (!methodExists) {
-        throw new Error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
+        throw this.error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
       }
     }
     const vtableName = `_${className}_${ifaceName}_vtable`;

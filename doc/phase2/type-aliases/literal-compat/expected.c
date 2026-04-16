@@ -8,6 +8,6 @@ double dist_Point(Point p) {
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", dist_Point((Point){.x = 3.0, .y = 4.0}));
+    printf("%g\n", dist_Point((Point){ .x = 3.0, .y = 4.0 }));
     return 0;
 }

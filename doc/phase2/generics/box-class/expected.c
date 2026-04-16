@@ -3,7 +3,7 @@
 typedef struct { int32_t value; } Box_i32;
 
 static Box_i32 Box_i32_new(int32_t v) {
-    Box_i32 self;
+    Box_i32 self = {0};
     self.value = v;
     return self;
 }

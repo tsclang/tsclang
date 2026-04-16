@@ -7,7 +7,7 @@ typedef struct { double X; double Y; double Z; } P3;
 
 int main(void) {
     TSC_INIT();
-    const P3 p = {.X = 1.0, .Y = 2.0, .Z = 3.0};
+    const P3 p = { .X = 1.0, .Y = 2.0, .Z = 3.0 };
     printf("%g\n", p.Z);
     return 0;
 }

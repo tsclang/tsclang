@@ -2,8 +2,9 @@
 // Produces an AST from a token stream.
 
 import { TK, KEYWORDS } from './lexer.js';
+import { TscError } from './error.js';
 
-export function parse(tokens, filename = '<input>') {
+export function parse(tokens, filename = '<input>', src = null) {
   let pos = 0;
 
   function cur()  { return tokens[pos]; }
@@ -11,7 +12,13 @@ export function parse(tokens, filename = '<input>') {
   function done() { return cur().type === TK.EOF; }
 
   function err(msg, tok = cur()) {
-    throw new Error(`${filename}:${tok.line}:${tok.col}: ${msg}`);
+    throw new TscError(msg, {
+      filename,
+      line:   tok.line,
+      col:    tok.col,
+      endCol: tok.endCol,
+      src,
+    });
   }
 
   function eat(type, value = null) {
@@ -164,24 +171,24 @@ export function parse(tokens, filename = '<input>') {
         eat(TK.RBRACK);
         // Structural tuple validations
         const restCount = elements.filter(e => e.rest).length;
-        if (restCount > 1) throw new Error('tuple cannot have more than one rest element');
+        if (restCount > 1) err('tuple cannot have more than one rest element');
         const restIdx = elements.findIndex(e => e.rest);
-        if (restIdx !== -1 && restIdx !== elements.length - 1) throw new Error('rest element must be the last element in a tuple');
+        if (restIdx !== -1 && restIdx !== elements.length - 1) err('rest element must be the last element in a tuple');
         const hasOptional = elements.some(e => e.optional);
         const hasRest = restCount > 0;
-        if (hasOptional && hasRest) throw new Error('tuple cannot have both optional and rest elements');
+        if (hasOptional && hasRest) err('tuple cannot have both optional and rest elements');
         if (hasOptional) {
           let seenOptional = false;
           for (const el of elements) {
             if (el.optional) { seenOptional = true; }
-            else if (seenOptional) throw new Error('optional tuple element must be at the end');
+            else if (seenOptional) err('optional tuple element must be at the end');
           }
         }
         const hasLabeled = elements.some(e => e.label);
         const hasUnlabeled = elements.some(e => !e.label && !e.rest);
-        if (hasLabeled && hasUnlabeled) throw new Error('tuple labels must be all-or-nothing: mix of labeled and unlabeled elements');
+        if (hasLabeled && hasUnlabeled) err('tuple labels must be all-or-nothing: mix of labeled and unlabeled elements');
         for (const el of elements) {
-          if (el.label === 'length') throw new Error('"length" is a reserved label for tuples');
+          if (el.label === 'length') err('"length" is a reserved label for tuples');
         }
         let t = { kind: 'TypeTuple', elements, readonly: isTupleReadonly };
         // Array suffix: [T1, T2][]
@@ -1151,7 +1158,7 @@ export function parse(tokens, filename = '<input>') {
   }
 
   function parseNew() {
-    eat(TK.IDENT, 'new');
+    const newTok = eat(TK.IDENT, 'new');
     let name = eat(TK.IDENT).value;
     let typeArgs = [];
     if (cur().type === TK.LT) {
@@ -1169,7 +1176,7 @@ export function parse(tokens, filename = '<input>') {
       }
       eat(TK.RPAREN);
     }
-    return { kind: 'New', name, typeArgs, args };
+    return { kind: 'New', name, typeArgs, args, line: newTok.line, col: newTok.col };
   }
 
   function parsePostfix() {
@@ -1177,8 +1184,8 @@ export function parse(tokens, filename = '<input>') {
     while (true) {
       if (cur().type === TK.DOT) {
         eat(TK.DOT);
-        const prop = eat(TK.IDENT).value;
-        expr = { kind: 'Member', object: expr, prop };
+        const propTok = eat(TK.IDENT);
+        expr = { kind: 'Member', object: expr, prop: propTok.value, line: propTok.line, col: propTok.col, endCol: propTok.endCol };
       } else if (cur().type === TK.QUESTDOT) {
         eat(TK.QUESTDOT);
         const prop = eat(TK.IDENT).value;
@@ -1204,16 +1211,18 @@ export function parse(tokens, filename = '<input>') {
           }
         }
       } else if (cur().type === TK.LPAREN) {
+        const callTok = cur();
         const args = parseCallArgs();
-        expr = { kind: 'Call', callee: expr, args };
+        expr = { kind: 'Call', callee: expr, args, line: callTok.line, col: callTok.col };
       } else if (cur().type === TK.LT && isGenericCall()) {
         // generic call: fn<T>(args)
+        const callTok2 = cur();
         eat(TK.LT);
         const typeArgs = [];
         while (cur().type !== TK.GT) { typeArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
         eat(TK.GT);
         const args = parseCallArgs();
-        expr = { kind: 'Call', callee: expr, typeArgs, args };
+        expr = { kind: 'Call', callee: expr, typeArgs, args, line: callTok2.line, col: callTok2.col };
       } else if (cur().type === TK.BANG && peek().type !== TK.EQ) {
         // x! — non-null assertion / error propagation
         eat(TK.BANG);
@@ -1368,11 +1377,11 @@ export function parse(tokens, filename = '<input>') {
     if (t.type === TK.IDENT && t.value === 'match') return parseMatch();
 
     // Literals
-    if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value }; }
-    if (t.type === TK.STRING) { pos++; return { kind: 'Literal', litType: 'string', value: t.value }; }
-    if (t.type === TK.CHAR)   { pos++; return { kind: 'Literal', litType: 'char',   value: t.value }; }
-    if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value }; }
-    if (t.type === TK.NULL)   { pos++; return { kind: 'Literal', litType: 'null',   value: 'null' }; }
+    if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.STRING) { pos++; return { kind: 'Literal', litType: 'string', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.CHAR)   { pos++; return { kind: 'Literal', litType: 'char',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.NULL)   { pos++; return { kind: 'Literal', litType: 'null',   value: 'null',  line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.TEMPLATE) {
       pos++;
       return { kind: 'TemplateLit', parts: t.parts };
@@ -1428,7 +1437,7 @@ export function parse(tokens, filename = '<input>') {
         const body = cur().type === TK.LBRACE ? parseBlock() : parseExpr();
         return { kind: 'Arrow', params: [{ name: t.value, typeAnn: null, rest: false, optional: false, defaultVal: null }], body };
       }
-      return { kind: 'Ident', name: t.value };
+      return { kind: 'Ident', name: t.value, line: t.line, col: t.col, endCol: t.endCol };
     }
 
     err(`Unexpected token: ${t.type} "${t.value}"`);

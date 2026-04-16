@@ -1,1 +1,1 @@
-TypeError: Use of moved value: 'b' was moved into closure on line 5
+use of moved value: 'b' was moved into closure on line 5

@@ -13,6 +13,7 @@ export default {
   },
 
   visitStmt(node, lines, depth) {
+    this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);  // indentation at current depth
     const p = (s) => lines.push(I + s);          // push with current-depth indent
     if (!node) return;
@@ -73,7 +74,7 @@ export default {
             const valNode = pair.elems[1]?.expr;
             if (keyNode?.kind !== 'Literal' || keyNode.litType !== 'string') continue;
             const key = keyNode.value;
-            if (!fieldNames.includes(key)) throw new Error(`Object.fromEntries: key "${key}" is not a field of the target type`);
+            if (!fieldNames.includes(key)) throw this.error(`Object.fromEntries: key "${key}" is not a field of the target type`);
             initParts.push(`.${key} = ${this.exprToC(valNode, lines, depth)}`);
           }
           if (isVar) {
@@ -137,7 +138,7 @@ export default {
 
         // Borrow check: Shared<T> requires a heap allocator
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
-          throw new Error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+          throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
         }
 
         // let x: Shared<T> = new T() → arc alloc with explicit field init
@@ -186,13 +187,13 @@ export default {
         }
 
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'never') {
-          throw new Error(`"never" cannot be used as a variable type`);
+          throw this.error(`"never" cannot be used as a variable type`);
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
-          throw new Error(`"void" can only be used as a return type`);
+          throw this.error(`"void" can only be used as a return type`);
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
-          throw new Error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+          throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
         if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {
@@ -297,7 +298,7 @@ export default {
         if (enumDef2?.isStringLiteralUnion && init?.kind === 'Literal' && init.litType === 'string') {
           const val = init.value;
           if (!enumDef2.members.includes(val)) {
-            throw new Error(`"${val}" is not a valid value for type ${ctype}`);
+            throw this.error(`"${val}" is not a valid value for type ${ctype}`);
           }
           p(`${qualifier}${ctype} ${name} = ${ctype}_${val};`);
           this.define(name, { ctype, varKind });
@@ -311,7 +312,7 @@ export default {
           if (init?.kind === 'ArrayLit') {
             const elems = this.arrayLitToC(init, et, lines, depth);
             if (elems.length !== size) {
-              throw new Error(`array literal has ${elems.length} elements but type ${this.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
+              throw this.error(`array literal has ${elems.length} elements but type ${this.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
             }
             p(`${et} ${name}[${size}] = {${elems.join(', ')}};`);
           } else if (init) {
@@ -391,7 +392,7 @@ export default {
                 const srcDef = this.classes.get(srcType);
                 const tupleHasRest = tupleDef1.fields.some(f => f.rest);
                 if (!srcDef?.isTuple && !tupleHasRest) {
-                  throw new Error('cannot spread runtime array into fixed-size tuple');
+                  throw this.error('cannot spread runtime array into fixed-size tuple');
                 }
                 if (srcDef?.isTuple) {
                   for (const f of srcDef.fields) {
@@ -495,10 +496,10 @@ export default {
               const structDef2 = this.classes.get(ctype);
               if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
                 if (initSym2?.varKind === 'const') {
-                  throw new Error(`cannot move out of "const" binding`);
+                  throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
                 }
                 if (initSym2?.isRefParam) {
-                  throw new Error(`cannot move out of "Ref<T>" borrow`);
+                  throw this.error(`cannot move out of "Ref<T>" borrow`, null, { code: 'E004' });
                 }
               }
             }
@@ -510,6 +511,7 @@ export default {
                 if (initSym2) {
                   initSym2._moved = true;
                   initSym2._movedLine = node.line;
+                  initSym2._movedSourceNode = init; // for secondary span
                 }
               }
               if (initSym2?.varKind === 'let' && structDef2?.fields) {
@@ -576,7 +578,7 @@ export default {
                 if (ctype === 'String') {
                   const srcEnumDef = this.classes.get(srcType);
                   if (srcEnumDef?.isStringLiteralUnion) {
-                    throw new Error(`cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"`);
+                    throw this.error(`cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"`);
                   }
                 }
                 const illegalConversions = [
@@ -588,7 +590,7 @@ export default {
                 ];
                 for (const [src, dst, srcTs, dstTs] of illegalConversions) {
                   if (srcType === src && ctype === dst) {
-                    throw new Error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
+                    throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
                   }
                 }
                 // Widening casts for non-binary expressions
@@ -629,10 +631,10 @@ export default {
                 const structDef2pre = this.classes.get(ctype);
                 if (structDef2pre?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
                   if (initSym2pre?.varKind === 'const') {
-                    throw new Error(`cannot move out of "const" binding`);
+                    throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
                   }
                   if (initSym2pre?.isRefParam) {
-                    throw new Error(`cannot move out of "Ref<T>" borrow`);
+                    throw this.error(`cannot move out of "Ref<T>" borrow`, null, { code: 'E004' });
                   }
                 }
               }
@@ -645,6 +647,7 @@ export default {
                   if (initSym2) {
                     initSym2._moved = true;
                     initSym2._movedLine = node.line;
+                    initSym2._movedSourceNode = init; // for secondary span
                   }
                   if (initSym2?.varKind === 'let' && structDef2?.fields) {
                     p(`${init.name} = (${ctype}){0};`);
@@ -660,6 +663,8 @@ export default {
                   objSym._movedFields.add(init.prop);
                   objSym._movedFieldLine = objSym._movedFieldLine ?? {};
                   objSym._movedFieldLine[init.prop] = node.line;
+                  objSym._movedFieldSourceNode = objSym._movedFieldSourceNode ?? {};
+                  objSym._movedFieldSourceNode[init.prop] = init; // for secondary span
                 }
               }
             }
@@ -869,7 +874,7 @@ export default {
       case 'Return': {
         // Error: return inside finally block
         if (this._inFinallyBlock) {
-          throw new Error('TypeError: Cannot return inside a finally block');
+          throw this.error('TypeError: Cannot return inside a finally block');
         }
         // Error: returning Ref to local variable (lifetime overflow)
         if (this.currentFuncReturnType?.startsWith('const ') &&
@@ -879,7 +884,7 @@ export default {
           // and the returned value is a local (non-param) variable
           const retSym = this.lookup(node.value.name);
           if (retSym && !retSym.isPointer && !retSym.isRefParam && !retSym.funcName) {
-            throw new Error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
+            throw this.error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
         if (this._throwsCtx) {
@@ -1153,15 +1158,15 @@ export default {
         const val = node.value;
         // Error: throw inside finally block
         if (this._inFinallyBlock) {
-          throw new Error('TypeError: Cannot throw inside a finally block');
+          throw this.error('TypeError: Cannot throw inside a finally block');
         }
         // Error: throw string literal
         if (val?.kind === 'Literal' && val.litType === 'string') {
-          throw new Error('can only throw Error instances, not string');
+          throw this.error('can only throw Error instances, not string');
         }
         // Error: throw in function without throws declaration
         if (!this._throwsCtx && this.inFunction) {
-          throw new Error(`function "${this.currentFuncName}" throws but does not declare "throws"`);
+          throw this.error(`function "${this.currentFuncName}" throws but does not declare "throws"`);
         }
 
         if (this._throwsCtx) {
@@ -1255,8 +1260,7 @@ export default {
       case 'Switch': {
         const discType = this.inferType(node.discriminant);
         if (discType === 'double' || discType === 'float') {
-          const loc = node.line ? `\n${this.filename}.tsc:${node.line}:` : '';
-          throw new Error(`cannot switch on type 'f64'${loc}`);
+          throw this.error(`cannot switch on type 'f64'`, node);
         }
         for (let ci = 0; ci < node.cases.length; ci++) {
           const c = node.cases[ci];
@@ -1265,9 +1269,11 @@ export default {
           const isTerminator = last.kind === 'Break' || last.kind === 'Return' ||
                                last.kind === 'Throw' || last.kind === 'Continue';
           if (!isTerminator && ci < node.cases.length - 1) {
-            const lastLine = last.line ?? c.line;
-            const loc = lastLine ? `\n${this.filename}.tsc:${lastLine}:` : '';
-            throw new Error(`implicit fallthrough${loc}`);
+            throw this.error(`implicit fallthrough`, last, {
+              label: 'add `break;` or `return` to end this case',
+              help: ['each case must end with `break`, `return`, or `continue`'],
+              code: 'E005',
+            });
           }
         }
         const discC = this.exprToC(node.discriminant, lines, depth);
@@ -1325,7 +1331,7 @@ export default {
         while ((m = ptrPattern.exec(nativeOut)) !== null) {
           const typeName = m[1];
           if (!knownCTypes.has(typeName) && !this.classes.has(typeName) && !this.interfaces.has(typeName)) {
-            throw new Error(`TypeError: Native block references undeclared type '${typeName}'; declare it or use @[native_type]`);
+            throw this.error(`TypeError: Native block references undeclared type '${typeName}'; declare it or use @[native_type]`);
           }
         }
         p(nativeOut);
@@ -1395,7 +1401,7 @@ export default {
       if (!hasWild) {
         const missing = allValues.filter(v => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw new Error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map(v => `'${v}'`).join(', ')}`);
+          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map(v => `'${v}'`).join(', ')}`);
         }
       }
     }
@@ -1570,7 +1576,7 @@ export default {
     if (!calleeSym?._isThrowsFunc) {
       if (isProp) {
         const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
-        throw new Error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+        throw this.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
       }
       // NonNull on non-throws: just emit normally
       const c = this.exprToC(innerExpr, lines, depth);
