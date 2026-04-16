@@ -1,0 +1,15 @@
+TSClang
+Copyright 2026 fwmakc
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+-------------------------------------------------------------------------------
+
+TSClang is an original compiler that transpiles a TypeScript-inspired language
+(.tsc) to C. It does not use, copy, or incorporate any source code from the
+TypeScript compiler (https://github.com/microsoft/TypeScript).
+
+The input language syntax is inspired by TypeScript, which is developed by
+Microsoft and licensed under the Apache License, Version 2.0.
+TypeScript is a trademark of Microsoft Corporation.
