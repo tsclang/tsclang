@@ -1157,7 +1157,7 @@ export default {
       }
     }
 
-    const lines = this.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx);
+    const lines = this.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx, isNever);
     // Track whether this function heap-allocates String return values
     if (retType === 'String') {
       const heapOps = ['tsc_string_concat','tsc_string_repeat','tsc_string_replace',
@@ -1190,12 +1190,13 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null) {
-    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx };
+  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null, isNever = false) {
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever };
     this.inFunction = true;
     this.currentFuncName = funcName;
     this.currentFuncReturnType = retType;
     this._throwsCtx = throwsCtx; // null for non-throws, ctx object for throws functions
+    this._currentFuncIsNever = isNever;
     const lines = [];
     this._currentFuncLines = lines;
     this._funcDepth = 0;
@@ -1250,6 +1251,7 @@ export default {
     this.currentFuncName = saved.funcName;
     this.currentFuncReturnType = saved.retType;
     this._throwsCtx = saved.throwsCtx;
+    this._currentFuncIsNever = saved.isNever;
     return lines;
   },
 

@@ -129,7 +129,7 @@
 - [x] `const`-переменная не может передаваться в `Mut<T>`
 - [x] Возврат `Ref<T>` на локальную переменную → ошибка
 - [x] `Shared<T>` при `#[allocator(none)]` → ошибка
-- [ ] Aliasing XOR mutability: одновременные `Mut`+`Ref` / два `Mut` (требуют scope lifetime-анализа)
+- [x] Aliasing XOR mutability: одновременные `Mut`+`Ref` / два `Mut`
 
 **Не реализовано:**
 - [ ] `Slice<T>` — zero-copy view на массив или строку
@@ -143,7 +143,9 @@
 
 > 2026-04-10: все [F]/[R] тесты phase3 проходят (121/121 через test/runner.js --no-gcc); [E]-тесты (borrow checker) не реализованы
 >
-> 2026-04-16: реализованы borrow checker проверки. Исправлен баг pre-scan (параметры функций исключаются из _funcRefVars). Добавлены: move-из-const, move-из-Ref, use-after-move (Ident + Member), use-after-field-move, Ref/Mut в полях класса, const→Mut<T>, возврат Ref на локальную, Shared<T>+allocator:none. Изменён формат аннотации в тесте: `// @allocator: none` → `#[allocator(none)]`. **Статус: 140/142 phase3 ✓** (2 оставшихся требуют lifetime-анализа: err-two-mut, err-mut-and-ref)
+> 2026-04-16: реализованы borrow checker проверки. Исправлен баг pre-scan (параметры функций исключаются из _funcRefVars). Добавлены: move-из-const, move-из-Ref, use-after-move (Ident + Member), use-after-field-move, Ref/Mut в полях класса, const→Mut<T>, возврат Ref на локальную, Shared<T>+allocator:none. Изменён формат аннотации в тесте: `// @allocator: none` → `#[allocator(none)]`.
+>
+> 2026-04-16 (продолжение): реализованы aliasing-проверки (Mut+Ref / два Mut) через `_refBorrowed` и `_mutBorrowedBy` в calls.js (per-callee tracking). **Статус: 142/142 phase3 ✓**
 
 ---
 
@@ -243,6 +245,19 @@
 ### Лог
 
 > 2026-04-15: реализована фаза 6 — модульная система (базовый набор). Парсер: pointer types (`*T`), unary `&`/`*`, `native(...)`, `declare const/function`. Codegen: `export function` (без `static` в C), `declare` → extern-объявления, `native` с шаблонной интерполяцией (re-parse через `_lex`/`_parse`), `unsafe {}` с `_inUnsafe` флагом, `@packed`/`@align` → `__attribute__`, `process.exit` → `exit()` + stdlib, `process.argv` → `tsc_make_argv` + `Array_string` (определена в runtime.h), pre-scan функций для определения нужности static-globals. **Статус: 23/23 phase6 ✓**
+>
+> 2026-04-16: реализован rustc-style формат диагностических ошибок (Phase A→C):
+> - **colors.js** — composable ANSI: `bold`, `boldRed`, `yellow`, `green`, `cyan`, `dim`; `setColorEnabled()`, `makeColors()`; `--no-color` / `NO_COLOR` env
+> - **error.js** переписан: `TscError` расширен (`label`, `spans`, `help`, `notes`, `code`, `kind`); `renderDiagnostic` — rustc-формат с гейтером, `-->` локацией, tab-aware позиционированием `^^^`, вторичными спанами `-`, `= help:`/`= note:`, контекстными строками, `...` при разрывах
+> - **error-catalog.js** — E001–E006: const-reassign, use-after-move, move-from-const, move-from-ref, implicit-fallthrough, use-after-field-move; команда `tsclang explain <CODE>`
+> - **DiagnosticBag** — сбор ошибок по top-level statement, флаг `--all-errors`, счётчик `aborting due to N errors`
+> - Вторичные спаны в codegen: use-after-move (место move), use-after-field-move, const-reassign
+> - Предупреждения: инфраструктура `warn()`, рендер жёлтым, счётчик `N warnings emitted`
+> - Парсер конвертирован на `TscError` (сниппет в parse-ошибках)
+> - Обновлён тестовый корпус: 12 файлов (10 `expected.c` + 4 `expected.error`)
+> - Исправлены баги: `never-noreturn` (`_currentFuncIsNever`), `cross-compat` (isCrossStruct), `err-vtable-mut-const` (interface-path перехват)
+> - Исправлен test runner: `filterArg` → `filterArgs[]` (OR-фильтрация по нескольким аргументам)
+> - **Статус фаз 0–6: 589/589 ✓** (phase0: 22, phase1: 166, phase2: 159, phase3: 142, phase4: 56, phase5: 21, phase6: 23)
 
 ---
 
@@ -438,10 +453,10 @@
 | 0  | Core runtime | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | `[x]` |
 | 2  | Система типов | `[x]` |
-| 3  | Модель памяти | `[~]` |
-| 4  | Объектная модель | `[ ]` |
-| 5  | Обработка ошибок | `[ ]` |
-| 6  | Модульная система | `[ ]` |
+| 3  | Модель памяти | `[x]` |
+| 4  | Объектная модель | `[x]` |
+| 5  | Обработка ошибок | `[x]` |
+| 6  | Модульная система | `[~]` |
 | 7  | Async/Await | `[ ]` |
 | 8  | Threads и конкурентность | `[ ]` |
 | 9  | CLI core | `[ ]` |

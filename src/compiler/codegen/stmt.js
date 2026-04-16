@@ -626,10 +626,13 @@ export default {
               this._lastArrayElemReturn = undefined;
               this._lastSuppressConst = undefined;
               // Borrow check before emit (with typeAnn path)
+              // Skip when source and target are different struct types (cross-type cast, not a move)
               if (init.kind === 'Ident') {
                 const initSym2pre = this.lookup(init.name);
                 const structDef2pre = this.classes.get(ctype);
-                if (structDef2pre?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                const isCrossStruct = initSym2pre?.ctype && initSym2pre.ctype !== ctype
+                  && this.classes.get(initSym2pre.ctype)?.isStruct && structDef2pre?.isStruct;
+                if (!isCrossStruct && (structDef2pre?.fields || ctype === 'String' || ctype.startsWith('Array_'))) {
                   if (initSym2pre?.varKind === 'const') {
                     throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
                   }
@@ -1165,7 +1168,8 @@ export default {
           throw this.error('can only throw Error instances, not string');
         }
         // Error: throw in function without throws declaration
-        if (!this._throwsCtx && this.inFunction) {
+        // (never-return functions are exempt — they are expected to throw/abort)
+        if (!this._throwsCtx && this.inFunction && !this._currentFuncIsNever) {
           throw this.error(`function "${this.currentFuncName}" throws but does not declare "throws"`);
         }
 

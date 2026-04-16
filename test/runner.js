@@ -32,7 +32,8 @@ const cyan   = s => c('36', s);
 // CLI args
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
-const filterArg   = args.find(a => !a.startsWith('--'));
+const filterArgs  = args.filter(a => !a.startsWith('--'));
+const filterArg   = filterArgs.length > 0 ? filterArgs.join(' ') : null;
 const flagVerbose = args.includes('--verbose') || args.includes('-v');
 const flagHelp    = args.includes('--help')    || args.includes('-h');
 const flagFail    = args.includes('--fail-fast');
@@ -477,14 +478,18 @@ async function main() {
   let testDirs = await walkDir(DOC_DIR);
   testDirs.sort();
 
-  if (filterArg) {
-    const needle = filterArg.toLowerCase();
-    testDirs = testDirs.filter(d => d.toLowerCase().replace(/\\/g, '/').includes(needle));
+  if (filterArgs.length > 0) {
+    const needles = filterArgs.map(f => f.toLowerCase());
+    testDirs = testDirs.filter(d => {
+      const norm = d.toLowerCase().replace(/\\/g, '/');
+      return needles.some(n => norm.includes(n));
+    });
     if (testDirs.length === 0) {
-      console.log(yellow(`No tests match filter: "${filterArg}"`));
+      console.log(yellow(`No tests match filter: "${filterArgs.join(', ')}"`));
       process.exit(0);
     }
-    console.log(dim(`Filter: "${filterArg}" → ${testDirs.length} test(s)\n`));
+    const label = filterArgs.length === 1 ? `"${filterArgs[0]}"` : `[${filterArgs.join(', ')}]`;
+    console.log(dim(`Filter: ${label} → ${testDirs.length} test(s)\n`));
   } else {
     console.log(dim(`Found ${testDirs.length} test(s)\n`));
   }

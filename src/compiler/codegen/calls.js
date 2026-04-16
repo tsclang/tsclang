@@ -357,12 +357,16 @@ export default {
             return `${this.exprToC(a.expr, lines, depth)}.data`;
           }
         }
-        // Borrow check: cannot pass const variable as Mut<T>
+        // Borrow check: cannot pass const variable as Mut<T> (non-interface only;
+        // interface Mut<T> is caught below with a better message)
         if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut' &&
             a.expr.kind === 'Ident') {
-          const argSym = this.lookup(a.expr.name);
-          if (argSym?.varKind === 'const') {
-            throw this.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+          const innerCheck = param.typeAnn.typeArgs?.[0]?.name;
+          if (!innerCheck || !this.interfaces.has(innerCheck)) {
+            const argSym = this.lookup(a.expr.name);
+            if (argSym?.varKind === 'const') {
+              throw this.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+            }
           }
         }
         // Interface param (or Mut<Interface>): wrap concrete class arg in fat pointer
@@ -408,6 +412,28 @@ export default {
           const innerName2 = param.typeAnn.typeArgs?.[0]?.name;
           if (!innerName2 || !this.interfaces.has(innerName2)) {
             const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+            if (argSym2 && a.expr.kind === 'Ident') {
+              if (param.typeAnn.name === 'Mut') {
+                // Cannot mutably borrow while an immutable borrow is active
+                if (argSym2._refBorrowed) {
+                  throw this.error(
+                    `TypeError: Cannot create mutable borrow of '${a.expr.name}' while immutable borrow is active`,
+                    a.expr
+                  );
+                }
+                // Cannot pass to two *different* Mut<T> borrowers in the same scope
+                if (argSym2._mutBorrowedBy && argSym2._mutBorrowedBy !== calleeC) {
+                  throw this.error(
+                    `TypeError: Cannot create two simultaneous mutable borrows of '${a.expr.name}'`,
+                    a.expr
+                  );
+                }
+                argSym2._mutBorrowedBy = calleeC;
+              } else {
+                // Ref<T>: mark as immutably borrowed (for future Mut<T> checks)
+                argSym2._refBorrowed = true;
+              }
+            }
             const argC2 = this.exprToC(a.expr, lines, depth);
             if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
             return argC2;
