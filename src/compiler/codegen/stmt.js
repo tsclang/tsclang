@@ -8,6 +8,9 @@ export default {
 
   visitStmtInMain(node) {
     const lines = [];
+    if (this._debugLines && node?.line) {
+      this.mainStmts.push(`#line ${node.line} "${this.filename}"`);
+    }
     this.visitStmt(node, lines, 0);
     for (const l of lines) this.mainStmts.push(l);
   },

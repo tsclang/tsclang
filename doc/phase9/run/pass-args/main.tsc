@@ -1,0 +1,2 @@
+const argv: string[] = process.argv;
+console.log("args:", argv[1], argv[2]);

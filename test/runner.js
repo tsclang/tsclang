@@ -3,8 +3,8 @@
 // Supports three input types: .tsc, .json (config), .sh (CLI)
 // Three test kinds: [R] run, [F] fragment (C-compare only), [E] compiler error
 
-import { readdir, readFile, mkdir, rm } from 'fs/promises';
-import { existsSync } from 'fs';
+import { readdir, readFile, mkdir, rm, copyFile } from 'fs/promises';
+import { existsSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
@@ -256,7 +256,10 @@ async function executeTscTest(testDir, kind, tmpBase) {
   // Step 1: Run tsclang
   const tscResult = await run(
     process.execPath,
-    [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase],
+    [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase,
+     ...(existsSync(join(testDir, 'flags.txt'))
+       ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
+       : [])],
   );
 
   if (kind === 'E') {
@@ -344,8 +347,20 @@ async function executeShTest(testDir, kind, tmpBase) {
 
   const script = await readFile(join(testDir, 'input.sh'), 'utf8');
 
-  // Substitute TSCLANG_BIN in the script so `tsclang` calls work
-  const patchedScript = script.replace(/\btsclang\b/g, `node ${JSON.stringify(TSCLANG_BIN)}`);
+  // Copy fixture files (non-special) from test dir to tmpBase
+  const specialFiles = new Set(['input.sh', 'input.json', 'input.tsc', 'expected.out', 'expected.error', 'expected.c']);
+  const testFiles = await readdir(testDir);
+  for (const f of testFiles) {
+    if (!specialFiles.has(f)) {
+      await copyFile(join(testDir, f), join(tmpBase, f));
+    }
+  }
+
+  // Substitute TSCLANG_BIN in the script so `tsclang` calls work.
+  // Use the full node executable path (MSYS2-compatible) so bash can find it.
+  const nodeExec = MSYS2_BASH ? `"${toMsysPath(process.execPath)}"` : 'node';
+  const tscBin   = MSYS2_BASH ? toMsysPath(TSCLANG_BIN) : TSCLANG_BIN;
+  const patchedScript = script.replace(/\btsclang\b/g, `${nodeExec} ${JSON.stringify(tscBin)}`);
 
   const result = await runShell(patchedScript, { cwd: tmpBase });
 

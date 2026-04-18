@@ -306,12 +306,14 @@
 
 > Фазы 9–15 требуют готового компилятора (фазы 1–8 завершены).
 
-- [ ] `tsclang init` — создание проекта, генерация `tsc.package.json`
-- [ ] Чтение и валидация `tsc.package.json`
-- [ ] `tsclang build` — базовый (только локальный код, без зависимостей)
-- [ ] `tsclang run` — базовый
+- [x] `tsclang init` — создание проекта, генерация `tsc.package.json`
+- [x] Чтение и валидация `tsc.package.json`
+- [x] `tsclang build` — базовый (только локальный код, без зависимостей)
+- [x] `tsclang run` — базовый
 
 ### Лог
+
+> 2026-04-18: реализованы команды `init`, `validate-config`, `build` (--emit c/binary/hex, --outDir, --debug), `run` (с forwarding аргументов); `#line` директивы через `--debug`; механизм `flags.txt` для тестов; исправлен inferType для Index на Array_T; phase9: **22/22 ✓**
 
 ---
 

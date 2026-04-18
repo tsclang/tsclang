@@ -11,6 +11,7 @@ import { TscError } from './error.js';
 export function codegen(ast, filename = 'input', src = null, opts = {}) {
   const ctx = new Context(filename, src);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
+  if (opts.debugLines) ctx._debugLines = true;
   ctx.visitProgram(ast);
   return { c: ctx.emit(), warnings: ctx._warnings };
 }
@@ -152,7 +153,7 @@ class Context {
       if (this._useArgcArgv) {
         parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
       }
-      parts.push(...this.mainStmts.map(s => this.ind() + s));
+      parts.push(...this.mainStmts.map(s => s.startsWith('#') ? s : this.ind() + s));
       // Async main bootstrap
       if (this._asyncMainPollFn) {
         const embeddedTargets = ['avr', 'arm', 'stm32'];
