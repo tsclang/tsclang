@@ -1,12 +1,11 @@
 #include "runtime.h"
 
-typedef struct { double x; double y; } Pt1;
-typedef struct { double x; double y; } Pt2;
+typedef struct { String message; } AppError;
+
+typedef struct { bool _done; int32_t _result; bool _ok; AppError _error; } Promise_i32_AppError;
 
 int main(void) {
     TSC_INIT();
-    const Pt1 a = { .x = 1.0, .y = 2.0 };
-    const Pt2 b = *(const Pt2 *)&a;
-    printf("%g\n", b.x);
+    Promise_i32_AppError p = { ._done = true, ._ok = false, ._error = {0} };
     return 0;
 }

@@ -6,17 +6,17 @@ typedef struct {
     int32_t _state;
     Data _result;
     bool _done;
+    Data d;
 } fetch_state;
 
 static void fetch_poll(fetch_state *self) {
     switch (self->_state) {
-        case 0: {
-            Data d = {0};
-            d.value = 42;
-            self->_result = d;
+        case 0:
+            self->d = {0};
+            self->d.value = 42;
+            self->_result = self->d;
             self->_done = true;
             return;
-        }
     }
 }
 

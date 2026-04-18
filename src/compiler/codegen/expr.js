@@ -47,6 +47,11 @@ export default {
         }
         if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
+        // Async/generator self context: inlined consts → literal, promoted vars → self->name
+        if (this._selfCtx) {
+          if (this._selfCtx.inlined?.has(node.name)) return this._selfCtx.inlined.get(node.name);
+          if (this._selfCtx.promoted?.has(node.name)) return `self->${node.name}`;
+        }
         // Deferred anon struct used outside destructuring: materialize now
         if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
           const { fields, init: _init } = this._deferredAnons.get(node.name);
@@ -352,7 +357,19 @@ export default {
         return `STR_LIT("${tsName}")`;
       }
 
-      case 'Await':    return this.exprToC(node.expr, lines, depth);
+      case 'Await': {
+        if (!this._inAsyncFunc)
+          throw this.error(`"await" can only be used inside an "async" function`, node);
+        // Check for await on non-async variable (e.g. await x where x: i32)
+        if (node.expr?.kind === 'Ident') {
+          const awaitSym = this.lookup(node.expr.name);
+          if (awaitSym && !awaitSym._isAsync && awaitSym.varKind) {
+            const t = awaitSym.ctype ?? 'unknown';
+            throw this.error(`"await" can only be applied to Promise<T>, got ${t}`, node);
+          }
+        }
+        return this.exprToC(node.expr, lines, depth);
+      }
       case 'Yield':    return node.value ? this.exprToC(node.value, lines, depth) : '0';
       case 'Drop':     return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
       case 'NonNull':  return this.exprToC(node.expr, lines, depth);
@@ -738,6 +755,20 @@ export default {
   // Assignment
   // ----------------------------------------------------------------
   assignToC(node, lines, depth) {
+    // Generator .next() assignment: r = g.next() → r = genFn_next(&g, args);
+    if (node.right?.kind === 'Call' && node.right.callee?.kind === 'Member'
+        && node.right.callee.prop === 'next') {
+      const objName = node.right.callee.object?.name;
+      const sym = objName ? this.lookup(objName) : null;
+      if (sym?._isGenState) {
+        const gi = sym._gi;
+        const objC = this.exprToC(node.right.callee.object, lines, depth);
+        const nextArgs = [].concat(sym._genArgs || []);
+        const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
+        const leftC = this.exprToC(node.left, lines, depth);
+        return `${leftC} ${node.op || '='} ${gi.nextFn}(${callArgs})`;
+      }
+    }
     // Prevent assignment to arr.length or arr.capacity
     if (node.left.kind === 'Member' && node.left.object.kind === 'Ident') {
       const arrSym = this.lookup(node.left.object.name);

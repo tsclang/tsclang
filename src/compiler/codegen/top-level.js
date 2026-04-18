@@ -974,6 +974,10 @@ export default {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
+    // Async/generator dispatch — state machine codegen
+    if (node.async) { this.emitAsyncFunc(node); return; }
+    if (generator)  { this.emitGeneratorFunc(node); return; }
+
     // If there are pending overload signatures for this function, emit one C function per signature
     const pendingSigs = name ? this._pendingOverloads?.get(name) : null;
     if (pendingSigs?.length) {

@@ -107,6 +107,8 @@ export default {
         cls.fields.every(f => f.modifiers?.includes('readonly'));
       if (!allReadonly) this._lastSuppressConst = true;
       if (hasCtor) return `${name}_new(${argsC})`;
+      // Throws classes have a synthesized _new(String msg) function
+      if (cls._isThrowsClass) return `${name}_new(${argsC})`;
       return `{0}`;
     }
 
@@ -428,5 +430,47 @@ export default {
     const envInit = '{' + [...captured.keys()].map(nm => `.${nm} = ${nm}`).join(', ') + '}';
 
     return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured };
+  },
+
+  // Emit `typedef struct {...} Promise_T;` once per type
+  _emitPromiseTypedef(promiseType, innerType) {
+    if (!this._emittedPromiseTypes) this._emittedPromiseTypes = new Set();
+    if (this._emittedPromiseTypes.has(promiseType)) return;
+    this._emittedPromiseTypes.add(promiseType);
+    this._topBlank();
+    this.topLevel.push(`typedef struct { bool _done; ${innerType} _result; bool _ok; } ${promiseType};`);
+  },
+
+  // Collect free (outer-scope) variables referenced in a lambda body
+  _collectFreeVars(lambda) {
+    const paramNames = new Set((lambda.params || []).map(p => p.name));
+    const free = [];
+    const seen = new Set(paramNames);
+    const walkE = (e) => {
+      if (!e) return;
+      if (e.kind === 'Ident' && !seen.has(e.name)) {
+        const sym = this.lookup(e.name);
+        if (sym?.ctype) { seen.add(e.name); free.push({ name: e.name, ctype: sym.ctype }); }
+      }
+      if (e.callee) walkE(e.callee);
+      if (e.object) walkE(e.object);
+      if (e.left) walkE(e.left);
+      if (e.right) walkE(e.right);
+      if (e.test) walkE(e.test);
+      if (e.args) for (const a of (e.args || [])) walkE(a?.expr);
+      if (e.elems) for (const a of (e.elems || [])) walkE(a?.expr);
+      if (e.props) for (const p of (e.props || [])) walkE(p?.value);
+    };
+    const walkS = (s) => {
+      if (!s) return;
+      if (s.kind === 'ExprStmt') walkE(s.expr);
+      if (s.kind === 'VarDecl') walkE(s.init);
+      if (s.kind === 'Return') walkE(s.value);
+      if (s.kind === 'Block') for (const st of (s.body || [])) walkS(st);
+      if (s.kind === 'If') { walkS(s.consequent); if (s.alternate) walkS(s.alternate); }
+    };
+    if (lambda.body?.kind === 'Block') for (const s of lambda.body.body || []) walkS(s);
+    else if (lambda.body) walkE(lambda.body);
+    return free;
   },
 };

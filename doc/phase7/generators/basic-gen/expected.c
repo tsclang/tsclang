@@ -8,7 +8,7 @@ static counter_result counter_next(counter_state *self, int32_t start) {
         case 0:
             self->i = start;
         case 1:
-            if (!true) { self->_done = true; return (counter_result){0, true}; }
+            if (!(true)) { self->_done = true; return (counter_result){0, true}; }
             self->_value = self->i;
             self->_state = 2;
             return (counter_result){self->_value, false};
@@ -23,12 +23,12 @@ case_1: ;
 
 int main(void) {
     TSC_INIT();
-    counter_state _gen_0 = {0};
-    counter_result _r_0 = counter_next(&_gen_0, 1);
+    counter_state gen = {0};
+    counter_result _r_0 = counter_next(&gen, 1);
     printf("%d\n", _r_0.value);
-    counter_result _r_1 = counter_next(&_gen_0, 1);
+    counter_result _r_1 = counter_next(&gen, 1);
     printf("%d\n", _r_1.value);
-    counter_result _r_2 = counter_next(&_gen_0, 1);
+    counter_result _r_2 = counter_next(&gen, 1);
     printf("%d\n", _r_2.value);
     return 0;
 }

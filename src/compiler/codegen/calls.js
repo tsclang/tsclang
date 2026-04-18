@@ -3,6 +3,26 @@ export default {
   callToC(node, lines, depth) {
     const { callee, args } = node;
 
+    // Generator .next() call: gen.next() → genFn_next(&gen, ...storedArgs)
+    if (callee.kind === 'Member' && callee.prop === 'next') {
+      const objName = callee.object?.name ?? callee.object;
+      const sym = typeof objName === 'string' ? this.lookup(objName) : null;
+      if (sym?._isGenState) {
+        const gi = sym._gi;
+        const objC = this.exprToC(callee.object, lines, depth);
+        const nextArgs = [].concat(sym._genArgs || []);
+        const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
+        if (lines !== undefined) {
+          const I = ' '.repeat(this.indent * depth);
+          const rVar = `_r_${(this._genResultCount = (this._genResultCount || 0) + 1) - 1}`;
+          lines.push(`${I}${gi.resultType} ${rVar} = ${gi.nextFn}(${callArgs});`);
+          this.define(rVar, { ctype: gi.resultType, varKind: 'let' });
+          return rVar;
+        }
+        return `${gi.nextFn}(${callArgs})`;
+      }
+    }
+
     // Optional chaining: x?.method() where x is opt_T
     if (callee.kind === 'OptChain') {
       const obj = callee.object;
@@ -130,12 +150,49 @@ export default {
     }
 
     // setTimeout / setInterval / clearTimeout
+    const _embeddedTargets = ['avr', 'arm', 'stm32'];
+    if (callee.kind === 'Ident' && (callee.name === 'setTimeout' || callee.name === 'setInterval')) {
+      if (_embeddedTargets.includes(this._targetName)) {
+        throw this.error(`"${callee.name}" is not available on embedded targets`, node);
+      }
+    }
     if (callee.kind === 'Ident' && callee.name === 'setTimeout') {
       const fn = this.exprToC(args[0].expr, lines, depth);
       const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_timeout(${fn}, ${ms})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'setInterval') {
+      const lambdaArg = args[0]?.expr;
+      if (lambdaArg?.kind === 'Arrow') {
+        const freeVars = this._collectFreeVars(lambdaArg);
+        if (freeVars.length > 0) {
+          const closureIdx = this.lambdaCount++;
+          const prefix = `_closure_${closureIdx}`;
+          const envType = `${prefix}_env`;
+          const fieldDecls = freeVars.map(v => `${v.ctype} ${v.name};`);
+          this._topBlank();
+          this.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
+          this.topLevel.push(`static ${envType} ${prefix}_captured;`);
+          const closureLines = [];
+          this.pushScope();
+          for (const v of freeVars) {
+            this.define(v.name, { ctype: v.ctype, _cAlias: `${prefix}_captured.${v.name}`, varKind: 'let' });
+          }
+          if (lambdaArg.body?.kind === 'Block') this.visitBlock(lambdaArg.body, closureLines, 0);
+          this.popScope();
+          this._topBlank();
+          this.topLevel.push(`static void ${prefix}_fn(void) {`);
+          for (const l of closureLines) this.topLevel.push('    ' + l);
+          this.topLevel.push('}');
+          if (lines !== undefined) {
+            const I = ' '.repeat(this.indent * depth);
+            const inits = freeVars.map(v => `.${v.name} = ${v.name}`).join(', ');
+            lines.push(`${I}${prefix}_captured = (${envType}){ ${inits} };`);
+          }
+          const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `tsc_set_interval(${prefix}_fn, ${ms})`;
+        }
+      }
       const fn = this.exprToC(args[0].expr, lines, depth);
       const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_interval(${fn}, ${ms})`;

@@ -1,11 +1,11 @@
 #include "runtime.h"
 
-static void _lambda_0_fn(void) {
+static void _lambda_0_void(void) {
     printf("timeout\n");
 }
 
 int main(void) {
     TSC_INIT();
-    tsc_set_timeout(_lambda_0_fn, 100);
+    tsc_set_timeout(_lambda_0_void, 100);
     return 0;
 }

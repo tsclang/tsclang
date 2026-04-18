@@ -153,6 +153,18 @@ class Context {
         parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
       }
       parts.push(...this.mainStmts.map(s => this.ind() + s));
+      // Async main bootstrap
+      if (this._asyncMainPollFn) {
+        const embeddedTargets = ['avr', 'arm', 'stm32'];
+        if (embeddedTargets.includes(this._targetName)) {
+          parts.push(`${this.ind()}${this._asyncMainStateType} _main_sm = {0};`);
+          parts.push(`${this.ind()}while (!_main_sm._done) {`);
+          parts.push(`${this.ind()}    ${this._asyncMainPollFn}(&_main_sm);`);
+          parts.push(`${this.ind()}}`);
+        } else {
+          parts.push(`${this.ind()}tsc_event_loop_run(${this._asyncMainPollFn});`);
+        }
+      }
       // Emit cleanup in reverse registration order (LIFO)
       for (let i = this._mainCleanup.length - 1; i >= 0; i--) {
         parts.push(`${this.ind()}${this._mainCleanup[i]};`);
@@ -207,5 +219,6 @@ import calls     from './codegen/calls.js';
 import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
 import types     from './codegen/types.js';
+import asyncMixin from './codegen/async.js';
 
-Object.assign(Context.prototype, topLevel, stmt, expr, calls, generics, misc, types);
+Object.assign(Context.prototype, topLevel, stmt, expr, calls, generics, misc, types, asyncMixin);

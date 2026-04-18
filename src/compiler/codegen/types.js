@@ -289,6 +289,7 @@ export default {
             if (structDef?.fields) {
               const field = structDef.fields.find(f => (f.name ?? f) === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
+              if (field?.ctype) return field.ctype;
               // Check inherited fields from superClass
               if (structDef.superClass) {
                 const baseDef = this.classes.get(structDef.superClass);
@@ -300,6 +301,18 @@ export default {
             if (structDef?.isTuple) {
               const field = structDef.fields.find(f => f.label === node.prop);
               if (field) return field.ctype.replace(' *', '');
+            }
+          }
+        }
+        // Fallback: infer object type recursively (e.g. call result member access)
+        {
+          const objType = this.inferType(node.object);
+          if (objType && objType !== 'int32_t') {
+            const sd = this.classes.get(objType);
+            if (sd?.fields) {
+              const f = sd.fields.find(ff => (ff.name ?? ff) === node.prop);
+              if (f?.typeAnn) return this.resolveType(f.typeAnn);
+              if (f?.ctype) return f.ctype;
             }
           }
         }
@@ -450,6 +463,12 @@ export default {
             if (node.callee.prop === 'parse') return cT;
             if (node.callee.prop === 'tryParse') return `opt_${etId}`;
           }
+        }
+        // Generator .next() call: return result type
+        if (node.callee.kind === 'Member' && node.callee.prop === 'next') {
+          const genObj = node.callee.object;
+          const genSym = genObj.kind === 'Ident' ? this.lookup(genObj.name) : null;
+          if (genSym?._isGenState) return genSym._gi?.resultType ?? genSym._resultType ?? 'int32_t';
         }
         // Generic method call on class instance: look up method return type
         if (node.callee.kind === 'Member') {

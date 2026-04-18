@@ -22,6 +22,35 @@ export default {
       case 'VarDecl': {
         const { varKind, name, typeAnn, init } = node;
 
+        // Generator instantiation: const g = genFn(args) → genFn_state g = {0};
+        if (init?.kind === 'Call' && init.callee?.kind === 'Ident') {
+          const gi = this._generatorFuncs?.get(init.callee.name);
+          if (gi) {
+            const I = ' '.repeat(this.indent * depth);
+            const genArgs = (init.args || []).map(a => this.exprToC(a.expr, lines, depth));
+            lines.push(`${I}${gi.stateType} ${name} = {0};`);
+            this.define(name, { ctype: gi.stateType, varKind, _isGenState: true,
+              _genFn: init.callee.name, _genArgs: genArgs, _gi: gi });
+            break;
+          }
+        }
+
+        // Generator .next() result: let r = g.next() → genFn_result r = genFn_next(&g, args);
+        if (init?.kind === 'Call' && init.callee?.kind === 'Member' && init.callee.prop === 'next') {
+          const objName = init.callee.object?.name;
+          const sym = objName ? this.lookup(objName) : null;
+          if (sym?._isGenState) {
+            const gi = sym._gi;
+            const I = ' '.repeat(this.indent * depth);
+            const objC = this.exprToC(init.callee.object, lines, depth);
+            const nextArgs = [].concat(sym._genArgs || []);
+            const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
+            lines.push(`${I}${gi.resultType} ${name} = ${gi.nextFn}(${callArgs});`);
+            this.define(name, { ctype: gi.resultType, varKind });
+            break;
+          }
+        }
+
         // Match expression: const x = match { ... }
         if (init?.kind === 'Match') {
           this.emitMatchVarDecl(node, lines, depth);
@@ -184,6 +213,73 @@ export default {
             this._registerCleanup(`tsc_arc_release(${name})`);
             break;
           }
+        }
+
+        // Promise.resolve(expr) → Promise_T typedef + struct init
+        if (init?.kind === 'Call' &&
+            init.callee?.kind === 'Member' &&
+            init.callee.object?.kind === 'Ident' && init.callee.object.name === 'Promise' &&
+            init.callee.prop === 'resolve') {
+          const arg = init.args?.[0]?.expr;
+          const innerType = arg ? this.inferType(arg) : 'int32_t';
+          const typeIdent = this.cTypeToIdent(innerType);
+          const promiseType = `Promise_${typeIdent}`;
+          this._emitPromiseTypedef(promiseType, innerType);
+          const argC = arg ? this.exprToC(arg, lines, depth) : '0';
+          p(`${promiseType} ${name} = { ._done = true, ._result = ${argC}, ._ok = true };`);
+          this.define(name, { ctype: promiseType, varKind });
+          break;
+        }
+
+        // Promise.reject<T>(error) → Promise_T_E typedef + rejected struct
+        if (init?.kind === 'Call' &&
+            init.callee?.kind === 'Member' &&
+            init.callee.object?.kind === 'Ident' && init.callee.object.name === 'Promise' &&
+            init.callee.prop === 'reject') {
+          const tArg = init.typeArgs?.[0];
+          const innerType = tArg ? this.resolveType(tArg) : 'int32_t';
+          const typeIdent = this.cTypeToIdent(innerType);
+          const errArg = init.args?.[0]?.expr;
+          const errType = errArg ? this.inferType(errArg) : 'TscError';
+          const promiseType = `Promise_${typeIdent}_${errType}`;
+          if (!this._emittedPromiseTypes) this._emittedPromiseTypes = new Set();
+          if (!this._emittedPromiseTypes.has(promiseType)) {
+            this._emittedPromiseTypes.add(promiseType);
+            this._topBlank();
+            this.topLevel.push(`typedef struct { bool _done; ${innerType} _result; bool _ok; ${errType} _error; } ${promiseType};`);
+          }
+          const errC = errArg ? this.exprToC(errArg, lines, depth) : '0';
+          p(`${promiseType} ${name} = { ._done = true, ._ok = false, ._error = ${errC} };`);
+          this.define(name, { ctype: promiseType, varKind });
+          break;
+        }
+
+        // new Promise<T>((resolve, reject) => { ... }) → static resolve/reject pattern
+        if (init?.kind === 'New' && init.name === 'Promise' && init.typeArgs?.length > 0) {
+          const tArg = init.typeArgs[0];
+          const innerType = this.resolveType(tArg);
+          const typeIdent = this.cTypeToIdent(innerType);
+          const promiseType = `Promise_${typeIdent}`;
+          this._emitPromiseTypedef(promiseType, innerType);
+          const lambda = init.args?.[0]?.expr;
+          const lambdaIdx = this.lambdaCount++;
+          const prefix = `_lambda_${lambdaIdx}`;
+          const resolveName = lambda?.params?.[0]?.name ?? 'resolve';
+          const rejectName = lambda?.params?.[1]?.name ?? 'reject';
+          this._topBlank();
+          this.topLevel.push(`static ${innerType} ${prefix}_${typeIdent}_result;`);
+          this.topLevel.push(`static bool ${prefix}_done = false;`);
+          this._topBlank();
+          this.topLevel.push(`static void ${prefix}_resolve(${innerType} v) { ${prefix}_${typeIdent}_result = v; ${prefix}_done = true; }`);
+          this.topLevel.push(`static void ${prefix}_reject(void) { ${prefix}_done = true; }`);
+          this.pushScope();
+          this.define(resolveName, { ctype: 'void', funcName: `${prefix}_resolve`, varKind: 'let' });
+          this.define(rejectName, { ctype: 'void', funcName: `${prefix}_reject`, varKind: 'let' });
+          for (const s of (lambda?.body?.body ?? [])) this.visitStmt(s, lines, depth);
+          this.popScope();
+          p(`${promiseType} ${name} = { ._done = ${prefix}_done, ._result = ${prefix}_${typeIdent}_result, ._ok = true };`);
+          this.define(name, { ctype: promiseType, varKind });
+          break;
         }
 
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'never') {

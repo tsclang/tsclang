@@ -1,0 +1,877 @@
+// async.js — async/generator state machine codegen
+export default {
+
+  _initAsync() {
+    if (!this._asyncFuncs) this._asyncFuncs = new Map();
+    if (!this._generatorFuncs) this._generatorFuncs = new Map();
+  },
+
+  // ─── Return type helpers ──────────────────────────────────────────────────
+
+  // C result type for async _result field.
+  // Returns null for Promise<void> (no _result field).
+  // Returns 'int' for void (placeholder).
+  _asyncRetType(rt) {
+    if (!rt) return 'int';
+    if (rt.kind === 'TypeRef') {
+      if (rt.name === 'Promise') {
+        const inner = rt.typeArgs?.[0];
+        if (!inner || inner.name === 'void') return null;
+        return this.resolveType(inner);
+      }
+      if (rt.name === 'void') return 'int';
+    }
+    return this.resolveType(rt);
+  },
+
+  // ─── Inlinable const detection ────────────────────────────────────────────
+
+  _isInlinableConst(init) {
+    if (!init) return false;
+    if (init.kind === 'Literal') return init.litType === 'number' || init.litType === 'boolean';
+    return init.kind === 'Num' || init.kind === 'Bool';
+  },
+
+  _constLiteralC(init) {
+    if (init.kind === 'Literal') {
+      if (init.litType === 'number') return String(init.value);
+      if (init.litType === 'boolean') return init.value === 'true' || init.value === true ? 'true' : 'false';
+    }
+    if (init.kind === 'Num') return String(init.value);
+    if (init.kind === 'Bool') return init.value ? 'true' : 'false';
+    return null;
+  },
+
+  // ─── Await info ───────────────────────────────────────────────────────────
+
+  _awaitInfoOf(awaitNode) {
+    const expr = awaitNode.expr;
+    if (!expr) return null;
+
+    if (expr.kind === 'Call') {
+      const callee = expr.callee?.kind === 'Ident' ? expr.callee.name : null;
+
+      if (callee === 'sleep') {
+        return { kind: 'sleep', stateType: 'TscSleepAwaitable', pollFn: 'tsc_sleep_poll',
+                 resultCType: null, args: expr.args };
+      }
+      if (expr.callee?.kind === 'Member' &&
+          expr.callee.object?.name === 'Promise' &&
+          expr.callee.prop === 'all') {
+        const items = expr.args?.[0]?.expr?.elems || [];
+        return { kind: 'promise-all', items };
+      }
+      if (callee && this._asyncFuncs?.has(callee)) {
+        const info = this._asyncFuncs.get(callee);
+        return { kind: 'async', name: callee, stateType: info.stateType,
+                 pollFn: info.pollFn, resultCType: info.resultCType, args: expr.args };
+      }
+      if (callee) {
+        return { kind: 'unknown', name: callee,
+                 stateType: `${callee}_state`, pollFn: `${callee}_poll`, resultCType: null };
+      }
+    }
+    return null;
+  },
+
+  // ─── Body scan: fields to promote and inlinable consts ────────────────────
+
+  _scanAsyncBody(params, body) {
+    const paramFields = [];
+    const bodyFields = [];
+    const inlined = new Map();     // name → C literal string
+    const inlinedTypes = new Map(); // name → raw TSclang type name (for error messages)
+    const seen = new Set();
+
+    for (const p of (params || [])) {
+      if (p.rest || p.destructArr) continue;
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); }
+    }
+
+    const walk = (stmts) => {
+      for (const s of stmts || []) {
+        if (!s) continue;
+        if (s.kind === 'VarDecl') {
+          const { varKind, name, typeAnn, init } = s;
+          if (varKind === 'const' && this._isInlinableConst(init) && !seen.has(name)) {
+            inlined.set(name, this._constLiteralC(init));
+            inlinedTypes.set(name, typeAnn?.name ?? 'i32');
+          } else if (!seen.has(name)) {
+            seen.add(name);
+            let ct;
+            if (init?.kind === 'Await') {
+              const ai = this._awaitInfoOf(init);
+              ct = ai?.resultCType || 'int32_t';
+              if (!ct) ct = 'int32_t';
+            } else if (typeAnn) {
+              ct = this.resolveType(typeAnn);
+            } else if (init) {
+              ct = this.inferType(init) || 'int32_t';
+            } else ct = 'int32_t';
+            bodyFields.push({ name, ctype: ct });
+          }
+        }
+        // VarDestructArr (const [x, y] = ...)
+        if (s.kind === 'VarDestructArr') {
+          for (const elem of (s.pattern || [])) {
+            if (!elem || seen.has(elem.name)) continue;
+            seen.add(elem.name);
+            bodyFields.push({ name: elem.name, ctype: 'int32_t' });
+          }
+        }
+        if (s.kind === 'Block') walk(s.body);
+        if (s.kind === 'If') {
+          const c = s.consequent;
+          walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
+          const a = s.alternate;
+          if (a) walk(a?.kind === 'Block' ? a.body : [a]);
+        }
+        if (s.kind === 'TryCatch') {
+          walk(s.body?.body || []);
+          if (s.catches) for (const c of s.catches) walk(c.body?.body || []);
+          if (s.finally) walk(s.finally.body || []);
+        }
+      }
+    };
+
+    walk(body?.kind === 'Block' ? body.body : []);
+    return { paramFields, bodyFields, inlined, inlinedTypes };
+  },
+
+  // Collect await sub-state field descriptors for the struct
+  _collectAwaitStates(body) {
+    const result = [];
+    let awaitIdx = 0;
+    let genIdx = 0;
+
+    const walk = (stmts) => {
+      for (const s of stmts || []) {
+        if (!s) continue;
+        const ae = s.kind === 'VarDecl' && s.init?.kind === 'Await' ? s.init
+                 : s.kind === 'VarDestructArr' && s.init?.kind === 'Await' ? s.init
+                 : s.kind === 'ExprStmt' && s.expr?.kind === 'Await' ? s.expr
+                 : null;
+        if (ae) {
+          const ai = this._awaitInfoOf(ae);
+          if (ai?.kind === 'promise-all') {
+            for (const item of ai.items) {
+              const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+              const sub = callName && this._asyncFuncs?.has(callName)
+                ? this._asyncFuncs.get(callName) : null;
+              result.push({ fieldName: `_await_${awaitIdx++}`,
+                            stateType: sub?.stateType ?? `${callName}_state` });
+            }
+          } else if (ai) {
+            result.push({ fieldName: `_await_${awaitIdx++}`, stateType: ai.stateType,
+                          isUnknown: ai.kind === 'unknown' });
+          }
+        }
+        if (s.kind === 'ForOf' && s.await) {
+          const genName = s.iterable?.callee?.kind === 'Ident' ? s.iterable.callee.name
+                        : s.iterable?.kind === 'Ident' ? s.iterable.name : null;
+          const gi = genName && this._generatorFuncs?.has(genName)
+            ? this._generatorFuncs.get(genName) : null;
+          if (gi) result.push({ fieldName: `_gen_${genIdx++}`, stateType: gi.stateType, isGen: true });
+        }
+        if (s.kind === 'TryCatch') walk(s.body?.body || []);
+      }
+    };
+
+    walk(body?.kind === 'Block' ? body.body : []);
+    return result;
+  },
+
+  // ─── Top-level emitters ───────────────────────────────────────────────────
+
+  _topBlank(arr = this.topLevel) {
+    if (arr.length > 0 && arr[arr.length - 1] !== '') arr.push('');
+  },
+
+  _emitStructMultiline(name, fields) {
+    this._topBlank();
+    this.topLevel.push('typedef struct {');
+    for (const f of fields) this.topLevel.push(`    ${f};`);
+    this.topLevel.push(`} ${name};`);
+  },
+
+  _emitStructCompact(name, fields) {
+    this._topBlank();
+    this.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
+  },
+
+  _emitTopFn(sig, bodyLines) {
+    this._topBlank();
+    this.topLevel.push(`${sig} {`);
+    for (const l of bodyLines) this.topLevel.push(l);
+    this.topLevel.push('}');
+  },
+
+  // ─── emitAsyncFunc ────────────────────────────────────────────────────────
+
+  emitAsyncFunc(node) {
+    this._initAsync();
+    const { name, params, returnType, body } = node;
+
+    // AVR: max 8 async state machines
+    if (this._targetName === 'avr') {
+      this._asyncCount = (this._asyncCount || 0) + 1;
+      if (this._asyncCount > 8) {
+        throw this.error(
+          `TypeError: Too many concurrent async state machines for AVR target: max 8, got ${this._asyncCount}`
+        );
+      }
+    }
+
+    // throws handling: async fn that throws → _result is Result_T_Err
+    const throwsTypes = node.throwsTypes || [];
+    const hasThrows = throwsTypes.length > 0;
+    const throwsKey = hasThrows ? throwsTypes[0].name : null;
+
+    const innerResultCType = this._asyncRetType(returnType);
+    // isVoidReturn: return type is void (no meaningful return value)
+    const isVoidReturn = !returnType
+      || (returnType?.kind === 'TypeRef' && (returnType.name === 'void' || returnType.name === 'Promise'));
+    let resultCType;
+    if (hasThrows) {
+      const innerIdent = isVoidReturn ? 'void' : this.cTypeToIdent(innerResultCType ?? 'int');
+      resultCType = `Result_${innerIdent}_${throwsKey}`;
+      // Emit Result typedef; void returns use _dummy placeholder
+      const innerDecl = isVoidReturn ? 'int _dummy' : `${innerResultCType} value`;
+      this._topBlank();
+      this.topLevel.push(`typedef struct { bool ok; union { ${innerDecl}; ${throwsKey} error; }; } ${resultCType};`);
+    } else {
+      resultCType = innerResultCType;
+    }
+
+    const stateType = `${name}_state`;
+    const pollFn = `${name}_poll`;
+
+    // Ref<T> across await: check if any Ref param is used (Ref types can't cross await)
+    const awaitStatesCount = this._collectAwaitStates(body).length;
+    if (awaitStatesCount > 0) {
+      for (const p of (params || [])) {
+        if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'Ref') {
+          throw this.error(`"Ref<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
+        }
+      }
+    }
+
+    // Scan fields and collect sub-state fields
+    const { paramFields, bodyFields, inlined, inlinedTypes } = this._scanAsyncBody(params, body);
+    const awaitStates = this._collectAwaitStates(body);
+
+    // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
+    if (innerResultCType && innerResultCType !== 'int32_t') {
+      const returnedVars = new Set();
+      const scanReturns = (stmts) => {
+        for (const s of stmts || []) {
+          if (s.kind === 'Return' && s.value?.kind === 'Ident') returnedVars.add(s.value.name);
+          if (s.kind === 'Block') scanReturns(s.body);
+          if (s.kind === 'If') { scanReturns([s.consequent]); if (s.alternate) scanReturns([s.alternate]); }
+          if (s.kind === 'TryCatch') scanReturns(s.body?.body || []);
+        }
+      };
+      scanReturns(body?.kind === 'Block' ? body.body : []);
+      for (const f of bodyFields) {
+        if (f.ctype === 'int32_t' && returnedVars.has(f.name)) f.ctype = innerResultCType;
+      }
+    }
+
+    // Build struct field strings
+    const sFields = ['int32_t _state'];
+    if (resultCType !== null) sFields.push(`${resultCType} _result`);
+    sFields.push('bool _done');
+    for (const f of paramFields) sFields.push(`${f.ctype} ${f.name}`);
+    for (const f of bodyFields) sFields.push(`${f.ctype} ${f.name}`);
+    for (const af of awaitStates) {
+      if (!af.isUnknown) sFields.push(`${af.stateType} ${af.fieldName}`);
+    }
+
+    // Compact struct only for Promise<void> with no user vars (exactly _state + _done)
+    if (sFields.length === 2) {
+      this._emitStructCompact(stateType, sFields);
+    } else {
+      this._emitStructMultiline(stateType, sFields);
+    }
+
+    // Register
+    this._asyncFuncs.set(name, { stateType, pollFn, resultCType, params });
+    this.define(name, {
+      ctype: resultCType ?? 'int', funcName: name,
+      _isAsync: true, _stateType: stateType, _pollFn: pollFn, params,
+    });
+
+    if (!body) return;
+
+    // Check for unknown await targets (no poll function available)
+    const canEmitPoll = awaitStates.every(af => !af.isUnknown);
+    if (!canEmitPoll) return;
+
+    // Build promoted set
+    const promoted = new Set();
+    for (const f of paramFields) promoted.add(f.name);
+    for (const f of bodyFields) promoted.add(f.name);
+
+    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey };
+    this._inAsyncFunc = true;
+
+    const pollLines = this._buildAsyncPoll(body);
+
+    this._inAsyncFunc = false;
+    this._selfCtx = null;
+
+    this._emitTopFn(`static void ${pollFn}(${stateType} *self)`, pollLines);
+
+    // Async main handling
+    if (name === 'main') {
+      this._asyncMainPollFn = pollFn;
+      this._asyncMainStateType = stateType;
+      this._asyncMainIsDesktop = (resultCType === null); // Promise<void>
+    }
+  },
+
+  _buildAsyncPoll(body) {
+    const stmts = body?.kind === 'Block' ? body.body : [];
+    const lines = [];
+    const ctx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
+
+    lines.push('    switch (self->_state) {');
+    lines.push('        case 0:');
+
+    this._emitAsyncStmtList(stmts, lines, ctx, '            ');
+
+    // Implicit done at end of function (if not already terminated by explicit return)
+    if (!ctx.terminated) {
+      lines.push('            self->_done = true;');
+      lines.push('            return;');
+    }
+
+    lines.push('    }');
+    for (const lbl of ctx.loopLabels) lines.push(lbl);
+
+    return lines;
+  },
+
+  _emitAsyncStmtList(stmts, lines, ctx, I) {
+    for (const s of stmts) this._emitAsyncStmt(s, lines, ctx, I);
+  },
+
+  // Emit: self->_state = N; /* fall through */ case N:
+  _emitAsyncTransition(lines, ctx, I) {
+    lines.push(`${I}self->_state = ${ctx.nextCase};`);
+    lines.push(`${I}/* fall through */`);
+    lines.push(`        case ${ctx.nextCase}:`);
+    ctx.nextCase++;
+  },
+
+  // Check for await on a non-async/non-callable expression and throw if found
+  _checkAwaitTarget(awaitNode) {
+    const expr = awaitNode?.expr;
+    if (!expr) return;
+    if (expr.kind === 'Ident') {
+      // Check inlined consts (they're not async)
+      const rawType = this._selfCtx?.inlinedTypes?.get(expr.name);
+      if (rawType !== undefined) {
+        throw this.error(`"await" can only be applied to Promise<T>, got ${rawType}`, awaitNode);
+      }
+      const sym = this.lookup(expr.name);
+      if (sym && !sym._isAsync && sym.varKind) {
+        throw this.error(
+          `"await" can only be applied to Promise<T>, got ${sym.ctype ?? 'unknown'}`, awaitNode);
+      }
+    }
+  },
+
+  _emitAsyncStmt(s, lines, ctx, I) {
+    if (!s) return;
+
+    // ── await in VarDecl ──
+    if (s.kind === 'VarDecl' && s.init?.kind === 'Await') {
+      this._checkAwaitTarget(s.init);
+      const ai = this._awaitInfoOf(s.init);
+      if (!ai) return;
+      const awaitIdx = ctx.awaitIdx++;
+
+      if (ai.kind === 'sleep') {
+        const argC = this._selfE(ai.args?.[0]?.expr);
+        lines.push(`${I}self->_await_${awaitIdx} = tsc_sleep_awaitable(${argC});`);
+      } else {
+        lines.push(`${I}self->_await_${awaitIdx} = (${ai.stateType}){0};`);
+      }
+      this._emitAsyncTransition(lines, ctx, I);
+      lines.push(`${I}${ai.pollFn}(&self->_await_${awaitIdx});`);
+      lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
+      if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+        lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result;`);
+      }
+      // Define var in scope so subsequent expressions can infer its type
+      if (ai.resultCType) this.define(s.name, { ctype: ai.resultCType, varKind: s.varKind });
+      return;
+    }
+
+    // ── await in VarDestructArr (const [x,y] = await Promise.all([...])) ──
+    if (s.kind === 'VarDestructArr' && s.init?.kind === 'Await') {
+      const ai = this._awaitInfoOf(s.init);
+      if (!ai || ai.kind !== 'promise-all') return;
+
+      const baseIdx = ctx.awaitIdx;
+      // Init all sub-states
+      for (let j = 0; j < ai.items.length; j++) {
+        const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
+          ? ai.items[j].expr.callee.name : null;
+        const sub = callName && this._asyncFuncs?.has(callName)
+          ? this._asyncFuncs.get(callName) : null;
+        if (sub) lines.push(`${I}self->_await_${ctx.awaitIdx++} = (${sub.stateType}){0};`);
+      }
+      this._emitAsyncTransition(lines, ctx, I);
+
+      // Poll all + combined done check
+      const notDone = [];
+      for (let j = 0; j < ai.items.length; j++) {
+        const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
+          ? ai.items[j].expr.callee.name : null;
+        const sub = callName && this._asyncFuncs?.has(callName)
+          ? this._asyncFuncs.get(callName) : null;
+        if (sub) {
+          lines.push(`${I}${sub.pollFn}(&self->_await_${baseIdx + j});`);
+          notDone.push(`!self->_await_${baseIdx + j}._done`);
+        }
+      }
+      if (notDone.length) lines.push(`${I}if (${notDone.join(' || ')}) return;`);
+
+      // Assign results to destructured vars
+      for (let j = 0; j < (s.pattern || []).length; j++) {
+        const elem = s.pattern[j];
+        if (!elem) continue;
+        const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
+          ? ai.items[j].expr.callee.name : null;
+        const sub = callName && this._asyncFuncs?.has(callName)
+          ? this._asyncFuncs.get(callName) : null;
+        if (sub && this._selfCtx.promoted.has(elem.name)) {
+          lines.push(`${I}self->${elem.name} = self->_await_${baseIdx + j}._result;`);
+        }
+      }
+      return;
+    }
+
+    // ── await in ExprStmt (no result) ──
+    if (s.kind === 'ExprStmt' && s.expr?.kind === 'Await') {
+      this._checkAwaitTarget(s.expr);
+      const ai = this._awaitInfoOf(s.expr);
+      if (!ai) return;
+      const awaitIdx = ctx.awaitIdx++;
+
+      if (ai.kind === 'sleep') {
+        const argC = this._selfE(ai.args?.[0]?.expr);
+        lines.push(`${I}self->_await_${awaitIdx} = tsc_sleep_awaitable(${argC});`);
+      } else {
+        lines.push(`${I}self->_await_${awaitIdx} = (${ai.stateType}){0};`);
+      }
+      this._emitAsyncTransition(lines, ctx, I);
+      lines.push(`${I}${ai.pollFn}(&self->_await_${awaitIdx});`);
+      lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
+      return;
+    }
+
+    // ── try/catch/finally with await ──
+    if (s.kind === 'TryCatch') {
+      for (const ts of s.body?.body || []) this._emitAsyncStmt(ts, lines, ctx, I);
+      const lastAwaitIdx = ctx.awaitIdx - 1;
+
+      const catchClause = s.catches?.[0];
+      if (catchClause) {
+        const { param, body: catchBody } = catchClause;
+        lines.push(`${I}if (!self->_await_${lastAwaitIdx}._result.ok) {`);
+        if (param) {
+          // param is a string name; typeAnn is on the catchClause directly
+          const pct = catchClause.typeAnn ? this.resolveType(catchClause.typeAnn) : 'void *';
+          lines.push(`${I}    ${pct} ${param} = self->_await_${lastAwaitIdx}._result.error;`);
+        }
+        for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
+        const catchEndsReturn = (catchBody?.body || []).some(cs => cs.kind === 'Return');
+        if (!catchEndsReturn) {
+          lines.push(`${I}    self->_done = true;`);
+          lines.push(`${I}    return;`);
+        }
+        lines.push(`${I}}`);
+      }
+      if (s.finally) {
+        for (const fs of s.finally.body || []) this._emitAsyncRegStmt(fs, lines, I);
+      }
+      return;
+    }
+
+    // ── for await ──
+    if (s.kind === 'ForOf' && s.await) {
+      const genName = s.iterable?.callee?.kind === 'Ident' ? s.iterable.callee.name
+                    : s.iterable?.kind === 'Ident' ? s.iterable.name : null;
+      const gi = genName && this._generatorFuncs?.has(genName)
+        ? this._generatorFuncs.get(genName) : null;
+      if (!gi) return;
+
+      const genIdx = ctx.genIdx++;
+      const genArgs = s.iterable?.kind === 'Call' ? (s.iterable.args || []) : [];
+      const loopCase = ctx.nextCase;
+
+      lines.push(`${I}self->_gen_${genIdx} = (${gi.stateType}){0};`);
+      lines.push(`${I}self->_state = ${loopCase};`);
+      lines.push(`${I}/* fall through */`);
+      lines.push(`        case ${loopCase}: {`);
+      ctx.nextCase++;
+
+      const genArgsC = genArgs.map(a => this._selfE(a.expr)).join(', ');
+      const nextArgs = genArgsC ? `&self->_gen_${genIdx}, ${genArgsC}` : `&self->_gen_${genIdx}`;
+      const nrVar = `_nr_${genIdx}`;
+      lines.push(`${I}    ${gi.resultType} ${nrVar} = ${gi.nextFn}(${nextArgs});`);
+      lines.push(`${I}    if (${nrVar}.done) { self->_done = true; return; }`);
+
+      if (s.binding?.kind === 'Ident') {
+        lines.push(`${I}    const ${gi.valueType} ${s.binding.name} = ${nrVar}.value;`);
+      }
+
+      for (const bs of s.body?.body || []) {
+        const tmp = [];
+        this.visitStmt(bs, tmp, 0);
+        for (const l of tmp) lines.push(`${I}    ${l.trim()}`);
+      }
+
+      lines.push(`${I}    goto case_${loopCase};`);
+      lines.push(`        }`);
+      ctx.loopLabels.push(`case_${loopCase}: ;`);
+      ctx.terminated = true; // loop handles done internally via _nr.done check
+      return;
+    }
+
+    // ── throw (in async throws function) ──
+    if (s.kind === 'Throw' && this._selfCtx?.hasThrows) {
+      lines.push(`${I}self->_result = (${this._selfCtx.resultCType}){.ok = false, .error = ${this._selfE(s.value)}};`);
+      lines.push(`${I}self->_done = true;`);
+      lines.push(`${I}return;`);
+      ctx.terminated = true;
+      return;
+    }
+
+    // ── return ──
+    if (s.kind === 'Return') {
+      if (s.value) lines.push(`${I}self->_result = ${this._selfE(s.value)};`);
+      lines.push(`${I}self->_done = true;`);
+      lines.push(`${I}return;`);
+      ctx.terminated = true;
+      return;
+    }
+
+    // ── regular statement ──
+    this._emitAsyncRegStmt(s, lines, I);
+  },
+
+  // Emit a regular statement (non-VarDecl, non-Return, non-Await) in async context
+  _emitAsyncRegStmt(stmt, lines, I) {
+    if (!stmt) return;
+    if (stmt.kind === 'VarDecl') {
+      const { name, init } = stmt;
+      const ctx = this._selfCtx;
+      if (ctx?.inlined.has(name)) return;
+      if (ctx?.promoted.has(name)) {
+        if (init) lines.push(`${I}self->${name} = ${this._selfE(init)};`);
+      } else {
+        const tmp = [];
+        this.visitStmt(stmt, tmp, 0);
+        for (const l of tmp) lines.push(I + l.trim());
+      }
+    } else if (stmt.kind === 'Return') {
+      const ctx = this._selfCtx;
+      if (stmt.value) {
+        if (ctx?.hasThrows) {
+          // Wrap in Result ok=true
+          lines.push(`${I}self->_result = (${ctx.resultCType}){.ok = true, .value = ${this._selfE(stmt.value)}};`);
+        } else {
+          lines.push(`${I}self->_result = ${this._selfE(stmt.value)};`);
+        }
+      } else if (ctx?.hasThrows) {
+        lines.push(`${I}self->_result = (${ctx.resultCType}){.ok = true};`);
+      }
+      lines.push(`${I}self->_done = true;`);
+      lines.push(`${I}return;`);
+    } else if (stmt.kind === 'Throw') {
+      const ctx = this._selfCtx;
+      if (ctx?.hasThrows) {
+        lines.push(`${I}self->_result = (${ctx.resultCType}){.ok = false, .error = ${this._selfE(stmt.value)}};`);
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      } else {
+        const tmp = [];
+        this.visitStmt(stmt, tmp, 0);
+        for (const l of tmp) lines.push(I + l.trim());
+      }
+    } else {
+      const tmp = [];
+      this.visitStmt(stmt, tmp, 0);
+      for (const l of tmp) lines.push(I + l.trim());
+    }
+  },
+
+  // Evaluate an expression with the current _selfCtx substitution
+  _selfE(expr) {
+    if (!expr) return '0';
+    const r = this.exprToC(expr, [], 0);
+    return r;
+  },
+
+  // ─── emitGeneratorFunc ────────────────────────────────────────────────────
+
+  emitGeneratorFunc(node) {
+    this._initAsync();
+    const { name, params, returnType, body, throwsTypes } = node;
+
+    // Determine yield type
+    let yieldType = 'int32_t';
+    if (returnType?.kind === 'TypeRef') {
+      if (returnType.name === 'Generator') {
+        yieldType = this.resolveType(returnType.typeArgs?.[0]) || 'int32_t';
+      } else {
+        yieldType = this.resolveType(returnType) || 'int32_t';
+      }
+    }
+
+    const throwsNames = [];
+    for (const t of (throwsTypes || [])) {
+      if (t.kind === 'TypeRef') throwsNames.push(t.name);
+    }
+    const hasThrows = throwsNames.length > 0;
+    const errKey = hasThrows ? throwsNames[0] : null;
+    const resultCt = hasThrows
+      ? `Result_${this.cTypeToIdent(yieldType)}_${errKey}` : null;
+
+    const stateType = `${name}_state`;
+    const resultType = `${name}_result`;
+    const nextFn = `${name}_next`;
+
+    // Scan let vars (promoted to struct)
+    const letFields = [];
+    const seenLets = new Set();
+    const walkLets = (stmts) => {
+      for (const s of stmts || []) {
+        if (!s) continue;
+        if (s.kind === 'VarDecl' && s.varKind === 'let' && !seenLets.has(s.name)) {
+          seenLets.add(s.name);
+          const ct = s.typeAnn ? this.resolveType(s.typeAnn)
+                   : s.init ? (this.inferType(s.init) || 'int32_t') : 'int32_t';
+          letFields.push({ name: s.name, ctype: ct });
+        }
+        if (s.kind === 'Block') walkLets(s.body);
+        if (s.kind === 'While') walkLets(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'For') walkLets(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+      }
+    };
+    walkLets(body?.kind === 'Block' ? body.body : []);
+
+    // Emit Result_T_E typedef if needed (before state struct references it)
+    if (hasThrows) {
+      this._topBlank();
+      this.topLevel.push(`typedef struct { bool ok; union { ${yieldType} value; ${errKey} error; }; } ${resultCt};`);
+      // No blank before state struct — keep them together
+    }
+
+    // State struct (compact) — no blank before if we just emitted Result_T_E
+    const stateFields = ['int32_t _state'];
+    for (const f of letFields) stateFields.push(`${f.ctype} ${f.name}`);
+    stateFields.push('bool _done');
+    if (hasThrows) {
+      stateFields.push(`${resultCt} _result`);
+    } else {
+      stateFields.push(`${yieldType} _value`);
+    }
+    if (!hasThrows) this._topBlank();
+    this.topLevel.push(`typedef struct { ${stateFields.join('; ')}; } ${stateType};`);
+
+    // Result struct (compact, no blank before — same block)
+    const resValueType = hasThrows ? resultCt : yieldType;
+    this.topLevel.push(`typedef struct { ${resValueType} value; bool done; } ${resultType};`);
+
+    // Register result struct in class registry for inferType to resolve .value type
+    this.classes.set(resultType, {
+      isStruct: true,
+      fields: [{ name: 'value', ctype: resValueType }, { name: 'done', ctype: 'bool' }],
+    });
+
+    // Register
+    this._generatorFuncs.set(name, { stateType, resultType, nextFn, valueType: yieldType, params, letFields });
+    this.define(name, {
+      ctype: stateType, funcName: name, _isGenerator: true,
+      _stateType: stateType, _resultType: resultType, _nextFn: nextFn,
+      _valueType: yieldType, params,
+    });
+
+    if (!body) return;
+
+    // Build next function signature
+    const paramStrs = (params || []).map(p => {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      return `${ct} ${p.name}`;
+    });
+    const fnSig = `static ${resultType} ${nextFn}(${stateType} *self${paramStrs.length ? ', ' + paramStrs.join(', ') : ''})`;
+
+    // Set up generator self context (let vars promoted)
+    const genPromoted = new Set(letFields.map(f => f.name));
+    this._selfCtx = { promoted: genPromoted, inlined: new Map() };
+
+    const nextLines = this._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
+
+    this._selfCtx = null;
+
+    this._emitTopFn(fnSig, nextLines);
+  },
+
+  _buildGenNext(body, yieldType, resultType, hasThrows, resultCt) {
+    const stmts = body?.kind === 'Block' ? body.body : [];
+    const lines = [];
+    const ctx = { caseNum: 0, loopLabels: [], needTerminal: true };
+
+    const zeroVal = yieldType === 'String' ? '(String){0}'
+                  : yieldType === 'bool' ? 'false' : '0';
+    const doneRet = hasThrows
+      ? `return (${resultType}){(${resultCt}){.ok = false}, true};`
+      : `return (${resultType}){${zeroVal}, true};`;
+
+    lines.push('    switch (self->_state) {');
+    lines.push('        case 0:');
+
+    this._emitGenStmtList(stmts, lines, ctx, '            ', yieldType, resultType, hasThrows, resultCt, zeroVal);
+
+    // If last statement was a yield, the open case needs a terminal done
+    if (ctx.needTerminal) {
+      lines.push(`            self->_done = true;`);
+      lines.push(`            ${doneRet}`);
+    }
+
+    lines.push('    }');
+    for (const lbl of ctx.loopLabels) lines.push(lbl);
+    lines.push(`    ${doneRet}`);
+
+    return lines;
+  },
+
+  _emitGenStmtList(stmts, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal) {
+    for (const s of stmts || []) {
+      this._emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
+    }
+  },
+
+  _emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal) {
+    if (!s) return;
+
+    // Unwrap ExprStmt(Yield(...))
+    if (s.kind === 'ExprStmt' && s.expr?.kind === 'Yield') {
+      this._emitGenStmt(s.expr, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
+      return;
+    }
+
+    if (s.kind === 'Yield') {
+      const val = s.value ? this._selfE(s.value) : zeroVal;
+      if (hasThrows) {
+        lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+        lines.push(`${I}return (${resultType}){(${resultCt}){.ok = true, .value = ${val}}, false};`);
+      } else {
+        lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+        lines.push(`${I}return (${resultType}){${val}, false};`);
+      }
+      ctx.caseNum++;
+      lines.push(`        case ${ctx.caseNum}:`);
+      ctx.needTerminal = true;
+      return;
+    }
+
+    if (s.kind === 'While') {
+      // case for loop condition (falls through from previous case)
+      const loopCase = ctx.caseNum + 1;
+      lines.push(`        case ${loopCase}:`);
+      ctx.caseNum = loopCase;
+      ctx.needTerminal = false;
+      const condC = this._selfE(s.test ?? s.cond);
+      const doneRet = hasThrows
+        ? `return (${resultType}){(${resultCt}){.ok = false}, true};`
+        : `return (${resultType}){${zeroVal}, true};`;
+      lines.push(`${I}if (!(${condC})) { self->_done = true; ${doneRet} }`);
+
+      const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+      let postYieldStmts = [];
+      let yieldFound = false;
+
+      for (const ws of whileBody) {
+        if (!ws) continue;
+        const wsYield = ws.kind === 'Yield' ? ws : (ws.kind === 'ExprStmt' && ws.expr?.kind === 'Yield' ? ws.expr : null);
+        if (wsYield) {
+          yieldFound = true;
+          const val = wsYield.value ? this._selfE(wsYield.value) : zeroVal;
+          if (!hasThrows) {
+            lines.push(`${I}self->_value = ${val};`);
+            lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+            lines.push(`${I}return (${resultType}){self->_value, false};`);
+          } else {
+            lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+            lines.push(`${I}return (${resultType}){(${resultCt}){.ok = true, .value = ${val}}, false};`);
+          }
+          ctx.caseNum++;
+          lines.push(`        case ${ctx.caseNum}:`);
+        } else {
+          if (yieldFound) postYieldStmts.push(ws);
+          else {
+            // pre-yield while body (before first yield)
+            this._emitGenRegStmt(ws, lines, I);
+          }
+        }
+      }
+      for (const ps of postYieldStmts) this._emitGenRegStmt(ps, lines, I);
+
+      // Loop back
+      lines.push(`${I}self->_state = ${loopCase};`);
+      lines.push(`${I}goto case_${loopCase};`);
+      ctx.loopLabels.push(`case_${loopCase}: ;`);
+      return;
+    }
+
+    if (s.kind === 'Return') {
+      if (!s.value) {
+        lines.push(`${I}self->_done = true;`);
+        const doneRet = hasThrows
+          ? `(${resultType}){(${resultCt}){.ok = false}, true}`
+          : `(${resultType}){${zeroVal}, true}`;
+        lines.push(`${I}return ${doneRet};`);
+      }
+      ctx.needTerminal = false;
+      return;
+    }
+
+    if (s.kind === 'Throw') {
+      if (hasThrows) {
+        const errC = this._selfE(s.value);
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return (${resultType}){(${resultCt}){.ok = false, .error = ${errC}}, true};`);
+      }
+      ctx.needTerminal = false;
+      return;
+    }
+
+    this._emitGenRegStmt(s, lines, I);
+  },
+
+  _emitGenRegStmt(stmt, lines, I) {
+    if (!stmt) return;
+    if (stmt.kind === 'VarDecl') {
+      const { varKind, name, typeAnn, init } = stmt;
+      if (varKind === 'let' && this._selfCtx?.promoted.has(name)) {
+        if (init) lines.push(`${I}self->${name} = ${this._selfE(init)};`);
+      } else {
+        const ct = typeAnn ? this.resolveType(typeAnn)
+                 : init ? (this.inferType(init) || 'int32_t') : 'int32_t';
+        const initC = init ? this._selfE(init) : null;
+        lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name};`);
+      }
+    } else {
+      const tmp = [];
+      this.visitStmt(stmt, tmp, 0);
+      for (const l of tmp) lines.push(I + l.trim());
+    }
+  },
+};

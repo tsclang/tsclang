@@ -2,10 +2,10 @@
 
 typedef struct {
     int32_t _state;
+    String _result;
+    bool _done;
     String url;
     String result;
-    bool _done;
-    String _result;
 } fetch_state;
 
 int main(void) {
