@@ -84,9 +84,67 @@ export default {
       if (node.kind === 'ProfileAnnotation') {
         const mTarget = node.content.match(/target\((\w+)\)/);
         if (mTarget) this._targetName = mTarget[1];
-        const mAlloc = node.content.match(/allocator\((\w+)\)/);
-        if (mAlloc) this._allocatorName = mAlloc[1];
+        const mAlloc = node.content.match(/allocator[:(]"?(\w+)"?\)?/);
+        if (mAlloc) this._allocatorName = mAlloc[1]; // 'none', 'static', 'dynamic'
+        const mNoRec = /no_recursion:true/.test(node.content);
+        if (mNoRec) this._noRecursion = true;
+        const mSched = node.content.match(/scheduler:(\w+)/);
+        if (mSched) this._schedulerName = mSched[1]; // 'cooperative'
+        const mRam = node.content.match(/ram_size:(\d+)/);
+        if (mRam) this._ramSize = parseInt(mRam[1]);
+        const mStack = node.content.match(/stack_size:(\d+)/);
+        if (mStack) this._stackSize = parseInt(mStack[1]);
       }
+    }
+
+    // Pre-scan: recursion detection when no_recursion is true
+    if (this._noRecursion) {
+      // Build call graph: funcName → Set of called top-level funcNames
+      const callGraph = new Map();
+      const _collectCalls = (nd, result) => {
+        if (!nd || typeof nd !== 'object') return;
+        if (Array.isArray(nd)) { nd.forEach(x => _collectCalls(x, result)); return; }
+        if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') result.add(nd.callee.name);
+        // Don't recurse into nested function bodies
+        if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
+        for (const v of Object.values(nd)) {
+          if (v && typeof v === 'object') _collectCalls(v, result);
+        }
+      };
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'FuncDecl' && n.body) {
+          const calls = new Set();
+          _collectCalls(n.body, calls);
+          callGraph.set(n.name, calls);
+        }
+      }
+      // Detect cycles via DFS
+      const visited = new Set();
+      const inStack = new Map(); // funcName → index in path
+      const path = [];
+      const _dfs = (fn) => {
+        if (inStack.has(fn)) {
+          const cycleStart = inStack.get(fn);
+          const cycle = path.slice(cycleStart);
+          if (cycle.length === 1) {
+            throw this.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden when no_recursion is true`);
+          } else {
+            const cycleStr = [...cycle, fn].join(' → ');
+            throw this.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden when no_recursion is true`);
+          }
+        }
+        if (visited.has(fn)) return;
+        inStack.set(fn, path.length);
+        path.push(fn);
+        for (const callee of (callGraph.get(fn) ?? [])) {
+          if (callGraph.has(callee)) _dfs(callee);
+        }
+        path.pop();
+        inStack.delete(fn);
+        visited.add(fn);
+      };
+      for (const fn of callGraph.keys()) _dfs(fn);
     }
 
     // Pre-scan: collect all classes used in throws clauses → _throwsClasses
@@ -317,6 +375,75 @@ export default {
           break;
         }
 
+        // @static decorator: emit as compile-time static backing (BSS-friendly)
+        const staticDec = (node.decorators ?? []).find(d => d.name === 'static');
+        if (staticDec && node.init?.kind === 'New' && node.init.name === 'Array') {
+          const capArg = node.init.args?.[0];
+          if (capArg) {
+            const capC = this.exprToC(capArg.expr, [], 0);
+            const et = node.init.typeArgs?.[0] ? this.resolveType(node.init.typeArgs[0]) : 'int32_t';
+            const etId = this.cTypeToIdent(et);
+            const dataVar = `${node.name}_data`;
+            this.topLevel.push(`static ${et} ${dataVar}[${capC}];`);
+            this.topLevel.push(`static struct { ${et} *data; size_t length; size_t capacity; } ${node.name} = {`);
+            this.topLevel.push(`    .data = ${dataVar}, .length = 0, .capacity = ${capC}`);
+            this.topLevel.push(`};`);
+            this.topLevel.push('');
+            const arrName = `Array_${etId}`;
+            this.define(node.name, { ctype: arrName, varKind: node.varKind, elemType: etId, arrElemCType: et, isArray: true, _isStaticArray: true });
+            break;
+          }
+        }
+        if (staticDec && node.typeAnn?.kind === 'TypeFixedArray') {
+          const et = this.resolveType(node.typeAnn.element);
+          const size = node.typeAnn.size;
+          if (this._ramSize != null) {
+            const bytes = size * this._cTypeBytes(et);
+            this._bssUsage = (this._bssUsage ?? 0) + bytes;
+            if (this._bssUsage > this._ramSize) {
+              throw this.error(`TypeError: Static BSS usage (${this._bssUsage} bytes) exceeds ram_size (${this._ramSize} bytes)`);
+            }
+          }
+          const initLines = [];
+          this.visitStmt(node, initLines, 0);
+          // Rewrite the emitted line to be static
+          for (const line of initLines) {
+            const trimmed = line.trim();
+            if (trimmed) this.topLevel.push('static ' + trimmed);
+          }
+          this.topLevel.push('');
+          this.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size });
+          break;
+        }
+        if (staticDec && node.init?.kind === 'New' && node.init.name === 'Map') {
+          const capArg = node.init.args?.[0];
+          if (capArg) {
+            const capC = this.exprToC(capArg.expr, [], 0);
+            const [kt, vt] = (node.init.typeArgs ?? []).map(t => this.resolveType(t));
+            const k = kt ?? 'int32_t';
+            const v = vt ?? 'int32_t';
+            const kId = this.cTypeToIdent(k);
+            const vId = this.cTypeToIdent(v);
+            const smType = `StaticMap_${kId}_${vId}`;
+            if (!this._emittedStaticMaps) this._emittedStaticMaps = new Set();
+            if (!this._emittedStaticMaps.has(smType)) {
+              this._emittedStaticMaps.add(smType);
+              this.addTop(`typedef struct {`);
+              this.addTop(`    ${k} keys[${capC}];`);
+              this.addTop(`    ${v} values[${capC}];`);
+              this.addTop(`    bool used[${capC}];`);
+              this.addTop(`    size_t capacity;`);
+              this.addTop(`    size_t count;`);
+              this.addTop(`} ${smType};`);
+              this.addTop('');
+            }
+            this.topLevel.push(`static ${smType} ${node.name} = {.capacity = ${capC}};`);
+            this.topLevel.push('');
+            this.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}` });
+            break;
+          }
+        }
+
         // Make it a static global only if referenced by a top-level function body
         // (required for C correctness — function can't access main() locals)
         const needsStatic = this._funcRefVars?.has(node.name);
@@ -383,6 +510,31 @@ export default {
       if (!this._genericClasses) this._genericClasses = new Map();
       this._genericClasses.set(name, node);
       return;
+    }
+
+    // Process @embedded.* decorators
+    const inlineDec = decorators?.find(d => d.name === 'embedded.inline');
+    const poolDec   = decorators?.find(d => d.name === 'embedded.pool');
+    const _embeddedTargets = ['avr', 'arm', 'stm32'];
+    const isEmbedded = _embeddedTargets.includes(this._targetName);
+
+    if (inlineDec && !isEmbedded) {
+      throw this.error(`Warning: @embedded.inline on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+    }
+    if (poolDec && !isEmbedded) {
+      throw this.error(`Warning: @embedded.pool on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+    }
+    if (poolDec && isEmbedded) {
+      const poolSizeArg = poolDec.args?.[0];
+      if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
+        throw this.error(`TypeError: @embedded.pool requires a numeric capacity argument; use @embedded.pool(N)`, node);
+      }
+    }
+    if (inlineDec && isEmbedded) {
+      const badMethods = members.filter(m => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
+      if (badMethods.length > 0) {
+        throw this.error(`TypeError: @embedded.inline class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
+      }
     }
 
     // Process @packed and @align decorators
@@ -538,6 +690,72 @@ export default {
     for (const ifaceName of explicitImplements) {
       this.emitVtableConstant(name, ifaceName);
     }
+
+    // @embedded.pool: generate pool array, mask (alloc/drop emitted lazily)
+    if (poolDec && isEmbedded) {
+      this._emitPoolClass(name, poolDec);
+    }
+    // Mark class as inline value type
+    if (inlineDec && isEmbedded) {
+      const cls = this.classes.get(name);
+      if (cls) cls._isInline = true;
+    }
+  },
+
+  _emitPoolClass(name, poolDec) {
+    const poolSize = parseInt(poolDec.args[0].value);
+    const poolVar  = `_${name.toLowerCase()}_pool`;
+    const maskVar  = `_${name.toLowerCase()}_pool_mask`;
+    const optType  = `opt_ref_${name}`;
+    const allocFn  = `${name}_alloc`;
+    const dropFn   = `${name}_drop`;
+    const maskType = poolSize <= 8 ? 'uint8_t' : 'uint16_t';
+
+    // Always emit pool storage
+    this.addTop(`static ${name} ${poolVar}[${poolSize}];`);
+    this.addTop(`static ${maskType} ${maskVar} = 0;`);
+    this.addTop('');
+
+    // Mark in classes map — alloc/drop emitted lazily
+    const cls = this.classes.get(name);
+    if (cls) {
+      cls._isPool = true; cls._poolSize = poolSize; cls._poolOptType = optType;
+      cls._poolAllocFn = allocFn; cls._poolDropFn = dropFn; cls._poolMaskVar = maskVar;
+      cls._poolVar = poolVar; cls._poolMaskType = maskType;
+    }
+  },
+
+  _ensurePoolAlloc(className) {
+    const cls = this.classes.get(className);
+    if (!cls?._isPool || cls._poolAllocEmitted) return;
+    cls._poolAllocEmitted = true;
+    const { _poolOptType: optType, _poolAllocFn: allocFn, _poolVar: poolVar,
+            _poolMaskVar: maskVar, _poolSize: poolSize } = cls;
+    this.addTop(`typedef struct { bool has_value; ${className} *value; int _pool_idx; } ${optType};`);
+    this.addTop('');
+    this.addTop(`static ${optType} ${allocFn}(void) {`);
+    this.addTop(`    for (int _i = 0; _i < ${poolSize}; _i++) {`);
+    this.addTop(`        if (!(${maskVar} & (1 << _i))) {`);
+    this.addTop(`            ${maskVar} |= (1 << _i);`);
+    this.addTop(`            return (${optType}){true, &${poolVar}[_i], _i};`);
+    this.addTop(`        }`);
+    this.addTop(`    }`);
+    this.addTop(`    return (${optType}){false, NULL, -1};`);
+    this.addTop(`}`);
+    this.addTop('');
+  },
+
+  _ensurePoolDrop(className) {
+    const cls = this.classes.get(className);
+    if (!cls?._isPool || cls._poolDropEmitted) return;
+    this._ensurePoolAlloc(className); // drop requires alloc
+    cls._poolDropEmitted = true;
+    const { _poolOptType: optType, _poolDropFn: dropFn, _poolMaskVar: maskVar } = cls;
+    const param = className[0].toLowerCase();
+    this.addTop(`static void ${dropFn}(${optType} ${param}) {`);
+    this.addTop(`    if (${param}.has_value) ${maskVar} &= ~(1 << ${param}._pool_idx);`);
+    this.addTop(`}`);
+    this.addTop('');
   },
 
   emitVtableConstant(className, ifaceName, classNode = null) {
@@ -1019,6 +1237,13 @@ export default {
     }
 
     // Async/generator dispatch — state machine codegen
+    if (node.async || generator) {
+      const hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
+      if (!hasStaticDec && this._allocatorName === 'static') {
+        const kind = node.async && generator ? 'async generator' : node.async ? 'async function' : 'generator';
+        throw this.error(`TypeError: ${kind} '${name}' must be annotated with @static when allocator is "static"`);
+      }
+    }
     if (node.async) { this.emitAsyncFunc(node); return; }
     if (generator)  { this.emitGeneratorFunc(node); return; }
 
@@ -1076,6 +1301,27 @@ export default {
     } else {
       retType = 'void';
     }
+    // Stack size check
+    if (this._stackSize != null && body) {
+      let stackBytes = 0;
+      const _scanStack = (nd) => {
+        if (!nd || typeof nd !== 'object') return;
+        if (Array.isArray(nd)) { nd.forEach(_scanStack); return; }
+        if (nd.kind === 'VarDecl' && nd.typeAnn?.kind === 'TypeFixedArray') {
+          const et = this.resolveType(nd.typeAnn.element);
+          stackBytes += nd.typeAnn.size * this._cTypeBytes(et);
+        }
+        if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
+        for (const v of Object.values(nd)) {
+          if (v && typeof v === 'object') _scanStack(v);
+        }
+      };
+      _scanStack(body);
+      if (stackBytes > this._stackSize) {
+        throw this.error(`Warning: Worst-case stack depth (${stackBytes} bytes) exceeds stack_size (${this._stackSize} bytes) in '${name}()'`);
+      }
+    }
+
     const suffix = node._monoName ? '' : mangleParams(params);
     let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
 

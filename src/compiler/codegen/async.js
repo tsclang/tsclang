@@ -311,8 +311,9 @@ export default {
       if (!af.isUnknown) sFields.push(`${af.stateType} ${af.fieldName}`);
     }
 
-    // Compact struct only for Promise<void> with no user vars (exactly _state + _done)
-    if (sFields.length === 2) {
+    // @static tasks always use compact struct; otherwise compact only for Promise<void> (2 fields)
+    const _hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
+    if (_hasStaticDec || sFields.length === 2) {
       this._emitStructCompact(stateType, sFields);
     } else {
       this._emitStructMultiline(stateType, sFields);
@@ -353,6 +354,16 @@ export default {
       ? ', ' + extraPollParams.map(f => `${f.ctype} ${f.name}`).join(', ')
       : '';
     this._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
+
+    // @static cooperative task: emit static instance, register for main scheduler
+    const hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
+    if (hasStaticDec && this._schedulerName === 'cooperative') {
+      this.topLevel.push('');
+      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+      if (!this._staticTasks) this._staticTasks = [];
+      this._staticTasks.push({ name, stateType, pollFn });
+      return;
+    }
 
     // Async main handling
     if (name === 'main') {
@@ -735,12 +746,13 @@ export default {
     }
 
     // State struct (compact) — no blank before if we just emitted Result_T_E
+    const isVoidYield = yieldType === 'void';
     const stateFields = ['int32_t _state'];
     for (const f of letFields) stateFields.push(`${f.ctype} ${f.name}`);
     stateFields.push('bool _done');
     if (hasThrows) {
       stateFields.push(`${resultCt} _result`);
-    } else {
+    } else if (!isVoidYield) {
       stateFields.push(`${yieldType} _value`);
     }
     if (!hasThrows) this._topBlank();
@@ -748,12 +760,15 @@ export default {
 
     // Result struct (compact, no blank before — same block)
     const resValueType = hasThrows ? resultCt : yieldType;
-    this.topLevel.push(`typedef struct { ${resValueType} value; bool done; } ${resultType};`);
+    const resultField = isVoidYield ? 'int _dummy' : `${resValueType} value`;
+    this.topLevel.push(`typedef struct { ${resultField}; bool done; } ${resultType};`);
 
     // Register result struct in class registry for inferType to resolve .value type
     this.classes.set(resultType, {
       isStruct: true,
-      fields: [{ name: 'value', ctype: resValueType }, { name: 'done', ctype: 'bool' }],
+      fields: isVoidYield
+        ? [{ name: '_dummy', ctype: 'int' }, { name: 'done', ctype: 'bool' }]
+        : [{ name: 'value', ctype: resValueType }, { name: 'done', ctype: 'bool' }],
     });
 
     // Register
@@ -782,6 +797,13 @@ export default {
     this._selfCtx = null;
 
     this._emitTopFn(fnSig, nextLines);
+
+    // @static generator: emit static instance
+    const _hasStaticDecGen = (node.decorators ?? []).some(d => d.name === 'static');
+    if (_hasStaticDecGen) {
+      this.topLevel.push('');
+      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+    }
   },
 
   _buildGenNext(body, yieldType, resultType, hasThrows, resultCt) {

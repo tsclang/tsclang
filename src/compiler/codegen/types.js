@@ -348,6 +348,10 @@ export default {
         if (node.callee.kind === 'Member') {
           const obj = node.callee.object;
           const prop = node.callee.prop;
+          // Pool class static .alloc() → opt_ref_ClassName
+          if (obj.kind === 'Ident' && prop === 'alloc' && this.classes.get(obj.name)?._isPool) {
+            return `opt_ref_${obj.name}`;
+          }
           if (obj.kind === 'Ident' && obj.name === 'performance') return 'double';
           if (obj.kind === 'Ident' && obj.name === 'Math') {
             if (prop === 'clz32' || prop === 'imul') return 'int32_t';
@@ -589,6 +593,11 @@ export default {
   // ----------------------------------------------------------------
   // Utility
   // ----------------------------------------------------------------
+  _cTypeBytes(ct) {
+    const m = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1,'size_t':4 };
+    return m[ct] ?? 4;
+  },
+
   cTypeToIdent(ctype) {
     // Map C type to a valid identifier suffix
     const m = {

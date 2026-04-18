@@ -2,7 +2,21 @@
 export default {
   visitBlock(block, lines, depth) {
     this.pushScope();
+    const blockPoolVars = [];
+    const prevPoolVars = this._currentBlockPoolVars;
+    this._currentBlockPoolVars = blockPoolVars;
     for (const s of block.body) this.visitStmt(s, lines, depth);
+    // Auto-drop pool vars at block exit (reverse order)
+    const I = ' '.repeat(this.indent * depth);
+    for (let i = blockPoolVars.length - 1; i >= 0; i--) {
+      const { name, className } = blockPoolVars[i];
+      const cls = this.classes.get(className);
+      if (cls?._isPool) {
+        this._ensurePoolDrop(className);
+        lines.push(`${I}${cls._poolDropFn}(${name});`);
+      }
+    }
+    this._currentBlockPoolVars = prevPoolVars;
     this.popScope();
   },
 
@@ -233,6 +247,9 @@ export default {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
+            if (this._allocatorName === 'none' || this._allocatorName === 'static') {
+              throw this.error(`TypeError: 'new Shared<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
+            }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
             this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
             this._registerCleanup(`tsc_arc_release(${name})`);
@@ -404,10 +421,14 @@ export default {
             break;
           }
         }
-        // Fat-pointer assignment: let x: Interface = concreteVar
-        if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name) && init?.kind === 'Ident') {
+        // Fat-pointer assignment: let x: Interface = concreteVar  OR  let x: Interface = (concreteVar as Interface)
+        if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {
           const ifaceName = typeAnn.name;
-          const argName = init.name;
+          // Unwrap cast: (concreteVar as Interface) → concreteVar
+          const innerInit2 = (init?.kind === 'Cast' && init.castType?.kind === 'TypeRef' && init.castType.name === ifaceName) ? init.expr : init;
+          if (innerInit2?.kind !== 'Ident') { /* fall through */ }
+          else {
+          const argName = innerInit2.name;
           const argSym = this.lookup(argName);
           const argClass = argSym?.ctype ? this.classes.get(argSym.ctype) : null;
           if (argClass && !this.interfaces.has(argSym.ctype)) {
@@ -421,6 +442,7 @@ export default {
             this.define(name, { ctype: ifaceName, varKind });
             break;
           }
+          } // end if innerInit2?.kind === 'Ident'
         }
         let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'double');
         // Reading a volatile variable into a local gives a plain (non-volatile) type
@@ -477,6 +499,13 @@ export default {
           const parsedNull = this._lastOptIsNull ?? false;
           this._lastOptIsNull = undefined;
           this.define(name, { ctype, varKind, optIsNull: isNullInit || atNonNeg || emptyPop || parsedNull });
+          // Track pool vars for auto-drop at block exit
+          if (ctype?.startsWith('opt_ref_') && this._currentBlockPoolVars) {
+            const _pcls2 = ctype.slice(8);
+            if (this.classes.get(_pcls2)?._isPool) {
+              this._currentBlockPoolVars.push({ name, className: _pcls2 });
+            }
+          }
           break;
         }
 
@@ -497,10 +526,14 @@ export default {
           const size = typeAnn.size;
           if (init?.kind === 'ArrayLit') {
             const elems = this.arrayLitToC(init, et, lines, depth);
-            if (elems.length !== size) {
+            if (elems.length === 1) {
+              // Single-element: C fill/zero-init shorthand (e.g. [0] → {0})
+              p(`${et} ${name}[${size}] = {${elems[0]}};`);
+            } else if (elems.length !== size) {
               throw this.error(`array literal has ${elems.length} elements but type ${this.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
+            } else {
+              p(`${et} ${name}[${size}] = {${elems.join(', ')}};`);
             }
-            p(`${et} ${name}[${size}] = {${elems.join(', ')}};`);
           } else if (init) {
             const initC = this.exprToC(init, lines, depth);
             p(`${et} ${name}[${size}] = ${initC};`);
@@ -871,6 +904,13 @@ export default {
                             typeAnn.typeArgs?.[0]?.name === 'string';
         this.define(name, { ctype, varKind, constValue, initNode: init,
                             ...(isStringRef ? { isStringRef: true } : {}) });
+        // Track pool vars for auto-drop at block exit
+        if (ctype?.startsWith('opt_ref_') && this._currentBlockPoolVars) {
+          const _pcls = ctype.slice(8);
+          if (this.classes.get(_pcls)?._isPool) {
+            this._currentBlockPoolVars.push({ name, className: _pcls });
+          }
+        }
         break;
       }
 
@@ -1106,7 +1146,9 @@ export default {
             const optSide = nullSide === 'right' ? node.test.left : node.test.right;
             if (optSide.kind === 'Ident') {
               const sym = this.lookup(optSide.name);
-              if (sym?.ctype?.startsWith('opt_')) narrowVar = optSide.name;
+              // Pool opt_ref types: don't narrow (member access routed via .value-> in expr.js)
+              const isPool = sym?.ctype?.startsWith('opt_ref_') && this.classes.get(sym.ctype.slice(8))?._isPool;
+              if (sym?.ctype?.startsWith('opt_') && !isPool) narrowVar = optSide.name;
               else if (sym?.isSharedUpgrade) upgradeReleaseVar = optSide.name;
             }
           }

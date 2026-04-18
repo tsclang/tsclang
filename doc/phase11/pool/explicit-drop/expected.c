@@ -1,10 +1,10 @@
 #include "runtime.h"
 
 typedef struct { int32_t value; } Gem;
+typedef struct { bool has_value; Gem *value; int _pool_idx; } opt_ref_Gem;
+
 static Gem _gem_pool[4];
 static uint8_t _gem_pool_mask = 0;
-
-typedef struct { bool has_value; Gem *value; int _pool_idx; } opt_ref_Gem;
 
 static opt_ref_Gem Gem_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {

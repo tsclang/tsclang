@@ -12,6 +12,12 @@ export default {
 
     // new Map<K,V>() → tsc_map_create_K_V()
     if (name === 'Map') {
+      if (this._allocatorName === 'static' && !args[0]) {
+        const [kt2, vt2] = (node.typeArgs ?? []).map(t => this.resolveType(t));
+        const k2 = kt2 ? this.ctypeToTsName(kt2) : 'string';
+        const v2 = vt2 ? this.ctypeToTsName(vt2) : 'i32';
+        throw this.error(`TypeError: 'new Map<${k2}, ${v2}>()' requires a capacity argument when allocator is "static"; use 'new Map<${k2}, ${v2}>(N)'`);
+      }
       const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
       const k = kt ? this.cTypeToIdent(kt) : 'string';
       const v = vt ? this.cTypeToIdent(vt) : 'i32';
@@ -25,6 +31,11 @@ export default {
 
     // new Array<T>(N) or new Array(N) — heap-allocated array
     if (name === 'Array') {
+      if (this._allocatorName === 'static' && !args[0]) {
+        const et2 = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
+        const tsName = this.ctypeToTsName(et2);
+        throw this.error(`TypeError: 'new Array<${tsName}>()' requires a capacity argument when allocator is "static"; use 'new Array<${tsName}>(N)'`);
+      }
       // Determine element type from type args or annotation context
       let et = 'int32_t';
       if (node.typeArgs?.[0]) et = this.resolveType(node.typeArgs[0]);
@@ -38,8 +49,10 @@ export default {
 
     // new Shared<T>()
     if (name === 'Shared') {
-      if (this._allocatorName === 'none') {
-        throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+      if (this._allocatorName === 'none' || this._allocatorName === 'static') {
+        const t2 = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
+        const tsName = this.ctypeToTsName(t2);
+        throw this.error(`TypeError: 'new Shared<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
       }
       const t = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
       return `tsc_arc_alloc(sizeof(${t}))`;
@@ -101,6 +114,10 @@ export default {
     // Known class with constructor
     const cls = this.classes.get(name);
     if (cls) {
+      // allocator-none: no heap allocation via new (except @embedded.inline which is stack-allocated)
+      if (this._allocatorName === 'none' && !cls._isInline) {
+        throw this.error(`TypeError: Heap allocation ('new ${name}()') is not allowed when allocator is "none"`);
+      }
       const hasCtor = cls.methods?.some(m => m.name === 'constructor');
       // Suppress const for class instances unless ALL fields are readonly
       const allReadonly = cls.fields?.length > 0 &&

@@ -1,19 +1,29 @@
 #include "runtime.h"
 
 typedef struct { int32_t _state; int _result; bool _done; } taskA_state;
+
 static void taskA_poll(taskA_state *self) {
     switch (self->_state) {
-        case 0: printf("A\n"); self->_done = true; return;
+        case 0:
+            printf("A\n");
+            self->_done = true;
+            return;
     }
 }
+
 static taskA_state _taskA_instance;
 
 typedef struct { int32_t _state; int _result; bool _done; } taskB_state;
+
 static void taskB_poll(taskB_state *self) {
     switch (self->_state) {
-        case 0: printf("B\n"); self->_done = true; return;
+        case 0:
+            printf("B\n");
+            self->_done = true;
+            return;
     }
 }
+
 static taskB_state _taskB_instance;
 
 int main(void) {

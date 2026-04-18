@@ -154,6 +154,24 @@ class Context {
         parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
       }
       parts.push(...this.mainStmts.map(s => s.startsWith('#') ? s : this.ind() + s));
+      // Cooperative scheduler loop for @static tasks
+      if (this._staticTasks?.length) {
+        const I = this.ind();
+        if (this._staticTasks.length === 1) {
+          const t = this._staticTasks[0];
+          parts.push(`${I}while (!_${t.name}_instance._done) {`);
+          parts.push(`${I}    ${t.pollFn}(&_${t.name}_instance);`);
+          parts.push(`${I}}`);
+        } else {
+          const cond = this._staticTasks.map(t => `!_${t.name}_instance._done`).join(' || ');
+          parts.push(`${I}while (${cond}) {`);
+          for (const t of this._staticTasks) {
+            parts.push(`${I}    if (!_${t.name}_instance._done) ${t.pollFn}(&_${t.name}_instance);`);
+          }
+          parts.push(`${I}}`);
+        }
+      }
+
       // Async main bootstrap
       if (this._asyncMainPollFn) {
         const embeddedTargets = ['avr', 'arm', 'stm32'];

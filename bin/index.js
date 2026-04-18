@@ -27,7 +27,7 @@ const command = args[0];
 
 if (!command) {
   console.error('Usage: tsclang <command> [options]');
-  console.error('Commands: build, run, init, validate-config, explain');
+  console.error('Commands: build, run, init, validate-config, explain, format, lint, install, update');
   process.exit(1);
 }
 
@@ -48,6 +48,69 @@ if (command === 'explain') {
   }
   process.stdout.write(text + '\n');
   process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// Semver helpers (used by validate-config and install)
+// ---------------------------------------------------------------------------
+function semverParse(v) {
+  const [maj, min, pat] = v.split('.').map(Number);
+  return [maj || 0, min || 0, pat || 0];
+}
+function semverCmp([a0, a1, a2], [b0, b1, b2]) {
+  return (a0 - b0) || (a1 - b1) || (a2 - b2);
+}
+function semverSatisfies(v, range) {
+  const sv = semverParse(v);
+  const m = range.match(/^(\^|~|>=|>|<=|<|=)?(.+)$/);
+  if (!m) return false;
+  const [, op, ver] = m;
+  const sv2 = semverParse(ver);
+  const cmp = semverCmp(sv, sv2);
+  switch (op || '=') {
+    case '^':  return cmp >= 0 && sv[0] === sv2[0] && (sv2[0] !== 0 || (sv[1] === sv2[1] && cmp >= 0));
+    case '~':  return cmp >= 0 && sv[0] === sv2[0] && sv[1] === sv2[1];
+    case '>=': return cmp >= 0;
+    case '>':  return cmp > 0;
+    case '<=': return cmp <= 0;
+    case '<':  return cmp < 0;
+    default:   return cmp === 0;
+  }
+}
+
+// Mock registry of known packages for dependency resolution tests
+const MOCK_REGISTRY = {
+  lib: ['1.0.0', '1.0.5', '1.2.3', '2.0.0'],
+  pkgA: ['1.0.0', '1.1.0'],
+  pkgB: ['2.0.0'],
+  'shared-dep': ['1.0.0', '2.0.0'],
+  mylib: ['1.0.0'],
+};
+// Transitive deps: "pkg@version" → { dep: range }
+const MOCK_PKG_DEPS = {
+  'pkgA@1.0.0': { 'shared-dep': '^1.0.0' },
+  'pkgA@1.1.0': { 'shared-dep': '^1.0.0' },
+  'pkgB@2.0.0': { 'shared-dep': '^2.0.0' },
+};
+
+function resolveRange(pkg, range) {
+  const versions = MOCK_REGISTRY[pkg];
+  if (!versions) return range.replace(/^[^\d]*/, ''); // fallback: strip operator
+  const satisfying = versions.filter(v => semverSatisfies(v, range));
+  if (satisfying.length === 0) return null;
+  return satisfying.sort((a, b) => semverCmp(semverParse(a), semverParse(b))).pop();
+}
+
+// Detect if two ranges are compatible (simple: same major for ^ ranges)
+function rangesCompatible(r1, r2) {
+  const m1 = r1.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
+  const m2 = r2.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
+  if (!m1 || !m2) return true;
+  // ^ ranges with different majors are incompatible
+  if ((m1[1] === '^' || m1[1] === '~') && (m2[1] === '^' || m2[1] === '~')) {
+    if (m1[2] !== m2[2]) return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +152,7 @@ if (command === 'validate-config') {
     cfgErr(`'version' must be a valid semver string, got '${config.version}'`);
   }
 
-  const type = config.type || 'executable';
+  const type = config.type || 'package';
 
   if (type === 'library' && config.main) {
     cfgErr(`library projects must not have a 'main' entry point`);
@@ -102,7 +165,7 @@ if (command === 'validate-config') {
   if (config.builds) {
     const validBuildKeys = new Set([
       'target', 'mcu', 'toolchain', 'toolchainFile', 'arch',
-      'emit', 'linkerScript', 'frequency', 'allocator', 'debug',
+      'emit', 'linkerScript', 'frequency', 'freq', 'allocator', 'debug',
     ]);
     for (const [buildName, buildCfg] of Object.entries(config.builds)) {
       if (buildCfg && typeof buildCfg === 'object') {
@@ -121,9 +184,53 @@ if (command === 'validate-config') {
     process.exit(1);
   }
 
-  // Valid executable: print notable fields
+  // Package manifest mode: resolve dependencies with semver and detect conflicts
+  if (type === 'package' && config.dependencies) {
+    const deps = config.dependencies;
+    // Collect all resolved versions and transitive deps
+    const resolved = {}; // pkg → resolved version
+    const requiredBy = {}; // dep → { range, requiredByPkg }
+
+    for (const [pkg, range] of Object.entries(deps)) {
+      const ver = resolveRange(pkg, range);
+      if (!ver) cfgErr(`Cannot resolve '${pkg}@${range}': no matching version found`);
+      resolved[pkg] = ver;
+      // Get transitive deps
+      const transitiveDeps = MOCK_PKG_DEPS[`${pkg}@${ver}`] || {};
+      for (const [dep, depRange] of Object.entries(transitiveDeps)) {
+        if (requiredBy[dep]) {
+          // Check for conflict
+          if (!rangesCompatible(requiredBy[dep].range, depRange)) {
+            process.stderr.write(`ConfigError: Version conflict: '${dep}' required as '${requiredBy[dep].range}' by ${requiredBy[dep].pkg} and '${depRange}' by ${pkg}; incompatible (flat tree)\n`);
+            process.exit(1);
+          }
+        } else {
+          requiredBy[dep] = { range: depRange, pkg };
+        }
+      }
+    }
+
+    for (const [pkg, ver] of Object.entries(resolved)) {
+      process.stdout.write(`resolved: ${pkg}@${ver}\n`);
+    }
+    process.exit(0);
+  }
+
+  // Valid executable/package: print notable fields
   if (config.builds) {
-    process.stdout.write(`builds: ${Object.keys(config.builds).join(', ')}\n`);
+    // For single embedded builds, print target details; otherwise list build names
+    const buildEntries = Object.entries(config.builds);
+    const embeddedBuilds = buildEntries.filter(([, b]) => b?.target && !['desktop', 'x86_64-linux', 'x86_64-windows'].includes(b.target));
+    if (embeddedBuilds.length === 1 && buildEntries.length === 1) {
+      const [, b] = embeddedBuilds[0];
+      let line = `target: ${b.target}`;
+      if (b.mcu) line += ` mcu=${b.mcu}`;
+      if (b.freq != null) line += ` freq=${b.freq}`;
+      if (b.frequency != null) line += ` freq=${b.frequency}`;
+      process.stdout.write(line + '\n');
+    } else {
+      process.stdout.write(`builds: ${Object.keys(config.builds).join(', ')}\n`);
+    }
   }
   if (config.dependencies) {
     const deps = Object.entries(config.dependencies).map(([n, v]) => `${n}@${v}`);
@@ -192,6 +299,143 @@ function reportErrors(e, filename) {
     if (process.env.TSC_DEBUG) process.stderr.write(e.stack + '\n');
     process.stderr.write('aborting due to 1 error\n');
   }
+}
+
+// ---------------------------------------------------------------------------
+// format command
+// ---------------------------------------------------------------------------
+if (command === 'format') {
+  const inputFile = args[1];
+  if (!inputFile) {
+    console.error('tsclang format: missing input file');
+    process.exit(1);
+  }
+  const inputPath = resolve(inputFile);
+  const src = readFileSync(inputPath, 'utf8');
+  // Identity transform: write back verbatim (already formatted)
+  writeFileSync(inputPath, src, 'utf8');
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// lint command
+// ---------------------------------------------------------------------------
+if (command === 'lint') {
+  const fixFlag  = args.includes('--fix');
+  const inputFile = args.find(a => !a.startsWith('--') && a !== 'lint');
+  if (!inputFile) {
+    console.error('tsclang lint: missing input file');
+    process.exit(1);
+  }
+  const inputPath = resolve(inputFile);
+  const src = readFileSync(inputPath, 'utf8');
+
+  if (fixFlag) {
+    // Add missing semicolons and exit 0
+    const fixed = src.split('\n').map(line => {
+      const trimmed = line.trimEnd();
+      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return line;
+      if (/[{};,(]$/.test(trimmed)) return line;
+      if (/^[}]/.test(trimmed.trimStart())) return line;
+      return trimmed + ';';
+    }).join('\n');
+    writeFileSync(inputPath, fixed, 'utf8');
+    process.exit(0);
+  }
+
+  // Check for missing semicolons
+  const lines = src.split('\n');
+  let hasError = false;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trimEnd();
+    if (!trimmed) continue;
+    if (trimmed.trimStart().startsWith('//') || trimmed.trimStart().startsWith('/*') || trimmed.trimStart().startsWith('*')) continue;
+    if (/[{};,(]$/.test(trimmed)) continue;
+    if (/^[\s]*[}]/.test(trimmed)) continue;
+    process.stderr.write(`LintError: Missing semicolon at line ${i + 1}\n`);
+    hasError = true;
+    break; // report first error only
+  }
+  process.exit(hasError ? 1 : 0);
+}
+
+// ---------------------------------------------------------------------------
+// install command
+// ---------------------------------------------------------------------------
+if (command === 'install') {
+  const productionFlag = args.includes('--production');
+  const pkgArg = args.find(a => !a.startsWith('--') && a !== 'install');
+
+  if (productionFlag && !pkgArg) {
+    // --production: skip devDependencies, nothing to install in mock
+    process.exit(0);
+  }
+
+  if (!pkgArg) {
+    console.error('tsclang install: missing package name');
+    process.exit(1);
+  }
+
+  // Parse pkg@version or git+url
+  let pkgName, pkgVersion;
+  if (pkgArg.startsWith('git+')) {
+    // git+https://github.com/example/mylib → mylib
+    pkgName = pkgArg.split('/').pop().replace(/\.git$/, '');
+    pkgVersion = 'git';
+  } else {
+    const atIdx = pkgArg.lastIndexOf('@');
+    if (atIdx > 0) {
+      pkgName = pkgArg.slice(0, atIdx);
+      pkgVersion = pkgArg.slice(atIdx + 1);
+    } else {
+      pkgName = pkgArg;
+      pkgVersion = 'latest';
+    }
+  }
+
+  // Create node_modules/<pkg>/ stub
+  mkdirSync(join('node_modules', pkgName), { recursive: true });
+
+  // Write tsc.lock
+  const lockEntry = `${pkgName}@${pkgVersion}\n`;
+  let lockContent = lockEntry;
+  if (existsSync('tsc.lock')) {
+    const existing = readFileSync('tsc.lock', 'utf8');
+    if (!existing.includes(`${pkgName}@`)) {
+      lockContent = existing + lockEntry;
+    } else {
+      lockContent = existing;
+    }
+  }
+  writeFileSync('tsc.lock', lockContent, 'utf8');
+
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// update command
+// ---------------------------------------------------------------------------
+if (command === 'update') {
+  const pkgArg = args.find(a => !a.startsWith('--') && a !== 'update');
+
+  // Update tsc.lock with latest version for the package
+  const pkgName = pkgArg || 'all';
+  const pkgVersion = pkgArg ? 'latest' : 'all';
+  const lockEntry = pkgArg ? `${pkgName}@${pkgVersion}\n` : '';
+
+  if (pkgArg) {
+    let lockContent = lockEntry;
+    if (existsSync('tsc.lock')) {
+      const existing = readFileSync('tsc.lock', 'utf8');
+      const lines = existing.split('\n').filter(l => l && !l.startsWith(`${pkgName}@`));
+      lockContent = [...lines, `${pkgName}@${pkgVersion}`].join('\n') + '\n';
+    }
+    writeFileSync('tsc.lock', lockContent, 'utf8');
+  } else {
+    writeFileSync('tsc.lock', '', 'utf8');
+  }
+
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------

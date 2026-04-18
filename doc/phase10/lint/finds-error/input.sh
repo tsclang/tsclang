@@ -1,0 +1,1 @@
+tsclang lint nosemi.tsc

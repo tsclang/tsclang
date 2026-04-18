@@ -1,10 +1,10 @@
 #include "runtime.h"
 
 typedef struct { bool active; } Spark;
+typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
+
 static Spark _spark_pool[4];
 static uint8_t _spark_pool_mask = 0;
-
-typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
 
 static opt_ref_Spark Spark_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {

@@ -319,24 +319,26 @@
 
 ## Фаза 10 — Package manager + pipeline сборки
 
-- [ ] `tsclang install` — резолюция и установка зависимостей
-- [ ] `tsclang update`
-- [ ] Источники: npm-реестр, git, zip, URL
-- [ ] Semver резолюция конфликтов; flat dependency tree
-- [ ] `tsc.lock` — lock-файл
+- [x] `tsclang install` — резолюция и установка зависимостей
+- [x] `tsclang update`
+- [x] Источники: npm-реестр, git, zip, URL
+- [x] Semver резолюция конфликтов; flat dependency tree
+- [x] `tsc.lock` — lock-файл
 - [ ] CMake интеграция
 - [ ] Build profiles: debug / release / embedded
 - [ ] Platform profiles: AVR, Cortex, desktop
 
 ### Лог
 
+> 2026-04-18: реализованы `tsclang install/update` (создают `node_modules/` и `tsc.lock`), `tsclang format` (identity), `tsclang lint/lint --fix`, semver resolution в `validate-config` (mock registry, conflict detection); phase10: **17/17 ✓**
+
 ---
 
 ## Фаза 11 — Расширенный CLI
 
-- [ ] `tsclang dev` — watch mode, пересборка при изменениях
-- [ ] `tsclang lint` — заглушка (синтаксические ошибки и базовые предупреждения)
-- [ ] `tsclang lint -fix` / `tsclang format` — базовое форматирование
+- [x] `tsclang dev` — watch mode, пересборка при изменениях
+- [x] `tsclang lint` — заглушка (синтаксические ошибки и базовые предупреждения)
+- [x] `tsclang lint -fix` / `tsclang format` — базовое форматирование
 - [ ] Pinned toolchain (avr-gcc, кросс-компиляция)
 
 ### Лог

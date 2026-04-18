@@ -346,6 +346,19 @@ export default {
         }
       }
     };
+    // drop(x) → T_drop(x) for pool types
+    if (callee.kind === 'Ident' && callee.name === 'drop') {
+      const argNode = args[0]?.expr;
+      if (argNode) {
+        const argSym = argNode.kind === 'Ident' ? this.lookup(argNode.name) : null;
+        const argType = argSym?.ctype ?? this.inferType(argNode);
+        const _pcn = argType?.startsWith('opt_ref_') ? argType.slice(8) : null;
+        if (_pcn && this.classes.get(_pcn)?._isPool) {
+          this._ensurePoolDrop(_pcn);
+          return `${this.classes.get(_pcn)._poolDropFn}(${this.exprToC(argNode, lines, depth)})`;
+        }
+      }
+    }
     if (callee.kind === 'Ident' && callee.name === 'parseFloat') {
       // With explicit f64 type annotation, use panic version returning double
       if (this._expectedType === 'double') {
@@ -1119,6 +1132,18 @@ export default {
       trimEnd:     () => `tsc_string_trim_end(${objC})`,
     };
 
+    // StaticMap_* methods → tsc_staticmap_* with pointer
+    const _smSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (_smSym?._isStaticMap) {
+      const sfx = _smSym._smSuffix; // e.g. "u8_i32"
+      const varName = baseObject.name;
+      if (prop === 'set')    return `tsc_staticmap_set_${sfx}(&${varName}, ${argsC})`;
+      if (prop === 'get')    return `tsc_staticmap_get_${sfx}(&${varName}, ${argsC})`;
+      if (prop === 'has')    return `tsc_staticmap_has_${sfx}(&${varName}, ${argsC})`;
+      if (prop === 'delete') return `tsc_staticmap_delete_${sfx}(&${varName}, ${argsC})`;
+      if (prop === 'clear')  return `tsc_staticmap_clear_${sfx}(&${varName})`;
+    }
+
     // Map_* methods → explicit C function calls
     const objType2 = (baseObject.kind === 'Ident' ? this.lookup(baseObject.name)?.ctype : null)
       ?? this.inferType(baseObject);
@@ -1195,6 +1220,19 @@ export default {
           !objType5.startsWith('opt_') && objType5 !== 'void') {
         const etId5 = this.cTypeToIdent(objType5);
         return `tsc_${etId5}_to_string(${objC})`;
+      }
+    }
+
+    // Pool class static calls: ClassName.alloc() → ensure alloc fn emitted + call it
+    if (baseObject.kind === 'Ident' && this.classes.has(baseObject.name)) {
+      const poolDef = this.classes.get(baseObject.name);
+      if (poolDef?._isPool && prop === 'alloc') {
+        this._ensurePoolAlloc(baseObject.name);
+        return `${poolDef._poolAllocFn}()`;
+      }
+      if (poolDef?._isPool && prop === 'drop') {
+        this._ensurePoolDrop(baseObject.name);
+        return `${poolDef._poolDropFn}(${argsC})`;
       }
     }
 

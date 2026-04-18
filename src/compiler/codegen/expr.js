@@ -157,6 +157,10 @@ export default {
         if (sym?.rest && node.prop === 'length') {
           return sym.countVar ?? `${node.object.name}_count`;
         }
+        // Fixed-size array: .length → compile-time constant
+        if (sym?.isFixedArray && node.prop === 'length') {
+          return `(size_t)${sym.arraySize}`;
+        }
         // Enum member access: Direction.North → Direction_North
         if (node.object.kind === 'Ident') {
           const enumDef = this.classes.get(node.object.name);
@@ -169,6 +173,21 @@ export default {
             if (field) {
               const objC = this.exprToC(node.object, lines, depth);
               return `${objC}.${field.name}`;
+            }
+          }
+        }
+        // Pool opt_ref var: p.field → p.value->field (route through pool pointer)
+        // Note: only exclude has_value and _pool_idx (struct meta-fields); 'value' may be a class field
+        if (sym?.ctype?.startsWith('opt_ref_') && !['has_value','_pool_idx'].includes(node.prop)) {
+          const poolClassName = sym.ctype.slice(8);
+          const poolCls = this.classes.get(poolClassName);
+          if (poolCls?._isPool) {
+            // Check if this prop exists on the pool class itself (not on opt_ref wrapper)
+            const isClassField = poolCls.fields?.some(f => f.name === node.prop);
+            if (isClassField || node.prop !== 'value') {
+              // Use raw variable name (not narrowed form) to avoid double-indirection
+              const rawName = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
+              return `${rawName}.value->${node.prop}`;
             }
           }
         }
@@ -396,7 +415,20 @@ export default {
         return this.exprToC(node.expr, lines, depth);
       }
       case 'Yield':    return node.value ? this.exprToC(node.value, lines, depth) : '0';
-      case 'Drop':     return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
+      case 'Drop': {
+        // drop(x) for pool opt_ref_T → T_drop(x)
+        const dropExpr = node.expr;
+        const dropSym = dropExpr?.kind === 'Ident' ? this.lookup(dropExpr.name) : null;
+        const dropType = dropSym?.ctype ?? this.inferType(dropExpr);
+        const _dpcn = dropType?.startsWith('opt_ref_') ? dropType.slice(8) : null;
+        if (_dpcn && this.classes.get(_dpcn)?._isPool) {
+          this._ensurePoolDrop(_dpcn);
+          const _dc = this.classes.get(_dpcn);
+          const _dropArg = dropExpr?.kind === 'Ident' ? dropExpr.name : this.exprToC(dropExpr, lines, depth);
+          return `${_dc._poolDropFn}(${_dropArg})`;
+        }
+        return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
+      }
       case 'NonNull':  return this.exprToC(node.expr, lines, depth);
       case 'Propagate': return this.exprToC(node.expr, lines, depth);
       case 'OptChain': {
@@ -616,6 +648,20 @@ export default {
         if (optType?.startsWith('opt_')) {
           const optC = this.exprToC(optSide, lines, depth);
           return (node.op === '!=' || node.op === '!==') ? `${optC}.has_value` : `!${optC}.has_value`;
+        }
+      }
+    }
+
+    // Pool opt_ref null check: p != null → p.has_value, p == null → !p.has_value
+    if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
+      const _isNullLit = (n) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+      const _nullSide = _isNullLit(node.right) ? 'right' : _isNullLit(node.left) ? 'left' : null;
+      if (_nullSide) {
+        const _other = _nullSide === 'right' ? node.left : node.right;
+        const _otherSym = _other.kind === 'Ident' ? this.lookup(_other.name) : null;
+        if (_otherSym?.ctype?.startsWith('opt_ref_') && this.classes.get(_otherSym.ctype.slice(8))?._isPool) {
+          const _vc = this.exprToC(_other, lines, depth);
+          return (node.op === '!=' || node.op === '!==') ? `${_vc}.has_value` : `!${_vc}.has_value`;
         }
       }
     }
@@ -849,7 +895,15 @@ export default {
       }
     }
     const l = this.exprToC(node.left, lines, depth);
-    const r = this.exprToC(node.right, lines, depth);
+    // Type-directed literal emit: float field = 1.0 → 1.0f
+    let r;
+    if (node.right?.kind === 'Literal' && node.right.litType === 'number' && node.op === '=') {
+      const leftType = this.inferType(node.left);
+      if (leftType === 'float' || leftType === 'double') {
+        r = this.literalToCTyped(node.right, leftType);
+      }
+    }
+    if (r === undefined) r = this.exprToC(node.right, lines, depth);
 
     // >>>= → x = (int32_t)((uint32_t)x >> r)
     if (node.op === '>>>=') {
