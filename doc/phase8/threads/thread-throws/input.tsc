@@ -1,4 +1,6 @@
-class ThreadErr { message: string; }
+class ThreadErr extends Error {
+    constructor(msg: string) { super(msg); }
+}
 const t = spawn throws ThreadErr {
     throw new ThreadErr("fail");
 };

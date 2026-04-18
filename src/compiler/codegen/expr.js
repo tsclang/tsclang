@@ -99,6 +99,13 @@ export default {
           }
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+        // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
+        if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
+          const ident = sym._channelIdent;
+          const objC = this.exprToC(node.object, lines, depth);
+          const fn = node.prop === 'length' ? 'length' : 'capacity';
+          return `tsc_channel_${fn}_${ident}(${objC}._inner)`;
+        }
         // Check for use of moved variable (e.g. a.value after let b = a)
         if (sym?._moved) {
           const ms = sym._movedSourceNode;
@@ -317,6 +324,13 @@ export default {
       }
 
       case 'Cast': {
+        // as Volatile<T> → (volatile T *)expr; hex literals get U suffix
+        if (node.castType.kind === 'TypeRef' && node.castType.name === 'Volatile') {
+          const inner = this.resolveType(node.castType.typeArgs?.[0]);
+          let exprC = this.exprToC(node.expr, lines, depth);
+          if (/^0x[0-9a-fA-F]+$/.test(exprC)) exprC += 'U';
+          return `(volatile ${inner} *)${exprC}`;
+        }
         const ownershipTypes = ['Ref', 'Mut', 'Shared', 'Weak', 'Box', 'Arc', 'Rc'];
         if (node.castType.kind === 'TypeRef' && ownershipTypes.includes(node.castType.name)) {
           throw this.error(`cannot use "as" for ownership types`, node);
@@ -358,8 +372,19 @@ export default {
       }
 
       case 'Await': {
-        if (!this._inAsyncFunc)
+        // await t.join() in non-async context → tsc_thread_join(t)
+        if (!this._inAsyncFunc) {
+          if (node.expr?.kind === 'Call' &&
+              node.expr.callee?.kind === 'Member' && node.expr.callee.prop === 'join') {
+            const tObj = node.expr.callee.object;
+            const tSym2 = tObj?.kind === 'Ident' ? this.lookup(tObj.name) : null;
+            if (tSym2?._isThread || tSym2?.ctype === 'tsc_thread_t') {
+              const tC2 = this.exprToC(tObj, lines, depth);
+              return `tsc_thread_join(${tC2})`;
+            }
+          }
           throw this.error(`"await" can only be used inside an "async" function`, node);
+        }
         // Check for await on non-async variable (e.g. await x where x: i32)
         if (node.expr?.kind === 'Ident') {
           const awaitSym = this.lookup(node.expr.name);

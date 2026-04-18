@@ -258,7 +258,10 @@ export default {
   visitTopLevel(node) {
     if (!node) return;
     switch (node.kind) {
-      case 'ProfileAnnotation': break; // ignore for now
+      case 'ProfileAnnotation': {
+        if (node.content.startsWith('isr(')) this._pendingIsrAnnotation = node.content;
+        break;
+      }
       case 'Import':  break; // stdlib handled via includes
       case 'Export':
         if (node.default) throw this.error('"export default" is not allowed; use named exports only');
@@ -304,6 +307,16 @@ export default {
           this.define(node.name, { ctype: 'Array_string', varKind: node.varKind, _cAlias: '_argv' });
           break;
         }
+        // volatile<T> global variable → emit as plain global C var (before main)
+        if (node.typeAnn?.kind === 'TypeRef' && node.typeAnn.name === 'volatile') {
+          const vCtype = this.resolveType(node.typeAnn);
+          const vInit = node.init ? this.exprToC(node.init) : '0';
+          this.addTop(`${vCtype} ${node.name} = ${vInit};`);
+          this.addTop('');
+          this.define(node.name, { ctype: vCtype, varKind: node.varKind });
+          break;
+        }
+
         // Make it a static global only if referenced by a top-level function body
         // (required for C correctness — function can't access main() locals)
         const needsStatic = this._funcRefVars?.has(node.name);
@@ -973,6 +986,37 @@ export default {
   visitFuncDecl(node, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
+
+    // #[isr(...)] annotation on async function → error
+    if (this._pendingIsrAnnotation) {
+      const pendingIsr = this._pendingIsrAnnotation;
+      this._pendingIsrAnnotation = null;
+      if (node.async) throw this.error(`TypeError: Cannot use 'await' inside an ISR handler '${name}'`);
+    } else {
+      this._pendingIsrAnnotation = null;
+    }
+
+    // @embedded.isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
+    const isrDecorator = (decorators ?? []).find(d => d.name === 'embedded.isr');
+    if (isrDecorator) {
+      const vectorArg = isrDecorator.args?.[0];
+      const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
+      // Throw not allowed inside ISR
+      const bodyHasThrow = (stmts) => (stmts ?? []).some(s => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
+      if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @embedded.isr handlers`);
+      const funcLines = [];
+      this.pushScope();
+      for (const p2 of (params ?? [])) this.define(p2.name, { ctype: p2.typeAnn ? this.resolveType(p2.typeAnn) : 'int32_t', varKind: 'let' });
+      const bodyLines = [];
+      this.visitBlock(body, bodyLines, 1);
+      this.popScope();
+      funcLines.push(`ISR(${vectorName}_vect) {`);
+      for (const l of bodyLines) funcLines.push(l);
+      funcLines.push('}');
+      for (const l of funcLines) this.addTop(l);
+      this.addTop('');
+      return;
+    }
 
     // Async/generator dispatch — state machine codegen
     if (node.async) { this.emitAsyncFunc(node); return; }

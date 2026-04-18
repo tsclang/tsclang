@@ -63,6 +63,137 @@ export default {
       return '/* super */';
     }
 
+    // Atomic<T> methods: .load(), .store(), .fetchAdd(), .compareExchange()
+    if (callee.kind === 'Member') {
+      const objName2 = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const atomicSym = objName2 ? this.lookup(objName2) : null;
+      if (atomicSym?._isAtomic) {
+        const inner = atomicSym._atomicInner ?? 'int32_t';
+        const isPtr = atomicSym._isSharedAtomic;
+        const ref = isPtr ? `${objName2}->value` : `${objName2}.value`;
+
+        // Ordering enum map
+        const ordMap = {
+          'LoadOrdering.Acquire': 'memory_order_acquire',
+          'LoadOrdering.SeqCst': 'memory_order_seq_cst',
+          'LoadOrdering.Relaxed': 'memory_order_relaxed',
+          'RmwOrdering.AcqRel': 'memory_order_acq_rel',
+          'RmwOrdering.SeqCst': 'memory_order_seq_cst',
+          'RmwOrdering.Relaxed': 'memory_order_relaxed',
+        };
+        const resolveOrdering = (argNode, op) => {
+          if (!argNode) return null;
+          const expr = argNode.expr ?? argNode;
+          // Member access: LoadOrdering.Acquire / RmwOrdering.AcqRel
+          if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
+            const key = `${expr.object.name}.${expr.prop}`;
+            if (ordMap[key]) return ordMap[key];
+          }
+          // String literal: validate
+          if (expr.kind === 'Literal' && expr.litType === 'string') {
+            const validStore = ['release', 'seq_cst'];
+            const validLoad  = ['acquire', 'seq_cst'];
+            const validRmw   = ['acq_rel', 'seq_cst'];
+            const valid = op === 'store' ? validStore : op === 'load' ? validLoad : validRmw;
+            if (!valid.includes(expr.value)) {
+              throw this.error(`TypeError: Invalid memory ordering '${expr.value}' for ${op} operation; valid: ${valid.map(v=>`'${v}'`).join(', ')}`);
+            }
+            return `memory_order_${expr.value}`;
+          }
+          return this.exprToC(expr, lines, depth);
+        };
+
+        if (callee.prop === 'load') {
+          const ord = resolveOrdering(args[0], 'load') ?? 'memory_order_acquire';
+          return `atomic_load_explicit(&${ref}, ${ord})`;
+        }
+        if (callee.prop === 'store') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'store') ?? 'memory_order_release';
+          if (valC.includes('('))
+            return `atomic_store_explicit(&${ref},\n        ${valC},\n        ${ord})`;
+          return `atomic_store_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchAdd') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_add_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'compareExchange') {
+          const expC = this.exprToC(args[0].expr, lines, depth);
+          const desC = this.exprToC(args[1].expr, lines, depth);
+          const successOrd = resolveOrdering(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          const failureOrd = 'memory_order_acquire';
+          if (!this._cmpxchgCount) this._cmpxchgCount = 0;
+          const tmpName = `_expected_${this._cmpxchgCount++}`;
+          const I2 = ' '.repeat(this.indent * depth);
+          lines.push(`${I2}${inner} ${tmpName} = ${expC};`);
+          return `atomic_compare_exchange_strong_explicit(\n        &${ref}, &${tmpName}, ${desC},\n        ${successOrd}, ${failureOrd})`;
+        }
+      }
+    }
+
+    // Channel<T> methods: .send(), .receive(), .tryReceive(), .trySend(), .close(), .isEmpty()
+    if (callee.kind === 'Member') {
+      const objName3 = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const chanSym = objName3 ? this.lookup(objName3) : null;
+      if (chanSym?._isChannel) {
+        const ident = chanSym._channelIdent;
+        const inner3 = chanSym._channelInner;
+        const inner_name = `${objName3}._inner`;
+        if (callee.prop === 'send') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          return `tsc_channel_send_${ident}(${inner_name}, ${valC})`;
+        }
+        if (callee.prop === 'receive') {
+          return `tsc_channel_receive_${ident}(${inner_name})`;
+        }
+        if (callee.prop === 'tryReceive') {
+          // Returns opt_T — emit typedef
+          const optType = `opt_${ident}`;
+          if (!this._emittedOptStructs) this._emittedOptStructs = new Set();
+          if (!this._emittedOptStructs.has(optType)) {
+            this._emittedOptStructs.add(optType);
+            this.addTop(`typedef struct { bool has_value; ${inner3} value; } ${optType};`);
+            this.addTop('');
+          }
+          return `tsc_channel_try_receive_${ident}(${inner_name})`;
+        }
+        if (callee.prop === 'trySend') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          return `tsc_channel_try_send_${ident}(${inner_name}, ${valC})`;
+        }
+        if (callee.prop === 'close') {
+          return `tsc_channel_close_${ident}(${inner_name})`;
+        }
+        if (callee.prop === 'isEmpty') {
+          return `tsc_channel_is_empty_${ident}(${inner_name})`;
+        }
+      }
+    }
+
+    // tsc_thread_t .join()
+    if (callee.kind === 'Member' && callee.prop === 'join') {
+      const objNameJ = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const threadSym = objNameJ ? this.lookup(objNameJ) : null;
+      if (threadSym?.ctype === 'tsc_thread_t' || threadSym?._isThread) {
+        const tC = this.exprToC(callee.object, lines, depth);
+        return `tsc_thread_join(${tC})`;
+      }
+    }
+
+    // Thread.spawn(lambda) — handled in VarDecl; here for stmt-level call
+    if (callee.kind === 'Member' &&
+        callee.object?.kind === 'Ident' && callee.object.name === 'Thread' &&
+        callee.prop === 'spawn') {
+      const lambdaArg = args[0]?.expr;
+      if (lambdaArg) {
+        const spawnResult = this._emitSpawnBlock(null, lambdaArg.body ?? lambdaArg, [], lines, depth);
+        return `(void)${spawnResult}`;
+      }
+      return '/* Thread.spawn */';
+    }
+
     // console.log / console.error / console.warn / console.debug
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
       return this.consoleCall(callee.prop, args, lines, depth);

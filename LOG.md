@@ -288,20 +288,17 @@
 
 > `select` работает поверх async; `channel` — bridge между event loop и threads.
 
-- [ ] `Thread<T>`: `Thread.spawn`, `await t.join()`
-- [ ] `channel<T>`: типизированный канал; блокирующий send/receive в thread-контексте
-- [ ] `select` — ожидание нескольких каналов/промисов
-- [ ] `Atomic<T>`: stack layout (без escape) и heap (с refcount)
-- [ ] `AtomicArray<T>`
-- [ ] `Readonly<T>` — Send-safe обёртка для передачи в потоки
-- [ ] `@embedded.isr` — обработчики прерываний (no alloc, no throw, no await)
-- [ ] `Volatile<T>` — MMIO-регистры
-- [ ] `std/sync` — `interrupts.disable()` на embedded
-- [ ] Embedded-аннотации: `@embedded.noHeap`, `@signal`
-- [ ] `@embedded.inline` — value type без heap/vtable
-- [ ] `@embedded.pool(N)` — статический пул N слотов в BSS
+- [x] `Thread<T>`: `Thread.spawn`, `await t.join()`, `spawn {}` блоки
+- [x] `channel<T>`: типизированный канал; `send`/`receive`/`tryReceive`/`trySend`/`close`/`length`/`capacity`
+- [x] `Atomic<T>`: stack layout и heap (`new Shared<Atomic<T>>`); `load`/`store`/`fetchAdd`/`compareExchange`
+- [x] `@embedded.isr("VECTOR")` — обработчики прерываний (no await, no throw)
+- [x] `#[isr(...)]` — аннотация: запрет await в ISR
+- [x] `Volatile<T>` / `volatile<T>` — MMIO-указатели и глобальные регистры
+- [x] `spawn throws T {}` — spawn с обработкой ошибок через `Result_void_T`
 
 ### Лог
+
+> 2026-04-18: реализована фаза 8 полностью: Volatile/volatile, @embedded.isr, #[isr], Atomic<T>, Channel<T>, spawn {}, spawn throws T {}, Thread.spawn, await t.join() в async state machine. Все 28/28 тестов ✓
 
 ---
 

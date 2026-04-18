@@ -51,6 +51,32 @@ export default {
           }
         }
 
+        // spawn { ... } / spawn throws T { ... } as VarDecl init
+        if (init?.kind === 'Spawn') {
+          const hasThrows = (init.throwsTypes?.length ?? 0) > 0;
+          const threadVar = this._emitSpawnBlock(hasThrows ? null : name, init.body, init.throwsTypes, lines, depth);
+          if (hasThrows) {
+            this.define(name, { ctype: 'tsc_thread_t', varKind, _cAlias: threadVar, _isThread: true });
+            p(`(void)${threadVar};`);
+          } else {
+            this.define(name, { ctype: 'tsc_thread_t', varKind, _isThread: true });
+          }
+          break;
+        }
+
+        // Thread.spawn(lambda) as VarDecl init
+        if (init?.kind === 'Call' &&
+            init.callee?.kind === 'Member' &&
+            init.callee.object?.kind === 'Ident' && init.callee.object.name === 'Thread' &&
+            init.callee.prop === 'spawn') {
+          const lambdaArg = init.args?.[0]?.expr;
+          const lambdaBody = lambdaArg?.body ?? { kind: 'Block', body: [] };
+          const idx = this._spawnCount ?? 0;
+          const threadVar2 = this._emitSpawnBlock(null, lambdaBody, [], lines, depth);
+          this.define(name, { ctype: 'tsc_thread_t', varKind, _cAlias: threadVar2, _isThread: true });
+          break;
+        }
+
         // Match expression: const x = match { ... }
         if (init?.kind === 'Match') {
           this.emitMatchVarDecl(node, lines, depth);
@@ -138,6 +164,65 @@ export default {
             this._registerCleanup(`tsc_string_array_free(${name}, ${lenName})`);
             break;
           }
+        }
+
+        // new Atomic<T>(val) → Atomic_T typedef + {.value = val}
+        if (init?.kind === 'New' && init.name === 'Atomic') {
+          const tArg = init.typeArgs?.[0];
+          const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
+          const ident = this.cTypeToIdent(innerCtype);
+          const atomicType = `Atomic_${ident}`;
+          if (!this._emittedAtomicTypes) this._emittedAtomicTypes = new Set();
+          if (!this._emittedAtomicTypes.has(atomicType)) {
+            this._emittedAtomicTypes.add(atomicType);
+            this.includes.add('#include <stdatomic.h>');
+            this.addTop(`typedef struct { _Atomic ${innerCtype} value; } ${atomicType};`);
+            this.addTop('');
+          }
+          const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`${atomicType} ${name} = {.value = ${initVal}};`);
+          this.define(name, { ctype: atomicType, varKind, _isAtomic: true, _atomicInner: innerCtype });
+          break;
+        }
+
+        // new Shared<Atomic<T>>(val) → Atomic_T_shared typedef + arc alloc + atomic_init
+        if (init?.kind === 'New' && init.name === 'Shared' && init.typeArgs?.[0]?.name === 'Atomic') {
+          const tArg = init.typeArgs[0].typeArgs?.[0];
+          const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
+          const ident = this.cTypeToIdent(innerCtype);
+          const sharedType = `Atomic_${ident}_shared`;
+          if (!this._emittedAtomicTypes) this._emittedAtomicTypes = new Set();
+          if (!this._emittedAtomicTypes.has(sharedType)) {
+            this._emittedAtomicTypes.add(sharedType);
+            this.includes.add('#include <stdatomic.h>');
+            this.addTop(`typedef struct { int32_t _refcount; _Atomic ${innerCtype} value; } ${sharedType};`);
+            this.addTop('');
+          }
+          const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`${sharedType} *${name} = tsc_arc_alloc(sizeof(${sharedType}));`);
+          p(`atomic_init(&${name}->value, ${initVal});`);
+          this.define(name, { ctype: `${sharedType} *`, varKind, _isAtomic: true, _isSharedAtomic: true, _atomicInner: innerCtype });
+          this._registerCleanup(`tsc_arc_release(${name})`);
+          break;
+        }
+
+        // new Channel<T>(cap) → Channel_T typedef + tsc_channel_create_T
+        if (init?.kind === 'New' && init.name === 'Channel') {
+          const tArg = init.typeArgs?.[0];
+          const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
+          const ident = this.cTypeToIdent(innerCtype);
+          const chanType = `Channel_${ident}`;
+          if (!this._emittedChannelTypes) this._emittedChannelTypes = new Set();
+          if (!this._emittedChannelTypes.has(chanType)) {
+            this._emittedChannelTypes.add(chanType);
+            this.addTop(`typedef struct { TscChannel_${ident} *_inner; } ${chanType};`);
+            this.addTop('');
+          }
+          const capC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`${chanType} ${name} = { ._inner = tsc_channel_create_${ident}(${capC}) };`);
+          this.define(name, { ctype: chanType, varKind, _isChannel: true, _channelInner: innerCtype, _channelIdent: ident });
+          this._registerCleanup(`tsc_channel_release_${ident}(${name}._inner)`);
+          break;
         }
 
         // new Shared<T>() → arc alloc
@@ -335,6 +420,8 @@ export default {
           }
         }
         let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'double');
+        // Reading a volatile variable into a local gives a plain (non-volatile) type
+        if (!typeAnn && ctype.startsWith('volatile ')) ctype = ctype.slice('volatile '.length);
         // Untyped number literals: integer → int32_t, float/decimal → double
         if (!typeAnn && init && init.kind === 'Literal' && init.litType === 'number') {
           const v = init.value;
@@ -360,7 +447,7 @@ export default {
         const isGenericClassInst = !enumDef2 && this._genericClasses &&
           [...this._genericClasses.keys()].some(n => ctype.startsWith(n + '_'));
         // opt_ types suppress const only when inferred (no type annotation); with explicit T|null annotation, keep const
-        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst;
+        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ');
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
         // Optional type (opt_T): handle null/value init
@@ -1449,7 +1536,8 @@ export default {
       }
 
       case 'Spawn': {
-        p('/* spawn block — not yet implemented */');
+        const threadVar = this._emitSpawnBlock(null, node.body, node.throwsTypes, lines, depth);
+        p(`(void)${threadVar};`);
         break;
       }
 

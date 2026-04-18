@@ -40,6 +40,7 @@ export default {
       if (name === 'Signal')     return `Signal_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
       if (name === 'Promise')    return `Promise_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}`;
       if (name === 'volatile')   return `volatile ${this.resolveType(typeArgs[0])}`;
+      if (name === 'Volatile')   return `volatile ${this.resolveType(typeArgs[0])} *`;
 
       // Inline utility types: Pick<T, K>, Omit<T, K> without a named alias
       if ((name === 'Pick' || name === 'Omit') && typeArgs.length >= 2) {
@@ -386,6 +387,24 @@ export default {
               return `Array_MapEntry_${mapSuffix}`;
             }
           }
+          // Atomic<T> method return types
+          const objSymA = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymA?._isAtomic) {
+            if (prop === 'load' || prop === 'fetchAdd') return objSymA._atomicInner ?? 'int32_t';
+            if (prop === 'store') return 'void';
+            if (prop === 'compareExchange') return 'bool';
+          }
+          // Channel<T> method return types
+          if (objSymA?._isChannel) {
+            if (prop === 'receive') return objSymA._channelInner ?? 'int32_t';
+            if (prop === 'tryReceive') return `opt_${objSymA._channelIdent}`;
+            if (prop === 'trySend' || prop === 'isEmpty') return 'bool';
+            if (prop === 'length' || prop === 'capacity') return 'size_t';
+            if (prop === 'send' || prop === 'close') return 'void';
+          }
+          // tsc_thread_t .join()
+          if ((objSymA?.ctype === 'tsc_thread_t' || objSymA?._isThread) && prop === 'join') return 'void';
+
           // Array method return types
           const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
           const objType = objSym?.ctype ?? this.inferType(obj);

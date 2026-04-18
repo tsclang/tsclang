@@ -1428,6 +1428,18 @@ export function parse(tokens, filename = '<input>', src = null) {
       return { kind: 'ObjLit', props };
     }
 
+    // spawn { ... } / spawn throws T { ... } used as expression
+    if (t.type === TK.IDENT && t.value === 'spawn') {
+      eat(TK.IDENT, 'spawn');
+      let throwsTypes2 = [];
+      if (cur().type === TK.IDENT && cur().value === 'throws') {
+        eat(TK.IDENT);
+        throwsTypes2.push(parseTypeAnnotation());
+      }
+      const spawnBody = parseBlock();
+      return { kind: 'Spawn', throwsTypes: throwsTypes2, body: spawnBody };
+    }
+
     // Identifier
     if (t.type === TK.IDENT) {
       pos++;

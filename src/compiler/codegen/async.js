@@ -82,6 +82,8 @@ export default {
     const inlined = new Map();     // name → C literal string
     const inlinedTypes = new Map(); // name → raw TSclang type name (for error messages)
     const seen = new Set();
+    const spawnInfos = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
+    const extraPollParams = []; // free vars of spawn blocks that become extra poll params
 
     for (const p of (params || [])) {
       if (p.rest || p.destructArr) continue;
@@ -92,6 +94,27 @@ export default {
     const walk = (stmts) => {
       for (const s of stmts || []) {
         if (!s) continue;
+
+        // Spawn VarDecl: pre-emit env struct + fn to topLevel, add thread var to body fields
+        if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
+          if (!seen.has(s.name)) seen.add(s.name);
+          const spawnIdx = this._spawnCount ?? 0;
+          const threadVar = this._emitSpawnBlock(null, s.init.body, s.init.throwsTypes, [], 0);
+          const envType = `_spawn_${spawnIdx}_env`;
+          const fnName  = `_spawn_${spawnIdx}_fn`;
+          const envVar  = `_env_${spawnIdx}`;
+          const synLambda = { params: [], body: s.init.body.kind === 'Block' ? s.init.body : { kind: 'Block', body: [s.init.body] } };
+          const fvArr = this._collectFreeVars(synLambda);
+          if (!seen.has(threadVar)) { seen.add(threadVar); bodyFields.push({ name: threadVar, ctype: 'tsc_thread_t' }); }
+          spawnInfos.push({ userVar: s.name, threadVar, envType, fnName, envVar, freeVars: fvArr });
+          for (const fv of fvArr) {
+            if (!paramFields.some(f => f.name === fv.name) && !extraPollParams.some(f => f.name === fv.name)) {
+              extraPollParams.push({ name: fv.name, ctype: fv.ctype });
+            }
+          }
+          continue;
+        }
+
         if (s.kind === 'VarDecl') {
           const { varKind, name, typeAnn, init } = s;
           if (varKind === 'const' && this._isInlinableConst(init) && !seen.has(name)) {
@@ -136,7 +159,7 @@ export default {
     };
 
     walk(body?.kind === 'Block' ? body.body : []);
-    return { paramFields, bodyFields, inlined, inlinedTypes };
+    return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
   },
 
   // Collect await sub-state field descriptors for the struct
@@ -257,8 +280,8 @@ export default {
       }
     }
 
-    // Scan fields and collect sub-state fields
-    const { paramFields, bodyFields, inlined, inlinedTypes } = this._scanAsyncBody(params, body);
+    // Scan fields and collect sub-state fields (also pre-emits any spawn env/fn)
+    const { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams } = this._scanAsyncBody(params, body);
     const awaitStates = this._collectAwaitStates(body);
 
     // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
@@ -313,7 +336,11 @@ export default {
     for (const f of paramFields) promoted.add(f.name);
     for (const f of bodyFields) promoted.add(f.name);
 
-    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey };
+    // Build spawn alias map: userVar → threadVar (for await t.join() detection)
+    const spawnVarAlias = new Map();
+    for (const si of spawnInfos) spawnVarAlias.set(si.userVar, si.threadVar);
+
+    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams };
     this._inAsyncFunc = true;
 
     const pollLines = this._buildAsyncPoll(body);
@@ -321,7 +348,11 @@ export default {
     this._inAsyncFunc = false;
     this._selfCtx = null;
 
-    this._emitTopFn(`static void ${pollFn}(${stateType} *self)`, pollLines);
+    // Extra poll params from spawn free vars
+    const extraParamsStr = extraPollParams.length > 0
+      ? ', ' + extraPollParams.map(f => `${f.ctype} ${f.name}`).join(', ')
+      : '';
+    this._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
 
     // Async main handling
     if (name === 'main') {
@@ -385,6 +416,25 @@ export default {
 
   _emitAsyncStmt(s, lines, ctx, I) {
     if (!s) return;
+
+    // ── spawn VarDecl: emit call site using pre-emitted env/fn ──
+    if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
+      const si = this._selfCtx?.spawnInfos?.find(info => info.userVar === s.name);
+      if (!si) return;
+      // Patch previous line (e.g. "        case 0:") to open a block
+      if (lines.length > 0) lines[lines.length - 1] += ' {';
+      lines.push(`${I}${si.envType} *${si.envVar} = malloc(sizeof(${si.envType}));`);
+      for (const fv of si.freeVars) {
+        lines.push(`${I}${si.envVar}->${fv.name} = ${fv.name};`);
+      }
+      lines.push(`${I}self->${si.threadVar} = tsc_thread_spawn(${si.fnName}, ${si.envVar});`);
+      lines.push(`${I}self->_state = ${ctx.nextCase};`);
+      lines.push('        }');
+      lines.push(`        case ${ctx.nextCase}:`);
+      ctx.nextCase++;
+      this.define(s.name, { ctype: 'tsc_thread_t', varKind: s.varKind, _isThread: true });
+      return;
+    }
 
     // ── await in VarDecl ──
     if (s.kind === 'VarDecl' && s.init?.kind === 'Await') {
@@ -457,6 +507,17 @@ export default {
 
     // ── await in ExprStmt (no result) ──
     if (s.kind === 'ExprStmt' && s.expr?.kind === 'Await') {
+      // Special case: await t.join() on a spawned thread handle
+      const awaitInner = s.expr.expr;
+      if (awaitInner?.kind === 'Call' && awaitInner.callee?.kind === 'Member' && awaitInner.callee.prop === 'join') {
+        const tObj = awaitInner.callee.object;
+        const alias = this._selfCtx?.spawnVarAlias?.get(tObj?.name);
+        if (alias) {
+          lines.push(`${I}if (!tsc_thread_done(self->${alias})) return;`);
+          lines.push(`${I}tsc_thread_join(self->${alias});`);
+          return;
+        }
+      }
       this._checkAwaitTarget(s.expr);
       const ai = this._awaitInfoOf(s.expr);
       if (!ai) return;
