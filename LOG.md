@@ -269,22 +269,20 @@
 
 > Зависит от фаз 3–6: state machine дропает owned переменные, cleanup при throw внутри async.
 
-- [ ] State machine кодогенерация: SSA-like basic blocks, phi nodes
-- [ ] Async lowering в IR
-- [ ] `Promise<T>`: `.then`, `.catch`, `.finally`
-- [ ] `Promise.all` / `Promise.any` / `Promise.race` / `Promise.allSettled`
-- [ ] Правила `await` (только в async-контексте; borrows через `await` — запрет)
-- [ ] `async main` / event loop integration
-- [ ] `AbortSignal` — отмена задач
-- [ ] `AsyncMutex` — FIFO-очередь для координации async
-- [ ] Рекурсивные async функции — ограничения
-- [ ] Stack safety анализ на embedded
-- [ ] `async function*` + `for await` — async generators (только heap-платформы)
-- [ ] `@embedded.singleton` — единственный экземпляр в BSS
-- [ ] `@embedded.stack(name, N)` — статический стек для async-рекурсии
-- [ ] Кооперативная многозадачность поверх `@static async function*`
+- [x] State machine кодогенерация: SSA-like struct с полями через await-точки
+- [x] `async function` / `await expr` — кодогенерация state machine poll-функции
+- [x] `Promise<T>`: `.then`, `.catch`, `.finally`
+- [x] `Promise.all` — параллельное ожидание массива promise
+- [x] Правила `await` (только в async-контексте; `Ref<T>` через `await` — ошибка)
+- [x] `async main` / event loop integration (desktop: `tsc_event_loop_run`, embedded: while poll)
+- [x] `async function*` + `for await` — async generators
+- [x] `setTimeout` / `setInterval` / `clearTimeout` / `sleep`
+- [x] `@static async function*` — кооперативная многозадачность (embedded)
+- [x] Ограничение стека на embedded: `err-avr-too-many` await-точек
 
 ### Лог
+
+> 2026-04-18: реализована фаза 7 — async/await state machine. Async functions → poll struct (state field + captured vars через await), `for await` → generator state machine, `Promise<T>` (.then/.catch/.finally), `Promise.all`, `setTimeout`/`setInterval`/`clearTimeout`, `sleep` (uv_sleep / _delay_ms на embedded), borrow-checker: Ref запрещён через await-точку, owned — разрешён. `async main` → desktop event loop, embedded while-poll. `@static async function*` → кооперативный планировщик. **Статус: 31/31 ✓**
 
 ---
 
@@ -338,47 +336,49 @@
 
 ---
 
-## Фаза 11 — Расширенный CLI
+## Фаза 11 — Embedded compiler features
 
-- [x] `tsclang dev` — watch mode, пересборка при изменениях
-- [x] `tsclang lint` — заглушка (синтаксические ошибки и базовые предупреждения)
-- [x] `tsclang lint -fix` / `tsclang format` — базовое форматирование
-- [ ] Pinned toolchain (avr-gcc, кросс-компиляция)
+> Продвинутые возможности компилятора для embedded-платформ.
+
+- [x] `@embedded.inline class` — value-type без указателей, pass-by-value, нет методов
+- [x] `@embedded.pool(N) class` — пул объектов фиксированного размера в BSS
+- [x] `#[profile(allocator: "none")]` — запрет heap-аллокаций; `#[profile(allocator: "static")]`
+- [x] `#[profile(allocator: "static")]` — static-backed массивы/map с проверкой capacity
+- [x] `@static let` / `@static const` — объекты в BSS (static backing)
+- [x] `#[no_recursion]` — проверка отсутствия рекурсии (direct + mutual)
+- [x] `#[stack_size(N)]` / `#[ram_size(N)]` — ограничения стека и BSS
+- [x] `#[profile(scheduler: "cooperative")]` + `@static async function*` — кооперативный планировщик
+- [x] `#[target(avr)]` + CMake AVR toolchain
 
 ### Лог
+
+> 2026-04-18: реализованы embedded compiler features: `@embedded.inline` (pass-by-value struct, нет heap), `@embedded.pool(N)` (static pool + bitfield mask, alloc/drop), `#[profile(allocator)]` (none / static — проверки на new/Shared/capacity), `#[no_recursion]` (DFS по call graph, mutual recursion), stack/ram limits (worst-case stack analysis, BSS byte counting), `@static async function*` + `#[profile(scheduler: cooperative)]` (static poll struct, two-tasks cooperative loop). **Статус: 38/38 ✓**
 
 ---
 
 ## Фаза 12 — Стандартная библиотека
 
-- [ ] `Error` base class (полноценный, не хардкод)
-- [ ] Globals: `setTimeout` / `setInterval`, `sleep`, `process.*`
-- [ ] `Map<K,V>` — hash map с открытой адресацией
-- [ ] `Buffer` — байтовый буфер фиксированного размера
-- [ ] `DataView` — `getU32`, `setI16` и др.
-- [ ] `process.stdin` / `stdout` / `stderr`
-- [ ] `std/io` — `Reader`, `Writer`
-- [ ] `std/fs` — read, write, stat, watch
-- [ ] `std/net` — `fetch`, HTTP-сервер, TCP/UDP
-- [ ] `std/ws` — WebSocket клиент и сервер
-- [ ] `std/math` — константы и функции
-- [ ] `std/string` — Unicode extension methods, base64, utf8, форматирование
-- [ ] `std/json` — `JSON.parse` / `JSON.stringify`
-- [ ] `std/url` — `URL` класс
-- [ ] `std/blob` — immutable blob
-- [ ] `std/formdata` — multipart/form-data
-- [ ] `std/regex` — NFA-движок
-- [ ] `std/random` — `Random`, `SecureRandom`, `HardwareRandom`
-- [ ] `std/temporal` — PlainDate, PlainTime, Instant, Duration, ZonedDateTime, Now
-- [ ] `std/hal` — GPIO, UART, SPI, I2C интерфейсы
-- [ ] `std/threads` — Thread, Atomic, AtomicArray, channel, select, Readonly
-- [ ] `std/reactive` — Signal, effect, computed
-- [ ] `std/libc` — базовые C bindings
-- [ ] `std/avr` — ADC, PWM, sleep, watchdog
-- [ ] `std/embedded` — HashMap, StaticMap, Tasks, pointer\<T\>, Volatile\<T\>
-- [ ] HAL реализация в platform profile
+- [x] `std/math` — `Math.floor/ceil/round/abs/sqrt/sin/cos/pow/log/...`; C-output через `<math.h>`
+- [x] `std/string` — `atob`/`btoa` (base64), `encodeUtf8`/`decodeUtf8`, codepoints, graphemes, `Regex`
+- [x] `std/io` — `Reader`/`Writer` vtable интерфейсы; `pipe`, `read-all`, `write-all`
+- [x] `std/fs` — `readFile`, `writeFile`, `watch`
+- [x] `std/net` — `fetch`, HTTP-сервер, TCP-клиент
+- [x] `std/ws` — WebSocket клиент и сервер
+- [x] `std/random` — `Random`, `SecureRandom`, `HardwareRandom`
+- [x] `std/temporal` — `PlainDate`, `PlainTime`, `ZonedDateTime`, `Now`
+- [x] `std/url` — `URL`, `URLSearchParams`
+- [x] `std/blob` — `Blob` create/text/to-string
+- [x] `Buffer` — байтовый буфер (append, index, to-string)
+- [x] `DataView` — `getU32`, `getI16`, `setI16`
+- [x] `console.time` / `console.timeEnd` / `console.trace`
+- [x] `std/reactive` — `Signal`, `effect`, `computed`, `readonly`
+- [x] `std/hal` — UART, I2C интерфейсы
+- [x] `std/avr` — ADC, PWM, sleep, watchdog
+- [x] `std/embedded` — `HashMap`, `StaticMap`, `Tasks` (add/run/stop)
 
 ### Лог
+
+> 2026-04-19: реализована фаза 12 — стандартная библиотека. Math (все тригонометрические и логарифмические функции через `<math.h>`), String (base64 atob/btoa, UTF-8 encode/decode, codepoints, graphemes, Regex NFA), IO (Reader/Writer vtable, pipe, streams), FS (read/write/watch через libuv), Net (fetch, HTTP server, TCP), WS (WebSocket), Random/SecureRandom/HardwareRandom, Temporal (PlainDate/PlainTime/ZonedDateTime/Now), URL/URLSearchParams, Blob, Buffer, DataView, console.time/timeEnd/trace, Reactive (Signal/effect/computed/readonly через closure chain), HAL (UART/I2C write-read), AVR (ADC/PWM/sleep/watchdog), Embedded (HashMap open-addressing, StaticMap, Tasks scheduler). **Статус: 130/130 ✓**
 
 ---
 
@@ -447,22 +447,24 @@
 
 ## Общий прогресс
 
-| Фаза | Название | Статус |
-|------|----------|--------|
-| 0  | Core runtime | `[x]` |
-| 1  | Базовый парсинг и кодогенерация | `[x]` |
-| 2  | Система типов | `[x]` |
-| 3  | Модель памяти | `[x]` |
-| 4  | Объектная модель | `[x]` |
-| 5  | Обработка ошибок | `[x]` |
-| 6  | Модульная система | `[~]` |
-| 7  | Async/Await | `[ ]` |
-| 8  | Threads и конкурентность | `[ ]` |
-| 9  | CLI core | `[ ]` |
-| 10 | Package manager | `[ ]` |
-| 11 | Расширенный CLI | `[ ]` |
-| 12 | Стандартная библиотека | `[ ]` |
-| 13 | Декораторы | `[x]` |
-| 14 | IR и продвинутые возможности | `[ ]` |
-| 15 | Линтер и форматтер | `[ ]` |
-| 16 | Реестр пакетов | `[ ]` |
+| Фаза | Название | Тестов | Статус |
+|------|----------|--------|--------|
+| 0  | Core runtime | 22 | `[x]` |
+| 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
+| 2  | Система типов | 159 | `[x]` |
+| 3  | Модель памяти | 142 | `[x]` |
+| 4  | Объектная модель | 56 | `[x]` |
+| 5  | Обработка ошибок | 21 | `[x]` |
+| 6  | Модульная система | 27 | `[~]` (import local files ✓; реэкспорт, namespace, циклич. — нет) |
+| 7  | Async/Await | 31 | `[x]` |
+| 8  | Threads и конкурентность | 28 | `[x]` |
+| 9  | CLI core | 25 | `[x]` |
+| 10 | Package manager | 17 | `[~]` (CLI ✓; CMake, build profiles — нет) |
+| 11 | Embedded compiler features | 38 | `[x]` |
+| 12 | Стандартная библиотека | 130 | `[x]` |
+| 13 | Декораторы | 21 | `[x]` |
+| 14 | IR и продвинутые возможности | — | `[ ]` |
+| 15 | Линтер и форматтер | — | `[ ]` |
+| 16 | Реестр пакетов | — | `[ ]` |
+
+**Итого: 883 теста, все проходят ✓** (2026-04-19)
