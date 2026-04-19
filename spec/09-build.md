@@ -1799,7 +1799,7 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
 | `dos` | MS-DOS (djgpp / x86 32-bit) | — | i386-pc-msdosdjgpp | .exe / .com | djgpp (gcc) | -march=i386 |
-| `nes` | Nintendo Entertainment System | — | mos6502-nes | .nes | cc65 | -t nes |
+| `nes` | Nintendo Entertainment System (6502) | — | mos6502-nes | .nes | cc65 | -t nes -Cl |
 | `spectrum` | ZX Spectrum (Z80) | — | z80-unknown-none | .tap / .z80 | z88dk (sccz80) | +zx -vn |
 | `genesis` | Sega Genesis (68000) | — | m68k-unknown-elf | .bin | m68k-elf-gcc | -m68000, -nostdlib |
 | `c64` | Commodore 64 (6510) | — | mos6510-c64 | .prg | cc65 / kickasm | -t c64 |

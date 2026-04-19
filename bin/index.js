@@ -546,7 +546,7 @@ if (command === 'build') {
       const cmakeContent = [
         'cmake_minimum_required(VERSION 3.10)',
         `project(${stem} C)`,
-        'set(CMAKE_C_STANDARD 99)',
+        'set(CMAKE_C_STANDARD 11)',
         `add_executable(${stem} ${stem}.c)`,
         `target_include_directories(${stem} PRIVATE ${JSON.stringify(dirname(runtimeH))})`,
         '',
@@ -561,7 +561,7 @@ if (command === 'build') {
     const gcc = spawnSync('gcc', [
       cPath, '-o', binPath,
       '-I', dirname(runtimeH),
-      '-lpthread', '-std=c99',
+      '-lpthread', '-std=c11',
     ], { stdio: 'pipe' });
     if (gcc.status !== 0) {
       process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
@@ -603,7 +603,7 @@ if (command === 'build') {
   const gcc = spawnSync('gcc', [
     cPath, '-o', binPath,
     '-I', dirname(runtimeH),
-    '-lpthread', '-std=c99',
+    '-lpthread', '-std=c11',
   ], { stdio: 'pipe' });
   if (gcc.status !== 0) {
     process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);

@@ -445,6 +445,80 @@
 
 ---
 
+## Фаза 17 — Platform backends: Retro & Consoles
+
+> Поддержка ретро-платформ и игровых консолей. Каждая платформа — отдельный toolchain + platform-profile пакет + платформенный `runtime_<target>.h`.
+>
+> **NES (cc65) поддерживается**: cc65 поддерживает compound literals, designated initializers, static inline, stdbool.h, stdint.h. Фактических несовместимостей в runtime.h только 4 (все мелкие: `_Noreturn`, `va_copy`, `snprintf`, `clock_gettime`). Кодогенератор менять не нужно.
+
+### Приоритет реализации
+
+1. **PlayStation 2** (`ps2`) — modern GCC (ee-gcc), C11, 32MB RAM, ps2dev SDK
+2. **PlayStation 1** (`ps1`) — psn00bsdk (GCC MIPS), C11, 2MB RAM, no heap by default
+3. **Sega Genesis / Mega Drive 2** (`genesis`) — SGDK (GCC m68k), C11, 64KB RAM, no heap
+4. **MS-DOS** (`dos`) — djgpp (GCC), C11, heap через DPMI, int 21h вывод
+5. **NES** (`nes`) — cc65, C99 subset, 2KB RAM, usize=u16, no heap, no float, no async
+6. **ZX Spectrum** (`spectrum`) — z88dk, C11 частично, 16-bit `int` → u16 режим, 48KB RAM
+
+### Общая инфраструктура
+
+- [ ] `runtime.h`: `#ifdef TSC_<TARGET>` guards вокруг POSIX/libuv частей
+- [ ] Platform capability flags: `no-heap`, `no-async`, `no-threads`, `int-width`
+- [ ] `console.log` → платформо-зависимый вывод (VDP, int21h, PSX tty, ps2 sio2)
+- [ ] toolchain CMake конфиги для каждой платформы (`cmake/toolchain-<target>.cmake`)
+- [ ] Platform profile пакеты: `@sega/platform`, `@sony/ps1`, `@sony/ps2`, `@dos/platform`, `@nes/platform`, `@spectrum/platform`
+
+### PlayStation 2
+
+- [ ] ee-gcc toolchain + ps2dev SDK
+- [ ] `runtime_ps2.h`: without libuv, with ps2sdk types (`s32`, `u32`)
+- [ ] `@sony/ps2`: GS (graphics synthesizer), SPU2 audio, pad input, CD/DVD
+- [ ] `no-heap` mode (allocator-static) по умолчанию; heap опционально через ps2sdk malloc
+
+### PlayStation 1
+
+- [ ] psn00bsdk toolchain (mipsel-unknown-elf-gcc)
+- [ ] `runtime_ps1.h`: без heap, `s32`/`u32`, без float (soft-float режим)
+- [ ] `@sony/ps1`: GPU (ordering table, primitives), SPU audio, BIOS calls
+- [ ] `no-heap` + `no-async` по умолчанию
+
+### Sega Genesis / Mega Drive 2
+
+- [ ] SGDK toolchain (m68k-elf-gcc)
+- [ ] `runtime_genesis.h`: без heap, `u32` int size, без printf (VDP text plane)
+- [ ] `@sega/vdp`: тайлы, спрайты, CRAM палитра
+- [ ] `@sega/psg`, `@sega/ym2612`: звук
+- [ ] ROM header + векторы прерываний через platform profile
+
+### MS-DOS (djgpp)
+
+- [ ] djgpp (i386-pc-msdosdjgpp) toolchain
+- [ ] `runtime_dos.h`: DPMI heap, `int 21h` вывод через libc printf
+- [ ] `@dos/int21h`: системные вызовы (файлы, клавиатура, экран)
+- [ ] `@dos/vga`: VGA mode 13h (320×200×256)
+
+### NES (cc65)
+
+- [ ] cc65 toolchain (`cmake/toolchain-nes.cmake`)
+- [ ] `runtime_nes.h`: `_Noreturn` → macro, `va_copy` → `va_start`, `snprintf` → `sprintf`, stub `clock_gettime`; `console.log` → заглушка / PPU text
+- [ ] NES profile checker: `allocator: none`, no float, usize=u16, no async, no threads
+- [ ] `@nes/platform`: MMIO регистры PPU/APU ($2000–$401F), iNES ROM header, NMI slot
+- [ ] `@nes/ppu`: тайлы, нейм-таблицы, OAM спрайты
+- [ ] `@nes/apu`: Pulse/Triangle/Noise/DPCM
+- [ ] `@nes/pad`: `readJoy1()` / `readJoy2()` → `u8`
+
+### ZX Spectrum
+
+- [ ] z88dk toolchain (sccz80)
+- [ ] `u16` режим: `usize = u16`, `int = i16` в runtime
+- [ ] `runtime_spectrum.h`: без heap, без printf (print через IM 1 / ROM RST)
+- [ ] `@spectrum/ula`: атрибуты, border, BEEPER
+- [ ] `@spectrum/ay`: AY-3-8912 звук
+
+### Лог
+
+---
+
 ## Общий прогресс
 
 | Фаза | Название | Тестов | Статус |
@@ -466,5 +540,6 @@
 | 14 | IR и продвинутые возможности | — | `[ ]` |
 | 15 | Линтер и форматтер | — | `[ ]` |
 | 16 | Реестр пакетов | — | `[ ]` |
+| 17 | Platform backends: Retro & Consoles | — | `[ ]` |
 
 **Итого: 883 теста, все проходят ✓** (2026-04-19)

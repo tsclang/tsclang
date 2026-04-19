@@ -86,15 +86,21 @@ typedef struct TscError {
 static double _tsc_t0 = 0.0;
 
 static inline void _tsc_init(void) {
+#ifndef TSC_NES
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     _tsc_t0 = (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
+#endif
 }
 
 static inline double tsc_performance_now(void) {
+#ifndef TSC_NES
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6 - _tsc_t0;
+#else
+    return 0.0;
+#endif
 }
 
 /* Compiler inserts this at the top of main() */
@@ -140,6 +146,11 @@ static inline V tsc_map_get_##SUFFIX(const TscMap_##SUFFIX *m, K key) { \
 
 TSC_MAP_DECL(String, int32_t, string_i32)
 
+/* cc65 does not support _Noreturn; guard for NES target */
+#ifdef TSC_NES
+#define _Noreturn
+#endif
+
 /* tsc_throw — used for 'throw new Error(msg)' in _Noreturn functions */
 #include <stdlib.h>
 _Noreturn static inline void tsc_throw(String msg) {
@@ -162,18 +173,33 @@ static inline String tsc_capture_stack(void) {
 /* Numeric-to-string conversions (used by optional chaining x?.toString()) */
 static inline String tsc_i32_to_string(int32_t v) {
     static char _tsc_i32_buf[32];
+#ifndef TSC_NES
     int n = snprintf(_tsc_i32_buf, sizeof(_tsc_i32_buf), "%d", v);
     return (String){ .data = _tsc_i32_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+#else
+    sprintf(_tsc_i32_buf, "%ld", (long)v);
+    return STR_LIT_RUNTIME(_tsc_i32_buf);
+#endif
 }
 static inline String tsc_i64_to_string(int64_t v) {
     static char _tsc_i64_buf[32];
+#ifndef TSC_NES
     int n = snprintf(_tsc_i64_buf, sizeof(_tsc_i64_buf), "%lld", (long long)v);
     return (String){ .data = _tsc_i64_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+#else
+    sprintf(_tsc_i64_buf, "%ld", (long)v);
+    return STR_LIT_RUNTIME(_tsc_i64_buf);
+#endif
 }
 static inline String tsc_f64_to_string(double v) {
     static char _tsc_f64_buf[64];
+#ifndef TSC_NES
     int n = snprintf(_tsc_f64_buf, sizeof(_tsc_f64_buf), "%g", v);
     return (String){ .data = _tsc_f64_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+#else
+    sprintf(_tsc_f64_buf, "%g", v);
+    return STR_LIT_RUNTIME(_tsc_f64_buf);
+#endif
 }
 
 /* string.lastIndexOf(sub): returns last position of sub, or -1 */
@@ -208,15 +234,26 @@ static inline String tsc_string_concat(String a, String b) {
 
 /* Format string → new heap String (like sprintf) */
 static inline String tsc_string_format(const char *fmt, ...) {
+#ifndef TSC_NES
     va_list a, b;
     va_start(a, fmt);
-    va_copy(b, a);
-    int n = vsnprintf(NULL, 0, fmt, a);
+    va_copy(b, a);                      /* va_copy: C99, not available on cc65 */
+    int n = vsnprintf(NULL, 0, fmt, a); /* vsnprintf: not available on cc65    */
     va_end(a);
     size_t sz = (n > 0) ? (size_t)n : 0;
     char *buf = (char *)malloc(sz + 1);
     vsnprintf(buf, sz + 1, fmt, b);
     va_end(b);
+#else
+    /* NES: fixed-size static buffer; heap/vsnprintf not available */
+    static char _fmt_buf[128];
+    va_list a;
+    va_start(a, fmt);
+    vsprintf(_fmt_buf, fmt, a);         /* vsprintf: available in cc65 stdio.h */
+    va_end(a);
+    size_t sz = strlen(_fmt_buf);
+    char *buf = _fmt_buf; /* no heap — caller must use immediately */
+#endif
     return (String){ .data = buf, .length = sz, .capacity = sz + 1 };
 }
 
