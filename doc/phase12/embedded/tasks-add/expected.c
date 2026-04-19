@@ -10,8 +10,12 @@ typedef struct { int _dummy; bool done; } ledTask_result;
 
 static ledTask_result ledTask_next(ledTask_state *self) {
     switch (self->_state) {
-        case 0: self->_state = 1; return (ledTask_result){0, false};
-        case 1: self->_done = true; return (ledTask_result){0, true};
+        case 0:
+            self->_state = 1;
+            return (ledTask_result){0, false};
+        case 1:
+            self->_done = true;
+            return (ledTask_result){0, true};
     }
     return (ledTask_result){0, true};
 }

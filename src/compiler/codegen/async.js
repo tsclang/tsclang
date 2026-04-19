@@ -55,6 +55,31 @@ export default {
         return { kind: 'sleep', stateType: 'TscSleepAwaitable', pollFn: 'tsc_sleep_poll',
                  resultCType: null, args: expr.args };
       }
+      // std/net: fetch(url, opts?)
+      if (callee === 'fetch') {
+        return { kind: 'net-fetch', stateType: 'TscFetchAwaitable', pollFn: 'tsc_fetch_poll',
+                 initFn: 'tsc_fetch_async', resultCType: 'TscResponse', isResult: true, args: expr.args };
+      }
+      // std/io async functions
+      if (callee === 'readAll') {
+        return { kind: 'io-readAll', stateType: 'TscReadAllAwaitable', pollFn: 'tsc_read_all_poll',
+                 initFn: 'tsc_read_all_async', resultCType: 'Array_u8', args: expr.args };
+      }
+      if (callee === 'writeAll') {
+        return { kind: 'io-writeAll', stateType: 'TscWriteAllAwaitable', pollFn: 'tsc_write_all_poll',
+                 initFn: 'tsc_write_all_async', resultCType: null, args: expr.args };
+      }
+      if (callee === 'pipe') {
+        return { kind: 'io-pipe', stateType: 'TscPipeAwaitable', pollFn: 'tsc_pipe_poll',
+                 initFn: 'tsc_pipe_async', resultCType: null, args: expr.args };
+      }
+      // std/net: net.connect(host, port)
+      if (expr.callee?.kind === 'Member' &&
+          expr.callee.object?.name === 'net' &&
+          expr.callee.prop === 'connect') {
+        return { kind: 'net-connect', stateType: 'TscConnectAwaitable', pollFn: 'tsc_net_connect_poll',
+                 initFn: 'tsc_net_connect_async', resultCType: 'TscSocket', args: expr.args };
+      }
       if (expr.callee?.kind === 'Member' &&
           expr.callee.object?.name === 'Promise' &&
           expr.callee.prop === 'all') {
@@ -214,7 +239,16 @@ export default {
   _emitStructMultiline(name, fields) {
     this._topBlank();
     this.topLevel.push('typedef struct {');
-    for (const f of fields) this.topLevel.push(`    ${f};`);
+    // First line: state/result/done header fields (up to bool _done)
+    let headerEnd = 0;
+    for (let i = 0; i < fields.length; i++) {
+      headerEnd = i;
+      if (fields[i].startsWith('bool _done')) break;
+    }
+    const headerFields = fields.slice(0, headerEnd + 1);
+    const bodyFields = fields.slice(headerEnd + 1);
+    this.topLevel.push(`    ${headerFields.join('; ')};`);
+    for (const f of bodyFields) this.topLevel.push(`    ${f};`);
     this.topLevel.push(`} ${name};`);
   },
 
@@ -306,14 +340,18 @@ export default {
     if (resultCType !== null) sFields.push(`${resultCType} _result`);
     sFields.push('bool _done');
     for (const f of paramFields) sFields.push(`${f.ctype} ${f.name}`);
-    for (const f of bodyFields) sFields.push(`${f.ctype} ${f.name}`);
+    for (const f of bodyFields) {
+      sFields.push(`${f.ctype} ${f.name}`);
+      // Ensure Array_u8 struct is emitted before the state struct that references it
+      if (f.ctype === 'Array_u8') this._ensureArrayStruct('Array_u8', 'uint8_t');
+    }
     for (const af of awaitStates) {
       if (!af.isUnknown) sFields.push(`${af.stateType} ${af.fieldName}`);
     }
 
-    // @static tasks always use compact struct; otherwise compact only for Promise<void> (2 fields)
+    // Compact if no promoted body vars; multiline if any body vars exist
     const _hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
-    if (_hasStaticDec || sFields.length === 2) {
+    if (_hasStaticDec || bodyFields.length === 0) {
       this._emitStructCompact(stateType, sFields);
     } else {
       this._emitStructMultiline(stateType, sFields);
@@ -457,13 +495,56 @@ export default {
       if (ai.kind === 'sleep') {
         const argC = this._selfE(ai.args?.[0]?.expr);
         lines.push(`${I}self->_await_${awaitIdx} = tsc_sleep_awaitable(${argC});`);
+      } else if (ai.kind === 'net-fetch') {
+        // fetch(url, opts?) — special handling for options object
+        const urlArg = ai.args?.[0]?.expr;
+        const urlC = urlArg ? this._selfE(urlArg) : 'STR_LIT("")';
+        const optsArg = ai.args?.[1]?.expr;
+        if (optsArg && optsArg.kind === 'ObjLit') {
+          // Wrap case in {} for local opts var
+          if (lines.length > 0) lines[lines.length - 1] += ' {';
+          const optsIdx = this._fetchOptsCount ?? 0;
+          this._fetchOptsCount = optsIdx + 1;
+          const optsVar = `_opts_${optsIdx}`;
+          const optsFields = (optsArg.props ?? []).map(p => `.${p.key} = ${this._selfE(p.value)}`);
+          lines.push(`${I}TscFetchOptions ${optsVar} = { ${optsFields.join(', ')} };`);
+          lines.push(`${I}self->_await_${awaitIdx} = tsc_fetch_async(${urlC}, &${optsVar});`);
+          lines.push(`${I}self->_state = ${ctx.nextCase};`);
+          lines.push(`${I}/* fall through */`);
+          lines.push('        }');
+          lines.push(`        case ${ctx.nextCase}:`);
+          ctx.nextCase++;
+        } else {
+          lines.push(`${I}self->_await_${awaitIdx} = tsc_fetch_async(${urlC}, NULL);`);
+          this._emitAsyncTransition(lines, ctx, I);
+        }
+      } else if (ai.initFn) {
+        const callArgs = [];
+        for (const arg of (ai.args ?? [])) {
+          const argExpr = arg?.expr;
+          if (!argExpr) continue;
+          const argC = this._selfE(argExpr);
+          const argType = this.inferType(argExpr);
+          if (argType === 'Array_u8' || argType?.startsWith('Array_')) {
+            callArgs.push(`${argC}.data`, `${argC}.length`);
+          } else {
+            callArgs.push(argC);
+          }
+        }
+        lines.push(`${I}self->_await_${awaitIdx} = ${ai.initFn}(${callArgs.join(', ')});`);
+        this._emitAsyncTransition(lines, ctx, I);
       } else {
         lines.push(`${I}self->_await_${awaitIdx} = (${ai.stateType}){0};`);
+        this._emitAsyncTransition(lines, ctx, I);
       }
-      this._emitAsyncTransition(lines, ctx, I);
       lines.push(`${I}${ai.pollFn}(&self->_await_${awaitIdx});`);
       lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
-      if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+      if (ai.isResult) {
+        lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
+        if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+          lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result.value;`);
+        }
+      } else if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
         lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result;`);
       }
       // Define var in scope so subsequent expressions can infer its type
@@ -537,6 +618,20 @@ export default {
       if (ai.kind === 'sleep') {
         const argC = this._selfE(ai.args?.[0]?.expr);
         lines.push(`${I}self->_await_${awaitIdx} = tsc_sleep_awaitable(${argC});`);
+      } else if (ai.initFn) {
+        const callArgs = [];
+        for (const arg of (ai.args ?? [])) {
+          const argExpr = arg?.expr;
+          if (!argExpr) continue;
+          const argC = this._selfE(argExpr);
+          const argType = this.inferType(argExpr);
+          if (argType === 'Array_u8' || argType?.startsWith('Array_')) {
+            callArgs.push(`${argC}.data`, `${argC}.length`);
+          } else {
+            callArgs.push(argC);
+          }
+        }
+        lines.push(`${I}self->_await_${awaitIdx} = ${ai.initFn}(${callArgs.join(', ')});`);
       } else {
         lines.push(`${I}self->_await_${awaitIdx} = (${ai.stateType}){0};`);
       }

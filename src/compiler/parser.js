@@ -337,6 +337,12 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (t.type === TK.IDENT && t.value === 'const')  return parseVarDecl('const', decorators);
     if (t.type === TK.IDENT && t.value === 'var')    return parseVarDecl('var', decorators);
     if (t.type === TK.IDENT && t.value === 'function')  return parseFunctionDecl(decorators);
+    if (t.type === TK.IDENT && t.value === 'decorator' && pos + 1 < tokens.length && tokens[pos + 1]?.value === 'function') {
+      pos++; // eat 'decorator'
+      const decl = parseFunctionDecl(decorators);
+      decl.isDecorator = true;
+      return decl;
+    }
     if (t.type === TK.IDENT && t.value === 'extension') return parseExtensionFunc();
     if (t.type === TK.IDENT && t.value === 'async')  return parseAsyncDecl(decorators);
     if (t.type === TK.IDENT && t.value === 'class')  return parseClassDecl(decorators);
@@ -525,7 +531,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     let generator = false;
     eat(TK.IDENT, 'function');
     if (tryEat(TK.STAR)) generator = true;
-    const name = cur().type === TK.IDENT && !KEYWORDS.has(cur().value) ? eat(TK.IDENT).value : null;
+    const name = cur().type === TK.IDENT ? eat(TK.IDENT).value : null;
     // Type parameters: function foo<T>(...)
     let typeParams = [];
     if (cur().type === TK.LT) {
@@ -626,6 +632,13 @@ export function parse(tokens, filename = '<input>', src = null) {
         if (cur().type === TK.SPREAD) err('only one rest parameter is allowed');
         err('rest parameter must be the last parameter');
       }
+      // Decorator on parameter → error
+      if (cur().type === TK.AT) {
+        eat(TK.AT);
+        const decName = eat(TK.IDENT).value;
+        err(`"@${decName}" cannot be applied to parameters`);
+      }
+
       let rest = false;
       if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; hadRest = true; }
 
@@ -1167,7 +1180,12 @@ export function parse(tokens, filename = '<input>', src = null) {
       eat(TK.GT);
     }
     let args = [];
-    if (cur().type === TK.LPAREN) {
+    let arraySize = null;
+    if (cur().type === TK.LBRACK) {
+      eat(TK.LBRACK);
+      arraySize = parseExpr();
+      eat(TK.RBRACK);
+    } else if (cur().type === TK.LPAREN) {
       eat(TK.LPAREN);
       while (cur().type !== TK.RPAREN) {
         if (cur().type === TK.SPREAD) { eat(TK.SPREAD); args.push({ spread: true, expr: parseExpr() }); }
@@ -1176,7 +1194,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       eat(TK.RPAREN);
     }
-    return { kind: 'New', name, typeArgs, args, line: newTok.line, col: newTok.col };
+    return { kind: 'New', name, typeArgs, args, arraySize, line: newTok.line, col: newTok.col };
   }
 
   function parsePostfix() {
@@ -1418,8 +1436,11 @@ export function parse(tokens, filename = '<input>', src = null) {
           eat(TK.COLON);
           props.push({ computed: true, key, value: parseExpr() });
         } else {
-          const key = eat(TK.IDENT).value;
-          if (tryEat(TK.COLON)) props.push({ key, value: parseExpr() });
+          // Allow string literal keys: { "key": val }
+          const isStringKey = cur().type === TK.STRING;
+          const keyTok = isStringKey ? eat(TK.STRING) : eat(TK.IDENT);
+          const key = keyTok.value;
+          if (tryEat(TK.COLON)) props.push({ key, value: parseExpr(), isStringKey });
           else props.push({ key, value: { kind: 'Ident', name: key } }); // shorthand
         }
         tryEat(TK.COMMA);
@@ -1438,6 +1459,17 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       const spawnBody = parseBlock();
       return { kind: 'Spawn', throwsTypes: throwsTypes2, body: spawnBody };
+    }
+
+    // Function expression: function(...)  or  function name(...)
+    if (t.type === TK.IDENT && t.value === 'function') {
+      pos++;
+      const exprFnName = (cur().type === TK.IDENT) ? eat(TK.IDENT).value : null;
+      const exprParams = parseParams();
+      let exprRetType = null;
+      if (tryEat(TK.COLON)) exprRetType = parseTypeAnnotation();
+      const exprBody = parseBlock();
+      return { kind: 'FuncExpr', name: exprFnName, params: exprParams, returnType: exprRetType, body: exprBody };
     }
 
     // Identifier

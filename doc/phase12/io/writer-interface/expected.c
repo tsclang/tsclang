@@ -8,7 +8,7 @@ typedef struct {
 } Writer_vtable;
 typedef struct { void *self; const Writer_vtable *vtable; } Writer;
 
-void emit_Writer_arr_u8(Writer w, Array_u8 data) {
+void emit_Writer_Array_u8(Writer w, Array_u8 data) {
     w.vtable->write(w.self, data.data, data.length);
 }
 

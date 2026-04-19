@@ -3,14 +3,13 @@
 typedef struct { int _dummy; } Svc;
 
 static void Svc_run_inner(const Svc *self) {
-    (void)self;
-    printf("%s\n", "running");
+    printf("running\n");
 }
 
 static void Svc_run(const Svc *self) {
-    printf("%s\n", "before");
+    printf("before\n");
     Svc_run_inner(self);
-    printf("%s\n", "after");
+    printf("after\n");
 }
 
 int main(void) {

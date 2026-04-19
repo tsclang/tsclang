@@ -13,7 +13,6 @@ int main(void) {
     tsc_hashmap_set_string_i32(&m, STR_LIT("a"), 1);
     tsc_hashmap_set_string_i32(&m, STR_LIT("b"), 2);
     tsc_hashmap_set_string_i32(&m, STR_LIT("c"), 3);
-    opt_i32 _v = tsc_hashmap_get_string_i32(&m, STR_LIT("b"));
-    printf("%s\n", (_v.has_value) ? "true" : "false");
+    printf("%s\n", (tsc_hashmap_get_string_i32(&m, STR_LIT("b")).has_value) ? "true" : "false");
     return 0;
 }

@@ -10,8 +10,12 @@ typedef struct { int _dummy; bool done; } blink_result;
 
 static blink_result blink_next(blink_state *self) {
     switch (self->_state) {
-        case 0: self->_state = 1; return (blink_result){0, false};
-        case 1: self->_done = true; return (blink_result){0, true};
+        case 0:
+            self->_state = 1;
+            return (blink_result){0, false};
+        case 1:
+            self->_done = true;
+            return (blink_result){0, true};
     }
     return (blink_result){0, true};
 }

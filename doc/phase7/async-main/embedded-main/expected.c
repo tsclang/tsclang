@@ -1,10 +1,6 @@
 #include "runtime.h"
 
-typedef struct {
-    int32_t _state;
-    int _result;
-    bool _done;
-} main_state;
+typedef struct { int32_t _state; int _result; bool _done; } main_state;
 
 static void main_poll(main_state *self) {
     switch (self->_state) {

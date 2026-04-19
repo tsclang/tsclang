@@ -3,7 +3,6 @@
 typedef struct { int _dummy; } Fmt;
 
 static void Fmt_format_inner(const Fmt *self, String s) {
-    (void)self;
     printf("%s\n", s.data);
 }
 

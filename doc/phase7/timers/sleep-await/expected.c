@@ -1,11 +1,6 @@
 #include "runtime.h"
 
-typedef struct {
-    int32_t _state;
-    int _result;
-    bool _done;
-    TscSleepAwaitable _await_0;
-} run_state;
+typedef struct { int32_t _state; int _result; bool _done; TscSleepAwaitable _await_0; } run_state;
 
 static void run_poll(run_state *self) {
     switch (self->_state) {

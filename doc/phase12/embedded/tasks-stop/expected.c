@@ -10,8 +10,12 @@ typedef struct { int _dummy; bool done; } work_result;
 
 static work_result work_next(work_state *self) {
     switch (self->_state) {
-        case 0: self->_state = 1; return (work_result){0, false};
-        case 1: self->_done = true; return (work_result){0, true};
+        case 0:
+            self->_state = 1;
+            return (work_result){0, false};
+        case 1:
+            self->_done = true;
+            return (work_result){0, true};
     }
     return (work_result){0, true};
 }

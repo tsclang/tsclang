@@ -206,6 +206,51 @@ export default {
       return 'tsc_performance_now()';
     }
 
+    // std/avr: avr.sleep(mode), avr.watchdogReset(), ADC.read(ch), PWM.setDuty(ch, duty)
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const objName = callee.object.name;
+      const prop = callee.prop;
+      const objSym = this.lookup(objName);
+      if (objSym?._isAvrObj) {
+        if (objName === 'avr' && prop === 'sleep') {
+          this.includes.add('#include <avr/sleep.h>');
+          const modeArg = args[0]?.expr;
+          const modeC = modeArg ? this._avrSleepModeToC(modeArg) : 'SLEEP_MODE_IDLE';
+          lines.push(`${' '.repeat(this.indent * depth)}set_sleep_mode(${modeC});`);
+          return 'sleep_mode()';
+        }
+        if (objName === 'avr' && prop === 'watchdogReset') {
+          this.includes.add('#include <avr/wdt.h>');
+          return 'wdt_reset()';
+        }
+        if (objName === 'ADC' && prop === 'read') {
+          const ch = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_adc_read(${ch})`;
+        }
+        if (objName === 'PWM' && prop === 'setDuty') {
+          const ch = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const duty = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `tsc_pwm_set_duty(${ch}, ${duty})`;
+        }
+      }
+    }
+
+    // TscRandom method calls: r.nextI32(), r.nextF64(), r.range(lo, hi)
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _rndSym = this.lookup(callee.object.name);
+      if (_rndSym?._isRandom) {
+        const _rndName = callee.object.name;
+        const _rndProp = callee.prop;
+        if (_rndProp === 'nextI32') return `tsc_random_next_i32(&${_rndName})`;
+        if (_rndProp === 'nextF64') return `tsc_random_next_f64(&${_rndName})`;
+        if (_rndProp === 'range') {
+          const lo = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const hi = args[1] ? this.exprToC(args[1].expr, lines, depth) : '1';
+          return `tsc_random_range_i32(&${_rndName}, ${lo}, ${hi})`;
+        }
+      }
+    }
+
     // process.exit(n)
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'process' &&
@@ -223,6 +268,690 @@ export default {
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'Math') {
       return this.mathCall(callee.prop, args, lines, depth);
+    }
+
+    // Reader/Writer vtable dispatch (std/io)
+    if (this._stdIoImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _ioSym = this.lookup(callee.object.name);
+      const _ioName = callee.object.name;
+      const _ioProp = callee.prop;
+      if (_ioSym?.ctype === 'Reader' && _ioProp === 'read') {
+        const bufArg = args[0]?.expr;
+        const bufName = bufArg?.kind === 'Ident' ? bufArg.name : this.exprToC(bufArg, lines, depth);
+        this._lastHalRead = 'size_t';
+        return `${_ioName}.vtable->read(${_ioName}.self, ${bufName}.data, ${bufName}.length)`;
+      }
+      if (_ioSym?.ctype === 'Writer' && _ioProp === 'write') {
+        const bufArg = args[0]?.expr;
+        const bufName = bufArg?.kind === 'Ident' ? bufArg.name : this.exprToC(bufArg, lines, depth);
+        return `${_ioName}.vtable->write(${_ioName}.self, ${bufName}.data, ${bufName}.length)`;
+      }
+    }
+
+    // HAL static method calls: GPIO, I2C, SPI, UART
+    if (this._stdHalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _halClass = callee.object.name;
+      const _halProp  = callee.prop;
+      if (_halClass === 'GPIO') {
+        if (_halProp === 'output') return `tsc_gpio_output(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
+        if (_halProp === 'input')  return `tsc_gpio_input(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
+        if (_halProp === 'write') {
+          const pin = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'false';
+          return `tsc_gpio_write(${pin}, ${val})`;
+        }
+        if (_halProp === 'read') {
+          this._lastHalRead = 'bool';
+          return `tsc_gpio_read(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
+        }
+      }
+      if (_halClass === 'I2C') {
+        if (_halProp === 'write') {
+          const addr = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const dataN = args[1]?.expr?.kind === 'Ident' ? args[1].expr.name : '_data';
+          return `tsc_i2c_write(${addr}, ${dataN}.data, ${dataN}.length)`;
+        }
+        if (_halProp === 'read') {
+          const addr = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const len  = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          this._lastHalRead = 'Array_u8';
+          return `tsc_i2c_read(${addr}, ${len})`;
+        }
+      }
+      if (_halClass === 'SPI') {
+        if (_halProp === 'transfer') {
+          this._lastHalRead = 'uint8_t';
+          return `tsc_spi_transfer(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
+        }
+      }
+      if (_halClass === 'UART') {
+        if (_halProp === 'init') {
+          const cfgArg = args[0]?.expr;
+          let baud = '9600';
+          if (cfgArg?.kind === 'ObjLit') {
+            const bp = cfgArg.props?.find(p => p.key === 'baud');
+            if (bp?.value) baud = this.exprToC(bp.value, lines, depth);
+          }
+          return `tsc_uart_init(${baud})`;
+        }
+        if (_halProp === 'write') return `tsc_uart_write(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
+        if (_halProp === 'read') {
+          this._lastHalRead = 'opt_u8';
+          this._ensureOptStruct('opt_u8', 'uint8_t');
+          return `tsc_uart_read()`;
+        }
+      }
+    }
+
+    // Blob method calls
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _blobSym = this.lookup(callee.object.name);
+      const _blobName = callee.object.name;
+      const _blobProp = callee.prop;
+      if (_blobSym?._isBlob) {
+        if (_blobProp === 'slice') {
+          const start = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const end   = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${_blobName}.size`;
+          const sizeExpr = (args[0] && args[1] &&
+            args[0].expr.kind === 'Literal' && args[1].expr.kind === 'Literal')
+            ? String(parseInt(args[1].expr.value) - parseInt(args[0].expr.value))
+            : `(${end} - ${start})`;
+          return `{.data = ${_blobName}.data + ${start}, .size = ${sizeExpr}}`;
+        }
+        if (_blobProp === 'arrayBuffer') {
+          // Ensure Buffer typedef
+          if (!this._emittedBufferTypeDef) {
+            this._emittedBufferTypeDef = true;
+            this.addTop('typedef struct { uint8_t *data; size_t length; } Buffer;');
+            this.addTop('');
+          }
+          return `{.data = ${_blobName}.data, .length = ${_blobName}.size}`;
+        }
+      }
+      if (_blobSym?._isTscBlob) {
+        if (_blobProp === 'text') {
+          const n = this._blobTextN = (this._blobTextN ?? 0); this._blobTextN++;
+          const tmp = `_text_${n}`;
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}String ${tmp} = tsc_blob_text(&${_blobName});`);
+          if (!this._postStmtCleanups) this._postStmtCleanups = [];
+          this._postStmtCleanups.push(`${I}tsc_string_free(${tmp});`);
+          return tmp;
+        }
+      }
+    }
+
+    // URL / URLSearchParams method calls
+    if (this._stdUrlImported && callee.kind === 'Member') {
+      // u.searchParams.get/set/delete — callee.object is Member (u.searchParams)
+      if (callee.object.kind === 'Member' && callee.object.prop === 'searchParams') {
+        const urlObj = callee.object.object;
+        const urlSym = urlObj.kind === 'Ident' ? this.lookup(urlObj.name) : null;
+        if (urlSym?._isURL) {
+          const urlName = urlObj.name;
+          const _spProp = callee.prop;
+          if (_spProp === 'get') {
+            const keyC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+            const n = this._urlOptN = (this._urlOptN ?? 0); this._urlOptN++;
+            const tmp = `_v_${n}`;
+            lines.push(`${' '.repeat(depth * 4)}TscOptString ${tmp} = tsc_search_params_get(&${urlName}.searchParams, ${keyC});`);
+            return `${tmp}.has_value ? ${tmp}.value.data : "null"`;
+          }
+          if (_spProp === 'set') {
+            const k = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+            const v = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+            return `tsc_url_params_set(&${urlName}, ${k}, ${v})`;
+          }
+          if (_spProp === 'delete') {
+            const k = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+            return `tsc_url_params_delete(&${urlName}, ${k})`;
+          }
+        }
+      }
+      // p.get(key) — URLSearchParams standalone
+      if (callee.object.kind === 'Ident') {
+        const _spSym = this.lookup(callee.object.name);
+        if (_spSym?._isURLSearchParams) {
+          const _spName = callee.object.name;
+          const _spProp = callee.prop;
+          if (_spProp === 'get') {
+            const keyC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+            const n = this._urlOptN = (this._urlOptN ?? 0); this._urlOptN++;
+            const tmp = `_v_${n}`;
+            lines.push(`${' '.repeat(depth * 4)}TscOptString ${tmp} = tsc_search_params_get(&${_spName}, ${keyC});`);
+            return `${tmp}.has_value ? ${tmp}.value.data : "null"`;
+          }
+        }
+      }
+    }
+
+    // Signal methods: signal.get(), signal.set(val)
+    if (this._stdReactiveImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _sigSym = this.lookup(callee.object.name);
+      if (_sigSym?._isSignal) {
+        const etIdent = _sigSym._signalElemType;
+        const sigRef = this._capturedSignalMap?.get(callee.object.name) ?? `&${callee.object.name}`;
+        if (callee.prop === 'get') return `tsc_signal_get_${etIdent}(${sigRef})`;
+        if (callee.prop === 'set') {
+          if (this._inComputedFn) throw this.error(`TypeError: Side effect (signal.set) inside computed() is not allowed`);
+          const val = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_signal_set_${etIdent}(${sigRef}, ${val})`;
+        }
+      }
+    }
+
+    // computed(arrow), effect(arrow), batch(arrow)
+    if (this._stdReactiveImported && callee.kind === 'Ident') {
+      if (callee.name === 'computed' || callee.name === 'effect' || callee.name === 'batch') {
+        const arrow = args[0]?.expr;
+        const n = callee.name === 'batch' ? (this._batchCount ?? 0) : (this._reactiveClosureCount ?? 0);
+        const prefix = callee.name === 'batch' ? `_batch_${n}` : `_closure_${n}`;
+        const fnName = `${prefix}_fn`;
+
+        if (callee.name === 'batch') {
+          // batch: emit static fn that accesses already-captured signal refs
+          this._batchCount = (this._batchCount ?? 0) + 1;
+          const batchLines = [];
+          if (arrow?.kind === 'Arrow') {
+            // Use persistent capture refs inside batch body
+            const _savedMap = this._capturedSignalMap;
+            this._capturedSignalMap = new Map(this._persistentCaptureRefs ?? []);
+            this.pushScope();
+            if (arrow.body.kind === 'Block') this.visitBlock(arrow.body, batchLines, 0);
+            else { const c = this.exprToC(arrow.body, batchLines, 0); batchLines.push(`return ${c};`); }
+            this.popScope();
+            this._capturedSignalMap = _savedMap;
+          }
+          this.topLevel.push(`static void ${fnName}(void) {`);
+          for (const l of batchLines) this.topLevel.push('    ' + l);
+          this.topLevel.push('}');
+          this.topLevel.push('');
+          return `tsc_batch(${fnName})`;
+        }
+
+        // computed/effect: collect Signal free vars, emit env struct + static captured + fn
+        if (!arrow || arrow.kind !== 'Arrow') return `tsc_effect(NULL)`;
+        this._reactiveClosureCount = (this._reactiveClosureCount ?? 0) + 1;
+
+        // Find free Signal vars
+        const paramNames = new Set((arrow.params ?? []).map(p => p.name));
+        const capturedSignals = new Map();
+        const walkFreeVars = (node) => {
+          if (!node || typeof node !== 'object') return;
+          if (Array.isArray(node)) { node.forEach(walkFreeVars); return; }
+          if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee.object?.kind === 'Ident') {
+            const varName = node.callee.object.name;
+            if (!paramNames.has(varName)) {
+              const sym = this.lookup(varName);
+              if (sym?._isSignal) capturedSignals.set(varName, sym);
+            }
+          }
+          for (const key of Object.keys(node)) {
+            if (key !== 'kind') walkFreeVars(node[key]);
+          }
+        };
+        walkFreeVars(arrow.body);
+
+        // Emit env struct and static captured:
+        // if topLevel has global statics already → append there; else use typedefs (stays adjacent to Signal typedef)
+        let _envInTopLevel = false;
+        if (capturedSignals.size > 0) {
+          const envName = `_closure_${n}_env`;
+          const fields = [...capturedSignals.entries()].map(([nm, sym]) => `${sym.ctype} *${nm};`).join(' ');
+          const hasGlobalsBefore = this.topLevel.some(l => l.trim().length > 0);
+          if (hasGlobalsBefore) {
+            this.topLevel.push(`typedef struct { ${fields} } ${envName};`);
+            this.topLevel.push(`static ${envName} _closure_${n}_captured;`);
+            _envInTopLevel = true;
+          } else {
+            this.typedefs.push(`typedef struct { ${fields} } ${envName};`);
+            this.typedefs.push(`static ${envName} _closure_${n}_captured;`);
+          }
+          // Track captured signal refs for fn body emission
+          if (!this._capturedSignalMap) this._capturedSignalMap = new Map();
+          for (const nm of capturedSignals.keys()) {
+            this._capturedSignalMap.set(nm, `_closure_${n}_captured.${nm}`);
+          }
+        }
+
+        // Emit fn
+        const retType = callee.name === 'effect' ? 'void'
+          : (arrow.body.kind === 'Block' ? 'int32_t' : (this.inferArrowReturn(arrow) || 'int32_t'));
+        const etIdent = this.cTypeToIdent(retType);
+        const sigType = callee.name === 'computed' ? `Signal_${etIdent}` : null;
+
+        if (callee.name === 'computed') this._inComputedFn = true;
+        const fnLines = [];
+        this.pushScope();
+        if (arrow.body.kind === 'Block') this.visitBlock(arrow.body, fnLines, 0);
+        else { const c = this.exprToC(arrow.body, fnLines, 0); fnLines.push(`return ${c};`); }
+        this.popScope();
+        if (callee.name === 'computed') this._inComputedFn = false;
+
+        // Clear captured signal map after fn body (back to main context)
+        if (capturedSignals.size > 0) {
+          for (const nm of capturedSignals.keys()) this._capturedSignalMap.delete(nm);
+        }
+
+        // No leading blank when env is adjacent in topLevel; add blank otherwise (env in typedefs)
+        if (!_envInTopLevel) this.topLevel.push('');
+        this.topLevel.push(`static ${retType} ${fnName}(void) {`);
+        for (const l of fnLines) this.topLevel.push('    ' + l);
+        this.topLevel.push('}');
+        this.topLevel.push('');
+
+        // Emit env init in current scope (main/function body)
+        if (capturedSignals.size > 0) {
+          const envInit = `(_closure_${n}_env){ ${[...capturedSignals.keys()].map(nm => `.${nm} = &${nm}`).join(', ')} }`;
+          lines.push(' '.repeat(this.indent * depth) + `_closure_${n}_captured = ${envInit};`);
+          // Track persistent captures for batch fns (separate from fn-body map)
+          if (!this._persistentCaptureRefs) this._persistentCaptureRefs = new Map();
+          for (const nm of capturedSignals.keys()) {
+            this._persistentCaptureRefs.set(nm, `_closure_${n}_captured.${nm}`);
+          }
+        }
+
+        if (callee.name === 'computed') {
+          // Signal the VarDecl that the result type is Signal_T (not raw T)
+          this._lastComputedSigType = sigType;
+          this._lastComputedElemType = etIdent;
+          return `tsc_computed_${etIdent}(${fnName})`;
+        }
+        return `tsc_effect(${fnName})`;
+      }
+    }
+
+    // WebSocket methods: ws.send(), ws.close(), ws.onMessage()
+    if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _wsSym = this.lookup(callee.object.name);
+      if (_wsSym?._isWebSocket) {
+        const wsRef = `&${callee.object.name}`;
+        const _wsProp = callee.prop;
+        if (_wsProp === 'send') {
+          const msgC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_ws_send(${wsRef}, ${msgC})`;
+        }
+        if (_wsProp === 'close') {
+          return `tsc_ws_close(${wsRef})`;
+        }
+        if (_wsProp === 'onMessage') {
+          const cbArg = args[0]?.expr;
+          let cbName;
+          if (cbArg?.kind === 'Arrow') {
+            this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            cbName = this.hoistArrow(cbArg, 'void');
+            this._lambdaParamHint = null;
+          } else {
+            cbName = cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
+          }
+          return `tsc_ws_on_message(${wsRef}, ${cbName})`;
+        }
+      }
+    }
+
+    // std/net: net.listen(port, handler) / net.connect handled via async
+    if (this._stdNetImported && callee.kind === 'Member' &&
+        callee.object.kind === 'Ident' && callee.object.name === 'net') {
+      const _netProp = callee.prop;
+      if (_netProp === 'listen') {
+        const portC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+        const cbArg = args[1]?.expr;
+        const n = this._handlerCount ?? 0;
+        this._handlerCount = n + 1;
+        const handlerName = `_handler_${n}`;
+        if (cbArg?.kind === 'Arrow') {
+          const paramTypes = ['TscSocket *'];
+          const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
+          const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i]}`);
+          const handlerLines = [];
+          this.pushScope();
+          for (let i = 0; i < paramNames.length; i++) {
+            this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const' });
+          }
+          if (cbArg.body.kind === 'Block') this.visitBlock(cbArg.body, handlerLines, 0);
+          else { const c = this.exprToC(cbArg.body, handlerLines, 0); handlerLines.push(`return ${c};`); }
+          this.popScope();
+          this.topLevel.push(`static void ${handlerName}(${paramStrs.join(', ')}) {`);
+          for (const l of handlerLines) this.topLevel.push('    ' + l);
+          this.topLevel.push('}');
+          this.topLevel.push('');
+        }
+        return `tsc_net_listen(${portC}, ${handlerName})`;
+      }
+    }
+
+    // std/net: HttpServer methods (server.get, server.post, server.listen)
+    if (this._stdNetImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _serverSym = this.lookup(callee.object.name);
+      if (_serverSym?._isHttpServer) {
+        const svrRef = `&${callee.object.name}`;
+        const _svrProp = callee.prop;
+        if (_svrProp === 'listen') return `tsc_http_server_listen(${svrRef})`;
+        if (_svrProp === 'get' || _svrProp === 'post') {
+          const pathC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("/")';
+          const cbArg = args[1]?.expr;
+          const n = this._handlerCount ?? 0;
+          this._handlerCount = n + 1;
+          const handlerName = `_handler_${n}`;
+          if (cbArg?.kind === 'Arrow') {
+            const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
+            const paramTypes = ['TscRequest *', 'TscResponse *'];
+            const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines = [];
+            this.pushScope();
+            for (let i = 0; i < Math.min(paramNames.length, paramTypes.length); i++) {
+              this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const', _isNetParam: true });
+            }
+            if (cbArg.body.kind === 'Block') this.visitBlock(cbArg.body, handlerLines, 0);
+            else { const c = this.exprToC(cbArg.body, handlerLines, 0); handlerLines.push(`return ${c};`); }
+            this.popScope();
+            this.topLevel.push(`static void ${handlerName}(${paramStrs.join(', ')}) {`);
+            for (const l of handlerLines) this.topLevel.push('    ' + l);
+            this.topLevel.push('}');
+            this.topLevel.push('');
+          }
+          return `tsc_http_server_${_svrProp}(${svrRef}, ${pathC}, ${handlerName})`;
+        }
+      }
+      // TscResponse methods: res.text, res.json
+      if (_serverSym?.ctype === 'TscResponse *') {
+        const resC = callee.object.name;
+        if (callee.prop === 'text') {
+          const textC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_response_text(${resC}, ${textC})`;
+        }
+        if (callee.prop === 'json') {
+          const jsonC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_response_json(${resC}, ${jsonC})`;
+        }
+      }
+      // TscSocket methods: sock.close()
+      if (_serverSym?.ctype === 'TscSocket *' || _serverSym?.ctype === 'TscSocket') {
+        if (callee.prop === 'close') {
+          const sockC = this.exprToC(callee.object, lines, depth);
+          const sockRef = _serverSym.ctype.endsWith('*') ? sockC : `&${sockC}`;
+          return `tsc_socket_close(${sockRef})`;
+        }
+      }
+    }
+
+    // fs.watch(path, callback) → tsc_fs_watch
+    if (this._stdFsImported && callee.kind === 'Member' &&
+        callee.object.kind === 'Ident' && callee.object.name === 'fs') {
+      const _fsProp = callee.prop;
+      if (_fsProp === 'watch') {
+        const pathC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(".")';
+        const cbArg = args[1]?.expr;
+        let cbName;
+        if (cbArg?.kind === 'Arrow') {
+          this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+          cbName = this.hoistArrow(cbArg, 'void');
+          this._lambdaParamHint = null;
+        } else {
+          cbName = cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
+        }
+        return `tsc_fs_watch(${pathC}, ${cbName})`;
+      }
+    }
+
+    // Temporal static methods: PlainDate.from(), Instant.now(), etc.
+    if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _tClass = callee.object.name;
+      const _tProp  = callee.prop;
+      const _temporalSuppressConst = () => { this._lastSuppressConst = true; };
+      if (_tClass === 'PlainDate' && _tProp === 'from') {
+        const y = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+        const m = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+        const d = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
+        _temporalSuppressConst();
+        return `tsc_plain_date_from(${y}, ${m}, ${d})`;
+      }
+      if (_tClass === 'PlainTime' && _tProp === 'from') {
+        const h = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+        const m = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+        const s = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
+        _temporalSuppressConst();
+        return `tsc_plain_time_from(${h}, ${m}, ${s})`;
+      }
+      if (_tClass === 'PlainDateTime' && _tProp === 'from') {
+        const date = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(TscPlainDate){0}';
+        const time = args[1] ? this.exprToC(args[1].expr, lines, depth) : '(TscPlainTime){0}';
+        _temporalSuppressConst();
+        return `tsc_plain_datetime_from(${date}, ${time})`;
+      }
+      if (_tClass === 'Instant' && _tProp === 'now') { _temporalSuppressConst(); return `tsc_instant_now()`; }
+      if (_tClass === 'ZonedDateTime' && _tProp === 'now') {
+        const tz = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("UTC")';
+        _temporalSuppressConst();
+        return `tsc_zoned_datetime_now(${tz})`;
+      }
+      if (_tClass === 'Now') {
+        if (_tProp === 'instant') { _temporalSuppressConst(); return `tsc_instant_now()`; }
+        if (_tProp === 'plainDate') {
+          const tz = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("UTC")';
+          _temporalSuppressConst();
+          return `tsc_now_plain_date(${tz})`;
+        }
+      }
+      if (_tClass === 'Duration' && _tProp === 'from') {
+        const objArg = args[0]?.expr;
+        if (objArg?.kind === 'ObjLit') {
+          const props = {};
+          for (const p of (objArg.props ?? [])) {
+            props[p.key] = p.value ? this.exprToC(p.value, lines, depth) : '0';
+          }
+          _temporalSuppressConst();
+          if ('days' in props && !('hours' in props) && !('minutes' in props)) {
+            return `tsc_duration_from_days(${props.days ?? '0'})`;
+          }
+          const h = props.hours ?? '0';
+          const m = props.minutes ?? '0';
+          const s = props.seconds ?? '0';
+          return `tsc_duration_from_hms(${h}, ${m}, ${s})`;
+        }
+      }
+    }
+
+    // Temporal instance methods: d.add(), d.until(), etc.
+    if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _tSym = this.lookup(callee.object.name);
+      const _tCtype = _tSym?.ctype ?? '';
+      if (_tCtype === 'TscPlainDate') {
+        const _tName = callee.object.name;
+        const _tProp = callee.prop;
+        if (_tProp === 'add') {
+          this._lastSuppressConst = true;
+          const durC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(TscDuration){0}';
+          return `tsc_plain_date_add(${_tName}, ${durC})`;
+        }
+        if (_tProp === 'until') {
+          this._lastSuppressConst = true;
+          const d2C = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(TscPlainDate){0}';
+          return `tsc_plain_date_until(${_tName}, ${d2C})`;
+        }
+      }
+    }
+
+    // Buffer method calls: buf.fill(), buf.slice()
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _bufSym = this.lookup(callee.object.name);
+      if (_bufSym?._isBuffer || _bufSym?.ctype === 'Buffer') {
+        const _bufName = callee.object.name;
+        const _bufProp = callee.prop;
+        if (_bufProp === 'fill') {
+          const val = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `memset(${_bufName}.data, ${val}, ${_bufName}.length)`;
+        }
+        if (_bufProp === 'slice') {
+          const start = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const end = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${_bufName}.length`;
+          const lenExpr = (args[0]?.expr?.kind === 'Literal' && args[1]?.expr?.kind === 'Literal')
+            ? String(parseFloat(args[1].expr.value) - parseFloat(args[0].expr.value))
+            : `(${end}) - (${start})`;
+          return `{.data = ${_bufName}.data + ${start}, .length = ${lenExpr}}`;
+        }
+      }
+    }
+
+    // DataView method calls: dv.setU8(), dv.getU8(), dv.setU16LE(), dv.getU16LE(), etc.
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _dvSym = this.lookup(callee.object.name);
+      if (_dvSym?._isDataView || _dvSym?.ctype === 'DataView') {
+        const _dvName = callee.object.name;
+        const _dvProp = callee.prop;
+        const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+        if (_dvProp === 'setU8') {
+          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `${_dvName}.data[${_dvIdx}] = ${val}`;
+        }
+        if (_dvProp === 'getU8') return `${_dvName}.data[${_dvIdx}]`;
+        const I = ' '.repeat(this.indent * depth);
+        // Static bounds check for get operations
+        const _dvOpSizes = { getU8:1, getU16LE:2, getU32LE:4, getF64LE:8, setU8:1, setU16LE:2, setU32LE:4, setF64LE:8 };
+        if (_dvOpSizes[_dvProp] && _dvSym._dvCap != null) {
+          const opSize = _dvOpSizes[_dvProp];
+          const offsetNode = args[0]?.expr;
+          const offsetVal = (offsetNode?.kind === 'Literal' && offsetNode?.litType === 'number') ? parseInt(offsetNode.value) : null;
+          if (offsetVal != null && offsetVal + opSize > _dvSym._dvCap) {
+            const suffix = _dvProp.startsWith('set') ? `requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}` : `requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}`;
+            throw this.error(`TypeError: DataView.${_dvProp} at offset ${offsetVal} requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}`);
+          }
+        }
+        if (_dvProp === 'setU16LE') {
+          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const n = this._dvW16n = (this._dvW16n ?? 0); this._dvW16n++;
+          const tmp = `_w16_${n}`;
+          lines.push(`${I}uint16_t ${tmp} = ${val};`);
+          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 2)`;
+        }
+        if (_dvProp === 'getU16LE') {
+          const tmp = `_v16`;
+          lines.push(`${I}uint16_t ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 2);`);
+          return `(uint16_t)${tmp}`;
+        }
+        if (_dvProp === 'setU32LE') {
+          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const n = this._dvW32n = (this._dvW32n ?? 0); this._dvW32n++;
+          const tmp = `_w32_${n}`;
+          lines.push(`${I}uint32_t ${tmp} = ${val};`);
+          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 4)`;
+        }
+        if (_dvProp === 'getU32LE') {
+          const n = this._dvR32n = (this._dvR32n ?? 0); this._dvR32n++;
+          const tmp = `_r32_${n}`;
+          lines.push(`${I}uint32_t ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 4);`);
+          return tmp;
+        }
+        if (_dvProp === 'setF64LE') {
+          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const n = this._dvWF64n = (this._dvWF64n ?? 0); this._dvWF64n++;
+          const tmp = `_wf64_${n}`;
+          lines.push(`${I}double ${tmp} = ${val};`);
+          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 8)`;
+        }
+        if (_dvProp === 'getF64LE') {
+          const n = this._dvRF64n = (this._dvRF64n ?? 0); this._dvRF64n++;
+          const tmp = `_rf64_${n}`;
+          lines.push(`${I}double ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 8);`);
+          return tmp;
+        }
+      }
+    }
+
+    // HashMap method calls: m.set(), m.get(), m.has(), m.delete()
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _hmSym = this.lookup(callee.object.name);
+      if (_hmSym?._isHashMap) {
+        const _hmName = callee.object.name;
+        const _hmProp = callee.prop;
+        const _hmSfx = _hmSym._hmSuffix;
+        const _hmArg0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        if (_hmProp === 'has') return `tsc_hashmap_has_${_hmSfx}(&${_hmName}, ${_hmArg0})`;
+        if (_hmProp === 'set') {
+          // Compile-time capacity overflow check
+          if (_hmSym._hmCap > 0) {
+            _hmSym._hmSetCount = (_hmSym._hmSetCount ?? 0) + 1;
+            if (_hmSym._hmSetCount > _hmSym._hmCap) {
+              throw this.error(
+                `RuntimeError: HashMap capacity exceeded: max ${_hmSym._hmCap}, attempted to insert ${_hmSym._hmSetCount}th entry`
+              );
+            }
+          }
+          const _hmArg1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `tsc_hashmap_set_${_hmSfx}(&${_hmName}, ${_hmArg0}, ${_hmArg1})`;
+        }
+        if (_hmProp === 'get') {
+          const vIdent = this.cTypeToIdent(_hmSym._hmValType ?? 'int32_t');
+          const optName = `opt_${vIdent}`;
+          this._ensureOptStruct(optName, _hmSym._hmValType ?? 'int32_t');
+          this._lastSuppressConst = true;
+          return `tsc_hashmap_get_${_hmSfx}(&${_hmName}, ${_hmArg0})`;
+        }
+        if (_hmProp === 'delete') return `tsc_hashmap_delete_${_hmSfx}(&${_hmName}, ${_hmArg0})`;
+      }
+    }
+
+    // Tasks method calls: tasks.add(), tasks.run(), tasks.stop()
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _tasksSym = this.lookup(callee.object.name);
+      if (_tasksSym?._isTasks) {
+        const _tasksName = callee.object.name;
+        const _tasksProp = callee.prop;
+        if (_tasksProp === 'run') return `tsc_tasks_run(&${_tasksName})`;
+        if (_tasksProp === 'stop') {
+          const _label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_tasks_stop(&${_tasksName}, ${_label})`;
+        }
+        if (_tasksProp === 'add') {
+          const _label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          const _fnName = args[1]?.expr?.kind === 'Ident' ? args[1].expr.name : null;
+          const _genInfo = _fnName ? this._generatorFuncs?.get(_fnName) : null;
+          if (_genInfo) {
+            const { stateType, nextFn } = _genInfo;
+            const pollFn = `${_fnName}_poll`;
+            if (!this._emittedTasksPolls) this._emittedTasksPolls = new Set();
+            if (!this._emittedTasksPolls.has(pollFn)) {
+              this._emittedTasksPolls.add(pollFn);
+              this.topLevel.push('');
+              this.topLevel.push(`static void ${pollFn}(void *state) {`);
+              this.topLevel.push(`    ${nextFn}((${stateType} *)state);`);
+              this.topLevel.push(`}`);
+            }
+            if (!this._tasksStateCount) this._tasksStateCount = 0;
+            const stateVar = `_${_fnName}_state_${this._tasksStateCount++}`;
+            const I = ' '.repeat(this.indent * depth);
+            lines.push(`${I}static ${stateType} ${stateVar} = {0};`);
+            return `tsc_tasks_add(&${_tasksName}, ${_label}, ${pollFn}, &${stateVar})`;
+          }
+        }
+      }
+    }
+
+    // TscRegex method calls: r.test(), r.match(), r.replace(), r.replaceAll()
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _rxSym = this.lookup(callee.object.name);
+      if (_rxSym?._isRegex) {
+        const _rxName = callee.object.name;
+        const _rxProp = callee.prop;
+        const _rxArg0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        if (_rxProp === 'test') return `tsc_regex_test(&${_rxName}, ${_rxArg0})`;
+        if (_rxProp === 'match') {
+          this._lastSuppressConst = true;
+          this._ensureArrayStruct('Array_string', 'String');
+          this._ensureOptStruct('opt_Array_string', 'Array_string');
+          return `tsc_regex_match(&${_rxName}, ${_rxArg0})`;
+        }
+        if (_rxProp === 'replace') {
+          this._lastSuppressConst = true;
+          const _rxArg1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_regex_replace(&${_rxName}, ${_rxArg0}, ${_rxArg1})`;
+        }
+        if (_rxProp === 'replaceAll') {
+          this._lastSuppressConst = true;
+          const _rxArg1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+          return `tsc_regex_replace_all(&${_rxName}, ${_rxArg0}, ${_rxArg1})`;
+        }
+      }
     }
 
     // Enum.method() calls: Enum.values(), Enum.fromValue(), EnumMember.toString()
@@ -346,6 +1075,55 @@ export default {
         }
       }
     };
+    // std/string: atob, btoa, decodeUtf8, encodeUtf8
+    if (callee.kind === 'Ident' && callee.name === 'atob') {
+      this.includes.add('#include "std/base64.h"');
+      this._lastSuppressConst = true;
+      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `tsc_atob(${arg})`;
+    }
+    if (callee.kind === 'Ident' && callee.name === 'btoa') {
+      this.includes.add('#include "std/base64.h"');
+      this._lastSuppressConst = true;
+      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `tsc_btoa(${arg})`;
+    }
+    if (callee.kind === 'Ident' && callee.name === 'decodeUtf8') {
+      this._lastSuppressConst = true;
+      // Static UTF-8 validation for literal byte arrays
+      const argExpr = args[0]?.expr;
+      const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
+        : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
+      if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every(e => e?.expr?.kind === 'Literal')) {
+        const bytes = _decLitArr.elems.map(e => parseInt(e.expr.value));
+        let i = 0;
+        while (i < bytes.length) {
+          const b = bytes[i];
+          let seqLen;
+          if (b < 0x80) { seqLen = 1; }
+          else if (b < 0xC2) { seqLen = -1; }
+          else if (b < 0xE0) { seqLen = 2; }
+          else if (b < 0xF0) { seqLen = 3; }
+          else if (b < 0xF5) { seqLen = 4; }
+          else { seqLen = -1; }
+          if (seqLen < 0) throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
+          for (let j = 1; j < seqLen; j++) {
+            if (i + j >= bytes.length || (bytes[i + j] & 0xC0) !== 0x80)
+              throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
+          }
+          i += seqLen;
+        }
+      }
+      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(Array_u8){0}';
+      return `tsc_decode_utf8(${arg})`;
+    }
+    if (callee.kind === 'Ident' && callee.name === 'encodeUtf8') {
+      this._ensureArrayStruct('Array_u8', 'uint8_t');
+      this._lastSuppressConst = true;
+      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `tsc_encode_utf8(${arg})`;
+    }
+
     // drop(x) → T_drop(x) for pool types
     if (callee.kind === 'Ident' && callee.name === 'drop') {
       const argNode = args[0]?.expr;
@@ -650,6 +1428,24 @@ export default {
   },
 
   consoleCall(method, args, lines, depth) {
+    // console.time / console.timeEnd / console.trace
+    if (method === 'time') {
+      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
+      return `tsc_console_time(${label})`;
+    }
+    if (method === 'timeEnd') {
+      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
+      return `tsc_console_time_end(${label})`;
+    }
+    if (method === 'trace') {
+      const embeddedTargets = ['avr', 'arm', 'stm32'];
+      if (embeddedTargets.includes(this._targetName)) {
+        throw this.error(`"console.trace()" is not available on embedded targets`);
+      }
+      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `tsc_console_trace(${label})`;
+    }
+
     const isErr = method === 'error' || method === 'warn' || method === 'debug';
 
     if (args.length === 0) {
@@ -666,6 +1462,37 @@ export default {
       // String literal → embed value directly in format string (no separate arg)
       if (expr.kind === 'Literal' && expr.litType === 'string') {
         fmtParts.push(expr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%'));
+        continue;
+      }
+
+      // String concat chain: "prefix" + s + "suffix" → fold into a single format string chunk
+      if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
+        const flattenConcat = (n) => {
+          if (n.kind === 'Binary' && n.op === '+' && this.isStringExpr(n)) {
+            return [...flattenConcat(n.left), ...flattenConcat(n.right)];
+          }
+          return [n];
+        };
+        let concatFmt = '';
+        for (const seg of flattenConcat(expr)) {
+          if (seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char')) {
+            concatFmt += seg.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%');
+          } else {
+            concatFmt += '%s';
+            const segCexpr = this.exprToC(seg, lines, depth);
+            const segType = this.inferType(seg);
+            fmtArgs.push(segType === 'String' ? `${segCexpr}.data` : segCexpr);
+          }
+        }
+        fmtParts.push(concatFmt);
+        continue;
+      }
+
+      // typeof expr → embed type name directly (compile-time constant)
+      if (expr.kind === 'Typeof') {
+        const _tofSym = expr.expr.kind === 'Ident' ? this.lookup(expr.expr.name) : null;
+        const _tofCt = _tofSym?.ctype ?? this.inferType(expr.expr);
+        fmtParts.push(this.ctypeToTsName(_tofCt));
         continue;
       }
 
@@ -912,13 +1739,60 @@ export default {
   },
 
   mathCall(prop, args, lines, depth) {
-    this.includes.add('#include <math.h>');
+    const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
+    const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
+    const isFloat = (t) => t === 'double' || t === 'float';
     const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const a1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
     const a2 = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
+
+    // Constants — always need math.h
+    if (prop === 'PI')      { this.includes.add('#include <math.h>'); return 'M_PI'; }
+    if (prop === 'E')       { this.includes.add('#include <math.h>'); return 'M_E'; }
+    if (prop === 'LN2')     { this.includes.add('#include <math.h>'); return 'M_LN2'; }
+    if (prop === 'LN10')    { this.includes.add('#include <math.h>'); return 'log(10.0)'; }
+    if (prop === 'SQRT2')   { this.includes.add('#include <math.h>'); return 'M_SQRT2'; }
+    if (prop === 'SQRT1_2') { this.includes.add('#include <math.h>'); return 'M_SQRT1_2'; }
+    if (prop === 'LOG2E')   { this.includes.add('#include <math.h>'); return 'M_LOG2E'; }
+    if (prop === 'LOG10E')  { this.includes.add('#include <math.h>'); return 'M_LOG10E'; }
+
+    // abs: integer arg → (int)abs(), float arg → fabs()
+    if (prop === 'abs') {
+      this.includes.add('#include <math.h>');
+      if (!isFloat(a0t)) return `(int)abs(${a0})`;
+      return `fabs(${a0})`;
+    }
+    // min/max: integer args → inline ternary (no math.h), float args → fmin/fmax
+    if (prop === 'min') {
+      if (!isFloat(a0t) && !isFloat(a1t)) return `(${a0} < ${a1}) ? ${a0} : ${a1}`;
+      this.includes.add('#include <math.h>');
+      return `fmin(${a0}, ${a1})`;
+    }
+    if (prop === 'max') {
+      if (!isFloat(a0t) && !isFloat(a1t)) return `(${a0} > ${a1}) ? ${a0} : ${a1}`;
+      this.includes.add('#include <math.h>');
+      return `fmax(${a0}, ${a1})`;
+    }
+    // clamp: emit tsc_clamp helper
+    if (prop === 'clamp') {
+      if (!this._emittedTscClamp) {
+        this._emittedTscClamp = true;
+        this.addTop('static double tsc_clamp(double v, double lo, double hi) {');
+        this.addTop('    return v < lo ? lo : (v > hi ? hi : v);');
+        this.addTop('}');
+        this.addTop('');
+      }
+      return `tsc_clamp(${a0}, ${a1}, ${a2})`;
+    }
+    // sign: no outer parens
+    if (prop === 'sign') {
+      return `(${a0} > 0.0) - (${a0} < 0.0) + 0.0`;
+    }
+
+    this.includes.add('#include <math.h>');
     const map = {
       // rounding
-      abs: `fabs(${a0})`, floor: `floor(${a0})`, ceil: `ceil(${a0})`,
+      floor: `floor(${a0})`, ceil: `ceil(${a0})`,
       round: `round(${a0})`, trunc: `trunc(${a0})`,
       // arithmetic
       sqrt: `sqrt(${a0})`, cbrt: `cbrt(${a0})`, pow: `pow(${a0}, ${a1})`,
@@ -934,23 +1808,11 @@ export default {
       log: `log(${a0})`, log2: `log2(${a0})`, log10: `log10(${a0})`,
       log1p: `log1p(${a0})`,
       exp: `exp(${a0})`, expm1: `expm1(${a0})`,
-      // utilities
-      min: `fmin(${a0}, ${a1})`, max: `fmax(${a0}, ${a1})`,
-      clamp: `(${a0} < ${a1} ? ${a1} : (${a0} > ${a2} ? ${a2} : ${a0}))`,
-      sign: `((${a0} > 0.0) - (${a0} < 0.0) + 0.0)`,
       clz32: `(int32_t)__builtin_clz((uint32_t)(${a0}))`,
       imul: `(int32_t)((int32_t)(${a0}) * (int32_t)(${a1}))`,
       fround: `(float)(${a0})`,
       random: `tsc_math_random()`,
     };
-    if (prop === 'PI')     return 'M_PI';
-    if (prop === 'E')      return 'M_E';
-    if (prop === 'LN2')    return 'M_LN2';
-    if (prop === 'LN10')   return 'log(10.0)';
-    if (prop === 'SQRT2')  return 'M_SQRT2';
-    if (prop === 'SQRT1_2') return 'M_SQRT1_2';
-    if (prop === 'LOG2E')  return 'M_LOG2E';
-    if (prop === 'LOG10E') return 'M_LOG10E';
     return map[prop] ?? `/* Math.${prop} */(${a0})`;
   },
 
@@ -1131,6 +1993,63 @@ export default {
       trimStart:   () => `tsc_string_trim_start(${objC})`,
       trimEnd:     () => `tsc_string_trim_end(${objC})`,
     };
+
+    // StaticMap inline (compile-time hash): opcodes.get("LDA") → _staticmap_N_get(...)
+    const _smInlineSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (_smInlineSym?._isStaticMapInline && prop === 'get') {
+      const sym = _smInlineSym;
+      if (!sym._getFn) {
+        // Generate get function on first use
+        const idx = sym._smIdx;
+        const fnName = `_staticmap_${idx}_get`;
+        sym._getFn = fnName;
+        const entries = sym._entries; // [{ key: string, valC: string }]
+        const n = entries.length;
+        const buckets = Math.max(1, n);
+
+        // Ensure opt_i32 typedef
+        this.addTop('typedef struct { bool has_value; int32_t value; } opt_i32;');
+        this.addTop('');
+
+        // djb2 hash in JS
+        const djb2 = (s) => {
+          let h = 5381;
+          for (let i = 0; i < s.length; i++) {
+            h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0;
+          }
+          return h;
+        };
+
+        // Group entries by bucket
+        const bucketMap = new Map();
+        for (const e of entries) {
+          const b = djb2(e.key) % buckets;
+          if (!bucketMap.has(b)) bucketMap.set(b, []);
+          bucketMap.get(b).push(e);
+        }
+
+        const fnLines = [];
+        fnLines.push(`static opt_i32 ${fnName}(String key) {`);
+        fnLines.push(`    uint32_t _h = tsc_djb2(key);`);
+        fnLines.push(`    switch (_h % ${buckets}) {`);
+        for (const [b, bEntries] of bucketMap) {
+          let line = `        case ${b}:`;
+          for (const e of bEntries) {
+            line += ` if (tsc_string_eq(key, STR_LIT("${e.key}"))) return (opt_i32){true, ${e.valC}};`;
+          }
+          line += ' break;';
+          fnLines.push(line);
+        }
+        fnLines.push('    }');
+        fnLines.push('    return (opt_i32){false, 0};');
+        fnLines.push('}');
+        for (const l of fnLines) this.topLevel.push(l);
+        this.topLevel.push('');
+        this._lastSuppressConst = true;
+      }
+      const keyC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      return `${sym._getFn}(${keyC})`;
+    }
 
     // StaticMap_* methods → tsc_staticmap_* with pointer
     const _smSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;

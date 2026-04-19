@@ -3,7 +3,6 @@
 typedef struct { int _dummy; } Validator;
 
 static void Validator_check_inner(const Validator *self, String s) {
-    (void)self;
     printf("ok: %s\n", s.data);
 }
 

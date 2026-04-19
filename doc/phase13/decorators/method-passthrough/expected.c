@@ -2,9 +2,12 @@
 
 typedef struct { int _dummy; } Foo;
 
+static void Foo_greet_inner(const Foo *self) {
+    printf("hello\n");
+}
+
 static void Foo_greet(const Foo *self) {
-    (void)self;
-    printf("%s\n", "hello");
+    Foo_greet_inner(self);
 }
 
 int main(void) {

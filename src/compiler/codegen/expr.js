@@ -4,6 +4,7 @@ export default {
     if (!node) return '0';
     this._currentNode = node;
     switch (node.kind) {
+      case 'RawC': return node.code;
       case 'Literal': return this.literalToC(node);
 
       case 'Ident': {
@@ -85,6 +86,16 @@ export default {
         if (node.object.kind === 'Ident' && node.object.name === 'process' && node.prop === 'argv') {
           this._useArgcArgv = true;
           return '_argv';
+        }
+        // process.stdin / process.stdout / process.stderr (std/io)
+        if (this._stdIoImported && node.object.kind === 'Ident' && node.object.name === 'process') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'process.${node.prop}' is not available on embedded targets`);
+          }
+          if (node.prop === 'stdin')  { this._lastSuppressConst = true; return 'tsc_stdin()'; }
+          if (node.prop === 'stdout') { this._lastSuppressConst = true; return 'tsc_stdout()'; }
+          if (node.prop === 'stderr') { this._lastSuppressConst = true; return 'tsc_stderr()'; }
         }
         // Math constants: Math.PI, Math.E, Math.SQRT2, etc.
         if (node.object.kind === 'Ident' && node.object.name === 'Math') {
@@ -213,10 +224,26 @@ export default {
         if (symCls?._isThrowsClass && node.prop === 'message') {
           return isPtr ? `${objC}->_base.message` : `${objC}._base.message`;
         }
+        // URL field access — u.search after mutation → tsc_url_search(&u)
+        if (this._stdUrlImported && sym?._isURL) {
+          const _urlMutatedFields = ['search'];
+          if (_urlMutatedFields.includes(node.prop)) {
+            return `tsc_url_search(&${node.object.name})`;
+          }
+        }
         return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
       }
 
       case 'Index': {
+        // req.params["key"] → tsc_request_param(req, STR_LIT("key"))
+        if (this._stdNetImported && node.object.kind === 'Member' && node.object.prop === 'params') {
+          const reqSym = node.object.object.kind === 'Ident' ? this.lookup(node.object.object.name) : null;
+          if (reqSym?.ctype === 'TscRequest *') {
+            const reqC = this.exprToC(node.object.object, lines, depth);
+            const keyC = this.exprToC(node.index, lines, depth);
+            return `tsc_request_param(${reqC}, ${keyC})`;
+          }
+        }
         const objType = this.inferType(node.object);
         const tupleDef = this.classes.get(objType);
         // Tuple index access: pair[0] → pair._0
@@ -257,6 +284,11 @@ export default {
               return `tsc_array_get_checked_${elemIdent}(${obj}, ${idx})`;
             }
           }
+          return `${obj}.data[${idx}]`;
+        }
+        // Buffer indexing: buf[i] → buf.data[i]
+        if (objType === 'Buffer' || objType === 'DataView') {
+          const idx = this.exprToC(node.index, lines, depth);
           return `${obj}.data[${idx}]`;
         }
         // String indexing: s[i] → (uint8_t)s.data[i], s[-1] → (uint8_t)s.data[s.length - 1]

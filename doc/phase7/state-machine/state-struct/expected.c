@@ -1,9 +1,7 @@
 #include "runtime.h"
 
 typedef struct {
-    int32_t _state;
-    String _result;
-    bool _done;
+    int32_t _state; String _result; bool _done;
     String url;
     String result;
 } fetch_state;

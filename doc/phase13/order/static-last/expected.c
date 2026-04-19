@@ -4,10 +4,10 @@ typedef struct { int _dummy; } Svc;
 
 static Svc Svc_create_inner(void) {
     printf("create\n");
-    return (Svc){0};
+    return {0};
 }
 
-static Svc Svc_create(void) {
+static Svc Svc_create() {
     printf("log\n");
     return Svc_create_inner();
 }

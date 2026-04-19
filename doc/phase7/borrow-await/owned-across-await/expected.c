@@ -3,9 +3,7 @@
 typedef struct { int32_t value; } Data;
 
 typedef struct {
-    int32_t _state;
-    Data _result;
-    bool _done;
+    int32_t _state; Data _result; bool _done;
     Data d;
 } fetch_state;
 
@@ -21,23 +19,22 @@ static void fetch_poll(fetch_state *self) {
 }
 
 typedef struct {
-    int32_t _state;
-    int _result;
-    bool _done;
-    Data d;
-    fetch_state _await_0;
+    int32_t _state; int _result; bool _done;
+    TscResponse d;
+    TscFetchAwaitable _await_0;
 } run_state;
 
 static void run_poll(run_state *self) {
     switch (self->_state) {
         case 0:
-            self->_await_0 = (fetch_state){0};
+            self->_await_0 = tsc_fetch_async(STR_LIT(""), NULL);
             self->_state = 1;
             /* fall through */
         case 1:
-            fetch_poll(&self->_await_0);
+            tsc_fetch_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->d = self->_await_0._result;
+            if (!self->_await_0._result.ok) { self->_done = true; return; }
+            self->d = self->_await_0._result.value;
             printf("%d\n", self->d.value);
             self->_done = true;
             return;

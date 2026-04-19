@@ -144,8 +144,15 @@ export function lex(src, filename = '<input>') {
       const quote = advance();
       let str = '';
       while (i < src.length && cur() !== quote) {
-        if (cur() === '\\') { advance(); str += '\\' + advance(); }
-        else str += advance();
+        if (cur() === '\\') {
+          advance();
+          const ec = advance();
+          switch (ec) {
+            case '"': case "'": str += ec; break;
+            case '\\': str += '\\'; break;
+            default: str += '\\' + ec; break;
+          }
+        } else str += advance();
       }
       if (i >= src.length) err('Unterminated string');
       advance(); // closing quote

@@ -80,6 +80,11 @@ export default {
     // Pre-scan: detect target and allocator annotations
     this._targetName = 'desktop';
     this._allocatorName = 'default';
+    // Also check comment-style annotation: // @target: avr
+    if (this.src) {
+      const mCommentTarget = this.src.match(/\/\/\s*@target:\s*(\w+)/);
+      if (mCommentTarget) this._targetName = mCommentTarget[1];
+    }
     for (const node of ast.body) {
       if (node.kind === 'ProfileAnnotation') {
         const mTarget = node.content.match(/target\((\w+)\)/);
@@ -249,6 +254,47 @@ export default {
       }
     }
 
+    // Pre-scan: collect names used as decorators (so we can suppress C emission for those functions)
+    this._decoratorFns = new Map();   // name → FuncDecl AST
+    this._decoratorNames = new Set(); // all names used with @
+    {
+      const scanDecs = (decs) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'ClassDecl') {
+          scanDecs(n.decorators);
+          for (const m of (n.members ?? [])) scanDecs(m.decorators);
+        }
+        if (n?.kind === 'FuncDecl') scanDecs(n.decorators);
+      }
+    }
+
+    // Pre-scan: detect HashMap capacity violations (capacity overflow takes priority over platform error)
+    this._hmCapViolations = new Map(); // varName → { count, cap }
+    {
+      const _hmDecls = new Map(); // varName → capacityNum
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'VarDecl' && n.init?.kind === 'New' && n.init.name === 'HashMap') {
+          const capLit = n.init.args?.[0]?.expr;
+          const capNum = capLit?.litType === 'number' ? parseInt(capLit.value) : 0;
+          if (capNum > 0) _hmDecls.set(n.name, { count: 0, cap: capNum });
+        }
+        if (n?.kind === 'ExprStmt' && n.expr?.kind === 'Call') {
+          const callee = n.expr.callee;
+          if (callee?.kind === 'Member' && callee.prop === 'set' && callee.object?.kind === 'Ident') {
+            const info = _hmDecls.get(callee.object.name);
+            if (info) {
+              info.count++;
+              if (info.count > info.cap && !this._hmCapViolations.has(callee.object.name)) {
+                this._hmCapViolations.set(callee.object.name, { count: info.count, cap: info.cap });
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Pre-scan: collect variable names referenced by top-level functions
     // These must become static globals (accessible from function scope)
     this._funcRefVars = new Set();
@@ -291,6 +337,37 @@ export default {
         };
         _collect(n.body, localNames);
       }
+      // Also scan reactive callbacks (effect/computed/batch arrow args) for non-Signal free vars
+      // Signal vars are captured by pointer into the env struct, not promoted to static globals
+      if (n?.kind === 'ExprStmt' && n.expr?.kind === 'Call') {
+        const _callee = n.expr.callee;
+        const _isReactive = _callee?.kind === 'Ident' && ['effect', 'computed', 'batch'].includes(_callee.name);
+        if (_isReactive) {
+          const arrow = n.expr.args?.[0]?.expr;
+          if (arrow?.kind === 'Arrow') {
+            // Collect top-level Signal var names (to exclude from promotion)
+            const _signalVarNames = new Set();
+            for (const sn of ast.body) {
+              const sd = sn.kind === 'Export' ? sn.decl : sn;
+              if (sd?.kind === 'VarDecl' && sd.init?.kind === 'New' && sd.init.name === 'Signal') {
+                _signalVarNames.add(sd.name);
+              }
+            }
+            const arrowParams = new Set((arrow.params ?? []).map(p => p.name));
+            const _collectArrow = (nd) => {
+              if (!nd || typeof nd !== 'object') return;
+              if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
+              if (nd.kind === 'Ident' && !arrowParams.has(nd.name) && !_signalVarNames.has(nd.name)) {
+                this._funcRefVars.add(nd.name);
+              }
+              for (const v of Object.values(nd)) {
+                if (v && typeof v === 'object') _collectArrow(v);
+              }
+            };
+            _collectArrow(arrow.body);
+          }
+        }
+      }
     }
 
     for (const node of ast.body) {
@@ -320,7 +397,108 @@ export default {
         if (node.content.startsWith('isr(')) this._pendingIsrAnnotation = node.content;
         break;
       }
-      case 'Import':  break; // stdlib handled via includes
+      case 'Import':
+        // Handle stdlib imports that require includes or special registration
+        if (node.source === 'std/avr') {
+          this.includes.add('#include "std/avr.h"');
+          // Register imported names as special avr objects
+          for (const name of (node.names ?? [])) {
+            if (name === 'SleepMode') this._avrSleepModeImported = true;
+            else this.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
+          }
+        } else if (node.source === 'std/random') {
+          this._stdRandomImported = true;
+        } else if (node.source === 'std/string') {
+          for (const name of (node.names ?? [])) {
+            if (name === 'atob' || name === 'btoa') this._stdStringBase64 = true;
+            else if (name === 'decodeUtf8') this._stdStringDecodeUtf8 = true;
+            else if (name === 'encodeUtf8') this._stdStringEncodeUtf8 = true;
+            else if (name === 'Regex') this._stdStringRegex = true;
+            // 'String' namespace — no extra registration needed
+          }
+        } else if (node.source === 'std/embedded') {
+          this._stdEmbeddedImported = true;
+        } else if (node.source === 'std/temporal') {
+          this.includes.add('#include "std/temporal.h"');
+          this._stdTemporalImported = true;
+        } else if (node.source === 'std/fs') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'std/fs' is not available on embedded targets`);
+          }
+          this.includes.add('#include "std/fs.h"');
+          this._stdFsImported = true;
+        } else if (node.source === 'std/url') {
+          this.includes.add('#include "std/url.h"');
+          this._stdUrlImported = true;
+        } else if (node.source === 'std/blob') {
+          // #include "std/blob.h" only added when TscBlob is actually used (isTscBlob path in stmt.js)
+          this._stdBlobImported = true;
+        } else if (node.source === 'std/io') {
+          this.includes.add('#include "std/io.h"');
+          this._stdIoImported = true;
+          // Register Reader/Writer as vtable interface types
+          for (const nm of (node.names ?? [])) {
+            if (nm === 'Reader') {
+              if (!this._emittedReaderVtable) {
+                this._emittedReaderVtable = true;
+                // Array_u8 must appear before Reader vtable
+                this._ensureArrayStruct('Array_u8', 'uint8_t');
+                this.typedefs.push('');
+                this.addTop('typedef struct {');
+                this.addTop('    size_t (*read)(void *self, uint8_t *buf, size_t len);');
+                this.addTop('} Reader_vtable;');
+                this.addTop('typedef struct { void *self; const Reader_vtable *vtable; } Reader;');
+                this.addTop('');
+              }
+              this.classes.set('Reader', { isStruct: true, _isVtable: true, _vtableKind: 'Reader',
+                fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Reader_vtable *' }] });
+            }
+            if (nm === 'Writer') {
+              if (!this._emittedWriterVtable) {
+                this._emittedWriterVtable = true;
+                // Array_u8 must appear before Writer vtable
+                this._ensureArrayStruct('Array_u8', 'uint8_t');
+                this.typedefs.push('');
+                this.addTop('typedef struct {');
+                this.addTop('    size_t (*write)(void *self, const uint8_t *buf, size_t len);');
+                this.addTop('} Writer_vtable;');
+                this.addTop('typedef struct { void *self; const Writer_vtable *vtable; } Writer;');
+                this.addTop('');
+              }
+              this.classes.set('Writer', { isStruct: true, _isVtable: true, _vtableKind: 'Writer',
+                fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Writer_vtable *' }] });
+            }
+          }
+        } else if (node.source === 'std/reactive') {
+          this.includes.add('#include "std/reactive.h"');
+          this._stdReactiveImported = true;
+          this._reactiveClosureCount = 0;
+          this._capturedSignalMap = new Map(); // varName → pointer expr like "_closure_0_captured.x"
+        } else if (node.source === 'std/ws') {
+          this.includes.add('#include "std/ws.h"');
+          this._stdWsImported = true;
+        } else if (node.source === 'std/net') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'std/net' is not available on embedded targets`);
+          }
+          this.includes.add('#include "std/net.h"');
+          this._stdNetImported = true;
+          // Register TscResponse so inferType resolves .ok → bool, .status → int32_t
+          this.classes.set('TscResponse', {
+            isStruct: true,
+            fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
+          });
+        } else if (node.source === 'std/hal') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (!embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'std/hal' requires an embedded platform target`);
+          }
+          this.includes.add('#include "std/hal.h"');
+          this._stdHalImported = true;
+        }
+        break; // stdlib handled via includes
       case 'Export':
         if (node.default) throw this.error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
@@ -512,6 +690,37 @@ export default {
       return;
     }
 
+    // Reserved prefix check (runs before PascalCase to give precise message)
+    for (const pfx of ['ref_']) {
+      if (name.startsWith(pfx)) {
+        throw this.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
+      }
+    }
+    // PascalCase invariant check (skip built-in/internal names)
+    if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
+      throw this.error(`class name "${name}" must start with uppercase (PascalCase)`, node);
+    }
+
+    // @readonly on methods is invalid
+    for (const m of (node.members ?? [])) {
+      if (m.kind === 'Method' && (m.decorators ?? []).some(d => d.name === 'readonly')) {
+        throw this.error(`"@readonly" can only be applied to properties`, m);
+      }
+    }
+
+    // Collect extra fields from class decorators (@sealed → target._field = val)
+    const _classDecoratorFields = [];   // extra fields to add to struct
+    const _classDecoratorInits  = [];   // statements to run after new ClassName()
+    for (const d of (decorators ?? [])) {
+      if (['embedded.inline', 'embedded.pool', 'packed', 'align'].includes(d.name)) continue;
+      const decFn = this._decoratorFns?.get(d.name);
+      if (decFn) {
+        const { fields: df, inits: di } = this._analyzeClassDecorator(decFn);
+        _classDecoratorFields.push(...df);
+        _classDecoratorInits.push(...di);
+      }
+    }
+
     // Process @embedded.* decorators
     const inlineDec = decorators?.find(d => d.name === 'embedded.inline');
     const poolDec   = decorators?.find(d => d.name === 'embedded.pool');
@@ -573,7 +782,8 @@ export default {
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
     const implements_ = node.implements_ ?? [];
     this.classes.set(name, { fields, methods, superClass: effectiveSuperClass, isStruct: true, implements_,
-      ...(isThrowsClass ? { _isThrowsClass: true } : {}) });
+      ...(isThrowsClass ? { _isThrowsClass: true } : {}),
+      ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}) });
 
     // Map TSClang base class names → C names
     const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
@@ -581,11 +791,20 @@ export default {
     // Check if this class is used as Shared<T> or Weak<T>
     const arcInfo = this._arcClasses?.get(name);
 
-    // All-static class with no fields → no struct needed (just a namespace)
-    const allStatic = methods.length > 0 && methods.every(m => m.modifiers.includes('static'));
-    const hasUserFields = fields.length > 0 || cBase;
+    // All-static class with no fields → skip struct unless class name used as a type
+    const _allStatic = methods.length > 0 && methods.every(m => m.modifiers.includes('static'));
+    const _hasUserFields = fields.length > 0 || cBase;
+    const _usedAsType = !_allStatic || _hasUserFields || (() => {
+      const scanType = (node) => {
+        if (!node || typeof node !== 'object') return false;
+        if (Array.isArray(node)) return node.some(scanType);
+        if (node.kind === 'TypeRef' && node.name === name) return true;
+        return Object.values(node).some(v => v && typeof v === 'object' ? scanType(v) : false);
+      };
+      return methods.some(m => scanType(m.returnType) || (m.params ?? []).some(p => scanType(p.typeAnn)));
+    })();
 
-    if (!allStatic || hasUserFields) {
+    if (_usedAsType) {
       // Build field list (single-line struct always)
       const userFieldParts = [];
       if (cBase) userFieldParts.push(`${cBase} _base;`);
@@ -594,10 +813,14 @@ export default {
         if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
           throw this.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
         }
+        const isReadonly = (f.decorators ?? []).some(d => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
-        if (ct.endsWith(' *')) userFieldParts.push(`${ct.slice(0, -2)} *${f.name};`);
-        else userFieldParts.push(`${ct} ${f.name};`);
+        const constPfx = isReadonly ? 'const ' : '';
+        if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);
+        else userFieldParts.push(`${constPfx}${ct} ${f.name};`);
       }
+      // Fields from class decorators (e.g., @sealed adds _sealed: bool)
+      for (const { fieldDecl } of _classDecoratorFields) userFieldParts.push(fieldDecl);
 
       if (arcInfo) {
         const arcPre = arcInfo.refFirst ? [
@@ -683,7 +906,12 @@ export default {
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       const isStatic = m.modifiers.includes('static');
-      this.emitMethod(name, m, isStatic, explicitImplements);
+      const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
+      if (mDecs.length > 0) {
+        this._emitDecoratedMethod(name, m, isStatic, explicitImplements, mDecs);
+      } else {
+        this.emitMethod(name, m, isStatic, explicitImplements);
+      }
     }
 
     // Emit vtable constants for each explicitly implemented interface
@@ -776,6 +1004,454 @@ export default {
     }).join(',\n');
     this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map(m => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
     this.addTop('');
+  },
+
+  // ----------------------------------------------------------------
+  // Decorator helpers
+  // ----------------------------------------------------------------
+
+  // Analyze a class decorator body and extract field mutations (target._field = value)
+  _analyzeClassDecorator(decFn) {
+    const fields = [], inits = [];
+    for (const stmt of (decFn.body?.body ?? [])) {
+      if (stmt.kind !== 'ExprStmt') continue;
+      const expr = stmt.expr;
+      // target._field = value
+      if (expr?.kind === 'Assign' && expr.left?.kind === 'Member') {
+        const fieldName = expr.left.prop;
+        const valNode = expr.right;
+        // Resolve value: literal true/false/number/string
+        let cVal = null, cType = null;
+        if (valNode?.kind === 'Literal') {
+          if (valNode.litType === 'bool') { cVal = valNode.value; cType = 'bool'; }
+          else if (valNode.litType === 'number') { cVal = valNode.value; cType = 'int32_t'; }
+        }
+        if (cVal !== null) {
+          fields.push({ fieldDecl: `${cType} ${fieldName};`, fieldName, cType });
+          inits.push({ fieldName, cVal });
+        }
+      }
+    }
+    return { fields, inits };
+  },
+
+  // Deep-substitute orig.apply(...) calls with a replacement expression
+  _deepSubstOrigApply(node, replacement, isVoid = false) {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) return node.map(n => this._deepSubstOrigApply(n, replacement, isVoid));
+    if (node.kind === 'Return' && node.value?.kind === 'Call' && node.value.callee?.prop === 'apply') {
+      // return orig.apply(...) → for void: just call; for non-void: return result
+      return isVoid ? { kind: 'ExprStmt', expr: replacement } : { kind: 'Return', value: replacement };
+    }
+    if (node.kind === 'ExprStmt' && node.expr?.kind === 'Call' && node.expr.callee?.prop === 'apply') {
+      return { kind: 'ExprStmt', expr: replacement };
+    }
+    const result = {};
+    for (const [k, v] of Object.entries(node)) {
+      result[k] = (typeof v === 'object' && v !== null) ? this._deepSubstOrigApply(v, replacement, isVoid) : v;
+    }
+    return result;
+  },
+
+  // Recursively substitute Ident nodes in an AST
+  _substituteInAst(node, bindings) {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) return node.map(n => this._substituteInAst(n, bindings));
+    if (node.kind === 'Ident' && bindings.has(node.name)) return bindings.get(node.name);
+    if (node.kind === 'Binary' && node.op === '+') {
+      const left  = this._substituteInAst(node.left,  bindings);
+      const right = this._substituteInAst(node.right, bindings);
+      const isStr = t => t.kind === 'Literal' && (t.litType === 'string' || t.litType === 'char');
+      if (isStr(left) && isStr(right)) {
+        return { kind: 'Literal', litType: 'string', value: left.value + right.value };
+      }
+      return { ...node, left, right };
+    }
+    const result = {};
+    for (const [k, v] of Object.entries(node)) {
+      result[k] = (typeof v === 'object' && v !== null) ? this._substituteInAst(v, bindings) : v;
+    }
+    return result;
+  },
+
+  // Check if a statement is `return orig.apply(this, ...)` or `orig.apply(this, ...)`
+  // Check if orig.apply appears anywhere inside a stmt (for nested patterns like else branches)
+  _hasOrigApplyDeep(node) {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(n => this._hasOrigApplyDeep(n));
+    if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee?.prop === 'apply') return true;
+    return Object.values(node).some(v => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
+  },
+
+  _isOrigApply(stmt) {
+    const expr = stmt.kind === 'Return' ? stmt.value
+      : stmt.kind === 'ExprStmt' ? stmt.expr
+      : stmt.kind === 'VarDecl' ? stmt.init
+      : null;
+    if (!expr) return false;
+    if (expr.kind !== 'Call') return false;
+    const callee = expr.callee;
+    return callee?.kind === 'Member' && callee.prop === 'apply';
+  },
+
+  // Analyze a decorator function and extract wrapper info
+  // Returns: { style, befores, afters } | { style, beforeStmts, afterStmts, applyIsReturn, paramBindings }
+  _analyzeDecorator(decFn, factoryArgs = null) {
+    // TSClang `decorator function` style
+    if (decFn.isDecorator) {
+      const befores = [], afters = [];
+      for (const stmt of (decFn.body?.body ?? [])) {
+        if (stmt.kind !== 'ExprStmt') continue;
+        const c = stmt.expr;
+        if (c?.kind !== 'Call') continue;
+        const callee = c.callee;
+        if (callee?.kind !== 'Member') continue;
+        if (callee.prop === 'before' && c.args?.[0]) befores.push(c.args[0].expr ?? c.args[0]);
+        if (callee.prop === 'after'  && c.args?.[0]) afters.push(c.args[0].expr ?? c.args[0]);
+      }
+      return { style: 'desc', befores, afters };
+    }
+
+    // Find the actual inner decorator body (handle factory pattern)
+    let innerBody = decFn.body?.body ?? [];
+    let capturedBindings = new Map();
+    if (factoryArgs !== null) {
+      // Factory: look for `return function(target, method, desc) { ... }`
+      for (const stmt of innerBody) {
+        if (stmt.kind === 'Return' && stmt.value?.kind === 'FuncExpr') {
+          innerBody = stmt.value.body?.body ?? [];
+          // Bind factory param names to their argument values
+          for (let i = 0; i < (decFn.params ?? []).length; i++) {
+            const pName = decFn.params[i].name;
+            if (factoryArgs[i]) capturedBindings.set(pName, factoryArgs[i]);
+          }
+          break;
+        }
+      }
+    }
+
+    // Find `desc.value = function(...) { BODY }` or `desc.value = function(x: T) { BODY }`
+    let wrapperBody = null;
+    let lambdaParams = [];
+    for (const stmt of innerBody) {
+      if (stmt.kind !== 'ExprStmt') continue;
+      const expr = stmt.expr;
+      if (expr?.kind !== 'Assign') continue;
+      if (expr.left?.kind !== 'Member' || expr.left.prop !== 'value') continue;
+      const rhs = expr.right;
+      if (rhs?.kind === 'FuncExpr' || rhs?.kind === 'Arrow') {
+        wrapperBody = (rhs.body?.body ?? rhs.body?.body) ?? (rhs.body?.kind === 'Block' ? rhs.body.body : [rhs.body]);
+        lambdaParams = (rhs.params ?? []).filter(p => p.name && p.name !== 'this');
+        break;
+      }
+    }
+
+    if (!wrapperBody) return { style: 'passthrough' };
+
+    // Split at orig.apply(...)
+    const beforeStmts = [], afterStmts = [];
+    let foundApply = false, applyIsReturn = false, applyResultVar = null, applyArgs = null;
+    let allApplyDeep = false;  // true when orig.apply only appears inside nested stmts
+    for (const stmt of wrapperBody) {
+      if (this._isOrigApply(stmt)) {
+        foundApply = true;
+        applyIsReturn = stmt.kind === 'Return';
+        if (stmt.kind === 'VarDecl') applyResultVar = stmt.name;
+        // Extract explicit args from orig.apply(this, [arg1, arg2, ...])
+        const applyExpr = stmt.kind === 'Return' ? stmt.value : stmt.kind === 'ExprStmt' ? stmt.expr : stmt.init;
+        const argsArg = applyExpr?.args?.[1]?.expr;
+        if (argsArg?.kind === 'ArrayLit') applyArgs = argsArg.elems;
+      } else if (!foundApply && this._hasOrigApplyDeep(stmt)) {
+        // orig.apply is nested inside this stmt (e.g., in else branch) → deep substitute
+        beforeStmts.push({ _deepSubstApply: true, stmt });
+        allApplyDeep = true;
+      } else {
+        (foundApply ? afterStmts : beforeStmts).push(stmt);
+      }
+    }
+    // If all applies are deep (no top-level apply found), mark accordingly
+    if (allApplyDeep && !foundApply) allApplyDeep = true; else allApplyDeep = false;
+    return { style: 'prop-desc', beforeStmts, afterStmts, applyIsReturn, applyResultVar, applyArgs, allApplyDeep, capturedBindings, lambdaParams };
+  },
+
+  // Build a synthetic body statement from an Arrow/FuncExpr lambda (for desc.before/after)
+  _extractLambdaBody(lambdaNode) {
+    if (!lambdaNode) return [];
+    const body = lambdaNode.body;
+    if (!body) return [];
+    if (body.kind === 'Block') return body.body ?? [];
+    return [{ kind: 'ExprStmt', expr: body }];
+  },
+
+  // Build the C call to the inner function
+  _buildInnerCall(className, methodName, m, isStatic) {
+    const innerFnName = `${className}_${methodName}_inner`;
+    const paramNames = (m.params ?? []).map(p => p.name).filter(Boolean);
+    if (isStatic) {
+      return `${innerFnName}(${paramNames.join(', ')})`;
+    }
+    return `${innerFnName}(self${paramNames.length ? ', ' + paramNames.join(', ') : ''})`;
+  },
+
+  // Emit a decorated method: generates _inner + chain of wrappers
+  _emitDecoratedMethod(className, m, isStatic, explicitImplements, decs) {
+    // Check if a MethodDesc decorator is applied to a standalone function (error case handled in standalone)
+    // decs: [D_1 (outermost/leftmost), ..., D_n (innermost/rightmost)]
+
+    // Emit the original body as _inner
+    this.emitMethod(className, { ...m, name: m.name + '_inner', decorators: [] }, isStatic, explicitImplements);
+
+    let prevMethodName = m.name + '_inner';
+
+    // Apply decorators from innermost (rightmost) to outermost (leftmost)
+    for (let i = decs.length - 1; i >= 0; i--) {
+      const d = decs[i];
+      const isOuter = i === 0;
+      const wrapperMethodName = isOuter ? m.name : m.name + '_' + d.name;
+
+      // Resolve factory args from decorator call args
+      const decFn = this._decoratorFns.get(d.name);
+      const factoryArgs = d.args ? d.args.map(a => a) : null;
+      const analysis = this._analyzeDecorator(decFn, factoryArgs);
+
+      this._emitDecoratorWrapperFn(className, m, isStatic, wrapperMethodName, prevMethodName, analysis, d, i, decs.length);
+      prevMethodName = wrapperMethodName;
+    }
+    // Register the public method name in class metadata so call sites resolve correctly
+    const cls = this.classes.get(className);
+    if (cls) {
+      if (!cls._methodNames) cls._methodNames = new Map();
+      const nameMangled = `${className}_${m.name}`;
+      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: false, isExplicitMut: false, isMoveMethod: false, isIfaceMethod: false });
+    }
+  },
+
+  // Emit a single wrapper function
+  _emitDecoratorWrapperFn(className, m, isStatic, wrapperName, innerName, analysis, d, decIdx, totalDecs) {
+    const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
+    const isVoid = retType === 'void';
+    const innerFnName = `${className}_${innerName}`;
+
+    // For prop-desc style, use the lambda's params (may differ in name from m.params).
+    // Exception: rest params (...args: any[]) mean the lambda captures all args generically —
+    // fall back to original method params in that case.
+    const _hasRestLambdaParam = analysis.lambdaParams?.some(p => p.rest);
+    const wrapperParamList = (analysis.style === 'prop-desc' && analysis.lambdaParams?.length > 0 && !_hasRestLambdaParam)
+      ? analysis.lambdaParams
+      : (m.params ?? []);
+    const paramNames = wrapperParamList.map(p => p.name).filter(Boolean);
+    const paramCTypes = wrapperParamList.map(p => {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      return `${ct} ${p.name}`;
+    });
+
+    let selfParam, innerCall;
+    if (isStatic) {
+      selfParam = '';
+      innerCall = `${innerFnName}(${paramNames.join(', ')})`;
+    } else {
+      selfParam = `const ${className} *self`;
+      innerCall = `${innerFnName}(self${paramNames.length ? ', ' + paramNames.join(', ') : ''})`;
+    }
+
+    const allParams = [selfParam, ...paramCTypes].filter(Boolean).join(', ');
+    const wrapperFnName = `${className}_${wrapperName}`;
+
+    const lines = [];
+    const I = '    ';
+
+    if (analysis.style === 'desc') {
+      // TSClang decorator function style: desc.before/after
+      const beforeBody = analysis.befores.flatMap(l => this._extractLambdaBody(l));
+      const afterBody  = analysis.afters.flatMap(l => this._extractLambdaBody(l));
+
+      // Emit before stmts
+      const beforeLines = [], afterLines = [];
+      this.pushScope();
+      this.visitBlock({ body: beforeBody }, beforeLines, 1);
+      this.popScope();
+      this.pushScope();
+      this.visitBlock({ body: afterBody }, afterLines, 1);
+      this.popScope();
+
+      lines.push(`static ${retType} ${wrapperFnName}(${allParams}) {`);
+      for (const l of beforeLines) lines.push(l);
+      lines.push(`${I}${isVoid ? '' : (retType + ' _r = ')}${innerCall};`);
+      for (const l of afterLines) lines.push(l);
+      if (!isVoid) lines.push(`${I}return _r;`);
+      lines.push('}');
+    } else if (analysis.style === 'prop-desc') {
+      // TypeScript PropertyDescriptor style
+      // Build bindings: `method` param → actual method name, factory captures → literal values
+      const bindings = new Map();
+      // Find `method` parameter (2nd param of decorator = method name)
+      const decFn = this._decoratorFns.get(d.name);
+      const methodParamName = decFn?.params?.[1]?.name;
+      if (methodParamName) {
+        bindings.set(methodParamName, { kind: 'Literal', litType: 'string', value: m.name });
+      }
+      for (const [k, v] of analysis.capturedBindings) bindings.set(k, v);
+
+      // Transform before/after stmts with substitution
+      // When applyResultVar is set (const r = orig.apply(...)), bind r → _r in after stmts
+      if (analysis.applyResultVar && !isVoid) {
+        bindings.set(analysis.applyResultVar, { kind: 'Ident', name: '_r' });
+      }
+      // Build the actual inner call, using explicit args from orig.apply if provided
+      if (analysis.applyArgs && analysis.applyArgs.length > 0) {
+        const tmpLines2 = [];
+        this.pushScope();
+        if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
+        // Use lambda params in scope so type inference works for substituted args
+        for (const p of wrapperParamList) {
+          if (p.name) this.define(p.name, { ctype: p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t', varKind: 'let' });
+        }
+        const argsC = analysis.applyArgs.map(a => {
+          const subA = this._substituteInAst(a.expr ?? a, bindings);
+          return this.exprToC(subA, tmpLines2, 1);
+        });
+        this.popScope();
+        const selfPart = isStatic ? '' : 'self';
+        const parts = [selfPart, ...argsC].filter(Boolean);
+        innerCall = `${innerFnName}(${parts.join(', ')})`;
+      }
+
+      // Build the replacement AST node for deep-substitution (orig.apply in nested branches)
+      const innerCallExpr = { kind: 'RawC', code: innerCall };
+
+      const subBefore = analysis.beforeStmts.map(s => {
+        if (s._deepSubstApply) {
+          // Nested orig.apply: deep-replace it with the inner call
+          const subStmt = this._substituteInAst(s.stmt, bindings);
+          return this._deepSubstOrigApply(subStmt, innerCallExpr, isVoid);
+        }
+        return this._substituteInAst(s, bindings);
+      });
+      // Filter afterStmts: if void and applyResultVar, drop `return <resultVar>` stmts
+      let afterFiltered = analysis.afterStmts;
+      if (isVoid && analysis.applyResultVar) {
+        afterFiltered = analysis.afterStmts.filter(s =>
+          !(s.kind === 'Return' && s.value?.kind === 'Ident' && s.value.name === analysis.applyResultVar)
+        );
+      }
+      const subAfter = afterFiltered.map(s => this._substituteInAst(s, bindings));
+
+      const beforeLines = [], afterLines = [];
+      this.pushScope();
+      if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
+      if (analysis.applyResultVar && !isVoid) this.define(analysis.applyResultVar, { ctype: retType });
+      for (const p of wrapperParamList) {
+        if (p.name) this.define(p.name, { ctype: p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t', varKind: 'let' });
+      }
+      this.visitBlock({ body: subBefore }, beforeLines, 1);
+      this.visitBlock({ body: subAfter }, afterLines, 1);
+      this.popScope();
+
+      lines.push(`static ${retType} ${wrapperFnName}(${allParams}) {`);
+      for (const l of beforeLines) lines.push(l);
+      if (!analysis.allApplyDeep) {
+        if (analysis.applyIsReturn && !isVoid) {
+          lines.push(`${I}return ${innerCall};`);
+        } else if (analysis.applyResultVar && !isVoid) {
+          // const r = orig.apply(...) → retType _r = innerCall;
+          lines.push(`${I}${retType} _r = ${innerCall};`);
+        } else {
+          lines.push(`${I}${isVoid ? '' : (retType + ' _r = ')}${innerCall};`);
+          if (!isVoid) lines.push(`${I}return _r;`);
+        }
+      }
+      for (const l of afterLines) lines.push(l);
+      lines.push('}');
+    } else {
+      // passthrough: just delegate to inner
+      lines.push(`static ${retType} ${wrapperFnName}(${allParams}) {`);
+      if (!isStatic) lines.push(`${I}(void)self;`);
+      lines.push(`${I}${isVoid ? '' : 'return '}${innerCall};`);
+      lines.push('}');
+    }
+
+    for (const l of lines) this.addTop(l);
+    this.addTop('');
+  },
+
+  // Emit a decorated standalone function
+  _emitDecoratedStandaloneFunc(node, decs) {
+    const { name, params, returnType, body } = node;
+    const retType = returnType ? this.resolveType(returnType) : 'void';
+
+    // Check if all decorators are MethodDesc-only (cannot apply to standalone functions)
+    for (const d of decs) {
+      const decFn = this._decoratorFns.get(d.name);
+      if (!decFn) continue;
+      if (decFn.isDecorator) {
+        // Check param type: MethodDesc → error
+        const descParam = decFn.params?.[0];
+        const descTypeName = descParam?.typeAnn?.name;
+        if (descTypeName === 'MethodDesc') {
+          throw this.error(`"${d.name}" is a method decorator and cannot be applied to a standalone function`, node);
+        }
+      }
+    }
+
+    // Mangle the function suffix from param types
+    const paramSuffix = params.map(p => {
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      return ct === 'String' ? 'string' : ct.replace(/[^a-zA-Z0-9]/g, '_');
+    }).join('_');
+    const mangledName = paramSuffix ? `${name}_${paramSuffix}` : name;
+    const innerMangledName = paramSuffix ? `${name}_inner_${paramSuffix}` : `${name}_inner`;
+
+    // Emit original as _inner (use _monoName to prevent double-mangling)
+    const innerNode = { ...node, name: innerMangledName, _monoName: innerMangledName, decorators: [] };
+    this.visitFuncDecl(innerNode, true, false);
+
+    // Emit each wrapper layer
+    let prevName = innerMangledName;
+    for (let i = decs.length - 1; i >= 0; i--) {
+      const d = decs[i];
+      const isOuter = i === 0;
+      const wrapperFnName = isOuter ? mangledName : `${name}_${d.name}_${paramSuffix}`;
+      const decFn = this._decoratorFns.get(d.name);
+      const factoryArgs = d.args ? d.args.map(a => a) : null;
+      const analysis = this._analyzeDecorator(decFn, factoryArgs);
+
+      const isVoid = retType === 'void';
+      const paramCDecls = params.map(p => {
+        const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+        return `${ct} ${p.name}`;
+      });
+      const paramNms = params.map(p => p.name);
+      const innerCall = `${prevName}(${paramNms.join(', ')})`;
+
+      const lines = [];
+      const I = '    ';
+      if (analysis.style === 'desc') {
+        const beforeBody = analysis.befores.flatMap(l => this._extractLambdaBody(l));
+        const afterBody  = analysis.afters.flatMap(l => this._extractLambdaBody(l));
+        const beforeLines = [], afterLines = [];
+        this.pushScope();
+        this.visitBlock({ body: beforeBody }, beforeLines, 1);
+        this.popScope();
+        this.pushScope();
+        this.visitBlock({ body: afterBody }, afterLines, 1);
+        this.popScope();
+        lines.push(`static ${retType} ${wrapperFnName}(${paramCDecls.join(', ')}) {`);
+        for (const l of beforeLines) lines.push(l);
+        lines.push(`${I}${isVoid ? '' : (retType + ' _r = ')}${innerCall};`);
+        for (const l of afterLines) lines.push(l);
+        if (!isVoid) lines.push(`${I}return _r;`);
+        lines.push('}');
+      } else {
+        lines.push(`static ${retType} ${wrapperFnName}(${paramCDecls.join(', ')}) {`);
+        lines.push(`${I}${isVoid ? '' : 'return '}${innerCall};`);
+        lines.push('}');
+      }
+      for (const l of lines) this.addTop(l);
+      this.addTop('');
+      prevName = wrapperFnName;
+    }
+    // Register the outer (public) name in scope so call sites can resolve it
+    this.define(name, { ctype: retType, funcName: mangledName, params });
   },
 
   emitMethod(className, m, isStatic, explicitImplements = []) {
@@ -1204,6 +1880,24 @@ export default {
   visitFuncDecl(node, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
+
+    // Decorator functions: store instead of emitting C
+    if (node.isDecorator || (name && this._decoratorNames?.has(name))) {
+      this._decoratorFns.set(name, node);
+      // Apply own decorators to standalone functions
+      const ownDecs = decorators ?? [];
+      if (ownDecs.length > 0) {
+        this._emitDecoratedStandaloneFunc(node, ownDecs);
+      }
+      return;
+    }
+
+    // Regular function with known decorators applied → emit as decorated standalone
+    const knownDecs = (decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
+    if (knownDecs.length > 0) {
+      this._emitDecoratedStandaloneFunc(node, knownDecs);
+      return;
+    }
 
     // #[isr(...)] annotation on async function → error
     if (this._pendingIsrAnnotation) {

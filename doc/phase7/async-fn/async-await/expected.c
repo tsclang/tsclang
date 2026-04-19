@@ -1,10 +1,6 @@
 #include "runtime.h"
 
-typedef struct {
-    int32_t _state;
-    int32_t _result;
-    bool _done;
-} delay_state;
+typedef struct { int32_t _state; int32_t _result; bool _done; } delay_state;
 
 static void delay_poll(delay_state *self) {
     switch (self->_state) {
@@ -16,9 +12,7 @@ static void delay_poll(delay_state *self) {
 }
 
 typedef struct {
-    int32_t _state;
-    int32_t _result;
-    bool _done;
+    int32_t _state; int32_t _result; bool _done;
     int32_t x;
     delay_state _await_0;
 } run_state;

@@ -2,7 +2,7 @@
 #include "std/net.h"
 
 static void _handler_0(TscRequest *req, TscResponse *res) {
-    String id = tsc_request_param(req, STR_LIT("id"));
+    const String id = tsc_request_param(req, STR_LIT("id"));
     tsc_response_text(res, id);
 }
 

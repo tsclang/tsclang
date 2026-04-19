@@ -223,6 +223,293 @@ export default {
           break;
         }
 
+        // new Signal<T>(val) → Signal_T struct + tsc_signal_create_T
+        if (init?.kind === 'New' && init.name === 'Signal' && this._stdReactiveImported) {
+          const tArg = init.typeArgs?.[0];
+          const et = tArg ? this.resolveType(tArg) : 'int32_t';
+          const etIdent = this.cTypeToIdent(et);
+          const sigType = `Signal_${etIdent}`;
+          if (!this._emittedSignalTypedefs) this._emittedSignalTypedefs = new Set();
+          if (!this._emittedSignalTypedefs.has(sigType)) {
+            this._emittedSignalTypedefs.add(sigType);
+            this.addTop(`typedef struct { ${et} _value; void (**_effects)(void); size_t _effect_count; } ${sigType};`);
+            this.addTop('');
+          }
+          const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`${sigType} ${name} = tsc_signal_create_${etIdent}(${initVal});`);
+          this.define(name, { ctype: sigType, varKind, _isSignal: true, _signalElemType: etIdent });
+          break;
+        }
+
+        // new StaticMap({ "key": val, ... }) → compile-time hash lookup function
+        if (init?.kind === 'New' && init.name === 'StaticMap' && this._stdEmbeddedImported) {
+          this.includes.add('#include "std/embedded.h"');
+          const objArg = init.args?.[0]?.expr;
+          if (objArg?.kind !== 'ObjLit') break;
+          const entries = [];
+          for (const prop of (objArg.props ?? [])) {
+            if (prop.computed) {
+              const keyName = prop.key?.kind === 'Ident' ? prop.key.name : '?';
+              throw this.error(`TypeError: StaticMap keys must be compile-time string literals; dynamic key '[${keyName}]' is not allowed`);
+            }
+            const valC = this.exprToC(prop.value, lines, depth);
+            entries.push({ key: prop.key, valC });
+          }
+          const idx = this._staticMapInlineCount ?? 0;
+          this._staticMapInlineCount = idx + 1;
+          // No runtime object; define symbol for later get() calls
+          this.define(name, { ctype: 'StaticMapInline', varKind, _isStaticMapInline: true,
+            _entries: entries, _smIdx: idx, _getFn: null });
+          break;
+        }
+
+        // new HttpServer({ port: N }) → TscHttpServer server = tsc_http_server_create(N)
+        if (init?.kind === 'New' && init.name === 'HttpServer' && this._stdNetImported) {
+          const optsArg = init.args?.[0]?.expr;
+          let portC = '8080';
+          if (optsArg?.kind === 'ObjLit') {
+            const portProp = (optsArg.props ?? []).find(pr => pr.key === 'port');
+            if (portProp) portC = this.exprToC(portProp.value, lines, depth);
+          }
+          p(`TscHttpServer ${name} = tsc_http_server_create(${portC});`);
+          this.define(name, { ctype: 'TscHttpServer', varKind, _isHttpServer: true });
+          break;
+        }
+
+        // new WebSocket("url") → TscWebSocket ws = tsc_ws_connect(STR_LIT("url"))
+        if (init?.kind === 'New' && init.name === 'WebSocket' && this._stdWsImported) {
+          const urlC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
+          p(`TscWebSocket ${name} = tsc_ws_connect(${urlC});`);
+          this.define(name, { ctype: 'TscWebSocket', varKind, _isWebSocket: true });
+          break;
+        }
+
+        // new Tasks<N>() → Tasks_N typedef + cooperative scheduler support
+        if (init?.kind === 'New' && init.name === 'Tasks') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (!embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
+          }
+          this.includes.add('#include "std/embedded.h"');
+          const nArg = init.typeArgs?.[0];
+          const n = nArg?.kind === 'TypeLiteral' ? nArg.value : '1';
+          const tasksType = `Tasks_${n}`;
+          if (!this._emittedTasksTypedefs) {
+            this._emittedTasksTypedefs = true;
+            this.addTop('typedef void (*TaskPollFn)(void *state);');
+            this.addTop('typedef struct { TaskPollFn fn; void *state; bool active; String name; } TscTask;');
+          }
+          if (!this._emittedTasksStructs) this._emittedTasksStructs = new Set();
+          if (!this._emittedTasksStructs.has(tasksType)) {
+            this._emittedTasksStructs.add(tasksType);
+            this.addTop(`typedef struct { TscTask _slots[${n}]; size_t _count; } ${tasksType};`);
+            this.addTop('');
+          }
+          p(`${tasksType} ${name} = {0};`);
+          this.define(name, { ctype: tasksType, varKind: 'let', _isTasks: true, _tasksN: n, _tasksType: tasksType });
+          break;
+        }
+
+        // new Buffer(n) → stack-allocated uint8_t array + Buffer struct (stdlib, not user class)
+        if (init?.kind === 'New' && init.name === 'Buffer' && !this.classes.has('Buffer')) {
+          if (!this._emittedBufferTypeDef) {
+            this._emittedBufferTypeDef = true;
+            this.addTop('typedef struct { uint8_t *data; size_t length; } Buffer;');
+            this.addTop('');
+          }
+          const n = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          const dataVar = `_${name}_data_${this._bufDataCount ?? 0}`;
+          this._bufDataCount = (this._bufDataCount ?? 0) + 1;
+          const bufQual = varKind === 'const' ? 'const ' : '';
+          p(`uint8_t ${dataVar}[${n}] = {0};`);
+          p(`${bufQual}Buffer ${name} = {.data = ${dataVar}, .length = ${n}};`);
+          const bufCapInt = init.args?.[0]?.expr?.kind === 'Literal' ? parseInt(init.args[0].expr.value) : null;
+          this.define(name, { ctype: 'Buffer', varKind, _isBuffer: true, _bufCap: bufCapInt });
+          break;
+        }
+
+        // new DataView(buf) → DataView struct pointing to buf's data
+        if (init?.kind === 'New' && init.name === 'DataView') {
+          if (!this._emittedBufferTypeDef) {
+            this._emittedBufferTypeDef = true;
+            this.addTop('typedef struct { uint8_t *data; size_t length; } Buffer;');
+            this.addTop('');
+          }
+          if (!this._emittedDataViewTypeDef) {
+            this._emittedDataViewTypeDef = true;
+            this.addTop('typedef struct { uint8_t *data; size_t length; } DataView;');
+            this.addTop('');
+          }
+          const _dvSrcName = init.args?.[0]?.expr?.kind === 'Ident' ? init.args[0].expr.name : null;
+          const _dvSrcSym = _dvSrcName ? this.lookup(_dvSrcName) : null;
+          const srcName = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'buf';
+          p(`DataView ${name} = {.data = ${srcName}.data, .length = ${srcName}.length};`);
+          this.define(name, { ctype: 'DataView', varKind: 'let', _isDataView: true, _dvCap: _dvSrcSym?._bufCap ?? null });
+          break;
+        }
+
+        // new HashMap<K,V>(cap) → HashMap_K_V typedef + {.capacity = cap}
+        if (init?.kind === 'New' && init.name === 'HashMap') {
+          // Capacity overflow takes priority over platform error (detected by pre-scan)
+          const _capViol = this._hmCapViolations?.get(name);
+          if (_capViol) {
+            const _n = _capViol.count;
+            const _sfx = (_n % 10 === 1 && _n % 100 !== 11) ? 'st'
+                       : (_n % 10 === 2 && _n % 100 !== 12) ? 'nd'
+                       : (_n % 10 === 3 && _n % 100 !== 13) ? 'rd' : 'th';
+            throw this.error(`RuntimeError: HashMap capacity exceeded: max ${_capViol.cap}, attempted to insert ${_n}${_sfx} entry`);
+          }
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (!embeddedTargets.includes(this._targetName)) {
+            throw this.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
+          }
+          this.includes.add('#include "std/embedded.h"');
+          const kArg = init.typeArgs?.[0];
+          const vArg = init.typeArgs?.[1];
+          const kCType = kArg ? this.resolveType(kArg) : 'String';
+          const vCType = vArg ? this.resolveType(vArg) : 'int32_t';
+          const kIdent = this.cTypeToIdent(kCType);
+          const vIdent = this.cTypeToIdent(vCType);
+          const suffix = `${kIdent}_${vIdent}`;
+          const hmType = `HashMap_${suffix}`;
+          const cap = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '8';
+          if (!this._emittedHashMaps) this._emittedHashMaps = new Set();
+          if (!this._emittedHashMaps.has(hmType)) {
+            this._emittedHashMaps.add(hmType);
+            this.addTop(`typedef struct {`);
+            this.addTop(`    ${kCType} keys[${cap}]; ${vCType} values[${cap}]; bool used[${cap}];`);
+            this.addTop(`    size_t capacity; size_t count;`);
+            this.addTop(`} ${hmType};`);
+            this.addTop('');
+          }
+          p(`${hmType} ${name} = {.capacity = ${cap}};`);
+          this.define(name, { ctype: hmType, varKind: 'let', _isHashMap: true,
+            _hmSuffix: suffix, _hmCap: parseInt(cap) || 0, _hmKeyType: kCType, _hmValType: vCType });
+          break;
+        }
+
+        // new Blob([...]) → two variants:
+        //   [int literals] → simple inline struct Blob {data, size, ?type}
+        //   [bufVar], {type:...} → TscBlob via tsc_blob_create
+        if (init?.kind === 'New' && init.name === 'Blob') {
+          const firstArg = init.args?.[0]?.expr; // the array arg
+          const secondArg = init.args?.[1]?.expr; // optional type arg
+          const isArrayArg = firstArg?.kind === 'ArrayLit';
+          const firstElem = firstArg?.elems?.[0]?.expr;
+          const firstElemSym = firstElem?.kind === 'Ident' ? this.lookup(firstElem.name) : null;
+          const isTscBlob = isArrayArg && firstElem && (firstElemSym?._isBuffer || firstElemSym?.ctype === 'Buffer');
+
+          if (isTscBlob) {
+            // TscBlob path: new Blob([buf], { type: "..." })
+            this.includes.add('#include "std/blob.h"');
+            const bufName = firstElem.name;
+            const bufSym = firstElemSym;
+            const dataExpr = bufSym?.ctype === 'Buffer' ? `${bufName}.data` : `${bufName}.data`;
+            const lenExpr  = bufSym?.ctype === 'Buffer' ? `${bufName}.length` : `${bufName}.length`;
+            let typeStr = 'STR_LIT("")';
+            if (secondArg?.kind === 'ObjLit') {
+              const tp = secondArg.props?.find(p => p.key === 'type');
+              if (tp?.value?.kind === 'Literal') typeStr = `STR_LIT(${JSON.stringify(tp.value.value)})`;
+            } else if (secondArg?.kind === 'Literal') {
+              typeStr = `STR_LIT(${JSON.stringify(secondArg.value)})`;
+            }
+            p(`TscBlob ${name} = tsc_blob_create(${dataExpr}, ${lenExpr}, ${typeStr});`);
+            this.define(name, { ctype: 'TscBlob', varKind: 'let', _isTscBlob: true });
+          } else {
+            // Simple inline Blob: new Blob([int, int, ...], ?typeStr)
+            const elems = firstArg?.kind === 'ArrayLit'
+              ? firstArg.elems.map(e => this.exprToC(e.expr, lines, depth))
+              : [];
+            const hasType = secondArg != null;
+            const blobN = this._blobDataCount = (this._blobDataCount ?? 0); this._blobDataCount++;
+            const dataVar = `_blob_data_${blobN}`;
+            // Emit typedef
+            const typedefBody = hasType
+              ? 'typedef struct { uint8_t *data; size_t size; String type; } Blob;'
+              : 'typedef struct { uint8_t *data; size_t size; } Blob;';
+            if (!this._emittedBlobTypeDef) {
+              this._emittedBlobTypeDef = typedefBody;
+              this.addTop(typedefBody);
+              this.addTop('');
+            }
+            p(`uint8_t ${dataVar}[] = {${elems.join(', ')}};`);
+            let initFields = `.data = ${dataVar}, .size = ${elems.length}`;
+            if (hasType) {
+              let typeStrLit = 'STR_LIT("")';
+              if (secondArg?.kind === 'Literal') typeStrLit = `STR_LIT(${JSON.stringify(secondArg.value)})`;
+              initFields += `, .type = ${typeStrLit}`;
+            }
+            const blobQual = varKind === 'const' ? 'const ' : '';
+            p(`${blobQual}Blob ${name} = {${initFields}};`);
+            this.define(name, { ctype: 'Blob', varKind, _isBlob: true, _blobCap: elems.length, _hasType: hasType });
+          }
+          break;
+        }
+
+        // new URL(str) or new URL(path, base) → TscURL + tsc_url_parse / tsc_url_parse_relative
+        if (init?.kind === 'New' && init.name === 'URL') {
+          this.includes.add('#include "std/url.h"');
+          const firstArg = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
+          if (init.args?.length >= 2) {
+            const baseArg = init.args[1] ? this.exprToC(init.args[1].expr, lines, depth) : 'NULL';
+            p(`TscURL ${name} = tsc_url_parse_relative(${firstArg}, &${baseArg});`);
+          } else {
+            p(`TscURL ${name} = tsc_url_parse(${firstArg});`);
+          }
+          this.define(name, { ctype: 'TscURL', varKind: 'let', _isURL: true });
+          this._registerCleanup(`tsc_url_free(&${name})`);
+          break;
+        }
+
+        // new URLSearchParams(str) → TscURLSearchParams + tsc_search_params_parse
+        if (init?.kind === 'New' && init.name === 'URLSearchParams') {
+          this.includes.add('#include "std/url.h"');
+          const strArg = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
+          p(`TscURLSearchParams ${name} = tsc_search_params_parse(${strArg});`);
+          this.define(name, { ctype: 'TscURLSearchParams', varKind: 'let', _isURLSearchParams: true });
+          this._registerCleanup(`tsc_search_params_free(&${name})`);
+          break;
+        }
+
+        // new Regex(pattern) → TscRegex + tsc_regex_compile
+        if (init?.kind === 'New' && init.name === 'Regex') {
+          this.includes.add('#include "std/regex.h"');
+          const patternC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
+          p(`TscRegex ${name} = tsc_regex_compile(${patternC});`);
+          this.define(name, { ctype: 'TscRegex', varKind: 'let', _isRegex: true });
+          this._registerCleanup(`tsc_regex_free(&${name})`);
+          break;
+        }
+
+        // new Random(seed) → TscRandom typedef + tsc_random_seed
+        if (init?.kind === 'New' && init.name === 'Random') {
+          if (!this._emittedTscRandomDef) {
+            this._emittedTscRandomDef = true;
+            this.addTop('typedef struct { uint64_t state; } TscRandom;');
+            this.addTop('');
+          }
+          const seedC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`TscRandom ${name} = tsc_random_seed(${seedC});`);
+          this.define(name, { ctype: 'TscRandom', varKind: 'let', _isRandom: true });
+          break;
+        }
+
+        // new SecureRandom() → error on embedded targets
+        if (init?.kind === 'New' && init.name === 'SecureRandom') {
+          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          if (embeddedTargets.includes(this._targetName)) {
+            throw this.error(`"SecureRandom" is not available on embedded targets`);
+          }
+          if (!this._emittedTscSecureRandomDef) {
+            this._emittedTscSecureRandomDef = true;
+            this.addTop('typedef struct { int _fd; } TscSecureRandom;');
+            this.addTop('');
+          }
+          p(`TscSecureRandom ${name} = tsc_secure_random_create();`);
+          this.define(name, { ctype: 'TscSecureRandom', varKind: 'let', _isSecureRandom: true });
+          break;
+        }
+
         // new Channel<T>(cap) → Channel_T typedef + tsc_channel_create_T
         if (init?.kind === 'New' && init.name === 'Channel') {
           const tArg = init.typeArgs?.[0];
@@ -506,6 +793,7 @@ export default {
               this._currentBlockPoolVars.push({ name, className: _pcls2 });
             }
           }
+          if (this._lastHalRead) { p(`(void)${name};`); this._lastHalRead = null; }
           break;
         }
 
@@ -551,6 +839,16 @@ export default {
           this._ensureArrayStruct(arrName, et);
           const elemIdent = this.cTypeToIdent(et);
 
+          // new T[N] → stack array + Array_T struct
+          if (init?.kind === 'New' && init.arraySize != null) {
+            const nC = this.exprToC(init.arraySize, lines, depth);
+            const dataVar = `_buf_data_${this._bufDataCount ?? 0}`;
+            this._bufDataCount = (this._bufDataCount ?? 0) + 1;
+            p(`${et} ${dataVar}[${nC}] = {0};`);
+            p(`${arrName} ${name} = {.data = ${dataVar}, .length = ${nC}, .capacity = ${nC}};`);
+            this.define(name, { ctype: arrName, elemType: elemIdent, arrElemCType: et, isArray: true, varKind });
+            break;
+          }
           if (!init || (init.kind === 'ArrayLit' && init.elems.length === 0)) {
             // Empty array literal or no init
             p(`${qualifier}${arrName} ${name} = {.data = NULL, .length = 0, .capacity = 0};`);
@@ -572,7 +870,8 @@ export default {
             }
           }
           this.define(name, { ctype: arrName, elemType: elemIdent, arrElemCType: et, isArray: true,
-                              arraySize: init?.kind === 'ArrayLit' ? this.arrayLitSize(init) : undefined, varKind });
+                              arraySize: init?.kind === 'ArrayLit' ? this.arrayLitSize(init) : undefined, varKind,
+                              initNode: init?.kind === 'ArrayLit' ? init : undefined });
           break;
         }
 
@@ -594,6 +893,7 @@ export default {
             p(`${this.varDecl(effQual2, ctype, name)} = ${initC};`);
           }
           this.define(name, { ctype, elemType: elemIdent, arrElemCType: etC2, isArray: true, varKind });
+          if (this._lastHalRead) { p(`(void)${name};`); this._lastHalRead = null; }
           break;
         }
 
@@ -818,6 +1118,16 @@ export default {
                 }
               }
             }
+            // computed() → Signal_T var (Signal is the result type, not raw T)
+            if (this._lastComputedSigType) {
+              const _sigType = this._lastComputedSigType;
+              const _sigElemIdent = this._lastComputedElemType;
+              this._lastComputedSigType = undefined;
+              this._lastComputedElemType = undefined;
+              p(`${_sigType} ${name} = ${initC};`);
+              this.define(name, { ctype: _sigType, varKind, _isSignal: true, _signalElemType: _sigElemIdent });
+              break;
+            }
             // Cross-struct assignment: const b: Pt2 = a (where a is a different struct type)
             if (init.kind === 'Ident') {
               const initSym = this.lookup(init.name);
@@ -910,6 +1220,23 @@ export default {
           if (this.classes.get(_pcls)?._isPool) {
             this._currentBlockPoolVars.push({ name, className: _pcls });
           }
+        }
+        // Flush sub-expression cleanups (e.g. tsc_blob_to_string temp in template literals)
+        if (this._postStmtCleanups?.length) {
+          for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
+          this._postStmtCleanups = [];
+        }
+        // HAL read: emit (void)varname; to suppress unused variable warning
+        if (this._lastHalRead) {
+          p(`(void)${name};`);
+          this._lastHalRead = null;
+        }
+        // Class decorator inits: inject after new ClassName() declaration
+        if (this._pendingDecoratorInits) {
+          for (const { fieldName, cVal } of this._pendingDecoratorInits) {
+            p(`${name}.${fieldName} = ${cVal};`);
+          }
+          this._pendingDecoratorInits = null;
         }
         break;
       }
@@ -1168,15 +1495,15 @@ export default {
             const innerI = ' '.repeat(this.indent * (depth + 1));
             lines.push(`${innerI}tsc_arc_release(${upgradeReleaseVar});`);
           }
-        } else if (node.consequent.kind === 'ExprStmt') {
-          // Inline: if (cond) expr;
+        } else if (!alt && node.consequent.kind === 'ExprStmt') {
+          // Inline (no else): if (cond) expr;
           const exprC = this.exprToC(node.consequent.expr, lines, depth);
           p(`if (${testC}) ${exprC};`);
-        } else if (node.consequent.kind === 'Continue') {
+        } else if (!alt && node.consequent.kind === 'Continue') {
           p(`if (${testC}) continue;`);
-        } else if (node.consequent.kind === 'Break') {
+        } else if (!alt && node.consequent.kind === 'Break') {
           p(`if (${testC}) break;`);
-        } else if (node.consequent.kind === 'Return' && !node.consequent.value) {
+        } else if (!alt && node.consequent.kind === 'Return' && !node.consequent.value) {
           p(`if (${testC}) return;`);
         } else {
           p(`if (${testC}) {`);
@@ -1278,6 +1605,79 @@ export default {
             if (vElem) {
               lines.push(`${II}${qual}${vCType} ${vElem.name} = ${entTmpName}.data[${ivar}].value;`);
               this.define(vElem.name, { ctype: vCType, varKind: node.varKind });
+            }
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            p('}');
+            break;
+          }
+        }
+
+        // for (const cp of s.codePoints()) → TscCodePointIter while loop
+        if (node.iterable.kind === 'Call' &&
+            node.iterable.callee?.kind === 'Member' &&
+            node.iterable.callee?.prop === 'codePoints') {
+          const strObj = node.iterable.callee.object;
+          const strC = this.exprToC(strObj, lines, depth);
+          const n = this.loopCount++;
+          const iterVar = `_cp_iter_${n}`;
+          const tmpVar = `_cp_${n}`;
+          const bindName2 = node.binding.kind === 'Ident' ? node.binding.name : null;
+          p(`TscCodePointIter ${iterVar} = tsc_codepoints(${strC});`);
+          p(`uint32_t ${tmpVar};`);
+          p(`while (tsc_codepoints_next(&${iterVar}, &${tmpVar})) {`);
+          if (bindName2) {
+            lines.push(`${II}${qual}uint32_t ${bindName2} = ${tmpVar};`);
+            this.define(bindName2, { ctype: 'uint32_t', varKind: node.varKind });
+          }
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          p('}');
+          break;
+        }
+
+        // for (const g of s.graphemes()) → TscGraphemeIter while loop
+        if (node.iterable.kind === 'Call' &&
+            node.iterable.callee?.kind === 'Member' &&
+            node.iterable.callee?.prop === 'graphemes') {
+          const strObj = node.iterable.callee.object;
+          const strC = this.exprToC(strObj, lines, depth);
+          const n = this.loopCount++;
+          const iterVar = `_g_iter_${n}`;
+          const tmpVar = `_g_${n}`;
+          const bindName2 = node.binding.kind === 'Ident' ? node.binding.name : null;
+          p(`TscGraphemeIter ${iterVar} = tsc_graphemes(${strC});`);
+          p(`String ${tmpVar};`);
+          p(`while (tsc_graphemes_next(&${iterVar}, &${tmpVar})) {`);
+          if (bindName2) {
+            lines.push(`${II}${qual}String ${bindName2} = ${tmpVar};`);
+            this.define(bindName2, { ctype: 'String', varKind: node.varKind });
+          }
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          p('}');
+          break;
+        }
+
+        // for (const [k, v] of u.searchParams) → TscURLParamIter while loop
+        if (this._stdUrlImported &&
+            node.iterable.kind === 'Member' && node.iterable.prop === 'searchParams' &&
+            node.binding.kind === 'ArrayPattern') {
+          const urlObj = node.iterable.object;
+          const urlSym = urlObj.kind === 'Ident' ? this.lookup(urlObj.name) : null;
+          if (urlSym?._isURL) {
+            const urlName = urlObj.name;
+            const n = this.loopCount++;
+            const iterVar = `_iter_${n}`;
+            const paramVar = `_p_${n}`;
+            p(`TscURLParamIter ${iterVar} = tsc_url_params_iter(&${urlName});`);
+            p(`TscURLParam ${paramVar};`);
+            p(`while (tsc_url_params_next(&${iterVar}, &${paramVar})) {`);
+            const [kElem, vElem] = node.binding.elems;
+            if (kElem) {
+              lines.push(`${II}${qual}String ${kElem.name} = ${paramVar}.key;`);
+              this.define(kElem.name, { ctype: 'String', varKind: node.varKind });
+            }
+            if (vElem) {
+              lines.push(`${II}${qual}String ${vElem.name} = ${paramVar}.value;`);
+              this.define(vElem.name, { ctype: 'String', varKind: node.varKind });
             }
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             p('}');

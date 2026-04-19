@@ -2,11 +2,8 @@
 #include "std/embedded.h"
 
 typedef struct {
-    String keys[64];
-    int32_t values[64];
-    bool used[64];
-    size_t capacity;
-    size_t count;
+    String keys[64]; int32_t values[64]; bool used[64];
+    size_t capacity; size_t count;
 } HashMap_string_i32;
 
 int main(void) {

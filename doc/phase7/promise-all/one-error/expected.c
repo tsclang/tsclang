@@ -5,11 +5,7 @@ static Err Err_new(String msg) { Err s = {0}; s._base.message = msg; return s; }
 
 typedef struct { bool ok; union { int32_t value; Err error; }; } Result_i32_Err;
 
-typedef struct {
-    int32_t _state;
-    Result_i32_Err _result;
-    bool _done;
-} a_state;
+typedef struct { int32_t _state; Result_i32_Err _result; bool _done; } a_state;
 
 static void a_poll(a_state *self) {
     switch (self->_state) {
@@ -22,11 +18,7 @@ static void a_poll(a_state *self) {
 
 typedef struct { bool ok; union { int32_t value; Err error; }; } Result_i32_Err;
 
-typedef struct {
-    int32_t _state;
-    Result_i32_Err _result;
-    bool _done;
-} b_state;
+typedef struct { int32_t _state; Result_i32_Err _result; bool _done; } b_state;
 
 static void b_poll(b_state *self) {
     switch (self->_state) {
@@ -38,9 +30,7 @@ static void b_poll(b_state *self) {
 }
 
 typedef struct {
-    int32_t _state;
-    int _result;
-    bool _done;
+    int32_t _state; int _result; bool _done;
     int32_t x;
     int32_t y;
     a_state _await_0;

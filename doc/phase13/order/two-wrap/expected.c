@@ -3,20 +3,19 @@
 typedef struct { int _dummy; } Foo;
 
 static void Foo_run_inner(const Foo *self) {
-    (void)self;
-    printf("%s\n", "run");
+    printf("run\n");
 }
 
 static void Foo_run_B(const Foo *self) {
-    printf("%s\n", "B-before");
+    printf("B-before\n");
     Foo_run_inner(self);
-    printf("%s\n", "B-after");
+    printf("B-after\n");
 }
 
 static void Foo_run(const Foo *self) {
-    printf("%s\n", "A-before");
+    printf("A-before\n");
     Foo_run_B(self);
-    printf("%s\n", "A-after");
+    printf("A-after\n");
 }
 
 int main(void) {

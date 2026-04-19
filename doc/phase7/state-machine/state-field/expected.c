@@ -1,9 +1,7 @@
 #include "runtime.h"
 
 typedef struct {
-    int32_t _state;
-    int32_t _result;
-    bool _done;
+    int32_t _state; int32_t _result; bool _done;
     int32_t x;
 } counter_state;
 

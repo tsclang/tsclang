@@ -12,9 +12,7 @@ static void *_spawn_0_fn(void *_arg) {
 }
 
 typedef struct {
-    int32_t _state;
-    int _result;
-    bool _done;
+    int32_t _state; int _result; bool _done;
     tsc_thread_t _t_0;
 } run_state;
 

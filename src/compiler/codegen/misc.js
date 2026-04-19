@@ -126,6 +126,16 @@ export default {
       if (hasCtor) return `${name}_new(${argsC})`;
       // Throws classes have a synthesized _new(String msg) function
       if (cls._isThrowsClass) return `${name}_new(${argsC})`;
+      // Class decorator inits: flag for injection after VarDecl emit
+      if (cls._decoratorInits?.length) this._pendingDecoratorInits = cls._decoratorInits;
+      // @readonly fields with initializers → designated initializer syntax
+      const readonlyInits = (cls.fields ?? []).filter(f =>
+        f.init && (f.decorators ?? []).some(d => d.name === 'readonly')
+      );
+      if (readonlyInits.length > 0) {
+        const parts = readonlyInits.map(f => `.${f.name} = ${this.exprToC(f.init, lines, depth)}`);
+        return `{ ${parts.join(', ')} }`;
+      }
       return `{0}`;
     }
 
@@ -150,12 +160,20 @@ export default {
       return `${ct} ${p.name}`;
     });
     const lines = [];
+    this.pushScope();
+    for (let i = 0; i < (node.params ?? []).length; i++) {
+      const p = node.params[i];
+      const hinted = this._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
+      this.define(p.name, { ctype: ct, varKind: 'const' });
+    }
     if (node.body.kind === 'Block') {
       this.visitBlock(node.body, lines, 0);
     } else {
       const c = this.exprToC(node.body, lines, 0);
       lines.push(`return ${c};`);
     }
+    this.popScope();
     this.addLambda(`static ${ret} ${name}(${paramStrs.join(', ') || 'void'}) {`);
     for (const l of lines) this.addLambda('    ' + l);
     this.addLambda('}');
@@ -293,8 +311,18 @@ export default {
       const toks = this._lex(p.src, this.filename);
       const ast = this._parse(toks);
       const exprNode = ast.body[0]?.expr ?? ast.body[0];
-      const t = this.inferType(exprNode);
-      const c = this.exprToC(exprNode, lines, depth);
+      let t = this.inferType(exprNode);
+      let c = this.exprToC(exprNode, lines, depth);
+      // TscBlob in template → tsc_blob_to_string
+      if (t === 'TscBlob' || (exprNode.kind === 'Ident' && this.lookup(exprNode.name)?._isTscBlob)) {
+        const n = this._blobStrN = (this._blobStrN ?? 0); this._blobStrN++;
+        const tmp = `_blob_str_${n}`;
+        const I = ' '.repeat(this.indent * depth);
+        lines.push(`${I}String ${tmp} = tsc_blob_to_string(&${c});`);
+        if (!this._postStmtCleanups) this._postStmtCleanups = [];
+        this._postStmtCleanups.push(`${I}tsc_string_free(${tmp});`);
+        t = 'String'; c = tmp;
+      }
       return { kind: 'expr', t, c };
     });
 
@@ -608,5 +636,18 @@ export default {
     if (lambda.body?.kind === 'Block') for (const s of lambda.body.body || []) walkS(s);
     else if (lambda.body) walkE(lambda.body);
     return free;
+  },
+
+  _avrSleepModeToC(node) {
+    // SleepMode.Idle → SLEEP_MODE_IDLE, etc.
+    if (node.kind === 'Member' && node.object.kind === 'Ident' && node.object.name === 'SleepMode') {
+      const map = {
+        Idle: 'SLEEP_MODE_IDLE', ADC: 'SLEEP_MODE_ADC',
+        PowerDown: 'SLEEP_MODE_PWR_DOWN', PowerSave: 'SLEEP_MODE_PWR_SAVE',
+        Standby: 'SLEEP_MODE_STANDBY', ExtStandby: 'SLEEP_MODE_EXT_STANDBY',
+      };
+      return map[node.prop] ?? `SLEEP_MODE_${node.prop.toUpperCase()}`;
+    }
+    return this.exprToC(node, [], 0);
   },
 };

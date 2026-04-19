@@ -1,3 +1,4 @@
+#[target(avr)]
 import { HashMap } from "std/embedded";
 const m = new HashMap<string, i32>(8);
 m.set("x", 10);

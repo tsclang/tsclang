@@ -263,6 +263,16 @@ export default {
         return 'bool';
       }
       case 'Member': {
+        // process.stdin/stdout/stderr (std/io)
+        if (this._stdIoImported && node.object.kind === 'Ident' && node.object.name === 'process') {
+          if (node.prop === 'stdin') return 'TscReader';
+          if (node.prop === 'stdout' || node.prop === 'stderr') return 'TscWriter';
+        }
+        // Math constants are double
+        if (node.object.kind === 'Ident' && node.object.name === 'Math') {
+          const mathFloatConsts = ['PI', 'E', 'LN2', 'LN10', 'SQRT2', 'SQRT1_2', 'LOG2E', 'LOG10E'];
+          if (mathFloatConsts.includes(node.prop)) return 'double';
+        }
         if (node.prop === 'length')   return 'size_t';
         if (node.prop === 'capacity') return 'size_t';
         if (node.prop === 'size') {
@@ -305,6 +315,36 @@ export default {
             }
           }
         }
+        // Temporal struct field access
+        if (this._stdTemporalImported && node.object.kind === 'Ident') {
+          const _tpSym = this.lookup(node.object.name);
+          const _tpCtype = _tpSym?.ctype ?? '';
+          const _tpIntFields = ['year', 'month', 'day', 'hour', 'minute', 'second',
+                                'days', 'hours', 'minutes', 'seconds',
+                                'epochNanoseconds', 'epochSeconds', 'epochMilliseconds'];
+          if (['TscPlainDate','TscPlainTime','TscPlainDateTime','TscInstant',
+               'TscDuration','TscZonedDateTime'].includes(_tpCtype)) {
+            if (_tpIntFields.includes(node.prop)) return 'int32_t';
+            if (node.prop === 'timeZone') return 'String';
+          }
+        }
+        // Blob / TscBlob field access
+        if (node.object.kind === 'Ident') {
+          const _blobMSym = this.lookup(node.object.name);
+          if (_blobMSym?._isBlob || _blobMSym?._isTscBlob || _blobMSym?.ctype === 'Blob' || _blobMSym?.ctype === 'TscBlob') {
+            if (node.prop === 'size') return 'size_t';
+            if (node.prop === 'type') return 'String';
+          }
+        }
+        // URL field access
+        if (this._stdUrlImported && node.object.kind === 'Ident') {
+          const _urlSym = this.lookup(node.object.name);
+          if (_urlSym?._isURL) {
+            const _urlFields = ['protocol', 'host', 'pathname', 'hash', 'search', 'hostname', 'port', 'href'];
+            if (_urlFields.includes(node.prop)) return 'String';
+            if (node.prop === 'searchParams') return 'TscURLSearchParams';
+          }
+        }
         // Fallback: infer object type recursively (e.g. call result member access)
         {
           const objType = this.inferType(node.object);
@@ -325,6 +365,12 @@ export default {
           const objType = this.inferType(node.callee.object);
           if (objType?.startsWith('opt_') && node.callee.prop === 'toString') return 'opt_string';
           return 'int32_t';
+        }
+        // std/string function return types
+        if (node.callee.kind === 'Ident') {
+          const _sfn = node.callee.name;
+          if (_sfn === 'atob' || _sfn === 'btoa' || _sfn === 'decodeUtf8') return 'String';
+          if (_sfn === 'encodeUtf8') return 'Array_u8';
         }
         // Generic function call: infer return type from template + substitution
         if (node.callee.kind === 'Ident' && this._genericFuncs?.has(node.callee.name)) {
@@ -356,9 +402,56 @@ export default {
           if (obj.kind === 'Ident' && obj.name === 'Math') {
             if (prop === 'clz32' || prop === 'imul') return 'int32_t';
             if (prop === 'fround') return 'float';
+            // abs/min/max return int if args are integer typed
+            if (prop === 'abs' || prop === 'min' || prop === 'max') {
+              const a0t = node.args?.[0] ? this.inferType(node.args[0].expr) : 'int32_t';
+              if (a0t !== 'double' && a0t !== 'float') return 'int32_t';
+            }
             return 'double';
           }
           if (obj.kind === 'Ident' && obj.name === 'console') return 'void';
+          // Temporal static method return types
+          if (obj.kind === 'Ident' && this._stdTemporalImported) {
+            const _tc = obj.name;
+            if (_tc === 'PlainDate' && prop === 'from') return 'TscPlainDate';
+            if (_tc === 'PlainTime' && prop === 'from') return 'TscPlainTime';
+            if (_tc === 'PlainDateTime' && prop === 'from') return 'TscPlainDateTime';
+            if (_tc === 'Instant' && prop === 'now') return 'TscInstant';
+            if (_tc === 'ZonedDateTime' && prop === 'now') return 'TscZonedDateTime';
+            if (_tc === 'Duration' && prop === 'from') return 'TscDuration';
+            if (_tc === 'Now') {
+              if (prop === 'instant') return 'TscInstant';
+              if (prop === 'plainDate') return 'TscPlainDate';
+            }
+          }
+          // Temporal instance method return types
+          if (obj.kind === 'Ident' && this._stdTemporalImported) {
+            const _tSym = this.lookup(obj.name);
+            if (_tSym?.ctype === 'TscPlainDate') {
+              if (prop === 'add') return 'TscPlainDate';
+              if (prop === 'until') return 'TscDuration';
+            }
+          }
+          // Buffer method return types
+          if (obj.kind === 'Ident') {
+            const _bSym = this.lookup(obj.name);
+            if (_bSym?._isBuffer || _bSym?.ctype === 'Buffer') {
+              if (prop === 'slice') return 'Buffer';
+              if (prop === 'fill') return 'void';
+            }
+            if (_bSym?._isDataView || _bSym?.ctype === 'DataView') {
+              if (prop === 'getU8') return 'uint32_t';
+              if (prop === 'getU16LE') return 'uint32_t';
+              if (prop === 'getU32LE') return 'uint32_t';
+              if (prop === 'getF64LE') return 'double';
+              if (prop === 'setU8' || prop === 'setU16LE' || prop === 'setU32LE' || prop === 'setF64LE') return 'void';
+            }
+          }
+          // Buffer indexing type
+          if (node.callee?.kind === 'Index') {
+            const _idxObjType = this.inferType(node.callee?.object);
+            if (_idxObjType === 'Buffer' || _idxObjType === 'DataView') return 'uint8_t';
+          }
           if (prop === 'at') return 'opt_u8';
           if (prop === 'toFixed' || prop === 'toPrecision') return 'String';
           // Map method return types
@@ -408,6 +501,78 @@ export default {
           }
           // tsc_thread_t .join()
           if ((objSymA?.ctype === 'tsc_thread_t' || objSymA?._isThread) && prop === 'join') return 'void';
+
+          // AVR object method return types
+          const objSymAvr = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymAvr?._isAvrObj) {
+            if (obj.name === 'ADC' && prop === 'read') return 'uint16_t';
+            return 'void';
+          }
+
+          // TscRandom method return types
+          const objSymRnd = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymRnd?._isRandom) {
+            if (prop === 'nextF64') return 'double';
+            if (prop === 'nextI32' || prop === 'range') return 'int32_t';
+          }
+
+          // HashMap method return types
+          const objSymHm = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymHm?._isHashMap) {
+            const _hmVt = objSymHm._hmValType ?? 'int32_t';
+            const _hmVid = this.cTypeToIdent(_hmVt);
+            if (prop === 'has') return 'bool';
+            if (prop === 'get') return `opt_${_hmVid}`;
+            if (prop === 'set' || prop === 'delete') return 'void';
+          }
+          // StaticMap inline method return types
+          if (objSymHm?._isStaticMapInline && prop === 'get') return 'opt_i32';
+
+          // Reader/Writer vtable method return types
+          if (this._stdIoImported && obj.kind === 'Ident') {
+            const _ioSym2 = this.lookup(obj.name);
+            if (_ioSym2?.ctype === 'Reader' && prop === 'read') return 'size_t';
+            if (_ioSym2?.ctype === 'Writer' && prop === 'write') return 'size_t';
+          }
+
+          // HAL static method return types
+          if (this._stdHalImported && obj.kind === 'Ident') {
+            const _hc = obj.name; const _hp = prop;
+            if (_hc === 'GPIO' && _hp === 'read') return 'bool';
+            if (_hc === 'I2C' && _hp === 'read') return 'Array_u8';
+            if (_hc === 'SPI' && _hp === 'transfer') return 'uint8_t';
+            if (_hc === 'UART' && _hp === 'read') return 'opt_u8';
+          }
+
+          // Blob method return types
+          const objSymBlob = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymBlob?._isBlob) {
+            if (prop === 'slice') return 'Blob';
+            if (prop === 'arrayBuffer') return 'Buffer';
+          }
+          if (objSymBlob?._isTscBlob) {
+            if (prop === 'text') return 'String';
+          }
+
+          // URL / URLSearchParams method return types
+          const objSymUrl = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymUrl?._isURL || objSymUrl?._isURLSearchParams) {
+            if (prop === 'get') return 'const char *';
+            if (prop === 'set' || prop === 'delete') return 'void';
+          }
+          // u.searchParams.get(...) — obj is Member (u.searchParams)
+          if (obj.kind === 'Member' && prop === 'get') {
+            const _usym = obj.object.kind === 'Ident' ? this.lookup(obj.object.name) : null;
+            if (_usym?._isURL && obj.prop === 'searchParams') return 'const char *';
+          }
+
+          // TscRegex method return types
+          const objSymRx = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymRx?._isRegex) {
+            if (prop === 'test') return 'bool';
+            if (prop === 'match') return 'opt_Array_string';
+            if (prop === 'replace' || prop === 'replaceAll') return 'String';
+          }
 
           // Array method return types
           const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
@@ -549,6 +714,11 @@ export default {
         return `Array_${this.cTypeToIdent(et)}`;
       }
       case 'Index': {
+        // req.params["key"] → String
+        if (node.object.kind === 'Member' && node.object.prop === 'params') {
+          const reqSym = node.object.object.kind === 'Ident' ? this.lookup(node.object.object.name) : null;
+          if (reqSym?.ctype === 'TscRequest *') return 'String';
+        }
         const objType = this.inferType(node.object);
         // Tuple index: pair[0] → type of field _0
         const tupleDef2 = this.classes.get(objType);
@@ -556,6 +726,8 @@ export default {
           const field = tupleDef2.fields[parseInt(node.index.value, 10)];
           if (field) return field.ctype.replace(' *', '');
         }
+        // Buffer/DataView indexing → uint8_t
+        if (objType === 'Buffer' || objType === 'DataView') return 'uint8_t';
         // Array_T → T (array element type)
         if (objType.startsWith('Array_')) {
           const etIdent = objType.slice(6);
@@ -586,6 +758,7 @@ export default {
         }
         return this.inferType(node.expr);
       }
+      case 'Typeof': return 'String';
       default: return 'int32_t';
     }
   },

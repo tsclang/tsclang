@@ -3,7 +3,6 @@
 typedef struct { int _dummy; } Worker;
 
 static void Worker_doWork_inner(const Worker *self) {
-    (void)self;
     printf("work\n");
 }
 

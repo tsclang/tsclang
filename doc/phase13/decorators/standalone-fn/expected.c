@@ -1,13 +1,13 @@
 #include "runtime.h"
 
-static void greet_inner_string(String name) {
+void greet_inner_string(String name) {
     printf("%s\n", name.data);
 }
 
 static void greet_string(String name) {
-    printf("%s\n", "before");
+    printf("before\n");
     greet_inner_string(name);
-    printf("%s\n", "after");
+    printf("after\n");
 }
 
 int main(void) {

@@ -14,6 +14,7 @@ static void run_poll(run_state *self) {
         case 0:
             self->_await_0 = tsc_read_all_async(tsc_stdin());
             self->_state = 1;
+            /* fall through */
         case 1:
             tsc_read_all_poll(&self->_await_0);
             if (!self->_await_0._done) return;

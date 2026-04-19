@@ -3,14 +3,12 @@
 typedef struct { int _dummy; } Calc;
 
 static int32_t Calc_sqrt_inner(const Calc *self, int32_t x) {
-    (void)self;
     return x;
 }
 
 static int32_t Calc_sqrt(const Calc *self, int32_t x) {
     if (x < 0) {
-        fprintf(stderr, "Error: too small\n");
-        exit(1);
+        tsc_throw(STR_LIT("too small"));
     }
     return Calc_sqrt_inner(self, x);
 }
