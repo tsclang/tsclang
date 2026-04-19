@@ -1,0 +1,7 @@
+export function mul(a: i32, b: i32): i32 {
+    return a * b;
+}
+
+export function square(x: i32): i32 {
+    return mul(x, x);
+}

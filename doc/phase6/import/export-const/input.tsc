@@ -1,0 +1,3 @@
+import { MAX, MIN } from "./constants";
+console.log(MAX);
+console.log(MIN);

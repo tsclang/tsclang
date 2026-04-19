@@ -1,0 +1,2 @@
+import { quadruple } from "./mid";
+console.log(quadruple(3));

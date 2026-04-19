@@ -1,0 +1,2 @@
+export const MAX: i32 = 100;
+export const MIN: i32 = 0;

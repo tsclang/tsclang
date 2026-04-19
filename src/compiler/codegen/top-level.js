@@ -499,7 +499,7 @@ export default {
           this._stdHalImported = true;
         }
         break; // stdlib handled via includes
-      case 'Export':
+      case 'Export': {
         if (node.default) throw this.error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
           this.visitFuncDecl(node.decl, true, true); // isExported=true → no static
@@ -508,7 +508,14 @@ export default {
         } else {
           this.visitTopLevel(node.decl);
         }
+        // Track exported symbol for bundle system
+        const _exportedName = node.decl?.name;
+        if (_exportedName) {
+          const _entry = this.lookup(_exportedName);
+          if (_entry) this._exports.set(_exportedName, _entry);
+        }
         break;
+      }
       case 'ClassDecl':   this.visitClassDecl(node); break;
       case 'Interface':   this.visitInterface(node); break;
       case 'Enum':        this.visitEnum(node); break;
@@ -622,9 +629,9 @@ export default {
           }
         }
 
-        // Make it a static global only if referenced by a top-level function body
-        // (required for C correctness — function can't access main() locals)
-        const needsStatic = this._funcRefVars?.has(node.name);
+        // Make it a static global if: referenced by a top-level function body,
+        // OR we're in library mode (no main() to put it in)
+        const needsStatic = this._libraryMode || this._funcRefVars?.has(node.name);
         if (needsStatic) {
           // Module-level variable → static global (not inside main)
           const varLines = [];

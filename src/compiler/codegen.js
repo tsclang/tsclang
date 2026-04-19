@@ -6,14 +6,28 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 
-// Returns { c: string, warnings: TscError[] }
+// Returns { c: string, warnings: TscError[], exports: Object }
 // opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
+// opts.libraryMode — emit without #include and main() (for bundled deps)
+// opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
 export function codegen(ast, filename = 'input', src = null, opts = {}) {
   const ctx = new Context(filename, src);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
+  if (opts.libraryMode) ctx._libraryMode = true;
+
+  // Pre-populate scope from already-compiled imported modules
+  if (opts.importedModules) {
+    for (const moduleExports of Object.values(opts.importedModules)) {
+      if (!moduleExports) continue;
+      for (const [name, entry] of Object.entries(moduleExports)) {
+        ctx.define(name, entry);
+      }
+    }
+  }
+
   ctx.visitProgram(ast);
-  return { c: ctx.emit(), warnings: ctx._warnings };
+  return { c: ctx.emit(), warnings: ctx._warnings, exports: Object.fromEntries(ctx._exports) };
 }
 
 // ============================================================
@@ -57,6 +71,11 @@ class Context {
     // Collected errors (DiagnosticBag — filled by visitProgram)
     this._errors = [];
     this._maxErrors = 10; // increased by --all-errors
+
+    // Library mode: emit without includes/main (for bundled deps)
+    this._libraryMode = false;
+    // Exported symbols: name → scope entry (populated by case 'Export')
+    this._exports = new Map();
 
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
@@ -130,23 +149,33 @@ class Context {
   ind(n = 1) { return ' '.repeat(this.indent * n); }
 
   emit() {
-    const parts = [...this.includes].sort();
-    parts.push('');
-
-    // Order: typedefs → lambdas → named functions (topLevel) → main
-    const _pushSection = (arr) => {
-      // Trim trailing blank lines, then skip if empty
+    // Trim trailing blanks then push section with trailing blank separator
+    const _pushSection = (arr, parts) => {
       const trimmed = [...arr];
       while (trimmed.length && trimmed[trimmed.length - 1] === '') trimmed.pop();
       if (trimmed.length === 0) return;
       parts.push(...trimmed);
       parts.push('');
     };
-    _pushSection(this.typedefs);
-    _pushSection(this.lambdaLines);
-    _pushSection(this.topLevel);
 
-    if (this.mainStmts.length > 0 || true) {
+    // Library mode: emit typedefs + lambdas + topLevel only (no includes, no main)
+    if (this._libraryMode) {
+      const parts = [];
+      _pushSection(this.typedefs, parts);
+      _pushSection(this.lambdaLines, parts);
+      _pushSection(this.topLevel, parts);
+      while (parts.length && parts[parts.length - 1] === '') parts.pop();
+      return parts.length ? parts.join('\n') + '\n' : '';
+    }
+
+    // Full emit: includes → typedefs → lambdas → topLevel → main
+    const parts = [...this.includes].sort();
+    parts.push('');
+    _pushSection(this.typedefs, parts);
+    _pushSection(this.lambdaLines, parts);
+    _pushSection(this.topLevel, parts);
+
+    {
       const mainSig = this._useArgcArgv ? 'int main(int argc, char **argv)' : 'int main(void)';
       parts.push(`${mainSig} {`);
       parts.push(`${this.ind()}TSC_INIT();`);
@@ -171,7 +200,6 @@ class Context {
           parts.push(`${I}}`);
         }
       }
-
       // Async main bootstrap
       if (this._asyncMainPollFn) {
         const embeddedTargets = ['avr', 'arm', 'stm32'];

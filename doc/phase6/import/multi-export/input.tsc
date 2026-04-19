@@ -1,0 +1,3 @@
+import { mul, square } from "./math";
+console.log(mul(3, 4));
+console.log(square(5));

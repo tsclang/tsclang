@@ -237,7 +237,9 @@
 - [x] `process.argv` → `int main(int argc, char **argv)` + `tsc_make_argv`
 - [x] `#[target(name)]` — мета-аннотация цели (embedded-check)
 - [x] Модульные переменные: `static` только если используются из функции
-- [ ] `import` / реэкспорт / namespace-импорт
+- [x] `import { X } from "./module"` — именованный импорт локальных файлов (bundle: library mode + рекурсивная компиляция)
+- [x] Транзитивные импорты (A → B → C)
+- [ ] Реэкспорт / namespace-импорт
 - [ ] Циклические импорты (forward declarations)
 - [ ] Path aliases (`#` / `~`)
 - [ ] `@platform` — условная компиляция
@@ -245,6 +247,8 @@
 ### Лог
 
 > 2026-04-15: реализована фаза 6 — модульная система (базовый набор). Парсер: pointer types (`*T`), unary `&`/`*`, `native(...)`, `declare const/function`. Codegen: `export function` (без `static` в C), `declare` → extern-объявления, `native` с шаблонной интерполяцией (re-parse через `_lex`/`_parse`), `unsafe {}` с `_inUnsafe` флагом, `@packed`/`@align` → `__attribute__`, `process.exit` → `exit()` + stdlib, `process.argv` → `tsc_make_argv` + `Array_string` (определена в runtime.h), pre-scan функций для определения нужности static-globals. **Статус: 23/23 phase6 ✓**
+>
+> 2026-04-19: реализован `import { X } from "./module"` (именованный импорт локальных файлов). Bundle-подход: `codegen()` получает `opts.libraryMode` и `opts.importedModules`; в library mode — emit без `#include` и без `main()`; `_exports` Map заполняется в `case 'Export'`; `compileTsc` в bin/index.js рекурсивно компилирует зависимости, передаёт их экспорты в scope следующих файлов, конкатенирует C-выход. Также исправлен race condition (shell-тесты `phase9/run` писали в одну папку `.tsclang-tmp` параллельно): `tsclang run` теперь использует уникальный temp-dir через `mkdtempSync`. **Статус: 27/27 phase6 ✓** (4 новых import-теста)
 >
 > 2026-04-16: реализован rustc-style формат диагностических ошибок (Phase A→C):
 > - **colors.js** — composable ANSI: `bold`, `boldRed`, `yellow`, `green`, `cyan`, `dim`; `setColorEnabled()`, `makeColors()`; `--no-color` / `NO_COLOR` env
@@ -380,27 +384,21 @@
 
 ## Фаза 13 — Декораторы
 
-- [ ] Decorator pass в pipeline (после парсинга, до typecheck)
-- [ ] `decorator function` синтаксис; фабрики; перегрузки по месту применения
-- [ ] Модель выполнения: `before()` / `after()` + захват переменных
-- [ ] Встроенные comptime-типы: `TypeRef`, `TypeSet`, `FuncRef`, `FieldRef`
-- [ ] Descriptor API:
-  - [ ] `MethodDesc`
-  - [ ] `PropDesc`
-  - [ ] `ParamDesc`
-  - [ ] `FunctionDesc`
-  - [ ] `ClassDesc` (`addField`, `addMethod`)
-  - [ ] `SelfRef` — `ctx.self.field<T>(name)`
-  - [ ] `MetaStore` — `meta.set<T>()`, `meta.get<T>()`
-- [ ] Порядок применения (снизу вверх; `@static` последним)
-- [ ] Встроенные декораторы: `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated`
-- [ ] Декораторы на async-методах: state machine wrap, AbortSignal проброс
-- [ ] Дженерики в декораторах: generic constraints
-- [ ] `ctx.args` / `ctx.result`
-- [ ] Декоратор и платформа: ограничения на `heap: false`
-- [ ] Кодогенерация: цепочка wrapper-функций, именование, C-output
+- [x] `decorator function` синтаксис (desc.before/after) + захват переменных
+- [x] TypeScript PropertyDescriptor стиль (desc.value = function)
+- [x] Фабричные декораторы (decorator factory с параметрами)
+- [x] Порядок применения: снизу вверх, @static последним
+- [x] Встроенные декораторы: `@static`, `@readonly`
+- [x] Декораторы на standalone функциях
+- [x] Кодогенерация: цепочка wrapper-функций, именование `_inner`/`_suffix`
+- [x] Lambda params в wrapper (разные имена параметров у декоратора и метода)
+- [x] Deep substitution orig.apply в ветках (if/else)
+- [x] String concat folding в console.log ("prefix" + s → printf)
+- [x] Все 21 тест phase13 проходят
 
 ### Лог
+
+> 2026-04-19: Реализованы все варианты декораторов: TSClang desc-style (before/after), TypeScript PropertyDescriptor-style, фабрики. Исправлены: извлечение applyArgs (elems vs elements), использование lambda params для C-параметров wrapper-функции, deep substitution orig.apply в else-ветках, folding строк в console.log. Все 21 тест phase13 проходят, регрессий нет (875 тестов).
 
 ---
 
@@ -464,7 +462,7 @@
 | 10 | Package manager | `[ ]` |
 | 11 | Расширенный CLI | `[ ]` |
 | 12 | Стандартная библиотека | `[ ]` |
-| 13 | Декораторы | `[ ]` |
+| 13 | Декораторы | `[x]` |
 | 14 | IR и продвинутые возможности | `[ ]` |
 | 15 | Линтер и форматтер | `[ ]` |
 | 16 | Реестр пакетов | `[ ]` |

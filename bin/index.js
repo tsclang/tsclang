@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // TSClang CLI entry point
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
+import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 
@@ -274,14 +275,65 @@ if (command === 'init') {
 }
 
 // ---------------------------------------------------------------------------
-// Shared: compile TSC → C string
+// Shared: compile TSC → C string (recursive for local imports)
 // ---------------------------------------------------------------------------
+
+// Try source + '.tsc', then source + '/index.tsc' relative to baseDir
+function resolveLocalImport(baseDir, source) {
+  for (const candidate of [
+    resolve(baseDir, source + '.tsc'),
+    resolve(baseDir, source, 'index.tsc'),
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 function compileTsc(inputPath, opts = {}) {
-  const src = readFileSync(inputPath, 'utf8');
+  const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
-  const tokens = lex(src, filename);
-  const ast    = parse(tokens, filename, src);
-  return codegen(ast, filename, src, opts);
+  const tokens   = lex(src, filename);
+  const ast      = parse(tokens, filename, src);
+
+  // Recursively compile local imports (./… or ../…) depth-first
+  const importedModules = { ...(opts.importedModules || {}) };
+  const depCParts = [];
+
+  for (const node of ast.body) {
+    if (node.kind !== 'Import') continue;
+    const source = node.source;
+    if (!source.startsWith('./') && !source.startsWith('../')) continue;
+
+    const depPath = resolveLocalImport(dirname(inputPath), source);
+    if (!depPath || importedModules[depPath]) continue; // not found or already compiled
+
+    const depResult = compileTsc(depPath, {
+      ...opts,
+      libraryMode: true,
+      importedModules,
+    });
+    importedModules[depPath] = depResult.exports;
+    depCParts.push(depResult.c);
+  }
+
+  const result = codegen(ast, filename, src, { ...opts, importedModules });
+
+  let c = result.c;
+  if (depCParts.length > 0) {
+    const depBlock = depCParts.join('\n').trimEnd() + '\n';
+    if (opts.libraryMode) {
+      // Library: prepend transitive deps without header
+      c = depBlock + '\n' + c;
+    } else {
+      // Full: insert dep code after the first section separator (after #includes)
+      const sepIdx = c.indexOf('\n\n');
+      c = sepIdx >= 0
+        ? c.slice(0, sepIdx + 2) + depBlock + '\n' + c.slice(sepIdx + 2)
+        : depBlock + '\n' + c;
+    }
+  }
+
+  return { c, warnings: result.warnings, exports: result.exports };
 }
 
 function reportErrors(e, filename) {
@@ -540,10 +592,9 @@ if (command === 'build') {
     process.exit(1);
   }
 
-  // Write C to temp file and compile+run
+  // Write C to temp file and compile+run (unique dir per invocation to avoid races)
   const stem    = basename(inputPath, extname(inputPath));
-  const tmpDir  = join(ROOT, '.tsclang-tmp');
-  mkdirSync(tmpDir, { recursive: true });
+  const tmpDir  = mkdtempSync(join(tmpdir(), 'tsclang-'));
   const cPath   = join(tmpDir, stem + '.c');
   const binPath = join(tmpDir, stem);
   writeFileSync(cPath, c, 'utf8');
@@ -560,6 +611,7 @@ if (command === 'build') {
   }
 
   const run = spawnSync(binPath, progArgs, { stdio: 'inherit' });
+  try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   process.exit(run.status ?? 0);
 
 } else {
