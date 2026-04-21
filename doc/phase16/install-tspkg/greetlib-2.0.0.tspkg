@@ -1,0 +1,7 @@
+{
+  "name": "greetlib",
+  "version": "2.0.0",
+  "files": {
+    "index.tsc": "export function greet(name: string): void { console.log(name); }"
+  }
+}

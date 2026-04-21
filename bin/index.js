@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // TSClang CLI entry point
 
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
@@ -113,11 +113,11 @@ function semverSatisfies(v, range) {
 
 // Mock registry of known packages for dependency resolution tests
 const MOCK_REGISTRY = {
-  lib: ['1.0.0', '1.0.5', '1.2.3', '2.0.0'],
-  pkgA: ['1.0.0', '1.1.0'],
-  pkgB: ['2.0.0'],
-  'shared-dep': ['1.0.0', '2.0.0'],
-  mylib: ['1.0.0'],
+  lib:          { versions: ['1.0.0', '1.0.5', '1.2.3', '2.0.0'], description: 'Core utility library' },
+  pkgA:         { versions: ['1.0.0', '1.1.0'],                    description: 'Package A with shared deps' },
+  pkgB:         { versions: ['2.0.0'],                             description: 'Package B' },
+  'shared-dep': { versions: ['1.0.0', '2.0.0'],                   description: 'Shared dependency' },
+  mylib:        { versions: ['1.0.0'],                             description: 'Sample math library' },
 };
 // Transitive deps: "pkg@version" → { dep: range }
 const MOCK_PKG_DEPS = {
@@ -127,7 +127,8 @@ const MOCK_PKG_DEPS = {
 };
 
 function resolveRange(pkg, range) {
-  const versions = MOCK_REGISTRY[pkg];
+  const entry = MOCK_REGISTRY[pkg];
+  const versions = entry?.versions ?? (Array.isArray(entry) ? entry : null);
   if (!versions) return range.replace(/^[^\d]*/, ''); // fallback: strip operator
   const satisfying = versions.filter(v => semverSatisfies(v, range));
   if (satisfying.length === 0) return null;
@@ -585,6 +586,70 @@ if (command === 'lint') {
 }
 
 // ---------------------------------------------------------------------------
+// search command
+// ---------------------------------------------------------------------------
+if (command === 'search') {
+  const query = args[1] ?? '';
+  const matches = Object.entries(MOCK_REGISTRY).filter(([name]) =>
+    !query || name.includes(query)
+  );
+  if (matches.length === 0) {
+    process.stdout.write(`No packages found matching "${query}"\n`);
+  } else {
+    process.stdout.write(`Found ${matches.length} package${matches.length > 1 ? 's' : ''}${query ? ` matching "${query}"` : ''}:\n`);
+    for (const [name, entry] of matches) {
+      const latest = (entry.versions ?? []).slice(-1)[0] ?? '?';
+      process.stdout.write(`  ${name}@${latest} — ${entry.description ?? ''}\n`);
+    }
+  }
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// publish command
+// ---------------------------------------------------------------------------
+if (command === 'publish') {
+  const pkgPath = join(process.cwd(), 'tsc.package.json');
+  if (!existsSync(pkgPath)) {
+    process.stderr.write('tsclang publish: tsc.package.json not found\n');
+    process.exit(1);
+  }
+  let pkg;
+  try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch (e) {
+    process.stderr.write(`tsclang publish: invalid tsc.package.json: ${e.message}\n`);
+    process.exit(1);
+  }
+  const { name, version } = pkg;
+  if (!name || !version) {
+    process.stderr.write('tsclang publish: tsc.package.json must have "name" and "version"\n');
+    process.exit(1);
+  }
+
+  // Collect .tsc files and tsc.package.json
+  const files = {};
+  const collectFiles = (dir, base = '') => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === 'node_modules' || entry.startsWith('.')) continue;
+      const full = join(dir, entry);
+      const rel  = base ? `${base}/${entry}` : entry;
+      if (statSync(full).isDirectory()) {
+        collectFiles(full, rel);
+      } else if (entry.endsWith('.tsc') || entry === 'tsc.package.json') {
+        files[rel] = readFileSync(full, 'utf8');
+      }
+    }
+  };
+  collectFiles(process.cwd());
+
+  const archive = JSON.stringify({ name, version, files }, null, 2);
+  const outFile = join(process.cwd(), `${name}-${version}.tspkg`);
+  writeFileSync(outFile, archive, 'utf8');
+  const n = Object.keys(files).length;
+  process.stdout.write(`Published ${name}@${version} (${n} file${n !== 1 ? 's' : ''})\n`);
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
 // install command
 // ---------------------------------------------------------------------------
 if (command === 'install') {
@@ -599,6 +664,41 @@ if (command === 'install') {
   if (!pkgArg) {
     console.error('tsclang install: missing package name');
     process.exit(1);
+  }
+
+  // Install from local .tspkg archive
+  if (pkgArg.endsWith('.tspkg')) {
+    const archivePath = resolve(pkgArg);
+    if (!existsSync(archivePath)) {
+      process.stderr.write(`tsclang install: file not found: ${pkgArg}\n`);
+      process.exit(1);
+    }
+    let archive;
+    try { archive = JSON.parse(readFileSync(archivePath, 'utf8')); } catch (e) {
+      process.stderr.write(`tsclang install: invalid .tspkg file: ${e.message}\n`);
+      process.exit(1);
+    }
+    const { name: pkgName, version: pkgVersion, files } = archive;
+    if (!pkgName || !pkgVersion || !files) {
+      process.stderr.write('tsclang install: malformed .tspkg (missing name/version/files)\n');
+      process.exit(1);
+    }
+    const pkgDir = join('node_modules', pkgName);
+    mkdirSync(pkgDir, { recursive: true });
+    for (const [rel, content] of Object.entries(files)) {
+      const dest = join(pkgDir, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, content, 'utf8');
+    }
+    const lockEntry = `${pkgName}@${pkgVersion}\n`;
+    let lockContent = lockEntry;
+    if (existsSync('tsc.lock')) {
+      const existing = readFileSync('tsc.lock', 'utf8');
+      lockContent = existing.includes(`${pkgName}@`) ? existing : existing + lockEntry;
+    }
+    writeFileSync('tsc.lock', lockContent, 'utf8');
+    process.stdout.write(`Installed ${pkgName}@${pkgVersion}\n`);
+    process.exit(0);
   }
 
   // Parse pkg@version or git+url

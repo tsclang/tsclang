@@ -449,11 +449,14 @@
 
 > Отдельный сервис. Детали уточнятся. Приоритет — низкий.
 
-- [ ] Сервис реестра (аналог npm registry)
-- [ ] Публикация пакетов
-- [ ] Поиск пакетов
+- [x] `tsclang search <query>` — поиск в каталоге (MOCK_REGISTRY с описаниями)
+- [x] `tsclang publish` — упаковка в `.tspkg` (JSON с исходниками)
+- [x] `tsclang install <file>.tspkg` — установка из локального архива → `node_modules/<pkg>/`
+- [ ] Реальный сетевой реестр (registry.tsclang.org) — отдельный сервис, вне компилятора
 
 ### Лог
+
+> 2026-04-21: расширен `MOCK_REGISTRY` (versions + description). Добавлены: `tsclang search` — ищет по подстроке в каталоге; `tsclang publish` — собирает `.tsc` + `tsc.package.json` в `.tspkg` (JSON-архив); `tsclang install <file>.tspkg` — распаковывает архив в `node_modules/<name>/`, пишет `tsc.lock`. **Статус: 916/916 ✓**
 
 ---
 
