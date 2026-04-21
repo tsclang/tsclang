@@ -1,0 +1,6 @@
+function square(x: i32): i32 {
+    return x * x;
+}
+
+const result = square(5);
+console.log(result);

@@ -360,7 +360,9 @@ async function executeShTest(testDir, kind, tmpBase) {
   // Use the full node executable path (MSYS2-compatible) so bash can find it.
   const nodeExec = MSYS2_BASH ? `"${toMsysPath(process.execPath)}"` : 'node';
   const tscBin   = MSYS2_BASH ? toMsysPath(TSCLANG_BIN) : TSCLANG_BIN;
-  const patchedScript = script.replace(/\btsclang\b/g, `${nodeExec} ${JSON.stringify(tscBin)}`);
+  const patchedScript = script
+    .replace(/\bnode\b/g, nodeExec)
+    .replace(/\btsclang\b/g, `${nodeExec} ${JSON.stringify(tscBin)}`);
 
   const result = await runShell(patchedScript, { cwd: tmpBase });
 

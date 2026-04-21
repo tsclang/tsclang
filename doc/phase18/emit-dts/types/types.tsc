@@ -1,0 +1,4 @@
+export type Color = u32;
+export type Point2D = { x: f64; y: f64 };
+export const MAX_SIZE: i32 = 1024;
+export const VERSION: string = "1.0.0";

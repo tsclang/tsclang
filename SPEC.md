@@ -459,17 +459,132 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - Декоратор и платформа: ограничения на `heap: false`
 - Кодогенерация: цепочка wrapper-функций, именование, C-output
 
-### Фаза 14 — Линтер и форматтер
+### Фаза 14 — IR и продвинутые возможности компилятора
 
-> Большая отдельная система, детали не определены. Вернёмся позже.
+- **Инкрементальная компиляция**: SHA-256 кэш в `.tsclang-cache/`; флаг `--no-cache`; сообщение `cache-hit-identical` при попадании
+- **Async while-await**: state machine с Duff's device; `goto case_N` loop-back; `_emitAsyncWhile` с инлайном хвостовых стейтментов
+- **Library format**: `resolvePackageImport` — обход дерева к `node_modules/<pkg>/index.tsc`; `tsc.package.json` с полем `main`; префикс символов = имя пакета
 
-Предварительно: отдельное приложение / набор правил поверх AST компилятора.
-Полноценный rule-based линтер поверх заглушки из фазы 11.
-Включает `tsclang lint` (все правила) и `tsclang lint -fix` (авто-исправление).
+### Фаза 15 — Линтер и форматтер
 
-### Фаза 15 — Реестр пакетов
+- **Линтер** (`tsclang lint`): AST-обход через `walkAst(node, visitor)`, правила:
+  - `no-unreachable` — код после `return`/`throw` в блоке → предупреждение
+  - `prefer-const` — `let` без переприсваивания → предлагает `const`
+  - `no-unused-var` — объявленная переменная без обращений → предупреждение
+- **Авто-исправление** (`tsclang lint --fix`): патч исходника по номеру строки (`let` → `const`)
+- **Форматтер** (`tsclang format`): нормализация пробелов и отступов (identity для корректного кода)
 
-> Большая отдельная система, детали не определены. Вернёмся позже.
+### Фаза 16 — Реестр пакетов
 
-Предварительно: отдельный сервис (аналог npm registry) для публикации и
-поиска TSClang-пакетов.
+- **`tsclang search <query>`**: поиск по MOCK_REGISTRY (имя + description)
+- **`tsclang publish`**: упаковка в `.tspkg` JSON-архив `{name, version, files: {rel: content}}`; счёт файлов
+- **`tsclang install <pkg>[@ver]`**: установка из реестра в `node_modules/`; вывод `Installed pkg@ver`
+- **`tsclang install <file.tspkg>`**: извлечение из локального архива в `node_modules/`
+- **Диапазоны версий**: `^`, `~`, `*` — `resolveRange` на массиве версий
+
+### Фаза 17 — Platform backends: Retro & Consoles
+
+- **Profile checker** в pre-scan `top-level.js`: платформа → набор ограничений:
+  - `_noFloatTargets = ['nes','genesis','ps1','spectrum']` — `f32`/`f64` TypeRef → ошибка
+  - `_noHeapTargets` — `new ClassName()` → ошибка
+  - `_noAsyncTargets` — `async function` → ошибка
+- **`usize = uint16_t`** для `nes` и `spectrum` в `resolveType`
+- **Embedded targets** расширены: `['avr','arm','stm32','nes','genesis','ps1','spectrum']`
+- **Runtime headers**: `runtime_nes.h`, `runtime_ps2.h`, `runtime_ps1.h`, `runtime_genesis.h`, `runtime_dos.h`, `runtime_spectrum.h`
+- **CMake toolchains**: `cmake/toolchain-{nes,ps2,ps1,genesis,dos,spectrum}.cmake`
+- Аннотация `// @target: nes` или `#[profile(target: nes)]`
+
+### Фаза 18 — Advanced tooling: Optimizer, WASM, DTS, Sourcemaps, LSP
+
+#### 18.1 — AST Optimizer
+
+Оптимизации на уровне AST до codegen. Активируется флагом `--opt` (или `#[profile(opt: true)]`).
+GCC делает машинные оптимизации — AST-оптимизатор убирает очевидную избыточность до трансляции в C.
+
+| Оптимизация | Пример | Результат |
+|-------------|--------|-----------|
+| Constant folding | `2 + 3` | `5` |
+| Constant propagation | `const K = 10; K * 2` | `20` |
+| Dead branch elimination | `if (false) { ... }` | удалить ветку |
+| Unused const elimination | `const x = 5;` (не используется) | удалить |
+| Strength reduction | `x * 2` → `x + x` | (опц., если нет сдвига) |
+
+Реализация: `src/compiler/optimizer.js` — рекурсивный `foldExpr(node)` и `deadCode(stmts)`.
+Вызывается из `compileTsc()` после парсинга, до codegen, если `--opt` передан.
+
+#### 18.2 — WebAssembly backend
+
+Таргет `wasm`: `--target wasm` или `#[profile(target: wasm)]`.
+
+- `runtime_wasm.h` — без libuv; `console.log` → `wasm_log` (JS import); `tsc_throw` → `wasm_trap`
+- `cmake/toolchain-wasm.cmake` — Emscripten `emcc` или `clang --target=wasm32-unknown-unknown`
+- `--emit wasm` — вызов `emcc` для компиляции `.c` → `.wasm` + `.js` glue
+- Ограничения: нет file I/O, нет threads (без atomics), heap через `malloc` (линейная память)
+- `console.log` → `wasm_log(ptr, len)` через `__attribute__((import_module("env"), import_name("log")))`
+
+#### 18.3 — Declaration emitter (`emit-dts`)
+
+`tsclang emit-dts <file.tsc>` — генерирует `.d.tsc` файл с типами экспортируемых символов.
+
+Формат выходного файла:
+```
+export declare function name(param: Type, ...): ReturnType;
+export declare class Name {
+  field: Type;
+  method(param: Type): ReturnType;
+}
+export declare type Alias = Type;
+export declare const name: Type;
+```
+
+Правила:
+- Только `export`-декларации попадают в `.d.tsc`
+- Тела функций и классов опускаются (только сигнатуры)
+- Тип выводится из аннотации; без аннотации → `any`
+- Файл создаётся рядом с исходником: `input.tsc` → `input.d.tsc`
+- Команда выводит `Emitted input.d.tsc (N declarations)`
+
+#### 18.4 — Source maps
+
+`tsclang build --sourcemap` — дополнительно создаёт `<name>.tsc.map`:
+
+```json
+{
+  "version": 1,
+  "file": "input.tsc",
+  "sourceC": "input.c",
+  "mappings": [[tscLine, cLine], ...]
+}
+```
+
+Каждый элемент mappings: `[номер строки в .tsc (1-based), номер строки в .c (1-based)]`.
+Только строки с реальными стейтментами (не пустые, не `{`/`}`).
+
+CLI интеграция:
+- `tsclang debug <file.tsc>` — строит с `--sourcemap`, затем запускает `gdb` с `--source-directory`
+- `tsclang debug` требует `gdb` в PATH; если не найден → предупреждение, бинарь запускается без отладки
+
+#### 18.5 — Language Server Protocol (LSP)
+
+`tsclang lsp` — запускает LSP-сервер на stdin/stdout (JSON-RPC 2.0).
+
+Поддерживаемые методы:
+
+| Метод | Запрос | Ответ |
+|-------|--------|-------|
+| `initialize` | `{capabilities}` | `{capabilities: {hoverProvider, completionProvider, definitionProvider}}` |
+| `initialized` | — | ACK |
+| `shutdown` / `exit` | — | завершение процесса |
+| `textDocument/didOpen` | `{uri, text}` | сохранить в буфер |
+| `textDocument/didChange` | `{uri, changes}` | обновить буфер |
+| `textDocument/hover` | `{uri, position}` | `{contents: {kind:"markdown", value:"**type**: i32"}}` |
+| `textDocument/completion` | `{uri, position}` | список символов из текущего скоупа + методов |
+| `textDocument/definition` | `{uri, position}` | `{uri, range}` для объявления символа |
+
+Архитектура:
+- `src/lsp/server.js` — основной цикл: `process.stdin` → JSON-RPC dispatcher
+- `src/lsp/analyzer.js` — хранит буфер документа, вызывает парсер + type inference, возвращает символы
+- Ошибки парсинга → `textDocument/publishDiagnostics`
+- Content-Length framing по протоколу LSP (заголовок `Content-Length: N\r\n\r\n`)
+
+Тестирование LSP: shell-тест посылает один JSON-RPC запрос в stdin процесса и проверяет JSON-ответ.

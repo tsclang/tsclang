@@ -1,0 +1,8 @@
+Emitted point.d.tsc (1 declarations)
+export declare class Point {
+  x: f64;
+  y: f64;
+  constructor(x: f64, y: f64);
+  distanceTo(other: Point): f64;
+  toString(): string;
+}

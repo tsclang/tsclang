@@ -1,0 +1,3 @@
+Emitted math.d.tsc (2 declarations)
+export declare function add(a: i32, b: i32): i32;
+export declare function clamp(val: f64, min: f64, max: f64): f64;

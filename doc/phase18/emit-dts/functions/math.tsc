@@ -1,0 +1,11 @@
+export function add(a: i32, b: i32): i32 {
+    return a + b;
+}
+
+export function clamp(val: f64, min: f64, max: f64): f64 {
+    if (val < min) return min;
+    if (val > max) return max;
+    return val;
+}
+
+function internal(): void {}

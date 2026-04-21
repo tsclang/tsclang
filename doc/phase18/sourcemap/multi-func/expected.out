@@ -1,0 +1,3 @@
+version: 1
+file: funcs.tsc
+tsc-lines-mapped: 3

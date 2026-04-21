@@ -1,0 +1,6 @@
+// @opt
+
+const K: i32 = 10;
+const y: i32 = K * 2;
+const z: i32 = K + y;
+console.log(z);

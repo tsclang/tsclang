@@ -1,0 +1,16 @@
+export type Id = u32;
+
+export const DEFAULT_TIMEOUT: i32 = 5000;
+
+export function createId(): Id {
+    return 0;
+}
+
+export class Registry {
+    size: i32;
+
+    add(id: Id): void {}
+    remove(id: Id): bool { return false; }
+}
+
+function helper(): void {}

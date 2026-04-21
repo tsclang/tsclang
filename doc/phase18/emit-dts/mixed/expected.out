@@ -1,0 +1,9 @@
+Emitted lib.d.tsc (4 declarations)
+export declare type Id = u32;
+export declare const DEFAULT_TIMEOUT: i32;
+export declare function createId(): Id;
+export declare class Registry {
+  size: i32;
+  add(id: Id): void;
+  remove(id: Id): bool;
+}

@@ -1,0 +1,5 @@
+Emitted types.d.tsc (4 declarations)
+export declare type Color = u32;
+export declare type Point2D = { x: f64; y: f64 };
+export declare const MAX_SIZE: i32;
+export declare const VERSION: string;

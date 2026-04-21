@@ -529,6 +529,60 @@
 
 ---
 
+## Фаза 18 — Advanced tooling: Optimizer, WASM, DTS, Sourcemaps, LSP
+
+### 18.1 — AST Optimizer
+
+- [ ] `src/compiler/optimizer.js` — `foldExpr(node)`, `deadCode(stmts)`, `propagateConsts(stmts)`
+- [ ] Constant folding: `BinaryExpr` с двумя литералами → `NumberLit`/`StringLit`
+- [ ] Constant propagation: `const K = <lit>; expr(K)` → подставить значение
+- [ ] Dead branch elimination: `if (false)` → убрать; `if (true)` → оставить тело
+- [ ] Unused const elimination: `const x = 5;` без обращений → удалить
+- [ ] Флаг `--opt` в CLI, `#[profile(opt: true)]` в исходнике
+- [ ] Тесты: `doc/phase18/optimizer/{const-fold,const-prop,dead-branch,unused-const}/`
+
+### 18.2 — WebAssembly backend
+
+- [ ] `src/runtime/runtime_wasm.h` — без libuv; `console.log` → `wasm_log` (JS import); `tsc_throw` → trap
+- [ ] `cmake/toolchain-wasm.cmake` — `emcc` или `clang --target=wasm32-unknown-unknown`
+- [ ] `--emit wasm` в CLI — вызов `emcc` для `.c` → `.wasm` + `.js`
+- [ ] C-output тест: `// @target: wasm` → корректный C с `TSC_WASM` define
+- [ ] Ошибка: `--emit wasm` без `emcc` в PATH → `ConfigError: emcc not found`
+- [ ] Тесты: `doc/phase18/wasm/{basic,err-no-emcc}/`
+
+### 18.3 — Declaration emitter
+
+- [ ] `tsclang emit-dts <file.tsc>` — новая команда в CLI
+- [ ] `src/compiler/dts-emitter.js` — обход AST, эмит `export declare ...`
+- [ ] Функции: `export declare function name(params): ReturnType;`
+- [ ] Классы: поля + методы, без тел
+- [ ] Типы и константы: `export declare type Alias = ...;` / `export declare const x: T;`
+- [ ] Вывод: `Emitted input.d.tsc (N declarations)`
+- [ ] Тесты: `doc/phase18/emit-dts/{functions,classes,types,mixed}/`
+
+### 18.4 — Source maps
+
+- [ ] Флаг `--sourcemap` в `tsclang build` — дополнительно создаёт `<name>.tsc.map`
+- [ ] Формат: `{version:1, file, sourceC, mappings:[[tscLine,cLine],...]}`
+- [ ] Codegen собирает соответствия строк: `this._lineMap = [{tsc, c}, ...]`
+- [ ] `tsclang debug <file.tsc>` — build + `gdb` с sourcemap; без gdb → предупреждение
+- [ ] Тесты: `doc/phase18/sourcemap/{basic,multi-func}/` (shell, проверяем .tsc.map)
+
+### 18.5 — Language Server Protocol
+
+- [ ] `tsclang lsp` — JSON-RPC 2.0 сервер на stdin/stdout; Content-Length framing
+- [ ] `src/lsp/server.js` — основной цикл; `src/lsp/analyzer.js` — буфер + type inference
+- [ ] Методы: `initialize`, `shutdown`, `textDocument/didOpen`, `textDocument/didChange`
+- [ ] `textDocument/hover` → тип символа под курсором
+- [ ] `textDocument/completion` → список символов из скоупа
+- [ ] `textDocument/definition` → расположение объявления
+- [ ] `textDocument/publishDiagnostics` → ошибки компилятора как диагностики
+- [ ] Тесты: `doc/phase18/lsp/{initialize,hover,completion,definition}/` (shell, JSON-RPC)
+
+### Лог
+
+---
+
 ## Общий прогресс
 
 | Фаза | Название | Тестов | Статус |
@@ -551,5 +605,6 @@
 | 15 | Линтер и форматтер | — | `[x]` |
 | 16 | Реестр пакетов | — | `[x]` |
 | 17 | Platform backends: Retro & Consoles | 9 | `[~]` (инфраструктура ✓, platform packages — отложено) |
+| 18 | Advanced tooling | — | `[ ]` |
 
-**Итого: 925 тестов ✓** (2026-04-21) — phase0-17 полностью по C-output; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости, не реализованы в runtime.h)
+**Итого: 926 тестов ✓** (2026-04-21) — phase0-17 полностью по C-output + wasm/basic; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости, не реализованы в runtime.h); phase18: 15 тестов ожидают реализации

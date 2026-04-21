@@ -1,0 +1,1 @@
+ConfigError: --emit wasm requires emcc (Emscripten) in PATH

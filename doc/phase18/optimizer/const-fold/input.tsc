@@ -1,0 +1,6 @@
+// @opt
+
+const a: i32 = 2 + 3;
+const b: i32 = 10 * 4;
+const c: i32 = 100 - 37;
+console.log(a, b, c);
