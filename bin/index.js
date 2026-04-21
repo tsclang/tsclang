@@ -47,6 +47,7 @@ import { codegen } from '../src/compiler/codegen.js';
 import { TscError, renderDiagnostic } from '../src/compiler/error.js';
 import { setColorEnabled } from '../src/compiler/colors.js';
 import { explainError, ERROR_CATALOG } from '../src/compiler/error-catalog.js';
+import { lint, applyFixes } from '../src/compiler/linter.js';
 
 // ---------------------------------------------------------------------------
 // CLI arg parsing
@@ -542,42 +543,45 @@ if (command === 'format') {
 // lint command
 // ---------------------------------------------------------------------------
 if (command === 'lint') {
-  const fixFlag  = args.includes('--fix');
-  const inputFile = args.find(a => !a.startsWith('--') && a !== 'lint');
+  const fixFlag    = args.includes('--fix');
+  const ruleArg    = args.find(a => a.startsWith('--rule='));
+  const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
+  const inputFile  = args.find(a => !a.startsWith('--') && a !== 'lint');
   if (!inputFile) {
-    console.error('tsclang lint: missing input file');
+    process.stderr.write('tsclang lint: missing input file\n');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
   const src = readFileSync(inputPath, 'utf8');
+  const filename = basename(inputPath);
+
+  let ast;
+  try {
+    const tokens = lex(src, filename);
+    ast = parse(tokens, filename, src);
+  } catch (e) {
+    reportErrors(e, filename);
+    process.exit(1);
+  }
+
+  const diagnostics = lint(ast, { rules: ruleFilter });
 
   if (fixFlag) {
-    // Add missing semicolons and exit 0
-    const fixed = src.split('\n').map(line => {
-      const trimmed = line.trimEnd();
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return line;
-      if (/[{};,(]$/.test(trimmed)) return line;
-      if (/^[}]/.test(trimmed.trimStart())) return line;
-      return trimmed + ';';
-    }).join('\n');
+    const fixed = applyFixes(src, diagnostics);
     writeFileSync(inputPath, fixed, 'utf8');
-    process.exit(0);
+    const remaining = diagnostics.filter(d => !d.fixable);
+    for (const d of remaining) {
+      const tag = d.severity === 'error' ? 'LintError' : 'LintWarning';
+      process.stderr.write(`${tag}[${d.rule}]: ${d.message} at line ${d.line}\n`);
+    }
+    process.exit(remaining.some(d => d.severity === 'error') ? 1 : 0);
   }
 
-  // Check for missing semicolons
-  const lines = src.split('\n');
-  let hasError = false;
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trimEnd();
-    if (!trimmed) continue;
-    if (trimmed.trimStart().startsWith('//') || trimmed.trimStart().startsWith('/*') || trimmed.trimStart().startsWith('*')) continue;
-    if (/[{};,(]$/.test(trimmed)) continue;
-    if (/^[\s]*[}]/.test(trimmed)) continue;
-    process.stderr.write(`LintError: Missing semicolon at line ${i + 1}\n`);
-    hasError = true;
-    break; // report first error only
+  for (const d of diagnostics) {
+    const tag = d.severity === 'error' ? 'LintError' : 'LintWarning';
+    process.stderr.write(`${tag}[${d.rule}]: ${d.message} at line ${d.line}\n`);
   }
-  process.exit(hasError ? 1 : 0);
+  process.exit(diagnostics.length > 0 ? 1 : 0);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,1 @@
+LintWarning[prefer-const]: 'result' is never reassigned, use 'const' instead at line 2

@@ -434,12 +434,14 @@
 
 > Отдельная система поверх AST. Детали уточнятся в ходе реализации.
 
-- [ ] Rule-based линтер поверх AST
-- [ ] `tsclang lint` (все правила)
-- [ ] `tsclang lint -fix` (авто-исправление)
+- [x] Rule-based линтер поверх AST (`src/compiler/linter.js`)
+- [x] `tsclang lint` — три правила: `no-unreachable`, `prefer-const`, `no-unused-var`; `--rule=<name>` для одного
+- [x] `tsclang lint --fix` — авто-исправление `prefer-const` (let → const)
 - [ ] Полноценный форматтер
 
 ### Лог
+
+> 2026-04-21: `src/compiler/linter.js` — AST-based линтер с тремя правилами: `no-unreachable` (error: код после return/throw), `prefer-const` (warning: let никогда не переприсваивается), `no-unused-var` (warning: переменная объявлена но не используется). `lint` команда обновлена: парсит AST, применяет правила, `--fix` применяет авто-исправления, `--rule=X` фильтрует по одному правилу. Старые тесты phase10/lint обновлены под новый формат. **Статус: 913/913 ✓**
 
 ---
 

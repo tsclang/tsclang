@@ -1,0 +1,4 @@
+function f(): i32 {
+    const x = 1;
+    return x;
+}
