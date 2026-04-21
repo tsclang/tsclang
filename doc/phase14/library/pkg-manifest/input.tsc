@@ -1,0 +1,2 @@
+import { square } from "mathlib";
+console.log(square(5));

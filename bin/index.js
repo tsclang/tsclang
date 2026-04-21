@@ -367,6 +367,35 @@ function resolveLocalImport(baseDir, source) {
   return null;
 }
 
+// Resolve package import (non-relative) by walking up directory tree looking for node_modules/
+function resolvePackageImport(pkgName, fromDir) {
+  let dir = fromDir;
+  while (true) {
+    const pkgDir = join(dir, 'node_modules', pkgName);
+    if (existsSync(pkgDir)) {
+      // Try manifest first
+      const manifestPath = join(pkgDir, 'tsc.package.json');
+      if (existsSync(manifestPath)) {
+        try {
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+          if (manifest.main) {
+            const mainPath = resolve(pkgDir, manifest.main);
+            if (existsSync(mainPath)) return mainPath;
+          }
+        } catch {}
+      }
+      // Try common entry points
+      for (const candidate of [join(pkgDir, 'index.tsc'), join(pkgDir, 'src', 'main.tsc')]) {
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 function compileTsc(inputPath, opts = {}) {
   const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
@@ -405,14 +434,21 @@ function compileTsc(inputPath, opts = {}) {
         if (existsSync(candidate)) { depPath = candidate; break; }
       }
     } else {
-      if (!source.startsWith('./') && !source.startsWith('../')) continue;
-      depPath = resolveLocalImport(dirname(inputPath), source);
+      if (!source.startsWith('./') && !source.startsWith('../')) {
+        depPath = resolvePackageImport(source, dirname(inputPath));
+      } else {
+        depPath = resolveLocalImport(dirname(inputPath), source);
+      }
     }
     if (!depPath) continue;
     sourceToPath[source] = depPath; // track source → resolved path
     if (importedModules[depPath]) continue; // already compiled
 
-    const depPrefix = basename(depPath, extname(depPath)).replace(/[^a-zA-Z0-9]/g, '_') + '_';
+    // Use package name as prefix for non-relative imports (better than filename)
+    const isPackageImport = !source.startsWith('./') && !source.startsWith('../') && !isAbsResolved;
+    const depPrefix = isPackageImport
+      ? source.replace(/[^a-zA-Z0-9]/g, '_').replace(/^_+/, '') + '_'
+      : basename(depPath, extname(depPath)).replace(/[^a-zA-Z0-9]/g, '_') + '_';
     const depResult = compileTsc(depPath, {
       ...opts,
       libraryMode: true,

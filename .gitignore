@@ -1,4 +1,5 @@
 node_modules/
+!doc/**/node_modules/
 .tsclang-cache/
 *.c
 !src/**/*.c
