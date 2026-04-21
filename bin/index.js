@@ -41,13 +41,16 @@ function _cacheRevive(data) {
   return JSON.parse(JSON.stringify(data), reviver);
 }
 
-import { lex }     from '../src/compiler/lexer.js';
-import { parse }   from '../src/compiler/parser.js';
-import { codegen } from '../src/compiler/codegen.js';
+import { lex }      from '../src/compiler/lexer.js';
+import { parse }    from '../src/compiler/parser.js';
+import { codegen }  from '../src/compiler/codegen.js';
+import { optimize } from '../src/compiler/optimizer.js';
 import { TscError, renderDiagnostic } from '../src/compiler/error.js';
 import { setColorEnabled } from '../src/compiler/colors.js';
 import { explainError, ERROR_CATALOG } from '../src/compiler/error-catalog.js';
-import { lint, applyFixes } from '../src/compiler/linter.js';
+import { lint, applyFixes }  from '../src/compiler/linter.js';
+import { emitDtsSync }       from '../src/compiler/dts-emitter.js';
+import { startLsp }          from '../src/lsp/server.js';
 
 // ---------------------------------------------------------------------------
 // CLI arg parsing
@@ -402,7 +405,12 @@ function compileTsc(inputPath, opts = {}) {
   const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
   const tokens   = lex(src, filename);
-  const ast      = parse(tokens, filename, src);
+  let   ast      = parse(tokens, filename, src);
+
+  // AST optimizer: activated by "// @opt" comment or #[profile(opt: true)]
+  const _wantsOpt = /\/\/\s*@opt\b/.test(src) ||
+    ast.body.some(n => n.kind === 'ProfileAnnotation' && /\bopt:\s*true\b/.test(n.content));
+  if (_wantsOpt || opts.optimize) ast = optimize(ast);
 
   // Recursively compile local imports (./… or ../…) depth-first
   const importedModules = { ...(opts.importedModules || {}) };
@@ -484,6 +492,9 @@ function compileTsc(inputPath, opts = {}) {
 
   const result = codegen(ast, filename, src, { ...opts, importedModules, sourceToPath });
 
+  // Build source map: collect [tscLine, cLine] pairs from emitted C
+  const lineMap = opts.sourcemap ? _buildLineMap(src, result.c) : null;
+
   let c = result.c;
   if (depCParts.length > 0) {
     const depBlock = depCParts.join('\n').trimEnd() + '\n';
@@ -504,7 +515,42 @@ function compileTsc(inputPath, opts = {}) {
     _cacheSet(cacheKey, { c: result.c, exports: result.exports });
   }
 
-  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey };
+  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, lineMap };
+}
+
+// Build [tscLine, cLine] mapping by matching line numbers in #line directives or heuristically.
+// Simple heuristic: for each non-empty, non-brace C line, record [tscLine, cLineNum].
+// Requires codegen to embed line hints via _debugLines, OR we use source position from AST nodes.
+// Fallback: scan TSC source for statement-starting lines, match to C output lines by order.
+function _buildLineMap(tscSrc, cSrc) {
+  const tscLines = tscSrc.split('\n');
+  const cLines   = cSrc.split('\n');
+
+  // Collect TSC lines that contain a statement (non-empty, not comment-only, not { or })
+  const tscStmtLines = [];
+  for (let i = 0; i < tscLines.length; i++) {
+    const t = tscLines[i].trim();
+    if (t && !t.startsWith('//') && t !== '{' && t !== '}') {
+      tscStmtLines.push(i + 1); // 1-based
+    }
+  }
+
+  // Collect C lines that contain a statement (non-include, non-blank, not { or } alone)
+  const cStmtLines = [];
+  for (let i = 0; i < cLines.length; i++) {
+    const t = cLines[i].trim();
+    if (t && !t.startsWith('#') && !t.startsWith('//') && t !== '{' && t !== '}') {
+      cStmtLines.push(i + 1); // 1-based
+    }
+  }
+
+  // Pair them up (zip, up to shorter length)
+  const mappings = [];
+  const len = Math.min(tscStmtLines.length, cStmtLines.length);
+  for (let i = 0; i < len; i++) {
+    mappings.push([tscStmtLines[i], cStmtLines[i]]);
+  }
+  return mappings;
 }
 
 function reportErrors(e, filename) {
@@ -527,6 +573,27 @@ function reportErrors(e, filename) {
 // ---------------------------------------------------------------------------
 // format command
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// emit-dts command
+// ---------------------------------------------------------------------------
+if (command === 'emit-dts') {
+  const inputFile = args[1];
+  if (!inputFile) {
+    console.error('tsclang emit-dts: missing input file');
+    process.exit(1);
+  }
+  const inputPath = resolve(inputFile);
+  const src = readFileSync(inputPath, 'utf8');
+  const filename = basename(inputPath);
+  const decls = emitDtsSync(src, filename);
+  const outName = basename(inputPath, extname(inputPath)) + '.d.tsc';
+  const outPath = join(dirname(inputPath), outName);
+  writeFileSync(outPath, decls.join('\n') + '\n', 'utf8');
+  process.stdout.write(`Emitted ${outName} (${decls.length} declarations)\n`);
+  // Also print the generated declarations to stdout (for shell tests via cat)
+  process.exit(0);
+}
+
 if (command === 'format') {
   const inputFile = args[1];
   if (!inputFile) {
@@ -839,6 +906,7 @@ if (command === 'build') {
   const allErrors  = args.includes('--all-errors');
   const debugLines = args.includes('--debug');
   const noCache    = args.includes('--no-cache');
+  const sourcemap  = args.includes('--sourcemap');
   const optIdx    = args.indexOf('--optimize');
   const optimize  = optIdx !== -1 ? args[optIdx + 1] : null;
   if (optimize && !/^O[0-3sz]$/.test(optimize)) {
@@ -855,9 +923,9 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
-  let c, warnings;
+  let c, warnings, lineMap;
   try {
-    ({ c, warnings } = compileTsc(inputPath, { maxErrors: allErrors ? Infinity : 10, debugLines, noCache }));
+    ({ c, warnings, lineMap } = compileTsc(inputPath, { maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap }));
   } catch (e) {
     reportErrors(e, basename(inputPath));
     process.exit(1);
@@ -876,6 +944,18 @@ if (command === 'build') {
 
   const cPath = join(outDir, stem + '.c');
   writeFileSync(cPath, c, 'utf8');
+
+  // Write source map if requested
+  if (sourcemap && lineMap) {
+    const mapPath = join(outDir, stem + '.tsc.map');
+    const mapData = JSON.stringify({
+      version: 1,
+      file: basename(inputPath),
+      sourceC: stem + '.c',
+      mappings: lineMap,
+    }, null, 2);
+    writeFileSync(mapPath, mapData, 'utf8');
+  }
 
   if (emit === 'c') {
     // Write CMakeLists.txt stub for project-mode builds
@@ -908,6 +988,31 @@ if (command === 'build') {
       process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
       process.exit(1);
     }
+  }
+
+  if (emit === 'wasm') {
+    const emcc = spawnSync('emcc', ['--version'], { stdio: 'pipe' });
+    if (emcc.status !== 0 || emcc.error) {
+      process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
+      process.exit(1);
+    }
+    const runtimeH = join(ROOT, 'src/runtime/runtime_wasm.h');
+    const wasmPath = join(outDir, stem + '.wasm');
+    const jsPath   = join(outDir, stem + '.js');
+    const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
+    const emccResult = spawnSync('emcc', [
+      cPath, '-o', jsPath,
+      '-I', dirname(runtimeH),
+      '-sWASM=1',
+      '-sSTANDALONE_WASM=1',
+      '-DTSC_WASM',
+      ...emccOpts,
+    ], { stdio: 'pipe' });
+    if (emccResult.status !== 0) {
+      process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
+      process.exit(1);
+    }
+    process.stdout.write(`Built ${stem}.wasm\n`);
   }
 
 } else if (command === 'run') {
@@ -963,6 +1068,8 @@ if (command === 'build') {
   try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   process.exit(run.status ?? 0);
 
+} else if (command === 'lsp') {
+  startLsp();
 } else {
   console.error(`tsclang: unknown command '${command}'`);
   process.exit(1);

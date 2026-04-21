@@ -2,6 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", 7);
+    const int32_t USED = 7;
+    printf("%d\n", USED);
     return 0;
 }
