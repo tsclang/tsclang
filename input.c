@@ -1,13 +1,11 @@
 #include "runtime.h"
 
-typedef struct { int32_t _refcount; int32_t value; } Node;
+int32_t module_add_i32_i32(int32_t a, int32_t b) {
+    return a + b;
+}
 
 int main(void) {
     TSC_INIT();
-    Node *x = tsc_arc_alloc(sizeof(Node));
-    x->value = 0;
-    x->value = 10;
-    printf("%d\n", x->value);
-    tsc_arc_release(x);
+    printf("%d\n", module_add_i32_i32(3, 4));
     return 0;
 }

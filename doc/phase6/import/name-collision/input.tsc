@@ -1,0 +1,4 @@
+import { fromA } from "./a";
+import { fromB } from "./b";
+console.log(fromA(5));
+console.log(fromB(5));

@@ -1,0 +1,2 @@
+function helper(x: i32): i32 { return x + 1; }
+export function fromA(x: i32): i32 { return helper(x); }

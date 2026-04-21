@@ -16,6 +16,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
   if (opts.libraryMode) ctx._libraryMode = true;
+  if (opts.modulePrefix) ctx._modulePrefix = opts.modulePrefix;
 
   // Build namespace set from import nodes (before pre-populating scope)
   const namespaceImports = new Map(); // localName → resolvedPath

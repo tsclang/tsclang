@@ -380,9 +380,11 @@ function compileTsc(inputPath, opts = {}) {
     sourceToPath[source] = depPath; // track source → resolved path
     if (importedModules[depPath]) continue; // already compiled
 
+    const depPrefix = basename(depPath, extname(depPath)).replace(/[^a-zA-Z0-9]/g, '_') + '_';
     const depResult = compileTsc(depPath, {
       ...opts,
       libraryMode: true,
+      modulePrefix: depPrefix,
       importedModules,
       sourceToPath,
       _compilingStack: compilingStack,

@@ -714,6 +714,7 @@ export default {
   // ----------------------------------------------------------------
   visitClassDecl(node) {
     const { name, superClass, members, decorators, typeParams } = node;
+    const cname = this._modulePrefix ? this._modulePrefix + name : name;
     // Generic class: store as template
     if (typeParams?.length > 0) {
       if (!this._genericClasses) this._genericClasses = new Map();
@@ -821,10 +822,14 @@ export default {
         break;
       }
     }
-    this.classes.set(name, { fields, methods, superClass: effectiveSuperClass, isStruct: true, implements_,
+    const _classEntry = { fields, methods, superClass: effectiveSuperClass, isStruct: true, implements_,
+      ...(cname !== name ? { _cname: cname } : {}),
       ...(isThrowsClass ? { _isThrowsClass: true } : {}),
       ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}),
-      ...(_iterableElemType ? { _iterableElemType } : {}) });
+      ...(_iterableElemType ? { _iterableElemType } : {}) };
+    this.classes.set(cname, _classEntry);
+    // Also register under original name so local TypeRef resolution works
+    if (cname !== name) this.classes.set(name, _classEntry);
 
     // Map TSClang base class names → C names
     const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
@@ -878,25 +883,25 @@ export default {
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         if (isSelfRef) {
-          this.addTop(`typedef struct ${name} ${name};`);
-          this.addTop(`struct ${name} { ${allArcFields.join(' ')} };`);
+          this.addTop(`typedef struct ${cname} ${cname};`);
+          this.addTop(`struct ${cname} { ${allArcFields.join(' ')} };`);
         } else {
-          this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${name};`);
+          this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
         // C does not allow empty structs; use a dummy field when no user fields exist
         const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
-        this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${name};`);
+        this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
       }
 
       // For throws classes: emit _new function directly to typedefs (so it appears between
       // the struct typedef and the Result typedefs emitted in visitFuncDecl).
       if (isThrowsClass && throwsInfo.needsNew) {
         const hasStack = throwsInfo.hasStack;
-        let newBody = `${name} s = {0}; s._base.message = msg;`;
+        let newBody = `${cname} s = {0}; s._base.message = msg;`;
         if (hasStack) newBody += ` s.stack = tsc_capture_stack();`;
         newBody += ` return s;`;
-        this.typedefs.push(`static ${name} ${name}_new(String msg) { ${newBody} }`);
+        this.typedefs.push(`static ${cname} ${cname}_new(String msg) { ${newBody} }`);
         this.typedefs.push('');  // blank after _new, before Result typedef
         this._lastAddedToTypedefs = false;  // next addTop('') won't be swallowed
       } else {
@@ -911,9 +916,9 @@ export default {
       for (const m of methods) {
         if (m.name === 'constructor') continue;
         const isStatic = m.modifiers.includes('static');
-        this.emitMethod(name, m, isStatic, explicitImplements);
+        this.emitMethod(cname, m, isStatic, explicitImplements);
       }
-      for (const ifaceName of explicitImplements) this.emitVtableConstant(name, ifaceName);
+      for (const ifaceName of explicitImplements) this.emitVtableConstant(cname, ifaceName);
       return;
     }
 
@@ -939,15 +944,15 @@ export default {
           }
         }
       }
-      this.emitMethod(name, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: name }, true);
+      this.emitMethod(cname, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: cname }, true);
     }
 
     // Emit Iterable<T> impl before methods (iter() will be skipped below)
     const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
-    const classInfo_ = this.classes.get(name);
+    const classInfo_ = this.classes.get(cname);
     if (classInfo_?._iterableElemType) {
       const iterMethod_ = methods.find(m => m.name === 'iter');
-      if (iterMethod_) this._emitIterableImpl(name, iterMethod_, classInfo_._iterableElemType);
+      if (iterMethod_) this._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
     }
 
     // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
@@ -958,24 +963,24 @@ export default {
       const isStatic = m.modifiers.includes('static');
       const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
-        this._emitDecoratedMethod(name, m, isStatic, explicitImplements, mDecs);
+        this._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
       } else {
-        this.emitMethod(name, m, isStatic, explicitImplements);
+        this.emitMethod(cname, m, isStatic, explicitImplements);
       }
     }
 
     // Emit vtable constants for each explicitly implemented interface
     for (const ifaceName of explicitImplements) {
-      this.emitVtableConstant(name, ifaceName);
+      this.emitVtableConstant(cname, ifaceName);
     }
 
     // @embedded.pool: generate pool array, mask (alloc/drop emitted lazily)
     if (poolDec && isEmbedded) {
-      this._emitPoolClass(name, poolDec);
+      this._emitPoolClass(cname, poolDec);
     }
     // Mark class as inline value type
     if (inlineDec && isEmbedded) {
-      const cls = this.classes.get(name);
+      const cls = this.classes.get(cname);
       if (cls) cls._isInline = true;
     }
   },
@@ -2081,6 +2086,7 @@ export default {
 
     const suffix = node._monoName ? '' : mangleParams(params);
     let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
+    if (this._modulePrefix && name && !node._noPrefix) cname = this._modulePrefix + cname;
 
     // Throws function handling
     const throwsTypes = node.throwsTypes ?? [];

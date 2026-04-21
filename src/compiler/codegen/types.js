@@ -90,8 +90,9 @@ export default {
         return aliased;
       }
 
-      // User-defined type
-      return name;
+      // User-defined type — use C name if registered with a module prefix
+      const _cls = this.classes.get(name);
+      return _cls?._cname ?? name;
     }
 
     if (typeNode.kind === 'TypePointer') {

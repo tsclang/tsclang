@@ -411,21 +411,22 @@
 
 ---
 
-## Фаза 14 — Компилятор: IR и продвинутые возможности
+## Фаза 14 — Компилятор: практические улучшения
 
-> Полноценный IR, debug info, диагностика, оптимизации.
+> Без SSA IR — всё через C-backend. Оптимизации делегируем gcc.
 
-- [ ] SSA-like IR: basic blocks, phi nodes, явный порядок операций
-- [ ] Async lowering в IR (state machine из IR-уровня)
-- [ ] Name mangling: полная схема, разрешение коллизий между модулями
-- [ ] Debug info: `#line` директивы; `tsclang debug --dap`; embedded (OpenOCD/SWD)
-- [ ] Consumer-side monomorphization: формат скомпилированной библиотеки
-- [ ] Incremental compilation *(roadmap)*: граф зависимостей + IR-кеш
-- [ ] Optimization levels: `-O0` / `-O1` / `-Os`; IR-уровень vs C-компилятор
-- [ ] Error messages: формат `file:line:col: error[EXXX]`; все категории ошибок; hint
-- [ ] Методология тестов: `.tsc` → ожидаемый C-output или ошибка
+- [x] `#line` директивы — уже реализовано (`--debug`)
+- [x] Error messages формат (rustc-style diagnostics) — уже реализовано
+- [x] Методология тестов (`.tsc` → `expected.c` / `expected.error`) — уже работает
+- [x] Name mangling: полная схема разрешения коллизий имён при module bundling
+- [ ] Optimization levels: пробросить `-O0`/`-O1`/`-Os` в gcc через build profile / `--optimize`
+- [ ] Incremental compilation: хеш-кеш C-output по файлам, не пересобирать неизменившиеся модули
+- [ ] Async state machine: улучшить читаемость и корректность генерации (без IR)
+- [ ] Library format: AST-сериализация для consumer-side monomorphization дженериков из внешних пакетов
 
 ### Лог
+
+> 2026-04-21: реализован name mangling для module bundling — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). **Статус: 900/900 ✓**
 
 ---
 
@@ -538,7 +539,7 @@
 | 3  | Модель памяти | 150 | `[x]` |
 | 4  | Объектная модель | 56 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
-| 6  | Модульная система | 35 | `[x]` |
+| 6  | Модульная система | 36 | `[x]` |
 | 7  | Async/Await | 31 | `[x]` |
 | 8  | Threads и конкурентность | 28 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
@@ -551,4 +552,4 @@
 | 16 | Реестр пакетов | — | `[ ]` |
 | 17 | Platform backends: Retro & Consoles | — | `[ ]` |
 
-**Итого: ~899 тестов ✓** (2026-04-21) — phase0-13 полностью по C-output; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости, не реализованы в runtime.h)
+**Итого: ~900 тестов ✓** (2026-04-21) — phase0-13 полностью по C-output; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости, не реализованы в runtime.h)
