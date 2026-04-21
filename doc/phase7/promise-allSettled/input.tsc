@@ -1,0 +1,6 @@
+async function a(): i32 { return 1; }
+async function b(): i32 { return 2; }
+async function run(): void {
+    await Promise.allSettled([a(), b()]);
+    console.log("settled");
+}

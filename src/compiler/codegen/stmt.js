@@ -100,6 +100,12 @@ export default {
           break;
         }
 
+        // select({key: ch.receive(), ...}) → tagged-union SelectResult
+        if (init?.kind === 'Call' && init.callee?.kind === 'Ident' && init.callee.name === 'select') {
+          this.emitSelectVarDecl(node, lines, depth);
+          break;
+        }
+
         // Propagate/NonNull: const x = throwsFunc()?  or  const x = throwsFunc()!
         if (init?.kind === 'Propagate' || init?.kind === 'NonNull') {
           this.emitPropagateVarDecl(node, lines, depth);
@@ -502,6 +508,21 @@ export default {
           }
           p(`TscSecureRandom ${name} = tsc_secure_random_create();`);
           this.define(name, { ctype: 'TscSecureRandom', varKind: 'let', _isSecureRandom: true });
+          break;
+        }
+
+        // new AsyncMutex() → TscAsyncMutex
+        if (init?.kind === 'New' && init.name === 'AsyncMutex') {
+          p(`TscAsyncMutex ${name} = tsc_async_mutex_create();`);
+          this.define(name, { ctype: 'TscAsyncMutex', varKind });
+          break;
+        }
+
+        // new AbortController() → TscAbortController
+        if (init?.kind === 'New' && init.name === 'AbortController') {
+          p(`TscAbortController ${name} = tsc_abort_controller_create();`);
+          this.define(name, { ctype: 'TscAbortController', varKind });
+          this._registerCleanup(`tsc_abort_controller_free(&${name})`);
           break;
         }
 
@@ -2383,6 +2404,71 @@ export default {
       }
       default: return '1';
     }
+  },
+
+  // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
+  emitSelectVarDecl(node, lines, depth) {
+    const I = ' '.repeat(this.indent * depth);
+    const { name, varKind, init } = node;
+    const objArg = init.args?.[0]?.expr;
+    const props = objArg?.props ?? [];
+
+    const selIdx = this._selectCount ?? 0;
+    this._selectCount = selIdx + 1;
+    const structName = `_SelectResult_${selIdx}`;
+    const doneLabel = `_sel${selIdx}_done`;
+
+    // Determine field types from channel receive() calls
+    const fields = [];
+    for (const prop of props) {
+      const key = prop.key;
+      // prop.value is ch.receive() call; infer channel element type from ch variable
+      const val = prop.value;
+      let ident = 'i32';
+      if (val?.kind === 'Call' && val.callee?.kind === 'Member' && val.callee.prop === 'receive') {
+        const chObj = val.callee.object;
+        const chSym = this.lookup(chObj?.name ?? '');
+        const m = chSym?.ctype?.match(/^Channel_(\w+)$/);
+        if (m) ident = m[1];
+      }
+      const ctype = this.resolveType({ kind: 'TypeRef', name: ident }) ?? 'int32_t';
+      fields.push({ key, ident, ctype, valExpr: val });
+    }
+
+    // Emit typedef
+    const fieldDecls = [`int32_t _arm`, ...fields.map(f => `${f.ctype} ${f.key}`)].join('; ');
+    this.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
+
+    // Register struct type so inferType works for field access
+    this.classes.set(structName, {
+      fields: [
+        { name: '_arm', ctype: 'int32_t' },
+        ...fields.map(f => ({ name: f.key, ctype: f.ctype })),
+      ],
+    });
+
+    // Emit declaration + initialization
+    const zeroInits = ['-1', ...fields.map(() => '0')].join(', ');
+    lines.push(`${I}${structName} ${name} = {${zeroInits}};`);
+
+    // Emit tryReceive chain (if-else, first ready wins)
+    for (let i = 0; i < fields.length; i++) {
+      const { key, ident, valExpr } = fields[i];
+      const chObj = valExpr?.callee?.object;
+      const chC = this.exprToC(chObj, lines, depth);
+      const optType = `opt_${ident}`;
+      // Ensure opt_T typedef
+      this._ensureOptStruct?.(optType, fields[i].ctype);
+      const selVar = `_sel_${key}`;
+      if (i === 0) {
+        lines.push(`${I}{ ${optType} ${selVar} = tsc_channel_try_receive_${ident}(${chC}._inner); if (${selVar}.has_value) { ${name}.${key} = ${selVar}.value; ${name}._arm = ${i}; } }`);
+      } else {
+        lines.push(`${I}if (${name}._arm < 0) { ${optType} ${selVar} = tsc_channel_try_receive_${ident}(${chC}._inner); if (${selVar}.has_value) { ${name}.${key} = ${selVar}.value; ${name}._arm = ${i}; } }`);
+      }
+    }
+
+    // Register the result variable in scope
+    this.define(name, { ctype: structName, varKind });
   },
 
 };

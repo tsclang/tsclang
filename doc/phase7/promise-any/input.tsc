@@ -1,0 +1,6 @@
+async function a(): i32 { return 10; }
+async function b(): i32 { return 20; }
+async function run(): void {
+    const x = await Promise.any([a(), b()]);
+    console.log(x);
+}

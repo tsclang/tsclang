@@ -1,0 +1,7 @@
+const mutex = new AsyncMutex();
+console.log(mutex.isLocked());
+const locked = mutex.tryLock();
+console.log(locked);
+console.log(mutex.isLocked());
+mutex.unlock();
+console.log(mutex.isLocked());

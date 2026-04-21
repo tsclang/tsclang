@@ -1,0 +1,3 @@
+const n: i32 = 42;
+const s = JSON.stringify(n);
+console.log(s);

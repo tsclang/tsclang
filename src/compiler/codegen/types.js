@@ -36,6 +36,9 @@ export default {
         this._ensureMapStruct(suffix);
         return `Map_${suffix}`;
       }
+      if (name === 'AbortController') return 'TscAbortController';
+      if (name === 'AbortSignal')     return 'TscAbortSignal *';
+      if (name === 'AsyncMutex')      return 'TscAsyncMutex';
       if (name === 'Generator')  return `${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}_state`;
       if (name === 'Atomic')     return `Atomic_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
       if (name === 'Channel')    return `Channel_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
@@ -355,6 +358,16 @@ export default {
             if (node.prop === 'searchParams') return 'TscURLSearchParams';
           }
         }
+        // AbortController / AbortSignal field access
+        if (node.object.kind === 'Ident') {
+          const _abortSym = this.lookup(node.object.name);
+          if (_abortSym?.ctype === 'TscAbortController') {
+            if (node.prop === 'signal') return 'TscAbortSignal *';
+          }
+          if (_abortSym?.ctype === 'TscAbortSignal *') {
+            if (node.prop === 'aborted') return 'bool';
+          }
+        }
         // Fallback: infer object type recursively (e.g. call result member access)
         {
           const objType = this.inferType(node.object);
@@ -381,6 +394,9 @@ export default {
           const _sfn = node.callee.name;
           if (_sfn === 'atob' || _sfn === 'btoa' || _sfn === 'decodeUtf8') return 'String';
           if (_sfn === 'encodeUtf8') return 'Array_u8';
+          if (_sfn === 'structuredClone' && node.args?.[0]) {
+            return this.inferType(node.args[0].expr);
+          }
         }
         // Generic function call: infer return type from template + substitution
         if (node.callee.kind === 'Ident' && this._genericFuncs?.has(node.callee.name)) {
@@ -426,6 +442,15 @@ export default {
               if (a0t !== 'double' && a0t !== 'float') return 'int32_t';
             }
             return 'double';
+          }
+          if (obj.kind === 'Ident' && obj.name === 'JSON') {
+            if (prop === 'stringify') return 'String';
+            if (prop === 'parse') {
+              const tname = node.typeArgs?.[0]?.name ?? 'i32';
+              if (tname === 'f64' || tname === 'f32') return 'double';
+              if (tname === 'bool') return 'bool';
+              return 'int32_t';
+            }
           }
           if (obj.kind === 'Ident' && obj.name === 'console') return 'void';
           // Temporal static method return types
@@ -592,6 +617,22 @@ export default {
             if (prop === 'replace' || prop === 'replaceAll') return 'String';
           }
 
+          // AbortController / AbortSignal / AsyncMutex member/method types
+          const objSymAC = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          const objTypeAC = objSymAC?.ctype ?? this.inferType(obj);
+          if (objTypeAC === 'TscAbortController') {
+            if (prop === 'signal') return 'TscAbortSignal *';
+            if (prop === 'abort') return 'void';
+          }
+          if (objTypeAC === 'TscAbortSignal *') {
+            if (prop === 'aborted') return 'bool';
+          }
+          if (objTypeAC === 'TscAsyncMutex') {
+            if (prop === 'tryLock' || prop === 'lock') return 'bool';
+            if (prop === 'unlock') return 'void';
+            if (prop === 'isLocked') return 'bool';
+          }
+
           // Array method return types
           const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
           const objType = objSym?.ctype ?? this.inferType(obj);
@@ -601,7 +642,7 @@ export default {
             if (prop === 'pop') return et ? `opt_${et}` : 'opt_i32';
             if (prop === 'remove') return etCType; // returns element directly
             if (prop === 'find') return et ? `opt_ref_${et}` : 'opt_ref_i32';
-            if (prop === 'filter' || prop === 'concat') return objType;
+            if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;
             if (prop === 'map') return objType; // approximate (may differ for cross-type map)
             if (prop === 'slice') return objType;
             if (prop === 'findIndex' || prop === 'indexOf') return 'int32_t';

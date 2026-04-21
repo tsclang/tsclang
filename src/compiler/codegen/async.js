@@ -86,6 +86,20 @@ export default {
         const items = expr.args?.[0]?.expr?.elems || [];
         return { kind: 'promise-all', items };
       }
+      if (expr.callee?.kind === 'Member' &&
+          expr.callee.object?.name === 'Promise' &&
+          (expr.callee.prop === 'race' || expr.callee.prop === 'any' || expr.callee.prop === 'allSettled')) {
+        const prop = expr.callee.prop;
+        const items = expr.args?.[0]?.expr?.elems || [];
+        let resultCType = null;
+        if (prop !== 'allSettled') {
+          const firstName = items[0]?.expr?.callee?.kind === 'Ident' ? items[0].expr.callee.name : null;
+          if (firstName && this._asyncFuncs?.has(firstName)) {
+            resultCType = this._asyncFuncs.get(firstName).resultCType;
+          }
+        }
+        return { kind: `promise-${prop}`, items, resultCType };
+      }
       if (callee && this._asyncFuncs?.has(callee)) {
         const info = this._asyncFuncs.get(callee);
         return { kind: 'async', name: callee, stateType: info.stateType,
@@ -204,7 +218,9 @@ export default {
                  : null;
         if (ae) {
           const ai = this._awaitInfoOf(ae);
-          if (ai?.kind === 'promise-all') {
+          const _isMultiPromise = ai?.kind === 'promise-all' || ai?.kind === 'promise-race' ||
+                                  ai?.kind === 'promise-any' || ai?.kind === 'promise-allSettled';
+          if (_isMultiPromise) {
             for (const item of ai.items) {
               const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
               const sub = callName && this._asyncFuncs?.has(callName)
@@ -543,6 +559,35 @@ export default {
       this._checkAwaitTarget(s.init);
       const ai = this._awaitInfoOf(s.init);
       if (!ai) return;
+
+      // Promise.race / Promise.any: poll all, take first done's result
+      if (ai.kind === 'promise-race' || ai.kind === 'promise-any') {
+        const baseIdx = ctx.awaitIdx;
+        const doneConds = [];
+        for (const item of ai.items) {
+          const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+          const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
+          if (sub) {
+            lines.push(`${I}self->_await_${ctx.awaitIdx++} = (${sub.stateType}){0};`);
+            doneConds.push({ idx: baseIdx + doneConds.length, sub });
+          }
+        }
+        this._emitAsyncTransition(lines, ctx, I);
+        for (const { idx, sub } of doneConds) lines.push(`${I}${sub.pollFn}(&self->_await_${idx});`);
+        if (doneConds.length) {
+          lines.push(`${I}if (${doneConds.map(({ idx }) => `!self->_await_${idx}._done`).join(' && ')}) return;`);
+        }
+        if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+          let rhs = `self->_await_${doneConds[doneConds.length - 1].idx}._result`;
+          for (let j = doneConds.length - 2; j >= 0; j--) {
+            rhs = `self->_await_${doneConds[j].idx}._done ? self->_await_${doneConds[j].idx}._result : ${rhs}`;
+          }
+          lines.push(`${I}self->${s.name} = ${rhs};`);
+        }
+        if (ai.resultCType) this.define(s.name, { ctype: ai.resultCType, varKind: s.varKind });
+        return;
+      }
+
       const awaitIdx = ctx.awaitIdx++;
 
       if (ai.kind === 'sleep') {
@@ -666,6 +711,29 @@ export default {
       this._checkAwaitTarget(s.expr);
       const ai = this._awaitInfoOf(s.expr);
       if (!ai) return;
+
+      // Promise.allSettled / race / any as statement (no result capture)
+      if (ai.kind === 'promise-allSettled' || ai.kind === 'promise-race' || ai.kind === 'promise-any') {
+        const baseIdx = ctx.awaitIdx;
+        const subItems = [];
+        for (const item of ai.items) {
+          const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+          const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
+          if (sub) { lines.push(`${I}self->_await_${ctx.awaitIdx++} = (${sub.stateType}){0};`); subItems.push({ idx: baseIdx + subItems.length, sub }); }
+        }
+        this._emitAsyncTransition(lines, ctx, I);
+        const notDone = [];
+        for (const { idx, sub } of subItems) {
+          lines.push(`${I}${sub.pollFn}(&self->_await_${idx});`);
+          notDone.push(`!self->_await_${idx}._done`);
+        }
+        if (notDone.length) {
+          const op = ai.kind === 'promise-allSettled' ? ' || ' : ' && ';
+          lines.push(`${I}if (${notDone.join(op)}) return;`);
+        }
+        return;
+      }
+
       const awaitIdx = ctx.awaitIdx++;
 
       if (ai.kind === 'sleep') {

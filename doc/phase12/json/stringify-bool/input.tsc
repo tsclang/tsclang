@@ -1,0 +1,3 @@
+const b: bool = true;
+const s = JSON.stringify(b);
+console.log(s);

@@ -151,6 +151,8 @@
 > 2026-04-21: реализован ARC runtime в runtime.h: `tsc_arc_alloc` (calloc + `_refcount=1`), `tsc_arc_retain`, `tsc_arc_release`, `tsc_weak_create`, `tsc_weak_upgrade`, `tsc_weak_release` — всё через макросы (typed-pointer, no void**). Исправлен кодген: `_refcount` теперь всегда первое поле (убран `refFirst=false` для annotated VarDecl); убрано ручное `x->_refcount = 1` и `(void**)&` в cleanup. **Статус: 149/149 phase3 ✓**
 >
 > 2026-04-21 (продолжение): реализован `Iterable<T>` протокол — специализированный кодген для `iter()`: парсер сохраняет type args в `implements`; кодген генерирует `ClassName_iter_t` (struct с локальными переменными), `ClassName_iter_next` (тело лямбды с `_cAlias`, `_inIterNextBody` флаг для `return` → `opt_T`), `ClassName_iter` (factory); `for-of` десугарится в while по `iter_next`. **Статус: 150/150 phase3 ✓**
+>
+> 2026-04-22: добавлены `clone()` и `structuredClone()` — arr.clone() → tsc_array_slice (полная копия); structuredClone(arr) → тот же pattern; inferType учитывает clone/structuredClone. **+2 теста**
 
 ---
 
@@ -292,6 +294,7 @@
 ### Лог
 
 > 2026-04-18: реализована фаза 7 — async/await state machine. Async functions → poll struct (state field + captured vars через await), `for await` → generator state machine, `Promise<T>` (.then/.catch/.finally), `Promise.all`, `setTimeout`/`setInterval`/`clearTimeout`, `sleep` (uv_sleep / _delay_ms на embedded), borrow-checker: Ref запрещён через await-точку, owned — разрешён. `async main` → desktop event loop, embedded while-poll. `@static async function*` → кооперативный планировщик. **Статус: 31/31 ✓**
+> 2026-04-22: добавлены Promise.race, Promise.any, Promise.allSettled (3 теста), AbortController/AbortSignal (runtime struct + codegen), AsyncMutex (tryLock/unlock/isLocked). **+5 тестов**
 
 ---
 
@@ -310,6 +313,7 @@
 ### Лог
 
 > 2026-04-18: реализована фаза 8 полностью: Volatile/volatile, @embedded.isr, #[isr], Atomic<T>, Channel<T>, spawn {}, spawn throws T {}, Thread.spawn, await t.join() в async state machine. Все 28/28 тестов ✓
+> 2026-04-22: добавлен `select` — _SelectResult_N struct, tsc_channel_try_receive pattern, inferType для member access. **+1 тест**
 
 ---
 
@@ -388,6 +392,7 @@
 ### Лог
 
 > 2026-04-19: реализована фаза 12 — стандартная библиотека. Math (все тригонометрические и логарифмические функции через `<math.h>`), String (base64 atob/btoa, UTF-8 encode/decode, codepoints, graphemes, Regex NFA), IO (Reader/Writer vtable, pipe, streams), FS (read/write/watch через libuv), Net (fetch, HTTP server, TCP), WS (WebSocket), Random/SecureRandom/HardwareRandom, Temporal (PlainDate/PlainTime/ZonedDateTime/Now), URL/URLSearchParams, Blob, Buffer, DataView, console.time/timeEnd/trace, Reactive (Signal/effect/computed/readonly через closure chain), HAL (UART/I2C write-read), AVR (ADC/PWM/sleep/watchdog), Embedded (HashMap open-addressing, StaticMap, Tasks scheduler). **Статус: 130/130 ✓**
+> 2026-04-22: добавлен std/json — JSON.stringify (i32/string/bool) + JSON.parse<T> (i32/f64/bool); tsc_json_stringify_string в runtime.h. **+4 теста**
 
 ---
 
@@ -590,21 +595,21 @@
 | 0  | Core runtime | 22 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 159 | `[x]` |
-| 3  | Модель памяти | 150 | `[x]` |
+| 3  | Модель памяти | 152 | `[x]` |
 | 4  | Объектная модель | 56 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 36 | `[x]` |
-| 7  | Async/Await | 31 | `[x]` |
-| 8  | Threads и конкурентность | 28 | `[x]` |
+| 7  | Async/Await | 36 | `[x]` |
+| 8  | Threads и конкурентность | 29 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
 | 10 | Package manager | 20 | `[~]` (CLI ✓, CMake ✓, build profiles ✓; platform profiles — отложено) |
 | 11 | Embedded compiler features | 38 | `[x]` |
-| 12 | Стандартная библиотека | 130 | `[x]` |
+| 12 | Стандартная библиотека | 134 | `[x]` |
 | 13 | Декораторы | 21 | `[x]` |
 | 14 | IR и продвинутые возможности | — | `[x]` |
-| 15 | Линтер и форматтер | — | `[x]` |
+| 15 | Линтер и форматтер | 8 | `[x]` |
 | 16 | Реестр пакетов | — | `[x]` |
 | 17 | Platform backends: Retro & Consoles | 9 | `[~]` (инфраструктура ✓, platform packages — отложено) |
-| 18 | Advanced tooling | 16 | `[x]` |
+| 18 | Advanced tooling | 17 | `[x]` |
 
-**Итого: 941 тестов ✓** (2026-04-21) — phase0-18 полностью реализованы; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости); phase18: optimizer, WASM, emit-dts, sourcemaps, LSP — все 16 тестов проходят
+**Итого: 956 тестов ✓** (2026-04-22) — phase0-18 полностью реализованы; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости); новые фичи: Promise.race/any/allSettled, select, JSON.parse/stringify, clone()/structuredClone(), AbortController/AbortSignal, AsyncMutex, formatter (нормализация отступов), tsclang debug (gdb интеграция)

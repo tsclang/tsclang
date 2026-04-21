@@ -81,6 +81,11 @@ export default {
       return `tsc_signal_create_${t}(${argsC})`;
     }
 
+    // new AbortController()
+    if (name === 'AbortController') {
+      return `tsc_abort_controller_create()`;
+    }
+
     // new Promise<T>(...)
     if (name === 'Promise') {
       return `/* new Promise */ {0}`;

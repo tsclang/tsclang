@@ -602,8 +602,9 @@ if (command === 'format') {
   }
   const inputPath = resolve(inputFile);
   const src = readFileSync(inputPath, 'utf8');
-  // Identity transform: write back verbatim (already formatted)
-  writeFileSync(inputPath, src, 'utf8');
+  const { format } = await import('../src/formatter.js');
+  const formatted = format(src);
+  writeFileSync(inputPath, formatted, 'utf8');
   process.exit(0);
 }
 
@@ -1070,6 +1071,34 @@ if (command === 'build') {
 
 } else if (command === 'lsp') {
   startLsp();
+} else if (command === 'debug') {
+  const inputFile = args[1];
+  if (!inputFile) {
+    console.error('tsclang debug: missing input file');
+    process.exit(1);
+  }
+  const inputPath = resolve(inputFile);
+  const { c, warnings } = compileTsc(inputPath, { debugLines: true, sourcemap: true });
+  const tmpDir = mkdtempSync(join(tmpdir(), 'tsclang-dbg-'));
+  const mainC = join(tmpDir, 'main.c');
+  const binaryPath = join(tmpDir, 'main');
+  writeFileSync(mainC, c, 'utf8');
+  const runtimeInc = join(ROOT, 'src/runtime');
+  const gccResult = spawnSync('gcc', [mainC, '-o', binaryPath, '-g', `-I${runtimeInc}`, '-lpthread', '-lm'], { encoding: 'utf8' });
+  if (gccResult.status !== 0) {
+    process.stderr.write(gccResult.stderr || 'gcc failed\n');
+    process.exit(1);
+  }
+  // Try gdb, fall back to running directly
+  const gdbCheck = spawnSync('gdb', ['--version'], { encoding: 'utf8' });
+  if (gdbCheck.status === 0) {
+    const gdbArgs = ['--source-directory', dirname(inputPath), '-q', binaryPath];
+    spawnSync('gdb', gdbArgs, { stdio: 'inherit' });
+  } else {
+    process.stderr.write('tsclang debug: gdb not found, running without debugger\n');
+    const r = spawnSync(binaryPath, [], { stdio: 'inherit' });
+    process.exit(r.status ?? 0);
+  }
 } else {
   console.error(`tsclang: unknown command '${command}'`);
   process.exit(1);

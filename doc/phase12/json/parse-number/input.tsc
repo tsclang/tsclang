@@ -1,0 +1,3 @@
+const s = "42";
+const n = JSON.parse<i32>(s);
+console.log(n);

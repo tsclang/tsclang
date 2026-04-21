@@ -193,6 +193,27 @@ export default {
       }
     }
 
+    // AbortController / AbortSignal methods
+    if (callee.kind === 'Member') {
+      const _acObjName = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const _acSym = _acObjName ? this.lookup(_acObjName) : null;
+      if (_acSym?.ctype === 'TscAbortController') {
+        const _acC = this.exprToC(callee.object, lines, depth);
+        if (callee.prop === 'abort') return `tsc_abort_controller_abort(&${_acC})`;
+      }
+      if (_acSym?.ctype === 'TscAbortSignal *') {
+        const _asC = this.exprToC(callee.object, lines, depth);
+        if (callee.prop === 'aborted') return `tsc_abort_signal_aborted(${_asC})`;
+      }
+      if (_acSym?.ctype === 'TscAsyncMutex') {
+        const _amC = this.exprToC(callee.object, lines, depth);
+        if (callee.prop === 'tryLock')  return `tsc_async_mutex_try_lock(&${_amC})`;
+        if (callee.prop === 'unlock')   return `tsc_async_mutex_unlock(&${_amC})`;
+        if (callee.prop === 'isLocked') return `tsc_async_mutex_is_locked(&${_amC})`;
+        if (callee.prop === 'lock')     return `tsc_async_mutex_try_lock(&${_amC})`;
+      }
+    }
+
     // tsc_thread_t .join()
     if (callee.kind === 'Member' && callee.prop === 'join') {
       const objNameJ = callee.object?.kind === 'Ident' ? callee.object.name : null;
@@ -289,6 +310,12 @@ export default {
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'Math') {
       return this.mathCall(callee.prop, args, lines, depth);
+    }
+
+    // JSON.stringify / JSON.parse
+    if (callee.kind === 'Member' &&
+        callee.object.kind === 'Ident' && callee.object.name === 'JSON') {
+      return this.jsonCall(callee.prop, node.typeArgs ?? [], args, lines, depth);
     }
 
     // Reader/Writer vtable dispatch (std/io)
@@ -1189,6 +1216,20 @@ export default {
       return `tsc_try_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
     }
 
+    // structuredClone(x) → C struct copy for primitives/structs, array clone for arrays
+    if (callee.kind === 'Ident' && callee.name === 'structuredClone' && args.length === 1) {
+      const argNode = args[0].expr;
+      const argType = this.inferType(argNode);
+      const argC = this.exprToC(argNode, lines, depth);
+      if (argType?.startsWith('Array_')) {
+        const et = argType.slice(6); // remove 'Array_' prefix
+        const etIdent = this.cTypeToIdent(et);
+        return `tsc_array_slice_${etIdent}(${argC}, 0, (int32_t)${argC}.length)`;
+      }
+      // For structs/primitives: C assignment = copy by value
+      return `(${argType})(${argC})`;
+    }
+
     // String(n) constructor → tsc_T_to_string(n)
     if (callee.kind === 'Ident' && callee.name === 'String' && args.length === 1) {
       const argNode = args[0].expr;
@@ -1837,6 +1878,27 @@ export default {
     return map[prop] ?? `/* Math.${prop} */(${a0})`;
   },
 
+  jsonCall(prop, typeArgs, args, lines, depth) {
+    if (prop === 'stringify') {
+      const arg0 = args[0]?.expr;
+      const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
+      const t = arg0 ? this.inferType(arg0) : 'int32_t';
+      if (t === 'String') return `tsc_json_stringify_string(${a0})`;
+      if (t === 'bool')   return `(${a0}) ? STR_LIT("true") : STR_LIT("false")`;
+      if (t === 'double' || t === 'float') return `tsc_f64_to_string(${a0})`;
+      if (t === 'int64_t') return `tsc_i64_to_string(${a0})`;
+      return `tsc_i32_to_string(${a0})`;
+    }
+    if (prop === 'parse') {
+      const typeName = typeArgs[0]?.name ?? 'i32';
+      const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      if (typeName === 'f64' || typeName === 'f32') return `atof(${a0}.data)`;
+      if (typeName === 'bool') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
+      return `atoi(${a0}.data)`;
+    }
+    return `/* JSON.${prop} */0`;
+  },
+
   methodCall(callee, args, lines, depth) {
     // Handle method chain: arr.resize(10, 0).fill(7, 0, 5)
     // When callee.object is itself a Call, emit it as a statement and use the base object
@@ -1991,6 +2053,7 @@ export default {
         case 'values':  return `tsc_array_values_${et}(${objC})`;
         case 'entries': return `tsc_array_entries_${et}(${objC})`;
         case 'flat':    return `tsc_array_flat_${et}(${objC})`;
+        case 'clone':   return `tsc_array_slice_${et}(${objC}, 0, (int32_t)${objC}.length)`;
       }
     }
 

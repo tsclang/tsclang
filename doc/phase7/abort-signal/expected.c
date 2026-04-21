@@ -3,10 +3,10 @@
 int main(void) {
     TSC_INIT();
     TscAbortController controller = tsc_abort_controller_create();
-    const int32_t signal = controller.signal;
-    printf("%d\n", signal.aborted);
+    const TscAbortSignal *signal = controller.signal;
+    printf("%s\n", (tsc_abort_signal_aborted(signal)) ? "true" : "false");
     tsc_abort_controller_abort(&controller);
-    printf("%d\n", signal.aborted);
+    printf("%s\n", (tsc_abort_signal_aborted(signal)) ? "true" : "false");
     tsc_abort_controller_free(&controller);
     return 0;
 }

@@ -1,0 +1,9 @@
+const ch1 = new Channel<i32>(1);
+const ch2 = new Channel<i32>(1);
+ch1.send(42);
+const result = select({ a: ch1.receive(), b: ch2.receive() });
+if (result._arm === 0) {
+    console.log(result.a);
+} else if (result._arm === 1) {
+    console.log(result.b);
+}

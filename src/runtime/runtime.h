@@ -33,6 +33,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <ctype.h>
+#ifndef TSC_EMBEDDED
+#include <stdatomic.h>
+#endif
 
 /* Math constants — POSIX extensions, not guaranteed by C99 */
 #ifndef M_E
@@ -573,6 +576,26 @@ static inline void tsc_string_array_free(String *parts, int32_t len) {
     free(parts);
 }
 
+/* JSON stringify: wraps a String value in double-quotes with basic escaping */
+static inline String tsc_json_stringify_string(String s) {
+    size_t cap = s.length * 2 + 3;
+    char *buf = (char *)malloc(cap);
+    size_t pos = 0;
+    buf[pos++] = '"';
+    for (size_t i = 0; i < (size_t)s.length; i++) {
+        unsigned char c = (unsigned char)s.data[i];
+        if      (c == '"')  { buf[pos++] = '\\'; buf[pos++] = '"'; }
+        else if (c == '\\') { buf[pos++] = '\\'; buf[pos++] = '\\'; }
+        else if (c == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n'; }
+        else if (c == '\r') { buf[pos++] = '\\'; buf[pos++] = 'r'; }
+        else if (c == '\t') { buf[pos++] = '\\'; buf[pos++] = 't'; }
+        else                { buf[pos++] = (char)c; }
+    }
+    buf[pos++] = '"';
+    buf[pos] = '\0';
+    return (String){ .data = buf, .length = (int32_t)pos, .capacity = (int32_t)cap };
+}
+
 /* -------------------------------------------------------------------------
  * Parse functions
  * Non-opt versions are regular static inline functions.
@@ -1085,3 +1108,73 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 })
 
 TSC_STATICMAP_IMPL(uint8_t, int32_t, u8_i32)
+
+/* -------------------------------------------------------------------------
+ * AbortController / AbortSignal
+ * Desktop: atomic_bool for thread-safety; Embedded: plain bool
+ * ------------------------------------------------------------------------- */
+typedef struct {
+#ifndef TSC_EMBEDDED
+    _Atomic bool aborted;
+#else
+    bool aborted;
+#endif
+} TscAbortSignal;
+
+typedef struct {
+    TscAbortSignal *signal;
+} TscAbortController;
+
+static inline TscAbortController tsc_abort_controller_create(void) {
+    TscAbortSignal *sig = (TscAbortSignal *)calloc(1, sizeof(TscAbortSignal));
+    return (TscAbortController){ .signal = sig };
+}
+
+static inline void tsc_abort_controller_abort(TscAbortController *ctrl) {
+#ifndef TSC_EMBEDDED
+    atomic_store(&ctrl->signal->aborted, true);
+#else
+    ctrl->signal->aborted = true;
+#endif
+}
+
+static inline bool tsc_abort_signal_aborted(TscAbortSignal *sig) {
+#ifndef TSC_EMBEDDED
+    return atomic_load(&sig->aborted);
+#else
+    return sig->aborted;
+#endif
+}
+
+static inline void tsc_abort_controller_free(TscAbortController *ctrl) {
+    free(ctrl->signal);
+    ctrl->signal = NULL;
+}
+
+/* -------------------------------------------------------------------------
+ * AsyncMutex — non-blocking mutex for async coordination on event loop
+ * Simple boolean lock; in a real event loop the waiter queue would be
+ * implemented with callbacks, but for single-threaded async state machines
+ * a plain bool is sufficient.
+ * ------------------------------------------------------------------------- */
+typedef struct {
+    bool _locked;
+} TscAsyncMutex;
+
+static inline TscAsyncMutex tsc_async_mutex_create(void) {
+    return (TscAsyncMutex){ ._locked = false };
+}
+
+static inline bool tsc_async_mutex_try_lock(TscAsyncMutex *m) {
+    if (m->_locked) return false;
+    m->_locked = true;
+    return true;
+}
+
+static inline void tsc_async_mutex_unlock(TscAsyncMutex *m) {
+    m->_locked = false;
+}
+
+static inline bool tsc_async_mutex_is_locked(TscAsyncMutex *m) {
+    return m->_locked;
+}

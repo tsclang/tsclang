@@ -1,0 +1,2 @@
+const s = JSON.stringify("hello");
+console.log(s);

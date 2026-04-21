@@ -236,6 +236,13 @@ export default {
         if (symCls?._isThrowsClass && node.prop === 'message') {
           return isPtr ? `${objC}->_base.message` : `${objC}._base.message`;
         }
+        // AbortController.signal / AbortSignal.aborted
+        if (sym?.ctype === 'TscAbortController' && node.prop === 'signal') {
+          return `${objC}.signal`;
+        }
+        if (sym?.ctype === 'TscAbortSignal *' && node.prop === 'aborted') {
+          return `tsc_abort_signal_aborted(${objC})`;
+        }
         // URL field access — u.search after mutation → tsc_url_search(&u)
         if (this._stdUrlImported && sym?._isURL) {
           const _urlMutatedFields = ['search'];
