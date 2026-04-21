@@ -1,0 +1,14 @@
+async function delay(): void {
+    return;
+}
+
+async function sensor(): i32 {
+    return 42;
+}
+
+async function poll(): void {
+    while (true) {
+        const v = await sensor();
+        await delay();
+    }
+}

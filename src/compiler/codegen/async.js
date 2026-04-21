@@ -175,6 +175,8 @@ export default {
           const a = s.alternate;
           if (a) walk(a?.kind === 'Block' ? a.body : [a]);
         }
+        if (s.kind === 'While') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'For')   walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'TryCatch') {
           walk(s.body?.body || []);
           if (s.catches) for (const c of s.catches) walk(c.body?.body || []);
@@ -221,6 +223,12 @@ export default {
           const gi = genName && this._generatorFuncs?.has(genName)
             ? this._generatorFuncs.get(genName) : null;
           if (gi) result.push({ fieldName: `_gen_${genIdx++}`, stateType: gi.stateType, isGen: true });
+        }
+        if (s.kind === 'While') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'If') {
+          const c = s.consequent;
+          walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
+          if (s.alternate) walk(s.alternate?.kind === 'Block' ? s.alternate.body : [s.alternate]);
         }
         if (s.kind === 'TryCatch') walk(s.body?.body || []);
       }
@@ -434,7 +442,52 @@ export default {
   },
 
   _emitAsyncStmtList(stmts, lines, ctx, I) {
-    for (const s of stmts) this._emitAsyncStmt(s, lines, ctx, I);
+    for (let i = 0; i < stmts.length; i++) {
+      const s = stmts[i];
+      if (s?.kind === 'While') {
+        this._emitAsyncWhile(s, stmts.slice(i + 1), lines, ctx, I);
+        return; // remaining stmts handled inside while emitter
+      }
+      this._emitAsyncStmt(s, lines, ctx, I);
+    }
+  },
+
+  _emitAsyncWhile(s, remainingStmts, lines, ctx, I) {
+    const loopCase = ctx.nextCase++;
+    const condC = this._selfE(s.cond ?? s.test);
+    const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+
+    // Transition to loop condition state
+    lines.push(`${I}self->_state = ${loopCase};`);
+    lines.push(`${I}/* fall through */`);
+    lines.push(`        case ${loopCase}:`);
+
+    // Condition check: on failure, inline remaining stmts (common: return x after while)
+    if (remainingStmts.length === 0) {
+      lines.push(`${I}if (!(${condC})) { self->_done = true; return; }`);
+    } else {
+      lines.push(`${I}if (!(${condC})) {`);
+      const savedTerminated = ctx.terminated;
+      ctx.terminated = false;
+      for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I + '    ');
+      if (!ctx.terminated) {
+        lines.push(`${I}    self->_done = true;`);
+        lines.push(`${I}    return;`);
+      }
+      ctx.terminated = savedTerminated;
+      lines.push(`${I}}`);
+    }
+
+    // Loop body
+    this._emitAsyncStmtList(whileBody, lines, ctx, I);
+
+    // Loop back
+    if (!ctx.terminated) {
+      lines.push(`${I}self->_state = ${loopCase};`);
+      lines.push(`${I}goto case_${loopCase};`);
+    }
+    ctx.loopLabels.push(`case_${loopCase}: ;`);
+    ctx.terminated = true;
   },
 
   // Emit: self->_state = N; /* fall through */ case N:

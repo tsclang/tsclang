@@ -421,12 +421,12 @@
 - [x] Name mangling: полная схема разрешения коллизий имён при module bundling
 - [x] Optimization levels: пробросить `-O0`/`-O1`/`-Os` в gcc через build profile / `--optimize`
 - [x] Incremental compilation: хеш-кеш C-output по файлам, не пересобирать неизменившиеся модули
-- [ ] Async state machine: улучшить читаемость и корректность генерации (без IR)
+- [x] Async state machine: while-await корректная генерация (Duff's device + goto loop-back)
 - [ ] Library format: AST-сериализация для consumer-side monomorphization дженериков из внешних пакетов
 
 ### Лог
 
-> 2026-04-21: реализован name mangling для module bundling — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). Optimization levels: флаг `--optimize O0/O1/O2/O3/Os/Oz` для `build` и `run` команд; прокидывается в gcc; `build-cmake` уже поддерживал через `builds.release.optimize`. Incremental compilation: SHA-256 хеш `(src + modulePrefix + dep cache keys)`, кэш в `.tsclang-cache/` (JSON, BigInt-safe). Cache hit печатает `cache-hit-identical` в stdout. Флаг `--no-cache` для обхода кэша. **Статус: 903/903 ✓**
+> 2026-04-21: реализован name mangling для module bundling — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). Optimization levels: флаг `--optimize O0/O1/O2/O3/Os/Oz` для `build` и `run` команд; прокидывается в gcc; `build-cmake` уже поддерживал через `builds.release.optimize`. Incremental compilation: SHA-256 хеш `(src + modulePrefix + dep cache keys)`, кэш в `.tsclang-cache/` (JSON, BigInt-safe). Cache hit печатает `cache-hit-identical` в stdout. Флаг `--no-cache` для обхода кэша. Async state machine: `while { await ... }` — исправлены `_scanAsyncBody` и `_collectAwaitStates` (не обходили While/For тела → vars и await sub-states не попадали в struct); добавлен `_emitAsyncWhile` с Duff's device паттерном + `goto case_N` loop-back. **Статус: 905/905 ✓**
 
 ---
 

@@ -1,0 +1,12 @@
+async function tick(): i32 {
+    return 1;
+}
+
+async function run(n: i32): i32 {
+    let count: i32 = 0;
+    while (count < n) {
+        const v = await tick();
+        count = count + v;
+    }
+    return count;
+}
