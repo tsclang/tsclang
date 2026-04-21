@@ -2032,6 +2032,17 @@ export default {
       return;
     }
 
+    // @embedded.stack("name", N) → emit static stack arrays in BSS
+    for (const dec of (node.decorators ?? [])) {
+      if (dec.name === 'embedded.stack' && dec.args?.length >= 2) {
+        const sName = dec.args[0]?.value ?? dec.args[0];
+        const sSize = dec.args[1]?.value ?? dec.args[1];
+        this._topBlank();
+        this.topLevel.push(`static uintptr_t ${sName}_stack[${sSize}];`);
+        this.topLevel.push(`static uint8_t ${sName}_stack_top = 0;`);
+      }
+    }
+
     // Async/generator dispatch — state machine codegen
     if (node.async || generator) {
       const hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');

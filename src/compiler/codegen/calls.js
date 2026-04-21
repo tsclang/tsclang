@@ -154,6 +154,67 @@ export default {
       }
     }
 
+    // AtomicArray<T> methods: .load(i), .store(i, v), .fetchAdd(i, v), .compareExchange(i, exp, des)
+    if (callee.kind === 'Member') {
+      const objNameAA = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const aaSym = objNameAA ? this.lookup(objNameAA) : null;
+      if (aaSym?._isAtomicArray) {
+        const inner = aaSym._atomicArrayInner ?? 'int32_t';
+        const ref = `${objNameAA}.data`;
+
+        const ordMap = {
+          'LoadOrdering.Acquire': 'memory_order_acquire',
+          'LoadOrdering.SeqCst': 'memory_order_seq_cst',
+          'LoadOrdering.Relaxed': 'memory_order_relaxed',
+          'StoreOrdering.Release': 'memory_order_release',
+          'StoreOrdering.SeqCst': 'memory_order_seq_cst',
+          'StoreOrdering.Relaxed': 'memory_order_relaxed',
+          'RmwOrdering.AcqRel': 'memory_order_acq_rel',
+          'RmwOrdering.SeqCst': 'memory_order_seq_cst',
+          'RmwOrdering.Relaxed': 'memory_order_relaxed',
+        };
+        const resolveOrd = (argNode, op) => {
+          if (!argNode) return null;
+          const expr = argNode.expr ?? argNode;
+          if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
+            const key = `${expr.object.name}.${expr.prop}`;
+            if (ordMap[key]) return ordMap[key];
+          }
+          return this.exprToC(expr, lines, depth);
+        };
+
+        if (callee.prop === 'load') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrd(args[1], 'load') ?? 'memory_order_acquire';
+          return `atomic_load_explicit(&${ref}[${idxC}], ${ord})`;
+        }
+        if (callee.prop === 'store') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'store') ?? 'memory_order_release';
+          return `atomic_store_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchAdd') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_add_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'compareExchange') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const expC = this.exprToC(args[1].expr, lines, depth);
+          const desC = this.exprToC(args[2].expr, lines, depth);
+          const successOrd = resolveOrd(args[3], 'rmw') ?? 'memory_order_acq_rel';
+          const failOrd = 'memory_order_acquire';
+          if (!this._cmpxchgCount) this._cmpxchgCount = 0;
+          const tmpName = `_expected_${this._cmpxchgCount++}`;
+          const I2 = ' '.repeat(this.indent * depth);
+          lines.push(`${I2}${inner} ${tmpName} = ${expC};`);
+          return `atomic_compare_exchange_strong_explicit(\n        &${ref}[${idxC}], &${tmpName}, ${desC},\n        ${successOrd}, ${failOrd})`;
+        }
+      }
+    }
+
     // Channel<T> methods: .send(), .receive(), .tryReceive(), .trySend(), .close(), .isEmpty()
     if (callee.kind === 'Member') {
       const objName3 = callee.object?.kind === 'Ident' ? callee.object.name : null;

@@ -1,0 +1,7 @@
+class Point { x: i32 = 0; y: i32 = 0; }
+const p = new Point();
+p.x = 1;
+p.y = 2;
+const p2: Point = { ...p, y: 99 };
+console.log(p2.x);
+console.log(p2.y);

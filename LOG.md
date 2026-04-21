@@ -153,6 +153,7 @@
 > 2026-04-21 (продолжение): реализован `Iterable<T>` протокол — специализированный кодген для `iter()`: парсер сохраняет type args в `implements`; кодген генерирует `ClassName_iter_t` (struct с локальными переменными), `ClassName_iter_next` (тело лямбды с `_cAlias`, `_inIterNextBody` флаг для `return` → `opt_T`), `ClassName_iter` (factory); `for-of` десугарится в while по `iter_next`. **Статус: 150/150 phase3 ✓**
 >
 > 2026-04-22: добавлены `clone()` и `structuredClone()` — arr.clone() → tsc_array_slice (полная копия); structuredClone(arr) → тот же pattern; inferType учитывает clone/structuredClone. **+2 теста**
+> 2026-04-22: реализован spread `{...obj}` в object literals — разворачивает поля struct по полному списку из cls.fields, с поддержкой override `{...p, y: 99}`. **+2 теста**
 
 ---
 
@@ -294,7 +295,7 @@
 ### Лог
 
 > 2026-04-18: реализована фаза 7 — async/await state machine. Async functions → poll struct (state field + captured vars через await), `for await` → generator state machine, `Promise<T>` (.then/.catch/.finally), `Promise.all`, `setTimeout`/`setInterval`/`clearTimeout`, `sleep` (uv_sleep / _delay_ms на embedded), borrow-checker: Ref запрещён через await-точку, owned — разрешён. `async main` → desktop event loop, embedded while-poll. `@static async function*` → кооперативный планировщик. **Статус: 31/31 ✓**
-> 2026-04-22: добавлены Promise.race, Promise.any, Promise.allSettled (3 теста), AbortController/AbortSignal (runtime struct + codegen), AsyncMutex (tryLock/unlock/isLocked). **+5 тестов**
+> 2026-04-22: добавлены Promise.race, Promise.any, Promise.allSettled (3 теста), AbortController/AbortSignal (runtime struct + codegen), AsyncMutex (tryLock/unlock/isLocked), @embedded.singleton (=@static generator instance), @embedded.stack (static uintptr_t stack[] + push/pop/empty macros). **+7 тестов**
 
 ---
 
@@ -305,6 +306,8 @@
 - [x] `Thread<T>`: `Thread.spawn`, `await t.join()`, `spawn {}` блоки
 - [x] `channel<T>`: типизированный канал; `send`/`receive`/`tryReceive`/`trySend`/`close`/`length`/`capacity`
 - [x] `Atomic<T>`: stack layout и heap (`new Shared<Atomic<T>>`); `load`/`store`/`fetchAdd`/`compareExchange`
+- [x] `AtomicArray<T>`: массив с атомарным доступом; `load`/`store`/`fetchAdd`/`compareExchange` с поддержкой ordering
+- [x] `Readonly<T>`: value-wrapper (`new Readonly(val)` → `const T`) + type annotation `Readonly<T>` → прозрачный тип
 - [x] `@embedded.isr("VECTOR")` — обработчики прерываний (no await, no throw)
 - [x] `#[isr(...)]` — аннотация: запрет await в ISR
 - [x] `Volatile<T>` / `volatile<T>` — MMIO-указатели и глобальные регистры
@@ -314,6 +317,7 @@
 
 > 2026-04-18: реализована фаза 8 полностью: Volatile/volatile, @embedded.isr, #[isr], Atomic<T>, Channel<T>, spawn {}, spawn throws T {}, Thread.spawn, await t.join() в async state machine. Все 28/28 тестов ✓
 > 2026-04-22: добавлен `select` — _SelectResult_N struct, tsc_channel_try_receive pattern, inferType для member access. **+1 тест**
+> 2026-04-22: добавлены AtomicArray<T> (4 теста) и Readonly<T> value-wrapper (2 теста), spread `{...obj}` в object literals (2 теста). **+8 тестов**
 
 ---
 

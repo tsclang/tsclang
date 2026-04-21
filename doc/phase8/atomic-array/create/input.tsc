@@ -1,0 +1,4 @@
+const arr = new AtomicArray<i32>(4);
+arr.store(0, 42);
+const v = arr.load(0);
+console.log(v);

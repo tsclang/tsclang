@@ -40,6 +40,7 @@ export default {
       if (name === 'AbortSignal')     return 'TscAbortSignal *';
       if (name === 'AsyncMutex')      return 'TscAsyncMutex';
       if (name === 'Generator')  return `${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}_state`;
+      if (name === 'Readonly' && typeArgs?.[0]) return this.resolveType(typeArgs[0]);
       if (name === 'Atomic')     return `Atomic_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
       if (name === 'Channel')    return `Channel_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
       if (name === 'Signal')     return `Signal_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
@@ -531,6 +532,12 @@ export default {
           const objSymA = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
           if (objSymA?._isAtomic) {
             if (prop === 'load' || prop === 'fetchAdd') return objSymA._atomicInner ?? 'int32_t';
+            if (prop === 'store') return 'void';
+            if (prop === 'compareExchange') return 'bool';
+          }
+          // AtomicArray<T> method return types
+          if (objSymA?._isAtomicArray) {
+            if (prop === 'load' || prop === 'fetchAdd') return objSymA._atomicArrayInner ?? 'int32_t';
             if (prop === 'store') return 'void';
             if (prop === 'compareExchange') return 'bool';
           }

@@ -1,0 +1,7 @@
+class Point { x: i32 = 0; y: i32 = 0; }
+const p = new Point();
+p.x = 10;
+p.y = 20;
+const ro = new Readonly(p);
+console.log(ro.x);
+console.log(ro.y);

@@ -63,6 +63,11 @@ export default {
       return `tsc_weak_create(${argsC})`;
     }
 
+    // new Readonly(val) → transparent: just return the value
+    if (name === 'Readonly') {
+      return args[0] ? this.exprToC(args[0].expr ?? args[0], lines, depth) : '{0}';
+    }
+
     // new Atomic<T>(val)
     if (name === 'Atomic') {
       const t = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';

@@ -1,0 +1,5 @@
+const arr = new AtomicArray<i32>(2);
+arr.store(0, 5);
+const old = arr.fetchAdd(0, 3);
+console.log(old);
+console.log(arr.load(0));

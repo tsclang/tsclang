@@ -1,0 +1,8 @@
+const arr = new AtomicArray<i32>(3);
+arr.store(0, 10, StoreOrdering.Release);
+arr.store(1, 20);
+arr.store(2, 30);
+const a = arr.load(0, LoadOrdering.Acquire);
+const b = arr.load(1);
+console.log(a);
+console.log(b);

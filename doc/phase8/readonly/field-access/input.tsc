@@ -1,0 +1,9 @@
+class Vec { x: i32 = 0; y: i32 = 0; z: i32 = 0; }
+function describe(v: Readonly<Vec>): void {
+    console.log(v.x);
+    console.log(v.y);
+    console.log(v.z);
+}
+const vec = new Vec();
+vec.x = 1; vec.y = 2; vec.z = 3;
+describe(new Readonly(vec));

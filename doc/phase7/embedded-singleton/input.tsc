@@ -1,0 +1,8 @@
+@embedded.singleton
+function* counter(): Generator<i32> {
+    let n: i32 = 0;
+    while (true) {
+        yield n;
+        n = n + 1;
+    }
+}

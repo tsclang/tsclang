@@ -208,6 +208,43 @@ export default {
           break;
         }
 
+        // new Readonly(val) or new Readonly<T>(val) → const T name = val
+        if (init?.kind === 'New' && init.name === 'Readonly') {
+          const valArg = init.args?.[0];
+          const valC = valArg ? this.exprToC(valArg.expr ?? valArg, lines, depth) : '{0}';
+          let innerType;
+          if (init.typeArgs?.[0]) {
+            innerType = this.resolveType(init.typeArgs[0]);
+          } else if (valArg) {
+            innerType = this.inferType(valArg.expr ?? valArg);
+          } else {
+            innerType = 'void *';
+          }
+          p(`const ${innerType} ${name} = ${valC};`);
+          this.define(name, { ctype: innerType, varKind, _isReadonly: true });
+          break;
+        }
+
+        // new AtomicArray<T>(N) → AtomicArray_T typedef + calloc
+        if (init?.kind === 'New' && init.name === 'AtomicArray') {
+          const tArg = init.typeArgs?.[0];
+          const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
+          const ident = this.cTypeToIdent(innerCtype);
+          const arrType = `AtomicArray_${ident}`;
+          if (!this._emittedAtomicTypes) this._emittedAtomicTypes = new Set();
+          if (!this._emittedAtomicTypes.has(arrType)) {
+            this._emittedAtomicTypes.add(arrType);
+            this.includes.add('#include <stdatomic.h>');
+            this.addTop(`typedef struct { int32_t length; _Atomic ${innerCtype} *data; } ${arrType};`);
+            this.addTop('');
+          }
+          const sizeC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
+          p(`${arrType} ${name} = {.length = ${sizeC}, .data = calloc(${sizeC}, sizeof(_Atomic ${innerCtype}))};`);
+          this.define(name, { ctype: arrType, varKind, _isAtomicArray: true, _atomicArrayInner: innerCtype });
+          this._registerCleanup(`free(${name}.data)`);
+          break;
+        }
+
         // new Shared<Atomic<T>>(val) → Atomic_T_shared typedef + arc alloc + atomic_init
         if (init?.kind === 'New' && init.name === 'Shared' && init.typeArgs?.[0]?.name === 'Atomic') {
           const tArg = init.typeArgs[0].typeArgs?.[0];

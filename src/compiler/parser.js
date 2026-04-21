@@ -377,6 +377,17 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (t.type === TK.IDENT && t.value === 'declare') return parseDeclare();
     if (t.type === TK.LBRACE) return parseBlock();
 
+    // @embedded.stack_push/pop/empty as standalone statement (decorators consumed above but not a decl)
+    if (decorators.length > 0) {
+      // Emit each decorator as an EmbeddedMacro ExprStmt
+      const stmts = decorators.map(d => ({
+        kind: 'ExprStmt',
+        expr: { kind: 'EmbeddedMacro', name: d.name, typeArgs: [], args: d.args ?? [] },
+      }));
+      eatSemi();
+      return stmts.length === 1 ? stmts[0] : { kind: 'Block', body: stmts };
+    }
+
     // Labeled statement: IDENT: stmt
     if (t.type === TK.IDENT && !KEYWORDS.has(t.value) && peek().type === TK.COLON) {
       const label = eat(TK.IDENT).value;
@@ -1201,6 +1212,25 @@ export function parse(tokens, filename = '<input>', src = null) {
     }
     if (cur().type === TK.IDENT && cur().value === 'drop') { pos++; return { kind: 'Drop', expr: parseUnary() }; }
     if (cur().type === TK.IDENT && cur().value === 'new')  return parseNew();
+    // @embedded.stack_push/pop/empty("name", ...) as expressions
+    if (cur().type === TK.AT) {
+      eat(TK.AT);
+      let macroName = eat(TK.IDENT).value;
+      while (cur().type === TK.DOT) { eat(TK.DOT); macroName += '.' + eat(TK.IDENT).value; }
+      let typeArgs = [];
+      if (cur().type === TK.LT) {
+        eat(TK.LT);
+        while (cur().type !== TK.GT) { typeArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
+        eat(TK.GT);
+      }
+      let args = [];
+      if (cur().type === TK.LPAREN) {
+        eat(TK.LPAREN);
+        while (cur().type !== TK.RPAREN) { args.push(parseExpr()); tryEat(TK.COMMA); }
+        eat(TK.RPAREN);
+      }
+      return { kind: 'EmbeddedMacro', name: macroName, typeArgs, args };
+    }
     return parsePostfix();
   }
 

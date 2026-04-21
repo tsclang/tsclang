@@ -384,8 +384,32 @@ export default {
       }
 
       case 'ObjLit': {
+        const spreads = node.props.filter(p => p.spread);
+        const explicit = node.props.filter(p => !p.spread && !p.computed);
+        // If there are spread elements, expand struct fields inline
+        if (spreads.length > 0) {
+          const explicitMap = new Map(explicit.map(p => [p.key, p.value]));
+          const resultProps = [];
+          for (const sp of spreads) {
+            const srcC = this.exprToC(sp.expr, lines, depth);
+            const srcType = this.inferType(sp.expr);
+            const cls = this.classes.get(srcType);
+            if (cls?.fields) {
+              for (const f of cls.fields) {
+                if (!explicitMap.has(f.name)) {
+                  resultProps.push([f.name, `${srcC}.${f.name}`, true]);
+                }
+              }
+            }
+          }
+          for (const [key, val] of explicitMap) {
+            resultProps.push([key, this.exprToC(val, lines, depth), false]);
+          }
+          // Sort: spread fields first (in field order), then explicit overrides
+          const props = resultProps.map(([k, v]) => `.${k} = ${v}`);
+          return props.length > 0 ? `{${props.join(', ')}}` : `{}`;
+        }
         const props = node.props.map(p => {
-          if (p.spread) return `/* ...${this.exprToC(p.expr, lines, depth)} */`;
           if (p.computed) return `/* computed key */`;
           return `.${p.key} = ${this.exprToC(p.value, lines, depth)}`;
         });
@@ -484,6 +508,26 @@ export default {
           return `${_dc._poolDropFn}(${_dropArg})`;
         }
         return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
+      }
+      case 'EmbeddedMacro': {
+        const macroName = node.name;
+        const strArg = (i) => node.args[i]?.kind === 'Literal' ? node.args[i].value : '??';
+        if (macroName === 'embedded.stack_empty') {
+          const sName = strArg(0);
+          return `(${sName}_stack_top == 0)`;
+        }
+        if (macroName === 'embedded.stack_push') {
+          const sName = strArg(0);
+          const val = this.exprToC(node.args[1], lines, depth);
+          return `(${sName}_stack[${sName}_stack_top++] = (uintptr_t)(${val}))`;
+        }
+        if (macroName === 'embedded.stack_pop') {
+          const sName = strArg(0);
+          const tArg = node.typeArgs?.[0];
+          const ct = tArg ? this.resolveType(tArg) : 'int32_t';
+          return `((${ct})${sName}_stack[--${sName}_stack_top])`;
+        }
+        return `/* @${macroName} */0`;
       }
       case 'NonNull':  return this.exprToC(node.expr, lines, depth);
       case 'Propagate': return this.exprToC(node.expr, lines, depth);

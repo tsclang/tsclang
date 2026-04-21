@@ -1,0 +1,9 @@
+@embedded.stack("items", 16)
+function process(): void {
+    @embedded.stack_push("items", 42);
+    const empty = @embedded.stack_empty("items");
+    console.log(empty);
+    const val = @embedded.stack_pop<i32>("items");
+    console.log(val);
+}
+process();
