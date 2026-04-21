@@ -373,6 +373,47 @@ export default {
       return this.mathCall(callee.prop, args, lines, depth);
     }
 
+    // Date.now() static call
+    if (callee.kind === 'Member' &&
+        callee.object.kind === 'Ident' && callee.object.name === 'Date' &&
+        callee.prop === 'now') {
+      return `tsc_date_now()`;
+    }
+
+    // Date instance method calls: d.getFullYear(), d.setMonth(2), etc.
+    if (callee.kind === 'Member') {
+      const dateObjName = callee.object?.kind === 'Ident' ? callee.object.name : null;
+      const dateSym = dateObjName ? this.lookup(dateObjName) : null;
+      if (dateSym?.ctype === 'Date') {
+        const prop = callee.prop;
+        const objC = dateObjName;
+        // Map getter/setter method names to C function names
+        const nameMap = {
+          getFullYear: 'tsc_date_get_full_year', getMonth: 'tsc_date_get_month',
+          getDate: 'tsc_date_get_date', getDay: 'tsc_date_get_day',
+          getHours: 'tsc_date_get_hours', getMinutes: 'tsc_date_get_minutes',
+          getSeconds: 'tsc_date_get_seconds', getMilliseconds: 'tsc_date_get_milliseconds',
+          getTime: 'tsc_date_get_time', getTimezoneOffset: 'tsc_date_get_timezone_offset',
+          valueOf: 'tsc_date_get_time',
+          setFullYear: 'tsc_date_set_full_year', setMonth: 'tsc_date_set_month',
+          setDate: 'tsc_date_set_date', setHours: 'tsc_date_set_hours',
+          setMinutes: 'tsc_date_set_minutes', setSeconds: 'tsc_date_set_seconds',
+          setMilliseconds: 'tsc_date_set_milliseconds', setTime: 'tsc_date_set_time',
+          toISOString: 'tsc_date_to_iso_string', toString: 'tsc_date_to_string',
+          toDateString: 'tsc_date_to_date_string',
+        };
+        const fn = nameMap[prop];
+        if (fn) {
+          const isSetter = prop.startsWith('set');
+          if (isSetter) {
+            const valC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+            return `${fn}(&${objC}, ${valC})`;
+          }
+          return `${fn}(${objC})`;
+        }
+      }
+    }
+
     // JSON.stringify / JSON.parse
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'JSON') {
@@ -1382,6 +1423,35 @@ export default {
       const argsC = this.argsToC(args, lines, depth);
       const callArgs = argsC ? `&${callee.name}.env, ${argsC}` : `&${callee.name}.env`;
       return `${callee.name}.fn(${callArgs})`;
+    }
+
+    // Libc variadic call or user Scalar-variadic call: pass args as raw C values
+    if (sym?._isLibcVariadic || sym?._isScalarVariadic) {
+      const _libcVmap = { printf: 'vprintf', fprintf: 'vfprintf', sprintf: 'vsprintf', snprintf: 'vsnprintf', scanf: 'vscanf', sscanf: 'vsscanf', fscanf: 'vfscanf' };
+      const _toRawArg = (a) => {
+        // Spread of a va_list → va_list variable name (for v-variant forwarding)
+        if (a.spread) {
+          const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          if (spreadSym?._isVaList) return { isVaList: true, vaListName: spreadSym._vaListName };
+          return { raw: `/* ...${this.exprToC(a.expr, lines, depth)} */` };
+        }
+        if (a.expr.kind === 'Literal' && a.expr.litType === 'string') {
+          return { raw: `"${a.expr.value.replace(/"/g, '\\"')}"` };
+        }
+        const ac = this.exprToC(a.expr, lines, depth);
+        const at = this.inferType(a.expr);
+        return { raw: at === 'String' ? `${ac}.data` : ac };
+      };
+      const processed = args.map(_toRawArg);
+      const vaListArg = processed.find(p => p.isVaList);
+      if (vaListArg) {
+        // Forward to v-variant: printf(fmt, ...args) → vprintf(fmt, _va_args)
+        const vName = _libcVmap[calleeC] ?? ('v' + calleeC);
+        const normalParts = processed.filter(p => !p.isVaList).map(p => p.raw);
+        normalParts.push(vaListArg.vaListName);
+        return `${vName}(${normalParts.join(', ')})`;
+      }
+      return `${calleeC}(${processed.map(p => p.raw).join(', ')})`;
     }
 
     // Check for any-typed params: cannot pass typed value as any

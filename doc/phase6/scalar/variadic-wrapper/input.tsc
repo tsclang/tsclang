@@ -1,0 +1,7 @@
+import { printf, vprintf } from "std/libc";
+
+function log(fmt: string, ...args: Scalar[]): void {
+    printf(fmt, ...args);
+}
+
+log("%d %s\n", 10, "items");

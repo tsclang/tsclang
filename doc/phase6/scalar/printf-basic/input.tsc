@@ -1,0 +1,5 @@
+import { printf } from "std/libc";
+
+printf("%d\n", 42);
+printf("%s\n", "hello");
+printf("%g\n", 3.14);

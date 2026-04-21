@@ -433,6 +433,23 @@ export default {
         break;
       }
       case 'Import':
+        // Check if source is a declared ambient module (declare module "name" { ... })
+        if (this._declaredModules?.has(node.source)) {
+          const decls = this._declaredModules.get(node.source);
+          const requestedNames = new Set(node.names ?? []);
+          for (const decl of decls) {
+            if (!requestedNames.size || requestedNames.has(decl.name)) {
+              if (decl.kind === 'DeclareFunction') this.visitDeclareFunction(decl);
+              else if (decl.kind === 'DeclareConst') {
+                const ct = this.resolveType(decl.typeAnn);
+                this.topLevel.push(`extern ${ct} ${decl.name};`);
+                this.topLevel.push('');
+                this.define(decl.name, { ctype: ct, varKind: 'const' });
+              }
+            }
+          }
+          break;
+        }
         // Handle stdlib imports that require includes or special registration
         if (node.source === 'std/avr') {
           this.includes.add('#include "std/avr.h"');
@@ -525,6 +542,13 @@ export default {
             isStruct: true,
             fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
           });
+        } else if (node.source === 'std/libc') {
+          this.includes.add('#include <stdio.h>');
+          const _libcVariadic = new Set(['printf', 'vprintf', 'fprintf', 'vfprintf', 'sprintf', 'vsprintf', 'snprintf', 'vsnprintf', 'scanf', 'sscanf', 'fscanf']);
+          for (const nm of (node.names ?? [])) {
+            const isVar = _libcVariadic.has(nm);
+            this.define(nm, { ctype: 'int32_t', funcName: nm, params: null, _isLibcFunc: true, _isLibcVariadic: isVar });
+          }
         } else if (node.source === 'std/hal') {
           const embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
           if (!embeddedTargets.includes(this._targetName)) {
@@ -709,11 +733,17 @@ export default {
       case 'ExtensionFunc': this.visitExtensionFunc(node); break;
       case 'DeclareConst':    this.visitDeclareConst(node); break;
       case 'DeclareFunction': this.visitDeclareFunction(node); break;
+      case 'DeclareModule':   this.visitDeclareModule(node); break;
       case 'Noop':        break;
       default:
         // Top-level expression (e.g. console.log at top level)
         this.visitStmtInMain(node);
     }
+  },
+
+  visitDeclareModule(node) {
+    if (!this._declaredModules) this._declaredModules = new Map();
+    this._declaredModules.set(node.moduleName, node.body);
   },
 
   visitDeclareConst(node) {
@@ -2209,6 +2239,12 @@ export default {
       }
     }
 
+    const hasScalarRest = params.some(p => {
+      if (!p.rest) return false;
+      const et2 = p.typeAnn?.kind === 'TypeArray' ? this.resolveType(p.typeAnn.element) : (p.typeAnn ? this.resolveType(p.typeAnn) : null);
+      return et2 === 'Scalar';
+    });
+
     const paramStrs = params.map(p => {
       if (p.rest) {
         // ...args: T[] → T *args, int32_t args_count (unwrap the array type)
@@ -2218,6 +2254,7 @@ export default {
           if (p.typeAnn.kind === 'TypeArray') et = this.resolveType(p.typeAnn.element);
           else et = this.resolveType(p.typeAnn);
         }
+        if (et === 'Scalar') return '...';  // C variadic
         return `${et} *${p.name}, int32_t ${p.name}_count`;
       }
       if (p.destructArr) {
@@ -2228,6 +2265,10 @@ export default {
         return `${et} *_arr`;
       }
       if (p.typeAnn?.kind === 'TypeFunc') return this.typeDecl(p.typeAnn, p.name);
+      // For Scalar-variadic functions: string params → const char * (C format string convention)
+      if (hasScalarRest && p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'string') {
+        return `const char *${p.name}`;
+      }
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
       return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
@@ -2255,7 +2296,7 @@ export default {
           _resultErrKey: throwsCtx.errKey,
           _resultErrTypes: throwsCtx.throwsNames,
         } : {};
-        this.define(name, { ctype: retType, funcName: cname, params, returnType, ...symExtra });
+        this.define(name, { ctype: retType, funcName: cname, params, returnType, _isScalarVariadic: hasScalarRest || undefined, ...symExtra });
       }
     }
 
@@ -2316,13 +2357,27 @@ export default {
       this.define('this', { ctype: className, isPointer: selfIsPointer });
       if (isCtor) lines.push(`${className} self = {0};`);
     }
+    // Detect Scalar[] rest param for va_list setup
+    const _scalarRest = params.find(p => {
+      if (!p.rest) return false;
+      const _et = p.typeAnn?.kind === 'TypeArray' ? this.resolveType(p.typeAnn.element) : (p.typeAnn ? this.resolveType(p.typeAnn) : null);
+      return _et === 'Scalar';
+    });
+    const _nonRestParams = params.filter(p => !p.rest);
+    const _lastNonRest = _nonRestParams[_nonRestParams.length - 1];
+
     for (const p of params) {
       if (p.rest) {
         // Rest param: element type, mark as rest
         let et = 'int32_t';
         if (p.typeAnn?.kind === 'TypeArray') et = this.resolveType(p.typeAnn.element);
         else if (p.typeAnn) et = this.resolveType(p.typeAnn);
-        this.define(p.name, { ctype: et, rest: true, countVar: `${p.name}_count` });
+        if (et === 'Scalar') {
+          // Scalar[] rest → va_list; setup is emitted after loop
+          this.define(p.name, { ctype: 'va_list', _isVaList: true, _vaListName: '_va_args' });
+        } else {
+          this.define(p.name, { ctype: et, rest: true, countVar: `${p.name}_count` });
+        }
       } else if (p.destructArr) {
         // Array destructuring: emit bindings at top of function body
         let et = 'int32_t';
@@ -2335,15 +2390,29 @@ export default {
           this.define(slot.name, { ctype: et });
         }
       } else if (p.typeAnn) {
-        const _ct = this.resolveType(p.typeAnn);
+        let _ct = this.resolveType(p.typeAnn);
+        // For Scalar-variadic functions: string params → const char * (matches signature)
+        if (_scalarRest && p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'string') _ct = 'const char *';
         const _isRef = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Ref';
         this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef });
       }
+    }
+    if (_scalarRest && _lastNonRest) {
+      lines.push(`va_list _va_args;`);
+      lines.push(`va_start(_va_args, ${_lastNonRest.name});`);
+      this._registerCleanup('va_end(_va_args)');
     }
     this.visitBlock(body, lines, 0);
     if (isCtor) {
       this._emitFuncCleanup(lines, '    ');
       lines.push('return self;');
+    }
+    // For void Scalar-variadic functions: emit va_end cleanup before implicit fall-through
+    if (_scalarRest && retType === 'void' && !throwsCtx) {
+      const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+      if (!lastNonEmpty?.trim().startsWith('return ')) {
+        this._emitFuncCleanup(lines, '');
+      }
     }
     // For void throws functions: add implicit {.ok=true} return if last stmt isn't a return
     if (throwsCtx?.isVoid) {

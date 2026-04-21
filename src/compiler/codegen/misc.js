@@ -63,6 +63,25 @@ export default {
       return `tsc_weak_create(${argsC})`;
     }
 
+    // new Date() / new Date(ms) / new Date(y, m, d, ...) → tsc_date_*
+    if (name === 'Date') {
+      if (args.length === 0) {
+        return `(Date){ tsc_date_now() }`;
+      }
+      if (args.length === 1) {
+        const arg0 = args[0].expr ?? args[0];
+        if (arg0.kind === 'Literal' && arg0.litType === 'string') {
+          // new Date("ISO string") — parse via strptime
+          return `tsc_date_from_ms(tsc_date_parse_iso(${this.exprToC(arg0, lines, depth)}))`;
+        }
+        const msC = this.exprToC(arg0, lines, depth);
+        return `tsc_date_from_ms((int64_t)(${msC}))`;
+      }
+      // new Date(year, month, day[, h, m, s, ms])
+      const a = args.map(a => this.exprToC(a.expr ?? a, lines, depth));
+      return `tsc_date_from_ymd(${a[0]}, ${a[1]}, ${a[2] ?? 1}, ${a[3] ?? 0}, ${a[4] ?? 0}, ${a[5] ?? 0}, ${a[6] ?? 0})`;
+    }
+
     // new Readonly(val) → transparent: just return the value
     if (name === 'Readonly') {
       return args[0] ? this.exprToC(args[0].expr ?? args[0], lines, depth) : '{0}';

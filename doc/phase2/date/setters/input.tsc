@@ -1,0 +1,7 @@
+const d = new Date(0);
+d.setFullYear(2024);
+d.setMonth(2);
+d.setDate(20);
+console.log(d.getFullYear());
+console.log(d.getMonth());
+console.log(d.getDate());

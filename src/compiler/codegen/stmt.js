@@ -811,7 +811,7 @@ export default {
         const isGenericClassInst = !enumDef2 && this._genericClasses &&
           [...this._genericClasses.keys()].some(n => ctype.startsWith(n + '_'));
         // opt_ types suppress const only when inferred (no type annotation); with explicit T|null annotation, keep const
-        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ');
+        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date';
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
         // Optional type (opt_T): handle null/value init
@@ -931,6 +931,7 @@ export default {
         if (!typeAnn && ctype?.startsWith('Array_') && init) {
           const elemIdent = ctype.slice(6); // Array_i32 → i32
           const etC2 = this._arrIdentToCType(elemIdent);
+          this._ensureArrayStruct(ctype, etC2);
           const heapKeywords = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                                 'tsc_array_concat', 'tsc_array_slice'];
           const initC = this.exprToC(init, lines, depth);

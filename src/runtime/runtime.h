@@ -109,6 +109,124 @@ static inline double tsc_performance_now(void) {
 /* Compiler inserts this at the top of main() */
 #define TSC_INIT() _tsc_init()
 
+/* -------------------------------------------------------------------------
+ * Date — legacy JS-compatible date/time type (ms since Unix epoch)
+ * ------------------------------------------------------------------------- */
+typedef struct { int64_t ms; } Date;
+
+/* Portable UTC mktime (_tsc_timegm is POSIX extension, not on Windows) */
+static inline time_t _tsc_timegm(struct tm *tm) {
+    /* Days per month (non-leap) */
+    static const int _dpm[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    int y = tm->tm_year + 1900, m = tm->tm_mon + 1, d = tm->tm_mday;
+    /* Normalize month */
+    while (m > 12) { m -= 12; y++; }
+    while (m < 1)  { m += 12; y--; }
+    /* Days since epoch via formula */
+    long days = 0;
+    int yy;
+    for (yy = 1970; yy < y; yy++)
+        days += (yy%4==0 && (yy%100!=0 || yy%400==0)) ? 366 : 365;
+    for (int mm = 1; mm < m; mm++) {
+        days += _dpm[mm-1];
+        if (mm == 2 && (y%4==0 && (y%100!=0 || y%400==0))) days++;
+    }
+    days += d - 1;
+    return (time_t)(days * 86400LL + tm->tm_hour * 3600LL + tm->tm_min * 60LL + tm->tm_sec);
+}
+
+static inline Date tsc_date_from_ms(int64_t ms) { return (Date){ ms }; }
+
+static inline int64_t tsc_date_now(void) {
+#ifndef TSC_EMBEDDED
+    struct timespec _ts;
+    clock_gettime(CLOCK_REALTIME, &_ts);
+    return (int64_t)_ts.tv_sec * 1000LL + (int64_t)_ts.tv_nsec / 1000000LL;
+#else
+    return 0LL;
+#endif
+}
+
+static inline int32_t tsc_date_get_full_year(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_year + 1900; }
+static inline int32_t tsc_date_get_month(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_mon; }
+static inline int32_t tsc_date_get_date(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_mday; }
+static inline int32_t tsc_date_get_day(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_wday; }
+static inline int32_t tsc_date_get_hours(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_hour; }
+static inline int32_t tsc_date_get_minutes(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_min; }
+static inline int32_t tsc_date_get_seconds(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t); return tm->tm_sec; }
+static inline int32_t tsc_date_get_milliseconds(Date d) { return (int32_t)(d.ms % 1000); }
+static inline int64_t tsc_date_get_time(Date d) { return d.ms; }
+static inline int32_t tsc_date_get_timezone_offset(Date d) {
+    (void)d;
+    time_t now = time(NULL);
+    struct tm *gmt = gmtime(&now);
+    time_t gmt_t = mktime(gmt);
+    struct tm *loc = localtime(&now);
+    time_t loc_t = mktime(loc);
+    return (int32_t)((gmt_t - loc_t) / 60);
+}
+
+static inline void tsc_date_set_full_year(Date *d, int32_t y) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_year = y - 1900; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_month(Date *d, int32_t m) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_mon = m; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_date(Date *d, int32_t day) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_mday = day; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_hours(Date *d, int32_t h) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_hour = h; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_minutes(Date *d, int32_t m) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_min = m; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_seconds(Date *d, int32_t s) {
+    time_t t = (time_t)(d->ms / 1000); struct tm tm = *gmtime(&t);
+    tm.tm_sec = s; d->ms = (int64_t)_tsc_timegm(&tm) * 1000LL + d->ms % 1000; }
+static inline void tsc_date_set_milliseconds(Date *d, int32_t ms) {
+    d->ms = (d->ms / 1000) * 1000LL + (int64_t)ms; }
+static inline void tsc_date_set_time(Date *d, int64_t ms) { d->ms = ms; }
+
+static inline String tsc_date_to_iso_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000);
+    struct tm *tm = gmtime(&t);
+    char *buf = (char *)malloc(32);
+    int ms = (int)(d.ms % 1000);
+    if (ms < 0) ms += 1000;
+    snprintf(buf, 32, "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+             tm->tm_hour, tm->tm_min, tm->tm_sec, ms);
+    return (String){ buf, (size_t)strlen(buf) };
+}
+
+static inline String tsc_date_to_date_string(Date d) {
+    static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    static const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    char *buf = (char *)malloc(32);
+    snprintf(buf, 32, "%s %s %02d %04d", days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
+    return (String){ buf, (size_t)strlen(buf) };
+}
+
+static inline String tsc_date_to_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    static const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+    char *buf = (char *)malloc(64);
+    snprintf(buf, 64, "%s %s %02d %04d %02d:%02d:%02d GMT+0000",
+             days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday,
+             tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    return (String){ buf, (size_t)strlen(buf) };
+}
+
 /* console.time / console.timeEnd — simple map-backed timers */
 #define _TSC_CONSOLE_TIMERS_CAP 16
 typedef struct {
@@ -1178,3 +1296,157 @@ static inline void tsc_async_mutex_unlock(TscAsyncMutex *m) {
 static inline bool tsc_async_mutex_is_locked(TscAsyncMutex *m) {
     return m->_locked;
 }
+
+/* -------------------------------------------------------------------------
+ * Thread runtime — tsc_thread_t, tsc_thread_spawn, tsc_thread_join
+ * Uses Win32 threads on Windows, pthreads elsewhere.
+ * ------------------------------------------------------------------------- */
+#ifndef TSC_EMBEDDED
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+typedef struct { HANDLE _h; void *(*_fn)(void *); void *_arg; } _TscThread;
+typedef _TscThread *tsc_thread_t;
+static DWORD WINAPI _tsc_thread_trampoline(LPVOID arg) {
+    _TscThread *t = (_TscThread *)arg;
+    t->_fn(t->_arg);
+    return 0;
+}
+static inline tsc_thread_t tsc_thread_spawn(void *(*fn)(void *), void *arg) {
+    _TscThread *t = (_TscThread *)malloc(sizeof(_TscThread));
+    t->_fn = fn; t->_arg = arg;
+    t->_h = CreateThread(NULL, 0, _tsc_thread_trampoline, t, 0, NULL);
+    return t;
+}
+static inline void tsc_thread_join(tsc_thread_t t) {
+    WaitForSingleObject(t->_h, INFINITE);
+    CloseHandle(t->_h);
+    free(t);
+}
+static inline bool tsc_thread_done(tsc_thread_t t) {
+    return WaitForSingleObject(t->_h, 0) == WAIT_OBJECT_0;
+}
+#else
+#include <pthread.h>
+typedef pthread_t tsc_thread_t;
+static inline tsc_thread_t tsc_thread_spawn(void *(*fn)(void *), void *arg) {
+    pthread_t t;
+    pthread_create(&t, NULL, fn, arg);
+    return t;
+}
+static inline void tsc_thread_join(tsc_thread_t t) {
+    pthread_join(t, NULL);
+}
+static inline bool tsc_thread_done(tsc_thread_t t) {
+    /* Non-blocking join attempt — not portable but works on Linux */
+#if defined(__linux__)
+    return pthread_tryjoin_np(t, NULL) == 0;
+#else
+    (void)t; return false;
+#endif
+}
+#endif
+#endif /* TSC_EMBEDDED */
+
+/* -------------------------------------------------------------------------
+ * Channel runtime — bounded SPSC ring buffer, single-threaded tests only.
+ * For multi-threaded use, add mutex guards around send/receive.
+ * ------------------------------------------------------------------------- */
+#ifndef TSC_EMBEDDED
+/* TSC_CHANNEL_DEF(T, TNAME): defines TscChannel_TNAME struct and all operations.
+ * try_receive uses a GCC statement-expression so it can reference opt_TNAME
+ * which is defined in the generated .c file after #include "runtime.h". */
+#define TSC_CHANNEL_DEF(T, TNAME) \
+typedef struct { \
+    T      *_data; \
+    size_t  _cap; \
+    size_t  _len; \
+    size_t  _head; \
+    bool    _closed; \
+} TscChannel_##TNAME; \
+\
+static inline TscChannel_##TNAME *tsc_channel_create_##TNAME(size_t cap) { \
+    TscChannel_##TNAME *ch = (TscChannel_##TNAME *)malloc(sizeof(TscChannel_##TNAME)); \
+    ch->_data   = (T *)malloc(cap * sizeof(T)); \
+    ch->_cap    = cap; \
+    ch->_len    = 0; \
+    ch->_head   = 0; \
+    ch->_closed = false; \
+    return ch; \
+} \
+static inline void tsc_channel_release_##TNAME(TscChannel_##TNAME *ch) { \
+    if (!ch) return; \
+    free(ch->_data); \
+    free(ch); \
+} \
+static inline bool tsc_channel_try_send_##TNAME(TscChannel_##TNAME *ch, T val) { \
+    if (!ch || ch->_closed || ch->_len >= ch->_cap) return false; \
+    size_t idx = (ch->_head + ch->_len) % ch->_cap; \
+    ch->_data[idx] = val; \
+    ch->_len++; \
+    return true; \
+} \
+static inline void tsc_channel_send_##TNAME(TscChannel_##TNAME *ch, T val) { \
+    while (!tsc_channel_try_send_##TNAME(ch, val)) {} \
+} \
+static inline T tsc_channel_receive_##TNAME(TscChannel_##TNAME *ch) { \
+    while (!ch || ch->_len == 0) {} \
+    T _v_ = ch->_data[ch->_head]; \
+    ch->_head = (ch->_head + 1) % ch->_cap; \
+    ch->_len--; \
+    return _v_; \
+} \
+/* try_receive: GCC statement-expression so opt_TNAME (from generated file) is in scope */ \
+static inline void _tsc_ch_pop_##TNAME(TscChannel_##TNAME *ch, T *out) { \
+    *out = ch->_data[ch->_head]; \
+    ch->_head = (ch->_head + 1) % ch->_cap; \
+    ch->_len--; \
+} \
+static inline void tsc_channel_close_##TNAME(TscChannel_##TNAME *ch) { \
+    if (ch) ch->_closed = true; \
+} \
+static inline bool tsc_channel_is_empty_##TNAME(TscChannel_##TNAME *ch) { \
+    return !ch || ch->_len == 0; \
+} \
+static inline size_t tsc_channel_length_##TNAME(TscChannel_##TNAME *ch) { \
+    return ch ? ch->_len : 0; \
+} \
+static inline size_t tsc_channel_capacity_##TNAME(TscChannel_##TNAME *ch) { \
+    return ch ? ch->_cap : 0; \
+}
+
+/* tsc_channel_try_receive_TNAME: must be a macro so opt_TNAME is resolved at call site */
+#define tsc_channel_try_receive_i32(ch) ({ \
+    TscChannel_i32 *_c_ = (ch); \
+    opt_i32 _r_ = {false, 0}; \
+    if (_c_ && _c_->_len > 0) { _tsc_ch_pop_i32(_c_, &_r_.value); _r_.has_value = true; } \
+    _r_; \
+})
+#define tsc_channel_try_receive_i64(ch) ({ \
+    TscChannel_i64 *_c_ = (ch); \
+    opt_i64 _r_ = {false, 0}; \
+    if (_c_ && _c_->_len > 0) { _tsc_ch_pop_i64(_c_, &_r_.value); _r_.has_value = true; } \
+    _r_; \
+})
+#define tsc_channel_try_receive_f64(ch) ({ \
+    TscChannel_f64 *_c_ = (ch); \
+    opt_f64 _r_ = {false, 0}; \
+    if (_c_ && _c_->_len > 0) { _tsc_ch_pop_f64(_c_, &_r_.value); _r_.has_value = true; } \
+    _r_; \
+})
+#define tsc_channel_try_receive_bool(ch) ({ \
+    TscChannel_bool *_c_ = (ch); \
+    opt_bool _r_ = {false, false}; \
+    if (_c_ && _c_->_len > 0) { _tsc_ch_pop_bool(_c_, &_r_.value); _r_.has_value = true; } \
+    _r_; \
+})
+
+/* Instantiate structs + non-try functions for common types */
+TSC_CHANNEL_DEF(int32_t, i32)
+TSC_CHANNEL_DEF(int64_t, i64)
+TSC_CHANNEL_DEF(double,  f64)
+TSC_CHANNEL_DEF(bool,    bool)
+
+#endif /* TSC_EMBEDDED */

@@ -424,6 +424,37 @@ export function parse(tokens, filename = '<input>', src = null) {
       eatSemi();
       return { kind: 'DeclareFunction', name, params, returnType };
     }
+    // declare module "name" { ... } → ambient module declaration (declaration merging)
+    if (cur().type === TK.IDENT && cur().value === 'module') {
+      eat(TK.IDENT, 'module');
+      const moduleName = eat(TK.STRING).value;
+      eat(TK.LBRACE);
+      const body = [];
+      while (!done() && cur().type !== TK.RBRACE) {
+        if (cur().type === TK.IDENT && cur().value === 'function') {
+          eat(TK.IDENT, 'function');
+          const name = eat(TK.IDENT).value;
+          const params = parseParams();
+          let returnType = null;
+          if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
+          eatSemi();
+          body.push({ kind: 'DeclareFunction', name, params, returnType });
+        } else if (cur().type === TK.IDENT && (cur().value === 'const' || cur().value === 'let')) {
+          const varKind = eat(TK.IDENT).value;
+          const name = eat(TK.IDENT).value;
+          eat(TK.COLON);
+          const typeAnn = parseTypeAnnotation();
+          eatSemi();
+          body.push({ kind: 'DeclareConst', name, typeAnn });
+        } else {
+          // Skip unknown
+          while (!done() && cur().type !== TK.SEMI && cur().type !== TK.RBRACE) pos++;
+          tryEat(TK.SEMI);
+        }
+      }
+      eat(TK.RBRACE);
+      return { kind: 'DeclareModule', moduleName, body };
+    }
     // Skip unknown declare forms
     while (!done() && cur().type !== TK.SEMI && cur().type !== TK.RBRACE) pos++;
     tryEat(TK.SEMI);

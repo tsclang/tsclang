@@ -1,0 +1,2 @@
+const ts = Date.now();
+console.log(ts > 0);

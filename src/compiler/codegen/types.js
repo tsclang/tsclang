@@ -36,6 +36,8 @@ export default {
         this._ensureMapStruct(suffix);
         return `Map_${suffix}`;
       }
+      if (name === 'Scalar') return 'Scalar';
+      if (name === 'Date') return 'Date';
       if (name === 'AbortController') return 'TscAbortController';
       if (name === 'AbortSignal')     return 'TscAbortSignal *';
       if (name === 'AsyncMutex')      return 'TscAsyncMutex';
@@ -444,6 +446,7 @@ export default {
             }
             return 'double';
           }
+          if (obj.kind === 'Ident' && obj.name === 'Date' && prop === 'now') return 'int64_t';
           if (obj.kind === 'Ident' && obj.name === 'JSON') {
             if (prop === 'stringify') return 'String';
             if (prop === 'parse') {
@@ -528,6 +531,18 @@ export default {
               return `Array_MapEntry_${mapSuffix}`;
             }
           }
+          // Date method return types
+          const objSymDate = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (objSymDate?.ctype === 'Date') {
+            if (prop === 'getTime' || prop === 'valueOf') return 'int64_t';
+            if (prop === 'getTimezoneOffset') return 'int32_t';
+            if (prop === 'toISOString' || prop === 'toString' || prop === 'toDateString' ||
+                prop === 'toTimeString' || prop === 'toLocaleDateString' ||
+                prop === 'toLocaleTimeString' || prop === 'toLocaleString') return 'String';
+            if (prop.startsWith('get')) return 'int32_t';
+            if (prop.startsWith('set')) return 'void';
+          }
+          // Date.now() static call
           // Atomic<T> method return types
           const objSymA = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
           if (objSymA?._isAtomic) {
@@ -754,6 +769,7 @@ export default {
         return 'int32_t';
       }
       case 'New': {
+        if (node.name === 'Date') return 'Date';
         if (node.name === 'Error') return 'TscError';
         if (node.name === 'Map') {
           const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
@@ -905,6 +921,9 @@ export default {
       this.addTop(`typedef struct { ${kCType} key; ${vCType} value; } ${entryName};`);
       this.addTop(`typedef struct { ${entryName} *data; size_t length; size_t capacity; } ${arrName};`);
       this.addTop('');
+      // Register in _emittedArrayStructs to prevent _ensureArrayStruct from re-emitting
+      if (!this._emittedArrayStructs) this._emittedArrayStructs = new Set();
+      this._emittedArrayStructs.add(arrName);
     }
   },
 

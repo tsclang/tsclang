@@ -1,0 +1,8 @@
+declare module "cmath" {
+    function fabs(x: f64): f64;
+    function floor(x: f64): f64;
+}
+
+import { fabs, floor } from "cmath";
+console.log(fabs(-3.5));
+console.log(floor(2.9));
