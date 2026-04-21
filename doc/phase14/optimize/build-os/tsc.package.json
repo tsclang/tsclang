@@ -1,0 +1,8 @@
+{
+  "name": "myapp",
+  "version": "1.0.0",
+  "main": "main.tsc",
+  "builds": {
+    "release": { "target": "desktop", "optimize": "Os" }
+  }
+}

@@ -644,6 +644,12 @@ if (command === 'build') {
   const outDir    = outIdx !== -1 ? args[outIdx + 1] : '.';
   const allErrors  = args.includes('--all-errors');
   const debugLines = args.includes('--debug');
+  const optIdx    = args.indexOf('--optimize');
+  const optimize  = optIdx !== -1 ? args[optIdx + 1] : null;
+  if (optimize && !/^O[0-3sz]$/.test(optimize)) {
+    process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use O0, O1, O2, O3, Os, Oz\n`);
+    process.exit(1);
+  }
 
   // Validate emit mode before reading input
   if (emit === 'hex') {
@@ -696,10 +702,12 @@ if (command === 'build') {
   if (emit === 'binary') {
     const runtimeH = join(ROOT, 'src/runtime/runtime.h');
     const binPath = join(outDir, stem);
+    const gccOptimize = optimize ? [`-${optimize}`] : [];
     const gcc = spawnSync('gcc', [
       cPath, '-o', binPath,
       '-I', dirname(runtimeH),
       '-lpthread', '-std=c11',
+      ...gccOptimize,
     ], { stdio: 'pipe' });
     if (gcc.status !== 0) {
       process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
@@ -720,6 +728,12 @@ if (command === 'build') {
   // Check for -- separator (args to pass to program)
   const sepIdx = args.indexOf('--');
   const progArgs = sepIdx !== -1 ? args.slice(sepIdx + 1) : [];
+  const runOptIdx = args.indexOf('--optimize');
+  const runOptimize = runOptIdx !== -1 && runOptIdx < (sepIdx !== -1 ? sepIdx : args.length) ? args[runOptIdx + 1] : null;
+  if (runOptimize && !/^O[0-3sz]$/.test(runOptimize)) {
+    process.stderr.write(`tsclang run: invalid --optimize value '${runOptimize}'; use O0, O1, O2, O3, Os, Oz\n`);
+    process.exit(1);
+  }
 
   const inputPath = resolve(inputFile);
   let c, warnings;
@@ -738,10 +752,12 @@ if (command === 'build') {
   writeFileSync(cPath, c, 'utf8');
 
   const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+  const runGccOpt = runOptimize ? [`-${runOptimize}`] : [];
   const gcc = spawnSync('gcc', [
     cPath, '-o', binPath,
     '-I', dirname(runtimeH),
     '-lpthread', '-std=c11',
+    ...runGccOpt,
   ], { stdio: 'pipe' });
   if (gcc.status !== 0) {
     process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
