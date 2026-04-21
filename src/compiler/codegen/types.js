@@ -7,6 +7,8 @@ export default {
 
     if (typeNode.kind === 'TypeRef') {
       const { name, typeArgs } = typeNode;
+      // usize = u16 on 16-bit targets
+      if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
       if (name in PRIMITIVE_MAP) return PRIMITIVE_MAP[name];
 
       if (name === 'Ref') {

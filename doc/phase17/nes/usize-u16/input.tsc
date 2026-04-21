@@ -1,0 +1,7 @@
+// @target: nes
+
+function addrOf(ptr: usize): u8 {
+    return 0;
+}
+
+let base: usize = 0x2000;

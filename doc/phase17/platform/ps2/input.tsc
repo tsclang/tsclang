@@ -1,0 +1,7 @@
+// @target: ps2
+
+function lerp(a: f32, b: f32, t: f32): f32 {
+    return a + (b - a) * t;
+}
+
+let x: f32 = lerp(0.0, 1.0, 0.5);

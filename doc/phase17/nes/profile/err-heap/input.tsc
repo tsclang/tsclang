@@ -1,0 +1,12 @@
+// @target: nes
+
+class Sprite {
+    x: u8;
+    y: u8;
+}
+
+function main(): void {
+    const s = new Sprite();
+    s.x = 10;
+    s.y = 20;
+}

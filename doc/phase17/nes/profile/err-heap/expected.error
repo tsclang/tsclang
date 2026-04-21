@@ -1,0 +1,1 @@
+TypeError: heap allocation ('new Sprite') is not supported on nes target

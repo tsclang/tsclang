@@ -102,6 +102,40 @@ export default {
       }
     }
 
+    // Pre-scan: platform-specific profile restrictions
+    const _retroTargets = ['nes', 'genesis', 'ps1', 'ps2', 'dos', 'spectrum'];
+    if (_retroTargets.includes(this._targetName)) {
+      const _walkForRestrictions = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
+        // No float types on any retro target
+        const _noFloatTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
+        if (_noFloatTargets.includes(this._targetName)) {
+          if (n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
+            throw this.error(`TypeError: float types (${n.name}) are not supported on ${this._targetName} target`);
+          }
+        }
+        // No heap allocation on no-heap targets
+        const _noHeapTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
+        if (_noHeapTargets.includes(this._targetName)) {
+          if (n.kind === 'New' && !['Shared','Weak','Box','Arc','Rc'].includes(n.name)) {
+            throw this.error(`TypeError: heap allocation ('new ${n.name}') is not supported on ${this._targetName} target`);
+          }
+        }
+        // No async on real-time targets without RTOS
+        const _noAsyncTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
+        if (_noAsyncTargets.includes(this._targetName)) {
+          if (n.kind === 'FuncDecl' && n.async) {
+            throw this.error(`TypeError: async functions are not supported on ${this._targetName} target`);
+          }
+        }
+        for (const k of Object.keys(n)) {
+          if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
+        }
+      };
+      for (const node of ast.body) _walkForRestrictions(node);
+    }
+
     // Pre-scan: recursion detection when no_recursion is true
     if (this._noRecursion) {
       // Build call graph: funcName → Set of called top-level funcNames
@@ -185,7 +219,7 @@ export default {
       }
     }
     // Determine hasMessage/hasStack for each throws class; also check all classes for embedded stack
-    const _embeddedTargets = ['avr', 'arm', 'stm32'];
+    const _embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
@@ -423,7 +457,7 @@ export default {
           this.includes.add('#include "std/temporal.h"');
           this._stdTemporalImported = true;
         } else if (node.source === 'std/fs') {
-          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          const embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
           if (embeddedTargets.includes(this._targetName)) {
             throw this.error(`TypeError: 'std/fs' is not available on embedded targets`);
           }
@@ -480,7 +514,7 @@ export default {
           this.includes.add('#include "std/ws.h"');
           this._stdWsImported = true;
         } else if (node.source === 'std/net') {
-          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          const embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
           if (embeddedTargets.includes(this._targetName)) {
             throw this.error(`TypeError: 'std/net' is not available on embedded targets`);
           }
@@ -492,7 +526,7 @@ export default {
             fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
           });
         } else if (node.source === 'std/hal') {
-          const embeddedTargets = ['avr', 'arm', 'stm32'];
+          const embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
           if (!embeddedTargets.includes(this._targetName)) {
             throw this.error(`TypeError: 'std/hal' requires an embedded platform target`);
           }
@@ -756,7 +790,7 @@ export default {
     // Process @embedded.* decorators
     const inlineDec = decorators?.find(d => d.name === 'embedded.inline');
     const poolDec   = decorators?.find(d => d.name === 'embedded.pool');
-    const _embeddedTargets = ['avr', 'arm', 'stm32'];
+    const _embeddedTargets = ['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum'];
     const isEmbedded = _embeddedTargets.includes(this._targetName);
 
     if (inlineDec && !isEmbedded) {

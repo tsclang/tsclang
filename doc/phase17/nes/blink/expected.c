@@ -2,12 +2,11 @@
 
 static uint16_t frameCount = 0U;
 
-void nmi(void) {
+void onNmi(void) {
     frameCount++;
 }
 
-void main(void) {
-    frameCount = 0;
+void gameLoop(void) {
     while (true) {
     }
 }

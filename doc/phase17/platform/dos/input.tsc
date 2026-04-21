@@ -1,0 +1,5 @@
+// @target: dos
+
+function angle(deg: f32): f32 {
+    return deg * 3.14159 / 180.0;
+}

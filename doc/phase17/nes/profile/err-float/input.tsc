@@ -1,0 +1,5 @@
+// @target: nes
+
+function brightness(r: f32, g: f32, b: f32): f32 {
+    return r * 0.299 + g * 0.587 + b * 0.114;
+}

@@ -1,0 +1,13 @@
+// @target: nes
+
+let frameCount: u16 = 0;
+
+function onNmi(): void {
+    frameCount++;
+}
+
+function gameLoop(): void {
+    while (true) {
+        // wait for NMI
+    }
+}
