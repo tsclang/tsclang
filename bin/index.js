@@ -6,9 +6,40 @@ import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
+import { createHash } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+
+// ---------------------------------------------------------------------------
+// Incremental compilation cache
+// ---------------------------------------------------------------------------
+const CACHE_DIR = join(ROOT, '.tsclang-cache');
+
+function _cacheKey(src, modulePrefix, depKeys) {
+  const depStr = depKeys.map(([p, k]) => `${p}:${k}`).sort().join('\n');
+  return createHash('sha256').update(`${src}\n${modulePrefix}\n${depStr}`).digest('hex').slice(0, 24);
+}
+
+function _cacheGet(key) {
+  const p = join(CACHE_DIR, key + '.json');
+  if (!existsSync(p)) return null;
+  try {
+    const reviver = (_, v) => v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v;
+    return JSON.parse(readFileSync(p, 'utf8'), reviver);
+  } catch { return null; }
+}
+
+function _cacheSet(key, data) {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  const replacer = (_, v) => typeof v === 'bigint' ? { __bigint: v.toString() } : v;
+  writeFileSync(join(CACHE_DIR, key + '.json'), JSON.stringify(data, replacer), 'utf8');
+}
+
+function _cacheRevive(data) {
+  const reviver = (_, v) => v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v;
+  return JSON.parse(JSON.stringify(data), reviver);
+}
 
 import { lex }     from '../src/compiler/lexer.js';
 import { parse }   from '../src/compiler/parser.js';
@@ -348,6 +379,7 @@ function compileTsc(inputPath, opts = {}) {
   const compilingStack = opts._compilingStack ?? new Set(); // cycle detection
   const aliases = opts._aliases ?? loadPathAliases(inputPath);
   const depCParts = [];
+  const depCacheKeys = []; // [[depPath, cacheKey], ...] for cache key computation
 
   if (compilingStack.has(inputPath)) {
     const cycle = [...compilingStack, inputPath].map(p => basename(p)).join(' → ');
@@ -392,8 +424,25 @@ function compileTsc(inputPath, opts = {}) {
     });
     importedModules[depPath] = depResult.exports;
     depCParts.push(depResult.c);
+    if (depResult._cacheKey) depCacheKeys.push([depPath, depResult._cacheKey]);
   }
   compilingStack.delete(inputPath);
+
+  // Incremental compilation: check cache for library modules (deps)
+  const modulePrefix = opts.modulePrefix ?? '';
+  const noCache = opts.noCache || opts.debugLines; // skip cache when debug lines requested
+  let cacheKey = null;
+  if (opts.libraryMode && !noCache) {
+    cacheKey = _cacheKey(src, modulePrefix, depCacheKeys);
+    const cached = _cacheGet(cacheKey);
+    if (cached) {
+      process.stdout.write('cache-hit-identical\n');
+      const cachedC = depCParts.length > 0
+        ? (depCParts.join('\n').trimEnd() + '\n\n' + cached.c)
+        : cached.c;
+      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey };
+    }
+  }
 
   const result = codegen(ast, filename, src, { ...opts, importedModules, sourceToPath });
 
@@ -412,7 +461,12 @@ function compileTsc(inputPath, opts = {}) {
     }
   }
 
-  return { c, warnings: result.warnings, exports: result.exports };
+  // Store library modules to cache
+  if (opts.libraryMode && cacheKey) {
+    _cacheSet(cacheKey, { c: result.c, exports: result.exports });
+  }
+
+  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey };
 }
 
 function reportErrors(e, filename) {
@@ -644,6 +698,7 @@ if (command === 'build') {
   const outDir    = outIdx !== -1 ? args[outIdx + 1] : '.';
   const allErrors  = args.includes('--all-errors');
   const debugLines = args.includes('--debug');
+  const noCache    = args.includes('--no-cache');
   const optIdx    = args.indexOf('--optimize');
   const optimize  = optIdx !== -1 ? args[optIdx + 1] : null;
   if (optimize && !/^O[0-3sz]$/.test(optimize)) {
@@ -662,7 +717,7 @@ if (command === 'build') {
   const inputPath = resolve(inputFile);
   let c, warnings;
   try {
-    ({ c, warnings } = compileTsc(inputPath, { maxErrors: allErrors ? Infinity : 10, debugLines }));
+    ({ c, warnings } = compileTsc(inputPath, { maxErrors: allErrors ? Infinity : 10, debugLines, noCache }));
   } catch (e) {
     reportErrors(e, basename(inputPath));
     process.exit(1);

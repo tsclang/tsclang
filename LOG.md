@@ -420,13 +420,13 @@
 - [x] Методология тестов (`.tsc` → `expected.c` / `expected.error`) — уже работает
 - [x] Name mangling: полная схема разрешения коллизий имён при module bundling
 - [x] Optimization levels: пробросить `-O0`/`-O1`/`-Os` в gcc через build profile / `--optimize`
-- [ ] Incremental compilation: хеш-кеш C-output по файлам, не пересобирать неизменившиеся модули
+- [x] Incremental compilation: хеш-кеш C-output по файлам, не пересобирать неизменившиеся модули
 - [ ] Async state machine: улучшить читаемость и корректность генерации (без IR)
 - [ ] Library format: AST-сериализация для consumer-side monomorphization дженериков из внешних пакетов
 
 ### Лог
 
-> 2026-04-21: реализован name mangling для module bundling — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). Optimization levels: флаг `--optimize O0/O1/O2/O3/Os/Oz` для `build` и `run` команд; прокидывается в gcc; `build-cmake` уже поддерживал через `builds.release.optimize`. **Статус: 902/902 ✓** — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). **Статус: 900/900 ✓**
+> 2026-04-21: реализован name mangling для module bundling — каждый зависимый модуль компилируется с `modulePrefix` (из basename файла, напр. `module_`, `base_`). Все top-level C-символы (функции, struct'ы, методы) получают этот префикс. `resolveType` для пользовательских типов возвращает `_cname` если задан. Export map хранит уже манглированный `funcName`, который подхватывается через `sym.funcName` в expr.js. 7 affected expected.c обновлены + добавлен тест `name-collision` (две функции с одним именем в разных модулях). Optimization levels: флаг `--optimize O0/O1/O2/O3/Os/Oz` для `build` и `run` команд; прокидывается в gcc; `build-cmake` уже поддерживал через `builds.release.optimize`. Incremental compilation: SHA-256 хеш `(src + modulePrefix + dep cache keys)`, кэш в `.tsclang-cache/` (JSON, BigInt-safe). Cache hit печатает `cache-hit-identical` в stdout. Флаг `--no-cache` для обхода кэша. **Статус: 903/903 ✓**
 
 ---
 
