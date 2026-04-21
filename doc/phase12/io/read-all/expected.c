@@ -1,8 +1,6 @@
 #include "runtime.h"
 #include "std/io.h"
 
-typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
-
 typedef struct {
     int32_t _state; int _result; bool _done;
     Array_u8 data;

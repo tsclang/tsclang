@@ -1,0 +1,2 @@
+import { a } from "./a";
+export function b(): i32 { return a() + 1; }

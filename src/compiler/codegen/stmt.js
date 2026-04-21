@@ -232,7 +232,7 @@ export default {
           if (!this._emittedSignalTypedefs) this._emittedSignalTypedefs = new Set();
           if (!this._emittedSignalTypedefs.has(sigType)) {
             this._emittedSignalTypedefs.add(sigType);
-            this.addTop(`typedef struct { ${et} _value; void (**_effects)(void); size_t _effect_count; } ${sigType};`);
+            this.addTop(`typedef struct { ${et} _value; void (**_effects)(void); size_t _effect_count; ${et} (*_compute)(void); } ${sigType};`);
             this.addTop('');
           }
           const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
@@ -481,13 +481,8 @@ export default {
           break;
         }
 
-        // new Random(seed) → TscRandom typedef + tsc_random_seed
+        // new Random(seed) → tsc_random_seed (TscRandom typedef is in runtime.h)
         if (init?.kind === 'New' && init.name === 'Random') {
-          if (!this._emittedTscRandomDef) {
-            this._emittedTscRandomDef = true;
-            this.addTop('typedef struct { uint64_t state; } TscRandom;');
-            this.addTop('');
-          }
           const seedC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
           p(`TscRandom ${name} = tsc_random_seed(${seedC});`);
           this.define(name, { ctype: 'TscRandom', varKind: 'let', _isRandom: true });
@@ -569,7 +564,6 @@ export default {
             const innerType = tArg.name;
             const structDef = this.classes.get(innerType);
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
-            p(`${name}->_refcount = 1;`);
             if (structDef?.fields) {
               for (const f of structDef.fields) {
                 const fname = typeof f === 'string' ? f : f.name;
@@ -577,7 +571,7 @@ export default {
               }
             }
             this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
-            this._registerCleanup(`tsc_arc_release((void **)&${name})`);
+            this._registerCleanup(`tsc_arc_release(${name})`);
             break;
           }
         }
@@ -1068,6 +1062,19 @@ export default {
               this.define(name, { ctype: 'void *', funcPtr: true, varKind });
               break;
             }
+            // Borrow check: cannot move out of array by index (no-typeAnn path)
+            if (init.kind === 'Index' && !ctype.endsWith(' *')) {
+              const _arrT2 = this.inferType(init.object);
+              if (_arrT2?.startsWith('Array_')) {
+                const _elem2 = _arrT2.slice(6);
+                const _primElems2 = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','bool','usize']);
+                if (!_primElems2.has(_elem2)) {
+                  throw this.error(`cannot move out of array by index`, init, {
+                    code: 'E009', help: ['use .remove(i) to take ownership'],
+                  });
+                }
+              }
+            }
             let initC;
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);
@@ -1168,6 +1175,24 @@ export default {
                   if (initSym2pre?.isRefParam) {
                     throw this.error(`cannot move out of "Ref<T>" borrow`, null, { code: 'E004' });
                   }
+                }
+              } else if (init.kind === 'Index') {
+                if (!ctype.endsWith(' *')) {
+                  // Cannot move out of array by index (only borrow via Ref<T>)
+                  const _arrT = this.inferType(init.object);
+                  if (_arrT?.startsWith('Array_')) {
+                    const _elem = _arrT.slice(6);
+                    const _primElems = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','bool','usize']);
+                    if (!_primElems.has(_elem)) {
+                      throw this.error(`cannot move out of array by index`, init, {
+                        code: 'E009', help: ['use .remove(i) to take ownership'],
+                      });
+                    }
+                  }
+                } else if (typeAnn?.name === 'Ref' && init.object.kind === 'Ident') {
+                  // Ref<T> borrow of array element → mark array as borrowed
+                  const _arrSym = this.lookup(init.object.name);
+                  if (_arrSym) _arrSym._refBorrowed = true;
                 }
               }
               p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
@@ -1428,6 +1453,20 @@ export default {
       }
 
       case 'Return': {
+        // Inside Iterable iter_next body: translate return null/val to opt_T
+        if (this._inIterNextBody) {
+          const optType = this._iterNextOptType;
+          const isNull = !node.value || (node.value.kind === 'Literal' && node.value.litType === 'null');
+          if (isNull) {
+            lines.push(`${I}return (${optType}){false, 0};`);
+          } else {
+            this._inReturnContext = true;
+            const valC = this.exprToC(node.value, lines, depth);
+            this._inReturnContext = false;
+            lines.push(`${I}return (${optType}){true, ${valC}};`);
+          }
+          break;
+        }
         // Error: return inside finally block
         if (this._inFinallyBlock) {
           throw this.error('TypeError: Cannot return inside a finally block');
@@ -1443,20 +1482,41 @@ export default {
             throw this.error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
-        if (this._throwsCtx) {
-          const ctx = this._throwsCtx;
-          if (node.value) {
-            const c = this.exprToC(node.value, lines, depth);
-            p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
+        if (this._funcCleanup?.length && node.value) {
+          // Evaluate return value before cleanup to avoid use-after-free of owned vars
+          this._inReturnContext = true;
+          const retC = this.exprToC(node.value, lines, depth);
+          this._inReturnContext = false;
+          const retType = this.inferType(node.value) ?? 'int32_t';
+          const tmpName = `_ret_${this.tempCount++}`;
+          p(`${retType} ${tmpName} = ${retC};`);
+          this._emitFuncCleanup(lines, I);
+          if (this._throwsCtx) {
+            p(`return (${this._throwsCtx.resultType}){.ok = true, .value = ${tmpName}};`);
           } else {
-            p(`return (${ctx.resultType}){.ok = true};`);
+            p(`return ${tmpName};`);
           }
         } else {
-          if (node.value) {
-            const c = this.exprToC(node.value, lines, depth);
-            p(`return ${c};`);
+          this._emitFuncCleanup(lines, I);
+          if (this._throwsCtx) {
+            const ctx = this._throwsCtx;
+            if (node.value) {
+              this._inReturnContext = true;
+              const c = this.exprToC(node.value, lines, depth);
+              this._inReturnContext = false;
+              p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
+            } else {
+              p(`return (${ctx.resultType}){.ok = true};`);
+            }
           } else {
-            p('return;');
+            if (node.value) {
+              this._inReturnContext = true;
+              const c = this.exprToC(node.value, lines, depth);
+              this._inReturnContext = false;
+              p(`return ${c};`);
+            } else {
+              p('return;');
+            }
           }
         }
         break;
@@ -1565,7 +1625,9 @@ export default {
         const testC = node.test ? this.exprToC(node.test, lines, depth) : '';
         const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
         p(`for (${initC}; ${testC}; ${updC}) {`);
+        this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
+        this._loopDepth--;
         p('}');
         break;
       }
@@ -1685,6 +1747,35 @@ export default {
           }
         }
 
+        // Iterable<T> protocol: class implements Iterable<T>
+        {
+          const _forOfSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+          const _forOfClass = _forOfSym?.ctype ? this.classes.get(_forOfSym.ctype) : null;
+          if (_forOfClass?._iterStructName && _forOfClass._iterableElemType) {
+            const _clsName = _forOfSym.ctype;
+            const _elemC = _forOfClass._iterableElemType;
+            const _elemIdent = this.cTypeToIdent(_elemC);
+            const _optType = `opt_${_elemIdent}`;
+            const _n = this.loopCount++;
+            const _iterVar = `_iter_${_n}`;
+            const _elemVar = `_elem_${_n}`;
+            const _objC = this.exprToC(node.iterable, lines, depth);
+            p(`${_forOfClass._iterStructName} ${_iterVar} = ${_clsName}_iter(&${_objC});`);
+            p(`${_optType} ${_elemVar};`);
+            p(`while ((${_elemVar} = ${_clsName}_iter_next(&${_iterVar})).has_value) {`);
+            const _bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
+            if (_bindName) {
+              lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
+              this.define(_bindName, { ctype: _elemC, varKind: node.varKind });
+            }
+            this._loopDepth++;
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            this._loopDepth--;
+            p('}');
+            break;
+          }
+        }
+
         const iterC = this.exprToC(node.iterable, lines, depth);
         const ivar = `_i_${this.loopCount++}`;
         // Infer element type: explicit annotation > array symbol > string char > default i32
@@ -1711,7 +1802,9 @@ export default {
             this.define(elem.name, { ctype: 'int32_t', varKind: node.varKind });
           }
         }
+        this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
+        this._loopDepth--;
         p('}');
         break;
       }
@@ -1724,7 +1817,9 @@ export default {
       case 'While': {
         const testC = this.exprToC(node.test, lines, depth);
         p(`while (${testC}) {`);
+        this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
+        this._loopDepth--;
         p('}');
         break;
       }
@@ -1732,7 +1827,9 @@ export default {
       case 'DoWhile': {
         const testC = this.exprToC(node.test, lines, depth);
         p('do {');
+        this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
+        this._loopDepth--;
         p(`} while (${testC});`);
         break;
       }
@@ -1803,6 +1900,7 @@ export default {
 
         if (this._throwsCtx) {
           const ctx = this._throwsCtx;
+          this._emitFuncCleanup(lines, I);
           if (val?.kind === 'New') {
             const errClass = val.name;
             const msgArg = val.args?.[0];
@@ -2227,8 +2325,15 @@ export default {
     p(`${resultType} ${resName} = ${callC};`);
 
     if (this._throwsCtx) {
-      // Inside a throws function: propagate error
-      p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+      // Inside a throws function: propagate error (emit cleanup first if any)
+      if (this._funcCleanup?.length) {
+        p(`if (!${resName}.ok) {`);
+        this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
+        p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);
+        p(`}`);
+      } else {
+        p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+      }
     } else {
       // Outside throws function: panic on error (!), error on ? (already caught above)
       p(`if (!${resName}.ok) { tsc_panic(${resName}.error._base.message); }`);

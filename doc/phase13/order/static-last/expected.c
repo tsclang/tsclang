@@ -4,7 +4,7 @@ typedef struct { int _dummy; } Svc;
 
 static Svc Svc_create_inner(void) {
     printf("create\n");
-    return {0};
+    return (Svc){0};
 }
 
 static Svc Svc_create() {

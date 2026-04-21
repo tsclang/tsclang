@@ -1,0 +1,6 @@
+@platform("desktop")
+function greet(): void {
+    console.log("hello desktop");
+}
+
+greet();

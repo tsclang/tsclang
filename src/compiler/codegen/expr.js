@@ -82,6 +82,18 @@ export default {
       }
 
       case 'Member': {
+        // Namespace import: X.Foo → resolve Foo from namespace
+        if (node.object.kind === 'Ident') {
+          const nsSym = this.lookup(node.object.name);
+          if (nsSym?._isNamespace) {
+            const nsEntry = nsSym._namespaceExports?.[node.prop];
+            if (nsEntry) {
+              // Put in local scope so subsequent uses work
+              this.define(node.prop, nsEntry);
+              return node.prop;
+            }
+          }
+        }
         // process.argv → _argv (array built in main from argc/argv)
         if (node.object.kind === 'Ident' && node.object.name === 'process' && node.prop === 'argv') {
           this._useArgcArgv = true;
@@ -285,6 +297,11 @@ export default {
             }
           }
           return `${obj}.data[${idx}]`;
+        }
+        // Slice_T / MutSlice_T indexing: s[i] → s.ptr[i]
+        if (objType?.startsWith('Slice_') || objType?.startsWith('MutSlice_')) {
+          const idx = this.exprToC(node.index, lines, depth);
+          return isNegLit ? `${obj}.ptr[${obj}.length - ${negVal}]` : `${obj}.ptr[${idx}]`;
         }
         // Buffer indexing: buf[i] → buf.data[i]
         if (objType === 'Buffer' || objType === 'DataView') {

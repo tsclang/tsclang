@@ -1,8 +1,6 @@
 #include "runtime.h"
 #include "std/io.h"
 
-typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
-
 typedef struct {
     size_t (*read)(void *self, uint8_t *buf, size_t len);
 } Reader_vtable;

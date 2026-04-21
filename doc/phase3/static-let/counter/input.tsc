@@ -1,0 +1,10 @@
+@static let counter: i32 = 0;
+
+function increment(): void {
+    counter++;
+}
+
+increment();
+increment();
+increment();
+console.log(counter);

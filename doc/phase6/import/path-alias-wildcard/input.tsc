@@ -1,0 +1,3 @@
+import { mul } from "#lib/math";
+
+console.log(mul(6, 7));

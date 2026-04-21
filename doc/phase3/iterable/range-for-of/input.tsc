@@ -1,0 +1,20 @@
+class Range implements Iterable<i32> {
+    start: i32;
+    end_: i32;
+    constructor(start: i32, end_: i32) {
+        this.start = start;
+        this.end_ = end_;
+    }
+    iter() {
+        let i = this.start;
+        const e = this.end_;
+        return () => {
+            if (i >= e) return null;
+            return i++;
+        }
+    }
+}
+const r = new Range(0, 3);
+for (const x of r) {
+    console.log(x);
+}

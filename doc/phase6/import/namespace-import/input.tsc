@@ -1,0 +1,4 @@
+import Lib from "./lib";
+
+console.log(Lib.greet("world"));
+console.log(Lib.VERSION);

@@ -1,0 +1,1 @@
+Circular import detected: input.tsc → a.tsc → b.tsc → a.tsc

@@ -278,6 +278,53 @@ if (command === 'init') {
 // Shared: compile TSC → C string (recursive for local imports)
 // ---------------------------------------------------------------------------
 
+// Find tsc.package.json starting from dir, walking up
+function findPackageJson(startDir) {
+  let dir = startDir;
+  while (true) {
+    const candidate = join(dir, 'tsc.package.json');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+// Load path aliases from tsc.package.json nearest to inputPath
+function loadPathAliases(inputPath) {
+  const pkgPath = findPackageJson(dirname(inputPath));
+  if (!pkgPath) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    if (pkg.paths && typeof pkg.paths === 'object') {
+      return { paths: pkg.paths, pkgDir: dirname(pkgPath) };
+    }
+  } catch {}
+  return null;
+}
+
+// Resolve a path alias like "#utils" or "#shared/utils" to a relative path
+function resolveAlias(source, aliases) {
+  if (!aliases) return source;
+  const { paths, pkgDir } = aliases;
+  for (const [pattern, targets] of Object.entries(paths)) {
+    const target = Array.isArray(targets) ? targets[0] : targets;
+    if (!target) continue;
+    if (pattern.endsWith('/*')) {
+      const prefix = pattern.slice(0, -2);
+      if (source === prefix || source.startsWith(prefix + '/')) {
+        const rest = source.slice(prefix.length);
+        const resolved = resolve(pkgDir, target.replace(/\/\*$/, '') + rest);
+        return resolved;
+      }
+    } else if (source === pattern) {
+      const resolved = resolve(pkgDir, target);
+      return resolved;
+    }
+  }
+  return source;
+}
+
 // Try source + '.tsc', then source + '/index.tsc' relative to baseDir
 function resolveLocalImport(baseDir, source) {
   for (const candidate of [
@@ -297,26 +344,56 @@ function compileTsc(inputPath, opts = {}) {
 
   // Recursively compile local imports (./… or ../…) depth-first
   const importedModules = { ...(opts.importedModules || {}) };
+  const sourceToPath = { ...(opts.sourceToPath || {}) }; // source string → resolved path
+  const compilingStack = opts._compilingStack ?? new Set(); // cycle detection
+  const aliases = opts._aliases ?? loadPathAliases(inputPath);
   const depCParts = [];
 
-  for (const node of ast.body) {
-    if (node.kind !== 'Import') continue;
-    const source = node.source;
-    if (!source.startsWith('./') && !source.startsWith('../')) continue;
+  if (compilingStack.has(inputPath)) {
+    const cycle = [...compilingStack, inputPath].map(p => basename(p)).join(' → ');
+    throw Object.assign(new Error(`Circular import detected: ${cycle}`), { isTscErrorBag: true, errors: [
+      Object.assign(new Error(`Circular import detected: ${cycle}`), { isTscError: true, filename, line: null, col: null, endCol: null, src: null, label: null, spans: [], help: ['break the cycle by extracting shared types into a third module'], notes: [], code: null, kind: 'error' })
+    ]});
+  }
+  compilingStack.add(inputPath);
 
-    const depPath = resolveLocalImport(dirname(inputPath), source);
-    if (!depPath || importedModules[depPath]) continue; // not found or already compiled
+  for (const node of ast.body) {
+    if (node.kind !== 'Import' && node.kind !== 'ExportFrom') continue;
+    const source = node.source;
+    if (!source) continue;
+
+    // Resolve path aliases (e.g. "#utils" → absolute path)
+    const resolvedSource = resolveAlias(source, aliases);
+    const isAbsResolved = resolvedSource !== source && resolve(resolvedSource) === resolvedSource;
+
+    let depPath;
+    if (isAbsResolved) {
+      // Alias resolved to absolute path — try candidates directly
+      for (const candidate of [resolvedSource + '.tsc', join(resolvedSource, 'index.tsc')]) {
+        if (existsSync(candidate)) { depPath = candidate; break; }
+      }
+    } else {
+      if (!source.startsWith('./') && !source.startsWith('../')) continue;
+      depPath = resolveLocalImport(dirname(inputPath), source);
+    }
+    if (!depPath) continue;
+    sourceToPath[source] = depPath; // track source → resolved path
+    if (importedModules[depPath]) continue; // already compiled
 
     const depResult = compileTsc(depPath, {
       ...opts,
       libraryMode: true,
       importedModules,
+      sourceToPath,
+      _compilingStack: compilingStack,
+      _aliases: aliases,
     });
     importedModules[depPath] = depResult.exports;
     depCParts.push(depResult.c);
   }
+  compilingStack.delete(inputPath);
 
-  const result = codegen(ast, filename, src, { ...opts, importedModules });
+  const result = codegen(ast, filename, src, { ...opts, importedModules, sourceToPath });
 
   let c = result.c;
   if (depCParts.length > 0) {
@@ -487,6 +564,65 @@ if (command === 'update') {
     writeFileSync('tsc.lock', '', 'utf8');
   }
 
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
+// build-cmake command: generate CMakeLists.txt from tsc.package.json
+// ---------------------------------------------------------------------------
+if (command === 'build-cmake') {
+  const pkgFile = args[1];
+  if (!pkgFile) {
+    console.error('tsclang build-cmake: missing tsc.package.json file');
+    process.exit(1);
+  }
+
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(resolve(pkgFile), 'utf8'));
+  } catch (e) {
+    process.stderr.write(`tsclang build-cmake: cannot read '${pkgFile}': ${e.message}\n`);
+    process.exit(1);
+  }
+
+  const buildNameArg = args.indexOf('--build') !== -1 ? args[args.indexOf('--build') + 1] : null;
+  // Auto-select: use --build value, or if one build config exists pick it
+  const builds = pkg.builds ?? {};
+  const buildNames = Object.keys(builds);
+  const buildName = buildNameArg ?? (buildNames.length === 1 ? buildNames[0] : null);
+  const buildCfg = buildName ? (builds[buildName] ?? {}) : {};
+
+  const projectName = pkg.name?.replace(/^@[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '_') ?? 'project';
+  const target      = buildCfg.target ?? 'desktop';
+  const mcu         = buildCfg.mcu ?? null;
+  const toolchain   = buildCfg.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc');
+  const optimize    = buildCfg.optimize ?? null;
+  const mainTsc     = pkg.main ?? `${projectName}.tsc`;
+  const mainFile    = mainTsc.replace(/\.tsc$/, '.c');
+  const runtimeH    = join(ROOT, 'src/runtime/runtime.h');
+
+  const lines = [
+    'cmake_minimum_required(VERSION 3.16)',
+    `project(${projectName} C)`,
+  ];
+
+  if (target === 'avr') {
+    lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
+    if (mcu) {
+      lines.push(`set(MCU ${mcu})`);
+      lines.push('add_compile_options(-mmcu=${MCU})');
+      lines.push('add_link_options(-mmcu=${MCU})');
+    }
+    if (optimize) lines.push(`add_compile_options(-${optimize})`);
+    lines.push(`add_executable(${projectName} ${mainFile})`);
+  } else {
+    if (toolchain !== 'gcc') lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
+    lines.push('set(CMAKE_C_STANDARD 11)');
+    if (optimize) lines.push(`add_compile_options(-${optimize})`);
+    lines.push(`add_executable(${projectName} ${mainFile})`);
+  }
+
+  process.stdout.write(lines.join('\n') + '\n');
   process.exit(0);
 }
 

@@ -37,8 +37,8 @@ export default {
             const tArg = ta.typeArgs?.[0];
             if (tArg?.kind === 'TypeRef') {
               const info = this._arcClasses.get(tArg.name) ?? {};
-              if (ta.name === 'Shared') { info.shared = true; info.refFirst = false; }
-              if (ta.name === 'Weak') { info.weak = true; info.refFirst = false; }
+              if (ta.name === 'Shared') { info.shared = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+              if (ta.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
               this._arcClasses.set(tArg.name, info);
             }
           }
@@ -257,6 +257,7 @@ export default {
     // Pre-scan: collect names used as decorators (so we can suppress C emission for those functions)
     this._decoratorFns = new Map();   // name → FuncDecl AST
     this._decoratorNames = new Set(); // all names used with @
+    this._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
     {
       const scanDecs = (decs) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
       for (const node of ast.body) {
@@ -499,6 +500,29 @@ export default {
           this._stdHalImported = true;
         }
         break; // stdlib handled via includes
+      case 'ExportFrom': {
+        // export { X, Y } from "./module"  OR  export { X, Y }
+        const { names, source } = node;
+        if (source) {
+          // Re-export from external module: look up in _importedModules
+          const resolvedPath = this._sourceToPath?.[source];
+          const moduleExports = resolvedPath ? this._importedModules?.[resolvedPath] : null;
+          for (const name of (names ?? [])) {
+            const entry = moduleExports?.[name] ?? this.lookup(name);
+            if (entry) {
+              this.define(name, entry);
+              this._exports.set(name, entry);
+            }
+          }
+        } else {
+          // export { X, Y } — re-export already-defined symbols
+          for (const name of (names ?? [])) {
+            const entry = this.lookup(name);
+            if (entry) this._exports.set(name, entry);
+          }
+        }
+        break;
+      }
       case 'Export': {
         if (node.default) throw this.error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
@@ -630,8 +654,8 @@ export default {
         }
 
         // Make it a static global if: referenced by a top-level function body,
-        // OR we're in library mode (no main() to put it in)
-        const needsStatic = this._libraryMode || this._funcRefVars?.has(node.name);
+        // OR in library mode (no main()), OR @static decorator forces BSS lifetime
+        const needsStatic = this._libraryMode || this._funcRefVars?.has(node.name) || !!staticDec;
         if (needsStatic) {
           // Module-level variable → static global (not inside main)
           const varLines = [];
@@ -788,9 +812,19 @@ export default {
 
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
     const implements_ = node.implements_ ?? [];
+    // Detect implements Iterable<T> and extract element type
+    const _ifaceName = (iface) => typeof iface === 'string' ? iface : iface.name;
+    let _iterableElemType = null;
+    for (const iface of implements_) {
+      if (_ifaceName(iface) === 'Iterable' && typeof iface === 'object' && iface.typeArgs?.[0]) {
+        _iterableElemType = this.resolveType(iface.typeArgs[0]);
+        break;
+      }
+    }
     this.classes.set(name, { fields, methods, superClass: effectiveSuperClass, isStruct: true, implements_,
       ...(isThrowsClass ? { _isThrowsClass: true } : {}),
-      ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}) });
+      ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}),
+      ...(_iterableElemType ? { _iterableElemType } : {}) });
 
     // Map TSClang base class names → C names
     const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
@@ -908,10 +942,19 @@ export default {
       this.emitMethod(name, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: name }, true);
     }
 
-    // Methods: emit with explicit-implements style (void *_self) when class has 'implements'
-    const explicitImplements = node.implements_ ?? [];
+    // Emit Iterable<T> impl before methods (iter() will be skipped below)
+    const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
+    const classInfo_ = this.classes.get(name);
+    if (classInfo_?._iterableElemType) {
+      const iterMethod_ = methods.find(m => m.name === 'iter');
+      if (iterMethod_) this._emitIterableImpl(name, iterMethod_, classInfo_._iterableElemType);
+    }
+
+    // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
+    const explicitImplements = (node.implements_ ?? []).filter(i => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
+      if (m.name === 'iter' && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
       const isStatic = m.modifiers.includes('static');
       const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
@@ -1888,6 +1931,17 @@ export default {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
+    // @platform(...) decorator: only emit for matching target
+    const platformDec = (decorators ?? []).find(d => d.name === 'platform');
+    if (platformDec) {
+      const allowed = (platformDec.args ?? []).map(a => a.value ?? a);
+      const target = this._targetName ?? 'desktop';
+      if (!allowed.includes(target)) {
+        if (name) this._platformSkipped.set(name, allowed);
+        return; // skip for this platform
+      }
+    }
+
     // Decorator functions: store instead of emitting C
     if (node.isDecorator || (name && this._decoratorNames?.has(name))) {
       this._decoratorFns.set(name, node);
@@ -1906,11 +1960,13 @@ export default {
       return;
     }
 
-    // #[isr(...)] annotation on async function → error
+    // #[isr(...)] annotation → forbid await and throw inside
     if (this._pendingIsrAnnotation) {
       const pendingIsr = this._pendingIsrAnnotation;
       this._pendingIsrAnnotation = null;
       if (node.async) throw this.error(`TypeError: Cannot use 'await' inside an ISR handler '${name}'`);
+      const bodyHasThrowIsr = (stmts) => (stmts ?? []).some(s => s.kind === 'Throw' || bodyHasThrowIsr(s.body?.body ?? s.body ?? []));
+      if (bodyHasThrowIsr(body?.body ?? [])) throw this.error(`"throw" is not allowed inside ISR handler '${name}'`);
     } else {
       this._pendingIsrAnnotation = null;
     }
@@ -2186,8 +2242,10 @@ export default {
   },
 
   emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null, isNever = false) {
-    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever };
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever, funcCleanup: this._funcCleanup, funcCleanupSet: this._funcCleanupSet };
     this.inFunction = true;
+    this._funcCleanup = [];
+    this._funcCleanupSet = new Set();
     this.currentFuncName = funcName;
     this.currentFuncReturnType = retType;
     this._throwsCtx = throwsCtx; // null for non-throws, ctx object for throws functions
@@ -2232,11 +2290,15 @@ export default {
       }
     }
     this.visitBlock(body, lines, 0);
-    if (isCtor) lines.push('return self;');
+    if (isCtor) {
+      this._emitFuncCleanup(lines, '    ');
+      lines.push('return self;');
+    }
     // For void throws functions: add implicit {.ok=true} return if last stmt isn't a return
     if (throwsCtx?.isVoid) {
       const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
       if (!lastNonEmpty?.trim().startsWith('return ')) {
+        this._emitFuncCleanup(lines, '    ');
         lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
       }
     }
@@ -2247,6 +2309,8 @@ export default {
     this.currentFuncReturnType = saved.retType;
     this._throwsCtx = saved.throwsCtx;
     this._currentFuncIsNever = saved.isNever;
+    this._funcCleanup = saved.funcCleanup;
+    this._funcCleanupSet = saved.funcCleanupSet;
     return lines;
   },
 

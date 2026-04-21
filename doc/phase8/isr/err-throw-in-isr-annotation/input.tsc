@@ -1,0 +1,8 @@
+#[target(avr)]
+
+class MyError extends Error {}
+
+#[isr(TIMER1_COMPA)]
+function onTimer(): void {
+    throw new MyError("bad");
+}

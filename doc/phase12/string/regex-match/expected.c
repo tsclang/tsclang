@@ -1,7 +1,6 @@
 #include "runtime.h"
 #include "std/regex.h"
 
-typedef struct { String *data; size_t length; size_t capacity; } Array_string;
 typedef struct { bool has_value; Array_string value; } opt_Array_string;
 
 int main(void) {

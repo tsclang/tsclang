@@ -1,0 +1,13 @@
+// @target: avr
+
+@platform("desktop")
+function deskOnly(): void {
+    console.log("desktop");
+}
+
+@platform("avr")
+function avrOnly(): void {
+    console.log("avr");
+}
+
+avrOnly();

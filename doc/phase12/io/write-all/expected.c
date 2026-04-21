@@ -1,8 +1,6 @@
 #include "runtime.h"
 #include "std/io.h"
 
-typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
-
 static uint8_t _lit_0[] = {72, 105, 10};
 static const Array_u8 data = {.data = _lit_0, .length = 3, .capacity = 3};
 

@@ -1,0 +1,1 @@
+TypeError: 'avrInit' is only available on platform "avr", but current target is "desktop"

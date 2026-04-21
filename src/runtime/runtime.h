@@ -106,12 +106,116 @@ static inline double tsc_performance_now(void) {
 /* Compiler inserts this at the top of main() */
 #define TSC_INIT() _tsc_init()
 
+/* console.time / console.timeEnd — simple map-backed timers */
+#define _TSC_CONSOLE_TIMERS_CAP 16
+typedef struct {
+    String _label;
+    double _start;
+} _TscTimer;
+static _TscTimer _tsc_timers[_TSC_CONSOLE_TIMERS_CAP];
+static int _tsc_timer_count = 0;
+static inline void tsc_console_time(String label) {
+    for (int _i = 0; _i < _tsc_timer_count; _i++) {
+        if (_tsc_timers[_i]._label.length == label.length &&
+            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0)
+            return;
+    }
+    if (_tsc_timer_count < _TSC_CONSOLE_TIMERS_CAP) {
+        _tsc_timers[_tsc_timer_count]._label = label;
+        _tsc_timers[_tsc_timer_count]._start = tsc_performance_now();
+        _tsc_timer_count++;
+    }
+}
+static inline void tsc_console_time_end(String label) {
+    double _end = tsc_performance_now();
+    for (int _i = 0; _i < _tsc_timer_count; _i++) {
+        if (_tsc_timers[_i]._label.length == label.length &&
+            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0) {
+            double _ms = _end - _tsc_timers[_i]._start;
+            fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
+            /* Remove timer */
+            _tsc_timers[_i] = _tsc_timers[--_tsc_timer_count];
+            return;
+        }
+    }
+}
+static inline void tsc_console_trace(String msg) {
+    fprintf(stderr, "Trace: %.*s\n", (int)msg.length, msg.data);
+}
+static inline void tsc_console_time_log(String label) {
+    double _now = tsc_performance_now();
+    for (int _i = 0; _i < _tsc_timer_count; _i++) {
+        if (_tsc_timers[_i]._label.length == label.length &&
+            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0) {
+            double _ms = _now - _tsc_timers[_i]._start;
+            fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
+            return;
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * TscRandom — xorshift64 PRNG
+ * ------------------------------------------------------------------------- */
+typedef struct { uint64_t state; } TscRandom;
+static inline TscRandom tsc_random_seed(uint64_t seed) {
+    if (seed == 0) seed = 1;
+    return (TscRandom){ seed };
+}
+static inline uint64_t _tsc_xorshift64(uint64_t *s) {
+    uint64_t x = *s;
+    x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+    return *s = x;
+}
+static inline int32_t tsc_random_next_i32(TscRandom *r) {
+    return (int32_t)(_tsc_xorshift64(&r->state) >> 32);
+}
+static inline int64_t tsc_random_next_i64(TscRandom *r) {
+    return (int64_t)_tsc_xorshift64(&r->state);
+}
+static inline double tsc_random_next_f64(TscRandom *r) {
+    return (double)(_tsc_xorshift64(&r->state) >> 11) / (double)(UINT64_C(1) << 53);
+}
+static inline int32_t tsc_random_range_i32(TscRandom *r, int32_t lo, int32_t hi) {
+    if (hi <= lo) return lo;
+    return lo + (int32_t)(_tsc_xorshift64(&r->state) % (uint32_t)(hi - lo));
+}
+static inline TscRandom tsc_random_default(void) {
+#ifndef TSC_NES
+    struct timespec _ts;
+    clock_gettime(CLOCK_MONOTONIC, &_ts);
+    uint64_t seed = (uint64_t)_ts.tv_nsec ^ ((uint64_t)_ts.tv_sec << 32);
+    if (seed == 0) seed = 1;
+    return (TscRandom){ seed };
+#else
+    return (TscRandom){ 12345 };
+#endif
+}
+
 /* -------------------------------------------------------------------------
  * String utilities
  * ------------------------------------------------------------------------- */
 
 /* Create a String from a runtime (non-literal) char pointer */
 #define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0 })
+
+/* -------------------------------------------------------------------------
+ * ARC — Atomic Reference Counting
+ * All Shared<T> structs have int32_t _refcount as their first field.
+ * Weak<T> structs also have int32_t _weakcount as their second field.
+ * tsc_arc_alloc sets _refcount = 1; all other fields are zero-initialized.
+ * ------------------------------------------------------------------------- */
+static inline void *_tsc_arc_alloc(size_t sz) {
+    int32_t *p = (int32_t *)calloc(1, sz);
+    if (p) p[0] = 1;
+    return (void *)p;
+}
+#define tsc_arc_alloc(sz) _tsc_arc_alloc(sz)
+#define tsc_arc_retain(ptr) ((ptr)->_refcount++, (ptr))
+#define tsc_arc_release(ptr) do { if (--(ptr)->_refcount <= 0) free(ptr); } while(0)
+#define tsc_weak_create(ptr) ((ptr)->_weakcount++, (ptr))
+#define tsc_weak_upgrade(ptr) ((ptr)->_refcount > 0 ? ((ptr)->_refcount++, (ptr)) : NULL)
+#define tsc_weak_release(ptr) do { --(ptr)->_weakcount; } while(0)
 
 /* Optional byte (for string.at()) */
 typedef struct { bool has_value; uint8_t value; } opt_u8;
@@ -220,6 +324,11 @@ static inline ptrdiff_t tsc_string_last_index_of(String s, String sub) {
 /* Free a heap-allocated string (no-op if capacity==0, i.e. string literal) */
 static inline void tsc_string_free(String s) {
     if (s.capacity > 0) free((char *)s.data);
+}
+
+/* String equality */
+static inline bool tsc_string_eq(String a, String b) {
+    return a.length == b.length && memcmp(a.data, b.data, a.length) == 0;
 }
 
 /* Concatenate two strings → new heap String */
@@ -575,7 +684,8 @@ static inline double tsc_parse_f64(String s) {
 /* -------------------------------------------------------------------------
  * process.argv support
  * ------------------------------------------------------------------------- */
-typedef struct { String *data; size_t length; size_t capacity; } Array_string;
+typedef struct { String  *data; size_t length; size_t capacity; } Array_string;
+typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
 
 static inline Array_string tsc_make_argv(int argc, char **argv) {
     size_t n = (size_t)(argc > 0 ? argc : 0);
@@ -863,3 +973,115 @@ typedef struct {
     for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) { _de_[_i_].key = _d_->_k[_i_]; _de_[_i_].value = _d_->_v[_i_]; } \
     (Array_MapEntry_string_i32){ .data = _de_, .length = _d_->_cnt, .capacity = _d_->_cnt }; \
 })
+
+// StaticMap: fixed-capacity map backed by parallel arrays (no heap)
+// Generated inline in .c output; these macros implement the operations.
+#define TSC_STATICMAP_IMPL(K, V, SUFFIX) \
+static inline void tsc_staticmap_set_##SUFFIX(void *_sm, K key, V val) { \
+    typedef struct { K keys[1]; V values[1]; bool used[1]; size_t capacity; size_t count; } _SM_##SUFFIX; \
+    _SM_##SUFFIX *m = (_SM_##SUFFIX*)_sm; \
+    for (size_t _i = 0; _i < m->capacity; _i++) { \
+        if (m->used[_i] && m->keys[_i] == key) { m->values[_i] = val; return; } \
+    } \
+    for (size_t _i = 0; _i < m->capacity; _i++) { \
+        if (!m->used[_i]) { m->keys[_i] = key; m->values[_i] = val; m->used[_i] = true; m->count++; return; } \
+    } \
+} \
+static inline bool tsc_staticmap_has_##SUFFIX(void *_sm, K key) { \
+    typedef struct { K keys[1]; V values[1]; bool used[1]; size_t capacity; size_t count; } _SM2_##SUFFIX; \
+    _SM2_##SUFFIX *m = (_SM2_##SUFFIX*)_sm; \
+    for (size_t _i = 0; _i < m->capacity; _i++) { \
+        if (m->used[_i] && m->keys[_i] == key) return true; \
+    } \
+    return false; \
+} \
+static inline void tsc_staticmap_delete_##SUFFIX(void *_sm, K key) { \
+    typedef struct { K keys[1]; V values[1]; bool used[1]; size_t capacity; size_t count; } _SM3_##SUFFIX; \
+    _SM3_##SUFFIX *m = (_SM3_##SUFFIX*)_sm; \
+    for (size_t _i = 0; _i < m->capacity; _i++) { \
+        if (m->used[_i] && m->keys[_i] == key) { m->used[_i] = false; m->count--; return; } \
+    } \
+} \
+static inline void tsc_staticmap_clear_##SUFFIX(void *_sm) { \
+    typedef struct { K keys[1]; V values[1]; bool used[1]; size_t capacity; size_t count; } _SM4_##SUFFIX; \
+    _SM4_##SUFFIX *m = (_SM4_##SUFFIX*)_sm; \
+    for (size_t _i = 0; _i < m->capacity; _i++) m->used[_i] = false; \
+    m->count = 0; \
+}
+
+// get is handled via statement expression to return optional
+#define tsc_staticmap_get_u8_i32(_sm, _key) ({ \
+    StaticMap_u8_i32 *_m = (StaticMap_u8_i32*)(_sm); \
+    opt_i32 _r = {false, 0}; \
+    for (size_t _i = 0; _i < _m->capacity; _i++) { \
+        if (_m->used[_i] && _m->keys[_i] == (_key)) { _r = (opt_i32){true, _m->values[_i]}; break; } \
+    } \
+    _r; \
+})
+
+/* -------------------------------------------------------------------------
+ * UTF-8 codepoint iteration
+ * ------------------------------------------------------------------------- */
+typedef struct { const char *_p; size_t _rem; } TscCodePointIter;
+
+static inline TscCodePointIter tsc_codepoints(String s) {
+    return (TscCodePointIter){ ._p = s.data, ._rem = s.length };
+}
+
+static inline bool tsc_codepoints_next(TscCodePointIter *it, uint32_t *out) {
+    if (it->_rem == 0) return false;
+    unsigned char c = (unsigned char)*it->_p;
+    uint32_t cp; size_t bytes;
+    if      (c < 0x80) { cp = c; bytes = 1; }
+    else if (c < 0xE0) { cp = c & 0x1F; bytes = 2; }
+    else if (c < 0xF0) { cp = c & 0x0F; bytes = 3; }
+    else               { cp = c & 0x07; bytes = 4; }
+    for (size_t i = 1; i < bytes && i < it->_rem; i++)
+        cp = (cp << 6) | ((unsigned char)it->_p[i] & 0x3F);
+    *out = cp;
+    size_t advance = bytes < it->_rem ? bytes : it->_rem;
+    it->_p += advance; it->_rem -= advance;
+    return true;
+}
+
+/* -------------------------------------------------------------------------
+ * Grapheme cluster iteration (simplified: one codepoint per grapheme)
+ * ------------------------------------------------------------------------- */
+typedef struct { TscCodePointIter _cp; } TscGraphemeIter;
+
+static inline TscGraphemeIter tsc_graphemes(String s) {
+    return (TscGraphemeIter){ ._cp = tsc_codepoints(s) };
+}
+
+static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
+    if (it->_cp._rem == 0) return false;
+    const char *start = it->_cp._p;
+    uint32_t _cp_dummy;
+    tsc_codepoints_next(&it->_cp, &_cp_dummy);
+    size_t len = (size_t)(it->_cp._p - start);
+    char *buf = (char *)malloc(len + 1);
+    memcpy(buf, start, len); buf[len] = '\0';
+    *out = (String){ .data = buf, .length = len, .capacity = len + 1 };
+    return true;
+}
+
+/* -------------------------------------------------------------------------
+ * UTF-8 encode/decode (work on any Array_u8-compatible struct — use macros)
+ * Array_u8 is defined by codegen; these macros expand at call site.
+ * ------------------------------------------------------------------------- */
+#define tsc_encode_utf8(_tsc_str) ({ \
+    String _es = (_tsc_str); \
+    uint8_t *_ebuf = (uint8_t *)malloc(_es.length); \
+    memcpy(_ebuf, _es.data, _es.length); \
+    (Array_u8){ .data = _ebuf, .length = _es.length, .capacity = _es.length }; \
+})
+
+#define tsc_decode_utf8(_tsc_bytes) ({ \
+    size_t _dlen = (_tsc_bytes).length; \
+    char *_dbuf = (char *)malloc(_dlen + 1); \
+    memcpy(_dbuf, (_tsc_bytes).data, _dlen); \
+    _dbuf[_dlen] = '\0'; \
+    (String){ .data = _dbuf, .length = _dlen, .capacity = _dlen + 1 }; \
+})
+
+TSC_STATICMAP_IMPL(uint8_t, int32_t, u8_i32)

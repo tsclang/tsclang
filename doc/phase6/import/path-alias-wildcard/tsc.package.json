@@ -1,0 +1,6 @@
+{
+  "name": "path-alias-wildcard-test",
+  "paths": {
+    "#lib/*": ["./lib/*"]
+  }
+}

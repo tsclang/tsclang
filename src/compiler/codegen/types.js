@@ -41,6 +41,13 @@ export default {
       if (name === 'Promise')    return `Promise_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}`;
       if (name === 'volatile')   return `volatile ${this.resolveType(typeArgs[0])}`;
       if (name === 'Volatile')   return `volatile ${this.resolveType(typeArgs[0])} *`;
+      if (name === 'Slice' || name === 'MutSlice') {
+        const et = typeArgs[0] ? this.resolveType(typeArgs[0]) : 'int32_t';
+        const etId = this.cTypeToIdent(et);
+        const slName = `${name}_${etId}`;
+        this._ensureSliceStruct(slName, et, name === 'MutSlice');
+        return slName;
+      }
 
       // Inline utility types: Pick<T, K>, Omit<T, K> without a named alias
       if ((name === 'Pick' || name === 'Omit') && typeArgs.length >= 2) {
@@ -394,6 +401,14 @@ export default {
         if (node.callee.kind === 'Member') {
           const obj = node.callee.object;
           const prop = node.callee.prop;
+          // Namespace import: Lib.foo() → infer from namespace export entry
+          if (obj.kind === 'Ident') {
+            const nsSym2 = this.lookup(obj.name);
+            if (nsSym2?._isNamespace) {
+              const nsEntry2 = nsSym2._namespaceExports?.[prop];
+              if (nsEntry2?.ctype) return nsEntry2.ctype;
+            }
+          }
           // Pool class static .alloc() → opt_ref_ClassName
           if (obj.kind === 'Ident' && prop === 'alloc' && this.classes.get(obj.name)?._isPool) {
             return `opt_ref_${obj.name}`;
@@ -728,6 +743,14 @@ export default {
         }
         // Buffer/DataView indexing → uint8_t
         if (objType === 'Buffer' || objType === 'DataView') return 'uint8_t';
+        // Slice_T / MutSlice_T indexing → element type
+        if (objType?.startsWith('Slice_') || objType?.startsWith('MutSlice_')) {
+          const etIdent = objType.startsWith('MutSlice_') ? objType.slice(9) : objType.slice(6);
+          const primMap2 = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+                             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+                             f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
+          return primMap2[etIdent] ?? etIdent;
+        }
         // Array_T → T (array element type)
         if (objType.startsWith('Array_')) {
           const etIdent = objType.slice(6);
@@ -854,11 +877,20 @@ export default {
     }
   },
 
+  // Emit Slice_T / MutSlice_T typedef (idempotent)
+  _ensureSliceStruct(slName, etC, mutable = false) {
+    if (!this._emittedSliceStructs) this._emittedSliceStructs = new Set();
+    if (this._emittedSliceStructs.has(slName)) return;
+    this._emittedSliceStructs.add(slName);
+    const ptrType = mutable ? `${etC} *` : `const ${etC} *`;
+    this.addTop(`typedef struct { ${ptrType}ptr; size_t length; } ${slName};`);
+  },
+
   // Emit Slice_u8 typedef (idempotent): { uint8_t *ptr; size_t length; }
   _ensureSliceU8Struct() {
     if (this._emittedSliceU8) return;
     this._emittedSliceU8 = true;
-    this.addTop(`typedef struct { uint8_t *ptr; size_t length; } Slice_u8;`);
+    this._ensureSliceStruct('Slice_u8', 'uint8_t', true);
   },
 
   // Emit opt_ref_T struct typedef (idempotent): { bool has_value; T *value; }

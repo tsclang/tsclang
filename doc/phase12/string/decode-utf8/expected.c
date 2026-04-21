@@ -1,7 +1,5 @@
 #include "runtime.h"
 
-typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
-
 int main(void) {
     TSC_INIT();
     uint8_t _lit_0[] = {104, 105};

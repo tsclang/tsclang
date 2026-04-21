@@ -1,7 +1,6 @@
 #include "runtime.h"
 
 typedef struct { void *_data; size_t size; } Map_string_i32;
-typedef struct { String *data; size_t length; size_t capacity; } Array_string;
 
 int main(void) {
     TSC_INIT();

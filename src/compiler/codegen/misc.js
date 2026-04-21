@@ -136,7 +136,8 @@ export default {
         const parts = readonlyInits.map(f => `.${f.name} = ${this.exprToC(f.init, lines, depth)}`);
         return `{ ${parts.join(', ')} }`;
       }
-      return `{0}`;
+      // In return context, compound literal syntax is required; in declarations, {0} works too
+      return this._inReturnContext ? `(${name}){0}` : `{0}`;
     }
 
     // Unknown: zero-init struct
@@ -475,6 +476,99 @@ export default {
     const envInit = '{' + [...captured.keys()].map(nm => `.${nm} = ${nm}`).join(', ') + '}';
 
     return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured };
+  },
+
+  // Special codegen for iter() method of Iterable<T> class.
+  // Generates: ClassName_iter_t struct + ClassName_iter_next + ClassName_iter factory.
+  // Returns true if the pattern was recognized and emitted.
+  _emitIterableImpl(className, iterMethod, elemCType) {
+    const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
+
+    // Find pre-return VarDecl stmts and the returned arrow
+    const preStmts = [];
+    let returnedArrow = null;
+    for (const s of stmts) {
+      if (s.kind === 'Return' && s.value?.kind === 'Arrow') { returnedArrow = s.value; break; }
+      preStmts.push(s);
+    }
+    if (!returnedArrow) return false;
+
+    const elemIdent = this.cTypeToIdent(elemCType);
+    const optType = `opt_${elemIdent}`;
+    const iterStructName = `${className}_iter_t`;
+
+    // Ensure opt_T struct is defined
+    if (!this._emittedOptStructs) this._emittedOptStructs = new Set();
+    if (!this._emittedOptStructs.has(optType)) {
+      this._emittedOptStructs.add(optType);
+      this.addTop(`typedef struct { bool has_value; ${elemCType} value; } ${optType};`);
+      this.addTop('');
+    }
+
+    // === Process pre-stmts to collect local vars ===
+    this.pushScope();
+    this.define('this', { ctype: `${className} *`, _cAlias: '_self', isPointer: true });
+
+    const localVars = [];
+    const factoryLines = [];
+    for (const s of preStmts) {
+      if (s.kind !== 'VarDecl') continue;
+      const tmpLines = [];
+      const initC = s.init ? this.exprToC(s.init, tmpLines, 1) : '0';
+      const ct = s.typeAnn ? this.resolveType(s.typeAnn)
+                           : (s.init ? this.inferType(s.init) : null) ?? 'int32_t';
+      const isConst = s.varKind === 'const';
+      localVars.push({ name: s.name, ctype: ct, initC, isConst });
+      this.define(s.name, { ctype: ct, varKind: s.varKind });
+      for (const l of tmpLines) factoryLines.push(l);
+      factoryLines.push(`    ${isConst ? 'const ' : ''}${ct} ${s.name} = ${initC};`);
+    }
+    this.popScope();
+
+    // === Emit iterator struct ===
+    const structFields = localVars.map(v => `${v.ctype} ${v.name};`).join(' ');
+    this.addTop(`typedef struct { ${structFields} } ${iterStructName};`);
+    this.addTop('');
+
+    // === Emit next function ===
+    this.pushScope();
+    for (const v of localVars) {
+      this.define(v.name, { ctype: v.ctype, _cAlias: `_self->${v.name}`, varKind: v.isConst ? 'const' : 'let' });
+    }
+    this._inIterNextBody = true;
+    this._iterNextElemType = elemCType;
+    this._iterNextOptType = optType;
+
+    const nextBodyLines = [];
+    if (returnedArrow.body?.kind === 'Block') {
+      this.visitBlock(returnedArrow.body, nextBodyLines, 0);
+    } else {
+      this._inReturnContext = true;
+      const c = this.exprToC(returnedArrow.body, nextBodyLines, 0);
+      this._inReturnContext = false;
+      nextBodyLines.push(`return (${optType}){true, ${c}};`);
+    }
+
+    this._inIterNextBody = false;
+    this.popScope();
+
+    this.addTop(`static ${optType} ${className}_iter_next(${iterStructName} *_self) {`);
+    for (const l of nextBodyLines) this.addTop('    ' + l);
+    this.addTop('}');
+    this.addTop('');
+
+    // === Emit factory function ===
+    const returnFields = localVars.map(v => `.${v.name} = ${v.name}`).join(', ');
+    this.addTop(`static ${iterStructName} ${className}_iter(const ${className} *_self) {`);
+    for (const l of factoryLines) this.addTop(l);
+    this.addTop(`    return (${iterStructName}){${returnFields}};`);
+    this.addTop('}');
+    this.addTop('');
+
+    // Record that iterable impl was generated (used by ForOf)
+    const classInfo = this.classes.get(className);
+    if (classInfo) classInfo._iterStructName = iterStructName;
+    return true;
   },
 
   // Emit `typedef struct {...} Promise_T;` once per type

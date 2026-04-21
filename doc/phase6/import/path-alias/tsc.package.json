@@ -1,0 +1,6 @@
+{
+  "name": "path-alias-test",
+  "paths": {
+    "#utils": ["./utils"]
+  }
+}

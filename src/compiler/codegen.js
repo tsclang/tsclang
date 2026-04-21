@@ -10,21 +10,47 @@ import { TscError } from './error.js';
 // opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
 // opts.libraryMode — emit without #include and main() (for bundled deps)
 // opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
+// opts.sourceToPath    — { [importSource]: resolvedPath } for namespace import lookup
 export function codegen(ast, filename = 'input', src = null, opts = {}) {
   const ctx = new Context(filename, src);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
   if (opts.libraryMode) ctx._libraryMode = true;
 
-  // Pre-populate scope from already-compiled imported modules
-  if (opts.importedModules) {
-    for (const moduleExports of Object.values(opts.importedModules)) {
-      if (!moduleExports) continue;
-      for (const [name, entry] of Object.entries(moduleExports)) {
-        ctx.define(name, entry);
+  // Build namespace set from import nodes (before pre-populating scope)
+  const namespaceImports = new Map(); // localName → resolvedPath
+  if (opts.importedModules && opts.sourceToPath && ast?.body) {
+    for (const node of ast.body) {
+      if (node.kind === 'Import' && node.namespace && node.names?.[0]) {
+        const resolvedPath = opts.sourceToPath[node.source];
+        if (resolvedPath) namespaceImports.set(node.names[0], resolvedPath);
       }
     }
   }
+
+  // Pre-populate scope from already-compiled imported modules
+  if (opts.importedModules) {
+    for (const [resolvedPath, moduleExports] of Object.entries(opts.importedModules)) {
+      if (!moduleExports) continue;
+      // Check if this module is imported as a namespace
+      let nsName = null;
+      for (const [name, path] of namespaceImports) {
+        if (path === resolvedPath) { nsName = name; break; }
+      }
+      if (nsName) {
+        // Namespace import: define X as a namespace object
+        ctx.define(nsName, { ctype: '_namespace', _isNamespace: true, _namespaceExports: moduleExports });
+      } else {
+        // Named import: put all exports flat in scope
+        for (const [name, entry] of Object.entries(moduleExports)) {
+          ctx.define(name, entry);
+        }
+      }
+    }
+  }
+  // Store sourceToPath and importedModules for ExportFrom handling
+  ctx._importedModules = opts.importedModules ?? {};
+  ctx._sourceToPath = opts.sourceToPath ?? {};
 
   ctx.visitProgram(ast);
   return { c: ctx.emit(), warnings: ctx._warnings, exports: Object.fromEntries(ctx._exports) };
@@ -64,6 +90,16 @@ class Context {
     // Cleanup: stmts to emit before return 0 in main (LIFO order)
     this._mainCleanup = [];
     this._cleanupSet = new Set();
+
+    // Function-scoped cleanup (null when not in function)
+    this._funcCleanup = null;
+    this._funcCleanupSet = null;
+    // Loop depth: loop-local owned vars are not registered in _funcCleanup
+    this._loopDepth = 0;
+
+    // Types predefined in runtime.h — prevent codegen from re-emitting them
+    this._emittedArrayStructs = new Set(['Array_string', 'Array_u8']);
+    this._emittedOptStructs   = new Set(['opt_u8']);
 
     // Collected warnings (printed after compilation, don't abort)
     this._warnings = [];
@@ -135,11 +171,27 @@ class Context {
     }));
   }
 
-  // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main scope
+  // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
   _registerCleanup(stmt) {
-    if (!this.inFunction && !this._cleanupSet.has(stmt)) {
-      this._cleanupSet.add(stmt);
-      this._mainCleanup.push(stmt);
+    if (!this.inFunction) {
+      if (!this._cleanupSet.has(stmt)) {
+        this._cleanupSet.add(stmt);
+        this._mainCleanup.push(stmt);
+      }
+    } else if (this._funcCleanup && this._loopDepth === 0) {
+      // Register for function-scope cleanup (not inside loops)
+      if (!this._funcCleanupSet.has(stmt)) {
+        this._funcCleanupSet.add(stmt);
+        this._funcCleanup.push(stmt);
+      }
+    }
+  }
+
+  // Emit current function-scoped cleanup in LIFO order into lines
+  _emitFuncCleanup(lines, I) {
+    if (!this._funcCleanup?.length) return;
+    for (let i = this._funcCleanup.length - 1; i >= 0; i--) {
+      lines.push(`${I}${this._funcCleanup[i]};`);
     }
   }
 

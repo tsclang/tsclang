@@ -1,0 +1,10 @@
+import { lex } from './src/compiler/lexer.js';
+import { parse } from './src/compiler/parser.js';
+import { codegen } from './src/compiler/codegen.js';
+import { readFileSync } from 'fs';
+const file = process.argv[2];
+const src = readFileSync(file, 'utf8');
+const tokens = lex(src, file);
+const ast = parse(tokens, file, src);
+const r = codegen(ast, { filename: file, src });
+process.stdout.write(r.c);

@@ -1,7 +1,7 @@
 #include "runtime.h"
 #include "std/reactive.h"
 
-typedef struct { int32_t _value; void (**_effects)(void); size_t _effect_count; } Signal_i32;
+typedef struct { int32_t _value; void (**_effects)(void); size_t _effect_count; int32_t (*_compute)(void); } Signal_i32;
 
 static int32_t calls = 0;
 

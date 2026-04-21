@@ -3,6 +3,20 @@ export default {
   callToC(node, lines, depth) {
     const { callee, args } = node;
 
+    // Namespace import: Lib.someFunc(...) → desugar to Ident call
+    if (callee.kind === 'Member' && callee.object?.kind === 'Ident') {
+      const nsSym = this.lookup(callee.object.name);
+      if (nsSym?._isNamespace) {
+        const nsEntry = nsSym._namespaceExports?.[callee.prop];
+        if (nsEntry) {
+          this.define(callee.prop, nsEntry);
+          // Re-dispatch as Ident call so mangling and type inference work normally
+          const syntheticCall = { ...node, callee: { kind: 'Ident', name: callee.prop } };
+          return this.callToC(syntheticCall, lines, depth);
+        }
+      }
+    }
+
     // Generator .next() call: gen.next() → genFn_next(&gen, ...storedArgs)
     if (callee.kind === 'Member' && callee.prop === 'next') {
       const objName = callee.object?.name ?? callee.object;
@@ -44,6 +58,13 @@ export default {
       // Fallback: treat as non-optional
       const objC2 = this.exprToC(obj, lines, depth);
       return `${objC2}.${callee.prop}(${this.argsToC(args, lines, depth)})`;
+    }
+
+    // @platform check: calling a function skipped for current platform
+    if (callee.kind === 'Ident' && this._platformSkipped?.has(callee.name)) {
+      const allowed = this._platformSkipped.get(callee.name).join('", "');
+      const target = this._targetName ?? 'desktop';
+      throw this.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
     }
 
     // super(args) in constructor → initialize base struct
@@ -1854,6 +1875,8 @@ export default {
     if (isArrayObj) {
       switch (prop) {
         case 'push': {
+          if (sym?._refBorrowed)
+            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
           if (baseObject.kind === 'Ident') {
             this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
@@ -1862,14 +1885,36 @@ export default {
           return `tsc_array_push_${et}(&${objC}, ${elemC})`;
         }
         case 'pop': {
+          if (sym?._refBorrowed)
+            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           this._ensureOptStruct(`opt_${et}`, etC);
           if (sym?.arraySize === 0) this._lastPopEmpty = true;
           return `tsc_array_pop_${et}(&${objC})`;
         }
         case 'remove': {
+          if (sym?._refBorrowed)
+            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const idxC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           this._lastArrayElemReturn = true; // suppress const for the returned element
           return `tsc_array_remove_${et}(&${objC}, ${idxC})`;
+        }
+        case 'view': {
+          // arr.view(start?, end?) → Slice_T (zero-copy borrow)
+          const slName = `Slice_${et}`;
+          this._ensureSliceStruct(slName, etC, false);
+          if (baseObject.kind === 'Ident' && sym) sym._refBorrowed = true;
+          const _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const _ve = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
+          return `(${slName}){ .ptr = ${objC}.data + (${_vs}), .length = (size_t)(${_ve}) - (${_vs}) }`;
+        }
+        case 'viewMut': {
+          // arr.viewMut(start?, end?) → MutSlice_T
+          const msName = `MutSlice_${et}`;
+          this._ensureSliceStruct(msName, etC, true);
+          if (baseObject.kind === 'Ident' && sym) sym._refBorrowed = true;
+          const _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const _me = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
+          return `(${msName}){ .ptr = ${objC}.data + (${_ms}), .length = (size_t)(${_me}) - (${_ms}) }`;
         }
         case 'length':   return `${objC}.length`;
         case 'capacity': return `${objC}.capacity`;
@@ -1946,6 +1991,31 @@ export default {
         case 'values':  return `tsc_array_values_${et}(${objC})`;
         case 'entries': return `tsc_array_entries_${et}(${objC})`;
         case 'flat':    return `tsc_array_flat_${et}(${objC})`;
+      }
+    }
+
+    // Slice<T> / MutSlice<T> method calls
+    const baseObjType = this.inferType(baseObject);
+    const isSliceObj = baseObjType?.startsWith('Slice_') || baseObjType?.startsWith('MutSlice_');
+    if (isSliceObj) {
+      const isMut = baseObjType.startsWith('MutSlice_');
+      const sliceEtC = baseObjType.slice(isMut ? 9 : 6); // element C type (after 'Slice_' or 'MutSlice_')
+      const sliceEt  = this.cTypeToIdent(sliceEtC);
+      switch (prop) {
+        case 'view': {
+          const slName = `Slice_${sliceEt}`;
+          this._ensureSliceStruct(slName, sliceEtC, false);
+          const _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const _ve = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${objC}.length`;
+          return `(${slName}){ .ptr = ${objC}.ptr + (${_vs}), .length = (size_t)(${_ve}) - (${_vs}) }`;
+        }
+        case 'viewMut': {
+          const msName = `MutSlice_${sliceEt}`;
+          this._ensureSliceStruct(msName, sliceEtC, true);
+          const _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const _me = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${objC}.length`;
+          return `(${msName}){ .ptr = ${objC}.ptr + (${_ms}), .length = (size_t)(${_me}) - (${_ms}) }`;
+        }
       }
     }
 

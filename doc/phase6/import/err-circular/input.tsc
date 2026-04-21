@@ -1,0 +1,5 @@
+import { a } from "./a";
+
+function main(): void {
+    console.log(a());
+}

@@ -1,0 +1,11 @@
+{
+  "name": "myapp",
+  "version": "1.0.0",
+  "main": "src/main.tsc",
+  "type": "executable",
+  "builds": {
+    "debug": {},
+    "release": { "optimize": "O2" },
+    "avr": { "target": "avr", "mcu": "atmega328p" }
+  }
+}

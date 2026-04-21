@@ -421,7 +421,11 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   function parseImport() {
     eat(TK.IDENT, 'import');
+    // import type { X } from "..." — type-only imports (compile-time only, no C emit)
+    const isTypeOnly = cur().type === TK.IDENT && cur().value === 'type';
+    if (isTypeOnly) eat(TK.IDENT, 'type');
     const names = [];
+    let namespace = false;
     if (tryEat(TK.LBRACE)) {
       while (cur().type !== TK.RBRACE) {
         names.push(eat(TK.IDENT).value);
@@ -429,12 +433,14 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       eat(TK.RBRACE);
     } else if (cur().type !== TK.IDENT || cur().value !== 'from') {
+      // Namespace import: import X from "./module"
       names.push(eat(TK.IDENT).value);
+      namespace = true;
     }
     eat(TK.IDENT, 'from');
     const source = eat(TK.STRING).value;
     eatSemi();
-    return { kind: 'Import', names, source };
+    return { kind: 'Import', names, source, namespace, typeOnly: isTypeOnly };
   }
 
   function parseExport() {
@@ -443,6 +449,23 @@ export function parse(tokens, filename = '<input>', src = null) {
       eat(TK.IDENT);
       const decl = parseStmt();
       return { kind: 'Export', default: true, decl };
+    }
+    // export { X, Y } from "./module"  OR  export { X, Y }
+    if (cur().type === TK.LBRACE) {
+      eat(TK.LBRACE);
+      const names = [];
+      while (cur().type !== TK.RBRACE) {
+        names.push(eat(TK.IDENT).value);
+        tryEat(TK.COMMA);
+      }
+      eat(TK.RBRACE);
+      let source = null;
+      if (cur().type === TK.IDENT && cur().value === 'from') {
+        eat(TK.IDENT, 'from');
+        source = eat(TK.STRING).value;
+      }
+      eatSemi();
+      return { kind: 'ExportFrom', names, source };
     }
     const decl = parseStmt();
     return { kind: 'Export', default: false, decl };
@@ -706,8 +729,19 @@ export function parse(tokens, filename = '<input>', src = null) {
     let implements_ = [];
     if (cur().type === TK.IDENT && cur().value === 'implements') {
       eat(TK.IDENT);
-      implements_.push(eat(TK.IDENT).value);
-      while (tryEat(TK.COMMA)) implements_.push(eat(TK.IDENT).value);
+      const _parseImpl = () => {
+        const nm = eat(TK.IDENT).value;
+        if (cur().type === TK.LT) {
+          eat(TK.LT);
+          const tArgs = [];
+          while (cur().type !== TK.GT) { tArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
+          eat(TK.GT);
+          return { name: nm, typeArgs: tArgs };
+        }
+        return nm;
+      };
+      implements_.push(_parseImpl());
+      while (tryEat(TK.COMMA)) implements_.push(_parseImpl());
     }
     eat(TK.LBRACE);
     const members = [];

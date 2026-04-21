@@ -1,21 +1,13 @@
 #include "runtime.h"
 
-typedef struct { int _dummy; } Math;
-
-static int32_t Math_sqrt_inner(const Math *self, int32_t x) {
-    return x;
-}
-
-static int32_t Math_sqrt(const Math *self, int32_t x) {
-    if (x < 0) {
-        tsc_throw(STR_LIT("negative"));
-    }
-    return Math_sqrt_inner(self, x);
-}
+typedef struct { int32_t _refcount; int32_t value; } Node;
 
 int main(void) {
     TSC_INIT();
-    Math m = {0};
-    printf("%d\n", Math_sqrt(&m, -1));
+    Node *x = tsc_arc_alloc(sizeof(Node));
+    x->value = 0;
+    x->value = 10;
+    printf("%d\n", x->value);
+    tsc_arc_release(x);
     return 0;
 }

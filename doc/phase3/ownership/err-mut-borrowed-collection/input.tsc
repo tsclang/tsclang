@@ -1,0 +1,6 @@
+class User {
+    name: string;
+}
+let users: User[] = [new User()];
+let u: Ref<User> = users[0];
+users.push(new User());

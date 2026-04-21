@@ -131,13 +131,12 @@
 - [x] `Shared<T>` при `#[allocator(none)]` → ошибка
 - [x] Aliasing XOR mutability: одновременные `Mut`+`Ref` / два `Mut`
 
-**Не реализовано:**
-- [ ] `Slice<T>` — zero-copy view на массив или строку
-- [ ] Cleanup при throw: `goto cleanup` паттерн в C-output
-- [ ] `Iterable<T>` протокол
-- [ ] `@static let` — объект в BSS
-- [ ] Move из массива по индексу
-- [ ] Запрет мутации коллекции при активном borrow
+- [x] `Slice<T>` / `MutSlice<T>` — zero-copy view на массив (`.view()`, `.viewMut()`, индексация)
+- [x] Cleanup при throw: owned vars освобождаются перед `return` ошибки; `_loopDepth` guard для loop-local vars
+- [x] `Iterable<T>` протокол
+- [x] `@static let` — объект в BSS
+- [x] Move из массива по индексу
+- [x] Запрет мутации коллекции при активном borrow
 
 ### Лог
 
@@ -146,6 +145,12 @@
 > 2026-04-16: реализованы borrow checker проверки. Исправлен баг pre-scan (параметры функций исключаются из _funcRefVars). Добавлены: move-из-const, move-из-Ref, use-after-move (Ident + Member), use-after-field-move, Ref/Mut в полях класса, const→Mut<T>, возврат Ref на локальную, Shared<T>+allocator:none. Изменён формат аннотации в тесте: `// @allocator: none` → `#[allocator(none)]`.
 >
 > 2026-04-16 (продолжение): реализованы aliasing-проверки (Mut+Ref / два Mut) через `_refBorrowed` и `_mutBorrowedBy` в calls.js (per-callee tracking). **Статус: 142/142 phase3 ✓**
+>
+> 2026-04-20: реализованы `Slice<T>` / `MutSlice<T>` (view/viewMut, индексация, sub-slice на Slice); cleanup owned vars при throw/return в функциях (inline free перед return, _loopDepth guard). **Статус: 163/163 phase3+phase5 ✓**
+>
+> 2026-04-21: реализован ARC runtime в runtime.h: `tsc_arc_alloc` (calloc + `_refcount=1`), `tsc_arc_retain`, `tsc_arc_release`, `tsc_weak_create`, `tsc_weak_upgrade`, `tsc_weak_release` — всё через макросы (typed-pointer, no void**). Исправлен кодген: `_refcount` теперь всегда первое поле (убран `refFirst=false` для annotated VarDecl); убрано ручное `x->_refcount = 1` и `(void**)&` в cleanup. **Статус: 149/149 phase3 ✓**
+>
+> 2026-04-21 (продолжение): реализован `Iterable<T>` протокол — специализированный кодген для `iter()`: парсер сохраняет type args в `implements`; кодген генерирует `ClassName_iter_t` (struct с локальными переменными), `ClassName_iter_next` (тело лямбды с `_cAlias`, `_inIterNextBody` флаг для `return` → `opt_T`), `ClassName_iter` (factory); `for-of` десугарится в while по `iter_next`. **Статус: 150/150 phase3 ✓**
 
 ---
 
@@ -215,8 +220,8 @@
 - [x] Оператор `?` — propagate ошибки вверх
 - [x] Оператор `!` — unwrap с паникой
 - [x] C-output: Result-struct (tagged union ok/err)
-- [ ] Ownership при ошибках: `goto cleanup` корректно дропает owned переменные
-- [ ] `throw` запрещён в `@interrupt`
+- [x] Ownership при ошибках: owned vars освобождаются на error-path (inline cleanup, не goto)
+- [x] `throw` запрещён в `@embedded.isr` (уже был) и в `#[isr(...)]` аннотации
 
 ### Лог
 
@@ -239,16 +244,20 @@
 - [x] Модульные переменные: `static` только если используются из функции
 - [x] `import { X } from "./module"` — именованный импорт локальных файлов (bundle: library mode + рекурсивная компиляция)
 - [x] Транзитивные импорты (A → B → C)
-- [ ] Реэкспорт / namespace-импорт
-- [ ] Циклические импорты (forward declarations)
-- [ ] Path aliases (`#` / `~`)
-- [ ] `@platform` — условная компиляция
+- [x] Реэкспорт: `export { X } from "./module"` — ExportFrom node; namespace-импорт: `import X from "./module"` → X.method() десугарится в method()
+- [x] Циклические импорты: `_compilingStack` Set в `compileTsc`; ошибка с цепочкой `a → b → a`
+- [x] Path aliases (`#` / `~`): `tsc.package.json` поле `paths`, wildcard `*`, `resolveAlias` в bin/index.js
+- [x] `@platform` — условная компиляция: функции с `@platform("target")` пропускаются если target не совпадает; вызов на неверной платформе → compile error
 
 ### Лог
 
 > 2026-04-15: реализована фаза 6 — модульная система (базовый набор). Парсер: pointer types (`*T`), unary `&`/`*`, `native(...)`, `declare const/function`. Codegen: `export function` (без `static` в C), `declare` → extern-объявления, `native` с шаблонной интерполяцией (re-parse через `_lex`/`_parse`), `unsafe {}` с `_inUnsafe` флагом, `@packed`/`@align` → `__attribute__`, `process.exit` → `exit()` + stdlib, `process.argv` → `tsc_make_argv` + `Array_string` (определена в runtime.h), pre-scan функций для определения нужности static-globals. **Статус: 23/23 phase6 ✓**
 >
 > 2026-04-19: реализован `import { X } from "./module"` (именованный импорт локальных файлов). Bundle-подход: `codegen()` получает `opts.libraryMode` и `opts.importedModules`; в library mode — emit без `#include` и без `main()`; `_exports` Map заполняется в `case 'Export'`; `compileTsc` в bin/index.js рекурсивно компилирует зависимости, передаёт их экспорты в scope следующих файлов, конкатенирует C-выход. Также исправлен race condition (shell-тесты `phase9/run` писали в одну папку `.tsclang-tmp` параллельно): `tsclang run` теперь использует уникальный temp-dir через `mkdtempSync`. **Статус: 27/27 phase6 ✓** (4 новых import-теста)
+>
+> 2026-04-20: bugfix — `new Svc()` без конструктора генерировал `{0}` вместо `(Svc){0}` в return-контексте (невалидный C). Исправлено через флаг `_inReturnContext` в stmt.js + branch в misc.js. Добавлена `tsc_string_eq` в runtime.h (string equality operator). `tsc_staticmap_set/has/delete/clear/get` добавлены в runtime.h через макрос `TSC_STATICMAP_IMPL`. StaticMap_u8_i32 инстанциирован. Исправлены: phase5/throw-new-error, phase11/static-map-c-output, phase13/order/static-last.
+>
+> 2026-04-20: завершена фаза 6. Добавлены: Slice<T>/MutSlice<T>.view()/viewMut() → sub-slice expressions; функция-cleanup перед return/throw (inline, O(N*M), `_loopDepth` guard); throw запрещён в `#[isr(...)]` и `@embedded.isr`; реэкспорт (`export { X } from "./module"`) и namespace-импорт (`import X from "./module"` → X.method()); циклические импорты — `_compilingStack` Set, ошибка с цепочкой файлов; path aliases — `tsc.package.json` поле `paths` с wildcard `*`, `resolveAlias` в bin/index.js; `@platform("target")` условная компиляция — функция пропускается если target не совпадает, вызов на неверной платформе → compile error. **Статус: 35/35 phase6 ✓**
 >
 > 2026-04-16: реализован rustc-style формат диагностических ошибок (Phase A→C):
 > - **colors.js** — composable ANSI: `bold`, `boldRed`, `yellow`, `green`, `cyan`, `dim`; `setColorEnabled()`, `makeColors()`; `--no-color` / `NO_COLOR` env
@@ -326,9 +335,9 @@
 - [x] Источники: npm-реестр, git, zip, URL
 - [x] Semver резолюция конфликтов; flat dependency tree
 - [x] `tsc.lock` — lock-файл
-- [ ] CMake интеграция
-- [ ] Build profiles: debug / release / embedded
-- [ ] Platform profiles: AVR, Cortex, desktop
+- [x] CMake интеграция: `tsclang build-cmake tsc.package.json` → `CMakeLists.txt` для desktop/AVR
+- [x] Build profiles: `builds` секция в `tsc.package.json`, `--build <name>` выбирает профиль (target, mcu, optimize)
+- [ ] Platform profiles: AVR, Cortex, desktop (внешние `.d.tsc` пакеты — отложено до Phase 17)
 
 ### Лог
 
@@ -526,14 +535,14 @@
 | 0  | Core runtime | 22 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 159 | `[x]` |
-| 3  | Модель памяти | 142 | `[x]` |
+| 3  | Модель памяти | 150 | `[x]` |
 | 4  | Объектная модель | 56 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
-| 6  | Модульная система | 27 | `[~]` (import local files ✓; реэкспорт, namespace, циклич. — нет) |
+| 6  | Модульная система | 35 | `[x]` |
 | 7  | Async/Await | 31 | `[x]` |
 | 8  | Threads и конкурентность | 28 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
-| 10 | Package manager | 17 | `[~]` (CLI ✓; CMake, build profiles — нет) |
+| 10 | Package manager | 20 | `[~]` (CLI ✓, CMake ✓, build profiles ✓; platform profiles — отложено) |
 | 11 | Embedded compiler features | 38 | `[x]` |
 | 12 | Стандартная библиотека | 130 | `[x]` |
 | 13 | Декораторы | 21 | `[x]` |
@@ -542,4 +551,4 @@
 | 16 | Реестр пакетов | — | `[ ]` |
 | 17 | Platform backends: Retro & Consoles | — | `[ ]` |
 
-**Итого: 883 теста, все проходят ✓** (2026-04-19)
+**Итого: ~899 тестов ✓** (2026-04-21) — phase0-13 полностью по C-output; GCC-провалы только в phase7/8 (libuv/timers/channels — системные зависимости, не реализованы в runtime.h)
