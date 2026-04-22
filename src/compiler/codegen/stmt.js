@@ -1703,8 +1703,8 @@ export default {
           const mapObj = node.iterable.callee.object;
           const mapSym = mapObj.kind === 'Ident' ? this.lookup(mapObj.name) : null;
           const mapType = mapSym?.ctype ?? this.inferType(mapObj);
-          if (mapType?.startsWith('Map_')) {
-            const mapSuffix = mapType.slice(4);
+          if (mapType?.startsWith('TscMap_') || mapType?.startsWith('Map_')) {
+            const mapSuffix = mapType.startsWith('TscMap_') ? mapType.slice(7) : mapType.slice(4);
             const parts = mapSuffix.split('_');
             const kIdent = parts[0];
             const vIdent = parts.slice(1).join('_');

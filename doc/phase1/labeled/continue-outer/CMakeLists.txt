@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.10)
+project(input C)
+set(CMAKE_C_STANDARD 11)
+add_executable(input input.c)
+target_include_directories(input PRIVATE "C:\\dev\\games\\ts\\tsclang\\src\\runtime")

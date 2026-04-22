@@ -362,21 +362,59 @@ static inline opt_u8 tsc_string_at(String s, int32_t idx) {
 #define TSC_MAP_CAP 64
 
 #define TSC_MAP_DECL(K, V, SUFFIX) \
-typedef struct { K _keys[TSC_MAP_CAP]; V _vals[TSC_MAP_CAP]; size_t _count; } TscMap_##SUFFIX; \
+typedef struct { K _keys[TSC_MAP_CAP]; V _vals[TSC_MAP_CAP]; size_t size; } TscMap_##SUFFIX; \
 static inline TscMap_##SUFFIX tsc_map_create_##SUFFIX(void) { \
-    TscMap_##SUFFIX m; m._count = 0; return m; } \
+    TscMap_##SUFFIX m; m.size = 0; return m; } \
 static inline void tsc_map_set_##SUFFIX(TscMap_##SUFFIX *m, K key, V val) { \
-    for (size_t _i = 0; _i < m->_count; _i++) { \
+    for (size_t _i = 0; _i < m->size; _i++) { \
         if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) { \
             m->_vals[_i] = val; return; } } \
-    if (m->_count < TSC_MAP_CAP) { m->_keys[m->_count] = key; m->_vals[m->_count] = val; m->_count++; } } \
-static inline V tsc_map_get_##SUFFIX(const TscMap_##SUFFIX *m, K key) { \
-    for (size_t _i = 0; _i < m->_count; _i++) { \
+    if (m->size < TSC_MAP_CAP) { m->_keys[m->size] = key; m->_vals[m->size] = val; m->size++; } } \
+static inline bool tsc_map_has_##SUFFIX(const TscMap_##SUFFIX *m, K key) { \
+    for (size_t _i = 0; _i < m->size; _i++) { \
         if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) \
-            return m->_vals[_i]; } \
-    return (V){0}; }
+            return true; } \
+    return false; } \
+static inline void tsc_map_delete_impl_##SUFFIX(TscMap_##SUFFIX *m, K key) { \
+    for (size_t _i = 0; _i < m->size; _i++) { \
+        if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) { \
+            memmove(&m->_keys[_i], &m->_keys[_i+1], (m->size-_i-1)*sizeof(K)); \
+            memmove(&m->_vals[_i], &m->_vals[_i+1], (m->size-_i-1)*sizeof(V)); \
+            m->size--; return; } } } \
+static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
+
+/* get returns opt_V — expanded at call site where opt_V is already typedef'd */
+#define tsc_map_get_string_i32(_m_, _key_) ({ \
+    const TscMap_string_i32 *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    int32_t _vv_ = 0; bool _ff_ = false; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_mm_->_keys[_ii_].length == _kk_.length && \
+            memcmp(_mm_->_keys[_ii_].data, _kk_.data, _kk_.length) == 0) \
+            { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \
+    } \
+    (opt_i32){ _ff_, _vv_ }; \
+})
+
+/* delete returns opt_V (the removed value, or nothing if key absent) */
+#define tsc_map_delete_string_i32(_m_, _key_) ({ \
+    TscMap_string_i32 *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    int32_t _vv_ = 0; bool _ff_ = false; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_mm_->_keys[_ii_].length == _kk_.length && \
+            memcmp(_mm_->_keys[_ii_].data, _kk_.data, _kk_.length) == 0) { \
+            _vv_ = _mm_->_vals[_ii_]; _ff_ = true; \
+            memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
+            memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(int32_t)); \
+            _mm_->size--; break; } } \
+    (opt_i32){ _ff_, _vv_ }; \
+})
 
 TSC_MAP_DECL(String, int32_t, string_i32)
+
+/* free is a no-op for flat-array maps (no heap allocation) */
+#define tsc_map_free_string_i32(m) ((void)(m))
 
 /* cc65 does not support _Noreturn; guard for NES target */
 #ifdef TSC_NES
@@ -1031,95 +1069,21 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     if (_a_->length > _nc_) _a_->length = _nc_; \
 } while(0)
 
-/* -------------------------------------------------------------------------
- * Map implementation — Map_K_V with opaque _data pointer
- * Private implementation uses _TscMapImpl_string_i32 (no typedef conflict)
- * -------------------------------------------------------------------------
- */
 
-#define TSC_MAP_IMPL_CAP 64
-typedef struct {
-    String _k[TSC_MAP_IMPL_CAP];
-    int32_t _v[TSC_MAP_IMPL_CAP];
-    size_t _cnt;
-} _TscMapImpl_string_i32;
-
-/* tsc_map_create_string_i32(): macro so Map_string_i32 is resolved at call site */
-#define tsc_map_create_string_i32() ({ \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)malloc(sizeof(_TscMapImpl_string_i32)); \
-    _d_->_cnt = 0; \
-    (Map_string_i32){ ._data = (void*)_d_, .size = 0 }; \
+/* keys: returns Array_string of all keys (heap-allocated copy) */
+#define tsc_map_keys_string_i32(_m_) ({ \
+    const TscMap_string_i32 *_mk_ = (_m_); \
+    String *_dk_ = (String*)malloc(_mk_->size * sizeof(String)); \
+    memcpy(_dk_, _mk_->_keys, _mk_->size * sizeof(String)); \
+    (Array_string){ .data = _dk_, .length = _mk_->size, .capacity = _mk_->size }; \
 })
 
-#define tsc_map_free_string_i32(m) do { \
-    const Map_string_i32 *_m_ = (m); if (_m_->_data) free(_m_->_data); \
-} while(0)
-
-#define tsc_map_set_string_i32(m, key, val) do { \
-    Map_string_i32 *_m_ = (m); \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)_m_->_data; \
-    String _k_ = (key); int32_t _v_ = (val); int _fnd_ = 0; \
-    for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) { \
-        if (_d_->_k[_i_].length == _k_.length && memcmp(_d_->_k[_i_].data, _k_.data, _k_.length) == 0) \
-            { _d_->_v[_i_] = _v_; _fnd_ = 1; break; } \
-    } \
-    if (!_fnd_ && _d_->_cnt < TSC_MAP_IMPL_CAP) \
-        { _d_->_k[_d_->_cnt] = _k_; _d_->_v[_d_->_cnt] = _v_; _d_->_cnt++; _m_->size++; } \
-} while(0)
-
-#define tsc_map_get_string_i32(m, key) ({ \
-    Map_string_i32 *_m_ = (Map_string_i32*)(m); \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)_m_->_data; \
-    String _k_ = (key); opt_i32 _r_ = {false, 0}; \
-    for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) \
-        if (_d_->_k[_i_].length == _k_.length && memcmp(_d_->_k[_i_].data, _k_.data, _k_.length) == 0) \
-            { _r_ = (opt_i32){true, _d_->_v[_i_]}; break; } \
-    _r_; \
-})
-
-#define tsc_map_has_string_i32(m, key) ({ \
-    Map_string_i32 *_m_ = (Map_string_i32*)(m); \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)_m_->_data; \
-    String _k_ = (key); bool _r_ = false; \
-    for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) \
-        if (_d_->_k[_i_].length == _k_.length && memcmp(_d_->_k[_i_].data, _k_.data, _k_.length) == 0) \
-            { _r_ = true; break; } \
-    _r_; \
-})
-
-#define tsc_map_delete_string_i32(m, key) ({ \
-    Map_string_i32 *_m_ = (m); \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)_m_->_data; \
-    String _k_ = (key); opt_i32 _r_ = {false, 0}; \
-    for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) { \
-        if (_d_->_k[_i_].length == _k_.length && memcmp(_d_->_k[_i_].data, _k_.data, _k_.length) == 0) { \
-            _r_ = (opt_i32){true, _d_->_v[_i_]}; \
-            memmove(&_d_->_k[_i_], &_d_->_k[_i_+1], (_d_->_cnt-_i_-1)*sizeof(String)); \
-            memmove(&_d_->_v[_i_], &_d_->_v[_i_+1], (_d_->_cnt-_i_-1)*sizeof(int32_t)); \
-            _d_->_cnt--; _m_->size--; break; \
-        } \
-    } \
-    _r_; \
-})
-
-#define tsc_map_clear_string_i32(m) do { \
-    Map_string_i32 *_m_ = (m); \
-    ((_TscMapImpl_string_i32*)_m_->_data)->_cnt = 0; _m_->size = 0; \
-} while(0)
-
-#define tsc_map_keys_string_i32(m) ({ \
-    Map_string_i32 *_m_ = (Map_string_i32*)(m); \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)_m_->_data; \
-    String *_dk_ = (String*)malloc(_d_->_cnt * sizeof(String)); \
-    memcpy(_dk_, _d_->_k, _d_->_cnt * sizeof(String)); \
-    (Array_string){ .data = _dk_, .length = _d_->_cnt, .capacity = _d_->_cnt }; \
-})
-
-#define tsc_map_entries_string_i32(m) ({ \
-    _TscMapImpl_string_i32 *_d_ = (_TscMapImpl_string_i32*)((m)->_data); \
-    MapEntry_string_i32 *_de_ = (MapEntry_string_i32*)malloc(_d_->_cnt * sizeof(MapEntry_string_i32)); \
-    for (size_t _i_ = 0; _i_ < _d_->_cnt; _i_++) { _de_[_i_].key = _d_->_k[_i_]; _de_[_i_].value = _d_->_v[_i_]; } \
-    (Array_MapEntry_string_i32){ .data = _de_, .length = _d_->_cnt, .capacity = _d_->_cnt }; \
+/* entries: returns Array_MapEntry_string_i32 (heap-allocated copy) */
+#define tsc_map_entries_string_i32(_m_) ({ \
+    const TscMap_string_i32 *_me_ = (_m_); \
+    MapEntry_string_i32 *_de_ = (MapEntry_string_i32*)malloc(_me_->size * sizeof(MapEntry_string_i32)); \
+    for (size_t _i_ = 0; _i_ < _me_->size; _i_++) { _de_[_i_].key = _me_->_keys[_i_]; _de_[_i_].value = _me_->_vals[_i_]; } \
+    (Array_MapEntry_string_i32){ .data = _de_, .length = _me_->size, .capacity = _me_->size }; \
 })
 
 // StaticMap: fixed-capacity map backed by parallel arrays (no heap)

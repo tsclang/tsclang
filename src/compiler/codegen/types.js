@@ -34,7 +34,7 @@ export default {
         const v = typeArgs[1] ? this.cTypeToIdent(this.resolveType(typeArgs[1])) : 'i32';
         const suffix = `${k}_${v}`;
         this._ensureMapStruct(suffix);
-        return `Map_${suffix}`;
+        return `TscMap_${suffix}`;
       }
       if (name === 'Scalar') return 'Scalar';
       if (name === 'Date') return 'Date';
@@ -775,7 +775,7 @@ export default {
           const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
           const k = kt ? this.cTypeToIdent(kt) : 'string';
           const v = vt ? this.cTypeToIdent(vt) : 'i32';
-          return `Map_${k}_${v}`;
+          return `TscMap_${k}_${v}`;
         }
         if (this._genericClasses?.has(node.name) && node.typeArgs?.length > 0) {
           const tmpl = this._genericClasses.get(node.name);
@@ -901,14 +901,10 @@ export default {
     return null;
   },
 
-  // Emit Map_K_V struct typedef (idempotent)
+  // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32 via TSC_MAP_DECL.
   _ensureMapStruct(suffix) {
-    if (!this._emittedMapStructs) this._emittedMapStructs = new Set();
-    if (!this._emittedMapStructs.has(suffix)) {
-      this._emittedMapStructs.add(suffix);
-      this.addTop(`typedef struct { void *_data; size_t size; } Map_${suffix};`);
-      // No trailing blank line — subsequent typedefs (opt, Array) go on the next line
-    }
+    if (!this._emittedMapStructs) this._emittedMapStructs = new Set(['string_i32']);
+    this._emittedMapStructs.add(suffix);
   },
 
   // Emit MapEntry_K_V and Array_MapEntry_K_V struct typedefs (idempotent)

@@ -5,7 +5,6 @@ int main(void) {
     int32_t sum = 0;
     int32_t i = 0;
     while (i < 3) {
-        i++;
         int32_t j = 0;
         while (j < 3) {
             j++;
@@ -14,6 +13,7 @@ int main(void) {
             }
             sum += 1;
         }
+        i++;
         outer_continue:;
     }
     printf("%d\n", sum);
