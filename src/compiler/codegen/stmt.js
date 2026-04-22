@@ -327,6 +327,20 @@ export default {
           break;
         }
 
+        // new WebSocketServer() → TscWebSocketServer server = tsc_ws_server_create()
+        if (init?.kind === 'New' && init.name === 'WebSocketServer' && this._stdWsImported) {
+          p(`TscWebSocketServer ${name} = tsc_ws_server_create();`);
+          this.define(name, { ctype: 'TscWebSocketServer', varKind, _isWsServer: true });
+          break;
+        }
+
+        // new UDPSocket() → TscUdpSocket udp = tsc_udp_create()
+        if (init?.kind === 'New' && init.name === 'UDPSocket' && this._stdNetImported) {
+          p(`TscUdpSocket ${name} = tsc_udp_create();`);
+          this.define(name, { ctype: 'TscUdpSocket', varKind, _isUdpSocket: true });
+          break;
+        }
+
         // new Tasks<N>() → Tasks_N typedef + cooperative scheduler support
         if (init?.kind === 'New' && init.name === 'Tasks') {
           const embeddedTargets = ['avr', 'arm', 'stm32'];

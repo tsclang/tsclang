@@ -73,6 +73,76 @@ export default {
         return { kind: 'io-pipe', stateType: 'TscPipeAwaitable', pollFn: 'tsc_pipe_poll',
                  initFn: 'tsc_pipe_async', resultCType: null, args: expr.args };
       }
+      // process.stdin.readLine() / process.stdout.write(s) / process.stderr.write(s)
+      if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Member' &&
+          expr.callee.object?.object?.name === 'process') {
+        const _streamProp = expr.callee.object.prop;
+        const _streamFn = _streamProp === 'stdin' ? 'tsc_stdin()' :
+                          _streamProp === 'stderr' ? 'tsc_stderr()' : 'tsc_stdout()';
+        if (expr.callee.prop === 'readLine') {
+          return { kind: 'io-readline', stateType: 'TscReadLineAwaitable', pollFn: 'tsc_read_line_poll',
+                   initFn: 'tsc_read_line_async', resultCType: 'String', rawArgs: [_streamFn], args: [] };
+        }
+        if (expr.callee.prop === 'write') {
+          return { kind: 'io-writestr', stateType: 'TscWriteStrAwaitable', pollFn: 'tsc_write_str_poll',
+                   initFn: 'tsc_write_str_async', resultCType: null, rawArgs: [_streamFn], args: expr.args };
+        }
+      }
+      // WebSocket.connect(url) → tsc_ws_connect_async
+      if (expr.callee?.kind === 'Member' &&
+          expr.callee.object?.kind === 'Ident' && expr.callee.object.name === 'WebSocket' &&
+          expr.callee.prop === 'connect') {
+        return { kind: 'ws-connect', stateType: 'TscWsConnectAwaitable', pollFn: 'tsc_ws_connect_poll',
+                 initFn: 'tsc_ws_connect_async', resultCType: 'TscWebSocket', args: expr.args };
+      }
+      // TscSocket methods: sock.readLine(), sock.write(s)
+      if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Ident') {
+        const _sockSym = this.lookup(expr.callee.object.name);
+        const _sockCtype = _sockSym?.ctype ?? this._preScanTypes?.get(expr.callee.object.name);
+        const _sockName = expr.callee.object.name;
+        if (_sockCtype === 'TscSocket') {
+          const _sp = expr.callee.prop;
+          if (_sp === 'readLine') {
+            return { kind: 'net-socket-readline', stateType: 'TscSocketReadLineAwaitable',
+                     pollFn: 'tsc_socket_readline_poll', initFn: 'tsc_socket_readline_async',
+                     resultCType: 'String', rawArgs: [`&self->${_sockName}`], args: [] };
+          }
+          if (_sp === 'write') {
+            return { kind: 'net-socket-write', stateType: 'TscSocketWriteAwaitable',
+                     pollFn: 'tsc_socket_write_poll', initFn: 'tsc_socket_write_async',
+                     resultCType: null, rawArgs: [`&self->${_sockName}`], args: expr.args };
+          }
+        }
+        // TscUdpSocket methods: udp.bind(port)
+        if (_sockCtype === 'TscUdpSocket') {
+          const _up = expr.callee.prop;
+          if (_up === 'bind') {
+            return { kind: 'net-udp-bind', stateType: 'TscUdpBindAwaitable',
+                     pollFn: 'tsc_udp_bind_poll', initFn: 'tsc_udp_bind_async',
+                     resultCType: null, rawArgs: [`&self->${_sockName}`], args: expr.args };
+          }
+        }
+      }
+      // fs namespace async methods: fs.readFile(), fs.writeFile(), etc.
+      if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Ident') {
+        const _fsSym3 = this.lookup(expr.callee.object.name) ??
+          (this._preScanTypes?.get(expr.callee.object.name) === '__fs_namespace__' ? { _isFsNamespace: true } : null);
+        if (_fsSym3?._isFsNamespace) {
+          const _fp = expr.callee.prop;
+          const _fsAsync = (initFn, pollFn, stateType, resultCType) =>
+            ({ kind: `fs-${_fp}`, stateType, pollFn, initFn, resultCType, args: expr.args });
+          if (_fp === 'readFile')     return _fsAsync('tsc_fs_read_async',    'tsc_fs_read_poll',    'TscFsReadAwaitable',    'String');
+          if (_fp === 'readFileBytes') return _fsAsync('tsc_fs_read_bytes_async', 'tsc_fs_read_bytes_poll', 'TscFsReadBytesAwaitable', 'Array_u8');
+          if (_fp === 'writeFile')    return _fsAsync('tsc_fs_write_async',   'tsc_fs_write_poll',   'TscFsVoidAwaitable',    null);
+          if (_fp === 'appendFile')   return _fsAsync('tsc_fs_append_async',  'tsc_fs_append_poll',  'TscFsVoidAwaitable',    null);
+          if (_fp === 'exists')       return _fsAsync('tsc_fs_exists_async',  'tsc_fs_exists_poll',  'TscFsBoolAwaitable',    'bool');
+          if (_fp === 'mkdir')        return _fsAsync('tsc_fs_mkdir_async',   'tsc_fs_mkdir_poll',   'TscFsVoidAwaitable',    null);
+          if (_fp === 'readDir')      return _fsAsync('tsc_fs_readdir_async', 'tsc_fs_readdir_poll', 'TscFsReaddirAwaitable', 'TscDirEntryArray');
+          if (_fp === 'remove')       return _fsAsync('tsc_fs_remove_async',  'tsc_fs_remove_poll',  'TscFsVoidAwaitable',    null);
+          if (_fp === 'rename')       return _fsAsync('tsc_fs_rename_async',  'tsc_fs_rename_poll',  'TscFsVoidAwaitable',    null);
+          if (_fp === 'stat')         return _fsAsync('tsc_fs_stat_async',    'tsc_fs_stat_poll',    'TscFsStatAwaitable',    'TscFileStat');
+        }
+      }
       // std/net: net.connect(host, port)
       if (expr.callee?.kind === 'Member' &&
           expr.callee.object?.name === 'net' &&
@@ -124,10 +194,15 @@ export default {
     const spawnInfos = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
     const extraPollParams = []; // free vars of spawn blocks that become extra poll params
 
+    // Pre-scan type map: tracks variable types as the walk progresses so that
+    // _awaitInfoOf can look up types of variables not yet in the real scope.
+    const preScanTypes = new Map();
+    this._preScanTypes = preScanTypes;
+
     for (const p of (params || [])) {
       if (p.rest || p.destructArr) continue;
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
-      if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); }
+      if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); preScanTypes.set(p.name, ct); }
     }
 
     const walk = (stmts) => {
@@ -172,6 +247,7 @@ export default {
               ct = this.inferType(init) || 'int32_t';
             } else ct = 'int32_t';
             bodyFields.push({ name, ctype: ct });
+            preScanTypes.set(name, ct);
           }
         }
         // VarDestructArr (const [x, y] = ...)
@@ -200,6 +276,8 @@ export default {
     };
 
     walk(body?.kind === 'Block' ? body.body : []);
+    // Note: _preScanTypes is intentionally kept alive so _collectAwaitStates (called next) can use it.
+    // The caller must clear this._preScanTypes after calling _collectAwaitStates.
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
   },
 
@@ -345,6 +423,7 @@ export default {
     // Scan fields and collect sub-state fields (also pre-emits any spawn env/fn)
     const { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams } = this._scanAsyncBody(params, body);
     const awaitStates = this._collectAwaitStates(body);
+    this._preScanTypes = null;
 
     // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
     if (innerResultCType && innerResultCType !== 'int32_t') {
@@ -620,7 +699,7 @@ export default {
           this._emitAsyncTransition(lines, ctx, I);
         }
       } else if (ai.initFn) {
-        const callArgs = [];
+        const callArgs = [...(ai.rawArgs ?? [])];
         for (const arg of (ai.args ?? [])) {
           const argExpr = arg?.expr;
           if (!argExpr) continue;
@@ -747,7 +826,7 @@ export default {
         const argC = this._selfE(ai.args?.[0]?.expr);
         lines.push(`${I}self->_await_${awaitIdx} = tsc_sleep_awaitable(${argC});`);
       } else if (ai.initFn) {
-        const callArgs = [];
+        const callArgs = [...(ai.rawArgs ?? [])];
         for (const arg of (ai.args ?? [])) {
           const argExpr = arg?.expr;
           if (!argExpr) continue;
@@ -880,12 +959,12 @@ export default {
         if (init) {
           // In assignment context, bare {0} is not valid — need compound literal cast
           let initC = this._selfE(init);
-          if (initC === '{0}') {
-            const ct = stmt.typeAnn ? this.resolveType(stmt.typeAnn)
-                     : (init ? (this.inferType(init) || null) : null);
-            if (ct) initC = `(${ct}){0}`;
-          }
+          const ct = stmt.typeAnn ? this.resolveType(stmt.typeAnn)
+                   : (init ? (this.inferType(init) || null) : null);
+          if (initC === '{0}' && ct) initC = `(${ct}){0}`;
           lines.push(`${I}self->${name} = ${initC};`);
+          // Define in scope so subsequent _awaitInfoOf lookups see the correct type
+          if (ct) this.define(name, { ctype: ct, varKind: stmt.varKind ?? 'const' });
         }
       } else {
         const tmp = [];

@@ -600,13 +600,26 @@ export default {
             if (_ioSym2?.ctype === 'Writer' && prop === 'write') return 'size_t';
           }
 
+          // fs namespace sync method return types
+          if (this._stdFsImported && obj.kind === 'Ident') {
+            const _fsSym2 = this.lookup(obj.name);
+            if (_fsSym2?._isFsNamespace) {
+              if (prop === 'readFileSync') return 'String';
+              if (prop === 'readFileBytesSync') return 'Array_u8';
+              if (prop === 'existsSync') return 'bool';
+              if (prop === 'readDirSync') return 'TscDirEntryArray';
+              if (prop === 'statSync') return 'TscFileStat';
+              return 'void';
+            }
+          }
           // HAL static method return types
           if (this._stdHalImported && obj.kind === 'Ident') {
             const _hc = obj.name; const _hp = prop;
-            if (_hc === 'GPIO' && _hp === 'read') return 'bool';
+            if (_hc === 'GPIO' && (_hp === 'read')) return 'bool';
             if (_hc === 'I2C' && _hp === 'read') return 'Array_u8';
             if (_hc === 'SPI' && _hp === 'transfer') return 'uint8_t';
             if (_hc === 'UART' && _hp === 'read') return 'opt_u8';
+            if (_hc === 'UART' && _hp === 'available') return 'bool';
           }
 
           // Blob method return types
@@ -771,6 +784,8 @@ export default {
       case 'New': {
         if (node.name === 'Date') return 'Date';
         if (node.name === 'Error') return 'TscError';
+        if (node.name === 'UDPSocket') return 'TscUdpSocket';
+        if (node.name === 'WebSocketServer') return 'TscWebSocketServer';
         if (node.name === 'Map') {
           const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
           const k = kt ? this.cTypeToIdent(kt) : 'string';

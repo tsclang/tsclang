@@ -453,10 +453,27 @@ export default {
         // Handle stdlib imports that require includes or special registration
         if (node.source === 'std/avr') {
           this.includes.add('#include "std/avr.h"');
-          // Register imported names as special avr objects
+          // Direct-call avr functions: funcName maps TSClang name → C function
+          const _avrFuncMap = {
+            pinMode: 'tsc_avr_pin_mode', digitalWrite: 'tsc_avr_digital_write',
+            digitalRead: 'tsc_avr_digital_read', delay: 'tsc_avr_delay',
+            delayMicroseconds: 'tsc_avr_delay_us', serialBegin: 'tsc_avr_serial_begin',
+            serialWrite: 'tsc_avr_serial_write', serialRead: 'tsc_avr_serial_read',
+            serialAvailable: 'tsc_avr_serial_available', analogWrite: 'tsc_avr_analog_write',
+            interruptEnable: 'tsc_avr_interrupt_enable', interruptDisable: 'tsc_avr_interrupt_disable',
+          };
+          const _avrReturnTypes = {
+            digitalRead: 'bool', serialAvailable: 'bool', serialRead: 'uint8_t',
+          };
           for (const name of (node.names ?? [])) {
-            if (name === 'SleepMode') this._avrSleepModeImported = true;
-            else this.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
+            if (name === 'SleepMode') { this._avrSleepModeImported = true; continue; }
+            if (_avrFuncMap[name]) {
+              const _rt = _avrReturnTypes[name];
+              this.define(name, { ctype: _rt ?? 'void', funcName: _avrFuncMap[name], varKind: 'const',
+                _suppressVoidWarning: !!_rt });
+            } else {
+              this.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
+            }
           }
         } else if (node.source === 'std/random') {
           this._stdRandomImported = true;
@@ -480,6 +497,12 @@ export default {
           }
           this.includes.add('#include "std/fs.h"');
           this._stdFsImported = true;
+          if (node.namespace && node.names.length > 0) {
+            this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
+          }
+          this.classes.set('TscFileStat', { isStruct: true,
+            fields: [{ name: 'size', ctype: 'int64_t' }, { name: 'isFile', ctype: 'bool' },
+                     { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
         } else if (node.source === 'std/url') {
           this.includes.add('#include "std/url.h"');
           this._stdUrlImported = true;

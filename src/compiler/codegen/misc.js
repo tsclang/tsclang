@@ -110,6 +110,16 @@ export default {
       return `tsc_abort_controller_create()`;
     }
 
+    // new UDPSocket() → tsc_udp_create()
+    if (name === 'UDPSocket') {
+      return `tsc_udp_create()`;
+    }
+
+    // new WebSocketServer() → tsc_ws_server_create()
+    if (name === 'WebSocketServer') {
+      return `tsc_ws_server_create()`;
+    }
+
     // new Promise<T>(...)
     if (name === 'Promise') {
       return `/* new Promise */ {0}`;

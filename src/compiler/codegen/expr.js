@@ -184,6 +184,11 @@ export default {
         if (sym?.isFixedArray && node.prop === 'length') {
           return `(size_t)${sym.arraySize}`;
         }
+        // PinMode enum (std/hal): PinMode.OUTPUT → TSC_PINMODE_OUTPUT
+        if (node.object.kind === 'Ident' && node.object.name === 'PinMode') {
+          const pm = { INPUT: 'TSC_PINMODE_INPUT', OUTPUT: 'TSC_PINMODE_OUTPUT', INPUTPULLUP: 'TSC_PINMODE_INPUTPULLUP' };
+          return pm[node.prop] ?? `TSC_PINMODE_${node.prop.toUpperCase()}`;
+        }
         // Enum member access: Direction.North → Direction_North
         if (node.object.kind === 'Ident') {
           const enumDef = this.classes.get(node.object.name);
@@ -564,7 +569,7 @@ export default {
   },
 
   literalToC(node) {
-    if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
+    if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
     if (node.litType === 'char')   return String(this._charCode(node.value)) + 'U';
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';

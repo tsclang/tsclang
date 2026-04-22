@@ -443,6 +443,11 @@ export default {
       const _halClass = callee.object.name;
       const _halProp  = callee.prop;
       if (_halClass === 'GPIO') {
+        if (_halProp === 'mode') {
+          const pin  = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const mode = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'TSC_PINMODE_INPUT';
+          return `tsc_gpio_mode(${pin}, ${mode})`;
+        }
         if (_halProp === 'output') return `tsc_gpio_output(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
         if (_halProp === 'input')  return `tsc_gpio_input(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
         if (_halProp === 'write') {
@@ -456,6 +461,7 @@ export default {
         }
       }
       if (_halClass === 'I2C') {
+        if (_halProp === 'begin') return 'tsc_i2c_begin()';
         if (_halProp === 'write') {
           const addr = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const dataN = args[1]?.expr?.kind === 'Ident' ? args[1].expr.name : '_data';
@@ -469,6 +475,7 @@ export default {
         }
       }
       if (_halClass === 'SPI') {
+        if (_halProp === 'begin') return 'tsc_spi_begin()';
         if (_halProp === 'transfer') {
           this._lastHalRead = 'uint8_t';
           return `tsc_spi_transfer(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
@@ -483,6 +490,10 @@ export default {
             if (bp?.value) baud = this.exprToC(bp.value, lines, depth);
           }
           return `tsc_uart_init(${baud})`;
+        }
+        if (_halProp === 'available') {
+          this._lastHalRead = 'bool';
+          return 'tsc_uart_available()';
         }
         if (_halProp === 'write') return `tsc_uart_write(${args[0] ? this.exprToC(args[0].expr, lines, depth) : '0'})`;
         if (_halProp === 'read') {
@@ -711,11 +722,13 @@ export default {
       }
     }
 
-    // WebSocket methods: ws.send(), ws.close(), ws.onMessage()
+    // WebSocket methods: ws.send(), ws.close(), ws.onMessage(), ws.onClose(), ws.sendBytes()
     if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _wsSym = this.lookup(callee.object.name);
-      if (_wsSym?._isWebSocket) {
-        const wsRef = `&${callee.object.name}`;
+      if (_wsSym?._isWebSocket || _wsSym?.ctype === 'TscWebSocket' || _wsSym?.ctype === 'TscWebSocket *') {
+        const _wsIsPtr = _wsSym?.ctype?.endsWith('*');
+        const _wsExprC = this.exprToC(callee.object, lines, depth);
+        const wsRef = _wsIsPtr ? _wsExprC : `&${_wsExprC}`;
         const _wsProp = callee.prop;
         if (_wsProp === 'send') {
           const msgC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -724,17 +737,57 @@ export default {
         if (_wsProp === 'close') {
           return `tsc_ws_close(${wsRef})`;
         }
-        if (_wsProp === 'onMessage') {
+        if (_wsProp === 'sendBytes') {
+          const dataExprC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(_empty_arr)';
+          return `tsc_ws_send_bytes(${wsRef}, ${dataExprC}.data, ${dataExprC}.length)`;
+        }
+        const _wsHoistCb = (paramTypes) => {
+          const cbArg = args[0]?.expr;
+          if (cbArg?.kind === 'Arrow') {
+            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            const cbName = this.hoistArrow(cbArg, 'void');
+            this._lambdaParamHint = null;
+            return cbName;
+          }
+          return cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
+        };
+        if (_wsProp === 'onMessage') return `tsc_ws_on_message(${wsRef}, ${_wsHoistCb()})`;
+        if (_wsProp === 'onClose')   return `tsc_ws_on_close(${wsRef}, ${_wsHoistCb([])})`;
+      }
+      // WebSocketServer methods: server.onConnect(cb), server.listen(port)
+      if (_wsSym?._isWsServer || _wsSym?.ctype === 'TscWebSocketServer') {
+        const svrRef = `&${callee.object.name}`;
+        const _svrProp = callee.prop;
+        if (_svrProp === 'listen') {
+          const portC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_ws_server_listen(${svrRef}, ${portC})`;
+        }
+        if (_svrProp === 'onConnect') {
           const cbArg = args[0]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
-            cbName = this.hoistArrow(cbArg, 'void');
-            this._lambdaParamHint = null;
+            const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
+            const paramTypes = ['TscWebSocket *'];
+            const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines = [];
+            this.pushScope();
+            for (let i = 0; i < Math.min(paramNames.length, paramTypes.length); i++) {
+              this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const', _isWebSocket: true });
+            }
+            if (cbArg.body.kind === 'Block') this.visitBlock(cbArg.body, handlerLines, 0);
+            else { const c = this.exprToC(cbArg.body, handlerLines, 0); handlerLines.push(`return ${c};`); }
+            this.popScope();
+            const n = this._handlerCount ?? 0;
+            this._handlerCount = n + 1;
+            cbName = `_lambda_${n}_void`;
+            this.topLevel.push(`static void ${cbName}(${paramStrs.join(', ')}) {`);
+            for (const l of handlerLines) this.topLevel.push('    ' + l);
+            this.topLevel.push('}');
+            this.topLevel.push('');
           } else {
             cbName = cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
           }
-          return `tsc_ws_on_message(${wsRef}, ${cbName})`;
+          return `tsc_ws_server_on_connect(${svrRef}, ${cbName})`;
         }
       }
     }
@@ -825,22 +878,36 @@ export default {
       }
     }
 
-    // fs.watch(path, callback) → tsc_fs_watch
-    if (this._stdFsImported && callee.kind === 'Member' &&
-        callee.object.kind === 'Ident' && callee.object.name === 'fs') {
-      const _fsProp = callee.prop;
-      if (_fsProp === 'watch') {
-        const pathC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(".")';
-        const cbArg = args[1]?.expr;
-        let cbName;
-        if (cbArg?.kind === 'Arrow') {
-          this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
-          cbName = this.hoistArrow(cbArg, 'void');
-          this._lambdaParamHint = null;
-        } else {
-          cbName = cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
+    // fs namespace: fs.watch(), fs.readFileSync(), fs.writeFileSync(), etc.
+    if (this._stdFsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _fsSym = this.lookup(callee.object.name);
+      if (_fsSym?._isFsNamespace) {
+        const _fsProp = callee.prop;
+        const _a0 = () => args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        const _a1 = () => args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+        if (_fsProp === 'watch') {
+          const pathC = _a0();
+          const cbArg = args[1]?.expr;
+          let cbName;
+          if (cbArg?.kind === 'Arrow') {
+            this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            cbName = this.hoistArrow(cbArg, 'void');
+            this._lambdaParamHint = null;
+          } else {
+            cbName = cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
+          }
+          return `tsc_fs_watch(${pathC}, ${cbName})`;
         }
-        return `tsc_fs_watch(${pathC}, ${cbName})`;
+        if (_fsProp === 'readFileSync')      return `tsc_fs_read_sync(${_a0()})`;
+        if (_fsProp === 'readFileBytesSync') return `tsc_fs_read_bytes_sync(${_a0()})`;
+        if (_fsProp === 'writeFileSync')     return `tsc_fs_write_sync(${_a0()}, ${_a1()})`;
+        if (_fsProp === 'appendFileSync')    return `tsc_fs_append_sync(${_a0()}, ${_a1()})`;
+        if (_fsProp === 'existsSync')        return `tsc_fs_exists_sync(${_a0()})`;
+        if (_fsProp === 'mkdirSync')         return `tsc_fs_mkdir_sync(${_a0()})`;
+        if (_fsProp === 'readDirSync')        return `tsc_fs_readdir_sync(${_a0()})`;
+        if (_fsProp === 'removeSync')        return `tsc_fs_remove_sync(${_a0()})`;
+        if (_fsProp === 'renameSync')        return `tsc_fs_rename_sync(${_a0()}, ${_a1()})`;
+        if (_fsProp === 'statSync')          return `tsc_fs_stat_sync(${_a0()})`;
       }
     }
 
@@ -1413,6 +1480,8 @@ export default {
       } else {
         // funcPtr variables hold the name directly; functions use their mangled name
         calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
+        // avr/hal direct calls that return values: set _lastHalRead so stmt.js emits (void)name;
+        if (sym?._suppressVoidWarning && sym.ctype !== 'void') this._lastHalRead = sym.ctype;
       }
     } else {
       calleeC = this.exprToC(callee, lines, depth);
