@@ -659,7 +659,7 @@ interface Stream extends Reader, Writer {}
 | Embedded (Flash) | LittleFS |
 
 ```typescript
-import { fs } from "std/fs"
+import fs from "std/fs"
 
 // файлы
 const text = await fs.readFile("data.txt")            // string throws IOError

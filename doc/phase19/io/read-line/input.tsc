@@ -1,0 +1,5 @@
+import { process } from "std/io";
+async function run(): void {
+    const line = await process.stdin.readLine();
+    console.log(line);
+}

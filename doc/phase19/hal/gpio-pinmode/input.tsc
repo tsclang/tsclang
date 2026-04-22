@@ -1,0 +1,5 @@
+#[target(avr)]
+import { GPIO, PinMode } from "std/hal";
+GPIO.mode(3, PinMode.OUTPUT);
+GPIO.mode(4, PinMode.INPUT);
+GPIO.mode(5, PinMode.INPUTPULLUP);

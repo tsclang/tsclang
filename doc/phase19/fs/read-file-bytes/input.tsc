@@ -1,0 +1,5 @@
+import fs from "std/fs";
+async function run(): void {
+    const data = await fs.readFileBytes("./data.bin");
+    console.log(data.length);
+}

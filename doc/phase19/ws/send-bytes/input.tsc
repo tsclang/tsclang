@@ -1,0 +1,4 @@
+import { WebSocket } from "std/ws";
+const ws = new WebSocket("ws://localhost:8080");
+const data: u8[] = [0x01, 0x02, 0x03];
+ws.sendBytes(data);

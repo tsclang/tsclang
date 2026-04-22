@@ -1,0 +1,5 @@
+#[target(avr)]
+import { pinMode, digitalWrite, digitalRead } from "std/avr";
+pinMode(13, 1);
+digitalWrite(13, true);
+const v = digitalRead(13);

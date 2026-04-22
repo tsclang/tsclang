@@ -1,0 +1,5 @@
+import fs from "std/fs";
+async function run(): void {
+    const ok = await fs.exists("./data.txt");
+    console.log(ok);
+}

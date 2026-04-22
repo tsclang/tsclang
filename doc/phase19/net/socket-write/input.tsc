@@ -1,0 +1,6 @@
+import { net } from "std/net";
+async function run(): void {
+    const sock = await net.connect("127.0.0.1", 8080);
+    await sock.write("GET / HTTP/1.0\r\n\r\n");
+    sock.close();
+}

@@ -1,4 +1,0 @@
-import { fs } from "std/fs";
-fs.watch(".", (event: string) => {
-    console.log(event);
-});

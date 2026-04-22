@@ -1,0 +1,5 @@
+import fs from "std/fs";
+async function run(): void {
+    const entries = await fs.readDir(".");
+    console.log(entries.length);
+}

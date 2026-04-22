@@ -1,0 +1,3 @@
+#[target(avr)]
+import { I2C } from "std/hal";
+I2C.begin();

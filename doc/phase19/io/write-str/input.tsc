@@ -1,0 +1,4 @@
+import { process } from "std/io";
+async function run(): void {
+    await process.stdout.write("hello\n");
+}

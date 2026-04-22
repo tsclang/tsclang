@@ -1,0 +1,5 @@
+import fs from "std/fs";
+async function run(): void {
+    const info = await fs.stat("./data.txt");
+    console.log(info.size);
+}

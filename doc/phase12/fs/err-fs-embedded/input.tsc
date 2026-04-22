@@ -1,5 +1,0 @@
-#[target(avr)]
-import { fs } from "std/fs";
-async function run(): void {
-    await fs.readFile("x.txt");
-}

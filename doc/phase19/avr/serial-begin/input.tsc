@@ -1,0 +1,4 @@
+#[target(avr)]
+import { serialBegin, serialAvailable, serialRead } from "std/avr";
+serialBegin(9600);
+const avail = serialAvailable();

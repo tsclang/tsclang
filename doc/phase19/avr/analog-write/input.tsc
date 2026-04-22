@@ -1,0 +1,3 @@
+#[target(avr)]
+import { analogWrite } from "std/avr";
+analogWrite(9, 128);

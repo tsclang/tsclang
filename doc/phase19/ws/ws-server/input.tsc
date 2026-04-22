@@ -1,0 +1,6 @@
+import { WebSocketServer } from "std/ws";
+const server = new WebSocketServer();
+server.onConnect((ws) => {
+    ws.send("hello");
+});
+server.listen(8080);

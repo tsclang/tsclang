@@ -1,0 +1,5 @@
+import { UDPSocket } from "std/net";
+async function run(): void {
+    const udp = new UDPSocket();
+    await udp.bind(9000);
+}

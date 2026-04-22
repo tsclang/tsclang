@@ -1,0 +1,3 @@
+import fs from "std/fs";
+const entries = fs.readDirSync(".");
+console.log(entries.length);

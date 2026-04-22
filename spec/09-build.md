@@ -979,13 +979,74 @@ tsclang build nes
   └─ 5. CMake + cc65 → бинарник
 ```
 
+### Три слоя платформенного профиля
+
+Платформенный профиль отвечает на три разных вопроса:
+
+| Слой | Что делает | Как выражен |
+|------|-----------|-------------|
+| **Типы** | Что можно вызвать, какие параметры | `.d.tsc` файлы (`declare module`, `declare platform`) |
+| **Сборка** | Какой компилятор, какие флаги, какие пути | `toolchain.cmake` |
+| **Реализация** | Реальный C-код с регистрами, MMIO, SDK | `include/std/hal.h` и др. |
+
+Все три слоя независимы и могут находиться в разных местах — но вместе они описывают платформу полностью.
+
+**Как три слоя работают вместе (пример AVR):**
+
+```
+import { GPIO } from "std/hal"        // TSClang видит declare module "std/hal" → проверяет типы
+GPIO.write(13, true)
+       ↓  codegen
+#include "std/hal.h"                  // всегда один и тот же include
+tsc_gpio_write(13, true)
+       ↓  avr-gcc + include path
+platforms/avr/std/hal.h               // находит платформенный header первым
+    PORTB |= (1 << 5);                // реальные регистры
+```
+
+Слой типов (`declare module`) и слой реализации (`include/std/hal.h`) — это две стороны одной монеты. Codegen всегда эмитирует одно и то же имя функции (`tsc_gpio_write`) и один и тот же `#include`. Платформа подменяет реализацию через include path, не через codegen.
+
+**Почему не `#ifdef __AVR_ARCH__` в одном файле:** это бы смешало все платформы в одном месте, сделало файл нечитаемым, и потребовало бы изменений при добавлении новой платформы. Platform directories — стандартный подход avr-libc, CMSIS (ARM), ESP-IDF.
+
 ### Структура платформенного профиля
 
 ```
 @nes/platform/
   tsc.package.json
   index.d.tsc
-  toolchain.cmake      ← опционально, для нестандартных компиляторов (cc65, z88dk)
+  toolchain.cmake      ← для нестандартных компиляторов (cc65, z88dk)
+  include/             ← C-реализация stdlib для этой платформы
+    std/
+      hal.h            ← переопределяет src/runtime/std/hal.h
+```
+
+Для known targets (avr, arm) `include/` лежит в самом TSClang-рантайме:
+
+```
+src/runtime/
+  std/                 ← desktop stubs (fallback)
+    hal.h, hal_types.h
+    avr.h, avr_types.h
+  platforms/
+    avr/
+      std/
+        hal.h          ← реальный AVR: DDRx/PORTx, TWI, SPI, USART0
+        avr.h          ← реальный AVR: <avr/io.h>, <util/delay.h>, ...
+    arm/
+      std/
+        hal.h          ← ARM CMSIS вызовы
+    esp32/
+      std/
+        hal.h          ← ESP-IDF: gpio_set_direction, i2c_master_*, ...
+```
+
+`toolchain.cmake` добавляет `include/` **перед** рантаймом:
+
+```cmake
+# platforms/avr — найдётся раньше, чем src/runtime/std/
+include_directories(BEFORE "${TSCLANG_RUNTIME}/platforms/avr")
+# Для community-пакетов:
+# include_directories(BEFORE "${PACKAGE_DIR}/include")
 ```
 
 Можно разбить declarations внутри профиля `index.d.tsc` по отдельным файлам:
@@ -997,6 +1058,11 @@ tsclang build nes
   platform.d.tsc       # declare platform { heap, fpu, bits... }
   libc.d.tsc           # declare module "std/libc" { memcpy, memset... }
   ppu.d.tsc            # declare функции для PPU
+  include/             # C-реализации (hal, ppu, apu, ...)
+    std/
+      hal.h
+    nes/
+      ppu.h
 ```
 
 ```typescript
@@ -1152,25 +1218,29 @@ Platform profile package включает его в себя:
 declare platform {
     toolchain: "cc65"
     toolchainFile: "toolchain.cmake"  // без ./ → путь внутри пакета профиля
+    include: "include"                // C-реализации: include/std/hal.h, include/nes/ppu.h, ...
     allocator: "static"               // Map/Set/Array с compile-time N → BSS
     scheduler: "cooperative"
     ...
 }
 ```
 
-TSClang видит `toolchainFile` и добавляет в CMakeLists.txt:
+TSClang видит поля и добавляет в CMakeLists.txt:
 ```cmake
 set(CMAKE_TOOLCHAIN_FILE ".../tsc_packages/@nes/platform/toolchain.cmake")
+include_directories(BEFORE ".../tsc_packages/@nes/platform/include")
 ```
 
-**`toolchainFile` — одно поле, два контекста:**
+**Соглашение путей — одинаково для `toolchainFile` и `include`:**
 
-Соглашение то же, что у импортов: `./` = локальный путь, без `./` = путь внутри пакета.
+`./` = локальный путь относительно корня проекта, без `./` = путь внутри пакета.
 
-| Значение | Откуда | Пример |
-|----------|--------|--------|
-| `"toolchain.cmake"` | внутри profile-пакета | в `declare platform {}` |
-| `"./my-toolchain.cmake"` | локальный путь проекта | в `tsc.package.json` |
+| Поле | Значение | Откуда |
+|------|----------|--------|
+| `toolchainFile` | `"toolchain.cmake"` | внутри profile-пакета |
+| `toolchainFile` | `"./my-toolchain.cmake"` | локальный путь проекта |
+| `include` | `"include"` | внутри profile-пакета |
+| `include` | `"./platform/include"` | локальный путь проекта |
 
 **Конфигурация:**
 
@@ -1203,8 +1273,13 @@ set(CMAKE_TOOLCHAIN_FILE ".../tsc_packages/@nes/platform/toolchain.cmake")
 ```typescript
 // @nes/platform/index.d.tsc
 
-// 1. Capabilities — что умеет платформа
+// 1. Capabilities + build config
 declare platform {
+    toolchain: "cc65"
+    toolchainFile: "toolchain.cmake"  // CMakeLists.txt ← CMAKE_TOOLCHAIN_FILE
+    include: "include"                // CMakeLists.txt ← include_directories(BEFORE ...)
+                                      //   include/std/hal.h переопределяет desktop stub
+
     allocator: "static"  // нет malloc/free → new без compile-time capacity → ошибка
                          // new X(N) с compile-time N → статический BSS
                          // Shared<T> → ошибка (ARC требует malloc)
@@ -1217,7 +1292,15 @@ declare platform {
     no_recursion: true   // стек 256 байт — рекурсия почти всегда переполнит
 }
 
-// 2. Декларируем subset std/libc — только что cc65 реально предоставляет
+// 2. Типы std/hal для этой платформы (слой типов ↔ слой реализации include/std/hal.h)
+declare module "std/hal" {
+    namespace GPIO {
+        function write(pin: u8, val: bool): void   // → tsc_gpio_write → NES mapper register
+        function read(pin: u8): bool
+    }
+}
+
+// 3. Декларируем subset std/libc — только что cc65 реально предоставляет
 declare module "std/libc" {
     function memcpy(dest: Mut<u8[]>, src: Ref<u8[]>, n: usize): void
     function memset(dest: Mut<u8[]>, c: u8, n: usize): void
@@ -1236,6 +1319,7 @@ declare module "std/libc" {
 |------|-----|----------|
 | `toolchain` | `string` | Имя компилятора (`"cc65"`, `"avr-gcc"`) |
 | `toolchainFile` | `string` | Путь к CMake toolchain file (внутри пакета — без `./`) |
+| `include` | `string` | Путь к директории с C-реализацией stdlib (без `./` → внутри пакета). TSClang добавляет `include_directories(BEFORE ...)` в CMakeLists.txt. Дефолт: `"include"` если директория существует. |
 | `heap` | `bool` | Доступен ли `malloc`/`free` |
 | `allocator` | `"heap" \| "static" \| "pool" \| "none"` | Стратегия аллокации (см. ниже) |
 | `scheduler` | `"libuv" \| "cooperative" \| "none"` | Планировщик для async/await |
@@ -2037,6 +2121,53 @@ error: @tsc/sqlite3 requires minHeap 65536 but platform has 4096
   platform: @arm/platform (Cortex-M0)
   hint: increase heap size or use lighter alternative
 ```
+
+## Platform header resolution
+
+Стандартные библиотеки (`std/hal`, `std/avr` и др.) имеют два уровня реализации:
+
+```
+src/runtime/
+  std/                        ← desktop stubs (no-op)
+    hal.h, hal_types.h
+    avr.h, avr_types.h
+    fs.h, net.h, io.h, ...
+  platforms/
+    avr/
+      std/
+        hal.h                 ← реальный AVR: DDRx/PORTx, TWI, SPI, USART0
+        avr.h                 ← реальный AVR: <avr/io.h>, <util/delay.h>, ...
+    arm/
+      std/
+        hal.h                 ← ARM CMSIS / HAL вызовы
+    esp32/
+      std/
+        hal.h                 ← ESP-IDF: gpio_set_direction, i2c_master_*, ...
+```
+
+**Механизм**: `cmake/toolchain-avr.cmake` добавляет `platforms/avr` **перед** стандартным путём:
+
+```cmake
+include_directories(BEFORE "${TSCLANG_RUNTIME}/platforms/avr")
+```
+
+Когда `avr-gcc` видит `#include "std/hal.h"`, он находит `platforms/avr/std/hal.h` первым.
+Для всего, чего нет в платформенной директории, fallback идёт в `src/runtime/std/`.
+
+**Codegen не трогаем** — он всегда эмитирует `#include "std/hal.h"`. Логика выбора
+реализации полностью в build system. Это стандартный подход avr-libc, CMSIS, ESP-IDF.
+
+**Разделение типов**: каждый модуль разбит на два файла:
+- `hal_types.h` — только typedef/enum (безопасно включать из платформенного header)
+- `hal.h` — включает `hal_types.h` + desktop no-op stubs
+
+Платформенный `platforms/avr/std/hal.h` включает `hal_types.h` (не `hal.h`),
+чтобы не получить конфликт переопределения функций.
+
+**Добавить новую платформу**:
+1. Создать `src/runtime/platforms/<name>/std/` с нужными заголовками
+2. Добавить `cmake/toolchain-<name>.cmake` с `include_directories(BEFORE ...)`
+3. Опционально — platform profile `.d.tsc` для type-checking
 
 ## Pipeline сборки
 

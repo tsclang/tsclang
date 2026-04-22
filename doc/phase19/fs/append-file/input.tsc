@@ -1,0 +1,4 @@
+import fs from "std/fs";
+async function run(): void {
+    await fs.appendFile("./log.txt", "line\n");
+}

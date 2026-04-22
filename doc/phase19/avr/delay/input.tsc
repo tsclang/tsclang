@@ -1,0 +1,4 @@
+#[target(avr)]
+import { delay, delayMicroseconds } from "std/avr";
+delay(100);
+delayMicroseconds(500);

@@ -1,0 +1,5 @@
+import fs from "std/fs";
+async function run(): void {
+    const content = await fs.readFile("./data.txt");
+    console.log(content);
+}

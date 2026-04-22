@@ -1,0 +1,5 @@
+import { WebSocket } from "std/ws";
+async function run(): void {
+    const ws = await WebSocket.connect("ws://localhost:8080");
+    ws.close();
+}

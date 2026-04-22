@@ -1,0 +1,4 @@
+#[target(avr)]
+import { UART } from "std/hal";
+UART.init({ baud: 9600 });
+const avail = UART.available();

@@ -1,0 +1,4 @@
+#[target(avr)]
+import { interruptEnable, interruptDisable } from "std/avr";
+interruptEnable();
+interruptDisable();

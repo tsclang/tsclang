@@ -1,0 +1,2 @@
+import fs from "std/fs";
+fs.removeSync("./tmp.txt");

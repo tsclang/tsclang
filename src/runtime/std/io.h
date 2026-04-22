@@ -6,9 +6,11 @@
 typedef struct { int32_t _fd; } TscReader;
 typedef struct { int32_t _fd; } TscWriter;
 
-typedef struct { bool _done; } TscPipeAwaitable;
-typedef struct { bool _done; Array_u8 _result; } TscReadAllAwaitable;
-typedef struct { bool _done; } TscWriteAllAwaitable;
+typedef struct { bool _done; }                             TscPipeAwaitable;
+typedef struct { bool _done; Array_u8 _result; }           TscReadAllAwaitable;
+typedef struct { bool _done; }                             TscWriteAllAwaitable;
+typedef struct { bool _done; String _result; bool _eof; }  TscReadLineAwaitable;
+typedef struct { bool _done; }                             TscWriteStrAwaitable;
 
 static inline TscReader  tsc_stdin(void)  { return (TscReader){0}; }
 static inline TscWriter  tsc_stdout(void) { return (TscWriter){1}; }
@@ -28,3 +30,13 @@ static inline TscWriteAllAwaitable tsc_write_all_async(TscWriter w, const uint8_
     (void)w; (void)buf; (void)len; return (TscWriteAllAwaitable){0};
 }
 static inline void tsc_write_all_poll(TscWriteAllAwaitable *a) { a->_done = true; }
+
+static inline TscReadLineAwaitable tsc_read_line_async(TscReader r) {
+    (void)r; return (TscReadLineAwaitable){0};
+}
+static inline void tsc_read_line_poll(TscReadLineAwaitable *a) { a->_done = true; }
+
+static inline TscWriteStrAwaitable tsc_write_str_async(TscWriter w, String s) {
+    (void)w; (void)s; return (TscWriteStrAwaitable){0};
+}
+static inline void tsc_write_str_poll(TscWriteStrAwaitable *a) { a->_done = true; }
