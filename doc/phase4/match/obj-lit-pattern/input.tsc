@@ -1,0 +1,10 @@
+type Shape = { kind: i32; a: f64; b: f64 }
+
+const shape: Shape = { kind: 1, a: 5.0, b: 0.0 };
+
+const area = match(shape) {
+    { kind: 1, a, b } => 3.14 * a * a,
+    { kind: 2, a, b } => a * b,
+    _ => 0.0,
+};
+console.log(area);

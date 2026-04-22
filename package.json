@@ -1,7 +1,7 @@
 {
   "name": "tsclang",
-  "version": "0.0.1",
-  "description": "TypeScript like code language for transpiling to C",
+  "version": "0.1.0",
+  "description": "TypeScript-like language that compiles to C — for server, desktop, embedded, and retro platforms",
   "publishConfig": {
     "access": "public"
   },
@@ -20,6 +20,27 @@
   "bin": {
     "tsclang": "./bin/index.js"
   },
+  "files": [
+    "bin/",
+    "src/compiler/",
+    "src/lsp/",
+    "src/runtime/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "typescript",
+    "compiler",
+    "c",
+    "transpiler",
+    "embedded",
+    "avr",
+    "language",
+    "tsclang"
+  ],
   "scripts": {
     "test": "node test/runner.js",
     "test:v": "node test/runner.js --verbose"

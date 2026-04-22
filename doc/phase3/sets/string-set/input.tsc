@@ -1,0 +1,7 @@
+let s = new Set<string>();
+s.add("hello");
+s.add("world");
+s.add("hello");
+console.log(s.size);
+console.log(s.has("hello"));
+console.log(s.has("foo"));

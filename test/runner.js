@@ -193,17 +193,19 @@ async function checkGcc() {
 }
 
 async function gccCompile(cFile, outBin) {
+  const extraLibs = process.platform === 'win32' ? '-lws2_32' : '';
   if (MSYS2_BASH) {
     // On Windows: run gcc via MSYS2 bash so cc1.exe has the correct runtime environment
     const inc  = existsSync(RUNTIME_INC) ? `-I${toMsysPath(RUNTIME_INC)}` : '';
     const src  = toMsysPath(cFile);
     const out  = toMsysPath(outBin);
-    const cmd  = `gcc ${src} -o ${out} ${inc} -Wall -Wextra -std=c11 -lm`;
+    const cmd  = `gcc ${src} -o ${out} ${inc} -Wall -Wextra -std=c11 -lm ${extraLibs}`;
     return runShell(cmd);
   }
   const compileArgs = [cFile, '-o', outBin];
   if (existsSync(RUNTIME_INC)) compileArgs.push(`-I${RUNTIME_INC}`);
   compileArgs.push('-Wall', '-Wextra', '-std=c11', '-lm');
+  if (extraLibs) compileArgs.push(extraLibs);
   return run('gcc', compileArgs);
 }
 

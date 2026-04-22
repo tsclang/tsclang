@@ -1,0 +1,6 @@
+const val = process.env.get("PATH");
+if (val != null) {
+    console.log("has PATH");
+} else {
+    console.log("no PATH");
+}

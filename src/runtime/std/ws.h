@@ -33,11 +33,11 @@ typedef int tsc_ws_sock_t;
 static inline void _tsc_ws_net_init(void) {}
 #endif
 
-typedef void (*TscMessageCallback)(String msg);
-typedef void (*TscWsConnectCallback)(struct _TscWebSocket *ws);
-typedef void (*TscWsCloseCallback)(void);
-
 typedef struct _TscWebSocket { int32_t _fd; } TscWebSocket;
+
+typedef void (*TscMessageCallback)(String msg);
+typedef void (*TscWsConnectCallback)(TscWebSocket *ws);
+typedef void (*TscWsCloseCallback)(void);
 typedef struct { bool _done; TscWebSocket _result; } TscWsConnectAwaitable;
 typedef struct { bool _done; }                        TscWsSendAwaitable;
 typedef struct { int32_t _fd; }                       TscWebSocketServer;

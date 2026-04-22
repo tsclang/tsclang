@@ -1,0 +1,4 @@
+performance.mark("start");
+performance.mark("end");
+const entry = performance.measure("work", "start", "end");
+console.log(entry.name);

@@ -302,11 +302,22 @@ export default {
       return this.consoleCall(callee.prop, args, lines, depth);
     }
 
-    // performance.now()
+    // performance.now() / performance.mark() / performance.measure()
     if (callee.kind === 'Member' &&
-        callee.object.kind === 'Ident' && callee.object.name === 'performance' &&
-        callee.prop === 'now') {
-      return 'tsc_performance_now()';
+        callee.object.kind === 'Ident' && callee.object.name === 'performance') {
+      const prop = callee.prop;
+      if (prop === 'now') return 'tsc_performance_now()';
+      if (prop === 'mark') {
+        const name = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        return `tsc_performance_mark(${name})`;
+      }
+      if (prop === 'measure') {
+        this._lastSuppressConst = true;
+        const name  = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        const start = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+        const end   = args[2] ? this.exprToC(args[2].expr, lines, depth) : 'STR_LIT("")';
+        return `tsc_performance_measure(${name}, ${start}, ${end})`;
+      }
     }
 
     // std/avr: avr.sleep(mode), avr.watchdogReset(), ADC.read(ch), PWM.setDuty(ch, duty)
@@ -352,6 +363,24 @@ export default {
           return `tsc_random_range_i32(&${_rndName}, ${lo}, ${hi})`;
         }
       }
+    }
+
+    // process.env.get(key) / process.env.has(key)
+    if (callee.kind === 'Member' &&
+        callee.object.kind === 'Member' &&
+        callee.object.object.kind === 'Ident' && callee.object.object.name === 'process' &&
+        callee.object.prop === 'env') {
+      const embeddedTargets = ['avr', 'arm', 'stm32'];
+      if (embeddedTargets.includes(this._targetName)) {
+        throw this.error(`"process.env" is not available on embedded targets`);
+      }
+      this.includes.add('#include <stdlib.h>');
+      const key = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      if (callee.prop === 'get') {
+        this._lastSuppressConst = true;
+        return `tsc_env_get(${key})`;
+      }
+      if (callee.prop === 'has') return `tsc_env_has(${key})`;
     }
 
     // process.exit(n)
@@ -1105,6 +1134,21 @@ export default {
           return `tsc_hashmap_get_${_hmSfx}(&${_hmName}, ${_hmArg0})`;
         }
         if (_hmProp === 'delete') return `tsc_hashmap_delete_${_hmSfx}(&${_hmName}, ${_hmArg0})`;
+      }
+    }
+
+    // Set method calls: s.add(), s.has(), s.delete(), s.clear()
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
+      const _setSym = this.lookup(callee.object.name);
+      if (_setSym?._isSet) {
+        const _sName = callee.object.name;
+        const _sProp = callee.prop;
+        const _sSfx  = _setSym._setSuffix;
+        const _sArg0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+        if (_sProp === 'add')    return `tsc_set_add_${_sSfx}(&${_sName}, ${_sArg0})`;
+        if (_sProp === 'has')    return `tsc_set_has_${_sSfx}(&${_sName}, ${_sArg0})`;
+        if (_sProp === 'delete') return `tsc_set_delete_${_sSfx}(&${_sName}, ${_sArg0})`;
+        if (_sProp === 'clear')  return `tsc_set_clear_${_sSfx}(&${_sName})`;
       }
     }
 

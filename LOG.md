@@ -23,6 +23,7 @@
 
 - [x] `console.log` / `console.error` / `console.warn` / `console.debug`
 - [x] `performance.now()` → `f64`
+- [x] `performance.mark(name)` / `performance.measure(name, start, end)` → `TscPerfEntry`
 - [x] Базовый `Error` (хардкод в компиляторе): `new Error("msg")`, `.message`
 - [x] `runtime.h` — минимальный заголовочный файл для C-output
 
@@ -154,6 +155,8 @@
 >
 > 2026-04-22: добавлены `clone()` и `structuredClone()` — arr.clone() → tsc_array_slice (полная копия); structuredClone(arr) → тот же pattern; inferType учитывает clone/structuredClone. **+2 теста**
 > 2026-04-22: реализован spread `{...obj}` в object literals — разворачивает поля struct по полному списку из cls.fields, с поддержкой override `{...p, y: 99}`. **+2 теста**
+>
+> 2026-04-23: реализован `Set<T>` — плоский массив (64 ячейки), макрос `TSC_SET_DECL_PRIM` для примитивных типов (i8/i16/i32/i64/u8/u16/u32/u64/f32/f64/bool) + специализация `TscSet_string` через memcmp. Кодген: `new Set<T>()` → `tsc_set_create_suffix()`, инициализация из массива-литерала; метод `.add/.has/.delete/.clear`; `for-of` по Set через index-цикл по `._vals[]`; `.size` → `size_t`. Set-переменные никогда не `const` в C (мутабельный struct). `_isSet/_setSuffix/_setElemCType` в символьной таблице. **+5 тестов: phase3/sets/**
 
 ---
 
@@ -206,6 +209,12 @@
 > - Статус: **52/53** phase4 тестов проходит (единственный провал — `extra-fields` конфликтует со спекой: классы могут наследовать только от `Error`)
 >
 > 2026-04-14: ослаблено ограничение наследования (разрешены любые одноуровневые цепочки). **Статус: 53/53 phase4 ✓**
+>
+> 2026-04-23: реализованы два новых паттерна в `match`:
+> - **Class pattern** `Circle { r }` — парсер: IDENT + `{` → `MatchClass { className, fields }`; кодген: для interface-discriminant — vtable-check (`shape.vtable == &Circle_Shape_vtable`), для concrete-type — безусловно; биндинг полей через `((Circle*)shape.self)->r`. Тест: fat-ptr interface, GCC-runnable (78.5).
+> - **Object-literal pattern** `{ kind: 1, a, b }` — парсер: `{` до идентификаторов → `MatchObjLit { discriminators, fields }`; кодген: условие по discriminator-полям (`shape.kind == 1`), биндинг полей из struct напрямую (`double a = shape.a`). Тест: struct с integer discriminator, GCC-runnable (78.5).
+> - `_matchPatternBindings()` — новый helper в codegen: извлекает поля из паттерна, обворачивает тело arm в блок `{ ... }` с биндингами.
+> **+2 теста: phase4/match/class-pattern, obj-lit-pattern**
 >
 > 2026-04-16: реализованы extension methods. Парсер: `extension function name(this: T, ...) { }` → `ExtensionFunc` AST. Codegen: `_ext_{typeIdent}_{name}(T _self, ...)`, `this` в теле → `_self` (через `_cAlias` в scope). Конфликт с методом класса — ошибка. Lookup в `calls.js`: extension проверяется после класс-методов, перед fallback. **Статус: 56/56 (53 + 3 новых extension-тестов) ✓**
 
@@ -274,6 +283,8 @@
 > - Исправлены баги: `never-noreturn` (`_currentFuncIsNever`), `cross-compat` (isCrossStruct), `err-vtable-mut-const` (interface-path перехват)
 > - Исправлен test runner: `filterArg` → `filterArgs[]` (OR-фильтрация по нескольким аргументам)
 > - **Статус фаз 0–6: 589/589 ✓** (phase0: 22, phase1: 166, phase2: 159, phase3: 142, phase4: 56, phase5: 21, phase6: 23)
+>
+> 2026-04-23: реализован `process.env` — `tsc_env_get(key)` (возвращает `opt_String`) и `tsc_env_has(key)` (возвращает `bool`) через POSIX `getenv()`. `opt_String` typedef: `{ bool has_value; String value; }`. Кодген в calls.js: трёхуровневый member access `process.env.get/has`. inferType: `get` → `opt_String`, `has` → `bool`. **+2 теста: phase6/process/env-get, env-has**
 
 ---
 
@@ -377,10 +388,10 @@
 
 - [x] `std/math` — `Math.floor/ceil/round/abs/sqrt/sin/cos/pow/log/...`; C-output через `<math.h>`
 - [x] `std/string` — `atob`/`btoa` (base64), `encodeUtf8`/`decodeUtf8`, codepoints, graphemes, `Regex`
-- [~] `std/io` — `Reader`/`Writer` vtable интерфейсы; `pipe`, `read-all`, `write-all` *(codegen + C-stubs; реальной реализации нет)*
-- [~] `std/fs` — `readFile`, `writeFile`, `watch` *(codegen + C-stubs; реальной реализации нет)*
-- [~] `std/net` — `fetch`, HTTP-сервер, TCP-клиент *(codegen + C-stubs; реальной реализации нет)*
-- [~] `std/ws` — WebSocket клиент и сервер *(codegen + C-stubs; реальной реализации нет)*
+- [x] `std/io` — `Reader`/`Writer` vtable интерфейсы; `pipe`, `read-all`, `write-all` *(реальная реализация: POSIX fd read/write — см. фазу 19)*
+- [x] `std/fs` — `readFile`, `writeFile`, `watch` *(реальная реализация: POSIX + Win32 — см. фазу 19)*
+- [x] `std/net` — `fetch`, HTTP-сервер, TCP-клиент *(реальная реализация: BSD sockets — см. фазу 19)*
+- [x] `std/ws` — WebSocket клиент и сервер *(реальная реализация: RFC 6455 — см. фазу 19)*
 - [x] `std/random` — `Random`, `SecureRandom`, `HardwareRandom`
 - [x] `std/temporal` — `PlainDate`, `PlainTime`, `ZonedDateTime`, `Now`
 - [x] `std/url` — `URL`, `URLSearchParams`
@@ -661,7 +672,7 @@
 | 9  | CLI core | 25 | `[x]` |
 | 10 | Package manager | 20 | `[~]` (CLI ✓, CMake ✓, build profiles ✓; platform profiles — отложено) |
 | 11 | Embedded compiler features | 38 | `[x]` |
-| 12 | Стандартная библиотека | 134 | `[~]` (math/string/temporal/json/reactive/blob/buffer/random/embedded ✓; io/fs/net/ws/hal/avr — codegen+stubs) |
+| 12 | Стандартная библиотека | 134 | `[~]` (math/string/temporal/json/reactive/blob/buffer/random/embedded/io/fs/net/ws ✓; hal/avr — desktop stubs, реальная реализация через platform profile) |
 | 13 | Декораторы | 21 | `[x]` |
 | 14 | IR и продвинутые возможности | — | `[x]` |
 | 15 | Линтер и форматтер | 8 | `[x]` |

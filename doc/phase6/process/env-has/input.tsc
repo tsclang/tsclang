@@ -1,0 +1,2 @@
+const haspath = process.env.has("PATH");
+console.log(haspath);

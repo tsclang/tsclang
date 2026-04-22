@@ -10,6 +10,10 @@
 #  include <io.h>
 #  define tsc_read(fd, buf, n)  _read((fd), (buf), (unsigned)(n))
 #  define tsc_write(fd, buf, n) _write((fd), (buf), (unsigned)(n))
+#  ifndef _SSIZE_T_DEFINED
+typedef int ssize_t;
+#    define _SSIZE_T_DEFINED
+#  endif
 #else
 #  include <unistd.h>
 #  define tsc_read(fd, buf, n)  read((fd), (buf), (n))

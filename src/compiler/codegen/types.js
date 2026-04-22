@@ -294,6 +294,8 @@ export default {
         if (node.prop === 'size') {
           const ot = this.inferType(node.object);
           if (this._mapSuffix(ot)) return 'size_t';
+          const _szSym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+          if (_szSym?._isSet) return 'size_t';
         }
         if (node.prop === 'data') {
           const _datObjType = this.inferType(node.object);
@@ -342,6 +344,14 @@ export default {
                'TscDuration','TscZonedDateTime'].includes(_tpCtype)) {
             if (_tpIntFields.includes(node.prop)) return 'int32_t';
             if (node.prop === 'timeZone') return 'String';
+          }
+        }
+        // TscPerfEntry field access (from performance.measure())
+        if (node.object.kind === 'Ident') {
+          const _peSym = this.lookup(node.object.name);
+          if (_peSym?.ctype === 'TscPerfEntry') {
+            if (node.prop === 'name') return 'String';
+            if (node.prop === 'duration' || node.prop === 'startTime') return 'double';
           }
         }
         // Blob / TscBlob field access
@@ -435,7 +445,10 @@ export default {
           if (obj.kind === 'Ident' && prop === 'alloc' && this.classes.get(obj.name)?._isPool) {
             return `opt_ref_${obj.name}`;
           }
-          if (obj.kind === 'Ident' && obj.name === 'performance') return 'double';
+          if (obj.kind === 'Ident' && obj.name === 'performance') {
+            if (prop === 'measure') return 'TscPerfEntry';
+            return 'double'; // now() and mark() both return double/void
+          }
           if (obj.kind === 'Ident' && obj.name === 'Math') {
             if (prop === 'clz32' || prop === 'imul') return 'int32_t';
             if (prop === 'fround') return 'float';
@@ -501,6 +514,19 @@ export default {
           }
           if (prop === 'at') return 'opt_u8';
           if (prop === 'toFixed' || prop === 'toPrecision') return 'String';
+          // process.env.get() → opt_String, .has() → bool
+          if (obj.kind === 'Member' &&
+              obj.object.kind === 'Ident' && obj.object.name === 'process' &&
+              obj.prop === 'env') {
+            if (prop === 'get') return 'opt_String';
+            if (prop === 'has') return 'bool';
+          }
+          // Set method return types
+          const _setSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+          if (_setSym0?._isSet) {
+            if (prop === 'has' || prop === 'delete') return 'bool';
+            if (prop === 'add' || prop === 'clear') return 'void';
+          }
           // Map method return types
           const objSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
           const objType0 = objSym0?.ctype ?? this.inferType(obj);

@@ -1,0 +1,3 @@
+performance.mark("start");
+performance.mark("end");
+console.log("marked");

@@ -1,0 +1,10 @@
+let s = new Set<i32>();
+s.add(1);
+s.add(2);
+s.add(1);
+console.log(s.size);
+console.log(s.has(1));
+console.log(s.has(3));
+const removed = s.delete(1);
+console.log(removed);
+console.log(s.size);

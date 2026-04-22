@@ -445,6 +445,25 @@ export default {
           break;
         }
 
+        // new Set<T>() / new Set<T>([...]) → TscSet_SUFFIX
+        if (init?.kind === 'New' && init.name === 'Set') {
+          const tArg = init.typeArgs?.[0];
+          const elemCType = tArg ? this.resolveType(tArg) : 'int32_t';
+          const suffix = this.cTypeToIdent(elemCType);
+          const setType = `TscSet_${suffix}`;
+          // never const in C — Set is a mutable struct
+          p(`${setType} ${name} = tsc_set_create_${suffix}();`);
+          const initArr = init.args?.[0]?.expr;
+          if (initArr?.kind === 'ArrayLit') {
+            for (const el of initArr.elems) {
+              const ev = this.exprToC(el.expr, lines, depth);
+              p(`tsc_set_add_${suffix}(&${name}, ${ev});`);
+            }
+          }
+          this.define(name, { ctype: setType, varKind, _isSet: true, _setSuffix: suffix, _setElemCType: elemCType });
+          break;
+        }
+
         // new Blob([...]) → two variants:
         //   [int literals] → simple inline struct Blob {data, size, ?type}
         //   [bufVar], {type:...} → TscBlob via tsc_blob_create
@@ -1820,6 +1839,28 @@ export default {
           }
         }
 
+        // for (const v of set) → index loop over TscSet_SUFFIX._vals
+        {
+          const _setSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+          if (_setSym?._isSet) {
+            const _sfx = _setSym._setSuffix;
+            const _eC  = _setSym._setElemCType;
+            const _setC = this.exprToC(node.iterable, lines, depth);
+            const _ivar = `_i_${this.loopCount++}`;
+            const _bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
+            p(`for (size_t ${_ivar} = 0; ${_ivar} < ${_setC}.size; ${_ivar}++) {`);
+            if (_bindName) {
+              lines.push(`${II}${qual}${_eC} ${_bindName} = ${_setC}._vals[${_ivar}];`);
+              this.define(_bindName, { ctype: _eC, varKind: node.varKind });
+            }
+            this._loopDepth++;
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            this._loopDepth--;
+            p('}');
+            break;
+          }
+        }
+
         // Iterable<T> protocol: class implements Iterable<T>
         {
           const _forOfSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
@@ -2227,19 +2268,39 @@ export default {
       // if/else chain form
       for (let i = 0; i < cases.length; i++) {
         const c = cases[i];
-        const bodyC = this.exprToC(c.body, lines, depth);
         const isLast = i === cases.length - 1;
         const prefix = i === 0 ? 'if' : 'else if';
+        const needsBindings = c.pattern.kind === 'MatchClass' || c.pattern.kind === 'MatchObjLit';
 
         if (isLast && (c.pattern.kind === 'MatchWild' || (isEnum && c.pattern.kind === 'MatchEnum'))) {
           // Last case: emit as else
+          const bodyC = this.exprToC(c.body, lines, depth);
           p(`else { ${name} = ${bodyC}; }`);
         } else {
           const cond = this._matchPatternCond(c.pattern, discC, discType, enumDef);
-          if (cond === null) {
+          if (needsBindings) {
+            // Emit block with field bindings then body
+            const armLines = [];
+            const armI = ' '.repeat(this.indent * (depth + 1));
+            this.pushScope();
+            const bindings = this._matchPatternBindings(c.pattern, discC, discType);
+            for (const b of bindings) armLines.push(armI + b);
+            const bodyC = this.exprToC(c.body, armLines, depth + 1);
+            armLines.push(`${armI}${name} = ${bodyC};`);
+            this.popScope();
+            if (cond === null) {
+              p(`else {`);
+            } else {
+              p(`${prefix} (${cond}) {`);
+            }
+            lines.push(...armLines);
+            p('}');
+          } else if (cond === null) {
             // Wildcard not at last position (just emit as else)
+            const bodyC = this.exprToC(c.body, lines, depth);
             p(`else { ${name} = ${bodyC}; }`);
           } else {
+            const bodyC = this.exprToC(c.body, lines, depth);
             p(`${prefix} (${cond}) { ${name} = ${bodyC}; }`);
           }
         }
@@ -2419,6 +2480,40 @@ export default {
     this.define(name, { ctype: valueType, varKind });
   },
 
+  // Generate field binding declarations for patterns that destructure (MatchClass, MatchObjLit)
+  // Returns array of C declaration strings, or empty array if no bindings needed
+  _matchPatternBindings(pattern, discC, discType) {
+    if (pattern.kind === 'MatchClass') {
+      const fields = pattern.fields ?? [];
+      if (fields.length === 0) return [];
+      const className = pattern.className;
+      const ifaceDef = this.interfaces?.get(discType) ?? null;
+      const classDef = this.classes.get(className);
+      return fields.map(f => {
+        const fieldDef = classDef?.fields?.find(fd => fd.name === f);
+        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
+        const access = ifaceDef
+          ? `((${className}*)${discC}.self)->${f}`
+          : `${discC}.${f}`;
+        this.define(f, { ctype, varKind: 'const' });
+        return `${ctype} ${f} = ${access};`;
+      });
+    }
+    if (pattern.kind === 'MatchObjLit') {
+      const fields = pattern.fields ?? [];
+      if (fields.length === 0) return [];
+      const structDef = this.classes.get(discType);
+      return fields.map(f => {
+        const fieldDef = structDef?.fields?.find(fd => fd.name === f);
+        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
+        const access = `${discC}.${f}`;
+        this.define(f, { ctype, varKind: 'const' });
+        return `${ctype} ${f} = ${access};`;
+      });
+    }
+    return [];
+  },
+
   // Generate a C condition expression for a match pattern
   _matchPatternCond(pattern, discC, discType, enumDef) {
     switch (pattern.kind) {
@@ -2441,6 +2536,25 @@ export default {
       case 'MatchOr': {
         const parts = pattern.patterns.map(p => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
         return parts.join(' || ');
+      }
+      case 'MatchClass': {
+        // Class pattern: check vtable for interface fat pointers
+        const ifaceDef = this.interfaces?.get(discType) ?? null;
+        if (ifaceDef) {
+          // Interface fat pointer: discC.vtable == &ClassName_InterfaceName_vtable
+          return `${discC}.vtable == &${pattern.className}_${discType}_vtable`;
+        }
+        // Concrete type: compile-time check only — always true (just bind fields)
+        return null; // treat as wildcard (fields still extracted by _matchPatternBindings)
+      }
+      case 'MatchObjLit': {
+        // Object literal pattern: check discriminator fields
+        if (pattern.discriminators.length === 0) return null;
+        const conds = pattern.discriminators.map(d => {
+          if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${d.value}"))`;
+          return `${discC}.${d.key} == ${d.value}`;
+        });
+        return conds.join(' && ');
       }
       case 'MatchTuple': {
         // Check each non-wildcard element against the corresponding tuple field

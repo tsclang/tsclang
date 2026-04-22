@@ -113,6 +113,36 @@ static inline double tsc_performance_now(void) {
 #endif
 }
 
+/* performance.mark / performance.measure */
+typedef struct { String name; double duration; double startTime; } TscPerfEntry;
+#define TSC_PERF_MARKS_MAX 16
+typedef struct { String name; double ts; } _TscPerfMark;
+static _TscPerfMark _tsc_perf_marks[TSC_PERF_MARKS_MAX];
+static size_t _tsc_perf_mark_count = 0;
+static inline void tsc_performance_mark(String name) {
+    double ts = tsc_performance_now();
+    for (size_t _i = 0; _i < _tsc_perf_mark_count; _i++) {
+        if (_tsc_perf_marks[_i].name.length == name.length &&
+            memcmp(_tsc_perf_marks[_i].name.data, name.data, name.length) == 0)
+            { _tsc_perf_marks[_i].ts = ts; return; }
+    }
+    if (_tsc_perf_mark_count < TSC_PERF_MARKS_MAX)
+        _tsc_perf_marks[_tsc_perf_mark_count++] = (_TscPerfMark){name, ts};
+}
+static inline double _tsc_perf_get_mark(String name) {
+    for (size_t _i = 0; _i < _tsc_perf_mark_count; _i++) {
+        if (_tsc_perf_marks[_i].name.length == name.length &&
+            memcmp(_tsc_perf_marks[_i].name.data, name.data, name.length) == 0)
+            return _tsc_perf_marks[_i].ts;
+    }
+    return 0.0;
+}
+static inline TscPerfEntry tsc_performance_measure(String name, String startMark, String endMark) {
+    double _st = _tsc_perf_get_mark(startMark);
+    double _en = _tsc_perf_get_mark(endMark);
+    return (TscPerfEntry){name, _en - _st, _st};
+}
+
 /* Compiler inserts this at the top of main() */
 #define TSC_INIT() _tsc_init()
 
@@ -415,6 +445,62 @@ TSC_MAP_DECL(String, int32_t, string_i32)
 
 /* free is a no-op for flat-array maps (no heap allocation) */
 #define tsc_map_free_string_i32(m) ((void)(m))
+
+/* -------------------------------------------------------------------------
+ * TscSet — simple array-backed set (up to 64 entries)
+ * ------------------------------------------------------------------------- */
+#define TSC_SET_CAP 64
+
+/* Primitive-type set: element comparison via == */
+#define TSC_SET_DECL_PRIM(T, SUFFIX) \
+typedef struct { T _vals[TSC_SET_CAP]; size_t size; } TscSet_##SUFFIX; \
+static inline TscSet_##SUFFIX tsc_set_create_##SUFFIX(void) { \
+    TscSet_##SUFFIX _s; _s.size = 0; return _s; } \
+static inline void tsc_set_add_##SUFFIX(TscSet_##SUFFIX *_s, T val) { \
+    for (size_t _i = 0; _i < _s->size; _i++) if (_s->_vals[_i] == val) return; \
+    if (_s->size < TSC_SET_CAP) _s->_vals[_s->size++] = val; } \
+static inline bool tsc_set_has_##SUFFIX(const TscSet_##SUFFIX *_s, T val) { \
+    for (size_t _i = 0; _i < _s->size; _i++) if (_s->_vals[_i] == val) return true; \
+    return false; } \
+static inline bool tsc_set_delete_##SUFFIX(TscSet_##SUFFIX *_s, T val) { \
+    for (size_t _i = 0; _i < _s->size; _i++) { \
+        if (_s->_vals[_i] == val) { \
+            memmove(&_s->_vals[_i], &_s->_vals[_i+1], (_s->size-_i-1)*sizeof(T)); \
+            _s->size--; return true; } } \
+    return false; } \
+static inline void tsc_set_clear_##SUFFIX(TscSet_##SUFFIX *_s) { _s->size = 0; }
+
+TSC_SET_DECL_PRIM(int8_t,   i8)
+TSC_SET_DECL_PRIM(int16_t,  i16)
+TSC_SET_DECL_PRIM(int32_t,  i32)
+TSC_SET_DECL_PRIM(int64_t,  i64)
+TSC_SET_DECL_PRIM(uint8_t,  u8)
+TSC_SET_DECL_PRIM(uint16_t, u16)
+TSC_SET_DECL_PRIM(uint32_t, u32)
+TSC_SET_DECL_PRIM(uint64_t, u64)
+TSC_SET_DECL_PRIM(float,    f32)
+TSC_SET_DECL_PRIM(double,   f64)
+TSC_SET_DECL_PRIM(bool,     bool)
+
+/* String set: element comparison via memcmp */
+typedef struct { String _vals[TSC_SET_CAP]; size_t size; } TscSet_string;
+static inline TscSet_string tsc_set_create_string(void) {
+    TscSet_string _s; _s.size = 0; return _s; }
+static inline void tsc_set_add_string(TscSet_string *_s, String val) {
+    for (size_t _i = 0; _i < _s->size; _i++)
+        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) return;
+    if (_s->size < TSC_SET_CAP) _s->_vals[_s->size++] = val; }
+static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
+    for (size_t _i = 0; _i < _s->size; _i++)
+        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) return true;
+    return false; }
+static inline bool tsc_set_delete_string(TscSet_string *_s, String val) {
+    for (size_t _i = 0; _i < _s->size; _i++) {
+        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) {
+            memmove(&_s->_vals[_i], &_s->_vals[_i+1], (_s->size-_i-1)*sizeof(String));
+            _s->size--; return true; } }
+    return false; }
+static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
 /* cc65 does not support _Noreturn; guard for NES target */
 #ifdef TSC_NES
@@ -872,6 +958,16 @@ static inline double tsc_parse_f64(String s) {
  * ------------------------------------------------------------------------- */
 typedef struct { String  *data; size_t length; size_t capacity; } Array_string;
 typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
+
+typedef struct { bool has_value; String value; } opt_String;
+
+/* process.env.get(key) → opt_String  (key must be null-terminated — string literals are) */
+static inline opt_String tsc_env_get(String key) {
+    const char *v = getenv(key.data);
+    if (!v) return (opt_String){false, {NULL, 0, 0}};
+    return (opt_String){true, {(char *)v, strlen(v), 0}};
+}
+static inline bool tsc_env_has(String key) { return getenv(key.data) != NULL; }
 
 static inline Array_string tsc_make_argv(int argc, char **argv) {
     size_t n = (size_t)(argc > 0 ? argc : 0);

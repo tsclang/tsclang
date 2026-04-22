@@ -63,7 +63,8 @@ const command = args[0];
 
 if (!command) {
   console.error('Usage: tsclang <command> [options]');
-  console.error('Commands: build, run, init, validate-config, explain, format, lint, install, update');
+  console.error('Commands: build, run, init, build-cmake, install, update, search, publish,');
+  console.error('          lint, format, explain, emit-dts, lsp, validate-config');
   process.exit(1);
 }
 

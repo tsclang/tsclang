@@ -1,0 +1,22 @@
+interface Shape { area(): f64 }
+
+class Circle implements Shape {
+    r: f64;
+    area(): f64 { return 3.14 * this.r * this.r; }
+}
+class Rect implements Shape {
+    w: f64;
+    h: f64;
+    area(): f64 { return this.w * this.h; }
+}
+
+let c = new Circle();
+c.r = 5.0;
+let shape: Shape = c;
+
+const a = match(shape) {
+    Circle { r } => 3.14 * r * r,
+    Rect { w, h } => w * h,
+    _ => 0.0,
+};
+console.log(a);

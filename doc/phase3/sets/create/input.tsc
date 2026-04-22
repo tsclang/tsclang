@@ -1,0 +1,2 @@
+const s = new Set<i32>();
+console.log(s.size);

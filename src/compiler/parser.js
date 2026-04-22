@@ -1434,13 +1434,48 @@ export function parse(tokens, filename = '<input>', src = null) {
         pos++;
         return { kind: 'MatchLit', value: t.value, litType: 'string' };
       }
-      // Identifier: wildcard _, enum case Foo.Bar, or bare enum value
+      // Object literal pattern: { key: "lit", field1, field2 }
+      if (t.type === TK.LBRACE) {
+        eat(TK.LBRACE);
+        const discriminators = [];
+        const fields = [];
+        while (cur().type !== TK.RBRACE) {
+          const key = eat(TK.IDENT).value;
+          if (cur().type === TK.COLON) {
+            eat(TK.COLON);
+            if (cur().type === TK.STRING) {
+              discriminators.push({ key, value: eat(TK.STRING).value, litType: 'string' });
+            } else if (cur().type === TK.NUMBER) {
+              discriminators.push({ key, value: eat(TK.NUMBER).value, litType: 'number' });
+            } else {
+              err(`Object match pattern: expected string or number literal after '${key}:'`);
+            }
+          } else {
+            fields.push(key);
+          }
+          tryEat(TK.COMMA);
+        }
+        eat(TK.RBRACE);
+        return { kind: 'MatchObjLit', discriminators, fields };
+      }
+      // Identifier: wildcard _, enum case Foo.Bar, class pattern ClassName { f1, f2 }
       if (t.type === TK.IDENT) {
         const name = eat(TK.IDENT).value;
         if (cur().type === TK.DOT) {
           eat(TK.DOT);
           const member = eat(TK.IDENT).value;
           return { kind: 'MatchEnum', enumName: name, caseName: member, path: `${name}.${member}` };
+        }
+        // Class/struct destructuring pattern: ClassName { field1, field2 }
+        if (cur().type === TK.LBRACE) {
+          eat(TK.LBRACE);
+          const fields = [];
+          while (cur().type !== TK.RBRACE) {
+            fields.push(eat(TK.IDENT).value);
+            tryEat(TK.COMMA);
+          }
+          eat(TK.RBRACE);
+          return { kind: 'MatchClass', className: name, fields };
         }
         return { kind: 'MatchIdent', name };
       }
