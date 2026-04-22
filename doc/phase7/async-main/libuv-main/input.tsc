@@ -1,0 +1,4 @@
+#[profile(scheduler:libuv)]
+async function main(): Promise<void> {
+    console.log("hello libuv");
+}

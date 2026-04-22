@@ -2,7 +2,7 @@ class Err { message: string; }
 async function fail(): void throws Err {
     throw new Err("boom");
 }
-async function run(): void {
+async function main(): void {
     try {
         await fail();
     } catch (e: Err) {

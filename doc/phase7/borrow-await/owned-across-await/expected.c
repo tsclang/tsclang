@@ -10,7 +10,7 @@ typedef struct {
 static void fetch_poll(fetch_state *self) {
     switch (self->_state) {
         case 0:
-            self->d = {0};
+            self->d = (Data){0};
             self->d.value = 42;
             self->_result = self->d;
             self->_done = true;
@@ -20,21 +20,20 @@ static void fetch_poll(fetch_state *self) {
 
 typedef struct {
     int32_t _state; int _result; bool _done;
-    TscResponse d;
-    TscFetchAwaitable _await_0;
+    Data d;
+    fetch_state _await_0;
 } run_state;
 
 static void run_poll(run_state *self) {
     switch (self->_state) {
         case 0:
-            self->_await_0 = tsc_fetch_async(STR_LIT(""), NULL);
+            self->_await_0 = (fetch_state){0};
             self->_state = 1;
             /* fall through */
         case 1:
-            tsc_fetch_poll(&self->_await_0);
+            fetch_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            if (!self->_await_0._result.ok) { self->_done = true; return; }
-            self->d = self->_await_0._result.value;
+            self->d = self->_await_0._result;
             printf("%d\n", self->d.value);
             self->_done = true;
             return;

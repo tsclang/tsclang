@@ -1,7 +1,7 @@
 class Err { message: string; }
 async function a(): i32 throws Err { return 1; }
 async function b(): i32 throws Err { throw new Err("fail"); }
-async function run(): void {
+async function main(): void {
     try {
         const [x, y] = await Promise.all([a(), b()]);
     } catch (e: Err) {

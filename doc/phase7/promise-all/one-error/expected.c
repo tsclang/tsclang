@@ -10,13 +10,11 @@ typedef struct { int32_t _state; Result_i32_Err _result; bool _done; } a_state;
 static void a_poll(a_state *self) {
     switch (self->_state) {
         case 0:
-            self->_result = 1;
+            self->_result = (Result_i32_Err){.ok = true, .value = 1};
             self->_done = true;
             return;
     }
 }
-
-typedef struct { bool ok; union { int32_t value; Err error; }; } Result_i32_Err;
 
 typedef struct { int32_t _state; Result_i32_Err _result; bool _done; } b_state;
 
@@ -35,9 +33,9 @@ typedef struct {
     int32_t y;
     a_state _await_0;
     b_state _await_1;
-} run_state;
+} main_state;
 
-static void run_poll(run_state *self) {
+static void main_poll(main_state *self) {
     switch (self->_state) {
         case 0:
             self->_await_0 = (a_state){0};
@@ -48,8 +46,8 @@ static void run_poll(run_state *self) {
             a_poll(&self->_await_0);
             b_poll(&self->_await_1);
             if (!self->_await_0._done || !self->_await_1._done) return;
-            self->x = self->_await_0._result;
-            self->y = self->_await_1._result;
+            self->x = self->_await_0._result.value;
+            self->y = self->_await_1._result.value;
             if (!self->_await_1._result.ok) {
                 Err e = self->_await_1._result.error;
                 printf("error\n");
@@ -63,5 +61,9 @@ static void run_poll(run_state *self) {
 
 int main(void) {
     TSC_INIT();
+    main_state _main_sm = {0};
+    while (!_main_sm._done) {
+        main_poll(&_main_sm);
+    }
     return 0;
 }

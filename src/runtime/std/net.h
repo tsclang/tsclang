@@ -1,5 +1,6 @@
 /* std/net.h — TSClang networking stubs (compile-only for [F] tests) */
 #pragma once
+#define TSC_STD_NET_H
 #include <stdint.h>
 #include <stdbool.h>
 

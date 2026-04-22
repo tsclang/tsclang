@@ -33,6 +33,7 @@ static void poll_poll(poll_state *self) {
         case 0:
             self->_state = 1;
             /* fall through */
+case_1:
         case 1:
             if (!(true)) { self->_done = true; return; }
             self->_await_0 = (sensor_state){0};
@@ -51,7 +52,6 @@ static void poll_poll(poll_state *self) {
             self->_state = 1;
             goto case_1;
     }
-case_1: ;
 }
 
 int main(void) {

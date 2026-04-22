@@ -1,7 +1,7 @@
 async function getValue(): i32 {
     return 10;
 }
-async function run(): void {
+async function main(): void {
     const x = await getValue();
     const y = x * 2;
     console.log(y);

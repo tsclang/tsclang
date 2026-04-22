@@ -3,7 +3,7 @@ function* nums(): Generator<i32> {
     yield 20;
     yield 30;
 }
-async function run(): void {
+async function main(): void {
     for await (const n of nums()) {
         console.log(n);
     }

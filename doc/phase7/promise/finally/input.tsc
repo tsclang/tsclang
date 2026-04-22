@@ -1,7 +1,7 @@
 async function work(): void {
     console.log("working");
 }
-async function run(): void {
+async function main(): void {
     try {
         await work();
     } finally {

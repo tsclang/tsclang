@@ -55,8 +55,8 @@ export default {
         return { kind: 'sleep', stateType: 'TscSleepAwaitable', pollFn: 'tsc_sleep_poll',
                  resultCType: null, args: expr.args };
       }
-      // std/net: fetch(url, opts?)
-      if (callee === 'fetch') {
+      // std/net: fetch(url, opts?) — only if NOT a user-defined async function
+      if (callee === 'fetch' && !this._asyncFuncs?.has('fetch')) {
         return { kind: 'net-fetch', stateType: 'TscFetchAwaitable', pollFn: 'tsc_fetch_poll',
                  initFn: 'tsc_fetch_async', resultCType: 'TscResponse', isResult: true, args: expr.args };
       }
@@ -317,10 +317,14 @@ export default {
     if (hasThrows) {
       const innerIdent = isVoidReturn ? 'void' : this.cTypeToIdent(innerResultCType ?? 'int');
       resultCType = `Result_${innerIdent}_${throwsKey}`;
-      // Emit Result typedef; void returns use _dummy placeholder
-      const innerDecl = isVoidReturn ? 'int _dummy' : `${innerResultCType} value`;
-      this._topBlank();
-      this.topLevel.push(`typedef struct { bool ok; union { ${innerDecl}; ${throwsKey} error; }; } ${resultCType};`);
+      // Emit Result typedef only once (deduplicate across functions sharing same Result type)
+      if (!this._emittedResultTypes) this._emittedResultTypes = new Set();
+      if (!this._emittedResultTypes.has(resultCType)) {
+        this._emittedResultTypes.add(resultCType);
+        const innerDecl = isVoidReturn ? 'int _dummy' : `${innerResultCType} value`;
+        this._topBlank();
+        this.topLevel.push(`typedef struct { bool ok; union { ${innerDecl}; ${throwsKey} error; }; } ${resultCType};`);
+      }
     } else {
       resultCType = innerResultCType;
     }
@@ -452,7 +456,6 @@ export default {
     }
 
     lines.push('    }');
-    for (const lbl of ctx.loopLabels) lines.push(lbl);
 
     return lines;
   },
@@ -476,6 +479,7 @@ export default {
     // Transition to loop condition state
     lines.push(`${I}self->_state = ${loopCase};`);
     lines.push(`${I}/* fall through */`);
+    lines.push(`case_${loopCase}:`);
     lines.push(`        case ${loopCase}:`);
 
     // Condition check: on failure, inline remaining stmts (common: return x after while)
@@ -502,7 +506,6 @@ export default {
       lines.push(`${I}self->_state = ${loopCase};`);
       lines.push(`${I}goto case_${loopCase};`);
     }
-    ctx.loopLabels.push(`case_${loopCase}: ;`);
     ctx.terminated = true;
   },
 
@@ -680,7 +683,7 @@ export default {
       }
       if (notDone.length) lines.push(`${I}if (${notDone.join(' || ')}) return;`);
 
-      // Assign results to destructured vars
+      // Assign results to destructured vars (unwrap .value for Result_T_Err types)
       for (let j = 0; j < (s.pattern || []).length; j++) {
         const elem = s.pattern[j];
         if (!elem) continue;
@@ -689,7 +692,11 @@ export default {
         const sub = callName && this._asyncFuncs?.has(callName)
           ? this._asyncFuncs.get(callName) : null;
         if (sub && this._selfCtx.promoted.has(elem.name)) {
-          lines.push(`${I}self->${elem.name} = self->_await_${baseIdx + j}._result;`);
+          const needsUnwrap = sub.resultCType?.startsWith('Result_');
+          const rhs = needsUnwrap
+            ? `self->_await_${baseIdx + j}._result.value`
+            : `self->_await_${baseIdx + j}._result`;
+          lines.push(`${I}self->${elem.name} = ${rhs};`);
         }
       }
       return;
@@ -805,6 +812,7 @@ export default {
       lines.push(`${I}self->_gen_${genIdx} = (${gi.stateType}){0};`);
       lines.push(`${I}self->_state = ${loopCase};`);
       lines.push(`${I}/* fall through */`);
+      lines.push(`case_${loopCase}:`);
       lines.push(`        case ${loopCase}: {`);
       ctx.nextCase++;
 
@@ -826,7 +834,6 @@ export default {
 
       lines.push(`${I}    goto case_${loopCase};`);
       lines.push(`        }`);
-      ctx.loopLabels.push(`case_${loopCase}: ;`);
       ctx.terminated = true; // loop handles done internally via _nr.done check
       return;
     }
@@ -842,7 +849,16 @@ export default {
 
     // ── return ──
     if (s.kind === 'Return') {
-      if (s.value) lines.push(`${I}self->_result = ${this._selfE(s.value)};`);
+      const retCtx = this._selfCtx;
+      if (s.value) {
+        if (retCtx?.hasThrows) {
+          lines.push(`${I}self->_result = (${retCtx.resultCType}){.ok = true, .value = ${this._selfE(s.value)}};`);
+        } else {
+          lines.push(`${I}self->_result = ${this._selfE(s.value)};`);
+        }
+      } else if (retCtx?.hasThrows) {
+        lines.push(`${I}self->_result = (${retCtx.resultCType}){.ok = true};`);
+      }
       lines.push(`${I}self->_done = true;`);
       lines.push(`${I}return;`);
       ctx.terminated = true;
@@ -861,7 +877,16 @@ export default {
       const ctx = this._selfCtx;
       if (ctx?.inlined.has(name)) return;
       if (ctx?.promoted.has(name)) {
-        if (init) lines.push(`${I}self->${name} = ${this._selfE(init)};`);
+        if (init) {
+          // In assignment context, bare {0} is not valid — need compound literal cast
+          let initC = this._selfE(init);
+          if (initC === '{0}') {
+            const ct = stmt.typeAnn ? this.resolveType(stmt.typeAnn)
+                     : (init ? (this.inferType(init) || null) : null);
+            if (ct) initC = `(${ct}){0}`;
+          }
+          lines.push(`${I}self->${name} = ${initC};`);
+        }
       } else {
         const tmp = [];
         this.visitStmt(stmt, tmp, 0);
@@ -1046,7 +1071,6 @@ export default {
     }
 
     lines.push('    }');
-    for (const lbl of ctx.loopLabels) lines.push(lbl);
     lines.push(`    ${doneRet}`);
 
     return lines;
@@ -1085,6 +1109,7 @@ export default {
     if (s.kind === 'While') {
       // case for loop condition (falls through from previous case)
       const loopCase = ctx.caseNum + 1;
+      lines.push(`case_${loopCase}:`);
       lines.push(`        case ${loopCase}:`);
       ctx.caseNum = loopCase;
       ctx.needTerminal = false;
@@ -1127,7 +1152,6 @@ export default {
       // Loop back
       lines.push(`${I}self->_state = ${loopCase};`);
       lines.push(`${I}goto case_${loopCase};`);
-      ctx.loopLabels.push(`case_${loopCase}: ;`);
       return;
     }
 

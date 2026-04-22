@@ -963,12 +963,19 @@ if (command === 'build') {
     const cmakePath = join(outDir, 'CMakeLists.txt');
     if (!existsSync(cmakePath)) {
       const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+      const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
       const cmakeContent = [
         'cmake_minimum_required(VERSION 3.10)',
         `project(${stem} C)`,
         'set(CMAKE_C_STANDARD 11)',
         `add_executable(${stem} ${stem}.c)`,
         `target_include_directories(${stem} PRIVATE ${JSON.stringify(dirname(runtimeH))})`,
+        ...(useLibuv ? [
+          'find_package(PkgConfig REQUIRED)',
+          'pkg_check_modules(LIBUV REQUIRED libuv)',
+          `target_link_libraries(${stem} \${LIBUV_LIBRARIES})`,
+          `target_include_directories(${stem} PRIVATE \${LIBUV_INCLUDE_DIRS})`,
+        ] : []),
         '',
       ].join('\n');
       writeFileSync(cmakePath, cmakeContent, 'utf8');
@@ -979,11 +986,13 @@ if (command === 'build') {
     const runtimeH = join(ROOT, 'src/runtime/runtime.h');
     const binPath = join(outDir, stem);
     const gccOptimize = optimize ? [`-${optimize}`] : [];
+    const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
     const gcc = spawnSync('gcc', [
       cPath, '-o', binPath,
       '-I', dirname(runtimeH),
       '-lpthread', '-std=c11',
       ...gccOptimize,
+      ...(useLibuv ? ['-luv'] : []),
     ], { stdio: 'pipe' });
     if (gcc.status !== 0) {
       process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);

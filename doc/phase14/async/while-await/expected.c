@@ -25,6 +25,7 @@ static void run_poll(run_state *self) {
             self->count = 0;
             self->_state = 1;
             /* fall through */
+case_1:
         case 1:
             if (!(self->count < self->n)) {
                 self->_result = self->count;
@@ -42,7 +43,6 @@ static void run_poll(run_state *self) {
             self->_state = 1;
             goto case_1;
     }
-case_1: ;
 }
 
 int main(void) {

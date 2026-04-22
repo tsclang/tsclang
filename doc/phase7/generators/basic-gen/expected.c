@@ -7,6 +7,7 @@ static counter_result counter_next(counter_state *self, int32_t start) {
     switch (self->_state) {
         case 0:
             self->i = start;
+case_1:
         case 1:
             if (!(true)) { self->_done = true; return (counter_result){0, true}; }
             self->_value = self->i;
@@ -17,7 +18,6 @@ static counter_result counter_next(counter_state *self, int32_t start) {
             self->_state = 1;
             goto case_1;
     }
-case_1: ;
     return (counter_result){0, true};
 }
 

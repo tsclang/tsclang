@@ -16,9 +16,9 @@ static void fail_poll(fail_state *self) {
     }
 }
 
-typedef struct { int32_t _state; int _result; bool _done; fail_state _await_0; } run_state;
+typedef struct { int32_t _state; int _result; bool _done; fail_state _await_0; } main_state;
 
-static void run_poll(run_state *self) {
+static void main_poll(main_state *self) {
     switch (self->_state) {
         case 0:
             self->_await_0 = (fail_state){0};
@@ -40,5 +40,9 @@ static void run_poll(run_state *self) {
 
 int main(void) {
     TSC_INIT();
+    main_state _main_sm = {0};
+    while (!_main_sm._done) {
+        main_poll(&_main_sm);
+    }
     return 0;
 }

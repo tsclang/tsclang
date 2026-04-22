@@ -222,7 +222,9 @@ class Context {
     }
 
     // Full emit: includes → typedefs → lambdas → topLevel → main
-    const parts = [...this.includes].sort();
+    const parts = [];
+    if (this._schedulerName === 'libuv') parts.push('#define TSC_SCHEDULER_LIBUV');
+    parts.push(...[...this.includes].sort());
     parts.push('');
     _pushSection(this.typedefs, parts);
     _pushSection(this.lambdaLines, parts);
@@ -255,14 +257,13 @@ class Context {
       }
       // Async main bootstrap
       if (this._asyncMainPollFn) {
-        const embeddedTargets = ['avr', 'arm', 'stm32'];
-        if (embeddedTargets.includes(this._targetName)) {
-          parts.push(`${this.ind()}${this._asyncMainStateType} _main_sm = {0};`);
+        parts.push(`${this.ind()}${this._asyncMainStateType} _main_sm = {0};`);
+        if (this._schedulerName === 'libuv') {
+          parts.push(`${this.ind()}TSC_RUN_ASYNC(${this._asyncMainStateType}, ${this._asyncMainPollFn}, &_main_sm);`);
+        } else {
           parts.push(`${this.ind()}while (!_main_sm._done) {`);
           parts.push(`${this.ind()}    ${this._asyncMainPollFn}(&_main_sm);`);
           parts.push(`${this.ind()}}`);
-        } else {
-          parts.push(`${this.ind()}tsc_event_loop_run(${this._asyncMainPollFn});`);
         }
       }
       // Emit cleanup in reverse registration order (LIFO)

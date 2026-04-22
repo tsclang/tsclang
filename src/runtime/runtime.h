@@ -37,6 +37,13 @@
 #include <stdatomic.h>
 #endif
 
+/* ISR fallback for non-AVR targets (avr-libc defines the real one) */
+#ifndef __AVR_ARCH__
+#ifndef ISR
+#define ISR(vector) void vector##_handler(void)
+#endif
+#endif
+
 /* Math constants — POSIX extensions, not guaranteed by C99 */
 #ifndef M_E
 #define M_E        2.718281828459045235360
@@ -1448,5 +1455,90 @@ TSC_CHANNEL_DEF(int32_t, i32)
 TSC_CHANNEL_DEF(int64_t, i64)
 TSC_CHANNEL_DEF(double,  f64)
 TSC_CHANNEL_DEF(bool,    bool)
+
+#endif /* TSC_EMBEDDED */
+
+/* -------------------------------------------------------------------------
+ * Async event loop — simple synchronous stub for desktop targets
+ * ------------------------------------------------------------------------- */
+#ifndef TSC_EMBEDDED
+
+typedef void (*_TscPollFn)(void *);
+
+/* Drive a poll function (wrapping a state struct) to completion. */
+#define tsc_event_loop_run(poll_fn) do { \
+    struct { int32_t _state; int _result; bool _done; } _sm = {0}; \
+    while (!_sm._done) (poll_fn)(&_sm); \
+} while (0)
+
+/* Timer stubs: synchronous — callbacks fire immediately, intervals fire once */
+typedef int32_t _TscTimerId;
+
+static inline _TscTimerId tsc_set_timeout(void (*fn)(void), int32_t ms) {
+    (void)ms;
+    fn();
+    return 0;
+}
+
+static inline _TscTimerId tsc_set_interval(void (*fn)(void), int32_t ms) {
+    (void)ms;
+    fn();
+    return 0;
+}
+
+static inline void tsc_clear_timeout(_TscTimerId id) { (void)id; }
+static inline void tsc_clear_interval(_TscTimerId id) { (void)id; }
+
+/* Sleep awaitable — synchronous stub: marks done immediately */
+typedef struct {
+    bool _done;
+    int32_t _ms;
+} TscSleepAwaitable;
+
+static inline TscSleepAwaitable tsc_sleep_awaitable(int32_t ms) {
+    return (TscSleepAwaitable){ ._done = false, ._ms = ms };
+}
+
+static inline void tsc_sleep_poll(TscSleepAwaitable *self) {
+    self->_done = true;
+}
+
+#endif /* TSC_EMBEDDED */
+
+/* -------------------------------------------------------------------------
+ * TSC_RUN_ASYNC — drive async main state machine to completion.
+ * Default (cooperative): busy spin.  With TSC_SCHEDULER_LIBUV: uv_idle_t.
+ * ------------------------------------------------------------------------- */
+#ifndef TSC_EMBEDDED
+
+#ifdef TSC_SCHEDULER_LIBUV
+#include <uv.h>
+
+typedef struct { void *_sm; void (*_poll)(void *); bool *_done; } _TscUvCtx;
+
+static void _tsc_uv_idle_cb(uv_idle_t *h) {
+    _TscUvCtx *c = (_TscUvCtx *)h->data;
+    c->_poll(c->_sm);
+    if (*c->_done) { uv_idle_stop(h); uv_stop(h->loop); }
+}
+
+#define TSC_RUN_ASYNC(state_t, poll_fn, sm_ptr) do {                          \
+    uv_loop_t *_loop = uv_default_loop();                                     \
+    uv_idle_t _idle_h;                                                        \
+    _TscUvCtx _ctx = {                                                        \
+        (sm_ptr), (void (*)(void *))(poll_fn), &(sm_ptr)->_done };            \
+    uv_idle_init(_loop, &_idle_h);                                            \
+    _idle_h.data = &_ctx;                                                     \
+    uv_idle_start(&_idle_h, _tsc_uv_idle_cb);                                \
+    uv_run(_loop, UV_RUN_DEFAULT);                                            \
+    uv_loop_close(_loop);                                                     \
+} while (0)
+
+#else /* cooperative */
+
+#define TSC_RUN_ASYNC(state_t, poll_fn, sm_ptr) \
+    do { while (!(sm_ptr)->_done) { (poll_fn)(sm_ptr); } } while (0)
+
+#endif /* TSC_SCHEDULER_LIBUV */
 
 #endif /* TSC_EMBEDDED */

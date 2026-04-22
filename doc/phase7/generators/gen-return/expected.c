@@ -7,6 +7,7 @@ static limited_result limited_next(limited_state *self, int32_t max) {
     switch (self->_state) {
         case 0:
             self->i = 0;
+case_1:
         case 1:
             if (!(self->i < max)) { self->_done = true; return (limited_result){0, true}; }
             self->_value = self->i;
@@ -17,7 +18,6 @@ static limited_result limited_next(limited_state *self, int32_t max) {
             self->_state = 1;
             goto case_1;
     }
-case_1: ;
     return (limited_result){0, true};
 }
 
