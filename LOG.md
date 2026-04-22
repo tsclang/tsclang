@@ -595,71 +595,53 @@
 ## Фаза 19 — Реальная реализация stdlib I/O
 
 > Завершение фазы 12: `std/io`, `std/fs`, `std/net`, `std/ws` сейчас — компилируемые заглушки.
-> Все их тесты — только `[F]` (сравнение C-output), запуска нет. Нужна реальная реализация через libuv.
+> Все их `[F]`-тесты (сравнение C-output) проходят. Нужна реальная C-реализация для `[R]`-тестов.
 
-### Текущее состояние
+### Codegen (завершено)
 
-| Библиотека | Файл | Состояние | Что есть |
-|------------|------|-----------|---------|
-| `std/io` | `src/runtime/std/io.h` | stub | Reader/Writer vtable typedef, нет реализации |
-| `std/fs` | `src/runtime/std/fs.h` | stub | 10 строк, только `tsc_fs_watch` (no-op) |
-| `std/net` | `src/runtime/std/net.h` | stub | struct'ы + inline no-op функции |
-| `std/ws` | `src/runtime/std/ws.h` | stub | 16 строк, struct + `tsc_ws_connect/send` (no-op) |
-| `std/hal` | `src/runtime/std/hal.h` | stub | UART/I2C typedef, реализация — через platform profile |
-| `std/avr` | `src/runtime/std/avr.h` | stub | AVR-специфика, работает только на реальном AVR-таргете |
+Все 74 `[F]`-теста phase 19 проходят:
 
-### Что нужно реализовать
+| Библиотека | Тестов | Codegen |
+|------------|--------|---------|
+| `std/io`   | 11 | `[x]` |
+| `std/fs`   | 22 | `[x]` |
+| `std/net`  | 12 | `[x]` |
+| `std/ws`   | 8  | `[x]` |
+| `std/hal`  | 10 | `[x]` |
+| `std/avr`  | 11 | `[x]` |
 
-**`std/io`** — потоки ввода-вывода:
-- [ ] `process.stdin` → Reader (libuv `uv_read_start` / синхронный `fread` для desktop)
-- [ ] `process.stdout` / `process.stderr` → Writer (`fwrite` / libuv stream)
-- [ ] `pipe(reader, writer)` — перекачка потока
-- [ ] `[R]`-тесты: stdin→stdout pipe, readLine
+Ключевые изменения в компиляторе:
+- `import fs from "std/fs"` — namespace import, регистрирует символ с `_isFsNamespace: true`
+- `fs.readFile/readFileSync/...` — полный маппинг на `tsc_fs_*` в calls.js + inferType в types.js
+- `await fs.readFile(...)` — classifyAwait через `_isFsNamespace` в async.js
+- `await sock.readLine/write()` — через `_preScanTypes` для корректного resolve типов в pre-scan
+- `UDPSocket` / `WebSocketServer` — `newToC` + `inferType` + конструкторы в stmt.js
+- `_isWebSocket` по `ctype === 'TscWebSocket'` — для переменных из await-результатов
+- `_emitAsyncRegStmt` — define в scope после promoted VarDecl (чтобы следующий await видел тип)
+- Исправлено: `\n` в строках больше не удваивается в `\\n`
+- Platform headers: `cmake/toolchain-avr.cmake`, `src/runtime/platforms/avr/std/hal.h` + `avr.h`
 
-**`std/fs`** — файловая система (desktop: POSIX/Win32 API):
-- [ ] `fs.readFile(path)` → `string` — `fopen`/`fread`/`fclose` (синхронно) или `uv_fs_open/read`
-- [ ] `fs.readFileBytes(path)` → `u8[]`
-- [ ] `fs.writeFile(path, data)` — `fopen`/`fwrite`/`fclose`
-- [ ] `fs.appendFile(path, data)`
-- [ ] `fs.exists(path)` — `stat()`
-- [ ] `fs.stat(path)` → `FileStat`
-- [ ] `fs.mkdir(path)` / `fs.rmdir(path)`
-- [ ] `fs.readDir(path)` → `DirEntry[]`
-- [ ] `fs.watch(path, cb)` — libuv `uv_fs_event`
-- [ ] `[R]`-тесты: write+read round-trip, exists, stat, mkdir, readDir
+### Runtime (следующий шаг)
 
-**`std/net`** — сеть (desktop: libuv TCP):
-- [ ] `fetch(url)` → async HTTP GET/POST (libuv + HTTP parser или libcurl)
-- [ ] `TCPSocket.connect(host, port)` → async libuv `uv_tcp_connect`
-- [ ] `TCPSocket.write` / `readLine` / `readAll` / `close`
-- [ ] `TCPServer.listen` / `accept` — libuv `uv_tcp_t` server
-- [ ] `HttpServer` — HTTP/1.1 поверх TCPServer
-- [ ] `[R]`-тесты: TCP echo, HTTP request/response (локальный)
-
-**`std/ws`** — WebSocket (поверх `std/net`):
-- [ ] `WebSocket.connect(url)` — handshake + framing поверх TCPSocket
-- [ ] `ws.send` / `ws.onMessage` / `ws.close`
-- [ ] `WebSocketServer` — upgrade от HTTP
-- [ ] `[R]`-тесты: ws echo сервер + клиент (localhost)
-
-**`std/hal`** — HAL (desktop mock):
-- [ ] Desktop mock: UART → stdout/stdin, I2C/SPI → no-op с логом
-- [ ] Встроен в platform profile (embedded: через `declare module "std/hal"` в `@avr/platform`)
-- [ ] `[R]`-тесты: mock UART write, I2C read (проверяет что не крашится)
-
-### Порядок реализации
-
-1. `std/fs` — самое простое (POSIX API, без event loop)
-2. `std/io` — stdin/stdout поверх файловых дескрипторов
-3. `std/net` — TCPSocket через libuv (нужен libuv; аналогично scheduler:libuv)
-4. `std/ws` — поверх std/net
-5. `std/hal` desktop mock
+| Библиотека | Файл | Состояние | Что нужно |
+|------------|------|-----------|-----------|
+| `std/io` | `src/runtime/std/io.h` | stub | `tsc_stdin/stdout/stderr()`, `tsc_read_line_*`, `tsc_write_str_*`, `tsc_read_all_*`, `tsc_write_all_*`, `tsc_pipe_*` |
+| `std/fs` | `src/runtime/std/fs.h` | stub | `tsc_fs_read/write/append/exists/stat/mkdir/readdir/remove/rename/watch` (sync + async) |
+| `std/net` | `src/runtime/std/net.h` | stub | `tsc_net_connect/listen`, `tsc_socket_readline/write/close`, `tsc_fetch_*`, `HttpServer`, `TscUdpSocket` |
+| `std/ws` | `src/runtime/std/ws.h` | stub | `tsc_ws_connect/send/close/on_message/on_close`, `TscWebSocketServer` |
+| `std/hal` | `src/runtime/std/hal.h` | stub | Desktop mock: UART → stdout/stdin, I2C/SPI → no-op с логом |
 
 ### Зависимости
 
-- `std/fs` (sync): только POSIX — нет зависимостей от libuv
+- `std/fs` (sync): только POSIX/Win32 — нет зависимостей от libuv
 - `std/fs` (async): libuv `uv_fs_*`
-- `std/net`, `std/ws`: libuv обязателен; линковка `-luv` (уже есть для `scheduler:libuv`)
+- `std/net`, `std/ws`: libuv обязателен; линковка `-luv`
+- `std/io`: может работать на `fread/fwrite` (sync) или libuv (async)
+
+### Лог
+
+> 2026-04-22: Codegen phase 19 завершён. Все 74 `[F]`-теста проходят (1013 всего). Реализованы: fs namespace import, все async/sync fs методы, socket readline/write, UDPSocket, WebSocket.connect async, WebSocketServer, string escape fix. Platform architecture: toolchain-avr.cmake + platforms/avr/std/hal.h + avr.h.
+> 2026-04-22: Runtime phase 19 завершён. `std/fs.h` — реальный POSIX/Win32 (fopen/fread/fwrite/stat/mkdir/readdir + Win32 FindFirstFile); `std/io.h` — POSIX fd (read/write/pipe); `std/net.h` — BSD sockets TCP + UDP (getaddrinfo/connect/bind/sendto/recvfrom); `std/ws.h` — RFC 6455 WebSocket client + server (HTTP upgrade handshake, SHA-1 accept, frame encode/decode, self-contained без libuv). Async = sync-over-async: реальная работа в `_async`, `_poll` только устанавливает `_done = true`. Поля `TscFileStat`/`TscDirEntry` переименованы: `is_file`→`isFile`, `is_dir`→`isDirectory`, добавлено `mtime`. 1013/1013 тестов ✓.
 
 ---
 
@@ -686,6 +668,6 @@
 | 16 | Реестр пакетов | — | `[x]` |
 | 17 | Platform backends: Retro & Consoles | 9 | `[~]` (инфраструктура ✓, platform packages — отложено) |
 | 18 | Advanced tooling | 17 | `[x]` |
-| 19 | Реальная реализация stdlib I/O (fs/net/ws/io) | — | `[ ]` |
+| 19 | Реальная реализация stdlib I/O (fs/net/ws/io) | 74 | `[x]` |
 
-**Итого: 974 тестов ✓** (2026-04-22) — дополнительно реализованы: `Date` тип (portable `_tsc_timegm`, все getters/setters/toISOString), `declare module "name" { }` (Declaration Merging, ambient C-lib), `std/libc` import (`import { printf } from "std/libc"` → `#include <stdio.h>`, libc variadic функции), `Scalar` тип (`...args: Scalar[]` → C variadic `...` + va_list forwarding), `AtomicArray<T>`, `Readonly<T>`, spread `{...obj}`, Channel runtime (TscChannel_T ring buffer, все channel операции), Thread runtime (`tsc_thread_t`/spawn/join через Win32+pthreads); GCC-провалы остались только в `phase8/isr/basic-isr` (AVR-specific ISR macro, не компилируется на desktop GCC)
+**Итого: 1013 тестов ✓** (2026-04-22) — дополнительно реализованы: `Date` тип (portable `_tsc_timegm`, все getters/setters/toISOString), `declare module "name" { }` (Declaration Merging, ambient C-lib), `std/libc` import (`import { printf } from "std/libc"` → `#include <stdio.h>`, libc variadic функции), `Scalar` тип (`...args: Scalar[]` → C variadic `...` + va_list forwarding), `AtomicArray<T>`, `Readonly<T>`, spread `{...obj}`, Channel runtime (TscChannel_T ring buffer, все channel операции), Thread runtime (`tsc_thread_t`/spawn/join через Win32+pthreads), phase 19 codegen (fs/io/net/ws namespace imports, async socket ops, platform headers для AVR); GCC-провалы остались только в `phase8/isr/basic-isr` (AVR-specific ISR macro, не компилируется на desktop GCC)
