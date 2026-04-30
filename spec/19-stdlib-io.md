@@ -1,7 +1,7 @@
 # TSClang — std/io: реализация
 
 > Детальная спецификация реализации `std/io`.
-> Шаг 3 в плане: документация → тесты → реализация.
+> Реализовано.
 
 ## Зависимости
 
@@ -35,16 +35,16 @@ typedef struct { bool _done; }                             TscWriteStrAwaitable;
 | `await reader.readLine()` | `tsc_read_line_async(r)` / `tsc_read_line_poll` | `TscReadLineAwaitable` | `\n` stripped |
 | `await writer.write(s)` | `tsc_write_str_async(w, s)` / `tsc_write_str_poll` | `TscWriteStrAwaitable` | string |
 
-Статус: `pipe`, `readAll`, `writeAll` — уже в codegen. `readLine`, `write` — NEW (шаг 3).
+Все функции реализованы.
 
-## Реализация (шаг 3)
+## Реализация
 
 - `tsc_stdin/stdout/stderr` → `(TscReader/Writer){ ._fd = 0/1/2 }`
-- `tsc_read_line_async`: POSIX `fgets` на fd / libuv `uv_read_start` на `uv_tty_t`; частичный буфер в poll state
+- `tsc_read_line_async`: POSIX `read()` побайтово до `\n`; poll ставит `_done = true`
 - `tsc_read_all_async`: читает в динамический буфер до EOF
-- `tsc_write_all_async`: POSIX `write` loop / libuv `uv_write` request
+- `tsc_write_all_async`: POSIX `write` loop
 - `tsc_write_str_async`: оборачивает `tsc_write_all_async(w, s.data, s.length)`
-- `tsc_pipe_async`: композитный awaitable (readLine → write → repeat до EOF)
+- `tsc_pipe_async`: readAll → writeAll
 
 ## Ограничения платформ
 
@@ -63,6 +63,6 @@ readLine       → ❌ embedded
 | pipe | `doc/phase19/io/pipe` | ✓ проходит |
 | readAll | `doc/phase19/io/read-all` | ✓ проходит |
 | writeAll | `doc/phase19/io/write-all` | ✓ проходит |
-| readLine | `doc/phase19/io/read-line` | ✗ ждёт шага 3 |
-| write (str) | `doc/phase19/io/write-str` | ✗ ждёт шага 3 |
+| readLine | `doc/phase19/io/read-line` | ✓ проходит |
+| write (str) | `doc/phase19/io/write-str` | ✓ проходит |
 | err-stdin-embedded | `doc/phase19/io/err-stdin-embedded` | ✓ проходит |

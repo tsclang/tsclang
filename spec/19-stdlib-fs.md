@@ -1,7 +1,6 @@
 # TSClang — std/fs: реализация
 
-> Детальная спецификация реализации `std/fs`.
-> Шаг 3 в плане: документация → тесты → реализация.
+> Детальная спецификация реализации `std/fs`. Реализовано.
 
 ## Зависимости
 
@@ -14,19 +13,20 @@
 ```c
 /* Запись директории */
 typedef struct {
-    String  name;      /* имя файла/директории без пути */
-    String  path;      /* полный путь */
-    bool    is_file;
-    bool    is_dir;
+    String  name;           /* имя файла/директории без пути */
+    String  path;           /* полный путь */
+    bool    isFile;
+    bool    isDirectory;
 } TscDirEntry;
 
 typedef struct { TscDirEntry *data; size_t length; size_t capacity; } TscDirEntryArray;
 
 /* Метаданные файла */
 typedef struct {
-    int64_t size;      /* байты */
-    bool    is_file;
-    bool    is_dir;
+    int64_t size;           /* байты */
+    bool    isFile;
+    bool    isDirectory;
+    int64_t mtime;          /* Unix timestamp последнего изменения */
 } TscFileStat;
 
 /* Awaitable structs (для async-версий) */
@@ -77,7 +77,7 @@ typedef struct { bool _done; TscDirEntryArray _result; } TscFsReaddirAwaitable;
 
 Sync-функции недоступны внутри `async function` — ошибка компилятора (блокируют event loop).
 
-## Реализация (шаг 3a — POSIX)
+## Реализация
 
 ```c
 /* readFileSync: fopen → fseek(SEEK_END) → ftell → malloc → fread → fclose */
@@ -115,24 +115,7 @@ TscDirEntryArray tsc_fs_readdir_sync(String path) { /* ... */ }
 
 Windows: `CreateFile`/`ReadFile`, `GetFileAttributes`, `FindFirstFile`/`FindNextFile`.
 
-### Async-обёртка (шаг 3a)
-
-Async-версии — обёртки вокруг sync для desktop (выполняют sync внутри `_async`, poll ставит `_done`):
-
-```c
-TscFsReadAwaitable tsc_fs_read_async(String path) {
-    TscFsReadAwaitable a = {0};
-    a._result = tsc_fs_read_sync(path);
-    return a;   // _done = false, poll завершит немедленно
-}
-void tsc_fs_read_poll(TscFsReadAwaitable *a) { a->_done = true; }
-```
-
-### Реализация async (шаг 3b — libuv)
-
-Заменяет sync-обёртку настоящим async I/O:
-- `uv_fs_open` → `uv_fs_fstat` → `uv_fs_read` (loop) → `uv_fs_close`
-- Callback сохраняет результат в awaitable; `_poll` проверяет флаг готовности
+Async-версии — обёртки вокруг sync (выполняют sync внутри `_async`, poll ставит `_done = true` немедленно).
 
 ## Тесты
 
@@ -140,30 +123,32 @@ void tsc_fs_read_poll(TscFsReadAwaitable *a) { a->_done = true; }
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| watch | `doc/phase19/fs/watch` | ✗ ждёт шага 3 |
-| read-file | `doc/phase19/fs/read-file` | ✗ ждёт шага 3 |
-| read-file-bytes | `doc/phase19/fs/read-file-bytes` | ✗ ждёт шага 3 |
-| write-file | `doc/phase19/fs/write-file` | ✗ ждёт шага 3 |
-| append-file | `doc/phase19/fs/append-file` | ✗ ждёт шага 3 |
-| remove | `doc/phase19/fs/remove` | ✗ ждёт шага 3 |
-| rename | `doc/phase19/fs/rename` | ✗ ждёт шага 3 |
-| mkdir | `doc/phase19/fs/mkdir` | ✗ ждёт шага 3 |
-| exists | `doc/phase19/fs/exists` | ✗ ждёт шага 3 |
-| stat | `doc/phase19/fs/stat` | ✗ ждёт шага 3 |
-| readdir | `doc/phase19/fs/readdir` | ✗ ждёт шага 3 |
-| err-fs-embedded | `doc/phase19/fs/err-fs-embedded` | ✗ ждёт шага 3 |
+| watch | `doc/phase19/fs/watch` | ✓ проходит |
+| read-file | `doc/phase19/fs/read-file` | ✓ проходит |
+| read-file-bytes | `doc/phase19/fs/read-file-bytes` | ✓ проходит |
+| write-file | `doc/phase19/fs/write-file` | ✓ проходит |
+| append-file | `doc/phase19/fs/append-file` | ✓ проходит |
+| remove | `doc/phase19/fs/remove` | ✓ проходит |
+| rename | `doc/phase19/fs/rename` | ✓ проходит |
+| mkdir | `doc/phase19/fs/mkdir` | ✓ проходит |
+| exists | `doc/phase19/fs/exists` | ✓ проходит |
+| stat | `doc/phase19/fs/stat` | ✓ проходит |
+| readdir | `doc/phase19/fs/readdir` | ✓ проходит |
+| err-fs-embedded | `doc/phase19/fs/err-fs-embedded` | ✓ проходит |
 
 ### Sync-тесты
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| read-file-sync | `doc/phase19/fs/read-file-sync` | ✗ ждёт шага 3 |
-| read-file-bytes-sync | `doc/phase19/fs/read-file-bytes-sync` | ✗ ждёт шага 3 |
-| write-file-sync | `doc/phase19/fs/write-file-sync` | ✗ ждёт шага 3 |
-| append-file-sync | `doc/phase19/fs/append-file-sync` | ✗ ждёт шага 3 |
-| remove-sync | `doc/phase19/fs/remove-sync` | ✗ ждёт шага 3 |
-| rename-sync | `doc/phase19/fs/rename-sync` | ✗ ждёт шага 3 |
-| mkdir-sync | `doc/phase19/fs/mkdir-sync` | ✗ ждёт шага 3 |
-| exists-sync | `doc/phase19/fs/exists-sync` | ✗ ждёт шага 3 |
-| stat-sync | `doc/phase19/fs/stat-sync` | ✗ ждёт шага 3 |
-| readdir-sync | `doc/phase19/fs/readdir-sync` | ✗ ждёт шага 3 |
+| read-file-sync | `doc/phase19/fs/read-file-sync` | ✓ проходит |
+| read-file-bytes-sync | `doc/phase19/fs/read-file-bytes-sync` | ✓ проходит |
+| write-file-sync | `doc/phase19/fs/write-file-sync` | ✓ проходит |
+| append-file-sync | `doc/phase19/fs/append-file-sync` | ✓ проходит |
+| remove-sync | `doc/phase19/fs/remove-sync` | ✓ проходит |
+| rename-sync | `doc/phase19/fs/rename-sync` | ✓ проходит |
+| mkdir-sync | `doc/phase19/fs/mkdir-sync` | ✓ проходит |
+| exists-sync | `doc/phase19/fs/exists-sync` | ✓ проходит |
+| stat-sync | `doc/phase19/fs/stat-sync` | ✓ проходит |
+| readdir-sync | `doc/phase19/fs/readdir-sync` | ✓ проходит |
+
+> `doc/phase19/fs/file-info` и `doc/phase19/fs/read-dir` — пустые директории, тесты не написаны.

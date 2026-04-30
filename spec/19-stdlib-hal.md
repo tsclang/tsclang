@@ -1,7 +1,7 @@
 # TSClang — std/hal: реализация
 
 > Детальная спецификация реализации `std/hal` (Hardware Abstraction Layer).
-> Шаг 3 в плане: документация → тесты → реализация.
+> Реализовано (desktop mock + AVR platform profile spec).
 
 ## Назначение
 
@@ -29,20 +29,20 @@ typedef enum {
 
 | TSClang | C-функция | Тип возврата | Статус |
 |---------|-----------|-------------|--------|
-| `GPIO.mode(pin, mode)` | `tsc_gpio_mode(pin, mode)` | `void` | NEW |
-| `GPIO.output(pin)` | `tsc_gpio_output(pin)` | `void` | уже есть |
-| `GPIO.input(pin)` | `tsc_gpio_input(pin)` | `void` | уже есть |
-| `GPIO.read(pin)` | `tsc_gpio_read(pin)` | `bool` | уже есть |
-| `GPIO.write(pin, val)` | `tsc_gpio_write(pin, val)` | `void` | уже есть |
-| `I2C.begin()` | `tsc_i2c_begin()` | `void` | NEW |
-| `I2C.write(addr, data)` | `tsc_i2c_write(addr, data.data, data.length)` | `void` | уже есть |
-| `I2C.read(addr, n)` | `tsc_i2c_read(addr, n)` | `Array_u8` | уже есть (macro) |
-| `SPI.begin()` | `tsc_spi_begin()` | `void` | NEW |
-| `SPI.transfer(byte)` | `tsc_spi_transfer(byte)` | `uint8_t` | уже есть |
-| `UART.init(opts)` | `tsc_uart_init(baud)` | `void` | уже есть |
-| `UART.write(byte)` | `tsc_uart_write(byte)` | `void` | уже есть |
-| `UART.read()` | `tsc_uart_read()` | `opt_u8` | уже есть |
-| `UART.available()` | `tsc_uart_available()` | `bool` | NEW |
+| `GPIO.mode(pin, mode)` | `tsc_gpio_mode(pin, mode)` | `void` | ✓ |
+| `GPIO.output(pin)` | `tsc_gpio_output(pin)` | `void` | ✓ |
+| `GPIO.input(pin)` | `tsc_gpio_input(pin)` | `void` | ✓ |
+| `GPIO.read(pin)` | `tsc_gpio_read(pin)` | `bool` | ✓ |
+| `GPIO.write(pin, val)` | `tsc_gpio_write(pin, val)` | `void` | ✓ |
+| `I2C.begin()` | `tsc_i2c_begin()` | `void` | ✓ |
+| `I2C.write(addr, data)` | `tsc_i2c_write(addr, data.data, data.length)` | `void` | ✓ |
+| `I2C.read(addr, n)` | `tsc_i2c_read(addr, n)` | `Array_u8` | ✓ |
+| `SPI.begin()` | `tsc_spi_begin()` | `void` | ✓ |
+| `SPI.transfer(byte)` | `tsc_spi_transfer(byte)` | `uint8_t` | ✓ |
+| `UART.init(opts)` | `tsc_uart_init(baud)` | `void` | ✓ |
+| `UART.write(byte)` | `tsc_uart_write(byte)` | `void` | ✓ |
+| `UART.read()` | `tsc_uart_read()` | `opt_u8` | ✓ |
+| `UART.available()` | `tsc_uart_available()` | `bool` | ✓ |
 
 `GPIO.output(pin)` = `GPIO.mode(pin, PinMode.OUTPUT)` — синоним.
 `GPIO.input(pin)` = `GPIO.mode(pin, PinMode.INPUT)` — синоним.
@@ -102,8 +102,8 @@ declare module "std/hal" {
 | uart-write-read | `doc/phase19/hal/uart-write-read` | ✓ проходит |
 | spi-transfer | `doc/phase19/hal/spi-transfer` | ✓ проходит |
 | i2c-write-read | `doc/phase19/hal/i2c-write-read` | ✓ проходит |
-| gpio-pinmode | `doc/phase19/hal/gpio-pinmode` | ✗ ждёт шага 3 |
-| uart-available | `doc/phase19/hal/uart-available` | ✗ ждёт шага 3 |
-| i2c-begin | `doc/phase19/hal/i2c-begin` | ✗ ждёт шага 3 |
-| spi-begin | `doc/phase19/hal/spi-begin` | ✗ ждёт шага 3 |
+| gpio-pinmode | `doc/phase19/hal/gpio-pinmode` | ✓ проходит |
+| uart-available | `doc/phase19/hal/uart-available` | ✓ проходит |
+| i2c-begin | `doc/phase19/hal/i2c-begin` | ✓ проходит |
+| spi-begin | `doc/phase19/hal/spi-begin` | ✓ проходит |
 | err-hal-desktop | `doc/phase19/hal/err-hal-desktop` | ✓ проходит |

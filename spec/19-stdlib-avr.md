@@ -1,7 +1,7 @@
 # TSClang — std/avr: реализация
 
 > Детальная спецификация реализации `std/avr` (AVR-специфичный API).
-> Шаг 3 в плане: документация → тесты → реализация.
+> Реализовано (desktop stubs + AVR platform profile spec).
 
 ## Назначение
 
@@ -34,23 +34,23 @@ typedef enum {
 
 | TSClang | C-функция | AVR-регистры | Статус |
 |---------|-----------|-------------|--------|
-| `ADC.read(ch)` | `tsc_adc_read(ch)` | `ADMUX`, `ADCSRA`, `ADC` | уже есть |
-| `PWM.setDuty(ch, duty)` | `tsc_pwm_set_duty(ch, duty)` | `OCR0A`/`OCR1A`/… | уже есть |
-| `avr.sleep(mode)` | `set_sleep_mode(mode); sleep_mode()` | `SMCR` | уже есть |
-| `avr.watchdogReset()` | `wdt_reset()` | WDT | уже есть |
-| `analogRead(pin)` | `tsc_adc_read(pin)` | = ADC.read | уже есть |
-| `pinMode(pin, mode)` | `tsc_avr_pin_mode(pin, mode)` | `DDRx` | NEW |
-| `digitalWrite(pin, val)` | `tsc_avr_digital_write(pin, val)` | `PORTx` | NEW |
-| `digitalRead(pin)` | `tsc_avr_digital_read(pin)` | `PINx` | NEW |
-| `delay(ms)` | `tsc_avr_delay(ms)` | `_delay_ms` | NEW |
-| `delayMicroseconds(us)` | `tsc_avr_delay_us(us)` | `_delay_us` | NEW |
-| `serialBegin(baud)` | `tsc_avr_serial_begin(baud)` | `UBRR0H/L`, `UCSR0B` | NEW |
-| `serialWrite(data)` | `tsc_avr_serial_write(data.data, data.length)` | `UDR0` | NEW |
-| `serialRead()` | `tsc_avr_serial_read()` | `UDR0` | NEW |
-| `serialAvailable()` | `tsc_avr_serial_available()` | `UCSR0A` | NEW |
-| `analogWrite(pin, val)` | `tsc_avr_analog_write(pin, val)` | `OCRxA`/`OCRxB` | NEW |
-| `interruptEnable()` | `tsc_avr_interrupt_enable()` | `sei()` | NEW |
-| `interruptDisable()` | `tsc_avr_interrupt_disable()` | `cli()` | NEW |
+| `ADC.read(ch)` | `tsc_adc_read(ch)` | `ADMUX`, `ADCSRA`, `ADC` | ✓ |
+| `PWM.setDuty(ch, duty)` | `tsc_pwm_set_duty(ch, duty)` | `OCR0A`/`OCR1A`/… | ✓ |
+| `avr.sleep(mode)` | `set_sleep_mode(mode); sleep_mode()` | `SMCR` | ✓ |
+| `avr.watchdogReset()` | `wdt_reset()` | WDT | ✓ |
+| `analogRead(pin)` | `tsc_adc_read(pin)` | = ADC.read | ✓ |
+| `pinMode(pin, mode)` | `tsc_avr_pin_mode(pin, mode)` | `DDRx` | ✓ |
+| `digitalWrite(pin, val)` | `tsc_avr_digital_write(pin, val)` | `PORTx` | ✓ |
+| `digitalRead(pin)` | `tsc_avr_digital_read(pin)` | `PINx` | ✓ |
+| `delay(ms)` | `tsc_avr_delay(ms)` | `_delay_ms` | ✓ |
+| `delayMicroseconds(us)` | `tsc_avr_delay_us(us)` | `_delay_us` | ✓ |
+| `serialBegin(baud)` | `tsc_avr_serial_begin(baud)` | `UBRR0H/L`, `UCSR0B` | ✓ |
+| `serialWrite(data)` | `tsc_avr_serial_write(data.data, data.length)` | `UDR0` | ✓ |
+| `serialRead()` | `tsc_avr_serial_read()` | `UDR0` | ✓ |
+| `serialAvailable()` | `tsc_avr_serial_available()` | `UCSR0A` | ✓ |
+| `analogWrite(pin, val)` | `tsc_avr_analog_write(pin, val)` | `OCRxA`/`OCRxB` | ✓ |
+| `interruptEnable()` | `tsc_avr_interrupt_enable()` | `sei()` | ✓ |
+| `interruptDisable()` | `tsc_avr_interrupt_disable()` | `cli()` | ✓ |
 
 ## Реализация (шаг 3 — только AVR target)
 
@@ -113,8 +113,8 @@ void tsc_avr_interrupt_disable(void) { cli(); }
 | watchdog-reset | `doc/phase19/avr/watchdog-reset` | ✓ проходит |
 | adc-read | `doc/phase19/avr/adc-read` | ✓ проходит |
 | pwm-duty | `doc/phase19/avr/pwm-duty` | ✓ проходит |
-| gpio-digital | `doc/phase19/avr/gpio-digital` | ✗ ждёт шага 3 |
-| serial-begin | `doc/phase19/avr/serial-begin` | ✗ ждёт шага 3 |
-| delay | `doc/phase19/avr/delay` | ✗ ждёт шага 3 |
-| interrupts | `doc/phase19/avr/interrupts` | ✗ ждёт шага 3 |
-| analog-write | `doc/phase19/avr/analog-write` | ✗ ждёт шага 3 |
+| gpio-digital | `doc/phase19/avr/gpio-digital` | ✓ проходит |
+| serial-begin | `doc/phase19/avr/serial-begin` | ✓ проходит |
+| delay | `doc/phase19/avr/delay` | ✓ проходит |
+| interrupts | `doc/phase19/avr/interrupts` | ✓ проходит |
+| analog-write | `doc/phase19/avr/analog-write` | ✓ проходит |
