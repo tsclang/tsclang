@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const DOC_DIR = join(ROOT, 'doc');
+const DOC_DIR = join(ROOT, 'test', 'cases');
 const TSCLANG_BIN = join(ROOT, 'bin', 'index.js');
 const RUNTIME_INC = join(ROOT, 'src', 'runtime');
 
@@ -86,7 +86,7 @@ function run(cmd, args, opts = {}) {
 function runShell(script, opts = {}) {
   // Use MSYS2 bash on Windows so Unix shell scripts work
   const sh     = MSYS2_BASH ?? (process.platform === 'win32' ? 'cmd' : 'sh');
-  const shArgs = MSYS2_BASH ? ['--login', '-c', script]
+  const shArgs = MSYS2_BASH ? ['--login', '-c', `export PATH="/mingw64/bin:$PATH" && ${script}`]
     : process.platform === 'win32' ? ['/c', script]
     : ['-c', script];
   return new Promise(resolve => {
@@ -368,7 +368,11 @@ async function executeShTest(testDir, kind, tmpBase) {
     .replace(/\bnode\b/g, nodeExec)
     .replace(/\btsclang\b/g, `${nodeExec} ${JSON.stringify(tscBin)}`);
 
-  const result = await runShell(patchedScript, { cwd: tmpBase });
+  const finalScript = MSYS2_BASH
+    ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`
+    : patchedScript;
+
+  const result = await runShell(finalScript, { cwd: tmpBase });
 
   if (kind === 'E') {
     if (result.code === 0) {

@@ -123,32 +123,32 @@ Async-версии — обёртки вокруг sync (выполняют sync
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| watch | `doc/phase19/fs/watch` | ✓ проходит |
-| read-file | `doc/phase19/fs/read-file` | ✓ проходит |
-| read-file-bytes | `doc/phase19/fs/read-file-bytes` | ✓ проходит |
-| write-file | `doc/phase19/fs/write-file` | ✓ проходит |
-| append-file | `doc/phase19/fs/append-file` | ✓ проходит |
-| remove | `doc/phase19/fs/remove` | ✓ проходит |
-| rename | `doc/phase19/fs/rename` | ✓ проходит |
-| mkdir | `doc/phase19/fs/mkdir` | ✓ проходит |
-| exists | `doc/phase19/fs/exists` | ✓ проходит |
-| stat | `doc/phase19/fs/stat` | ✓ проходит |
-| readdir | `doc/phase19/fs/readdir` | ✓ проходит |
-| err-fs-embedded | `doc/phase19/fs/err-fs-embedded` | ✓ проходит |
+| watch | `test/cases/phase19/fs/watch` | ✓ проходит |
+| read-file | `test/cases/phase19/fs/read-file` | ✓ проходит |
+| read-file-bytes | `test/cases/phase19/fs/read-file-bytes` | ✓ проходит |
+| write-file | `test/cases/phase19/fs/write-file` | ✓ проходит |
+| append-file | `test/cases/phase19/fs/append-file` | ✓ проходит |
+| remove | `test/cases/phase19/fs/remove` | ✓ проходит |
+| rename | `test/cases/phase19/fs/rename` | ✓ проходит |
+| mkdir | `test/cases/phase19/fs/mkdir` | ✓ проходит |
+| exists | `test/cases/phase19/fs/exists` | ✓ проходит |
+| stat | `test/cases/phase19/fs/stat` | ✓ проходит |
+| readdir | `test/cases/phase19/fs/readdir` | ✓ проходит |
+| err-fs-embedded | `test/cases/phase19/fs/err-fs-embedded` | ✓ проходит |
 
 ### Sync-тесты
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| read-file-sync | `doc/phase19/fs/read-file-sync` | ✓ проходит |
-| read-file-bytes-sync | `doc/phase19/fs/read-file-bytes-sync` | ✓ проходит |
-| write-file-sync | `doc/phase19/fs/write-file-sync` | ✓ проходит |
-| append-file-sync | `doc/phase19/fs/append-file-sync` | ✓ проходит |
-| remove-sync | `doc/phase19/fs/remove-sync` | ✓ проходит |
-| rename-sync | `doc/phase19/fs/rename-sync` | ✓ проходит |
-| mkdir-sync | `doc/phase19/fs/mkdir-sync` | ✓ проходит |
-| exists-sync | `doc/phase19/fs/exists-sync` | ✓ проходит |
-| stat-sync | `doc/phase19/fs/stat-sync` | ✓ проходит |
-| readdir-sync | `doc/phase19/fs/readdir-sync` | ✓ проходит |
+| read-file-sync | `test/cases/phase19/fs/read-file-sync` | ✓ проходит |
+| read-file-bytes-sync | `test/cases/phase19/fs/read-file-bytes-sync` | ✓ проходит |
+| write-file-sync | `test/cases/phase19/fs/write-file-sync` | ✓ проходит |
+| append-file-sync | `test/cases/phase19/fs/append-file-sync` | ✓ проходит |
+| remove-sync | `test/cases/phase19/fs/remove-sync` | ✓ проходит |
+| rename-sync | `test/cases/phase19/fs/rename-sync` | ✓ проходит |
+| mkdir-sync | `test/cases/phase19/fs/mkdir-sync` | ✓ проходит |
+| exists-sync | `test/cases/phase19/fs/exists-sync` | ✓ проходит |
+| stat-sync | `test/cases/phase19/fs/stat-sync` | ✓ проходит |
+| readdir-sync | `test/cases/phase19/fs/readdir-sync` | ✓ проходит |
 
-> `doc/phase19/fs/file-info` и `doc/phase19/fs/read-dir` — пустые директории, тесты не написаны.
+> `test/cases/phase19/fs/file-info` и `test/cases/phase19/fs/read-dir` — пустые директории, тесты не написаны.

@@ -10,7 +10,7 @@
 ### Структура теста
 
 ```
-doc/<phase>/<feature>/<test-name>/
+test/cases/<phase>/<feature>/<test-name>/
     input.tsc          — входной TSClang-код (обязательно)
     expected.c         — ожидаемый C-output (для success-тестов)
     expected.out       — ожидаемый stdout при запуске (опционально)

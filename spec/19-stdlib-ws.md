@@ -75,11 +75,11 @@ Opcodes:
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| client-create | `doc/phase19/ws/client-create` | ✓ проходит |
-| send | `doc/phase19/ws/send` | ✓ проходит |
-| on-message | `doc/phase19/ws/on-message` | ✓ проходит |
-| close | `doc/phase19/ws/close` | ✓ проходит |
-| connect-async | `doc/phase19/ws/connect-async` | ✓ проходит |
-| send-bytes | `doc/phase19/ws/send-bytes` | ✓ проходит |
-| on-close | `doc/phase19/ws/on-close` | ✓ проходит |
-| ws-server | `doc/phase19/ws/ws-server` | ✓ проходит |
+| client-create | `test/cases/phase19/ws/client-create` | ✓ проходит |
+| send | `test/cases/phase19/ws/send` | ✓ проходит |
+| on-message | `test/cases/phase19/ws/on-message` | ✓ проходит |
+| close | `test/cases/phase19/ws/close` | ✓ проходит |
+| connect-async | `test/cases/phase19/ws/connect-async` | ✓ проходит |
+| send-bytes | `test/cases/phase19/ws/send-bytes` | ✓ проходит |
+| on-close | `test/cases/phase19/ws/on-close` | ✓ проходит |
+| ws-server | `test/cases/phase19/ws/ws-server` | ✓ проходит |

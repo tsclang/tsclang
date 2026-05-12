@@ -95,15 +95,15 @@ declare module "std/hal" {
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| gpio-output | `doc/phase19/hal/gpio-output` | ✓ проходит |
-| gpio-write | `doc/phase19/hal/gpio-write` | ✓ проходит |
-| gpio-read | `doc/phase19/hal/gpio-read` | ✓ проходит |
-| uart-init | `doc/phase19/hal/uart-init` | ✓ проходит |
-| uart-write-read | `doc/phase19/hal/uart-write-read` | ✓ проходит |
-| spi-transfer | `doc/phase19/hal/spi-transfer` | ✓ проходит |
-| i2c-write-read | `doc/phase19/hal/i2c-write-read` | ✓ проходит |
-| gpio-pinmode | `doc/phase19/hal/gpio-pinmode` | ✓ проходит |
-| uart-available | `doc/phase19/hal/uart-available` | ✓ проходит |
-| i2c-begin | `doc/phase19/hal/i2c-begin` | ✓ проходит |
-| spi-begin | `doc/phase19/hal/spi-begin` | ✓ проходит |
-| err-hal-desktop | `doc/phase19/hal/err-hal-desktop` | ✓ проходит |
+| gpio-output | `test/cases/phase19/hal/gpio-output` | ✓ проходит |
+| gpio-write | `test/cases/phase19/hal/gpio-write` | ✓ проходит |
+| gpio-read | `test/cases/phase19/hal/gpio-read` | ✓ проходит |
+| uart-init | `test/cases/phase19/hal/uart-init` | ✓ проходит |
+| uart-write-read | `test/cases/phase19/hal/uart-write-read` | ✓ проходит |
+| spi-transfer | `test/cases/phase19/hal/spi-transfer` | ✓ проходит |
+| i2c-write-read | `test/cases/phase19/hal/i2c-write-read` | ✓ проходит |
+| gpio-pinmode | `test/cases/phase19/hal/gpio-pinmode` | ✓ проходит |
+| uart-available | `test/cases/phase19/hal/uart-available` | ✓ проходит |
+| i2c-begin | `test/cases/phase19/hal/i2c-begin` | ✓ проходит |
+| spi-begin | `test/cases/phase19/hal/spi-begin` | ✓ проходит |
+| err-hal-desktop | `test/cases/phase19/hal/err-hal-desktop` | ✓ проходит |

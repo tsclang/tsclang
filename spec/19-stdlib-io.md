@@ -59,10 +59,10 @@ readLine       → ❌ embedded
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| stdin/stdout/stderr | `doc/phase19/io/stdin`, `stdout`, `stderr` | ✓ проходит |
-| pipe | `doc/phase19/io/pipe` | ✓ проходит |
-| readAll | `doc/phase19/io/read-all` | ✓ проходит |
-| writeAll | `doc/phase19/io/write-all` | ✓ проходит |
-| readLine | `doc/phase19/io/read-line` | ✓ проходит |
-| write (str) | `doc/phase19/io/write-str` | ✓ проходит |
-| err-stdin-embedded | `doc/phase19/io/err-stdin-embedded` | ✓ проходит |
+| stdin/stdout/stderr | `test/cases/phase19/io/stdin`, `stdout`, `stderr` | ✓ проходит |
+| pipe | `test/cases/phase19/io/pipe` | ✓ проходит |
+| readAll | `test/cases/phase19/io/read-all` | ✓ проходит |
+| writeAll | `test/cases/phase19/io/write-all` | ✓ проходит |
+| readLine | `test/cases/phase19/io/read-line` | ✓ проходит |
+| write (str) | `test/cases/phase19/io/write-str` | ✓ проходит |
+| err-stdin-embedded | `test/cases/phase19/io/err-stdin-embedded` | ✓ проходит |

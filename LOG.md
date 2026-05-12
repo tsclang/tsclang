@@ -559,7 +559,7 @@
 - [x] Dead branch elimination: `if (false)` → убрать; `if (true)` → оставить тело
 - [x] Unused const elimination: `const x = 5;` без обращений → удалить
 - [x] Флаг `--opt` в CLI, `// @opt` и `#[profile(opt: true)]` в исходнике
-- [x] Тесты: `doc/phase18/optimizer/{const-fold,const-prop,dead-branch,unused-const}/` ✓
+- [x] Тесты: `test/cases/phase18/optimizer/{const-fold,const-prop,dead-branch,unused-const}/` ✓
 
 ### 18.2 — WebAssembly backend
 
@@ -568,7 +568,7 @@
 - [x] `--emit wasm` в CLI — вызов `emcc` для `.c` → `.wasm`
 - [x] C-output тест: `// @target: wasm` → корректный C с `TSC_WASM` define
 - [x] Ошибка: `--emit wasm` без `emcc` в PATH → `ConfigError: --emit wasm requires emcc (Emscripten) in PATH`
-- [x] Тесты: `doc/phase18/wasm/{basic,err-no-emcc}/` ✓
+- [x] Тесты: `test/cases/phase18/wasm/{basic,err-no-emcc}/` ✓
 
 ### 18.3 — Declaration emitter
 
@@ -578,14 +578,14 @@
 - [x] Классы: поля + методы, без тел; конструктор без возвращаемого типа
 - [x] Типы и константы: `export declare type Alias = ...;` / `export declare const x: T;`
 - [x] Вывод: `Emitted input.d.tsc (N declarations)`
-- [x] Тесты: `doc/phase18/emit-dts/{functions,classes,types,mixed}/` ✓
+- [x] Тесты: `test/cases/phase18/emit-dts/{functions,classes,types,mixed}/` ✓
 
 ### 18.4 — Source maps
 
 - [x] Флаг `--sourcemap` в `tsclang build` — дополнительно создаёт `<name>.tsc.map`
 - [x] Формат: `{version:1, file, sourceC, mappings:[[tscLine,cLine],...]}`
 - [x] `_buildLineMap()` — эвристическое сопоставление statement-строк TSC → C
-- [x] Тесты: `doc/phase18/sourcemap/{basic,multi-func}/` ✓
+- [x] Тесты: `test/cases/phase18/sourcemap/{basic,multi-func}/` ✓
 
 ### 18.5 — Language Server Protocol
 
@@ -595,7 +595,7 @@
 - [x] `textDocument/hover` → тип символа под курсором (из VarDecl/FuncDecl)
 - [x] `textDocument/completion` → Math-члены после `Math.`, ключевые слова и символы файла
 - [x] `textDocument/definition` → расположение объявления по имени символа
-- [x] Тесты: `doc/phase18/lsp/{initialize,hover,completion,definition}/` ✓
+- [x] Тесты: `test/cases/phase18/lsp/{initialize,hover,completion,definition}/` ✓
 
 ### Лог
 

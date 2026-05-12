@@ -84,15 +84,15 @@ typedef struct { int32_t port; }                                   TscHttpServer
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| fetch-get | `doc/phase19/net/fetch-get` | ✓ проходит |
-| fetch-post | `doc/phase19/net/fetch-post` | ✓ проходит |
-| response-props | `doc/phase19/net/response-props` | ✓ проходит |
-| request-props | `doc/phase19/net/request-props` | ✓ проходит |
-| http-server | `doc/phase19/net/http-server` | ✓ проходит |
-| server-routes | `doc/phase19/net/server-routes` | ✓ проходит |
-| tcp-connect | `doc/phase19/net/tcp-connect` | ✓ проходит |
-| tcp-server | `doc/phase19/net/tcp-server` | ✓ проходит |
-| socket-write | `doc/phase19/net/socket-write` | ✓ проходит |
-| socket-readline | `doc/phase19/net/socket-readline` | ✓ проходит |
-| udp-socket | `doc/phase19/net/udp-socket` | ✓ проходит |
-| err-net-embedded | `doc/phase19/net/err-net-embedded` | ✓ проходит |
+| fetch-get | `test/cases/phase19/net/fetch-get` | ✓ проходит |
+| fetch-post | `test/cases/phase19/net/fetch-post` | ✓ проходит |
+| response-props | `test/cases/phase19/net/response-props` | ✓ проходит |
+| request-props | `test/cases/phase19/net/request-props` | ✓ проходит |
+| http-server | `test/cases/phase19/net/http-server` | ✓ проходит |
+| server-routes | `test/cases/phase19/net/server-routes` | ✓ проходит |
+| tcp-connect | `test/cases/phase19/net/tcp-connect` | ✓ проходит |
+| tcp-server | `test/cases/phase19/net/tcp-server` | ✓ проходит |
+| socket-write | `test/cases/phase19/net/socket-write` | ✓ проходит |
+| socket-readline | `test/cases/phase19/net/socket-readline` | ✓ проходит |
+| udp-socket | `test/cases/phase19/net/udp-socket` | ✓ проходит |
+| err-net-embedded | `test/cases/phase19/net/err-net-embedded` | ✓ проходит |
