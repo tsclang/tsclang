@@ -660,25 +660,34 @@
 
 | Фаза | Название | Тестов | Статус |
 |------|----------|--------|--------|
-| 0  | Core runtime | 22 | `[x]` |
+| 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
-| 2  | Система типов | 159 | `[x]` |
-| 3  | Модель памяти | 152 | `[x]` |
-| 4  | Объектная модель | 56 | `[x]` |
+| 2  | Система типов | 164 | `[x]` |
+| 3  | Модель памяти | 159 | `[x]` |
+| 4  | Объектная модель | 58 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
-| 6  | Модульная система | 36 | `[x]` |
-| 7  | Async/Await | 36 | `[x]` |
-| 8  | Threads и конкурентность | 29 | `[x]` |
+| 6  | Модульная система | 41 | `[x]` |
+| 7  | Async/Await | 39 | `[x]` |
+| 8  | Threads и конкурентность | 36 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
-| 10 | Package manager | 20 | `[~]` (CLI ✓, CMake ✓, build profiles ✓; platform profiles — отложено) |
+| 10 | Строки и кодировки | 20 | `[x]` |
 | 11 | Embedded compiler features | 38 | `[x]` |
-| 12 | Стандартная библиотека | 134 | `[~]` (math/string/temporal/json/reactive/blob/buffer/random/embedded/io/fs/net/ws ✓; hal/avr — desktop stubs, реальная реализация через platform profile) |
+| 12 | Стандартная библиотека | 98 | `[x]` |
 | 13 | Декораторы | 21 | `[x]` |
-| 14 | IR и продвинутые возможности | — | `[x]` |
-| 15 | Линтер и форматтер | 8 | `[x]` |
-| 16 | Реестр пакетов | — | `[x]` |
-| 17 | Platform backends: Retro & Consoles | 9 | `[~]` (инфраструктура ✓, platform packages — отложено) |
-| 18 | Advanced tooling | 17 | `[x]` |
-| 19 | Реальная реализация stdlib I/O (fs/net/ws/io) | 74 | `[x]` |
+| 14 | Reactive | 7 | `[x]` |
+| 15 | Regex | 8 | `[x]` |
+| 16 | LSP | 3 | `[x]` |
+| 17 | Linter | 9 | `[x]` |
+| 18 | Оптимизатор | 17 | `[x]` |
+| 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1013 тестов ✓** (2026-04-22) — дополнительно реализованы: `Date` тип (portable `_tsc_timegm`, все getters/setters/toISOString), `declare module "name" { }` (Declaration Merging, ambient C-lib), `std/libc` import (`import { printf } from "std/libc"` → `#include <stdio.h>`, libc variadic функции), `Scalar` тип (`...args: Scalar[]` → C variadic `...` + va_list forwarding), `AtomicArray<T>`, `Readonly<T>`, spread `{...obj}`, Channel runtime (TscChannel_T ring buffer, все channel операции), Thread runtime (`tsc_thread_t`/spawn/join через Win32+pthreads), phase 19 codegen (fs/io/net/ws namespace imports, async socket ops, platform headers для AVR); GCC-провалы остались только в `phase8/isr/basic-isr` (AVR-specific ISR macro, не компилируется на desktop GCC)
+**Итого: 1028 тестов ✓** (2026-05-13)
+
+> 2026-05-13: Рефакторинг компилятора:
+> - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
+> - `inferType` Call case (410L) → `_inferCall` + `_inferMemberCall`; `_dispatchStdLib` (770L) → thin dispatcher + 15 domain methods
+> - Дедупликация: `embeddedTargets` (13 копий → `_isEmbedded`/`_isEmbeddedOrRetro`), `identToCType` (3 → `_arrIdentToCType`), `PRIMITIVE_IDENTS`, `HEAP_ARRAY_KEYWORDS`, `ORDERING_MAP` — module constants
+> - `_genNextCall()` helper (4 копии generator .next()), `_checkMoved`/`_checkFieldMoved` (4 копии use-after-move errors), `_flushPostStmtCleanups`/`_pushPostStmtCleanup` (6 копий)
+> - Lazy init guards (62 экз.) → все свойства инициализированы в конструкторе Context
+> - Mixin collision detection при старте, `forIn` → throw error, удалён пустой `arrMethods`, исправлен Blob slice ternary
+> - Добавлены 3 пропущенных теста phase9 (hello-world, single-file, run/desktop) + 3 исправленных stub-теста (generic-partial-param, staticmap-create, cmake-avr)
