@@ -50,8 +50,7 @@ export default {
       : tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
     const monoName = `${name}_${suffix}`;
 
-    // Emit monomorphized function if not already done
-    if (!this._emittedGenerics) this._emittedGenerics = new Set();
+    // Emit monomorphized function if not already done
     if (!this._emittedGenerics.has(monoName)) {
       this._emittedGenerics.add(monoName);
       this.emitMonoFunc(tmpl, monoName, subst);
@@ -82,10 +81,8 @@ export default {
     const fields = node.props
       .filter(p => !p.spread && !p.computed)
       .map(p => ({ name: p.key, ctype: this.inferType(p.value) }));
-    const sig = fields.map(f => `${f.ctype} ${f.name}`).join(';');
-    if (!this._anonStructSigs) this._anonStructSigs = new Map();
-    if (this._anonStructSigs.has(sig)) return this._anonStructSigs.get(sig);
-    if (!this._anonStructCount) this._anonStructCount = 0;
+    const sig = fields.map(f => `${f.ctype} ${f.name}`).join(';');
+    if (this._anonStructSigs.has(sig)) return this._anonStructSigs.get(sig);
     const anonName = `_anon_${this._anonStructCount++}`;
     const structFields = fields.map(f => ({
       name: f.name,

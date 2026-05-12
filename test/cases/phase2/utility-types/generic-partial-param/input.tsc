@@ -1,3 +1,5 @@
+interface Point { x: i32; y: i32; }
 function merge<T>(base: T, patch: Partial<T>): T {
     return base;
 }
+const p = merge<Point>({ x: 1, y: 2 }, { y: 99 });

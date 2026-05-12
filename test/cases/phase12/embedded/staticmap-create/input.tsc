@@ -1,2 +1,4 @@
 import { StaticMap } from "std/embedded";
 const m = new StaticMap({ "LDA": 0xA9, "STA": 0x8D, "LDX": 0xA2 });
+const v = m.get("STA");
+if (v != null) console.log(v);

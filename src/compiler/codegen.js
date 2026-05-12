@@ -6,6 +6,9 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 
+const EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32']);
+const ALL_EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum']);
+
 // Returns { c: string, warnings: TscError[], exports: Object }
 // opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
 // opts.libraryMode — emit without #include and main() (for bundled deps)
@@ -101,6 +104,53 @@ class Context {
     // Types predefined in runtime.h — prevent codegen from re-emitting them
     this._emittedArrayStructs = new Set(['Array_string', 'Array_u8']);
     this._emittedOptStructs   = new Set(['opt_u8']);
+    this._emittedResultTypes = new Set();
+    this._emittedHelpers = new Set();
+    this._emittedImplicitVtables = new Set();
+    this._emittedTasksPolls = new Set();
+    this._emittedGenerics = new Set();
+    this._emittedPromiseTypes = new Set();
+    this._emittedResultErrKeys = new Set();
+    this._emittedGenericClasses = new Set();
+    this._emittedAtomicTypes = new Set();
+    this._emittedSignalTypedefs = new Set();
+    this._emittedTasksStructs = new Set();
+    this._emittedHashMaps = new Set();
+    this._emittedChannelTypes = new Set();
+    this._emittedStaticMaps = new Set();
+    this._emittedMapStructs = new Set(['string_i32']);
+    this._emittedMapEntries = new Set();
+    this._emittedSliceStructs = new Set();
+    this._emittedTuples = new Set();
+    this._emittedBlobTypeDef = false;
+    this._emittedBufferTypeDef = false;
+    this._emittedDataViewTypeDef = false;
+    this._emittedTscClamp = false;
+    this._emittedTscSecureRandomDef = false;
+    this._emittedSliceU8 = false;
+    this._emittedReaderVtable = false;
+    this._emittedWriterVtable = false;
+    this._mapHasSetCalls = new Set();
+    this._heapStringFuncs = new Set();
+    this._anonStructSigs = new Map();
+    this._anonStructCount = 0;
+    this._cmpxchgCount = 0;
+    this._tasksStateCount = 0;
+    this._fromEntriesCount = 0;
+    this._staticTasks = [];
+    this._asyncFuncs = new Map();
+    this._generatorFuncs = new Map();
+    this._capturedSignalMap = new Map();
+    this._persistentCaptureRefs = new Map();
+    this._deferredAnons = new Map();
+    this._genericClasses = new Map();
+    this._genericFuncs = new Map();
+    this._pendingOverloads = new Map();
+    this._declaredModules = new Map();
+    this._extensions = new Map();
+    this._typeAliases = new Map();
+    this._pendingOptTypedefs = new Map();
+    this._narrowedVars = new Set();
 
     // Collected warnings (printed after compilation, don't abort)
     this._warnings = [];
@@ -125,6 +175,8 @@ class Context {
   pushScope() { this.scopes.push(new Map()); }
   popScope()  { this.scopes.pop(); }
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
+  _isEmbedded()          { return EMBEDDED_TARGETS.has(this._targetName); }
+  _isEmbeddedOrRetro()   { return ALL_EMBEDDED_TARGETS.has(this._targetName); }
   lookup(name) {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
       if (this.scopes[i].has(name)) return this.scopes[i].get(name);
@@ -185,6 +237,53 @@ class Context {
         this._funcCleanupSet.add(stmt);
         this._funcCleanup.push(stmt);
       }
+    }
+  }
+
+  _pushPostStmtCleanup(line) {
+    if (!this._postStmtCleanups) this._postStmtCleanups = [];
+    this._postStmtCleanups.push(line);
+  }
+
+  _flushPostStmtCleanups(lines) {
+    if (this._postStmtCleanups?.length) {
+      for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
+      this._postStmtCleanups = [];
+    }
+  }
+
+  _genNextCall(sym, objC) {
+    const gi = sym._gi;
+    const nextArgs = [].concat(sym._genArgs || []);
+    const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
+    return { gi, callExpr: `${gi.nextFn}(${callArgs})` };
+  }
+
+  _checkMoved(sym, node, name) {
+    if (sym?._moved) {
+      const ms = sym._movedSourceNode;
+      throw this.error(`use of moved value: "${name}"`, node, {
+        label: 'use of moved value',
+        spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
+        code: 'E002',
+      });
+    }
+    if (sym?._movedIntoClosureLine !== undefined) {
+      throw this.error(`use of moved value: '${name}' was moved into closure on line ${sym._movedIntoClosureLine}`, node, {
+        label: 'use of moved value',
+        code: 'E002',
+      });
+    }
+  }
+
+  _checkFieldMoved(sym, prop, node, objName) {
+    if (sym?._movedFields?.has(prop)) {
+      const ms = sym._movedFieldSourceNode?.[prop];
+      throw this.error(`use of moved value: '${objName}.${prop}'`, node, {
+        label: 'use of moved value',
+        spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
+        code: 'E006',
+      });
     }
   }
 
@@ -315,11 +414,37 @@ class Context {
 
 import topLevel  from './codegen/top-level.js';
 import stmt      from './codegen/stmt.js';
+import stmtSub   from './codegen/stmt/index.js';
 import expr      from './codegen/expr.js';
-import calls     from './codegen/calls.js';
+import calls     from './codegen/calls/index.js';
 import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
 import types     from './codegen/types.js';
 import asyncMixin from './codegen/async.js';
 
-Object.assign(Context.prototype, topLevel, stmt, expr, calls, generics, misc, types, asyncMixin);
+const _mixinSources = [
+  ['topLevel',  topLevel],
+  ['stmt',      stmt],
+  ['stmtSub',   stmtSub],
+  ['expr',      expr],
+  ['calls',     calls],
+  ['generics',  generics],
+  ['misc',      misc],
+  ['types',     types],
+  ['async',     asyncMixin],
+];
+
+{
+  const seen = new Map();
+  for (const [name, obj] of _mixinSources) {
+    for (const key of Object.keys(obj)) {
+      if (seen.has(key)) {
+        console.error(`codegen mixin collision: "${key}" defined in both "${seen.get(key)}" and "${name}"`);
+        process.exit(1);
+      }
+      seen.set(key, name);
+    }
+  }
+}
+
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, types, asyncMixin);
