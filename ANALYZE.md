@@ -7,6 +7,16 @@
 
 ---
 
+Из 1029 тестов только 3 заглушки:
+#	Тест	Что должен тестировать	Почему заглушка
+1	phase2/utility-types/generic-partial-param	Partial<T> в generic-параметре	merge<T>(base, patch: Partial<T>) никогда не вызывается → expected.c = пустой main(), не проверяет сгенерированный тип
+2	phase12/embedded/staticmap-create	new StaticMap({...})	StaticMap создаётся в input.tsc, но expected.c = пустой main() — ни переменной, ни struct
+3	phase11/platform/cmake-avr	CMake для AVR	input.json + expected.c (CMake-контент), но нет expected.out → раннер не может выполнить json-тест без expected.out, тест всегда skip
+Остальные 1026 — полноценные тесты. Из них 7 с пустым expected.out — это корректно (stderr-only, if(false), exit(0) и т.д.).
+Что делать с этими тремя — починить (написать реальные expected) или удалить?
+
+---
+
 ### Сильные стороны (где проект впечатляет)
 
 1. **Продуманная спецификация и дисциплина**  
