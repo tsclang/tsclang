@@ -1,5 +1,0 @@
-cmake_minimum_required(VERSION 3.10)
-project(test_argv C)
-set(CMAKE_C_STANDARD 99)
-add_executable(test_argv test_argv.c)
-target_include_directories(test_argv PRIVATE "C:\\dev\\games\\ts\\tsclang\\src\\runtime")
