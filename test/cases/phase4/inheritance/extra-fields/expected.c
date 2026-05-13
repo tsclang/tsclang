@@ -1,14 +1,18 @@
 #include "runtime.h"
 
-typedef struct { String name; } Animal;
-typedef struct { Animal _base; String breed; } Dog;
+typedef struct { TscError _base; int32_t code; } MyError;
+
+static MyError MyError_new(String msg) {
+    MyError self = {0};
+    self._base.message = msg;
+    self.code = 42;
+    return self;
+}
 
 int main(void) {
     TSC_INIT();
-    Dog d = {0};
-    d._base.name = STR_LIT("Rex");
-    d.breed = STR_LIT("Labrador");
-    printf("%s\n", d._base.name.data);
-    printf("%s\n", d.breed.data);
+    MyError _err_0 = MyError_new(STR_LIT("oops"));
+    printf("%s\n", _err_0._base.message.data);
+    printf("%d\n", _err_0.code);
     return 0;
 }

@@ -1,11 +1,13 @@
-class Animal {
-    name: string;
+class MyError extends Error {
+    code: i32;
+    constructor(msg: string) {
+        super(msg);
+        this.code = 42;
+    }
 }
-class Dog extends Animal {
-    breed: string;
+try {
+    throw new MyError("oops");
+} catch (e: MyError) {
+    console.log(e.message);
+    console.log(e.code);
 }
-let d = new Dog();
-d.name = "Rex";
-d.breed = "Labrador";
-console.log(d.name);
-console.log(d.breed);

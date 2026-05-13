@@ -60,7 +60,17 @@ export default {
     };
     for (const node of ast.body) _scanArc(node);
 
-    // Pre-scan: detect inheritance chains > 1 level (must fire before per-class non-Error check)
+    // Pre-scan: only Error inheritance is allowed
+    {
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'ClassDecl' && n.superClass && n.superClass !== 'Error') {
+          throw this.error(`TypeError: class '${n.name}' cannot extend '${n.superClass}'; inheritance is only allowed from 'Error'`);
+        }
+      }
+    }
+
+    // Pre-scan: detect inheritance chains > 1 level
     {
       const classDecls = {};
       for (const node of ast.body) {

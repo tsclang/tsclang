@@ -1,0 +1,1 @@
+TypeError: class 'Dog' cannot extend 'Animal'; inheritance is only allowed from 'Error'

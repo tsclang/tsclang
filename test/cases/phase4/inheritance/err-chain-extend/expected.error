@@ -1,1 +1,1 @@
-TypeError: Inheritance chains longer than one level are not supported; 'C' cannot extend 'B' which already extends 'A'
+TypeError: class 'NetworkError' cannot extend 'AppError'; inheritance is only allowed from 'Error'

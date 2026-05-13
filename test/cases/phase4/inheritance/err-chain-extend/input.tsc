@@ -1,3 +1,9 @@
-class A { x: i32; }
-class B extends A { y: i32; }
-class C extends B { z: i32; }
+class AppError extends Error {
+    x: i32;
+}
+class NetworkError extends AppError {
+    y: i32;
+}
+class TimeoutError extends NetworkError {
+    z: i32;
+}
