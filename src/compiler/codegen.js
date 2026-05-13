@@ -164,6 +164,10 @@ class Context {
     // Exported symbols: name → scope entry (populated by case 'Export')
     this._exports = new Map();
 
+    // Explicit user-defined main() — rename to __main and call from generated int main()
+    this._hasExplicitMain = false;
+    this._explicitMainRetType = null;
+
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
     this._parse = _parse;
@@ -369,7 +373,16 @@ class Context {
       for (let i = this._mainCleanup.length - 1; i >= 0; i--) {
         parts.push(`${this.ind()}${this._mainCleanup[i]};`);
       }
-      parts.push(`${this.ind()}return 0;`);
+      if (this._hasExplicitMain) {
+        if (this._explicitMainRetType === 'void') {
+          parts.push(`${this.ind()}_tsc_main();`);
+          parts.push(`${this.ind()}return 0;`);
+        } else {
+          parts.push(`${this.ind()}return _tsc_main();`);
+        }
+      } else {
+        parts.push(`${this.ind()}return 0;`);
+      }
       parts.push('}');
     }
     return parts.join('\n') + '\n';

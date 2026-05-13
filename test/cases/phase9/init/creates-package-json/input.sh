@@ -1,2 +1,3 @@
-tsclang init --name myapp
+tsclang init myapp
+cd myapp
 cat tsc.package.json | grep '"name"'

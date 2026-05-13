@@ -175,7 +175,8 @@ export default {
         if (keyArg.kind === 'TypeRef' && typeParamNames.has(keyArg.name)) {
           throw this.error(`Pick with runtime key in return type is not supported`);
         }
-      }
+      }
+
       this._genericFuncs.set(name, node);
       return;
     }
@@ -191,6 +192,7 @@ export default {
     } else {
       retType = 'void';
     }
+    const origRetType = retType;
     // Stack size check
     if (this._stackSize != null && body) {
       let stackBytes = 0;
@@ -215,6 +217,12 @@ export default {
     const suffix = node._monoName ? '' : mangleParams(params);
     let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
     if (this._modulePrefix && name && !node._noPrefix) cname = this._modulePrefix + cname;
+    // Rename user-defined main() to avoid conflict with generated int main()
+    if (name === 'main' && !node.async && !generator) {
+      cname = '_tsc_main';
+      this._hasExplicitMain = true;
+      this._explicitMainRetType = origRetType;
+    }
 
     // Throws function handling
     const throwsTypes = node.throwsTypes ?? [];
@@ -361,7 +369,8 @@ export default {
                        'tsc_i64_to_string','tsc_u32_to_string','tsc_u64_to_string',
                        'tsc_bool_to_string','tsc_char_to_string'];
       const heapsString = lines.some(l => l.trimStart().startsWith('return ') &&
-                                          heapOps.some(op => l.includes(op)));
+                                          heapOps.some(op => l.includes(op)));
+
       if (heapsString) this._heapStringFuncs.add(cname);
     }
     // Special C syntax when return type is a function pointer: RET (*NAME(PARAMS))(FP_PARAMS)
@@ -531,7 +540,8 @@ export default {
     this.addTop('}');
     this.addTop('');
 
-    // Register extension for call resolution
+    // Register extension for call resolution
+
     const key = `${thisIdent}.${name}`;
     this._extensions.set(key, { cFuncName, thisCType, thisIdent, retCType });
   }

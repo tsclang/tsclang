@@ -284,19 +284,38 @@ if (command === 'validate-config') {
 // init command
 // ---------------------------------------------------------------------------
 if (command === 'init') {
-  const nameIdx = args.indexOf('--name');
-  const name    = nameIdx !== -1 ? args[nameIdx + 1] : 'myapp';
+  // Parse positional name and flags
+  let name = null;
+  for (let i = 1; i < args.length; i++) {
+    if (!args[i].startsWith('-')) {
+      name = args[i];
+      break;
+    }
+  }
+
   const typeIdx = args.indexOf('--type');
-  const type    = typeIdx !== -1 ? args[typeIdx + 1] : 'executable';
+  const hasLibrary = args.includes('--library') || args.includes('-l');
+  const hasDeclaration = args.includes('--declaration') || args.includes('-d');
+  let type = typeIdx !== -1 ? args[typeIdx + 1] : 'executable';
+  if (hasLibrary) type = 'library';
+  if (hasDeclaration) type = 'declaration';
+
+  const pkgName = name || 'myapp';
+
+  // Create subdirectory if name is provided
+  if (name) {
+    mkdirSync(name, { recursive: true });
+    process.chdir(name);
+  }
 
   // Key order matters: the last key has no trailing comma (for grep-based tests)
   // executable: version, type, main, name (name last)
   // library: version, name, type (type last)
   let pkg;
   if (type === 'executable') {
-    pkg = { version: '0.1.0', type, main: 'src/main.tsc', name };
+    pkg = { version: '0.1.0', type, main: 'src/main.tsc', name: pkgName };
   } else {
-    pkg = { version: '0.1.0', name, type };
+    pkg = { version: '0.1.0', name: pkgName, type };
   }
 
   writeFileSync('tsc.package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf8');
