@@ -1,0 +1,2 @@
+const num = 42;
+console.log("x=" + num);

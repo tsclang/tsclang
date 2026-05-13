@@ -41,19 +41,18 @@ export default {
           }
           return [n];
         };
-        let concatFmt = '';
-        for (const seg of flattenConcat(expr)) {
-          if (seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char')) {
+        const segments = flattenConcat(expr);
+        // Only flatten when every segment is a string literal (safe to merge into format string)
+        if (segments.every(seg => seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char'))) {
+          let concatFmt = '';
+          for (const seg of segments) {
             concatFmt += seg.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%');
-          } else {
-            concatFmt += '%s';
-            const segCexpr = this.exprToC(seg, lines, depth);
-            const segType = this.inferType(seg);
-            fmtArgs.push(segType === 'String' ? `${segCexpr}.data` : segCexpr);
           }
+          fmtParts.push(concatFmt);
+          continue;
         }
-        fmtParts.push(concatFmt);
-        continue;
+        // Mixed concat (e.g. "x=" + num): fall through to the general String path
+        // which creates a temp variable and emits tsc_string_free
       }
 
       if (expr.kind === 'Typeof') {
