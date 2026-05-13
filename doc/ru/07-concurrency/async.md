@@ -248,8 +248,10 @@ setTimeout(() => controller.abort(new TimeoutError()), 5000)
 
 try {
     const data = await fetch(url, { signal })
-} catch (e: NetworkError | AbortError) {
-    if (e instanceof AbortError) console.log("отменено:", e.cause)
+} catch (e: AbortError) {
+    console.log("отменено:", e.cause);
+} catch (e: NetworkError) {
+    console.log("сетевая ошибка:", e.message);
 }
 ```
 

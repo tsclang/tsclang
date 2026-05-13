@@ -1048,9 +1048,8 @@ input.tsc:1:
 - [R] try/finally — finally всегда выполняется (успех)
 - [R] try/finally — finally всегда выполняется (ошибка)
 - [R] несколько catch-блоков — dispatch по типу
-- [R] union catch: `catch (e: IOError | NetworkError)`
-- [R] match внутри union catch (exhaustive)
-- [R] instanceof внутри union catch
+- [R] несколько catch-блоков — dispatch по типу (multiple catches)
+- [R] union catch без `e`: `catch (e: IOError | NetworkError)` — тело выполняется, но `e` не привязан
 - [E] `throw` внутри `finally` → ошибка
 - [E] `return` внутри `finally` → ошибка
 

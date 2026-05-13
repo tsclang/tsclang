@@ -117,9 +117,10 @@ await Promise.all([a(), b()])
 
 try {
     await Promise.all([a(), b()])
-} catch (e: IOError | NetworkError) {
-    if (e instanceof IOError) { ... }
-    else if (e instanceof NetworkError) { ... }
+} catch (e: IOError) {
+    console.log("io error:", e.message);
+} catch (e: NetworkError) {
+    console.log("network error:", e.message);
 }
 ```
 

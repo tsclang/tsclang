@@ -111,46 +111,21 @@ if (_r.ok) {
 }
 ```
 
-### Union catch — multiple types in one block
+### Multiple catch blocks — type dispatch
 
 ```typescript
 try {
     fetch("https://...");
-} catch (e: IOError | NetworkError) {
-    console.log("error:", e.message);   // type e = IOError | NetworkError
+} catch (e: IOError) {
+    console.log("io:", e.message);
+} catch (e: NetworkError) {
+    console.log("net:", e.message);
 }
 ```
 
-### Exhaustive handling inside union catch
-
-Dispatch inside `catch` — via `match` or `instanceof`:
-
-```typescript
-// match — exhaustive, _ not needed
-try {
-    fetch("https://...")
-} catch (e: IOError | NetworkError) {
-    match (e) {
-        IOError { message }   => console.log("io:", message),
-        NetworkError { code } => console.log("net:", code),
-    }
-}
-```
-
-```typescript
-// instanceof — narrowing with else
-try {
-    fetch("https://...")
-} catch (e: IOError | NetworkError) {
-    if (e instanceof IOError) {
-        console.log("io:", e.message);      // e: IOError
-    } else {
-        console.log("net:", e.code);        // e: NetworkError
-    }
-}
-```
-
-Dispatch compiles via `_kind` from the Result struct — without `type_id` in Error, without vtable.
+> **Union catch without `e` binding.** `catch (e: IOError | NetworkError)` compiles, but `e` is not declared — the compiler doesn't know the concrete type. Use multiple `catch` blocks if you need access to error fields.
+>
+> **instanceof in catch.** `instanceof` requires an interface type on the right-hand side; with error classes (`extends Error`), use multiple `catch` blocks instead of `instanceof`.
 
 ## finally
 

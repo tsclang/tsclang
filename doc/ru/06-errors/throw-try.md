@@ -111,46 +111,21 @@ if (_r.ok) {
 }
 ```
 
-### Union catch — несколько типов в одном блоке
+### Несколько `catch`-блоков — диспатч по типу
 
 ```typescript
 try {
     fetch("https://...");
-} catch (e: IOError | NetworkError) {
-    console.log("error:", e.message);   // тип e = IOError | NetworkError
+} catch (e: IOError) {
+    console.log("io:", e.message);
+} catch (e: NetworkError) {
+    console.log("net:", e.message);
 }
 ```
 
-### Exhaustive handling внутри union catch
-
-Диспатч внутри `catch` — через `match` или `instanceof`:
-
-```typescript
-// match — exhaustive, _ не нужен
-try {
-    fetch("https://...")
-} catch (e: IOError | NetworkError) {
-    match (e) {
-        IOError { message }   => console.log("io:", message),
-        NetworkError { code } => console.log("net:", code),
-    }
-}
-```
-
-```typescript
-// instanceof — narrowing с else
-try {
-    fetch("https://...")
-} catch (e: IOError | NetworkError) {
-    if (e instanceof IOError) {
-        console.log("io:", e.message);      // e: IOError
-    } else {
-        console.log("net:", e.code);        // e: NetworkError
-    }
-}
-```
-
-Диспатч компилируется через `_kind` из Result-struct — без `type_id` в Error, без vtable.
+> **Union catch без привязки `e`.** `catch (e: IOError | NetworkError)` компилируется, но переменная `e` не создаётся — компилятор не знает конкретный тип. Используйте несколько `catch`-блоков, если нужен доступ к полям ошибки.
+>
+> **instanceof в catch.** `instanceof` требует interface type справа; с классами ошибок (`extends Error`) используйте несколько `catch`-блоков вместо `instanceof`.
 
 ## finally
 
