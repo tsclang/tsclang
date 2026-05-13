@@ -103,6 +103,13 @@
     const p = (s) => lines.push(I + s);
     const II = ' '.repeat(this.indent * (depth + 1));
 
+    // Require explicit type annotation in catch clauses
+    for (const c of node.catches ?? []) {
+      if (c.param && !c.typeAnn) {
+        throw this.error(`TypeError: catch clause requires explicit error type`, c);
+      }
+    }
+
     // Determine if this is a void ExprStmt call or a VarDecl call
     const isVoidCall = callStmt.kind === 'ExprStmt';
     const callExpr = isVoidCall ? callStmt.expr : callStmt.init;

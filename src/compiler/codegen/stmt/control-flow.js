@@ -122,7 +122,8 @@
         const alt = node.alternate;
         // Single statement consequent (no braces)?
         let hasBraces = node.consequent.kind === 'Block';
-        if (narrowVar) {
+        if (narrowVar) {
+
           this._narrowedVars.add(narrowVar);
         }
         if (hasBraces) {
@@ -533,6 +534,13 @@
 
       case 'TryCatch': {
         const tryStmts = node.body?.body ?? node.body ?? [];
+
+        // Require explicit type annotation in catch clauses
+        for (const c of node.catches ?? []) {
+          if (c.param && !c.typeAnn) {
+            throw this.error(`TypeError: catch clause requires explicit error type`, c);
+          }
+        }
 
         // Check if try body contains a call to a throws function
         const _findThrowsFuncCall = (stmts) => {

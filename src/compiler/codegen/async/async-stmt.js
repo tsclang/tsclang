@@ -242,6 +242,9 @@ export default {
       const catchClause = s.catches?.[0];
       if (catchClause) {
         const { param, body: catchBody } = catchClause;
+        if (param && !catchClause.typeAnn) {
+          throw this.error(`TypeError: catch clause requires explicit error type`, catchClause);
+        }
         lines.push(`${I}if (!self->_await_${lastAwaitIdx}._result.ok) {`);
         if (param) {
           // param is a string name; typeAnn is on the catchClause directly

@@ -1,0 +1,9 @@
+class Err { message: string; }
+function risky(): void throws Err {
+    throw new Err("fail");
+}
+try {
+    risky();
+} catch (e) {
+    console.log(e.message);
+}
