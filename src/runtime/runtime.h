@@ -1165,6 +1165,46 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     if (_a_->length > _nc_) _a_->length = _nc_; \
 } while(0)
 
+/* Array_string helpers (minimal set) */
+#define tsc_array_free_string(arr) do { \
+    Array_string *_a_ = (arr); \
+    if (_a_->data) free(_a_->data); \
+    _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
+} while(0)
+
+#define tsc_array_push_string(arr, val) do { \
+    Array_string *_a_ = (arr); String _v_ = (val); \
+    if (_a_->length >= _a_->capacity) { \
+        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
+        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); \
+        _a_->capacity = _nc_; \
+    } \
+    _a_->data[_a_->length++] = _v_; \
+} while(0)
+
+#define tsc_array_pop_string(arr) ({ \
+    Array_string *_a_ = (arr); \
+    opt_String _r_ = {false, {NULL, 0, 0}}; \
+    if (_a_->length > 0) { _r_ = (opt_String){true, _a_->data[--_a_->length]}; } \
+    _r_; \
+})
+
+#define tsc_array_remove_string(arr, idx) ({ \
+    Array_string *_a_ = (arr); size_t _i_ = (size_t)(idx); \
+    String _v_ = _a_->data[_i_]; \
+    memmove(_a_->data + _i_, _a_->data + _i_ + 1, (_a_->length - _i_ - 1) * sizeof(String)); \
+    _a_->length--; _v_; \
+})
+
+#define tsc_array_slice_string(arr, start, end_idx) ({ \
+    Array_string _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
+    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
+    size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
+    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(String)); \
+    (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
 
 /* keys: returns Array_string of all keys (heap-allocated copy) */
 #define tsc_map_keys_string_i32(_m_) ({ \
