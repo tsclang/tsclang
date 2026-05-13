@@ -53,6 +53,7 @@ export function mangleType(typeNode) {
     if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0]);
     if (typeArgs.length === 0) {
       // Use the TSClang name directly (i32, f64, etc.) not the C type (int32_t, double)
+      if (name === 'number') return 'f64';
       return PRIMITIVE_MAP[name] ? name : name;
     }
     return name + '_' + typeArgs.map(mangleType).join('_');

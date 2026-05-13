@@ -1,0 +1,8 @@
+// @target: avr
+function add(a: number, b: number): number {
+    return a + b;
+}
+
+const x: number = 1.5;
+const y: number = 2.5;
+console.log(add(x, y));

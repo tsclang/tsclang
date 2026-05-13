@@ -9,6 +9,7 @@ export default {
       const { name, typeArgs } = typeNode;
       // usize = u16 on 16-bit targets
       if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
+      if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';
       if (name in PRIMITIVE_MAP) return PRIMITIVE_MAP[name];
 
       if (name === 'Ref') {
@@ -86,7 +87,8 @@ export default {
       if (this._typeAliases?.has(name)) {
         const aliased = this._typeAliases.get(name);
         // Lazily emit opt typedef if needed (but not when inside NonNullable processing)
-        if (!this._noOptEmit && aliased.startsWith('opt_') && this._pendingOptTypedefs?.has(aliased)) {
+        if (!this._noOptEmit && aliased.startsWith('opt_') && this._pendingOptTypedefs?.has(aliased)) {
+
           if (!this._emittedOptStructs.has(aliased)) {
             this._emittedOptStructs.add(aliased);
             const optInner = this._pendingOptTypedefs.get(aliased);
@@ -145,9 +147,11 @@ export default {
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
         const optName = `opt_${this.cTypeToIdent(inner)}`;
-        // Store for deferred emission
+        // Store for deferred emission
+
         this._pendingOptTypedefs.set(optName, inner);
-        // Emit struct typedef if not already done
+        // Emit struct typedef if not already done
+
         if (!this._emittedOptStructs.has(optName)) {
           this._emittedOptStructs.add(optName);
           this.addTop(`typedef struct { bool has_value; ${inner} value; } ${optName};`);
@@ -182,7 +186,8 @@ export default {
         let ct = this.resolveType(el.typeAnn);
         if (el.optional) {
           // Wrap in opt_T
-          const optName = `opt_${this.cTypeToIdent(ct)}`;
+          const optName = `opt_${this.cTypeToIdent(ct)}`;
+
           if (!this._emittedOptStructs.has(optName)) {
             this._emittedOptStructs.add(optName);
             this.addTop(`typedef struct { bool has_value; ${ct} value; } ${optName};`);
@@ -205,7 +210,8 @@ export default {
       structName = `${prefix}_${elNames.join('_')}`;
     }
 
-    // Emit typedef if not already done
+    // Emit typedef if not already done
+
     if (!this._emittedTuples.has(structName)) {
       this._emittedTuples.add(structName);
       const fieldDecls = fields.map(f => {
