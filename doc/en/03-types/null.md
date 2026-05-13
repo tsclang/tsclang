@@ -4,13 +4,13 @@
 
 ---
 
-`null` is the only "missing value" in TSClang. Unlike JS/TS, there is **no `undefined`** and **no `NaN`** — parsing functions return `T | null`, integer division by zero causes a panic, for float — IEEE 754 behavior.
+`null` is the only "missing value" in TSClang. Unlike JS/TS, there is **no `undefined`** and **no `NaN`** — parsing functions return `T | null`, integer division by zero causes panic, for float — IEEE 754 behavior.
 
 ---
 
-## Declaring a nullable type
+## Declaring a Nullable Type
 
-### Explicit syntax: `T | null`
+### Explicit Syntax: `T | null`
 
 ```typescript
 let name: string | null = null;
@@ -29,14 +29,14 @@ let name: ?string = null;                 // equivalent to string | null
 
 ---
 
-## C representation
+## C Representation
 
 `T | null` compiles to a struct with a bool flag `has_value`:
 
 ```c
 typedef struct {
     bool    has_value;   // 1 byte
-    // padding to T alignment
+    // padding to align T
     int32_t value;       // 4 bytes
 } opt_i32;
 ```
@@ -53,10 +53,10 @@ opt_i32 x = {true, 42};
 opt_i32 y = {false, 0};
 ```
 
-### Size table with padding
+### Size Table Including Padding
 
 | Type | C struct | Size |
-|------|----------|------|
+|-----|----------|--------|
 | `u8 \| null` | `bool + u8` | 2 bytes |
 | `i16 \| null` | `bool + pad(1) + i16` | 4 bytes |
 | `i32 \| null` | `bool + pad(3) + i32` | 8 bytes |
@@ -65,13 +65,13 @@ opt_i32 y = {false, 0};
 | `f64 \| null` | `bool + pad(7) + f64` | 16 bytes |
 | `string \| null` | `bool + pad(7) + String` | 32 bytes |
 
-On desktop the overhead is not critical. On embedded (AVR: 2KB RAM) padding can be significant.
+On desktop, overhead is negligible. On embedded (AVR: 2KB RAM), padding can be significant.
 
 ---
 
-## Optional chaining `?.`
+## Optional Chaining `?.`
 
-Safe access to fields and methods of a nullable value. If the left side is `null` — the result is also `null`:
+Safe access to fields and methods of a nullable value. If the left side is `null`, the result is also `null`:
 
 ```typescript
 let user: User | null = findUser(id);
@@ -82,14 +82,14 @@ let len = user?.name.length;         // usize | null
 let upper = user?.getName().toUpperCase();  // string | null
 ```
 
-### C-output
+### C Output
 
 ```c
 opt_i32 x = {true, 7};
 const int32_t y = x.has_value ? x.value : 99;
 ```
 
-On `?.` with `null`:
+When `?.` on `null`:
 
 ```c
 opt_i32 x = {false, 0};
@@ -100,19 +100,19 @@ opt_string y = x.has_value
 
 ---
 
-## Nullish coalescing `??`
+## Nullish Coalescing `??`
 
-The `??` operator returns the left side if it is not `null`, otherwise the right side:
+The `??` operator returns the left side if it is not `null`, otherwise the right:
 
 ```typescript
 let x: i32 | null = null;
 let y = x ?? 99;               // 99
 
 let name: string | null = getNullable();
-let display = name ?? "N/A";   // string — guaranteed not null
+let display = name ?? "N/A";   // string — guaranteed non-null
 ```
 
-### C-output
+### C Output
 
 ```typescript
 let x: i32 | null = 7;
@@ -126,9 +126,9 @@ const int32_t y = x.has_value ? x.value : 99;
 
 ---
 
-## Type narrowing after null check
+## Type Narrowing After Null Check
 
-After checking `x != null` the compiler narrows the type from `T | null` to `T`:
+After checking `x != null`, the compiler narrows the type from `T | null` to `T`:
 
 ```typescript
 let x: i32 | null = 5;
@@ -140,10 +140,10 @@ if (x != null) {
 
 // alternative — early return
 if (x == null) return;
-// x: i32 from here on
+// x: i32 below
 ```
 
-### C-output
+### C Output
 
 ```c
 opt_i32 x = {true, 5};
@@ -154,13 +154,13 @@ if (x.has_value) {
 
 ---
 
-## Patterns for embedded
+## Patterns for Embedded
 
-When the overhead of `T | null` (bool + padding) is unacceptable on memory-constrained platforms, two alternative patterns are used.
+When `T | null` overhead (bool + padding) is unacceptable on memory-constrained platforms, two alternative patterns are used.
 
-### Pattern 1: sentinel value
+### Pattern 1: Sentinel Value
 
-Reserve one value from the type's range as "missing". Suitable when the sentinel is guaranteed not to appear in the data:
+Allocate one value from the type's range as "missing". Suitable when the sentinel is guaranteed not to occur in data:
 
 ```typescript
 const NO_READING: u16 = 0xFFFF;  // ADC: 10-bit values 0..1023 — 0xFFFF is never valid
@@ -178,14 +178,14 @@ if (reading != NO_READING) {
 
 Typical sentinel values:
 
-| Type | Sentinel | When to use |
-|------|----------|-------------|
+| Type | Sentinel | When to Use |
+|-----|----------|-------------------|
 | `u8` | `0xFF` | values 0..254 |
 | `u16` | `0xFFFF` | values 0..65534 |
 | `i16` | `-32768` (`INT16_MIN`) | temperature, sensors |
 | `u32` | `0xFFFFFFFF` | addresses, identifiers |
 
-### Pattern 2: separate flag in struct
+### Pattern 2: Separate Flag in Struct
 
 Group several bool flags at the end of a struct — all flags are packed without padding:
 
@@ -208,12 +208,12 @@ interface SensorData {
 
 Field order affects padding — the compiler **does not reorder** fields automatically (ABI compatibility).
 
-### Which pattern to use when
+### When to Use Which Pattern
 
 | Situation | Recommendation |
-|-----------|----------------|
+|----------|-------------|
 | Single optional primitive | sentinel value |
-| Struct with several optional fields | separate flag at the end of struct |
+| Struct with several optional fields | separate flag at end of struct |
 | Desktop / sufficient memory | `T \| null` — safer, more readable |
 
 ---
@@ -237,15 +237,15 @@ const safe = age ?? 0;        // 0
 
 ## Errors
 
-| Error | Cause |
-|-------|-------|
+| Error | Reason |
+|--------|---------|
 | `any is already nullable, "any \| null" is redundant` | `any` is already implicitly nullable (`void*`) |
-| `use of possibly null value` | Using `T \| null` without a check |
-| `Object is possibly null` | Accessing field/method without a null check |
+| `use of possibly null value` | Using `T \| null` without checking |
+| `Object is possibly null` | Accessing field/method without null check |
 
 ---
 
-## See also
+## See Also
 
 - [Special Types (void, never, any)](./special-types.md) — `any` as implicitly nullable
 - [Arrays](./arrays.md) — `pop()`, `find()` return `T | null`
