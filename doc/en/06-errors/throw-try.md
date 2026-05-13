@@ -60,6 +60,8 @@ try {
 }
 ```
 
+> **The type annotation in `catch` is required.** `catch (e)` without a type is a compile-time error. The compiler needs to know which Result struct the handler corresponds to.
+
 ### C-output
 
 ```c

@@ -281,7 +281,7 @@ await Promise.all([a(), b()])
 
 try {
     await Promise.all([a(), b()])
-} catch (e) {
+} catch (e: IOError | NetworkError) {
     if (e instanceof IOError) { ... }
     else if (e instanceof NetworkError) { ... }
 }
@@ -495,7 +495,7 @@ setTimeout(() => controller.abort(new TimeoutError()), 5000)
 
 try {
     const data = await fetch(url, { signal })
-} catch (e) {
+} catch (e: NetworkError | AbortError) {
     if (e instanceof AbortError) console.log("отменено:", e.cause)
 }
 ```
@@ -1091,7 +1091,7 @@ const t = Thread.spawn(() => {
 
 try {
     const result = await t.join()   // throws IOError если поток упал
-} catch (e) { ... }
+} catch (e: IOError) { ... }
 ```
 
 `Thread<void>` — для потоков без результата, `join()` используется только как точка синхронизации:

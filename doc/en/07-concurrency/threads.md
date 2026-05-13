@@ -49,7 +49,7 @@ const t = Thread.spawn(() => {
 
 try {
     const result = await t.join()   // throws IOError if thread crashed
-} catch (e) { /* ... */ }
+} catch (e: IOError) { /* ... */ }
 ```
 
 ### Thread\<void\>

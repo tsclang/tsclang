@@ -248,7 +248,7 @@ setTimeout(() => controller.abort(new TimeoutError()), 5000)
 
 try {
     const data = await fetch(url, { signal })
-} catch (e) {
+} catch (e: NetworkError | AbortError) {
     if (e instanceof AbortError) console.log("cancelled:", e.cause)
 }
 ```
