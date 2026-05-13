@@ -691,3 +691,9 @@
 > - Lazy init guards (62 экз.) → все свойства инициализированы в конструкторе Context
 > - Mixin collision detection при старте, `forIn` → throw error, удалён пустой `arrMethods`, исправлен Blob slice ternary
 > - Добавлены 3 пропущенных теста phase9 (hello-world, single-file, run/desktop) + 3 исправленных stub-теста (generic-partial-param, staticmap-create, cmake-avr)
+
+> 2026-05-13: Мультиязычная документация — каркас для 8 языков:
+> - Переведены: `index.md`, `plan.md`, полный `01-intro/` (5 файлов)
+> - Секционные `index.md` для 02-syntax … 12-migration (11 файлов)
+> - Языки: `zh-cn`, `zh-tw`, `ja`, `pt-br`, `tr`, `de`, `fr`, `es` (144 файла, ~15K строк)
+> - Полные переводы: `ru/` (112 файлов), `en/` (112 файлов)
