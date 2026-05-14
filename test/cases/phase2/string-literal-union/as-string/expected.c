@@ -8,5 +8,6 @@ int main(void) {
     const Dir d = Dir_south;
     const String s = STR_LIT_RUNTIME(Dir_values[(int)d]);
     printf("%s\n", s.data);
+    tsc_string_release(s);
     return 0;
 }

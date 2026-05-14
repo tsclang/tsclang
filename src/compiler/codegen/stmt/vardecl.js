@@ -87,7 +87,7 @@ export default {
             init.typeArgs?.[0]?.kind === 'TypeObject') {
           const typeArg = init.typeArgs[0];
           const fields = typeArg.fields;
-          const fieldNames = fields.map(f => f.name);
+          const fieldNames = fields.map(f => f.name);
           const structName = `_fromEntries_${this._fromEntriesCount++}`;
           const fieldDecls = fields.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
@@ -160,7 +160,7 @@ export default {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
           const ident = this.cTypeToIdent(innerCtype);
-          const atomicType = `Atomic_${ident}`;
+          const atomicType = `Atomic_${ident}`;
           if (!this._emittedAtomicTypes.has(atomicType)) {
             this._emittedAtomicTypes.add(atomicType);
             this.includes.add('#include <stdatomic.h>');
@@ -195,7 +195,7 @@ export default {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
           const ident = this.cTypeToIdent(innerCtype);
-          const arrType = `AtomicArray_${ident}`;
+          const arrType = `AtomicArray_${ident}`;
           if (!this._emittedAtomicTypes.has(arrType)) {
             this._emittedAtomicTypes.add(arrType);
             this.includes.add('#include <stdatomic.h>');
@@ -214,7 +214,7 @@ export default {
           const tArg = init.typeArgs[0].typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
           const ident = this.cTypeToIdent(innerCtype);
-          const sharedType = `Atomic_${ident}_shared`;
+          const sharedType = `Atomic_${ident}_shared`;
           if (!this._emittedAtomicTypes.has(sharedType)) {
             this._emittedAtomicTypes.add(sharedType);
             this.includes.add('#include <stdatomic.h>');
@@ -234,7 +234,7 @@ export default {
           const tArg = init.typeArgs?.[0];
           const et = tArg ? this.resolveType(tArg) : 'int32_t';
           const etIdent = this.cTypeToIdent(et);
-          const sigType = `Signal_${etIdent}`;
+          const sigType = `Signal_${etIdent}`;
           if (!this._emittedSignalTypedefs.has(sigType)) {
             this._emittedSignalTypedefs.add(sigType);
             this.addTop(`typedef struct { ${et} _value; void (**_effects)(void); size_t _effect_count; ${et} (*_compute)(void); } ${sigType};`);
@@ -316,7 +316,7 @@ export default {
             this._emittedTasksTypedefs = true;
             this.addTop('typedef void (*TaskPollFn)(void *state);');
             this.addTop('typedef struct { TaskPollFn fn; void *state; bool active; String name; } TscTask;');
-          }
+          }
           if (!this._emittedTasksStructs.has(tasksType)) {
             this._emittedTasksStructs.add(tasksType);
             this.addTop(`typedef struct { TscTask _slots[${n}]; size_t _count; } ${tasksType};`);
@@ -388,7 +388,7 @@ export default {
           const vIdent = this.cTypeToIdent(vCType);
           const suffix = `${kIdent}_${vIdent}`;
           const hmType = `HashMap_${suffix}`;
-          const cap = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '8';
+          const cap = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '8';
           if (!this._emittedHashMaps.has(hmType)) {
             this._emittedHashMaps.add(hmType);
             this.addTop(`typedef struct {`);
@@ -558,7 +558,7 @@ export default {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
           const ident = this.cTypeToIdent(innerCtype);
-          const chanType = `Channel_${ident}`;
+          const chanType = `Channel_${ident}`;
           if (!this._emittedChannelTypes.has(chanType)) {
             this._emittedChannelTypes.add(chanType);
             this.addTop(`typedef struct { TscChannel_${ident} *_inner; } ${chanType};`);
@@ -674,7 +674,7 @@ export default {
           const typeIdent = this.cTypeToIdent(innerType);
           const errArg = init.args?.[0]?.expr;
           const errType = errArg ? this.inferType(errArg) : 'TscError';
-          const promiseType = `Promise_${typeIdent}_${errType}`;
+          const promiseType = `Promise_${typeIdent}_${errType}`;
           if (!this._emittedPromiseTypes.has(promiseType)) {
             this._emittedPromiseTypes.add(promiseType);
             this._topBlank();
@@ -780,13 +780,13 @@ export default {
           ctype = (v.includes('.') || v.includes('e') || v.includes('E')) ? 'double' : 'int32_t';
         }
         // ObjLit with named fields and no type annotation тЖТ defer as individual consts (expanded at destructuring)
-        if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {
+        if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {
           const anonName = `_anon_${this._anonStructCount++}`;
           const fields = init.props.map(p => {
             const ft = this.inferType(p.value);
             return { name: p.key, typeAnn: { kind: 'TypeRef', name: ft, typeArgs: [] }, _ctype: ft };
           });
-          // Defer emission: don't create typedef or variable yet тАФ expand at destructuring time
+          // Defer emission: don't create typedef or variable yet тАФ expand at destructuring time
           this._deferredAnons.set(name, { fields, init });
           this.define(name, { ctype: anonName, varKind, initNode: init, deferredAnon: true });
           this.classes.set(anonName, { isStruct: true, fields });
@@ -1023,13 +1023,23 @@ export default {
           if (init.kind === 'Arrow') {
             const closure = this.hoistClosure(init, name);
             if (closure) {
+              if (closure.retainLines?.length) {
+                for (const rl of closure.retainLines) p(rl);
+              }
               p(`${closure.closureName} ${name} = {.env = ${closure.envInit}, .fn = ${closure.fnName}};`);
-              this.define(name, { ctype: closure.closureName, isClosure: true, closureRetType: closure.ret, varKind });
+              this.define(name, { ctype: closure.closureName, isClosure: true, closureRetType: closure.ret, varKind,
+                                  ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
+              // Register cleanup for captured string fields
+              if (closure.hasStringCapture) {
+                for (const nm of closure.capturedStringFields ?? []) {
+                  this._registerCleanup(`tsc_string_release(${name}.env.${nm})`);
+                }
+              }
               // Mark captured variables as moved (0-indexed line number for error messages)
               const closureLine = (node.line ?? 1) - 1;
               for (const [nm] of closure.capturedVars) {
                 const capSym = this.lookup(nm);
-                if (capSym) capSym._movedIntoClosureLine = closureLine;
+                if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
               }
               return;
             }
@@ -1048,7 +1058,7 @@ export default {
             // Move semantics borrow check (before emit, but set _moved AFTER)
             { const initSym2 = this.lookup(init.name);
               const structDef2 = this.classes.get(ctype);
-              if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+              if (structDef2?.fields || ctype.startsWith('Array_')) {
                 if (initSym2?.varKind === 'const') {
                   throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
                 }
@@ -1057,11 +1067,14 @@ export default {
                 }
               }
             }
+            if (ctype === 'String') {
+              p(`tsc_string_retain(${init.name});`);
+            }
             p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
             // Move semantics: mark source moved and zero out
             { const initSym2 = this.lookup(init.name);
               const structDef2 = this.classes.get(ctype);
-              if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+              if (structDef2?.fields || ctype.startsWith('Array_')) {
                 if (initSym2) {
                   initSym2._moved = true;
                   initSym2._movedLine = node.line;
@@ -1071,6 +1084,9 @@ export default {
               if (initSym2?.varKind === 'let' && structDef2?.fields) {
                 p(`${init.name} = (${ctype}){0};`);
               }
+            }
+            if (ctype === 'String') {
+              this._registerCleanup(`tsc_string_release(${name})`);
             }
           } else if (init.kind === 'ObjLit' && enumDef2?.isPartial) {
             // Partial<T> ObjLit: expand { name: "Alice" } тЖТ { .has_name = true, .name = ..., .has_age = false }
@@ -1104,7 +1120,7 @@ export default {
               return;
             }
             // Borrow check: cannot move out of array by index (no-typeAnn path)
-            if (init.kind === 'Index' && !ctype.endsWith(' *')) {
+            if (init.kind === 'Index' && !ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {
               const _arrT2 = this.inferType(init.object);
               if (_arrT2?.startsWith('Array_')) {
                 const _elem2 = _arrT2.slice(6);
@@ -1114,6 +1130,10 @@ export default {
                   });
                 }
               }
+            }
+            // Ref<T> / Mut<T> borrow from object fields is not supported
+            if (init.kind === 'Member' && (typeAnn?.name === 'Ref' || typeAnn?.name === 'Mut')) {
+              throw this.error(`TypeError: Cannot borrow a class field; pass the entire object as ${typeAnn.name}<T> instead`, init);
             }
             let initC;
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
@@ -1195,7 +1215,7 @@ export default {
             // Heap-allocated string: emit as non-const and register cleanup
             } else if (ctype === 'String' && this._isHeapStringInit(init)) {
               p(`String ${name} = ${initC};`);
-              this._registerCleanup(`tsc_string_free(${name})`);
+              this._registerCleanup(`tsc_string_release(${name})`);
             } else {
               // Suppress const if flagged by array element return or parse() result
               const effQual = (this._lastArrayElemReturn || this._lastSuppressConst) ? '' : qualifier;
@@ -1208,7 +1228,7 @@ export default {
                 const structDef2pre = this.classes.get(ctype);
                 const isCrossStruct = initSym2pre?.ctype && initSym2pre.ctype !== ctype
                   && this.classes.get(initSym2pre.ctype)?.isStruct && structDef2pre?.isStruct;
-                if (!isCrossStruct && (structDef2pre?.fields || ctype === 'String' || ctype.startsWith('Array_'))) {
+                if (!isCrossStruct && (structDef2pre?.fields || ctype.startsWith('Array_'))) {
                   if (initSym2pre?.varKind === 'const') {
                     throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
                   }
@@ -1217,7 +1237,7 @@ export default {
                   }
                 }
               } else if (init.kind === 'Index') {
-                if (!ctype.endsWith(' *')) {
+                if (!ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {
                   // Cannot move out of array by index (only borrow via Ref<T>)
                   const _arrT = this.inferType(init.object);
                   if (_arrT?.startsWith('Array_')) {
@@ -1231,15 +1251,58 @@ export default {
                 } else if (typeAnn?.name === 'Ref' && init.object.kind === 'Ident') {
                   // Ref<T> borrow of array element тЖТ mark array as borrowed
                   const _arrSym = this.lookup(init.object.name);
-                  if (_arrSym) _arrSym._refBorrowed = true;
+                  if (_arrSym) this._trackRefBorrow(_arrSym);
                 }
+              }
+              if (init.kind === 'Index' && typeAnn?.name === 'Ref' && ctype.endsWith(' *')) {
+                initC = `&${initC}`;
+              }
+              if (init.kind === 'Ident' && typeAnn?.name === 'Ref' && ctype.endsWith(' *')) {
+                const srcSym = this.lookup(init.name);
+                if (srcSym && !srcSym.isPointer && !srcSym.ctype?.endsWith('*')) {
+                  initC = `&${initC}`;
+                }
+                if (srcSym) this._trackRefBorrow(srcSym);
+              }
+              if (init.kind === 'Ident' && typeAnn?.name === 'Mut' && ctype.endsWith('*')) {
+                const srcSym = this.lookup(init.name);
+                if (srcSym && !srcSym.isPointer && !srcSym.ctype?.endsWith('*')) {
+                  initC = `&${initC}`;
+                }
+                if (srcSym) {
+                  if (srcSym.varKind === 'const') {
+                    throw this.error(`cannot borrow "${init.name}" as mutable: it is a const binding`);
+                  }
+                  if ((srcSym._refBorrowCount || 0) > 0) {
+                    throw this.error(
+                      `TypeError: Cannot create mutable borrow of '${init.name}' while immutable borrow is active`,
+                      init
+                    );
+                  }
+                  if (srcSym._mutBorrowedBy) {
+                    throw this.error(
+                      `TypeError: Cannot create two simultaneous mutable borrows of '${init.name}'`,
+                      init
+                    );
+                  }
+                  srcSym._mutBorrowedBy = `_mut_var_${name}`;
+                }
+              }
+              if (ctype === 'String' && init.kind === 'Ident') {
+                p(`tsc_string_retain(${init.name});`);
+              }
+              if (ctype === 'String' && init.kind === 'Member' && init.object.kind === 'Ident') {
+                p(`tsc_string_retain(${init.object.name}.${init.prop});`);
+              }
+              if (ctype === 'String' && init.kind === 'Index') {
+                p(`tsc_string_retain(${initC});`);
               }
               p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
               // Move semantics: mark source moved and zero out (after emit)
               if (init.kind === 'Ident') {
                 const initSym2 = this.lookup(init.name);
                 const structDef2 = this.classes.get(ctype);
-                if (structDef2?.fields || ctype === 'String' || ctype.startsWith('Array_')) {
+                if (structDef2?.fields || ctype.startsWith('Array_')) {
                   if (initSym2) {
                     initSym2._moved = true;
                     initSym2._movedLine = node.line;
@@ -1250,11 +1313,11 @@ export default {
                   }
                 }
               } else if (init.kind === 'Member' && init.object.kind === 'Ident') {
-                // Field move: let d = obj.field тЖТ mark field as moved
+                // Field move: let d = obj.field → mark field as moved
                 const objSym = this.lookup(init.object.name);
                 const objDef = objSym ? this.classes.get(objSym.ctype) : null;
                 const fieldType = objDef?.fields?.find(f => f.name === init.prop);
-                if (fieldType && (fieldType.typeAnn?.name === 'string' || this.classes.has(this.resolveType(fieldType.typeAnn ?? {})))) {
+                if (fieldType && this.classes.has(this.resolveType(fieldType.typeAnn ?? {}))) {
                   if (!objSym._movedFields) objSym._movedFields = new Set();
                   objSym._movedFields.add(init.prop);
                   objSym._movedFieldLine = objSym._movedFieldLine ?? {};
@@ -1262,6 +1325,9 @@ export default {
                   objSym._movedFieldSourceNode = objSym._movedFieldSourceNode ?? {};
                   objSym._movedFieldSourceNode[init.prop] = init; // for secondary span
                 }
+              }
+              if (ctype === 'String') {
+                this._registerCleanup(`tsc_string_release(${name})`);
               }
             }
           }
@@ -1276,8 +1342,22 @@ export default {
         }
         const isStringRef = typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Ref' &&
                             typeAnn.typeArgs?.[0]?.name === 'string';
+        const _isRefVar = typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Ref';
+        const _refInnerType = _isRefVar && ctype.endsWith(' *')
+          ? this.resolveType(typeAnn.typeArgs?.[0] ?? {})
+          : undefined;
         this.define(name, { ctype, varKind, constValue, initNode: init,
-                            ...(isStringRef ? { isStringRef: true } : {}) });
+                            ...(isStringRef ? { isStringRef: true } : {}),
+                            ...(_refInnerType ? { isPointer: true, derefType: _refInnerType } : {}) });
+        // Register cleanup for class variables with string fields
+        if (init && this.classes.has(ctype)) {
+          const stringFields = this._getStringFields(ctype);
+          if (stringFields.length > 0) {
+            this._ensureClassFree(ctype);
+            const freeFn = this.classes.get(ctype)?._classFreeFn;
+            if (freeFn) this._registerCleanup(`${freeFn}(&${name})`);
+          }
+        }
         // Track pool vars for auto-drop at block exit
         if (ctype?.startsWith('opt_ref_') && this._currentBlockPoolVars) {
           const _pcls = ctype.slice(8);

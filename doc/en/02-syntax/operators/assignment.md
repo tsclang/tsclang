@@ -13,12 +13,21 @@ let x: i32 = 10;
 x = 20;              // simple assignment
 ```
 
-For complex types (strings, arrays, objects) assignment is a **move**. After `a = b` variable `b` is invalid:
+For complex types (arrays, objects, classes) assignment is a **move**. After `a = b` variable `b` is invalid:
+
+```typescript
+let a = new Node();
+let b = a;              // move — a is now invalid
+// console.log(a);      // error: use of moved variable
+```
+
+**Exception: `string`** uses ARC, not move. After `let b = a` both are valid:
 
 ```typescript
 let a: string = "hello";
-let b: string = a;    // move — a is now invalid
-// a.length           // error: use of moved variable
+let b: string = a;      // copy + retain — both valid
+console.log(a.length);  // ok
+console.log(b.length);  // ok
 ```
 
 ---
@@ -45,7 +54,7 @@ total /= 4;          // 60
 total %= 7;          // 4
 total **= 3;         // 64
 
-// string += — concatenation with move
+// string += — concatenation
 let msg: string = "Hello";
 msg += " world";     // "Hello world"
 ```

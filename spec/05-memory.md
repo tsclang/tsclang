@@ -6,7 +6,8 @@
 
 | Тип | Семантика |
 |-----|-----------|
-| `T` | **Owner** — владеет объектом, move при передаче |
+| `T` | **Owner** — владеет объектом, move при передаче (кроме `string`) |
+| `string` | **Immutable + ARC** — copy + retain при присвоении, release при выходе из scope |
 | `Ref<T>` | **Immutable borrow** — только чтение |
 | `Mut<T>` | **Mutable borrow** — чтение и запись |
 | `Shared<T>` | **ARC** — strong ref, увеличивает refcount |
@@ -18,6 +19,7 @@
 | Тип | C-представление | Примечание |
 |-----|----------------|-----------|
 | `T` (owned) | `T value` / `T* ptr` | move = не вызываем free на источнике |
+| `string` | `String` struct + ARC | immutable, copy + retain на присвоении, release при выходе из scope |
 | `Ref<T>` | `const T* ptr` | read-only pointer |
 | `Mut<T>` | `T* ptr` | read-write pointer |
 | `Shared<T>` | `T* ptr` + `atomic_size_t refcount` | ARC |
@@ -28,10 +30,12 @@
 ## Базовые правила
 
 - **Примитивы** (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) — всегда **копируются**, borrow checker не применяется; `T | null` компилируется в struct с флагом
-- **Сложные типы** (массивы, объекты, строки, классы) — управляются ownership системой
-  - `string` — Owner, валидная UTF-8 последовательность байтов; передаётся как `Ref<string>`, копируется через `clone()`; `s[i]` возвращает `u8` (примитив, copy) — индексация не создаёт borrow. Литералы не выделяют heap (`capacity = 0`, data → rodata); heap выделяется только при динамическом построении (конкатенация, методы возвращающие новую строку, чтение из I/O)
+- **Сложные типы** (массивы, объекты, классы) — управляются ownership системой (move при присвоении)
+  - **Строки (`string`)** — **immutable + ARC**. Каждый владелец `String` делает `tsc_string_retain` при получении и `tsc_string_release` при потере значения. Литералы не выделяют heap (`capacity = 0`, data → rodata, `_refcount = NULL`); heap-строки получают `_refcount` через `_tsc_str_make`. На embedded (`TSC_EMBEDDED`) строки всегда rodata, ARC не используется, struct не содержит `_refcount`. `s[i]` возвращает `u8` (примитив, copy) — индексация не создаёт borrow. Подробности ARC — см. раздел «String ARC» ниже.
 
 ## Owner (T) — владение
+
+> **Исключение:** `string` не использует move-семантику. Строки — immutable + ARC (см. ниже).
 
 ### Move при присвоении
 
@@ -110,6 +114,37 @@ let buf = new Buffer(input)
 buf.append(more)   // ✅ — buf снова свободен для мутации
 ```
 
+> **Примечание:** borrow на коллекции (включая `arr[i]`) блокирует мутацию только до конца `{}`-scope, в котором создана переменная-borrow. После выхода из блока мутация снова разрешена.
+
+### Borrow из массива
+
+`arr[i]` для сложных типов — только borrow (`Ref<T>`), move по индексу запрещён:
+
+```typescript
+const u: Ref<User> = users[0];     // ✅ borrow
+const u = users[0];                // ❌ E009: cannot move out of array by index
+const u = users.remove(0);         // ✅ move + удаление из массива
+```
+
+`Mut<T>` для элементов массива (`arr[i]`) — не поддерживается.
+
+### Borrow полей объектов — не поддерживается
+
+`Ref<T>` / `Mut<T>` от поля класса (`obj.field`) — запрещены. Компилятор не может отследить lifetime поля без аннотаций:
+
+```typescript
+const u: Ref<User> = container.user;  // ❌ ошибка
+const m: Mut<User> = container.user;  // ❌ ошибка
+```
+
+**Паттерн: передавать весь объект как `Ref<Container>`:**
+
+```typescript
+function getName(c: Ref<Container>): string {
+    return c.user.name;   // ✅ доступ внутри функции
+}
+```
+
 **Паттерн 3: `Shared<T>` (только desktop)**
 
 Если методов много и многословность неприемлема — `Shared<T>` даёт ARC-семантику вместо borrow. Не работает на embedded.
@@ -144,6 +179,27 @@ function push(arr: Mut<i32[]>, val: i32) {
 let data = [1, 2, 3];
 push(data, 4);
 console.log(data);   // [1, 2, 3, 4]
+```
+
+### Borrow tracking для `const m: Mut<T> = a`
+
+Компилятор проверяет три условия при создании `Mut<T>` переменной из идентификатора:
+
+1. **const binding** — нельзя создать `Mut<T>` из `const` переменной
+2. **Ref активен** — нельзя `Mut<T>` пока существует живой `Ref<T>` borrow на тот же символ
+3. **Двойной Mut** — нельзя создать два `Mut<T>` на один символ одновременно
+
+```typescript
+const b = new Box();
+const m: Mut<Box> = b;   // ❌ cannot borrow "b" as mutable: it is a const binding
+
+let c = new Box();
+const r: Ref<Box> = c;
+const m: Mut<Box> = c;   // ❌ Cannot create mutable borrow while immutable borrow is active
+
+let d = new Box();
+const m1: Mut<Box> = d;
+const m2: Mut<Box> = d;  // ❌ Cannot create two simultaneous mutable borrows
 ```
 
 ## Shared\<T\> — ARC
@@ -225,6 +281,14 @@ function foo(x: i32): void { ... }
 let n = 42;
 foo(n);  // copy — n жив после вызова
 ```
+
+**Строки (`string`) в параметрах — implicit borrow (zero-overhead):**
+```typescript
+function greet(name: string): void { ... }
+let s = "hello";
+greet(s);  // borrow — s жив после вызова, caller чистит s в своём cleanup
+```
+Caller **не** делает `tsc_string_retain`; callee **не** делает `tsc_string_release`. Владение остаётся у caller. Если callee сохраняет строку (в поле, массиве, `return`), safe temp pattern / return retain автоматически добавляет `retain`. Для явного borrow используется `Ref<string>`.
 
 **Сложные типы — 4 варианта параметра:**
 ```typescript
@@ -365,11 +429,19 @@ function foo(u: Ref<User>) {
 }
 ```
 
-**Правило 2: Нельзя вернуть ссылку на локал**
+**Правило 2: Нельзя вернуть ссылку на локал или элемент массива**
 ```typescript
 function bad(): Ref<User> {
     const u = new User();
-    return u;  // ошибка: u умрёт в конце функции
+    return u;        // ❌ ошибка: u умрёт в конце функции
+}
+
+function bad2(arr: Ref<User[]>): Ref<User> {
+    return arr[0];   // ❌ ошибка: borrow на элемент не может пережить массив
+}
+
+function bad3(arr: Mut<i32[]>): Mut<i32> {
+    return arr[0];   // ❌ ошибка: mutable borrow на элемент не может пережить массив
 }
 ```
 
@@ -450,6 +522,43 @@ async function ok2(arr: i32[]): Promise<void> {
 - Явный паттерн (`arr[0]` после await вместо `r`) короче и понятнее.
 
 Авто-reborrow отклонён — запрет полный и явный.
+
+**Правило 5: Замыкания и borrow**
+
+Замыкание (arrow function) захватывает сложные типы как implicit `Ref<T>` — копия указателя/struct в env struct. Замыкание стековое и не может пережить источник:
+
+```typescript
+let prefix = "Hello";
+const greet = (name: string): string => {
+    return prefix + ", " + name;   // prefix захвачен как Ref<string>
+};
+```
+
+> **Ограничение:** в текущей реализации компилятор не отслеживает lifetime захваченных переменных при выходе замыкания за пределы scope (например, возврат из функции или сохранение в глобальную переменную). По дизайну замыкание — стековое.
+
+**Захват переменных в замыкание:**
+
+| Тип переменной | Как захватывается | C-representation в env struct |
+|---------------|-------------------|------------------------------|
+| Примитив (`i32`, `bool`) | Copy-by-value | `int32_t x;` |
+| `string` | Shallow copy (`String` struct) | `String s;` |
+| `Ref<T>` / `Mut<T>` | Copy pointer | `const User *u;` / `User *m;` |
+| Array / Object | Copy struct (data ptr + len + cap) | `Array_i32 arr;` |
+
+**Правило:** env struct — stack-allocated. Она копирует значения/указатели на момент создания closure. Если оригинал умрёт раньше, чем closure будет вызван — dangling pointer.
+
+---
+
+### Сводная таблица поведения borrow по контекстам
+
+| Контекст | Borrow отпускается? | Примечание |
+|----------|---------------------|------------|
+| Конец `{}` scope | ✅ Да | `_scopeBorrowStack` + `_refBorrowCount` в `pushScope`/`popScope` |
+| Конец функции | ✅ Да | Cleanup + отпускание |
+| Конец arrow function | ✅ Да | Env struct умирает на стеке |
+| Callback после `await` | ❌ Запрещён | `err-ref-across-await` |
+| Отложенный callback | ❌ Запрещён по дизайну | Closure — стековое |
+| Захват в closure | Copy struct/pointer | Lifetime не отслеживается (ограничение) |
 
 ## Автоматический Drop
 

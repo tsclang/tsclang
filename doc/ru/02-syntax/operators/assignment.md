@@ -13,12 +13,21 @@ let x: i32 = 10;
 x = 20;              // простое присваивание
 ```
 
-Для сложных типов (строки, массивы, объекты) присваивание — **move**. После `a = b` переменная `b` невалидна:
+Для сложных типов (массивы, объекты, классы) присваивание — **move**. После `a = b` переменная `b` невалидна:
+
+```typescript
+let a = new Node();
+let b = a;              // move — a теперь невалидна
+// console.log(a);      // error: use of moved variable
+```
+
+**Исключение: `string`** использует ARC, а не move. После `let b = a` обе переменные валидны:
 
 ```typescript
 let a: string = "hello";
-let b: string = a;    // move — a теперь невалидна
-// a.length           // error: use of moved variable
+let b: string = a;      // copy + retain — обе валидны
+console.log(a.length);  // ok
+console.log(b.length);  // ok
 ```
 
 ---
@@ -45,7 +54,7 @@ total /= 4;          // 60
 total %= 7;          // 4
 total **= 3;         // 64
 
-// string += — конкатенация с move
+// string += — конкатенация
 let msg: string = "Hello";
 msg += " world";     // "Hello world"
 ```

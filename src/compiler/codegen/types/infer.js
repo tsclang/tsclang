@@ -68,7 +68,7 @@ export default {
           // Struct member access: p.x where p is a struct type
           const objSym = this.lookup(node.object.name);
           if (objSym) {
-            const structDef = this.classes.get(objSym.ctype);
+            const structDef = this.classes.get(objSym.ctype) ?? this.classes.get(objSym.derefType);
             if (structDef?.fields) {
               const field = structDef.fields.find(f => (f.name ?? f) === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
@@ -139,7 +139,11 @@ export default {
         {
           const objType = this.inferType(node.object);
           if (objType && objType !== 'int32_t') {
-            const sd = this.classes.get(objType);
+            let sd = this.classes.get(objType);
+            if (!sd && objType.endsWith('*')) {
+              const stripped = objType.replace(/^(const |mutable )/, '').replace(/ \*$/, '');
+              sd = this.classes.get(stripped);
+            }
             if (sd?.fields) {
               const f = sd.fields.find(ff => (ff.name ?? ff) === node.prop);
               if (f?.typeAnn) return this.resolveType(f.typeAnn);

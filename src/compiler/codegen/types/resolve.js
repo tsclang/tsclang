@@ -12,18 +12,24 @@ export default {
       if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';
       if (name in PRIMITIVE_MAP) return PRIMITIVE_MAP[name];
 
+      if (name === 'Shared' || name === 'Weak') {
+        const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
+        const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','bool','usize','isize','char']);
+        if (innerName && COPY_ONLY.has(innerName)) {
+          throw this.error(`TypeError: ${name}<T> requires a non-primitive type, got ${innerName}`, typeNode);
+        }
+        return `${this.resolveType(typeArgs[0])} *`;
+      }
       if (name === 'Ref') {
         const inner = this.resolveType(typeArgs[0]);
-        if (inner === 'String') return 'String'; // string slice borrows are struct-by-value
+        if (inner === 'String') return 'String';
         return `const ${inner} *`;
       }
       if (name === 'Mut') {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
-        if (innerName && this.interfaces.has(innerName)) return this.resolveType(typeArgs[0]); // fat-ptr by value
+        if (innerName && this.interfaces.has(innerName)) return this.resolveType(typeArgs[0]);
         return `${this.resolveType(typeArgs[0])} *`;
       }
-      if (name === 'Shared') return `${this.resolveType(typeArgs[0])} *`;
-      if (name === 'Weak')   return `${this.resolveType(typeArgs[0])} *`;
       if (name === 'Array' || name === 'ReadonlyArray') {
         const et = typeArgs[0] ? this.resolveType(typeArgs[0]) : 'int32_t';
         const arrName = `Array_${this.cTypeToIdent(et)}`;

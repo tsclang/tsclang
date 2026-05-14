@@ -1,0 +1,7 @@
+class User {
+    name: string;
+}
+function getRef(): Ref<User> {
+    let n = new User();
+    return n;
+}

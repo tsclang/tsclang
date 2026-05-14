@@ -26,6 +26,8 @@ The compiler statically tracks the owner of each value. Memory deallocation is d
 - **Primitives** (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) — always **copied**, borrow checker doesn't apply
 - **Complex types** (arrays, objects, strings, classes) — managed by ownership system
 - `string` — heap-allocated Owner, passed as `Ref<string>`, copied via `clone()`
+- **Borrow from array** — `arr[i]` for complex types only via `Ref<T>`; move is forbidden (E009)
+- **Borrow object fields** — not supported; pass the entire object as `Ref<T>`
 
 ## Borrow checker
 
@@ -71,6 +73,7 @@ cleanup:
 | [Drop and cleanup](./drop.md) | Automatic deallocation, `goto cleanup` |
 | [Destructuring](./destructuring.md) | Borrow vs move when destructuring fields |
 | [Closures](./closures.md) | Capture rules: copy, Ref, Mut, move |
+| [Borrow Guide](./borrow-guide.md) | Practical examples, errors and fixes |
 | [Iterators](./iterators.md) | `Iterable<T>`, pull-based stack iterators |
 
 ## C-output
@@ -97,6 +100,9 @@ User_free(&user);   // inserted by compiler
 | `already borrowed as Ref` | `Mut` while `Ref` is active |
 | `Ref<T> not allowed in class field` | Attempting to store borrow in class field |
 | `cannot move out of array by index` | `arr[i]` for owned type without `.remove()` |
+| `Cannot return borrow to array element from function` | Returning `Ref<T>`/`Mut<T>` on `arr[i]` from function |
+| `Cannot borrow a class field` | `Ref<T>`/`Mut<T>` from object field (`obj.field`) |
+| `Cannot return mutable borrow to local variable` | Returning `Mut<T>` on local variable from function |
 
 ## See also
 

@@ -63,11 +63,23 @@
         // Ident init with type annotation: move semantics (copy fields + zero-out source)
         if (typeAnn && init.kind === 'Ident' && structDef?.fields) {
           const srcName = init.name;
+          const stringFields = [];
           for (const { name, alias } of pattern) {
             const field = structDef.fields.find(f => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
+            if (fieldCType === 'String') {
+              p(`tsc_string_retain(${srcName}.${name});`);
+              stringFields.push({ src: `${srcName}.${name}`, alias });
+            }
             p(`${fieldCType} ${alias} = ${srcName}.${name};`);
             this.define(alias, { ctype: fieldCType, varKind });
+            if (fieldCType === 'String') {
+              this._registerCleanup(`tsc_string_release(${alias})`);
+            }
+          }
+          // Release string fields in source before zeroing
+          for (const { src } of stringFields) {
+            p(`tsc_string_release(${src});`);
           }
           p(`${srcName} = (${objType}){0};`);
           return;

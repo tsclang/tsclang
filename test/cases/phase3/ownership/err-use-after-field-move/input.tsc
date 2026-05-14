@@ -1,7 +1,11 @@
 class Holder {
-    data: string;
+    inner: Inner;
+}
+class Inner {
+    value: i32;
 }
 let h = new Holder();
-h.data = "test";
-let d = h.data;
-console.log(h.data);
+h.inner = new Inner();
+h.inner.value = 42;
+let d = h.inner;
+console.log(h.inner.value);

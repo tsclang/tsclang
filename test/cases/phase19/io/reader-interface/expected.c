@@ -1,6 +1,7 @@
 #include "runtime.h"
 #include "std/io.h"
 
+
 typedef struct {
     size_t (*read)(void *self, uint8_t *buf, size_t len);
 } Reader_vtable;

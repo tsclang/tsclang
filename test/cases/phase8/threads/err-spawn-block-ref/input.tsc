@@ -1,0 +1,5 @@
+function foo(arr: Ref<i32[]>): void {
+    spawn {
+        console.log(arr.length);
+    };
+}

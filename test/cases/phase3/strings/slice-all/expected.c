@@ -5,5 +5,7 @@ int main(void) {
     const String s = STR_LIT("hello");
     const String all = {.data = s.data, .length = s.length, .capacity = 0};
     printf("%.*s\n", (int)all.length, all.data);
+    tsc_string_release(all);
+    tsc_string_release(s);
     return 0;
 }

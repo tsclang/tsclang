@@ -141,7 +141,7 @@ export default {
         subst.set(tmpl.typeParams[i].name, ct);
       }
       const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
-      const monoName = `${name}_${suffix}`;
+      const monoName = `${name}_${suffix}`;
       if (!this._emittedGenericClasses.has(monoName)) {
         this._emittedGenericClasses.add(monoName);
         this.emitMonoClass(tmpl, monoName, subst);
@@ -241,6 +241,7 @@ export default {
 
   // Format a variable declaration: qualifier + ctype + name with proper pointer spacing
   varDecl(qualifier, ctype, name) {
+    if (qualifier === 'const ' && ctype.startsWith('const ')) qualifier = '';
     if (ctype.endsWith(' *')) return `${qualifier}${ctype}${name}`;
     return `${qualifier}${ctype} ${name}`;
   },

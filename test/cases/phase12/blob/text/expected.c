@@ -15,6 +15,6 @@ int main(void) {
     TscBlob b = tsc_blob_create(buf.data, buf.length, STR_LIT("text/plain"));
     String _text_0 = tsc_blob_text(&b);
     printf("%s\n", _text_0.data);
-    tsc_string_free(_text_0);
+    tsc_string_release(_text_0);
     return 0;
 }

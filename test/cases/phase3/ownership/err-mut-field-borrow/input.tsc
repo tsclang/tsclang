@@ -1,0 +1,8 @@
+class User {
+    name: string;
+}
+class Container {
+    user: User;
+}
+const c = new Container();
+const u: Mut<User> = c.user;

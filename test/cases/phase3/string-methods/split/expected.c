@@ -10,5 +10,6 @@ int main(void) {
     printf("%s\n", parts[1].data);
     printf("%s\n", parts[2].data);
     tsc_string_array_free(parts, parts_len);
+    tsc_string_release(s);
     return 0;
 }

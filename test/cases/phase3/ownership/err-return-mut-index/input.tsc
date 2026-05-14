@@ -1,0 +1,3 @@
+function first(arr: Mut<i32[]>): Mut<i32> {
+    return arr[0];
+}

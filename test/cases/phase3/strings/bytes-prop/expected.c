@@ -7,5 +7,6 @@ int main(void) {
     const String s = STR_LIT("ABC");
     Slice_u8 b = {.ptr = (uint8_t *)s.data, .length = s.length};
     printf("%zu\n", b.length);
+    tsc_string_release(s);
     return 0;
 }

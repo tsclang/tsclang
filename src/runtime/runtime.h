@@ -71,16 +71,46 @@
 #endif
 
 /* -------------------------------------------------------------------------
- * String
+ * String — immutable, ARC on desktop, rodata-only on embedded
  * ------------------------------------------------------------------------- */
+#ifdef TSC_EMBEDDED
 typedef struct {
     const char *data;
     size_t      length;
-    size_t      capacity; /* 0 = rodata (literal), >0 = heap */
+    size_t      capacity; /* always 0 on embedded (no heap) */
 } String;
-
-/* Construct a string literal (no heap allocation) */
 #define STR_LIT(s) ((String){ .data = (s), .length = sizeof(s) - 1, .capacity = 0 })
+#define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0 })
+static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
+    return (String){ .data = data, .length = len, .capacity = cap };
+}
+static inline void tsc_string_retain(String s) { (void)s; }
+static inline void tsc_string_release(String s) { if (s.capacity > 0) free((void*)s.data); }
+#else
+typedef struct {
+    const char *data;
+    size_t      length;
+    size_t      capacity;   /* 0 = rodata (literal), >0 = heap */
+    uint32_t   *_refcount;  /* NULL for rodata, heap-allocated counter for ARC */
+} String;
+#define STR_LIT(s) ((String){ .data = (s), .length = sizeof(s) - 1, .capacity = 0, ._refcount = NULL })
+#define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0, ._refcount = NULL })
+static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
+    uint32_t *rc = NULL;
+    if (cap > 0) { rc = (uint32_t*)malloc(sizeof(uint32_t)); *rc = 1; }
+    return (String){ .data = data, .length = len, .capacity = cap, ._refcount = rc };
+}
+static inline void tsc_string_retain(String s) {
+    if (s._refcount) (*s._refcount)++;
+}
+static inline void tsc_string_release(String s) {
+    if (s._refcount) {
+        if (--(*s._refcount) == 0) { free(s._refcount); free((void*)s.data); }
+    } else if (s.capacity > 0) {
+        free((void*)s.data);
+    }
+}
+#endif
 
 /* -------------------------------------------------------------------------
  * Error (stub — proper heap allocation added in Phase 3)
@@ -241,7 +271,7 @@ static inline String tsc_date_to_iso_string(Date d) {
     snprintf(buf, 32, "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
              tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
              tm->tm_hour, tm->tm_min, tm->tm_sec, ms);
-    return (String){ buf, (size_t)strlen(buf) };
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
 static inline String tsc_date_to_date_string(Date d) {
@@ -250,7 +280,7 @@ static inline String tsc_date_to_date_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
     char *buf = (char *)malloc(32);
     snprintf(buf, 32, "%s %s %02d %04d", days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
-    return (String){ buf, (size_t)strlen(buf) };
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
 static inline String tsc_date_to_string(Date d) {
@@ -261,7 +291,7 @@ static inline String tsc_date_to_string(Date d) {
     snprintf(buf, 64, "%s %s %02d %04d %02d:%02d:%02d GMT+0000",
              days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday,
              tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec);
-    return (String){ buf, (size_t)strlen(buf) };
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
 /* console.time / console.timeEnd — simple map-backed timers */
@@ -353,9 +383,6 @@ static inline TscRandom tsc_random_default(void) {
 /* -------------------------------------------------------------------------
  * String utilities
  * ------------------------------------------------------------------------- */
-
-/* Create a String from a runtime (non-literal) char pointer */
-#define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0 })
 
 /* -------------------------------------------------------------------------
  * ARC — Atomic Reference Counting
@@ -523,7 +550,7 @@ _Noreturn static inline void tsc_panic(String msg) {
 /* tsc_capture_stack — capture call stack as string (stub for desktop) */
 static inline String tsc_capture_stack(void) {
     static const char _tsc_stack_stub[] = "(stack trace not available)";
-    return (String){ .data = _tsc_stack_stub, .length = sizeof(_tsc_stack_stub) - 1, .capacity = 0 };
+    return _tsc_str_make(_tsc_stack_stub, sizeof(_tsc_stack_stub) - 1, 0);
 }
 
 /* Numeric-to-string conversions (used by optional chaining x?.toString()) */
@@ -531,7 +558,7 @@ static inline String tsc_i32_to_string(int32_t v) {
     static char _tsc_i32_buf[32];
 #ifndef TSC_NES
     int n = snprintf(_tsc_i32_buf, sizeof(_tsc_i32_buf), "%d", v);
-    return (String){ .data = _tsc_i32_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+    return _tsc_str_make(_tsc_i32_buf, (size_t)(n > 0 ? n : 0), 0);
 #else
     sprintf(_tsc_i32_buf, "%ld", (long)v);
     return STR_LIT_RUNTIME(_tsc_i32_buf);
@@ -541,7 +568,7 @@ static inline String tsc_i64_to_string(int64_t v) {
     static char _tsc_i64_buf[32];
 #ifndef TSC_NES
     int n = snprintf(_tsc_i64_buf, sizeof(_tsc_i64_buf), "%lld", (long long)v);
-    return (String){ .data = _tsc_i64_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+    return _tsc_str_make(_tsc_i64_buf, (size_t)(n > 0 ? n : 0), 0);
 #else
     sprintf(_tsc_i64_buf, "%ld", (long)v);
     return STR_LIT_RUNTIME(_tsc_i64_buf);
@@ -551,7 +578,7 @@ static inline String tsc_f64_to_string(double v) {
     static char _tsc_f64_buf[64];
 #ifndef TSC_NES
     int n = snprintf(_tsc_f64_buf, sizeof(_tsc_f64_buf), "%g", v);
-    return (String){ .data = _tsc_f64_buf, .length = (size_t)(n > 0 ? n : 0), .capacity = 0 };
+    return _tsc_str_make(_tsc_f64_buf, (size_t)(n > 0 ? n : 0), 0);
 #else
     sprintf(_tsc_f64_buf, "%g", v);
     return STR_LIT_RUNTIME(_tsc_f64_buf);
@@ -575,7 +602,7 @@ static inline ptrdiff_t tsc_string_last_index_of(String s, String sub) {
 
 /* Free a heap-allocated string (no-op if capacity==0, i.e. string literal) */
 static inline void tsc_string_free(String s) {
-    if (s.capacity > 0) free((char *)s.data);
+    tsc_string_release(s);
 }
 
 /* String equality */
@@ -590,7 +617,7 @@ static inline String tsc_string_concat(String a, String b) {
     if (a.length) memcpy(buf, a.data, a.length);
     if (b.length) memcpy(buf + a.length, b.data, b.length);
     buf[len] = '\0';
-    return (String){ .data = buf, .length = len, .capacity = len + 1 };
+    return _tsc_str_make(buf, len, len + 1);
 }
 
 /* Format string → new heap String (like sprintf) */
@@ -615,7 +642,7 @@ static inline String tsc_string_format(const char *fmt, ...) {
     size_t sz = strlen(_fmt_buf);
     char *buf = _fmt_buf; /* no heap — caller must use immediately */
 #endif
-    return (String){ .data = buf, .length = sz, .capacity = sz + 1 };
+    return _tsc_str_make(buf, sz, sz + 1);
 }
 
 /* -------------------------------------------------------------------------
@@ -656,11 +683,11 @@ static inline String tsc_string_slice(String s, int32_t start, int32_t end_idx) 
     int32_t len = (int32_t)s.length;
     if (start < 0) start = len + start; if (start < 0) start = 0;
     if (end_idx < 0) end_idx = len + end_idx; if (end_idx > len) end_idx = len;
-    if (start >= end_idx) { char *e = (char*)malloc(1); e[0] = '\0'; return (String){e, 0, 1}; }
+    if (start >= end_idx) { char *e = (char*)malloc(1); e[0] = '\0'; return _tsc_str_make(e, 0, 1); }
     size_t n = (size_t)(end_idx - start);
     char *buf = (char *)malloc(n + 1);
     memcpy(buf, s.data + start, n); buf[n] = '\0';
-    return (String){ .data = buf, .length = n, .capacity = n + 1 };
+    return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_substring(String s, int32_t start, int32_t end_idx) {
@@ -675,14 +702,14 @@ static inline String tsc_string_to_lower(String s) {
     char *buf = (char *)malloc(s.length + 1);
     for (size_t i = 0; i < s.length; i++) buf[i] = (char)tolower((unsigned char)s.data[i]);
     buf[s.length] = '\0';
-    return (String){ .data = buf, .length = s.length, .capacity = s.length + 1 };
+    return _tsc_str_make(buf, s.length, s.length + 1);
 }
 
 static inline String tsc_string_to_upper(String s) {
     char *buf = (char *)malloc(s.length + 1);
     for (size_t i = 0; i < s.length; i++) buf[i] = (char)toupper((unsigned char)s.data[i]);
     buf[s.length] = '\0';
-    return (String){ .data = buf, .length = s.length, .capacity = s.length + 1 };
+    return _tsc_str_make(buf, s.length, s.length + 1);
 }
 
 static inline String tsc_string_trim(String s) {
@@ -692,7 +719,7 @@ static inline String tsc_string_trim(String s) {
     size_t n = j - i;
     char *buf = (char *)malloc(n + 1);
     memcpy(buf, s.data + i, n); buf[n] = '\0';
-    return (String){ .data = buf, .length = n, .capacity = n + 1 };
+    return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_trim_start(String s) {
@@ -701,7 +728,7 @@ static inline String tsc_string_trim_start(String s) {
     size_t n = s.length - i;
     char *buf = (char *)malloc(n + 1);
     memcpy(buf, s.data + i, n); buf[n] = '\0';
-    return (String){ .data = buf, .length = n, .capacity = n + 1 };
+    return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_trim_end(String s) {
@@ -709,40 +736,40 @@ static inline String tsc_string_trim_end(String s) {
     while (j > 0 && isspace((unsigned char)s.data[j-1])) j--;
     char *buf = (char *)malloc(j + 1);
     memcpy(buf, s.data, j); buf[j] = '\0';
-    return (String){ .data = buf, .length = j, .capacity = j + 1 };
+    return _tsc_str_make(buf, j, j + 1);
 }
 
 static inline String tsc_string_pad_start(String s, int32_t target_len, String fill) {
     if ((int32_t)s.length >= target_len) {
         char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
-        return (String){ b, s.length, s.length + 1 };
+        return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t pad = (size_t)(target_len - (int32_t)s.length);
     size_t total = (size_t)target_len;
     char *buf = (char *)malloc(total + 1);
     for (size_t i = 0; i < pad; i++) buf[i] = fill.length > 0 ? fill.data[i % fill.length] : ' ';
     memcpy(buf + pad, s.data, s.length); buf[total] = '\0';
-    return (String){ .data = buf, .length = total, .capacity = total + 1 };
+    return _tsc_str_make(buf, total, total + 1);
 }
 
 static inline String tsc_string_pad_end(String s, int32_t target_len, String fill) {
     if ((int32_t)s.length >= target_len) {
         char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
-        return (String){ b, s.length, s.length + 1 };
+        return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t total = (size_t)target_len;
     char *buf = (char *)malloc(total + 1);
     memcpy(buf, s.data, s.length);
     for (size_t i = s.length; i < total; i++) buf[i] = fill.length > 0 ? fill.data[(i - s.length) % fill.length] : ' ';
     buf[total] = '\0';
-    return (String){ .data = buf, .length = total, .capacity = total + 1 };
+    return _tsc_str_make(buf, total, total + 1);
 }
 
 static inline String tsc_string_replace(String s, String from, String to) {
     ptrdiff_t pos = tsc_string_index_of(s, from);
     if (pos < 0 || from.length == 0) {
         char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
-        return (String){ b, s.length, s.length + 1 };
+        return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t n = s.length - from.length + to.length;
     char *buf = (char *)malloc(n + 1);
@@ -751,13 +778,13 @@ static inline String tsc_string_replace(String s, String from, String to) {
     size_t after = (size_t)pos + from.length;
     memcpy(buf + pos + to.length, s.data + after, s.length - after);
     buf[n] = '\0';
-    return (String){ .data = buf, .length = n, .capacity = n + 1 };
+    return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_replace_all(String s, String from, String to) {
     if (from.length == 0) {
         char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
-        return (String){ b, s.length, s.length + 1 };
+        return _tsc_str_make(b, s.length, s.length + 1);
     }
     /* Count occurrences */
     size_t count = 0;
@@ -774,23 +801,23 @@ static inline String tsc_string_replace_all(String s, String from, String to) {
         } else { buf[dst++] = s.data[i++]; }
     }
     buf[n] = '\0';
-    return (String){ .data = buf, .length = n, .capacity = n + 1 };
+    return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_char_at(String s, int32_t idx) {
-    if (idx < 0 || (size_t)idx >= s.length) { char *b = (char*)malloc(1); b[0] = '\0'; return (String){b, 0, 1}; }
+    if (idx < 0 || (size_t)idx >= s.length) { char *b = (char*)malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
     char *buf = (char *)malloc(2);
     buf[0] = s.data[idx]; buf[1] = '\0';
-    return (String){ .data = buf, .length = 1, .capacity = 2 };
+    return _tsc_str_make(buf, 1, 2);
 }
 
 static inline String tsc_string_repeat(String s, int32_t n) {
-    if (n <= 0 || s.length == 0) { char *b = (char*)malloc(1); b[0] = '\0'; return (String){b, 0, 1}; }
+    if (n <= 0 || s.length == 0) { char *b = (char*)malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
     size_t total = s.length * (size_t)n;
     char *buf = (char *)malloc(total + 1);
     for (int32_t i = 0; i < n; i++) memcpy(buf + (size_t)i * s.length, s.data, s.length);
     buf[total] = '\0';
-    return (String){ .data = buf, .length = total, .capacity = total + 1 };
+    return _tsc_str_make(buf, total, total + 1);
 }
 
 /* tsc_string_split: split s by sep, write pointers to *out_parts, count to *out_len */
@@ -810,7 +837,7 @@ static inline void tsc_string_split(String s, String sep, String **out_parts, in
         if (i == s.length || (i + sep.length <= s.length && memcmp(s.data + i, sep.data, sep.length) == 0)) {
             size_t n = i - start;
             char *buf = (char *)malloc(n + 1); memcpy(buf, s.data + start, n); buf[n] = '\0';
-            parts[pi++] = (String){ .data = buf, .length = n, .capacity = n + 1 };
+            parts[pi++] = _tsc_str_make(buf, n, n + 1);
             start = i + sep.length;
             if (i == s.length) break;
             i += sep.length;
@@ -842,7 +869,7 @@ static inline String tsc_json_stringify_string(String s) {
     }
     buf[pos++] = '"';
     buf[pos] = '\0';
-    return (String){ .data = buf, .length = (int32_t)pos, .capacity = (int32_t)cap };
+    return _tsc_str_make(buf, (int32_t)pos, (int32_t)cap);
 }
 
 /* -------------------------------------------------------------------------
@@ -964,8 +991,8 @@ typedef struct { bool has_value; String value; } opt_String;
 /* process.env.get(key) → opt_String  (key must be null-terminated — string literals are) */
 static inline opt_String tsc_env_get(String key) {
     const char *v = getenv(key.data);
-    if (!v) return (opt_String){false, {NULL, 0, 0}};
-    return (opt_String){true, {(char *)v, strlen(v), 0}};
+    if (!v) return (opt_String){false, _tsc_str_make(NULL, 0, 0)};
+    return (opt_String){true, _tsc_str_make((char *)v, strlen(v), 0)};
 }
 static inline bool tsc_env_has(String key) { return getenv(key.data) != NULL; }
 
@@ -1168,7 +1195,11 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 /* Array_string helpers (minimal set) */
 #define tsc_array_free_string(arr) do { \
     Array_string *_a_ = (arr); \
-    if (_a_->data) free(_a_->data); \
+    if (_a_->data) { \
+        for (size_t _i_ = 0; _i_ < _a_->length; _i_++) \
+            tsc_string_release(_a_->data[_i_]); \
+        free(_a_->data); \
+    } \
     _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
 } while(0)
 
@@ -1184,7 +1215,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_pop_string(arr) ({ \
     Array_string *_a_ = (arr); \
-    opt_String _r_ = {false, {NULL, 0, 0}}; \
+    opt_String _r_ = {false, _tsc_str_make(NULL, 0, 0)}; \
     if (_a_->length > 0) { _r_ = (opt_String){true, _a_->data[--_a_->length]}; } \
     _r_; \
 })
@@ -1309,7 +1340,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
     size_t len = (size_t)(it->_cp._p - start);
     char *buf = (char *)malloc(len + 1);
     memcpy(buf, start, len); buf[len] = '\0';
-    *out = (String){ .data = buf, .length = len, .capacity = len + 1 };
+    *out = _tsc_str_make(buf, len, len + 1);
     return true;
 }
 
@@ -1329,7 +1360,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
     char *_dbuf = (char *)malloc(_dlen + 1); \
     memcpy(_dbuf, (_tsc_bytes).data, _dlen); \
     _dbuf[_dlen] = '\0'; \
-    (String){ .data = _dbuf, .length = _dlen, .capacity = _dlen + 1 }; \
+    _tsc_str_make(_dbuf, _dlen, _dlen + 1); \
 })
 
 TSC_STATICMAP_IMPL(uint8_t, int32_t, u8_i32)

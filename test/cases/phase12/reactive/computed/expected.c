@@ -5,6 +5,7 @@ typedef struct { int32_t _value; void (**_effects)(void); size_t _effect_count; 
 typedef struct { Signal_i32 *x; } _closure_0_env;
 static _closure_0_env _closure_0_captured;
 
+
 static int32_t _closure_0_fn(void) {
     return tsc_signal_get_i32(_closure_0_captured.x) * 2;
 }

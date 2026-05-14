@@ -1,0 +1,7 @@
+let arr: Array<i32> = [10, 20, 30];
+{
+    let s: Slice<i32> = arr.view(0, 2);
+    console.log(s[0]);
+}
+arr.push(40);
+console.log(arr.length);

@@ -11,5 +11,6 @@ int main(void) {
     } else {
         printf("%g\n", n.value);
     }
+    tsc_string_release(s);
     return 0;
 }

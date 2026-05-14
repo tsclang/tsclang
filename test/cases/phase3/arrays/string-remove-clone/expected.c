@@ -10,5 +10,6 @@ int main(void) {
     Array_string cloned = tsc_array_slice_string(arr, 0, (int32_t)arr.length);
     printf("%zu\n", cloned.length);
     tsc_array_free_string(&cloned);
+    tsc_string_release(removed);
     return 0;
 }

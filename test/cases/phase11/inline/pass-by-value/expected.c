@@ -13,5 +13,6 @@ int main(void) {
     p.x = 0;
     p.y = 0;
     Point q = move_Point_i32(p, 5);
+    p = (Point){0};
     return 0;
 }

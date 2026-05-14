@@ -1,0 +1,7 @@
+const arr: i32[] = [10, 20];
+{
+    const r: Ref<i32> = arr[0];
+    console.log(r);
+}
+arr.push(30);
+console.log(arr.length);

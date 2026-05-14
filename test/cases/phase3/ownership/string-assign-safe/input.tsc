@@ -1,0 +1,7 @@
+class Holder {
+    p: string;
+}
+let h = new Holder();
+h.p = "test";
+h.p = h.p;
+console.log(h.p);

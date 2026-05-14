@@ -6,6 +6,6 @@ int main(void) {
     const int32_t b = 3;
     String msg = tsc_string_format("%d + %d = %d", a, b, a + b);
     printf("%s\n", msg.data);
-    tsc_string_free(msg);
+    tsc_string_release(msg);
     return 0;
 }

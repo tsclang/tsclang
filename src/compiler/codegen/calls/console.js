@@ -52,7 +52,7 @@ export default {
           continue;
         }
         // Mixed concat (e.g. "x=" + num): fall through to the general String path
-        // which creates a temp variable and emits tsc_string_free
+        // which creates a temp variable and emits tsc_string_release
       }
 
       if (expr.kind === 'Typeof') {
@@ -123,7 +123,7 @@ export default {
           const I = ' '.repeat(this.indent * depth);
           const cexprStr = cexpr;
           lines.push(`${I}String ${tmp} = ${cexprStr};`);
-          this._pushPostStmtCleanup(`${I}tsc_string_free(${tmp});`);
+          this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
           fmtParts.push('%s');
           fmtArgs.push(`${tmp}.data`);
         } else {

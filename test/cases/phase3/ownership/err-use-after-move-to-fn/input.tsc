@@ -1,0 +1,10 @@
+class Node {
+    value: i32;
+}
+function consume(n: Node): void {
+    console.log(n.value);
+}
+let a = new Node();
+a.value = 42;
+consume(a);
+console.log(a.value);

@@ -41,7 +41,8 @@
       if (objType?.startsWith('opt_')) {
         const innerIdent = objType.slice(4);
         if (callee.prop === 'toString') {
-          // Ensure opt_string typedef is emitted
+          // Ensure opt_string typedef is emitted
+
           if (!this._emittedOptStructs.has('opt_string')) {
             this._emittedOptStructs.add('opt_string');
             this.addTop(`typedef struct { bool has_value; String value; } opt_string;`);
@@ -205,7 +206,9 @@
     if (!hasSpread && symParams && args.length < symParams.filter(p => !p.rest).length) {
       const normalParams = symParams.filter(p => !p.rest);
       const filled = normalParams.map((p, i) => {
-        if (i < args.length) return this.exprToC(args[i].expr, lines, depth);
+        if (i < args.length) {
+          return this.exprToC(args[i].expr, lines, depth);
+        }
         if (p.defaultVal) return this.exprToC(p.defaultVal, lines, depth);
         return '0'; // fallback (shouldn't happen if type-checked)
       });
@@ -217,6 +220,27 @@
     const hasSpreadArgs = args.some(a => a.spread);
     if (symParams && !hasSpreadArgs) {
       const I = ' '.repeat(this.indent * depth);
+      // Pre-pass: detect same variable passed as Mut<T> to multiple params of the same call
+      {
+        const mutArgNames = new Map();
+        for (let i = 0; i < args.length; i++) {
+          const p = symParams[i];
+          if (p?.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'Mut' &&
+              args[i].expr.kind === 'Ident') {
+            const nm = args[i].expr.name;
+            const innerName = p.typeAnn.typeArgs?.[0]?.name;
+            if (!innerName || !this.interfaces.has(innerName)) {
+              if (mutArgNames.has(nm)) {
+                throw this.error(
+                  `TypeError: Cannot create two simultaneous mutable borrows of '${nm}'`,
+                  args[i].expr
+                );
+              }
+              mutArgNames.set(nm, i);
+            }
+          }
+        }
+      }
       const coercedArgs = args.map((a, i) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
@@ -299,7 +323,7 @@
             if (argSym2 && a.expr.kind === 'Ident') {
               if (param.typeAnn.name === 'Mut') {
                 // Cannot mutably borrow while an immutable borrow is active
-                if (argSym2._refBorrowed) {
+                if ((argSym2._refBorrowCount || 0) > 0) {
                   throw this.error(
                     `TypeError: Cannot create mutable borrow of '${a.expr.name}' while immutable borrow is active`,
                     a.expr
@@ -315,7 +339,7 @@
                 argSym2._mutBorrowedBy = calleeC;
               } else {
                 // Ref<T>: mark as immutably borrowed (for future Mut<T> checks)
-                argSym2._refBorrowed = true;
+                this._trackRefBorrow(argSym2);
               }
             }
             const argC2 = this.exprToC(a.expr, lines, depth);
@@ -323,7 +347,38 @@
             return argC2;
           }
         }
-        return this.exprToC(a.expr, lines, depth);
+        const _argC = this.exprToC(a.expr, lines, depth);
+        // Move semantics: class/array-by-value arg passed to function → mark source as moved
+        if (a.expr.kind === 'Ident' && paramType) {
+          const _moveClassDef = this.classes.get(paramType);
+          const _hasFields = !!_moveClassDef?.fields;
+          const _isArray = paramType.startsWith('Array_');
+          const _isBorrow = param.typeAnn?.kind === 'TypeRef' &&
+            (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut' || param.typeAnn.name === 'Shared');
+          if ((_hasFields || _isArray) && !_isBorrow) {
+            const _moveArgSym = this.lookup(a.expr.name);
+            if (_moveArgSym) {
+              if (_moveArgSym.varKind === 'const') {
+                throw this.error(`cannot move out of "const" binding`, a.expr, { code: 'E003' });
+              }
+              if (_moveArgSym._moved) {
+                throw this.error(
+                  `use of moved value: "${a.expr.name}"`,
+                  a.expr,
+                  { code: 'E002', secondary: _moveArgSym._movedSourceNode, secondaryLine: _moveArgSym._movedLine }
+                );
+              }
+              _moveArgSym._moved = true;
+              _moveArgSym._movedLine = a.expr.line;
+              _moveArgSym._movedSourceNode = a.expr;
+              if (_moveArgSym.varKind === 'let' && _hasFields) {
+                if (!this._postStmtCleanups) this._postStmtCleanups = [];
+                this._postStmtCleanups.push(`${I}${a.expr.name} = (${paramType}){0};`);
+              }
+            }
+          }
+        }
+        return _argC;
       });
       return `${calleeC}(${coercedArgs.join(', ')})`;
     }

@@ -7,5 +7,6 @@ int main(void) {
         const char ch = s.data[_i_0];
         printf("%c\n", ch);
     }
+    tsc_string_release(s);
     return 0;
 }

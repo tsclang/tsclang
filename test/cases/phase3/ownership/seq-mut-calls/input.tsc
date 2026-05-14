@@ -1,0 +1,9 @@
+class Box {
+    value: i32;
+}
+function bump(m: Mut<Box>): void { m.value += 1; }
+let b = new Box();
+b.value = 0;
+bump(b);
+bump(b);
+console.log(b.value);

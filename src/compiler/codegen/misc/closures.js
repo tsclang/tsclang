@@ -24,7 +24,7 @@ export default {
         const tmp = `_blob_str_${n}`;
         const I = ' '.repeat(this.indent * depth);
         lines.push(`${I}String ${tmp} = tsc_blob_to_string(&${c});`);
-        this._pushPostStmtCleanup(`${I}tsc_string_free(${tmp});`);
+        this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
         t = 'String'; c = tmp;
       }
       return { kind: 'expr', t, c };
@@ -117,14 +117,30 @@ export default {
 
     // Build env struct fields
     const envFields = [];
+    const capturedStringFields = [];
     for (const [nm, sym] of captured) {
       const ct = sym.ctype ?? 'void *';
       if (ct.endsWith(' *')) envFields.push(`${ct.slice(0,-2)} *${nm};`);
       else envFields.push(`${ct} ${nm};`);
+      if (ct === 'String') capturedStringFields.push(nm);
     }
+    const hasStringCapture = capturedStringFields.length > 0;
     // Use addLambda for all closure items to preserve ordering (env → fn → closure struct)
     this.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
     this.addLambda('');
+
+    // Generate destroy function if closure captures strings
+    const destroyFnName = `${closureName}_destroy`;
+    if (hasStringCapture) {
+      this.addLambda(`static void ${destroyFnName}(void *_env) {`);
+      this.addLambda(`    ${envName} *env = (${envName} *)_env;`);
+      for (const nm of capturedStringFields) {
+        this.addLambda(`    tsc_string_release(env->${nm});`);
+      }
+      this.addLambda('    free(env);');
+      this.addLambda('}');
+      this.addLambda('');
+    }
 
     // Build fn params (env + explicit params)
     const paramStrs = [`${envName} *env`];
@@ -175,10 +191,15 @@ export default {
     this.addLambda(`typedef struct { ${envName} env; ${fnPtrDecl}; } ${closureName};`);
     this.addLambda('');
 
-    // Build env initializer
+    // Build env initializer with retain for string captures
+    const retainLines = [];
+    for (const nm of capturedStringFields) {
+      retainLines.push(`tsc_string_retain(${nm});`);
+    }
     const envInit = '{' + [...captured.keys()].map(nm => `.${nm} = ${nm}`).join(', ') + '}';
 
-    return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured };
+    return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured,
+             retainLines, hasStringCapture, destroyFnName, capturedStringFields };
   },
 
   // Special codegen for iter() method of Iterable<T> class.

@@ -13,6 +13,7 @@ Result_string_IOError process_string(String path) {
     Result_string_IOError _res_0 = readFile_string(path);
     if (!_res_0.ok) { return (Result_string_IOError){.ok = false, .error = _res_0.error}; }
     String content = _res_0.value;
+    tsc_string_retain(content);
     return (Result_string_IOError){.ok = true, .value = content};
 }
 

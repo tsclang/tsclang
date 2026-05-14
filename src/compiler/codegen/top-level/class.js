@@ -347,5 +347,35 @@ export default {
     this.addTop('');
   },
 
+  _getStringFields(className) {
+    const cls = this.classes.get(className);
+    if (!cls?.fields) return [];
+    const result = [];
+    for (const f of cls.fields) {
+      const fname = typeof f === 'string' ? f : (f.name ?? f);
+      const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+      if (ftype === 'String') result.push(fname);
+    }
+    return result;
+  },
+
+  _ensureClassFree(className) {
+    const cls = this.classes.get(className);
+    if (!cls || cls._classFreeEmitted) return;
+    const stringFields = this._getStringFields(className);
+    if (stringFields.length === 0) return;
+    cls._classFreeEmitted = true;
+    cls._stringFields = stringFields;
+    const freeFn = `${className}_free`;
+    cls._classFreeFn = freeFn;
+    this.addTop(`static void ${freeFn}(${className} *self) {`);
+    this.addTop(`    if (!self) return;`);
+    for (const fname of stringFields) {
+      this.addTop(`    tsc_string_release(self->${fname});`);
+    }
+    this.addTop(`}`);
+    this.addTop('');
+  },
+
   // ----------------------------------------------------------------
 };

@@ -76,6 +76,8 @@ int main(void) {
 
 ## Move поля объекта
 
+> **Примечание:** поля `string` **не перемещаются** — строки используют ARC (retain/release). См. [String ARC](#string-arc) ниже.
+
 ```typescript
 class Owner {
     name: string;
@@ -83,9 +85,9 @@ class Owner {
 
 let o = new Owner();
 o.name = "Alice";
-let n = o.name;          // move поля: string из o.name
+let n = o.name;          // COPY + retain: o.name остаётся валидной
 console.log(n);           // ok
-// console.log(o.name);  // error: use of moved value: 'o.name'
+console.log(o.name);      // ok — string использует ARC, не move
 ```
 
 ### C-output
@@ -96,8 +98,11 @@ typedef struct { String name; } Owner;
 int main(void) {
     Owner o = {0};
     o.name = STR_LIT("Alice");
-    String n = o.name;        // move — bits перенесены в n
+    tsc_string_retain(o.name);
+    String n = o.name;        // copy + retain
     printf("%s\n", n.data);
+    printf("%s\n", o.name.data);
+    tsc_string_release(n);
     return 0;
 }
 ```
@@ -166,6 +171,39 @@ cleanup:
     if (buf) Buffer_free(buf);
     if (user) User_free(user);
 }
+```
+
+## String ARC
+
+Строки — **исключение** из move-семантики. Они используют **автоматический подсчёт ссылок (ARC)**:
+
+- **Copy + retain** при присвоении (`let b = a`, `let b = a.p`, `let b = arr[i]`)
+- **Release** при выходе из scope (`tsc_string_release(b)`)
+- **Источник остаётся валидным** — нет ошибки "use after move" для строк
+- **Rodata-строки** (литералы, `capacity = 0`) — retain/release это no-ops
+- **Heap-строки** (конкатенация, I/O) — refcount выделяется через `_tsc_str_make`
+- **Embedded** (`TSC_EMBEDDED`) — нет refcount, строки всегда rodata
+
+### ARC во всех путях
+
+| Путь | Источник | Получатель |
+|------|----------|------------|
+| `let b = a` / `a.p` / `arr[i]` | — | retain + cleanup release |
+| `foo(s)` | retain перед вызовом | cleanup release параметра |
+| `a.p = expr` | safe temp: retain new → release old | — |
+| `arr[i] = s` | safe temp: retain new → release old | — |
+| `s += "x"` | release old после вычисления concat | — |
+| `return s` | retain возвращаемого значения | cleanup release locals |
+| Захват в замыкание | retain при захвате | env destructor release |
+| `const { name }: T = obj` | retain полей, release source | cleanup release извлечённых |
+| Уничтожение массива | per-element release в `tsc_array_free_string` | — |
+| Уничтожение класса | автогенерация `ClassName_free()` | — |
+
+```typescript
+let a = "hello";
+let b = a;           // copy + retain, обе валидны
+console.log(a);      // ok
+console.log(b);      // ok
 ```
 
 ## Ошибки

@@ -3,9 +3,15 @@
 typedef struct { String name; int32_t age; } User;
 typedef struct { const String name; const int32_t age; } ReadonlyUser;
 
+static void ReadonlyUser_free(ReadonlyUser *self) {
+    if (!self) return;
+    tsc_string_release(self->name);
+}
+
 int main(void) {
     TSC_INIT();
     const ReadonlyUser u = { .name = STR_LIT("Bob"), .age = 25 };
     printf("%s\n", u.name.data);
+    ReadonlyUser_free(&u);
     return 0;
 }

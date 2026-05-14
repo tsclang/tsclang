@@ -1,0 +1,10 @@
+class Box {
+    x: i32;
+}
+function foo(a: Mut<Box>, b: Mut<Box>): void {
+    a.x = 1;
+    b.x = 2;
+}
+let b = new Box();
+b.x = 0;
+foo(b, b);

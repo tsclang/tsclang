@@ -11,5 +11,6 @@ int main(void) {
         count += 1;
     }
     printf("%d\n", count);
+    tsc_string_release(s);
     return 0;
 }

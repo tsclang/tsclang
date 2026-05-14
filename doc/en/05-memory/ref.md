@@ -23,6 +23,18 @@ console.log(data.length);  // 3 — data is alive
 
 A `let` variable is automatically borrowed as `Ref<T>` when passed to a function. A `const` variable too — but only as `Ref<T>` (never as `Mut<T>`).
 
+## Borrow from array
+
+`arr[i]` for complex types — only via `Ref<T>`. Move by index is forbidden:
+
+```typescript
+const u: Ref<User> = users[0];     // ✅ borrow
+const u = users[0];                // ❌ E009: cannot move out of array by index
+const u = users.remove(0);         // ✅ move + removal from array
+```
+
+> **Note:** borrow on a collection blocks mutation only until the end of the `{}` scope where the borrow variable was created. After the block ends, mutation is allowed again.
+
 ## Multiple Ref simultaneously
 
 Multiple immutable borrows are **allowed** — they do not conflict:
@@ -70,6 +82,32 @@ function take(r: Ref<Obj>): void {
 ```typescript
 function bad(arr: Ref<i32[]>): void {
     arr[0] = 99;         // error: cannot mutate through Ref<T>
+}
+```
+
+### Cannot borrow object fields
+
+`Ref<T>` from a class field (`obj.field`) — **not supported**. The compiler cannot track field lifetime without annotations:
+
+```typescript
+const u: Ref<User> = container.user;  // ❌ error: Cannot borrow a class field
+```
+
+**Pattern:** pass the entire object as `Ref<Container>`:
+
+```typescript
+function getName(c: Ref<Container>): string {
+    return c.user.name;   // ✅ access inside function
+}
+```
+
+### Cannot return borrow from function
+
+Returning `Ref<T>` on an array element or object field from a function — forbidden (lifetime cannot be expressed without annotations):
+
+```typescript
+function first(arr: Ref<User[]>): Ref<User> {
+    return arr[0];   // ❌ error: Cannot return borrow to array element
 }
 ```
 
@@ -148,6 +186,8 @@ The `_ref_` suffix in the function name indicates immutable borrow. The call pas
 | `arr[0] = 99` (where `arr: Ref<i32[]>`) | `cannot mutate through Ref<T>` | Use `Mut<T>` |
 | `class C { ptr: Ref<i32[]> }` | `"Ref<T>" cannot be stored in a class field` | Owned field or `Shared<T>` |
 | `users.push(x)` while `Ref` is active | `cannot mutate 'users' while a borrow is active` | Limit the borrow scope with a `{}` block |
+| `return arr[0]` (return type `Ref<T>`) | `Cannot return borrow to array element from function` | Returning borrow on element is impossible |
+| `const u: Ref<User> = container.user` | `Cannot borrow a class field` | Pass the object as `Ref<Container>` |
 
 ## See also
 

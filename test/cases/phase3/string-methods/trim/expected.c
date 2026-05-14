@@ -5,6 +5,7 @@ int main(void) {
     const String s = STR_LIT("  hello  ");
     String _tmp_0 = tsc_string_trim(s);
     printf("%s\n", _tmp_0.data);
-    tsc_string_free(_tmp_0);
+    tsc_string_release(_tmp_0);
+    tsc_string_release(s);
     return 0;
 }

@@ -6,6 +6,7 @@ int main(void) {
     TscRegex r = tsc_regex_compile(STR_LIT("o"));
     String result = tsc_regex_replace_all(&r, STR_LIT("hello world"), STR_LIT("0"));
     printf("%s\n", result.data);
+    tsc_string_release(result);
     tsc_regex_free(&r);
     return 0;
 }

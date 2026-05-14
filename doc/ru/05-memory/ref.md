@@ -23,6 +23,18 @@ console.log(data.length);  // 3 — data жива
 
 `let`-переменная автоматически заимствуется как `Ref<T>` при передаче в функцию. `const`-переменная тоже — но только как `Ref<T>` (никак как `Mut<T>`).
 
+## Borrow из массива
+
+`arr[i]` для сложных типов — только через `Ref<T>`. Move по индексу запрещён:
+
+```typescript
+const u: Ref<User> = users[0];     // ✅ borrow
+const u = users[0];                // ❌ E009: cannot move out of array by index
+const u = users.remove(0);         // ✅ move + удаление из массива
+```
+
+> **Примечание:** borrow на коллекции блокирует мутацию только до конца `{}`-scope, в котором создана переменная-borrow. После выхода из блока мутация снова разрешена.
+
 ## Несколько Ref одновременно
 
 Несколько неизменяемых заёмов **разрешены** — они не конфликтуют:
@@ -70,6 +82,32 @@ function take(r: Ref<Obj>): void {
 ```typescript
 function bad(arr: Ref<i32[]>): void {
     arr[0] = 99;         // error: cannot mutate through Ref<T>
+}
+```
+
+### Нельзя заимствовать поле объекта
+
+`Ref<T>` от поля класса (`obj.field`) — **не поддерживается**. Компилятор не может отследить lifetime поля без аннотаций:
+
+```typescript
+const u: Ref<User> = container.user;  // ❌ ошибка: Cannot borrow a class field
+```
+
+**Паттерн:** передавать весь объект как `Ref<Container>`:
+
+```typescript
+function getName(c: Ref<Container>): string {
+    return c.user.name;   // ✅ доступ внутри функции
+}
+```
+
+### Нельзя вернуть borrow из функции
+
+Возврат `Ref<T>` на элемент массива или поле объекта из функции — запрещён (lifetime не может быть выражен без аннотаций):
+
+```typescript
+function first(arr: Ref<User[]>): Ref<User> {
+    return arr[0];   // ❌ ошибка: Cannot return borrow to array element
 }
 ```
 
@@ -148,6 +186,8 @@ int main(void) {
 | `arr[0] = 99` (где `arr: Ref<i32[]>`) | `cannot mutate through Ref<T>` | Используйте `Mut<T>` |
 | `class C { ptr: Ref<i32[]> }` | `"Ref<T>" cannot be stored in a class field` | Owned-поле или `Shared<T>` |
 | `users.push(x)` при активном `Ref` | `cannot mutate 'users' while a borrow is active` | Ограничьте scope заёма блоком `{}` |
+| `return arr[0]` (return type `Ref<T>`) | `Cannot return borrow to array element from function` | Возврат borrow на элемент невозможен |
+| `const u: Ref<User> = container.user` | `Cannot borrow a class field` | Передайте объект целиком как `Ref<Container>` |
 
 ## См. также
 

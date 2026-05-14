@@ -1,0 +1,7 @@
+let result = 0;
+{
+    let a = 10;
+    let f = (): i32 => a + 1;
+    result = f();
+}
+console.log(result);

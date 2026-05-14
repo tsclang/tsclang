@@ -9,5 +9,6 @@ int main(void) {
     if (!n.has_value) {
         printf("null\n");
     }
+    tsc_string_release(s);
     return 0;
 }

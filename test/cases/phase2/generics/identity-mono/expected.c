@@ -5,6 +5,7 @@ int32_t identity_i32(int32_t x) {
 }
 
 String identity_string(String x) {
+    tsc_string_retain(x);
     return x;
 }
 

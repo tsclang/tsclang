@@ -1,6 +1,7 @@
 #include "runtime.h"
 #include "std/io.h"
 
+
 typedef struct {
     size_t (*write)(void *self, const uint8_t *buf, size_t len);
 } Writer_vtable;

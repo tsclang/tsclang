@@ -31,7 +31,7 @@ export default {
     if (isArrayObj) {
       switch (prop) {
         case 'push': {
-          if (sym?._refBorrowed)
+          if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
           if (baseObject.kind === 'Ident') {
@@ -41,14 +41,14 @@ export default {
           return `tsc_array_push_${et}(&${objC}, ${elemC})`;
         }
         case 'pop': {
-          if (sym?._refBorrowed)
+          if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           this._ensureOptStruct(`opt_${et}`, etC);
           if (sym?.arraySize === 0) this._lastPopEmpty = true;
           return `tsc_array_pop_${et}(&${objC})`;
         }
         case 'remove': {
-          if (sym?._refBorrowed)
+          if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const idxC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           this._lastArrayElemReturn = true;
@@ -57,7 +57,7 @@ export default {
         case 'view': {
           const slName = `Slice_${et}`;
           this._ensureSliceStruct(slName, etC, false);
-          if (baseObject.kind === 'Ident' && sym) sym._refBorrowed = true;
+          if (baseObject.kind === 'Ident' && sym) this._trackRefBorrow(sym);
           const _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _ve = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
           return `(${slName}){ .ptr = ${objC}.data + (${_vs}), .length = (size_t)(${_ve}) - (${_vs}) }`;
@@ -65,7 +65,7 @@ export default {
         case 'viewMut': {
           const msName = `MutSlice_${et}`;
           this._ensureSliceStruct(msName, etC, true);
-          if (baseObject.kind === 'Ident' && sym) sym._refBorrowed = true;
+          if (baseObject.kind === 'Ident' && sym) this._trackRefBorrow(sym);
           const _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _me = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
           return `(${msName}){ .ptr = ${objC}.data + (${_ms}), .length = (size_t)(${_me}) - (${_ms}) }`;

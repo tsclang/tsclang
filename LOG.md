@@ -157,6 +157,30 @@
 > 2026-04-22: реализован spread `{...obj}` в object literals — разворачивает поля struct по полному списку из cls.fields, с поддержкой override `{...p, y: 99}`. **+2 теста**
 >
 > 2026-04-23: реализован `Set<T>` — плоский массив (64 ячейки), макрос `TSC_SET_DECL_PRIM` для примитивных типов (i8/i16/i32/i64/u8/u16/u32/u64/f32/f64/bool) + специализация `TscSet_string` через memcmp. Кодген: `new Set<T>()` → `tsc_set_create_suffix()`, инициализация из массива-литерала; метод `.add/.has/.delete/.clear`; `for-of` по Set через index-цикл по `._vals[]`; `.size` → `size_t`. Set-переменные никогда не `const` в C (мутабельный struct). `_isSet/_setSuffix/_setElemCType` в символьной таблице. **+5 тестов: phase3/sets/**
+>
+> 2026-05-13: реализовано scope-aware освобождение borrow: `_refBorrowed` (boolean) заменён на `_refBorrowCount` (счётчик) + `_scopeBorrowStack` в `pushScope`/`popScope`. Borrow `Ref<T>` на элемент массива и `view`/`viewMut` теперь автоматически снимаются при выходе из `{}`-блока. Исправлены проверки в method-dispatch.js, call-dispatch.js, vardecl.js. **+1 тест: phase3/ownership/array-ref-borrow-scope-release**
+>
+> 2026-05-14: добавлены 5 недостающих тестов Ref/Mut borrow-системы:
+> - `err-view-borrow-blocks-mutation` — `.view()` создаёт borrow, мутация блокируется
+> - `err-viewmut-borrow-blocks-mutation` — `.viewMut()` создаёт borrow, мутация блокируется
+> - `seq-mut-calls` — последовательные `Mut<T>` вызовы одной функции (success)
+> - `view-scope-release` — borrow от `.view()` отпускается при выходе из `{}` scope
+> - `err-spawn-block-ref` — `spawn {}` не может захватить `Ref<T>` (not Send)
+>
+> 2026-05-14: обновлена документация — фикс "scope-agnostic tracking" в `borrow-guide.md` (en/ru) и `spec/05-memory.md`: статус изменён с ❌ на ✅, добавлена ссылка на `_scopeBorrowStack` + `_refBorrowCount`.
+>
+> 2026-05-14: **String ARC — полная реализация.** Строки перешли с move-семантики на immutable + ARC во всех путях:
+> - `let b = a` / `let b = a.p` / `let b = arr[i]` — retain при получении, release при cleanup
+> - `foo(s)` — retain в caller, release параметра в callee cleanup
+> - `a.p = expr` / `arr[i] = s` — safe temp (retain new → release old → assign)
+> - `s += "x"` — eval concat → release old → assign
+> - `return s` — retain возвращаемого значения
+> - Closure capture — retain при захвате, env destructor при уничтожении
+> - `const { name }: T = obj` — retain извлечённых полей, release source перед zeroing
+> - `tsc_array_free_string` — per-element release в цикле
+> - Классы со строковыми полями — автогенерация `ClassName_free()` деструктора
+> - Изменённые файлы: `runtime.h`, `vardecl.js`, `call-dispatch.js`, `method-dispatch.js`, `func.js`, `assign.js`, `control-flow.js`, `closures.js`, `destruct.js`, `class.js`
+> - Все 1046 тестов проходят
 
 ---
 
@@ -681,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1028 тестов ✓** (2026-05-13)
+**Итого: 1054 тестов ✓** (2026-05-14)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -697,3 +721,46 @@
 > - Секционные `index.md` для 02-syntax … 12-migration (11 файлов)
 > - Языки: `zh-cn`, `zh-tw`, `ja`, `pt-br`, `tr`, `de`, `fr`, `es` (144 файла, ~15K строк)
 > - Полные переводы: `ru/` (112 файлов), `en/` (112 файлов)
+
+> 2026-05-13: Bug #10 — `Ref<T>` borrow semantics для array indexing + фиксация дизайна:
+> - `Ref<T>` borrow для `arr[i]` (codegen: `&arr.data[i]`, borrow check: `_refBorrowed`)
+> - `isPointer`/`derefType` для локальных `Ref<T>` переменных (доступ к полям через `->`)
+> - Дедупликация `const` в `varDecl` (fix `const const int32_t *`)
+> - Compile-time error: `return arr[i]` как `Ref<T>` или `Mut<T>` из функции
+> - Compile-time error: `Ref<T>`/`Mut<T>` от полей объектов (`obj.field`)
+> - Новые тесты: `array-ref-borrow`, `err-return-ref-index`, `err-return-mut-index`, `err-ref-field-borrow`, `err-mut-field-borrow`, `err-return-mut-local`
+> - Обновлены `spec/05-memory.md`, `SPEC.md`, `doc/ru/05-memory/`, `doc/en/05-memory/`
+
+> 2026-05-14: Borrow checker и inferType — исправлены 5 багов:
+> - **Bug 1**: `err-two-mut-same-call` — предпроверка (pre-pass) одинаковых `Mut<T>` аргументов в одном вызове (`foo(b, b)`)
+> - **Bug 2**: `err-mut-while-ref-active` — `_trackRefBorrow()` для `const r: Ref<T> = ident` в vardecl (Ident init)
+> - **Bug 3**: `err-use-after-move-to-fn` — move-семантика при передаче класса/массива по значению в функцию; zero-out через `_postStmtCleanups`
+> - **Bug 4**: `inferType` для `Member` через `Ref<T>`/`Mut<T>` параметры — `derefType` в func.js (был только в vardecl.js); fallback в infer.js — strip `const`/`*` для pointer types
+> - **Bug 5**: `Ref<T>` vardecl — `&` для Ident init (раньше только для Index); генерация `const Box *r = &b` вместо `const Box *r = b`
+> - `ref-borrow` expected.c: добавлен `tsc_string_retain(u->name)` на return ( latent double-free)
+> - `move-to-fn` и `pass-by-value` expected.c: обновлены с zero-out после вызова
+> - Результат: 1052 теста, 0 ошибок
+
+> 2026-05-14: Тесты и фиксы — раунд 2:
+> - **Chained Member access** (`o.inner.name`) — тест `phase4/classes/chained-member` [R]; фикс в assign.js: compound literal `(Type){0}` для Member assign struct
+> - **129 expected.c** регенерировано из actual compiler output (после borrow checker + inferType фиксов)
+> - **`err-use-after-field-move`** — обновлён для non-String полей (String теперь ARC, не move)
+> - **`debug-line-directives`** — обновлён с `#line` директивами (использует `flags.txt --debug`)
+> - **gcc-ран**: 461 passed, 1 failed (`request-props` — предсуществующий баг cleanup в closure)
+> - `err-ref-across-await` уже работает (компилятор ловит TSC-E051)
+> - Результат: 1054 теста, 0 ошибок (no-gcc)
+
+> 2026-05-14: Implicit Borrow для string параметров (zero-overhead):
+> - **call-dispatch.js**: убран `tsc_string_retain` для String аргументов (coercedArgs fallthrough + default params fill)
+> - **method-dispatch.js**: убран `tsc_string_retain` в `argsToC`
+> - **func.js**: убран `tsc_string_release` cleanup для String параметров
+> - Семантика: `string` параметр = implicit borrow; caller НЕ делает retain, callee НЕ делает release; владение у caller
+> - 46 expected.c регенерировано
+> - spec/05-memory.md обновлён (раздел «Правила передачи аргументов»)
+> - Результат: 1054 теста, 0 ошибок — **Phase 3 (Ownership) завершена**
+
+> 2026-05-14: Mut<T> vardecl borrow tracking:
+> - **vardecl.js**: добавлен Mut<T> borrow tracking для `const m: Mut<T> = a` — проверка const, refBorrowCount, double-Mut; установка `_mutBorrowedBy`
+> - 3 новых error-теста: `err-mut-var-const`, `err-mut-var-while-ref`, `err-mut-var-double`
+> - spec/05-memory.md: раздел «Borrow tracking для Mut<T> vardecl»
+> - Результат: 1057 тестов, 0 ошибок

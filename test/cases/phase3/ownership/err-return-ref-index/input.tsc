@@ -1,0 +1,3 @@
+function first(arr: Ref<i32[]>): Ref<i32> {
+    return arr[0];
+}

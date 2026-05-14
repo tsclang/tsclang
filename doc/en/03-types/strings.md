@@ -238,5 +238,5 @@ String upper = tsc_str_toUpper(s);
 - [Numeric Types](./numbers.md) — number ↔ string conversion, `.toString()`, `parseInt`
 - [Arrays](./arrays.md) — `string[]`, `split()`, `join()`
 - [Null](./null.md) — `string | null`, optional chaining `s?.length`
-- [Memory Model](../05-memory/index.md) — `string` as heap owner, `Ref<string>`, move semantics
+- [Memory Model](../05-memory/index.md) — `string` with ARC (retain/release), `Ref<string>`, ownership
 - [std/string](../10-stdlib/string.md) — Unicode methods, regex, encodings

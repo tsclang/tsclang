@@ -78,6 +78,14 @@ export default {
     }
     if (r === undefined) r = this.exprToC(node.right, lines, depth);
 
+    // Member assign of struct {0} → need (Type){0} compound literal for valid C
+    if (node.left.kind === 'Member' && r === '{0}' && node.op === '=') {
+      const leftType = this.inferType(node.left);
+      if (leftType && leftType !== 'int32_t' && this.classes.has(leftType)) {
+        r = `(${leftType}){0}`;
+      }
+    }
+
     // >>>= → x = (int32_t)((uint32_t)x >> r)
     if (node.op === '>>>=') {
       return `${l} = (int32_t)((uint32_t)${l} >> ${r})`;
@@ -109,6 +117,23 @@ export default {
       } else {
         return `{ ${lt} ${tmp} = ${l}; ${l} = (${tmp}) ? ${tmp} : ${r}; }`;
       }
+    }
+
+    const leftType = this.inferType(node.left);
+
+    // += for string: s += "x" → eval concat first, release old, assign (ownership transfer)
+    if (node.op === '+=' && leftType === 'String') {
+      const I = ' '.repeat(this.indent * depth);
+      lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      return null;
+    }
+
+    // String property/array assign: safe temp pattern to avoid a.p = a.p destroying before retain
+    if (node.op === '=' && leftType === 'String' &&
+        (node.left.kind === 'Member' || node.left.kind === 'Index')) {
+      const I = ' '.repeat(this.indent * depth);
+      lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_retain(_tsc_tmp); tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      return null;
     }
 
     return `${l} ${node.op} ${r}`;

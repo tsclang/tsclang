@@ -1,0 +1,4 @@
+let x = 7;
+let y = 3;
+const add = (): i32 => x + y;
+console.log(add());

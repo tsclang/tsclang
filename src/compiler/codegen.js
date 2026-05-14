@@ -80,6 +80,7 @@ class Context {
 
     // Symbol table: name → { ctype, varKind }
     this.scopes = [new Map()];
+    this._scopeBorrowStack = [[]];
     // Known classes: name → { fields, methods }
     this.classes = new Map();
     // Known interfaces
@@ -176,8 +177,21 @@ class Context {
   // ----------------------------------------------------------------
   // Scope helpers
   // ----------------------------------------------------------------
-  pushScope() { this.scopes.push(new Map()); }
-  popScope()  { this.scopes.pop(); }
+  pushScope() { this.scopes.push(new Map()); this._scopeBorrowStack.push([]); }
+  popScope()  {
+    this.scopes.pop();
+    const borrows = this._scopeBorrowStack.pop();
+    for (const sym of borrows) {
+      sym._refBorrowCount = (sym._refBorrowCount || 0) - 1;
+      if (sym._refBorrowCount <= 0) sym._refBorrowCount = 0;
+    }
+  }
+  _trackRefBorrow(sym) {
+    if (!sym) return;
+    sym._refBorrowCount = (sym._refBorrowCount || 0) + 1;
+    const current = this._scopeBorrowStack[this._scopeBorrowStack.length - 1];
+    if (current) current.push(sym);
+  }
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
   _isEmbedded()          { return EMBEDDED_TARGETS.has(this._targetName); }
   _isEmbeddedOrRetro()   { return ALL_EMBEDDED_TARGETS.has(this._targetName); }

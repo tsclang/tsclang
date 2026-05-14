@@ -76,6 +76,8 @@ The function accepts `Buffer` by value — the caller loses ownership.
 
 ## Moving an object field
 
+> **Note:** `string` fields are **not moved** — strings use ARC (retain/release). See [String ARC](#string-arc) below.
+
 ```typescript
 class Owner {
     name: string;
@@ -83,9 +85,9 @@ class Owner {
 
 let o = new Owner();
 o.name = "Alice";
-let n = o.name;          // move field: string from o.name
+let n = o.name;          // COPY + retain: o.name stays valid
 console.log(n);           // ok
-// console.log(o.name);  // error: use of moved value: 'o.name'
+console.log(o.name);      // ok — string is ARC, not moved
 ```
 
 ### C-output
@@ -96,8 +98,11 @@ typedef struct { String name; } Owner;
 int main(void) {
     Owner o = {0};
     o.name = STR_LIT("Alice");
-    String n = o.name;        // move — bits transferred to n
+    tsc_string_retain(o.name);
+    String n = o.name;        // copy + retain
     printf("%s\n", n.data);
+    printf("%s\n", o.name.data);
+    tsc_string_release(n);
     return 0;
 }
 ```
@@ -166,6 +171,39 @@ cleanup:
     if (buf) Buffer_free(buf);
     if (user) User_free(user);
 }
+```
+
+## String ARC
+
+Strings are the **exception** to move semantics. They use **automatic reference counting (ARC)**:
+
+- **Copy + retain** on assignment (`let b = a`, `let b = a.p`, `let b = arr[i]`)
+- **Release** when going out of scope (`tsc_string_release(b)`)
+- **Source stays valid** — no "use after move" error for strings
+- **Rodata strings** (literals, `capacity = 0`) — retain/release are no-ops
+- **Heap strings** (concatenation, I/O) — refcount allocated via `_tsc_str_make`
+- **Embedded** (`TSC_EMBEDDED`) — no refcount, strings are always rodata
+
+### ARC in all paths
+
+| Path | Caller/Source | Callee/Destination |
+|------|--------------|-------------------|
+| `let b = a` / `a.p` / `arr[i]` | — | retain + cleanup release |
+| `foo(s)` | retain before call | cleanup release param |
+| `a.p = expr` | safe temp: retain new → release old | — |
+| `arr[i] = s` | safe temp: retain new → release old | — |
+| `s += "x"` | release old after eval concat | — |
+| `return s` | retain returned value | cleanup release locals |
+| Closure capture | retain on capture | env destructor release |
+| `const { name }: T = obj` | retain fields, release source | cleanup release extracted |
+| Array destruction | per-element release in `tsc_array_free_string` | — |
+| Class destruction | auto-generated `ClassName_free()` | — |
+
+```typescript
+let a = "hello";
+let b = a;           // copy + retain, both valid
+console.log(a);      // ok
+console.log(b);      // ok
 ```
 
 ## Errors

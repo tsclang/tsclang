@@ -1,0 +1,7 @@
+class Box {
+    x: i32;
+}
+let b = new Box();
+b.x = 1;
+const m1: Mut<Box> = b;
+const m2: Mut<Box> = b;

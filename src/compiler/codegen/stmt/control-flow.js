@@ -41,6 +41,7 @@
             this._inReturnContext = true;
             const valC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
+            if (this.inferType(node.value) === 'String') lines.push(`${I}tsc_string_retain(${valC});`);
             lines.push(`${I}return (${optType}){true, ${valC}};`);
           }
           break;
@@ -49,7 +50,14 @@
         if (this._inFinallyBlock) {
           throw this.error('TypeError: Cannot return inside a finally block');
         }
-        // Error: returning Ref to local variable (lifetime overflow)
+        // Error: returning Ref/Mut to local variable or array element (lifetime overflow)
+        const funcSym = this.currentFuncName ? this.lookup(this.currentFuncName) : null;
+        const retTypeAnn = funcSym?.returnType;
+        const isRefReturn = retTypeAnn?.kind === 'TypeRef' && retTypeAnn.name === 'Ref';
+        const isMutReturn = retTypeAnn?.kind === 'TypeRef' && retTypeAnn.name === 'Mut';
+        if ((isRefReturn || isMutReturn) && node.value?.kind === 'Index') {
+          throw this.error(`TypeError: Cannot return borrow to array element from function`);
+        }
         if (this.currentFuncReturnType?.startsWith('const ') &&
             this.currentFuncReturnType?.includes(' *') &&
             node.value?.kind === 'Ident') {
@@ -60,6 +68,12 @@
             throw this.error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
+        if (isMutReturn && node.value?.kind === 'Ident') {
+          const retSym = this.lookup(node.value.name);
+          if (retSym && !retSym.isPointer && !retSym.isRefParam && !retSym.funcName) {
+            throw this.error(`TypeError: Cannot return mutable borrow to local variable '${node.value.name}' that does not outlive the function`);
+          }
+        }
         if (this._funcCleanup?.length && node.value) {
           // Evaluate return value before cleanup to avoid use-after-free of owned vars
           this._inReturnContext = true;
@@ -67,6 +81,7 @@
           this._inReturnContext = false;
           const retType = this.inferType(node.value) ?? 'int32_t';
           const tmpName = `_ret_${this.tempCount++}`;
+          if (retType === 'String') p(`tsc_string_retain(${retC});`);
           p(`${retType} ${tmpName} = ${retC};`);
           this._emitFuncCleanup(lines, I);
           if (this._throwsCtx) {
@@ -82,6 +97,7 @@
               this._inReturnContext = true;
               const c = this.exprToC(node.value, lines, depth);
               this._inReturnContext = false;
+              if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${c});`);
               p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
             } else {
               p(`return (${ctx.resultType}){.ok = true};`);
@@ -91,6 +107,7 @@
               this._inReturnContext = true;
               const c = this.exprToC(node.value, lines, depth);
               this._inReturnContext = false;
+              if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${c});`);
               p(`return ${c};`);
             } else {
               p('return;');

@@ -9,5 +9,6 @@ int main(void) {
         const uint32_t cp = _cp_0;
         printf("%u\n", cp);
     }
+    tsc_string_release(s);
     return 0;
 }

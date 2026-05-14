@@ -158,7 +158,7 @@ export default {
           const tmp = `_text_${n}`;
           const I = ' '.repeat(this.indent * depth);
           lines.push(`${I}String ${tmp} = tsc_blob_text(&${_blobName});`);
-          this._pushPostStmtCleanup(`${I}tsc_string_free(${tmp});`);
+          this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
           return tmp;
         }
       }

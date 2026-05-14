@@ -6,5 +6,6 @@ int main(void) {
     const Array_u8 bytes = {.data = _lit_0, .length = 2, .capacity = 2};
     String s = tsc_decode_utf8(bytes);
     printf("%s\n", s.data);
+    tsc_string_release(s);
     return 0;
 }

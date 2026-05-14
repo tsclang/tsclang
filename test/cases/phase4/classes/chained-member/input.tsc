@@ -1,0 +1,10 @@
+class Inner {
+    name: string;
+}
+class Outer {
+    inner: Inner;
+}
+let o = new Outer();
+o.inner = new Inner();
+o.inner.name = "hello";
+console.log(o.inner.name);

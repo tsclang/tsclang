@@ -455,7 +455,13 @@ export default {
         // For Scalar-variadic functions: string params → const char * (matches signature)
         if (_scalarRest && p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'string') _ct = 'const char *';
         const _isRef = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Ref';
-        this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef });
+        const _isMut = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Mut';
+        const _isBorrow = _isRef || _isMut;
+        const _derefType = _isBorrow && _ct.endsWith('*')
+          ? this.resolveType(p.typeAnn.typeArgs?.[0] ?? {})
+          : undefined;
+        this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
+                              ...(_derefType ? { derefType: _derefType } : {}) });
       }
     }
     if (_scalarRest && _lastNonRest) {
