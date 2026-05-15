@@ -6,6 +6,6 @@ static void _lambda_0_void(void) {
 
 int main(void) {
     TSC_INIT();
-    tsc_set_timeout((tsc_closure){.env = NULL, .fn = (void*)_lambda_0_void}, 100);
+    tsc_set_timeout(_lambda_0_void, 100);
     return 0;
 }

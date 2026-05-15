@@ -5,7 +5,7 @@ int32_t double_i32(int32_t x) {
 }
 
 int32_t apply_fn_i32_i32_i32(tsc_closure f, int32_t x) {
-    return ((int32_t (*)(void *, int32_t))f.fn)(f.env, x);
+    return ((int32_t (*)(int32_t))f.fn)(x);
 }
 
 int main(void) {

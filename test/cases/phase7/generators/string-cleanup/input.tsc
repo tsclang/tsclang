@@ -1,0 +1,7 @@
+function* greet(prefix: string): Generator<string> {
+    let name: string = prefix;
+    yield name;
+}
+const g = greet("hi");
+const r = g.next();
+console.log(r.value);

@@ -220,23 +220,41 @@ export default {
     return name;
   },
 
+  _scanReturnExpr(node) {
+    if (!node || typeof node !== 'object') return null;
+    if (Array.isArray(node)) {
+      for (const child of node) { const r = this._scanReturnExpr(child); if (r) return r; }
+      return null;
+    }
+    if (node.kind === 'Return' && (node.expr || node.value)) return node.expr || node.value;
+    for (const key of Object.keys(node)) {
+      if (key === 'kind') continue;
+      const child = node[key];
+      if (child && typeof child === 'object') { const r = this._scanReturnExpr(child); if (r) return r; }
+    }
+    return null;
+  },
+
   inferArrowReturn(node) {
     if (node.returnType) return this.resolveType(node.returnType);
-    if (node.body.kind !== 'Block') {
-      // Push lambda params into scope for type inference
-      if (node.params?.length && this._lambdaParamHint) {
-        this.pushScope();
-        for (let i = 0; i < node.params.length; i++) {
-          const p = node.params[i];
-          const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (this._lambdaParamHint[i] ?? 'void *');
-          this.define(p.name, { ctype: ct });
-        }
+    const hasParams = node.params?.length > 0;
+    if (hasParams) {
+      this.pushScope();
+      for (let i = 0; i < node.params.length; i++) {
+        const p = node.params[i];
+        const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (this._lambdaParamHint?.[i] ?? 'void *');
+        this.define(p.name, { ctype: ct });
       }
-      const t = this.inferType(node.body);
-      if (node.params?.length && this._lambdaParamHint) this.popScope();
-      return t;
     }
-    return 'void';
+    let result = 'void';
+    if (node.body.kind !== 'Block') {
+      result = this.inferType(node.body) ?? 'void';
+    } else {
+      const retExpr = this._scanReturnExpr(node.body);
+      if (retExpr) result = this.inferType(retExpr) ?? 'void';
+    }
+    if (hasParams) this.popScope();
+    return result;
   },
 
   // Format a variable declaration: qualifier + ctype + name with proper pointer spacing

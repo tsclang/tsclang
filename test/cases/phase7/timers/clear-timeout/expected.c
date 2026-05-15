@@ -6,7 +6,7 @@ static void _lambda_0_void(void) {
 
 int main(void) {
     TSC_INIT();
-    const int32_t id = tsc_set_timeout((tsc_closure){.env = NULL, .fn = (void*)_lambda_0_void}, 1000);
+    const int32_t id = tsc_set_timeout(_lambda_0_void, 1000);
     tsc_clear_timeout(id);
     return 0;
 }

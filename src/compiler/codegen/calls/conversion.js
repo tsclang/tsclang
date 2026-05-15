@@ -61,7 +61,18 @@
       }
     }
     if (callee.kind === 'Ident' && callee.name === 'setTimeout') {
-      const fn = this.exprToC(args[0].expr, lines, depth);
+      let fn;
+      const cbExpr = args[0]?.expr;
+      if (cbExpr?.kind === 'Arrow') {
+        const closure = this.hoistClosure(cbExpr, `_cb_${this.closureCount ?? 0}`);
+        if (closure) {
+          fn = closure.fnName;
+        } else {
+          fn = this.hoistArrow(cbExpr, 'void', '_cb');
+        }
+      } else {
+        fn = this.exprToC(args[0].expr, lines, depth);
+      }
       const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_timeout(${fn}, ${ms})`;
     }

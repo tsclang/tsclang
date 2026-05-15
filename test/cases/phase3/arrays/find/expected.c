@@ -11,7 +11,7 @@ int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 5, 3, 8, 2};
     const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
-    opt_ref_i32 found = tsc_array_find_i32(arr, (tsc_closure){.env = NULL, .fn = (void*)_lambda_0_bool});
+    opt_ref_i32 found = tsc_array_find_i32(arr, _lambda_0_bool);
     printf("%d\n", found.has_value ? *found.value : -1);
     return 0;
 }

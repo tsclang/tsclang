@@ -105,8 +105,14 @@
           } else {
             if (node.value) {
               this._inReturnContext = true;
-              const c = this.exprToC(node.value, lines, depth);
+              let c = this.exprToC(node.value, lines, depth);
               this._inReturnContext = false;
+              if (this.currentFuncReturnType === 'tsc_closure' && node.value.kind === 'Ident') {
+                const retSym = this.lookup(node.value.name);
+                if (retSym?.funcName && !retSym.funcPtr) {
+                  c = `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
+                }
+              }
               if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${c});`);
               p(`return ${c};`);
             } else {

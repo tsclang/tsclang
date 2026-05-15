@@ -47,6 +47,25 @@ export default {
     };
     walkLets(body?.kind === 'Block' ? body.body : []);
 
+    const stringFields = [];
+    const classFreeFields = [];
+    for (const f of letFields) {
+      if (f.ctype === 'String') {
+        stringFields.push(f.name);
+      } else {
+        const cls = this.classes.get(f.ctype);
+        if (cls) {
+          const sFields2 = this._getStringFields(f.ctype);
+          if (sFields2.length > 0) {
+            this._ensureClassFree(f.ctype);
+            const freeFn = this.classes.get(f.ctype)?._classFreeFn;
+            if (freeFn) classFreeFields.push({ name: f.name, freeFn });
+          }
+        }
+      }
+    }
+    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0;
+
     // Emit Result_T_E typedef if needed (before state struct references it)
     if (hasThrows) {
       this._topBlank();
@@ -99,7 +118,7 @@ export default {
 
     // Set up generator self context (let vars promoted)
     const genPromoted = new Set(letFields.map(f => f.name));
-    this._selfCtx = { promoted: genPromoted, inlined: new Map() };
+    this._selfCtx = { promoted: genPromoted, inlined: new Map(), stringFields, classFreeFields, hasCleanup };
 
     const nextLines = this._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
 
@@ -132,9 +151,24 @@ export default {
 
     this._emitGenStmtList(stmts, lines, ctx, '            ', yieldType, resultType, hasThrows, resultCt, zeroVal);
 
-    // If last statement was a yield, the open case needs a terminal done
     if (ctx.needTerminal) {
-      lines.push(`            self->_done = true;`);
+      if (this._selfCtx?.hasCleanup) {
+        lines.push(`            goto _cleanup;`);
+      } else {
+        lines.push(`            self->_done = true;`);
+        lines.push(`            ${doneRet}`);
+      }
+    }
+
+    if (this._selfCtx?.hasCleanup) {
+      lines.push('        _cleanup:');
+      for (const name of this._selfCtx.stringFields) {
+        lines.push(`            tsc_string_release(&self->${name});`);
+      }
+      for (const { name, freeFn } of this._selfCtx.classFreeFields) {
+        lines.push(`            ${freeFn}(&self->${name});`);
+      }
+      lines.push('            self->_done = true;');
       lines.push(`            ${doneRet}`);
     }
 
@@ -185,7 +219,11 @@ export default {
       const doneRet = hasThrows
         ? `return (${resultType}){(${resultCt}){.ok = false}, true};`
         : `return (${resultType}){${zeroVal}, true};`;
-      lines.push(`${I}if (!(${condC})) { self->_done = true; ${doneRet} }`);
+      if (this._selfCtx?.hasCleanup) {
+        lines.push(`${I}if (!(${condC})) { goto _cleanup; }`);
+      } else {
+        lines.push(`${I}if (!(${condC})) { self->_done = true; ${doneRet} }`);
+      }
 
       const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
       let postYieldStmts = [];
@@ -225,11 +263,15 @@ export default {
 
     if (s.kind === 'Return') {
       if (!s.value) {
-        lines.push(`${I}self->_done = true;`);
-        const doneRet = hasThrows
-          ? `(${resultType}){(${resultCt}){.ok = false}, true}`
-          : `(${resultType}){${zeroVal}, true}`;
-        lines.push(`${I}return ${doneRet};`);
+        if (this._selfCtx?.hasCleanup) {
+          lines.push(`${I}goto _cleanup;`);
+        } else {
+          lines.push(`${I}self->_done = true;`);
+          const doneRet = hasThrows
+            ? `(${resultType}){(${resultCt}){.ok = false}, true}`
+            : `(${resultType}){${zeroVal}, true}`;
+          lines.push(`${I}return ${doneRet};`);
+        }
       }
       ctx.needTerminal = false;
       return;
@@ -238,6 +280,10 @@ export default {
     if (s.kind === 'Throw') {
       if (hasThrows) {
         const errC = this._selfE(s.value);
+        if (this._selfCtx?.hasCleanup) {
+          for (const name of this._selfCtx.stringFields) lines.push(`${I}tsc_string_release(&self->${name});`);
+          for (const { name, freeFn } of this._selfCtx.classFreeFields) lines.push(`${I}${freeFn}(&self->${name});`);
+        }
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return (${resultType}){(${resultCt}){.ok = false, .error = ${errC}}, true};`);
       }
@@ -253,7 +299,17 @@ export default {
     if (stmt.kind === 'VarDecl') {
       const { varKind, name, typeAnn, init } = stmt;
       if (varKind === 'let' && this._selfCtx?.promoted.has(name)) {
-        if (init) lines.push(`${I}self->${name} = ${this._selfE(init)};`);
+        if (init) {
+          let initC = this._selfE(init);
+          const ct = typeAnn ? this.resolveType(typeAnn)
+                   : (init ? (this.inferType(init) || null) : null);
+          if (initC === '{0}' && ct) initC = `(${ct}){0}`;
+          lines.push(`${I}self->${name} = ${initC};`);
+          if (this._selfCtx.stringFields.includes(name) &&
+              (init.kind === 'Ident' || init.kind === 'Member' || init.kind === 'Index')) {
+            lines.push(`${I}tsc_string_retain(&self->${name});`);
+          }
+        }
       } else {
         const ct = typeAnn ? this.resolveType(typeAnn)
                  : init ? (this.inferType(init) || 'int32_t') : 'int32_t';

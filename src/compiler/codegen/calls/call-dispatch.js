@@ -91,6 +91,22 @@
       return this.callGeneric(callee.name, node.typeArgs ?? [], args, lines, depth);
     }
 
+    // IIFE: (x => expr)(args) — hoist and call directly
+    if (callee.kind === 'Arrow') {
+      const closure = this.hoistClosure(callee, `_iife_${this.closureCount ?? 0}`);
+      if (closure) {
+        const argsC = this.argsToC(args, lines, depth);
+        const paramTypes = args.map(a => this.inferType(a.expr) ?? 'void *');
+        const sigArgs = ['void *', ...paramTypes].join(', ');
+        const envName = `_iife_env_${this.closureCount - 1}`;
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} ${envName} = ${closure.envInit};`);
+        return `((${closure.ret} (*)(${sigArgs}))${closure.fnName})(&${envName}${argsC ? ', ' + argsC : ''})`;
+      }
+      const fnName = this.hoistArrow(callee, 'void', '_iife');
+      const argsC = this.argsToC(args, lines, depth);
+      return `${fnName}(${argsC})`;
+    }
+
     // Plain function call вЂ” look up mangled name in scope
     let calleeC;
     let sym = null;
@@ -136,9 +152,25 @@
       const argsC = this.argsToC(args, lines, depth);
       const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
-      const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
-      const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
-      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
+      if (sym.isClosure) {
+        const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
+        const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
+        return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
+      }
+      const sigArgs = paramTypes.join(', ') || 'void';
+      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${argsC})`;
+    }
+
+    // tsc_closure call from expression (e.g. arr[0](args))
+    if (callee.kind !== 'Ident' && !sym?.funcName) {
+      const calleeType = this.inferType(callee);
+      if (calleeType === 'tsc_closure') {
+        const argsC = this.argsToC(args, lines, depth);
+        const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
+        const retType = this.inferType(node) ?? 'void';
+        const sigArgs = paramTypes.join(', ') || 'void';
+        return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
+      }
     }
 
     // Libc variadic call or user Scalar-variadic call: pass args as raw C values

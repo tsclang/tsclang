@@ -23,11 +23,21 @@ export default {
 
     const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_');
     const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce']);
-    if (isArrayObj && arrayCallbackProps.has(prop)) {
+    let cbFnName = null;
+    let cbExtraArgs = '';
+    let argsForC = args;
+    if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
       this._lambdaParamHint = (prop === 'reduce' || prop === 'sort') ? [etC, etC] : [etC];
+      cbFnName = this._extractCallbackFn(args[0], lines, depth);
+      this._lambdaParamHint = null;
+      if (cbFnName) {
+        argsForC = args.slice(1);
+        if (argsForC.length > 0) {
+          cbExtraArgs = argsForC.map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth)).join(', ');
+        }
+      }
     }
-    const argsC = this.argsToC(args, lines, depth);
-    this._lambdaParamHint = null;
+    const argsC = this.argsToC(argsForC, lines, depth);
     if (isArrayObj) {
       switch (prop) {
         case 'push': {
@@ -73,7 +83,7 @@ export default {
         case 'length':   return `${objC}.length`;
         case 'capacity': return `${objC}.capacity`;
         case 'sort': {
-          const fnC = args.length ? argsC : 'NULL';
+          const fnC = args.length ? (cbFnName ?? argsC) : 'NULL';
           return `tsc_array_sort_${et}(&${objC}, ${fnC})`;
         }
         case 'reverse':    return `tsc_array_reverse_${et}(&${objC})`;
@@ -110,24 +120,25 @@ export default {
           }
           return `tsc_array_reallocate_${et}(&${objC}, ${capC})`;
         }
-        case 'filter':  return `tsc_array_filter_${et}(${objC}, ${argsC})`;
-        case 'forEach': return `tsc_array_foreach_${et}(${objC}, ${argsC})`;
+        case 'filter':  return `tsc_array_filter_${et}(${objC}, ${cbFnName ?? argsC})`;
+        case 'forEach': return `tsc_array_foreach_${et}(${objC}, ${cbFnName ?? argsC})`;
         case 'map': {
-          const outET = lambdaOutET(argsC);
-          return `tsc_array_map_${et}_${outET}(${objC}, ${argsC})`;
+          const outET = cbFnName ? (this._lastCbRetType ? this.cTypeToIdent(this._lastCbRetType) : et) : lambdaOutET(argsC);
+          return `tsc_array_map_${et}_${outET}(${objC}, ${cbFnName ?? argsC})`;
         }
         case 'reduce': {
           const initExpr = args[1]?.expr;
           const outET = initExpr ? this.cTypeToIdent(this.inferType(initExpr)) : et;
-          return `tsc_array_reduce_${et}_${outET}(${objC}, ${argsC})`;
+          const reduceArgs = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
+          return `tsc_array_reduce_${et}_${outET}(${objC}, ${reduceArgs})`;
         }
-        case 'every':    return `tsc_array_every_${et}(${objC}, ${argsC})`;
-        case 'some':     return `tsc_array_some_${et}(${objC}, ${argsC})`;
+        case 'every':    return `tsc_array_every_${et}(${objC}, ${cbFnName ?? argsC})`;
+        case 'some':     return `tsc_array_some_${et}(${objC}, ${cbFnName ?? argsC})`;
         case 'find': {
           this._ensureOptRefStruct(`opt_ref_${et}`, etC);
-          return `tsc_array_find_${et}(${objC}, ${argsC})`;
+          return `tsc_array_find_${et}(${objC}, ${cbFnName ?? argsC})`;
         }
-        case 'findIndex': return `(int)tsc_array_find_index_${et}(${objC}, ${argsC})`;
+        case 'findIndex': return `(int)tsc_array_find_index_${et}(${objC}, ${cbFnName ?? argsC})`;
         case 'indexOf':  return `(int)tsc_array_index_of_${et}(${objC}, ${argsC})`;
         case 'includes': return `tsc_array_includes_${et}(${objC}, ${argsC})`;
         case 'concat':   return `tsc_array_concat_${et}(${objC}, ${argsC})`;
@@ -430,6 +441,32 @@ export default {
     if ((typeAnn.name === 'Mut' || typeAnn.name === 'Ref') && typeAnn.typeArgs?.[0]?.kind === 'TypeRef') {
       const inner = typeAnn.typeArgs[0].name;
       if (this.interfaces.has(inner)) return inner;
+    }
+    return null;
+  },
+
+  _extractCallbackFn(arg, lines, depth) {
+    const expr = arg.expr ?? arg;
+    if (expr.kind === 'Arrow') {
+      const closure = this.hoistClosure(expr, `_cb_${this.closureCount ?? 0}`);
+      if (closure) {
+        if (closure.retainLines?.length) {
+          const I = ' '.repeat(this.indent * depth);
+          for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+        }
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _cb_env_${this.closureCount - 1} = ${closure.envInit};`);
+        lines.push(`${' '.repeat(this.indent * depth)}tsc_closure _cb_${this.closureCount - 1} = (tsc_closure){.env = &_cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}};`);
+        this._lastCbRetType = closure.ret;
+        return closure.fnName;
+      }
+      const fnName = this.hoistArrow(expr, 'void', '_cb');
+      this._lastCbRetType = this.inferArrowReturn(expr);
+      return fnName;
+    }
+    if (expr.kind === 'Ident') {
+      const sym = this.lookup(expr.name);
+      if (sym?._closureFnName) { this._lastCbRetType = sym.closureRetType; return sym._closureFnName; }
+      if (sym?.funcName) { this._lastCbRetType = sym.ctype; return sym.funcName; }
     }
     return null;
   },

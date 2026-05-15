@@ -15,7 +15,7 @@ int main(void) {
     TSC_INIT();
     tsc_closure add5 = makeAdder_i32(5);
     tsc_closure add10 = makeAdder_i32(10);
-    printf("%d\n", ((int32_t (*)(void *))add5.fn)(add5.env));
-    printf("%d\n", ((int32_t (*)(void *))add10.fn)(add10.env));
+    printf("%d\n", ((int32_t (*)(void))add5.fn)());
+    printf("%d\n", ((int32_t (*)(void))add10.fn)());
     return 0;
 }

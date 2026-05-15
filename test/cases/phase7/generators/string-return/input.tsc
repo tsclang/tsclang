@@ -1,0 +1,10 @@
+function* gen(msg: string): Generator<string> {
+    let m: string = msg;
+    yield m;
+    return;
+}
+const g = gen("ok");
+const r1 = g.next();
+console.log(r1.value);
+const r2 = g.next();
+console.log(String(r2.done));

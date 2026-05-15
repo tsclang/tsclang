@@ -10,6 +10,6 @@ int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 3, 5, 4};
     const Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
-    printf("%s\n", tsc_array_some_i32(arr, (tsc_closure){.env = NULL, .fn = (void*)_lambda_0_bool}) ? "true" : "false");
+    printf("%s\n", tsc_array_some_i32(arr, _lambda_0_bool) ? "true" : "false");
     return 0;
 }

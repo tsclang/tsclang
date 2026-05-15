@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1054 тестов ✓** (2026-05-14)
+**Итого: 1067 тестов ✓** (2026-05-15)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -764,3 +764,13 @@
 > - 3 новых error-теста: `err-mut-var-const`, `err-mut-var-while-ref`, `err-mut-var-double`
 > - spec/05-memory.md: раздел «Borrow tracking для Mut<T> vardecl»
 > - Результат: 1057 тестов, 0 ошибок
+
+> 2026-05-15: **String ARC + tsc_closure + retro-strings + async ownership** — большой коммит:
+> - **String ARC**: immutable строки с refcount (`_refcount` поле, `#ifdef TSC_EMBEDDED` guard). retain/release для Ident/Member/Index инициализаторов, implicit borrow для string параметров (sync), safe temp для property/array assign, cleanup release при выходе из scope
+> - **tsc_closure**: универсальный fat pointer для всех function values. Замыкания используют отдельную stack env-переменную (`name_env`) с транзитивным захватом через `_closureEnvVar` flag. Arrow без captures → `tsc_closure` с `.env = NULL`
+> - **Retro-strings (embedded)**: STR_LIT использует PSTR() на AVR, ring buffer allocator `_tsc_str_pool` для embedded string allocation. `TSC_STRING_GET_CHAR` macro для platform-aware string indexing. PROGMEM-aware runtime helpers
+> - **Async string ownership**: retain-on-capture для string params в async state machine (исключение из implicit borrow), retain для string local inits из Ident/Member/Index, централизованный `goto _cleanup` для release/free на всех exit points (return, throw, catch, implicit done). Opt-out для primitive-only async (zero overhead)
+> - **spec/05b-ownership.md**: 7 sections — primitive, string, class, array, tuple, Shared&Weak, §7 Async ownership
+> - Новые тесты: transitive-capture (phase4), string-param-retain/string-local-retain/string-await-result (phase7)
+> - 45 файлов изменено, +1691/-306 строк
+> - Результат: **1067 тестов, 0 ошибок** (no-gcc)
