@@ -226,9 +226,13 @@
         const testC = node.test ? this.exprToC(node.test, lines, depth) : '';
         const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
         p(`for (${initC}; ${testC}; ${updC}) {`);
+        const savedLC = this._loopBodyCleanups;
+        this._loopBodyCleanups = [];
         this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
         this._loopDepth--;
+        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+        this._loopBodyCleanups = savedLC;
         p('}');
         break;
       }
@@ -362,9 +366,13 @@
               lines.push(`${II}${qual}${_eC} ${_bindName} = ${_setC}._vals[${_ivar}];`);
               this.define(_bindName, { ctype: _eC, varKind: node.varKind });
             }
+            const savedLC1 = this._loopBodyCleanups;
+            this._loopBodyCleanups = [];
             this._loopDepth++;
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             this._loopDepth--;
+            this._emitLoopBodyCleanups(lines, II);
+            this._loopBodyCleanups = savedLC1;
             p('}');
             break;
           }
@@ -391,9 +399,13 @@
               lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
               this.define(_bindName, { ctype: _elemC, varKind: node.varKind });
             }
+            const savedLC2 = this._loopBodyCleanups;
+            this._loopBodyCleanups = [];
             this._loopDepth++;
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             this._loopDepth--;
+            this._emitLoopBodyCleanups(lines, II);
+            this._loopBodyCleanups = savedLC2;
             p('}');
             break;
           }
@@ -425,9 +437,13 @@
             this.define(elem.name, { ctype: 'int32_t', varKind: node.varKind });
           }
         }
+        const savedLC3 = this._loopBodyCleanups;
+        this._loopBodyCleanups = [];
         this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
         this._loopDepth--;
+        this._emitLoopBodyCleanups(lines, II);
+        this._loopBodyCleanups = savedLC3;
         p('}');
         break;
       }
@@ -440,9 +456,13 @@
       case 'While': {
         const testC = this.exprToC(node.test, lines, depth);
         p(`while (${testC}) {`);
+        const savedLC4 = this._loopBodyCleanups;
+        this._loopBodyCleanups = [];
         this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
         this._loopDepth--;
+        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+        this._loopBodyCleanups = savedLC4;
         p('}');
         break;
       }
@@ -450,9 +470,13 @@
       case 'DoWhile': {
         const testC = this.exprToC(node.test, lines, depth);
         p('do {');
+        const savedLC5 = this._loopBodyCleanups;
+        this._loopBodyCleanups = [];
         this._loopDepth++;
         this.visitStmtOrBlock(node.body, lines, depth + 1);
         this._loopDepth--;
+        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+        this._loopBodyCleanups = savedLC5;
         p(`} while (${testC});`);
         break;
       }
@@ -490,9 +514,15 @@
             headerLine = `for (${initC}; ${testC}; ${updC}) {`;
           }
           p(headerLine);
+          const savedLC6 = this._loopBodyCleanups;
+          this._loopBodyCleanups = [];
+          this._loopDepth++;
           const bodyLines = [];
           this.visitStmtOrBlock(inner.body, bodyLines, depth + 1);
           for (const bl of bodyLines) lines.push(bl);
+          this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+          this._loopDepth--;
+          this._loopBodyCleanups = savedLC6;
           if (usesContinue) {
             const II = ' '.repeat(this.indent * (depth + 1));
             lines.push(`${II}${label}_continue:;`);

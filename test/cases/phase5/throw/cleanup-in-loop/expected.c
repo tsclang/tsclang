@@ -25,6 +25,7 @@ void process(void) {
             (void)e;
             total = total + 100;
         }
+        tsc_string_release(s);
     }
     printf("%d\n", total);
 }
@@ -34,3 +35,4 @@ int main(void) {
     process();
     return 0;
 }
+

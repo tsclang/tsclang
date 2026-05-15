@@ -99,8 +99,9 @@ class Context {
     // Function-scoped cleanup (null when not in function)
     this._funcCleanup = null;
     this._funcCleanupSet = null;
-    // Loop depth: loop-local owned vars are not registered in _funcCleanup
+    // Loop depth: loop-local owned vars use _loopBodyCleanups instead of _funcCleanup
     this._loopDepth = 0;
+    this._loopBodyCleanups = null;
 
     // Types predefined in runtime.h — prevent codegen from re-emitting them
     this._emittedArrayStructs = new Set(['Array_string', 'Array_u8']);
@@ -244,13 +245,16 @@ class Context {
 
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
   _registerCleanup(stmt) {
+    if (this._loopDepth > 0 && this._loopBodyCleanups) {
+      this._loopBodyCleanups.push(stmt);
+      return;
+    }
     if (!this.inFunction) {
       if (!this._cleanupSet.has(stmt)) {
         this._cleanupSet.add(stmt);
         this._mainCleanup.push(stmt);
       }
-    } else if (this._funcCleanup && this._loopDepth === 0) {
-      // Register for function-scope cleanup (not inside loops)
+    } else if (this._funcCleanup) {
       if (!this._funcCleanupSet.has(stmt)) {
         this._funcCleanupSet.add(stmt);
         this._funcCleanup.push(stmt);
@@ -305,7 +309,13 @@ class Context {
     }
   }
 
-  // Emit current function-scoped cleanup in LIFO order into lines
+  _emitLoopBodyCleanups(lines, indent) {
+    if (!this._loopBodyCleanups?.length) return;
+    for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
+      lines.push(`${indent}${this._loopBodyCleanups[i]};`);
+    }
+  }
+
   _emitFuncCleanup(lines, I) {
     if (!this._funcCleanup?.length) return;
     for (let i = this._funcCleanup.length - 1; i >= 0; i--) {
