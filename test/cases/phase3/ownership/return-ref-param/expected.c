@@ -16,7 +16,8 @@ int main(void) {
     User u = {0};
     { String _tsc_tmp = STR_LIT("Alice"); tsc_string_retain(_tsc_tmp); tsc_string_release(u.name); u.name = _tsc_tmp; }
     const User *r = getRef_ref_User(&u);
-    printf("%s\n", r.name.data);
+    printf("%s\n", r->name.data);
     User_free(&u);
     return 0;
 }
+

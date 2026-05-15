@@ -1392,9 +1392,11 @@ export default {
         const _refInnerType = _isRefVar && ctype.endsWith(' *')
           ? this.resolveType(typeAnn.typeArgs?.[0] ?? {})
           : undefined;
+        const _isPtrByCtype = !_refInnerType && ctype?.endsWith(' *');
         this.define(name, { ctype, varKind, constValue, initNode: init,
                             ...(isStringRef ? { isStringRef: true } : {}),
-                            ...(_refInnerType ? { isPointer: true, derefType: _refInnerType } : {}) });
+                            ...(_refInnerType ? { isPointer: true, derefType: _refInnerType } : {}),
+                            ...(_isPtrByCtype ? { isPointer: true } : {}) });
         // Register cleanup for class variables with string fields
         if (init && this.classes.has(ctype)) {
           const stringFields = this._getStringFields(ctype);
