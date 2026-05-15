@@ -1,0 +1,8 @@
+async function fetch(): string {
+    return "hello";
+}
+async function process(): void {
+    const raw = await fetch();
+    const copy: string = raw;
+    console.log(copy);
+}

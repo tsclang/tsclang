@@ -117,7 +117,7 @@ export default {
 
     if (typeNode.kind === 'TypeArray') {
       // Function pointer arrays use native C array syntax, not Array_T struct
-      if (typeNode.element?.kind === 'TypeFunc') return 'void *';
+      if (typeNode.element?.kind === 'TypeFunc') return 'tsc_closure';
       const et = this.resolveType(typeNode.element);
       const arrName = `Array_${this.cTypeToIdent(et)}`;
       this._ensureArrayStruct(arrName, et);
@@ -168,8 +168,7 @@ export default {
     }
 
     if (typeNode.kind === 'TypeFunc') {
-      // Function pointer type — for non-declarator uses, return a placeholder
-      return 'void *';
+      return 'tsc_closure';
     }
 
     return 'void';
@@ -237,15 +236,10 @@ export default {
   typeDecl(typeNode, name) {
     if (!typeNode) return `void *${name ? ' ' + name : ''}`;
     if (typeNode.kind === 'TypeFunc') {
-      const ret = this.resolveType(typeNode.ret);
-      const pts = typeNode.params.map(p => this.resolveType(p));
-      return `${ret} (*${name || ''})(${pts.join(', ') || 'void'})`;
+      return `tsc_closure${name ? ' ' + name : ''}`;
     }
     if (typeNode.kind === 'TypeArray' && typeNode.element?.kind === 'TypeFunc') {
-      const ft = typeNode.element;
-      const ret = this.resolveType(ft.ret);
-      const pts = ft.params.map(p => this.resolveType(p));
-      return `${ret} (*${name || ''}[])(${pts.join(', ') || 'void'})`;
+      return `tsc_closure${name ? ' ' + name : ''}[]`;
     }
     return `${this.resolveType(typeNode)}${name ? ' ' + name : ''}`;
   },

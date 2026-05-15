@@ -304,7 +304,7 @@ export default {
       if (n2 === 'parseFloat' || n2 === 'tryParseFloat' || n2 === 'Number') return 'opt_f64';
       if (n2 === 'String') return 'String';
       const sym = this.lookup(n2);
-      if (sym?.isClosure && sym.closureRetType) return sym.closureRetType;
+      if (sym?.ctype === 'tsc_closure' && sym.closureRetType) return sym.closureRetType;
       if (sym) return sym.ctype;
     }
     return 'int32_t';

@@ -105,17 +105,15 @@ export default {
   hoistClosure(arrowNode, varName) {
     const paramNames = (arrowNode.params ?? []).map(p => p.name);
     const captured = this._findFreeVars(arrowNode.body, paramNames);
-    if (captured.size === 0) return null; // no closure needed
+    if (captured.size === 0) return null;
 
     const n = this.closureCount++;
     const closureName = `_closure_${n}`;
     const envName = `${closureName}_env`;
     const fnName = `${closureName}_fn`;
 
-    // Determine return type
     let ret = arrowNode.returnType ? this.resolveType(arrowNode.returnType) : this.inferArrowReturn(arrowNode);
 
-    // Build env struct fields
     const envFields = [];
     const capturedStringFields = [];
     for (const [nm, sym] of captured) {
@@ -125,11 +123,9 @@ export default {
       if (ct === 'String') capturedStringFields.push(nm);
     }
     const hasStringCapture = capturedStringFields.length > 0;
-    // Use addLambda for all closure items to preserve ordering (env → fn → closure struct)
     this.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
     this.addLambda('');
 
-    // Generate destroy function if closure captures strings
     const destroyFnName = `${closureName}_destroy`;
     if (hasStringCapture) {
       this.addLambda(`static void ${destroyFnName}(void *_env) {`);
@@ -142,14 +138,12 @@ export default {
       this.addLambda('');
     }
 
-    // Build fn params (env + explicit params)
     const paramStrs = [`${envName} *env`];
     for (const p of (arrowNode.params ?? [])) {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
       paramStrs.push(`${ct} ${p.name}`);
     }
 
-    // Build fn body — push captured vars into scope mapped to env->nm
     this.pushScope();
     for (const [nm, sym] of captured) {
       this.define(nm, { ...sym, _closureEnvVar: nm });
@@ -167,39 +161,24 @@ export default {
     }
     this.popScope();
 
-    // Replace captured var references: nm → env->nm
-    const finalLines = bodyLines.map(l => {
-      let result = l;
-      for (const nm of captured.keys()) {
-        result = result.replace(new RegExp(`\\b${nm}\\b`, 'g'), `env->${nm}`);
-      }
-      return result;
-    });
-
     this.addLambda(`static ${ret} ${fnName}(${paramStrs.join(', ')}) {`);
-    for (const l of finalLines) this.addLambda('    ' + l);
+    for (const l of bodyLines) this.addLambda('    ' + l);
     this.addLambda('}');
     this.addLambda('');
 
-    // Build closure struct typedef
-    const paramTypes = (arrowNode.params ?? []).map(p =>
-      p.typeAnn ? this.resolveType(p.typeAnn) : 'void *'
-    );
-    const fnPtrDecl = paramTypes.length > 0
-      ? `${ret} (*fn)(${envName} *, ${paramTypes.join(', ')})`
-      : `${ret} (*fn)(${envName} *)`;
-    this.addLambda(`typedef struct { ${envName} env; ${fnPtrDecl}; } ${closureName};`);
-    this.addLambda('');
-
-    // Build env initializer with retain for string captures
     const retainLines = [];
     for (const nm of capturedStringFields) {
-      retainLines.push(`tsc_string_retain(${nm});`);
+      const sym = captured.get(nm);
+      const src = sym?._closureEnvVar ? `env->${nm}` : nm;
+      retainLines.push(`tsc_string_retain(${src});`);
     }
-    const envInit = '{' + [...captured.keys()].map(nm => `.${nm} = ${nm}`).join(', ') + '}';
+    const envInit = '{' + [...captured.entries()].map(([nm, sym]) => {
+      const src = sym._closureEnvVar ? `env->${nm}` : nm;
+      return `.${nm} = ${src}`;
+    }).join(', ') + '}';
 
-    return { closureName, fnName, envInit, ret, ctype: closureName, capturedVars: captured,
-             retainLines, hasStringCapture, destroyFnName, capturedStringFields };
+    return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,
+             retainLines, hasStringCapture, destroyFnName, capturedStringFields, envName };
   },
 
   // Special codegen for iter() method of Iterable<T> class.

@@ -5,16 +5,16 @@ typedef struct { int32_t _state; String _result; bool _done; } fetch_state;
 static void fetch_poll(fetch_state *self) {
     switch (self->_state) {
         case 0:
-            self->_result = STR_LIT("data");
+            self->_result = STR_LIT("hello");
             self->_done = true;
             return;
     }
 }
 
 typedef struct {
-    int32_t _state; String _result; bool _done;
+    int32_t _state; int _result; bool _done;
     String raw;
-    String result;
+    String copy;
     fetch_state _await_0;
 } process_state;
 
@@ -28,12 +28,13 @@ static void process_poll(process_state *self) {
             fetch_poll(&self->_await_0);
             if (!self->_await_0._done) return;
             self->raw = self->_await_0._result;
-            self->result = tsc_string_concat(self->raw, STR_LIT("!"));
-            self->_result = self->result;
+            self->copy = self->raw;
+            tsc_string_retain(&self->copy);
+            printf("%s\n", self->copy.data);
             goto _cleanup;
         _cleanup:
             tsc_string_release(&self->raw);
-            tsc_string_release(&self->result);
+            tsc_string_release(&self->copy);
             self->_done = true;
             return;
     }

@@ -357,7 +357,8 @@ export default {
           _resultErrKey: throwsCtx.errKey,
           _resultErrTypes: throwsCtx.throwsNames,
         } : {};
-        this.define(name, { ctype: retType, funcName: cname, params, returnType, _isScalarVariadic: hasScalarRest || undefined, ...symExtra });
+        const _closureRet = returnType?.kind === 'TypeFunc' ? (returnType.ret ? this.resolveType(returnType.ret) : 'void') : undefined;
+        this.define(name, { ctype: retType, funcName: cname, params, returnType, _isScalarVariadic: hasScalarRest || undefined, ...(_closureRet ? { closureRetType: _closureRet } : {}), ...symExtra });
       }
     }
 
@@ -376,9 +377,7 @@ export default {
     // Special C syntax when return type is a function pointer: RET (*NAME(PARAMS))(FP_PARAMS)
     let funcSig;
     if (returnType?.kind === 'TypeFunc') {
-      const fpRet = this.resolveType(returnType.ret);
-      const fpParams = returnType.params.map(pt => this.resolveType(pt)).join(', ') || 'void';
-      funcSig = `${fpRet} (*${cname}(${paramStrs.join(', ') || 'void'}))(${fpParams})`;
+      funcSig = `tsc_closure ${cname}(${paramStrs.join(', ') || 'void'})`;
     } else {
       const neverPrefix = isNever ? '_Noreturn ' : '';
       const retSep = retType.endsWith('*') ? '' : ' ';
@@ -451,8 +450,8 @@ export default {
           this.define(slot.name, { ctype: et });
         }
       } else if (p.typeAnn) {
-        let _ct = this.resolveType(p.typeAnn);
-        // For Scalar-variadic functions: string params → const char * (matches signature)
+        const _isFuncParam = p.typeAnn.kind === 'TypeFunc';
+        let _ct = _isFuncParam ? 'tsc_closure' : this.resolveType(p.typeAnn);
         if (_scalarRest && p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'string') _ct = 'const char *';
         const _isRef = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Ref';
         const _isMut = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Mut';
@@ -460,7 +459,9 @@ export default {
         const _derefType = _isBorrow && _ct.endsWith('*')
           ? this.resolveType(p.typeAnn.typeArgs?.[0] ?? {})
           : undefined;
+        const _funcRet = _isFuncParam ? (p.typeAnn.ret ? this.resolveType(p.typeAnn.ret) : 'void') : undefined;
         this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
+                              ...(_isFuncParam ? { funcPtr: true, closureRetType: _funcRet } : {}),
                               ...(_derefType ? { derefType: _derefType } : {}) });
       }
     }

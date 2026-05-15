@@ -8,7 +8,7 @@ int32_t decrement_i32(int32_t x) {
     return x - 1;
 }
 
-int32_t (*getOp_bool(bool inc))(int32_t) {
+tsc_closure getOp_bool(bool inc) {
     if (inc) {
         return increment_i32;
     }
@@ -17,7 +17,7 @@ int32_t (*getOp_bool(bool inc))(int32_t) {
 
 int main(void) {
     TSC_INIT();
-    int32_t (*op)(int32_t) = getOp_bool(true);
-    printf("%d\n", op(10));
+    tsc_closure op = getOp_bool(true);
+    printf("%d\n", ((int32_t (*)(void *, int32_t))op.fn)(op.env, 10));
     return 0;
 }

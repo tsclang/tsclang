@@ -1001,7 +1001,6 @@ export default {
         if (typeAnn?.kind === 'TypeFunc' || (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind === 'TypeFunc')) {
           let initC;
           if (init?.kind === 'ArrayLit') {
-            // {square_i32, ...} тАФ resolve each element as function ref
             const elems = init.elems.map(e => {
               if (e.expr?.kind === 'Ident') {
                 const s = this.lookup(e.expr.name);
@@ -1009,33 +1008,22 @@ export default {
               }
               return this.exprToC(e.expr, lines, depth);
             });
-            initC = `{${elems.join(', ')}}`;
-          } else {
-            initC = init ? this.exprToC(init, lines, depth) : '0';
-          }
-          p(`${this.typeDecl(typeAnn, name)} = ${initC};`);
-          this.define(name, { ctype: 'void *', funcPtr: true, varKind });
-          return;
-        }
-
-        if (init) {
-          // Special: arrow function тЖТ closure struct or function pointer
-          if (init.kind === 'Arrow') {
+            initC = `{${elems.map(e => `(tsc_closure){.env = NULL, .fn = (void*)${e}}`).join(', ')}}`;
+          } else if (init?.kind === 'Arrow') {
             const closure = this.hoistClosure(init, name);
             if (closure) {
               if (closure.retainLines?.length) {
                 for (const rl of closure.retainLines) p(rl);
               }
-              p(`${closure.closureName} ${name} = {.env = ${closure.envInit}, .fn = ${closure.fnName}};`);
-              this.define(name, { ctype: closure.closureName, isClosure: true, closureRetType: closure.ret, varKind,
+              p(`${closure.envName} ${name}_env = ${closure.envInit};`);
+              p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
+              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
                                   ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
-              // Register cleanup for captured string fields
               if (closure.hasStringCapture) {
                 for (const nm of closure.capturedStringFields ?? []) {
-                  this._registerCleanup(`tsc_string_release(${name}.env.${nm})`);
+                  this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
                 }
               }
-              // Mark captured variables as moved (0-indexed line number for error messages)
               const closureLine = (node.line ?? 1) - 1;
               for (const [nm] of closure.capturedVars) {
                 const capSym = this.lookup(nm);
@@ -1043,16 +1031,57 @@ export default {
               }
               return;
             }
-            const lambdaName = this.hoistArrow(init, ctype, name);
-            // Function pointers don't use const qualifier on the return type
-            p(`${ctype} (*${name})(${this.arrowParamTypes(init)}) = ${lambdaName};`);
+            const lambdaName = this.hoistArrow(init, 'void', name);
+            const lambdaRet = this.inferArrowReturn(init);
+            p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${lambdaName}};`);
+            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet });
+            return;
+          } else {
+            const initSym = init?.kind === 'Ident' ? this.lookup(init.name) : null;
+            if (initSym?.funcName) {
+              initC = `(tsc_closure){.env = NULL, .fn = (void*)${initSym.funcName}}`;
+            } else {
+              initC = init ? this.exprToC(init, lines, depth) : '(tsc_closure){0}';
+            }
+          }
+          p(`tsc_closure ${name} = ${initC};`);
+          this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind });
+          return;
+        }
+
+        if (init) {
+          if (init.kind === 'Arrow') {
+            const closure = this.hoistClosure(init, name);
+            if (closure) {
+              if (closure.retainLines?.length) {
+                for (const rl of closure.retainLines) p(rl);
+              }
+              p(`${closure.envName} ${name}_env = ${closure.envInit};`);
+              p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
+              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
+                                  ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
+              if (closure.hasStringCapture) {
+                for (const nm of closure.capturedStringFields ?? []) {
+                  this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
+                }
+              }
+              const closureLine = (node.line ?? 1) - 1;
+              for (const [nm] of closure.capturedVars) {
+                const capSym = this.lookup(nm);
+                if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
+              }
+              return;
+            }
+            const lambdaName = this.hoistArrow(init, 'void', name);
+            const lambdaRet = this.inferArrowReturn(init);
+            p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${lambdaName}};`);
+            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet });
+            return;
           } else if (!typeAnn && init.kind === 'Ident') {
-            // Possibly a function reference тАФ check symbol table
             const sym = this.lookup(init.name);
             if (sym?.funcName && sym?.params) {
-              const pts = sym.params.filter(pp => !pp.rest).map(pp => pp.typeAnn ? this.resolveType(pp.typeAnn) : 'void *');
-              p(`${sym.ctype} (*${name})(${pts.join(', ') || 'void'}) = ${sym.funcName};`);
-              this.define(name, { ctype: sym.ctype, funcPtr: true, varKind, funcName: sym.funcName });
+              p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${sym.funcName}};`);
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName });
               return;
             }
             // Move semantics borrow check (before emit, but set _moved AFTER)
@@ -1116,7 +1145,7 @@ export default {
             if (!typeAnn && callSym?.returnType?.kind === 'TypeFunc') {
               const initC = this.exprToC(init, lines, depth);
               p(`${this.typeDecl(callSym.returnType, name)} = ${initC};`);
-              this.define(name, { ctype: 'void *', funcPtr: true, varKind });
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}) });
               return;
             }
             // Borrow check: cannot move out of array by index (no-typeAnn path)

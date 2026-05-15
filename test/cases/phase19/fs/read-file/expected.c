@@ -18,6 +18,9 @@ static void run_poll(run_state *self) {
             if (!self->_await_0._done) return;
             self->content = self->_await_0._result;
             printf("%s\n", self->content.data);
+            goto _cleanup;
+        _cleanup:
+            tsc_string_release(&self->content);
             self->_done = true;
             return;
     }

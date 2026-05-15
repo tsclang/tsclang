@@ -33,6 +33,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <ctype.h>
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+#endif
 #ifndef TSC_EMBEDDED
 #include <stdatomic.h>
 #endif
@@ -77,15 +80,44 @@
 typedef struct {
     const char *data;
     size_t      length;
-    size_t      capacity; /* always 0 on embedded (no heap) */
+    size_t      capacity; /* 0 = rodata/PROGMEM, >0 = ring buffer (RAM) */
 } String;
+#ifdef __AVR__
+#define STR_LIT(s) ((String){ .data = PSTR(s), .length = sizeof(s) - 1, .capacity = 0 })
+#else
 #define STR_LIT(s) ((String){ .data = (s), .length = sizeof(s) - 1, .capacity = 0 })
+#endif
 #define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0 })
+#ifndef TSC_STR_POOL_SIZE
+#define TSC_STR_POOL_SIZE 256
+#endif
+static char _tsc_str_pool[TSC_STR_POOL_SIZE];
+static size_t _tsc_str_pool_pos = 0;
+static inline char *_tsc_str_alloc(size_t sz) {
+    if (sz == 0) sz = 1;
+    if (_tsc_str_pool_pos + sz > TSC_STR_POOL_SIZE) _tsc_str_pool_pos = 0;
+    char *p = &_tsc_str_pool[_tsc_str_pool_pos];
+    _tsc_str_pool_pos += sz;
+    return p;
+}
 static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
-    return (String){ .data = data, .length = len, .capacity = cap };
+    if (cap > 0) {
+        char *buf = _tsc_str_alloc(len + 1);
+        if (len > 0 && data) {
+#ifdef __AVR__
+            /* data might be PROGMEM — use byte-by-byte read */
+            for (size_t i = 0; i < len; i++) buf[i] = data[i];
+#else
+            memcpy(buf, data, len);
+#endif
+        }
+        buf[len] = '\0';
+        return (String){ .data = buf, .length = len, .capacity = cap };
+    }
+    return (String){ .data = data, .length = len, .capacity = 0 };
 }
 static inline void tsc_string_retain(String s) { (void)s; }
-static inline void tsc_string_release(String s) { if (s.capacity > 0) free((void*)s.data); }
+static inline void tsc_string_release(String s) { (void)s; }
 #else
 typedef struct {
     const char *data;
@@ -111,6 +143,99 @@ static inline void tsc_string_release(String s) {
     }
 }
 #endif
+
+/* -------------------------------------------------------------------------
+ * TSC_STRING_GET_CHAR — PROGMEM-aware single-char read
+ * On AVR, strings with capacity==0 are in PROGMEM (flash).
+ * On desktop, all strings are in RAM — direct access.
+ * Used by the compiler for s[i] string indexing.
+ * ------------------------------------------------------------------------- */
+#ifdef __AVR__
+#define TSC_STRING_GET_CHAR(s, i) \
+    ((s).capacity == 0 ? (char)pgm_read_byte(&(s).data[i]) : (s).data[i])
+#else
+#define TSC_STRING_GET_CHAR(s, i) ((s).data[i])
+#endif
+
+/* -------------------------------------------------------------------------
+ * PROGMEM-aware string helpers (used by runtime string functions)
+ * On AVR, reads from capacity==0 strings go through pgm_read_byte.
+ * On desktop, these resolve to standard memcmp/memcpy.
+ * ------------------------------------------------------------------------- */
+static inline char _tsc_str_get(const String *s, size_t i) {
+#ifdef __AVR__
+    if (s->capacity == 0) return (char)pgm_read_byte(&s->data[i]);
+#endif
+    return (s->data[i]);
+}
+
+static inline void _tsc_str_copy_to(char *dst, const String *s, size_t off, size_t n) {
+#ifdef __AVR__
+    if (s->capacity == 0) {
+        for (size_t _i = 0; _i < n; _i++) dst[_i] = (char)pgm_read_byte(&s->data[off + _i]);
+        return;
+    }
+#endif
+    memcpy(dst, s->data + off, n);
+}
+
+static inline bool _tsc_str_eq(String a, String b) {
+    if (a.length != b.length) return false;
+#ifdef __AVR__
+    for (size_t _i = 0; _i < a.length; _i++) {
+        if (_tsc_str_get(&a, _i) != _tsc_str_get(&b, _i)) return false;
+    }
+    return true;
+#else
+    return memcmp(a.data, b.data, a.length) == 0;
+#endif
+}
+
+static inline ptrdiff_t _tsc_str_find(const String *s, const String *sub, size_t start) {
+    if (sub->length == 0) return (ptrdiff_t)start;
+    if (sub->length > s->length - start) return -1;
+    for (size_t i = start; i <= s->length - sub->length; i++) {
+        bool match = true;
+        for (size_t j = 0; j < sub->length; j++) {
+            if (_tsc_str_get(s, i + j) != _tsc_str_get(sub, j)) { match = false; break; }
+        }
+        if (match) return (ptrdiff_t)i;
+    }
+    return -1;
+}
+
+static inline ptrdiff_t _tsc_str_rfind(const String *s, const String *sub) {
+    if (sub->length == 0) return (ptrdiff_t)s->length;
+    if (sub->length > s->length) return -1;
+    ptrdiff_t last = -1;
+    for (size_t i = 0; i <= s->length - sub->length; i++) {
+        bool match = true;
+        for (size_t j = 0; j < sub->length; j++) {
+            if (_tsc_str_get(s, i + j) != _tsc_str_get(sub, j)) { match = false; break; }
+        }
+        if (match) last = (ptrdiff_t)i;
+    }
+    return last;
+}
+
+static inline char *_tsc_str_malloc(size_t sz) {
+#ifdef TSC_EMBEDDED
+    return _tsc_str_alloc(sz);
+#else
+    return (char *)malloc(sz);
+#endif
+}
+
+/* -------------------------------------------------------------------------
+ * tsc_closure — universal fat pointer for function values
+ * All () => T parameters and variables use this type.
+ * Plain functions: .env = NULL, .fn = (void*)funcName
+ * Closures with captures: .env = &envVar, .fn = (void*)closureFn
+ * ------------------------------------------------------------------------- */
+typedef struct {
+    void *env;
+    void (*fn)(void);
+} tsc_closure;
 
 /* -------------------------------------------------------------------------
  * Error (stub — proper heap allocation added in Phase 3)
@@ -152,8 +277,7 @@ static size_t _tsc_perf_mark_count = 0;
 static inline void tsc_performance_mark(String name) {
     double ts = tsc_performance_now();
     for (size_t _i = 0; _i < _tsc_perf_mark_count; _i++) {
-        if (_tsc_perf_marks[_i].name.length == name.length &&
-            memcmp(_tsc_perf_marks[_i].name.data, name.data, name.length) == 0)
+        if (_tsc_str_eq(_tsc_perf_marks[_i].name, name))
             { _tsc_perf_marks[_i].ts = ts; return; }
     }
     if (_tsc_perf_mark_count < TSC_PERF_MARKS_MAX)
@@ -161,8 +285,7 @@ static inline void tsc_performance_mark(String name) {
 }
 static inline double _tsc_perf_get_mark(String name) {
     for (size_t _i = 0; _i < _tsc_perf_mark_count; _i++) {
-        if (_tsc_perf_marks[_i].name.length == name.length &&
-            memcmp(_tsc_perf_marks[_i].name.data, name.data, name.length) == 0)
+        if (_tsc_str_eq(_tsc_perf_marks[_i].name, name))
             return _tsc_perf_marks[_i].ts;
     }
     return 0.0;
@@ -303,25 +426,23 @@ typedef struct {
 static _TscTimer _tsc_timers[_TSC_CONSOLE_TIMERS_CAP];
 static int _tsc_timer_count = 0;
 static inline void tsc_console_time(String label) {
+    double ts = tsc_performance_now();
     for (int _i = 0; _i < _tsc_timer_count; _i++) {
-        if (_tsc_timers[_i]._label.length == label.length &&
-            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0)
+        if (_tsc_str_eq(_tsc_timers[_i]._label, label))
             return;
     }
     if (_tsc_timer_count < _TSC_CONSOLE_TIMERS_CAP) {
         _tsc_timers[_tsc_timer_count]._label = label;
-        _tsc_timers[_tsc_timer_count]._start = tsc_performance_now();
+        _tsc_timers[_tsc_timer_count]._start = ts;
         _tsc_timer_count++;
     }
 }
 static inline void tsc_console_time_end(String label) {
     double _end = tsc_performance_now();
     for (int _i = 0; _i < _tsc_timer_count; _i++) {
-        if (_tsc_timers[_i]._label.length == label.length &&
-            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0) {
+        if (_tsc_str_eq(_tsc_timers[_i]._label, label)) {
             double _ms = _end - _tsc_timers[_i]._start;
             fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
-            /* Remove timer */
             _tsc_timers[_i] = _tsc_timers[--_tsc_timer_count];
             return;
         }
@@ -333,8 +454,7 @@ static inline void tsc_console_trace(String msg) {
 static inline void tsc_console_time_log(String label) {
     double _now = tsc_performance_now();
     for (int _i = 0; _i < _tsc_timer_count; _i++) {
-        if (_tsc_timers[_i]._label.length == label.length &&
-            memcmp(_tsc_timers[_i]._label.data, label.data, label.length) == 0) {
+        if (_tsc_str_eq(_tsc_timers[_i]._label, label)) {
             double _ms = _now - _tsc_timers[_i]._start;
             fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
             return;
@@ -410,7 +530,7 @@ static inline opt_u8 tsc_string_at(String s, int32_t idx) {
     int32_t len = (int32_t)s.length;
     if (idx < 0) idx += len;
     if (idx < 0 || idx >= len) return (opt_u8){ false, 0 };
-    return (opt_u8){ true, (uint8_t)(unsigned char)s.data[idx] };
+    return (opt_u8){ true, (uint8_t)(unsigned char)_tsc_str_get(&s, (size_t)idx) };
 }
 
 /* -------------------------------------------------------------------------
@@ -424,17 +544,17 @@ static inline TscMap_##SUFFIX tsc_map_create_##SUFFIX(void) { \
     TscMap_##SUFFIX m; m.size = 0; return m; } \
 static inline void tsc_map_set_##SUFFIX(TscMap_##SUFFIX *m, K key, V val) { \
     for (size_t _i = 0; _i < m->size; _i++) { \
-        if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) { \
+        if (_tsc_str_eq(m->_keys[_i], key)) { \
             m->_vals[_i] = val; return; } } \
     if (m->size < TSC_MAP_CAP) { m->_keys[m->size] = key; m->_vals[m->size] = val; m->size++; } } \
 static inline bool tsc_map_has_##SUFFIX(const TscMap_##SUFFIX *m, K key) { \
     for (size_t _i = 0; _i < m->size; _i++) { \
-        if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) \
+        if (_tsc_str_eq(m->_keys[_i], key)) \
             return true; } \
     return false; } \
 static inline void tsc_map_delete_impl_##SUFFIX(TscMap_##SUFFIX *m, K key) { \
     for (size_t _i = 0; _i < m->size; _i++) { \
-        if (m->_keys[_i].length == key.length && memcmp(m->_keys[_i].data, key.data, key.length) == 0) { \
+        if (_tsc_str_eq(m->_keys[_i], key)) { \
             memmove(&m->_keys[_i], &m->_keys[_i+1], (m->size-_i-1)*sizeof(K)); \
             memmove(&m->_vals[_i], &m->_vals[_i+1], (m->size-_i-1)*sizeof(V)); \
             m->size--; return; } } } \
@@ -446,8 +566,7 @@ static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
     String _kk_ = (_key_); \
     int32_t _vv_ = 0; bool _ff_ = false; \
     for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
-        if (_mm_->_keys[_ii_].length == _kk_.length && \
-            memcmp(_mm_->_keys[_ii_].data, _kk_.data, _kk_.length) == 0) \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) \
             { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \
     } \
     (opt_i32){ _ff_, _vv_ }; \
@@ -459,8 +578,7 @@ static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
     String _kk_ = (_key_); \
     int32_t _vv_ = 0; bool _ff_ = false; \
     for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
-        if (_mm_->_keys[_ii_].length == _kk_.length && \
-            memcmp(_mm_->_keys[_ii_].data, _kk_.data, _kk_.length) == 0) { \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) { \
             _vv_ = _mm_->_vals[_ii_]; _ff_ = true; \
             memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(int32_t)); \
@@ -515,15 +633,15 @@ static inline TscSet_string tsc_set_create_string(void) {
     TscSet_string _s; _s.size = 0; return _s; }
 static inline void tsc_set_add_string(TscSet_string *_s, String val) {
     for (size_t _i = 0; _i < _s->size; _i++)
-        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) return;
+        if (_tsc_str_eq(_s->_vals[_i], val)) return;
     if (_s->size < TSC_SET_CAP) _s->_vals[_s->size++] = val; }
 static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
     for (size_t _i = 0; _i < _s->size; _i++)
-        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) return true;
+        if (_tsc_str_eq(_s->_vals[_i], val)) return true;
     return false; }
 static inline bool tsc_set_delete_string(TscSet_string *_s, String val) {
     for (size_t _i = 0; _i < _s->size; _i++) {
-        if (_s->_vals[_i].length == val.length && memcmp(_s->_vals[_i].data, val.data, val.length) == 0) {
+        if (_tsc_str_eq(_s->_vals[_i], val)) {
             memmove(&_s->_vals[_i], &_s->_vals[_i+1], (_s->size-_i-1)*sizeof(String));
             _s->size--; return true; } }
     return false; }
@@ -587,13 +705,7 @@ static inline String tsc_f64_to_string(double v) {
 
 /* string.lastIndexOf(sub): returns last position of sub, or -1 */
 static inline ptrdiff_t tsc_string_last_index_of(String s, String sub) {
-    if (sub.length == 0) return (ptrdiff_t)s.length;
-    if (sub.length > s.length) return -1;
-    ptrdiff_t last = -1;
-    for (size_t i = 0; i <= s.length - sub.length; i++) {
-        if (memcmp(s.data + i, sub.data, sub.length) == 0) last = (ptrdiff_t)i;
-    }
-    return last;
+    return _tsc_str_rfind(&s, &sub);
 }
 
 /* -------------------------------------------------------------------------
@@ -607,15 +719,15 @@ static inline void tsc_string_free(String s) {
 
 /* String equality */
 static inline bool tsc_string_eq(String a, String b) {
-    return a.length == b.length && memcmp(a.data, b.data, a.length) == 0;
+    return _tsc_str_eq(a, b);
 }
 
 /* Concatenate two strings → new heap String */
 static inline String tsc_string_concat(String a, String b) {
     size_t len = a.length + b.length;
-    char *buf = (char *)malloc(len + 1);
-    if (a.length) memcpy(buf, a.data, a.length);
-    if (b.length) memcpy(buf + a.length, b.data, b.length);
+    char *buf = _tsc_str_malloc(len + 1);
+    _tsc_str_copy_to(buf, &a, 0, a.length);
+    _tsc_str_copy_to(buf + a.length, &b, 0, b.length);
     buf[len] = '\0';
     return _tsc_str_make(buf, len, len + 1);
 }
@@ -629,18 +741,17 @@ static inline String tsc_string_format(const char *fmt, ...) {
     int n = vsnprintf(NULL, 0, fmt, a); /* vsnprintf: not available on cc65    */
     va_end(a);
     size_t sz = (n > 0) ? (size_t)n : 0;
-    char *buf = (char *)malloc(sz + 1);
+    char *buf = _tsc_str_malloc(sz + 1);
     vsnprintf(buf, sz + 1, fmt, b);
     va_end(b);
 #else
-    /* NES: fixed-size static buffer; heap/vsnprintf not available */
     static char _fmt_buf[128];
     va_list a;
     va_start(a, fmt);
-    vsprintf(_fmt_buf, fmt, a);         /* vsprintf: available in cc65 stdio.h */
+    vsprintf(_fmt_buf, fmt, a);
     va_end(a);
     size_t sz = strlen(_fmt_buf);
-    char *buf = _fmt_buf; /* no heap — caller must use immediately */
+    char *buf = _fmt_buf;
 #endif
     return _tsc_str_make(buf, sz, sz + 1);
 }
@@ -652,27 +763,26 @@ static inline String tsc_string_format(const char *fmt, ...) {
 static inline bool tsc_string_includes(String s, String sub) {
     if (sub.length == 0) return true;
     if (sub.length > s.length) return false;
-    for (size_t i = 0; i <= s.length - sub.length; i++)
-        if (memcmp(s.data + i, sub.data, sub.length) == 0) return true;
-    return false;
+    return _tsc_str_find(&s, &sub, 0) >= 0;
 }
 
 static inline bool tsc_string_starts_with(String s, String prefix) {
     if (prefix.length > s.length) return false;
-    return memcmp(s.data, prefix.data, prefix.length) == 0;
+    for (size_t i = 0; i < prefix.length; i++)
+        if (_tsc_str_get(&s, i) != _tsc_str_get(&prefix, i)) return false;
+    return true;
 }
 
 static inline bool tsc_string_ends_with(String s, String suffix) {
     if (suffix.length > s.length) return false;
-    return memcmp(s.data + s.length - suffix.length, suffix.data, suffix.length) == 0;
+    for (size_t i = 0; i < suffix.length; i++)
+        if (_tsc_str_get(&s, s.length - suffix.length + i) != _tsc_str_get(&suffix, i)) return false;
+    return true;
 }
 
 static inline ptrdiff_t tsc_string_index_of(String s, String sub) {
     if (sub.length == 0) return 0;
-    if (sub.length > s.length) return -1;
-    for (size_t i = 0; i <= s.length - sub.length; i++)
-        if (memcmp(s.data + i, sub.data, sub.length) == 0) return (ptrdiff_t)i;
-    return -1;
+    return _tsc_str_find(&s, &sub, 0);
 }
 
 /* -------------------------------------------------------------------------
@@ -683,10 +793,10 @@ static inline String tsc_string_slice(String s, int32_t start, int32_t end_idx) 
     int32_t len = (int32_t)s.length;
     if (start < 0) start = len + start; if (start < 0) start = 0;
     if (end_idx < 0) end_idx = len + end_idx; if (end_idx > len) end_idx = len;
-    if (start >= end_idx) { char *e = (char*)malloc(1); e[0] = '\0'; return _tsc_str_make(e, 0, 1); }
+    if (start >= end_idx) { char *e = _tsc_str_malloc(1); e[0] = '\0'; return _tsc_str_make(e, 0, 1); }
     size_t n = (size_t)(end_idx - start);
-    char *buf = (char *)malloc(n + 1);
-    memcpy(buf, s.data + start, n); buf[n] = '\0';
+    char *buf = _tsc_str_malloc(n + 1);
+    _tsc_str_copy_to(buf, &s, (size_t)start, n); buf[n] = '\0';
     return _tsc_str_make(buf, n, n + 1);
 }
 
@@ -699,68 +809,68 @@ static inline String tsc_string_substring(String s, int32_t start, int32_t end_i
 }
 
 static inline String tsc_string_to_lower(String s) {
-    char *buf = (char *)malloc(s.length + 1);
-    for (size_t i = 0; i < s.length; i++) buf[i] = (char)tolower((unsigned char)s.data[i]);
+    char *buf = _tsc_str_malloc(s.length + 1);
+    for (size_t i = 0; i < s.length; i++) buf[i] = (char)tolower((unsigned char)_tsc_str_get(&s, i));
     buf[s.length] = '\0';
     return _tsc_str_make(buf, s.length, s.length + 1);
 }
 
 static inline String tsc_string_to_upper(String s) {
-    char *buf = (char *)malloc(s.length + 1);
-    for (size_t i = 0; i < s.length; i++) buf[i] = (char)toupper((unsigned char)s.data[i]);
+    char *buf = _tsc_str_malloc(s.length + 1);
+    for (size_t i = 0; i < s.length; i++) buf[i] = (char)toupper((unsigned char)_tsc_str_get(&s, i));
     buf[s.length] = '\0';
     return _tsc_str_make(buf, s.length, s.length + 1);
 }
 
 static inline String tsc_string_trim(String s) {
     size_t i = 0, j = s.length;
-    while (i < j && isspace((unsigned char)s.data[i])) i++;
-    while (j > i && isspace((unsigned char)s.data[j-1])) j--;
+    while (i < j && isspace((unsigned char)_tsc_str_get(&s, i))) i++;
+    while (j > i && isspace((unsigned char)_tsc_str_get(&s, j-1))) j--;
     size_t n = j - i;
-    char *buf = (char *)malloc(n + 1);
-    memcpy(buf, s.data + i, n); buf[n] = '\0';
+    char *buf = _tsc_str_malloc(n + 1);
+    _tsc_str_copy_to(buf, &s, i, n); buf[n] = '\0';
     return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_trim_start(String s) {
     size_t i = 0;
-    while (i < s.length && isspace((unsigned char)s.data[i])) i++;
+    while (i < s.length && isspace((unsigned char)_tsc_str_get(&s, i))) i++;
     size_t n = s.length - i;
-    char *buf = (char *)malloc(n + 1);
-    memcpy(buf, s.data + i, n); buf[n] = '\0';
+    char *buf = _tsc_str_malloc(n + 1);
+    _tsc_str_copy_to(buf, &s, i, n); buf[n] = '\0';
     return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_trim_end(String s) {
     size_t j = s.length;
-    while (j > 0 && isspace((unsigned char)s.data[j-1])) j--;
-    char *buf = (char *)malloc(j + 1);
-    memcpy(buf, s.data, j); buf[j] = '\0';
+    while (j > 0 && isspace((unsigned char)_tsc_str_get(&s, j-1))) j--;
+    char *buf = _tsc_str_malloc(j + 1);
+    _tsc_str_copy_to(buf, &s, 0, j); buf[j] = '\0';
     return _tsc_str_make(buf, j, j + 1);
 }
 
 static inline String tsc_string_pad_start(String s, int32_t target_len, String fill) {
     if ((int32_t)s.length >= target_len) {
-        char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
+        char *b = _tsc_str_malloc(s.length + 1); _tsc_str_copy_to(b, &s, 0, s.length); b[s.length] = '\0';
         return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t pad = (size_t)(target_len - (int32_t)s.length);
     size_t total = (size_t)target_len;
-    char *buf = (char *)malloc(total + 1);
-    for (size_t i = 0; i < pad; i++) buf[i] = fill.length > 0 ? fill.data[i % fill.length] : ' ';
-    memcpy(buf + pad, s.data, s.length); buf[total] = '\0';
+    char *buf = _tsc_str_malloc(total + 1);
+    for (size_t i = 0; i < pad; i++) buf[i] = fill.length > 0 ? _tsc_str_get(&fill, i % fill.length) : ' ';
+    _tsc_str_copy_to(buf + pad, &s, 0, s.length); buf[total] = '\0';
     return _tsc_str_make(buf, total, total + 1);
 }
 
 static inline String tsc_string_pad_end(String s, int32_t target_len, String fill) {
     if ((int32_t)s.length >= target_len) {
-        char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
+        char *b = _tsc_str_malloc(s.length + 1); _tsc_str_copy_to(b, &s, 0, s.length); b[s.length] = '\0';
         return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t total = (size_t)target_len;
-    char *buf = (char *)malloc(total + 1);
-    memcpy(buf, s.data, s.length);
-    for (size_t i = s.length; i < total; i++) buf[i] = fill.length > 0 ? fill.data[(i - s.length) % fill.length] : ' ';
+    char *buf = _tsc_str_malloc(total + 1);
+    _tsc_str_copy_to(buf, &s, 0, s.length);
+    for (size_t i = s.length; i < total; i++) buf[i] = fill.length > 0 ? _tsc_str_get(&fill, (i - s.length) % fill.length) : ' ';
     buf[total] = '\0';
     return _tsc_str_make(buf, total, total + 1);
 }
@@ -768,75 +878,88 @@ static inline String tsc_string_pad_end(String s, int32_t target_len, String fil
 static inline String tsc_string_replace(String s, String from, String to) {
     ptrdiff_t pos = tsc_string_index_of(s, from);
     if (pos < 0 || from.length == 0) {
-        char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
+        char *b = _tsc_str_malloc(s.length + 1); _tsc_str_copy_to(b, &s, 0, s.length); b[s.length] = '\0';
         return _tsc_str_make(b, s.length, s.length + 1);
     }
     size_t n = s.length - from.length + to.length;
-    char *buf = (char *)malloc(n + 1);
-    memcpy(buf, s.data, (size_t)pos);
-    memcpy(buf + pos, to.data, to.length);
+    char *buf = _tsc_str_malloc(n + 1);
+    _tsc_str_copy_to(buf, &s, 0, (size_t)pos);
+    _tsc_str_copy_to(buf + pos, &to, 0, to.length);
     size_t after = (size_t)pos + from.length;
-    memcpy(buf + pos + to.length, s.data + after, s.length - after);
+    _tsc_str_copy_to(buf + pos + to.length, &s, after, s.length - after);
     buf[n] = '\0';
     return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_replace_all(String s, String from, String to) {
     if (from.length == 0) {
-        char *b = (char*)malloc(s.length + 1); memcpy(b, s.data, s.length); b[s.length] = '\0';
+        char *b = _tsc_str_malloc(s.length + 1); _tsc_str_copy_to(b, &s, 0, s.length); b[s.length] = '\0';
         return _tsc_str_make(b, s.length, s.length + 1);
     }
-    /* Count occurrences */
     size_t count = 0;
     for (size_t i = 0; i + from.length <= s.length; ) {
-        if (memcmp(s.data + i, from.data, from.length) == 0) { count++; i += from.length; }
-        else i++;
+        bool match = true;
+        for (size_t j = 0; j < from.length; j++) {
+            if (_tsc_str_get(&s, i + j) != _tsc_str_get(&from, j)) { match = false; break; }
+        }
+        if (match) { count++; i += from.length; } else i++;
     }
     size_t n = s.length + count * (to.length - from.length);
-    char *buf = (char *)malloc(n + 1);
+    char *buf = _tsc_str_malloc(n + 1);
     size_t dst = 0;
     for (size_t i = 0; i < s.length; ) {
-        if (i + from.length <= s.length && memcmp(s.data + i, from.data, from.length) == 0) {
-            memcpy(buf + dst, to.data, to.length); dst += to.length; i += from.length;
-        } else { buf[dst++] = s.data[i++]; }
+        bool match = (i + from.length <= s.length);
+        if (match) { for (size_t j = 0; j < from.length; j++) { if (_tsc_str_get(&s, i + j) != _tsc_str_get(&from, j)) { match = false; break; } } }
+        if (match) {
+            _tsc_str_copy_to(buf + dst, &to, 0, to.length); dst += to.length; i += from.length;
+        } else { buf[dst++] = _tsc_str_get(&s, i++); }
     }
     buf[n] = '\0';
     return _tsc_str_make(buf, n, n + 1);
 }
 
 static inline String tsc_string_char_at(String s, int32_t idx) {
-    if (idx < 0 || (size_t)idx >= s.length) { char *b = (char*)malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
-    char *buf = (char *)malloc(2);
-    buf[0] = s.data[idx]; buf[1] = '\0';
+    if (idx < 0 || (size_t)idx >= s.length) { char *b = _tsc_str_malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
+    char *buf = _tsc_str_malloc(2);
+    buf[0] = _tsc_str_get(&s, (size_t)idx); buf[1] = '\0';
     return _tsc_str_make(buf, 1, 2);
 }
 
 static inline String tsc_string_repeat(String s, int32_t n) {
-    if (n <= 0 || s.length == 0) { char *b = (char*)malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
+    if (n <= 0 || s.length == 0) { char *b = _tsc_str_malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
     size_t total = s.length * (size_t)n;
-    char *buf = (char *)malloc(total + 1);
-    for (int32_t i = 0; i < n; i++) memcpy(buf + (size_t)i * s.length, s.data, s.length);
+    char *buf = _tsc_str_malloc(total + 1);
+    for (int32_t i = 0; i < n; i++) _tsc_str_copy_to(buf + (size_t)i * s.length, &s, 0, s.length);
     buf[total] = '\0';
     return _tsc_str_make(buf, total, total + 1);
 }
 
 /* tsc_string_split: split s by sep, write pointers to *out_parts, count to *out_len */
 static inline void tsc_string_split(String s, String sep, String **out_parts, int32_t *out_len) {
-    /* Count splits */
     int32_t cnt = 1;
     if (sep.length > 0) {
         for (size_t i = 0; i + sep.length <= s.length; ) {
-            if (memcmp(s.data + i, sep.data, sep.length) == 0) { cnt++; i += sep.length; }
-            else i++;
+            bool match = true;
+            for (size_t j = 0; j < sep.length; j++) {
+                if (_tsc_str_get(&s, i + j) != _tsc_str_get(&sep, j)) { match = false; break; }
+            }
+            if (match) { cnt++; i += sep.length; } else i++;
         }
     }
-    String *parts = (String *)malloc((size_t)cnt * sizeof(String));
+    String *parts = (String *)_tsc_str_malloc((size_t)cnt * sizeof(String));
     int32_t pi = 0; size_t start = 0;
     if (sep.length == 0) { parts[0] = s; *out_parts = parts; *out_len = 1; return; }
     for (size_t i = 0; i <= s.length; ) {
-        if (i == s.length || (i + sep.length <= s.length && memcmp(s.data + i, sep.data, sep.length) == 0)) {
+        bool at_sep = (i == s.length);
+        if (!at_sep) {
+            at_sep = true;
+            for (size_t j = 0; j < sep.length; j++) {
+                if (_tsc_str_get(&s, i + j) != _tsc_str_get(&sep, j)) { at_sep = false; break; }
+            }
+        }
+        if (at_sep) {
             size_t n = i - start;
-            char *buf = (char *)malloc(n + 1); memcpy(buf, s.data + start, n); buf[n] = '\0';
+            char *buf = _tsc_str_malloc(n + 1); _tsc_str_copy_to(buf, &s, start, n); buf[n] = '\0';
             parts[pi++] = _tsc_str_make(buf, n, n + 1);
             start = i + sep.length;
             if (i == s.length) break;
@@ -855,11 +978,11 @@ static inline void tsc_string_array_free(String *parts, int32_t len) {
 /* JSON stringify: wraps a String value in double-quotes with basic escaping */
 static inline String tsc_json_stringify_string(String s) {
     size_t cap = s.length * 2 + 3;
-    char *buf = (char *)malloc(cap);
+    char *buf = _tsc_str_malloc(cap);
     size_t pos = 0;
     buf[pos++] = '"';
     for (size_t i = 0; i < (size_t)s.length; i++) {
-        unsigned char c = (unsigned char)s.data[i];
+        unsigned char c = (unsigned char)_tsc_str_get(&s, i);
         if      (c == '"')  { buf[pos++] = '\\'; buf[pos++] = '"'; }
         else if (c == '\\') { buf[pos++] = '\\'; buf[pos++] = '\\'; }
         else if (c == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n'; }
@@ -935,7 +1058,7 @@ static inline int _tsc_parse_prefixed_f64(const char *b, double *out) {
 
 static inline int32_t tsc_i32_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
-    memcpy(buf, s.data, n); buf[n] = '\0';
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
     int64_t v = 0;
     if (!_tsc_parse_prefixed_i64(buf, &v)) {
         fprintf(stderr, "Parse error: '%s' is not a valid integer\n", buf); exit(1);
@@ -945,7 +1068,7 @@ static inline int32_t tsc_i32_parse(String s) {
 
 static inline double tsc_parse_f64(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
-    memcpy(buf, s.data, n); buf[n] = '\0';
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
     double v = 0;
     if (!_tsc_parse_prefixed_f64(buf, &v)) {
         fprintf(stderr, "Parse error: '%s' is not a valid number\n", buf); exit(1);
@@ -957,7 +1080,7 @@ static inline double tsc_parse_f64(String s) {
 #define tsc_i32_try_parse(s) ({ \
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
-    memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
     int64_t _v_ = 0; int _ok_ = _tsc_parse_prefixed_i64(_b_, &_v_); \
     (opt_i32){ .has_value = _ok_, .value = (int32_t)_v_ }; \
 })
@@ -966,7 +1089,7 @@ static inline double tsc_parse_f64(String s) {
 #define tsc_parse_int(s) ({ \
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
-    memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
     int64_t _v_ = 0; int _ok_ = _tsc_parse_prefixed_i64(_b_, &_v_); \
     (opt_i32){ .has_value = _ok_, .value = (int32_t)_v_ }; \
 })
@@ -974,7 +1097,7 @@ static inline double tsc_parse_f64(String s) {
 #define tsc_try_parse_f64(s) ({ \
     String _s_ = (s); char _b_[64]; \
     size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
-    memcpy(_b_, _s_.data, _n_); _b_[_n_] = '\0'; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
     double _v_ = 0; int _ok_ = _tsc_parse_prefixed_f64(_b_, &_v_); \
     (opt_f64){ .has_value = _ok_, .value = _v_ }; \
 })

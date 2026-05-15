@@ -48,6 +48,7 @@ export default {
           sym.deferredAnon = false;
           this._deferredAnons.delete(node.name);
         }
+        if (sym?._closureEnvVar) return `env->${node.name}`;
         return node.name;
       }
 
@@ -279,14 +280,14 @@ export default {
           const idx = this.exprToC(node.index, lines, depth);
           return `${obj}.data[${idx}]`;
         }
-        // String indexing: s[i] → (uint8_t)s.data[i], s[-1] → (uint8_t)s.data[s.length - 1]
+        // String indexing: s[i] → (uint8_t)TSC_STRING_GET_CHAR(s, i)
         if (objType === 'String') {
           if (isNegLit) {
             const n = negVal;
-            return `(uint8_t)${obj}.data[${obj}.length - ${n}]`;
+            return `(uint8_t)TSC_STRING_GET_CHAR(${obj}, ${obj}.length - ${n})`;
           }
           const idx = this.exprToC(node.index, lines, depth);
-          return `(uint8_t)${obj}.data[${idx}]`;
+          return `(uint8_t)TSC_STRING_GET_CHAR(${obj}, ${idx})`;
         }
         const idx = this.exprToC(node.index, lines, depth);
         return `${obj}[${idx}]`;
@@ -381,9 +382,17 @@ export default {
       }
 
       case 'Arrow': {
-        // Hoisted lambda
+        const closure = this.hoistClosure(node, '_lambda');
+        if (closure) {
+          if (closure.retainLines?.length) {
+            const I = ' '.repeat(this.indent * depth);
+            for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+          }
+          lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _lambda_env_${this.closureCount - 1} = ${closure.envInit};`);
+          return `(tsc_closure){.env = &_lambda_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
+        }
         const lambdaName = this.hoistArrow(node, 'void', '_lambda');
-        return lambdaName;
+        return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
       }
 
       case 'Cast': {

@@ -6,13 +6,12 @@ static int32_t _closure_0_fn(_closure_0_env *env) {
     return env->a + env->b;
 }
 
-typedef struct { _closure_0_env env; int32_t (*fn)(_closure_0_env *); } _closure_0;
-
 int main(void) {
     TSC_INIT();
     int32_t a = 3;
     int32_t b = 4;
-    _closure_0 sum = {.env = {.a = a, .b = b}, .fn = _closure_0_fn};
-    printf("%d\n", sum.fn(&sum.env));
+    _closure_0_env sum_env = {.a = a, .b = b};
+    tsc_closure sum = {.env = &sum_env, .fn = (void*)_closure_0_fn};
+    printf("%d\n", ((int32_t (*)(void *))sum.fn)(sum.env));
     return 0;
 }

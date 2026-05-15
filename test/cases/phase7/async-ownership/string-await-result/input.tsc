@@ -1,0 +1,7 @@
+async function fetch(): string {
+    return "hello";
+}
+async function run(): void {
+    const data = await fetch();
+    console.log(data);
+}

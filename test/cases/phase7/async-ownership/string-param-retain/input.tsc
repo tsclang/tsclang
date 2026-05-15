@@ -1,0 +1,7 @@
+async function fetch(): string {
+    return "data";
+}
+async function greet(name: string): void {
+    await sleep(10);
+    console.log(name);
+}

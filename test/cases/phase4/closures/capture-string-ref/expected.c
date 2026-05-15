@@ -13,15 +13,14 @@ static String _closure_0_fn(_closure_0_env *env, String name) {
     return tsc_string_concat(tsc_string_concat(env->prefix, STR_LIT(", ")), name);
 }
 
-typedef struct { _closure_0_env env; String (*fn)(_closure_0_env *, String); } _closure_0;
-
 int main(void) {
     TSC_INIT();
     const String prefix = STR_LIT("Hello");
     tsc_string_retain(prefix);
-    _closure_0 greet = {.env = {.prefix = prefix}, .fn = _closure_0_fn};
-    printf("%s\n", greet.fn(&greet.env, STR_LIT("World")).data);
-    tsc_string_release(greet.env.prefix);
+    _closure_0_env greet_env = {.prefix = prefix};
+    tsc_closure greet = {.env = &greet_env, .fn = (void*)_closure_0_fn};
+    printf("%s\n", ((String (*)(void *, String))greet.fn)(greet.env, STR_LIT("World")).data);
+    tsc_string_release(greet_env.prefix);
     tsc_string_release(prefix);
     return 0;
 }

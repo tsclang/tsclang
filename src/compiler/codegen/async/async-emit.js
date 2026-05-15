@@ -118,7 +118,27 @@ export default {
     const spawnVarAlias = new Map();
     for (const si of spawnInfos) spawnVarAlias.set(si.userVar, si.threadVar);
 
-    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams };
+    const stringFields = [];
+    const classFreeFields = [];
+    for (const f of [...paramFields, ...bodyFields]) {
+      if (f.ctype === 'String') {
+        stringFields.push(f.name);
+      } else {
+        const cls = this.classes.get(f.ctype);
+        if (cls) {
+          const sFields2 = this._getStringFields(f.ctype);
+          if (sFields2.length > 0) {
+            this._ensureClassFree(f.ctype);
+            const freeFn = this.classes.get(f.ctype)?._classFreeFn;
+            if (freeFn) classFreeFields.push({ name: f.name, freeFn });
+          }
+        }
+      }
+    }
+    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0;
+    const paramStringFields = stringFields.filter(n => paramFields.some(f => f.name === n));
+
+    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, hasCleanup, paramStringFields };
     this._inAsyncFunc = true;
 
     const pollLines = this._buildAsyncPoll(body);
@@ -153,14 +173,35 @@ export default {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines = [];
     const ctx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
+    const sc = this._selfCtx;
 
     lines.push('    switch (self->_state) {');
     lines.push('        case 0:');
+
+    for (const name of sc.paramStringFields) {
+      lines.push(`            tsc_string_retain(&self->${name});`);
+    }
 
     this._emitAsyncStmtList(stmts, lines, ctx, '            ');
 
     // Implicit done at end of function (if not already terminated by explicit return)
     if (!ctx.terminated) {
+      if (sc.hasCleanup) {
+        lines.push('            goto _cleanup;');
+      } else {
+        lines.push('            self->_done = true;');
+        lines.push('            return;');
+      }
+    }
+
+    if (sc.hasCleanup) {
+      lines.push('        _cleanup:');
+      for (const name of sc.stringFields) {
+        lines.push(`            tsc_string_release(&self->${name});`);
+      }
+      for (const { name, freeFn } of sc.classFreeFields) {
+        lines.push(`            ${freeFn}(&self->${name});`);
+      }
       lines.push('            self->_done = true;');
       lines.push('            return;');
     }
@@ -194,15 +235,23 @@ export default {
 
     // Condition check: on failure, inline remaining stmts (common: return x after while)
     if (remainingStmts.length === 0) {
-      lines.push(`${I}if (!(${condC})) { self->_done = true; return; }`);
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}if (!(${condC})) { goto _cleanup; }`);
+      } else {
+        lines.push(`${I}if (!(${condC})) { self->_done = true; return; }`);
+      }
     } else {
       lines.push(`${I}if (!(${condC})) {`);
       const savedTerminated = ctx.terminated;
       ctx.terminated = false;
       for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I + '    ');
       if (!ctx.terminated) {
-        lines.push(`${I}    self->_done = true;`);
-        lines.push(`${I}    return;`);
+        if (this._selfCtx.hasCleanup) {
+          lines.push(`${I}    goto _cleanup;`);
+        } else {
+          lines.push(`${I}    self->_done = true;`);
+          lines.push(`${I}    return;`);
+        }
       }
       ctx.terminated = savedTerminated;
       lines.push(`${I}}`);

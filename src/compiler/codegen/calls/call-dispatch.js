@@ -131,11 +131,14 @@
       calleeC = this.exprToC(callee, lines, depth);
     }
 
-    // Closure call: name(args) в†’ name.fn(&name.env, args)
-    if (sym?.isClosure && callee.kind === 'Ident') {
+    // tsc_closure call: closure variable or func-ptr variable (not a regular function)
+    if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = this.argsToC(args, lines, depth);
-      const callArgs = argsC ? `&${callee.name}.env, ${argsC}` : `&${callee.name}.env`;
-      return `${callee.name}.fn(${callArgs})`;
+      const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
+      const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
+      const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
+      const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
+      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
     }
 
     // Libc variadic call or user Scalar-variadic call: pass args as raw C values
@@ -346,6 +349,32 @@
             if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
             return argC2;
           }
+        }
+        // tsc_closure param: wrap closure/func arg into tsc_closure
+        if (paramType === 'tsc_closure' && a.expr.kind === 'Ident') {
+          const argSym = this.lookup(a.expr.name);
+          if (argSym?.isClosure && argSym._closureEnvName) {
+            return `(tsc_closure){.env = &${a.expr.name}_env, .fn = (void*)${argSym._closureFnName}}`;
+          }
+          if (argSym?.funcPtr && argSym.ctype === 'tsc_closure') {
+            return a.expr.name;
+          }
+          if (argSym?.funcName) {
+            return `(tsc_closure){.env = NULL, .fn = (void*)${argSym.funcName}}`;
+          }
+        }
+        if (paramType === 'tsc_closure' && a.expr.kind === 'Arrow') {
+          const closure = this.hoistClosure(a.expr, `_cb_${this.closureCount ?? 0}`);
+          if (closure) {
+            if (closure.retainLines?.length) {
+              const I = ' '.repeat(this.indent * depth);
+              for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+            }
+            lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _cb_env_${this.closureCount - 1} = ${closure.envInit};`);
+            return `(tsc_closure){.env = &_cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
+          }
+          const lambdaName = this.hoistArrow(a.expr, 'void', '_cb');
+          return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
         }
         const _argC = this.exprToC(a.expr, lines, depth);
         // Move semantics: class/array-by-value arg passed to function → mark source as moved

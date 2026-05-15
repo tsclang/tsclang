@@ -106,7 +106,11 @@ export default {
       lines.push(`${I}${ai.pollFn}(&self->_await_${awaitIdx});`);
       lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
       if (ai.isResult) {
-        lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
+        if (this._selfCtx.hasCleanup) {
+          lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { goto _cleanup; }`);
+        } else {
+          lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
+        }
         if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
           lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result.value;`);
         }
@@ -254,8 +258,12 @@ export default {
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
         const catchEndsReturn = (catchBody?.body || []).some(cs => cs.kind === 'Return');
         if (!catchEndsReturn) {
-          lines.push(`${I}    self->_done = true;`);
-          lines.push(`${I}    return;`);
+          if (this._selfCtx.hasCleanup) {
+            lines.push(`${I}    goto _cleanup;`);
+          } else {
+            lines.push(`${I}    self->_done = true;`);
+            lines.push(`${I}    return;`);
+          }
         }
         lines.push(`${I}}`);
       }
@@ -288,7 +296,11 @@ export default {
       const nextArgs = genArgsC ? `&self->_gen_${genIdx}, ${genArgsC}` : `&self->_gen_${genIdx}`;
       const nrVar = `_nr_${genIdx}`;
       lines.push(`${I}    ${gi.resultType} ${nrVar} = ${gi.nextFn}(${nextArgs});`);
-      lines.push(`${I}    if (${nrVar}.done) { self->_done = true; return; }`);
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}    if (${nrVar}.done) { goto _cleanup; }`);
+      } else {
+        lines.push(`${I}    if (${nrVar}.done) { self->_done = true; return; }`);
+      }
 
       if (s.binding?.kind === 'Ident') {
         lines.push(`${I}    const ${gi.valueType} ${s.binding.name} = ${nrVar}.value;`);
@@ -309,8 +321,12 @@ export default {
     // ── throw (in async throws function) ──
     if (s.kind === 'Throw' && this._selfCtx?.hasThrows) {
       lines.push(`${I}self->_result = (${this._selfCtx.resultCType}){.ok = false, .error = ${this._selfE(s.value)}};`);
-      lines.push(`${I}self->_done = true;`);
-      lines.push(`${I}return;`);
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
       ctx.terminated = true;
       return;
     }
@@ -327,8 +343,12 @@ export default {
       } else if (retCtx?.hasThrows) {
         lines.push(`${I}self->_result = (${retCtx.resultCType}){.ok = true};`);
       }
-      lines.push(`${I}self->_done = true;`);
-      lines.push(`${I}return;`);
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
       ctx.terminated = true;
       return;
     }
@@ -352,6 +372,10 @@ export default {
                    : (init ? (this.inferType(init) || null) : null);
           if (initC === '{0}' && ct) initC = `(${ct}){0}`;
           lines.push(`${I}self->${name} = ${initC};`);
+          if (ctx.stringFields.includes(name) &&
+              (init.kind === 'Ident' || init.kind === 'Member' || init.kind === 'Index')) {
+            lines.push(`${I}tsc_string_retain(&self->${name});`);
+          }
           // Define in scope so subsequent _awaitInfoOf lookups see the correct type
           if (ct) this.define(name, { ctype: ct, varKind: stmt.varKind ?? 'const' });
         }
@@ -372,14 +396,22 @@ export default {
       } else if (ctx?.hasThrows) {
         lines.push(`${I}self->_result = (${ctx.resultCType}){.ok = true};`);
       }
-      lines.push(`${I}self->_done = true;`);
-      lines.push(`${I}return;`);
+      if (ctx?.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
     } else if (stmt.kind === 'Throw') {
       const ctx = this._selfCtx;
       if (ctx?.hasThrows) {
         lines.push(`${I}self->_result = (${ctx.resultCType}){.ok = false, .error = ${this._selfE(stmt.value)}};`);
-        lines.push(`${I}self->_done = true;`);
-        lines.push(`${I}return;`);
+        if (ctx.hasCleanup) {
+          lines.push(`${I}goto _cleanup;`);
+        } else {
+          lines.push(`${I}self->_done = true;`);
+          lines.push(`${I}return;`);
+        }
       } else {
         const tmp = [];
         this.visitStmt(stmt, tmp, 0);

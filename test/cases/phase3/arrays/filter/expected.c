@@ -10,7 +10,7 @@ int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 2, 3, 4, 5};
     const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
-    Array_i32 evens = tsc_array_filter_i32(arr, _lambda_0_bool);
+    Array_i32 evens = tsc_array_filter_i32(arr, (tsc_closure){.env = NULL, .fn = (void*)_lambda_0_bool});
     printf("%zu\n", evens.length);
     printf("%d\n", evens.data[0]);
     tsc_array_free_i32(&evens);
