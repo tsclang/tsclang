@@ -1,0 +1,5 @@
+class Item { label: string; }
+let a = new Item();
+a.label = "hello";
+let b: Item = { ...a };
+console.log(b.label);

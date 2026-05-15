@@ -1,0 +1,10 @@
+class Node { name: string; }
+let n = new Shared<Node>();
+n.name = "test";
+let w = new Weak<Node>(n);
+let strong = w.upgrade();
+if (strong != null) {
+    console.log(strong.name);
+} else {
+    console.log("none");
+}
