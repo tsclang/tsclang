@@ -163,7 +163,7 @@ export default {
     if (this._selfCtx?.hasCleanup) {
       lines.push('        _cleanup:');
       for (const name of this._selfCtx.stringFields) {
-        lines.push(`            tsc_string_release(&self->${name});`);
+        lines.push(`            tsc_string_release(self->${name});`);
       }
       for (const { name, freeFn } of this._selfCtx.classFreeFields) {
         lines.push(`            ${freeFn}(&self->${name});`);
@@ -281,7 +281,7 @@ export default {
       if (hasThrows) {
         const errC = this._selfE(s.value);
         if (this._selfCtx?.hasCleanup) {
-          for (const name of this._selfCtx.stringFields) lines.push(`${I}tsc_string_release(&self->${name});`);
+          for (const name of this._selfCtx.stringFields) lines.push(`${I}tsc_string_release(self->${name});`);
           for (const { name, freeFn } of this._selfCtx.classFreeFields) lines.push(`${I}${freeFn}(&self->${name});`);
         }
         lines.push(`${I}self->_done = true;`);
@@ -307,7 +307,7 @@ export default {
           lines.push(`${I}self->${name} = ${initC};`);
           if (this._selfCtx.stringFields.includes(name) &&
               (init.kind === 'Ident' || init.kind === 'Member' || init.kind === 'Index')) {
-            lines.push(`${I}tsc_string_retain(&self->${name});`);
+            lines.push(`${I}tsc_string_retain(self->${name});`);
           }
         }
       } else {

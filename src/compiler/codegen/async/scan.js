@@ -92,9 +92,152 @@ export default {
     };
 
     walk(body?.kind === 'Block' ? body.body : []);
+
+    if (bodyFields.length > 0) {
+      const localVarNames = new Set(bodyFields.map(f => f.name));
+      const needsPromotion = this._livenessScan(body, localVarNames);
+      const safeLocal = new Set([
+        'int32_t', 'int64_t', 'int8_t', 'int16_t',
+        'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+        'float', 'double', 'size_t', 'bool', 'int', 'void',
+      ]);
+      const filtered = bodyFields.filter(f =>
+        needsPromotion.has(f.name) || !safeLocal.has(f.ctype)
+      );
+      if (filtered.length < bodyFields.length) {
+        for (const f of bodyFields) {
+          if (!needsPromotion.has(f.name) && safeLocal.has(f.ctype)) preScanTypes.delete(f.name);
+        }
+        bodyFields.length = 0;
+        bodyFields.push(...filtered);
+      }
+    }
+
     // Note: _preScanTypes is intentionally kept alive so _collectAwaitStates (called next) can use it.
     // The caller must clear this._preScanTypes after calling _collectAwaitStates.
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
+  },
+
+  _scanExprIdents(node, touch) {
+    if (!node || typeof node !== 'object') return;
+    if (node.kind === 'Ident') { touch(node.name); return; }
+    if (node.kind === 'Literal' || node.kind === 'RawC') return;
+    for (const val of Object.values(node)) {
+      if (Array.isArray(val)) {
+        for (const item of val) {
+          if (item && typeof item === 'object') {
+            if (item.kind) this._scanExprIdents(item, touch);
+            else if (item.expr?.kind) this._scanExprIdents(item.expr, touch);
+          }
+        }
+      } else if (val && typeof val === 'object' && val.kind) {
+        this._scanExprIdents(val, touch);
+      }
+    }
+  },
+
+  _livenessScan(body, localVarNames) {
+    const segs = new Map();
+    let seg = 0;
+
+    const touch = (name) => {
+      if (!localVarNames.has(name)) return;
+      const info = segs.get(name);
+      if (info) {
+        if (seg < info.min) info.min = seg;
+        if (seg > info.max) info.max = seg;
+      } else {
+        segs.set(name, { min: seg, max: seg });
+      }
+    };
+
+    const scanExpr = (node) => this._scanExprIdents(node, touch);
+
+    const walk = (stmts) => {
+      for (const s of stmts || []) {
+        if (!s) continue;
+
+        const isAwaitVarDecl = s.kind === 'VarDecl' && s.init?.kind === 'Await';
+        const isAwaitDestruct = s.kind === 'VarDestructArr' && s.init?.kind === 'Await';
+        const isAwaitExpr = s.kind === 'ExprStmt' && s.expr?.kind === 'Await';
+
+        if (isAwaitVarDecl) {
+          scanExpr(s.init.expr);
+          seg++;
+          touch(s.name);
+          continue;
+        }
+        if (isAwaitDestruct) {
+          scanExpr(s.init.expr);
+          seg++;
+          for (const elem of (s.pattern || [])) if (elem) touch(elem.name);
+          continue;
+        }
+        if (isAwaitExpr) {
+          scanExpr(s.expr.expr);
+          seg++;
+          continue;
+        }
+
+        if (s.kind === 'ForOf' && s.await) {
+          seg++;
+          if (s.binding?.kind === 'Ident') touch(s.binding.name);
+          continue;
+        }
+
+        if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
+          touch(s.name);
+          continue;
+        }
+
+        if (s.kind === 'VarDecl') {
+          touch(s.name);
+          if (s.init) scanExpr(s.init);
+        }
+        if (s.kind === 'VarDestructArr') {
+          for (const elem of (s.pattern || [])) if (elem) touch(elem.name);
+          if (s.init) scanExpr(s.init);
+        }
+        if (s.kind === 'ExprStmt') scanExpr(s.expr);
+        if (s.kind === 'Return' && s.value) scanExpr(s.value);
+        if (s.kind === 'Throw' && s.value) scanExpr(s.value);
+        if (s.kind === 'If') {
+          scanExpr(s.test ?? s.cond);
+          const c = s.consequent;
+          walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
+          const a = s.alternate;
+          if (a) walk(a?.kind === 'Block' ? a.body : [a]);
+        }
+        if (s.kind === 'While') {
+          scanExpr(s.test ?? s.cond);
+          walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        }
+        if (s.kind === 'For') {
+          if (s.init?.kind === 'VarDecl') { touch(s.init.name); if (s.init.init) scanExpr(s.init.init); }
+          else if (s.init) scanExpr(s.init);
+          if (s.test) scanExpr(s.test);
+          if (s.update) scanExpr(s.update);
+          walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        }
+        if (s.kind === 'TryCatch') {
+          walk(s.body?.body || []);
+          if (s.catches) for (const c of s.catches) {
+            if (c.param) touch(c.param);
+            walk(c.body?.body || []);
+          }
+          if (s.finally) walk(s.finally.body || []);
+        }
+        if (s.kind === 'Block') walk(s.body);
+      }
+    };
+
+    walk(body?.kind === 'Block' ? body.body : []);
+
+    const needsPromotion = new Set();
+    for (const [name, { min, max }] of segs) {
+      if (max > min) needsPromotion.add(name);
+    }
+    return needsPromotion;
   },
 
   // Collect await sub-state field descriptors for the struct

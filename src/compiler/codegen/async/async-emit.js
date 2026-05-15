@@ -179,7 +179,7 @@ export default {
     lines.push('        case 0:');
 
     for (const name of sc.paramStringFields) {
-      lines.push(`            tsc_string_retain(&self->${name});`);
+      lines.push(`            tsc_string_retain(self->${name});`);
     }
 
     this._emitAsyncStmtList(stmts, lines, ctx, '            ');
@@ -197,7 +197,7 @@ export default {
     if (sc.hasCleanup) {
       lines.push('        _cleanup:');
       for (const name of sc.stringFields) {
-        lines.push(`            tsc_string_release(&self->${name});`);
+        lines.push(`            tsc_string_release(self->${name});`);
       }
       for (const { name, freeFn } of sc.classFreeFields) {
         lines.push(`            ${freeFn}(&self->${name});`);

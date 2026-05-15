@@ -27,13 +27,7 @@ static void b_poll(b_state *self) {
     }
 }
 
-typedef struct {
-    int32_t _state; int _result; bool _done;
-    int32_t x;
-    int32_t y;
-    a_state _await_0;
-    b_state _await_1;
-} main_state;
+typedef struct { int32_t _state; int _result; bool _done; a_state _await_0; b_state _await_1; } main_state;
 
 static void main_poll(main_state *self) {
     switch (self->_state) {
@@ -46,8 +40,6 @@ static void main_poll(main_state *self) {
             a_poll(&self->_await_0);
             b_poll(&self->_await_1);
             if (!self->_await_0._done || !self->_await_1._done) return;
-            self->x = self->_await_0._result.value;
-            self->y = self->_await_1._result.value;
             if (!self->_await_1._result.ok) {
                 Err e = self->_await_1._result.error;
                 printf("error\n");

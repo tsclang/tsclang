@@ -29,12 +29,12 @@ static void process_poll(process_state *self) {
             if (!self->_await_0._done) return;
             self->raw = self->_await_0._result;
             self->copy = self->raw;
-            tsc_string_retain(&self->copy);
+            tsc_string_retain(self->copy);
             printf("%s\n", self->copy.data);
             goto _cleanup;
         _cleanup:
-            tsc_string_release(&self->raw);
-            tsc_string_release(&self->copy);
+            tsc_string_release(self->raw);
+            tsc_string_release(self->copy);
             self->_done = true;
             return;
     }

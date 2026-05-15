@@ -21,12 +21,7 @@ static void sensor_poll(sensor_state *self) {
     }
 }
 
-typedef struct {
-    int32_t _state; int _result; bool _done;
-    int32_t v;
-    sensor_state _await_0;
-    delay_state _await_1;
-} poll_state;
+typedef struct { int32_t _state; int _result; bool _done; sensor_state _await_0; delay_state _await_1; } poll_state;
 
 static void poll_poll(poll_state *self) {
     switch (self->_state) {
@@ -42,7 +37,6 @@ case_1:
         case 2:
             sensor_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->v = self->_await_0._result;
             self->_await_1 = (delay_state){0};
             self->_state = 3;
             /* fall through */

@@ -15,7 +15,6 @@ typedef struct {
     int32_t _state; int32_t _result; bool _done;
     int32_t n;
     int32_t count;
-    int32_t v;
     tick_state _await_0;
 } run_state;
 
@@ -38,8 +37,7 @@ case_1:
         case 2:
             tick_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->v = self->_await_0._result;
-            self->count = self->count + self->v;
+            self->count = self->count + v;
             self->_state = 1;
             goto case_1;
     }

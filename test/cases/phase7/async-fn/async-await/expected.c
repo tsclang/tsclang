@@ -11,11 +11,7 @@ static void delay_poll(delay_state *self) {
     }
 }
 
-typedef struct {
-    int32_t _state; int32_t _result; bool _done;
-    int32_t x;
-    delay_state _await_0;
-} run_state;
+typedef struct { int32_t _state; int32_t _result; bool _done; delay_state _await_0; } run_state;
 
 static void run_poll(run_state *self) {
     switch (self->_state) {
@@ -26,8 +22,7 @@ static void run_poll(run_state *self) {
         case 1:
             delay_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->x = self->_await_0._result;
-            self->_result = self->x + 1;
+            self->_result = x + 1;
             self->_done = true;
             return;
     }

@@ -1,11 +1,7 @@
 #include "runtime.h"
 #include "std/fs.h"
 
-typedef struct {
-    int32_t _state; int _result; bool _done;
-    bool ok;
-    TscFsBoolAwaitable _await_0;
-} run_state;
+typedef struct { int32_t _state; int _result; bool _done; TscFsBoolAwaitable _await_0; } run_state;
 
 static void run_poll(run_state *self) {
     switch (self->_state) {
@@ -16,8 +12,7 @@ static void run_poll(run_state *self) {
         case 1:
             tsc_fs_exists_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->ok = self->_await_0._result;
-            printf("%s\n", (self->ok) ? "true" : "false");
+            printf("%s\n", (ok) ? "true" : "false");
             self->_done = true;
             return;
     }

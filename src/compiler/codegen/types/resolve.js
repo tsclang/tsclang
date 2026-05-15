@@ -65,6 +65,25 @@ export default {
       }
 
       // Inline utility types: Pick<T, K>, Omit<T, K> without a named alias
+      if (name === 'Partial' && typeArgs.length >= 1) {
+        const baseType = this.resolveType(typeArgs[0]);
+        const baseDef = this.classes.get(baseType);
+        if (baseDef?.fields) {
+          const structKey = `_partial_${this.cTypeToIdent(baseType)}`;
+          if (!this.classes.has(structKey)) {
+            const fieldDecls = baseDef.fields.flatMap(f => {
+              const fname = f.name ?? f;
+              const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+              return [`bool has_${fname};`, `${ftype} ${fname};`];
+            }).join(' ');
+            this.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
+            this.addTop('');
+            this.classes.set(structKey, { isStruct: true, isMutable: true, isPartial: true, fields: baseDef.fields });
+          }
+          return structKey;
+        }
+        return baseType;
+      }
       if ((name === 'Pick' || name === 'Omit') && typeArgs.length >= 2) {
         const baseType = this.resolveType(typeArgs[0]);
         const baseDef = this.classes.get(baseType);

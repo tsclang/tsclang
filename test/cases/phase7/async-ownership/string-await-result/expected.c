@@ -30,7 +30,7 @@ static void run_poll(run_state *self) {
             printf("%s\n", self->data.data);
             goto _cleanup;
         _cleanup:
-            tsc_string_release(&self->data);
+            tsc_string_release(self->data);
             self->_done = true;
             return;
     }

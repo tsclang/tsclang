@@ -11,12 +11,7 @@ static void getValue_poll(getValue_state *self) {
     }
 }
 
-typedef struct {
-    int32_t _state; int _result; bool _done;
-    int32_t x;
-    int32_t y;
-    getValue_state _await_0;
-} main_state;
+typedef struct { int32_t _state; int _result; bool _done; getValue_state _await_0; } main_state;
 
 static void main_poll(main_state *self) {
     switch (self->_state) {
@@ -27,9 +22,8 @@ static void main_poll(main_state *self) {
         case 1:
             getValue_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->x = self->_await_0._result;
-            self->y = self->x * 2;
-            printf("%d\n", self->y);
+            const int32_t y = x * 2;
+            printf("%d\n", y);
             self->_done = true;
             return;
     }

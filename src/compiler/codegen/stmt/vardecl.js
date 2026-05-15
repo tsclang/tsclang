@@ -1340,10 +1340,10 @@ export default {
               if (ctype === 'String' && init.kind === 'Member' && init.object.kind === 'Ident') {
                 p(`tsc_string_retain(${init.object.name}.${init.prop});`);
               }
-              if (ctype === 'String' && init.kind === 'Index') {
-                p(`tsc_string_retain(${initC});`);
-              }
               p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
+              if (ctype === 'String' && init.kind === 'Index') {
+                p(`tsc_string_retain(${name});`);
+              }
               // Move semantics: mark source moved and zero out (after emit)
               if (init.kind === 'Ident') {
                 const initSym2 = this.lookup(init.name);

@@ -30,7 +30,7 @@ static void run_poll(run_state *self) {
             tsc_socket_close(&self->sock);
             goto _cleanup;
         _cleanup:
-            tsc_string_release(&self->line);
+            tsc_string_release(self->line);
             self->_done = true;
             return;
     }

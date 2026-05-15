@@ -32,8 +32,8 @@ static void process_poll(process_state *self) {
             self->_result = self->result;
             goto _cleanup;
         _cleanup:
-            tsc_string_release(&self->raw);
-            tsc_string_release(&self->result);
+            tsc_string_release(self->raw);
+            tsc_string_release(self->result);
             self->_done = true;
             return;
     }

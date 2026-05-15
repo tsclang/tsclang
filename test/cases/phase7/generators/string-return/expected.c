@@ -7,13 +7,13 @@ static gen_result gen_next(gen_state *self, String msg) {
     switch (self->_state) {
         case 0:
             self->m = msg;
-            tsc_string_retain(&self->m);
+            tsc_string_retain(self->m);
             self->_state = 1;
             return (gen_result){self->m, false};
         case 1:
             goto _cleanup;
         _cleanup:
-            tsc_string_release(&self->m);
+            tsc_string_release(self->m);
             self->_done = true;
             return (gen_result){(String){0}, true};
     }

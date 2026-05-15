@@ -374,7 +374,7 @@ export default {
           lines.push(`${I}self->${name} = ${initC};`);
           if (ctx.stringFields.includes(name) &&
               (init.kind === 'Ident' || init.kind === 'Member' || init.kind === 'Index')) {
-            lines.push(`${I}tsc_string_retain(&self->${name});`);
+            lines.push(`${I}tsc_string_retain(self->${name});`);
           }
           // Define in scope so subsequent _awaitInfoOf lookups see the correct type
           if (ct) this.define(name, { ctype: ct, varKind: stmt.varKind ?? 'const' });
