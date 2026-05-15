@@ -417,6 +417,7 @@ export default {
 
   argsToC(args, lines, depth) {
     const parts = [];
+    const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
       if (a.spread) {
         const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
@@ -429,7 +430,14 @@ export default {
           parts.push(`/* ...${this.exprToC(a.expr, lines, depth)} */`);
         }
       } else {
-        parts.push(this.exprToC(a.expr, lines, depth));
+        let c = this.exprToC(a.expr, lines, depth);
+        if (this._isHeapStringInit(a.expr)) {
+          const tmp = `_arg_${this.tempCount++}`;
+          lines.push(`${I}String ${tmp} = ${c};`);
+          this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
+          c = tmp;
+        }
+        parts.push(c);
       }
     }
     return parts.join(', ');

@@ -35,6 +35,7 @@ static void run_poll(run_state *self) {
             a_poll(&self->_await_0);
             b_poll(&self->_await_1);
             if (!self->_await_0._done && !self->_await_1._done) return;
+            int32_t x = self->_await_0._done ? self->_await_0._result : self->_await_1._result;
             printf("%d\n", x);
             self->_done = true;
             return;

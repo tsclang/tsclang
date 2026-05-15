@@ -37,6 +37,7 @@ case_1:
         case 2:
             tick_poll(&self->_await_0);
             if (!self->_await_0._done) return;
+            int32_t v = self->_await_0._result;
             self->count = self->count + v;
             self->_state = 1;
             goto case_1;

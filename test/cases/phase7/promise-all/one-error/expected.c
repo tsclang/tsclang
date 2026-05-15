@@ -40,6 +40,8 @@ static void main_poll(main_state *self) {
             a_poll(&self->_await_0);
             b_poll(&self->_await_1);
             if (!self->_await_0._done || !self->_await_1._done) return;
+            int32_t x = self->_await_0._result.value;
+            int32_t y = self->_await_1._result.value;
             if (!self->_await_1._result.ok) {
                 Err e = self->_await_1._result.error;
                 printf("error\n");

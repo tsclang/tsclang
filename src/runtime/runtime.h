@@ -672,6 +672,9 @@ static inline String tsc_capture_stack(void) {
 }
 
 /* Numeric-to-string conversions (used by optional chaining x?.toString()) */
+static inline String tsc_bool_to_string(bool v) {
+    return v ? STR_LIT("true") : STR_LIT("false");
+}
 static inline String tsc_i32_to_string(int32_t v) {
     static char _tsc_i32_buf[32];
 #ifndef TSC_NES

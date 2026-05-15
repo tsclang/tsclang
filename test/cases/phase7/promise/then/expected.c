@@ -22,6 +22,7 @@ static void main_poll(main_state *self) {
         case 1:
             getValue_poll(&self->_await_0);
             if (!self->_await_0._done) return;
+            int32_t x = self->_await_0._result;
             const int32_t y = x * 2;
             printf("%d\n", y);
             self->_done = true;

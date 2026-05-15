@@ -47,6 +47,23 @@ export default {
     };
     walkLets(body?.kind === 'Block' ? body.body : []);
 
+    if (letFields.length > 0) {
+      const localVarNames = new Set(letFields.map(f => f.name));
+      const needsPromotion = this._genLivenessScan(body, localVarNames);
+      const safeLocal = new Set([
+        'int32_t', 'int64_t', 'int8_t', 'int16_t',
+        'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+        'float', 'double', 'size_t', 'bool', 'int', 'void',
+      ]);
+      const filtered = letFields.filter(f =>
+        needsPromotion.has(f.name) || !safeLocal.has(f.ctype)
+      );
+      if (filtered.length < letFields.length) {
+        letFields.length = 0;
+        letFields.push(...filtered);
+      }
+    }
+
     const stringFields = [];
     const classFreeFields = [];
     for (const f of letFields) {

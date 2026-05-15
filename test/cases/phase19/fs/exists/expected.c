@@ -12,6 +12,7 @@ static void run_poll(run_state *self) {
         case 1:
             tsc_fs_exists_poll(&self->_await_0);
             if (!self->_await_0._done) return;
+            bool ok = self->_await_0._result;
             printf("%s\n", (ok) ? "true" : "false");
             self->_done = true;
             return;

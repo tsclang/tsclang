@@ -37,6 +37,7 @@ case_1:
         case 2:
             sensor_poll(&self->_await_0);
             if (!self->_await_0._done) return;
+            int32_t v = self->_await_0._result;
             self->_await_1 = (delay_state){0};
             self->_state = 3;
             /* fall through */

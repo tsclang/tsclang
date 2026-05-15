@@ -45,12 +45,16 @@ export default {
         if (doneConds.length) {
           lines.push(`${I}if (${doneConds.map(({ idx }) => `!self->_await_${idx}._done`).join(' && ')}) return;`);
         }
-        if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+        if (ai.resultCType) {
           let rhs = `self->_await_${doneConds[doneConds.length - 1].idx}._result`;
           for (let j = doneConds.length - 2; j >= 0; j--) {
             rhs = `self->_await_${doneConds[j].idx}._done ? self->_await_${doneConds[j].idx}._result : ${rhs}`;
           }
-          lines.push(`${I}self->${s.name} = ${rhs};`);
+          if (this._selfCtx.promoted.has(s.name)) {
+            lines.push(`${I}self->${s.name} = ${rhs};`);
+          } else {
+            lines.push(`${I}${ai.resultCType} ${s.name} = ${rhs};`);
+          }
         }
         if (ai.resultCType) this.define(s.name, { ctype: ai.resultCType, varKind: s.varKind });
         return;
@@ -113,9 +117,15 @@ export default {
         }
         if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
           lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result.value;`);
+        } else if (ai.resultCType) {
+          lines.push(`${I}${ai.resultCType} ${s.name} = self->_await_${awaitIdx}._result.value;`);
         }
-      } else if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
-        lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result;`);
+      } else if (ai.resultCType) {
+        if (this._selfCtx.promoted.has(s.name)) {
+          lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result;`);
+        } else {
+          lines.push(`${I}${ai.resultCType} ${s.name} = self->_await_${awaitIdx}._result;`);
+        }
       }
       // Define var in scope so subsequent expressions can infer its type
       if (ai.resultCType) this.define(s.name, { ctype: ai.resultCType, varKind: s.varKind });
@@ -160,12 +170,23 @@ export default {
           ? ai.items[j].expr.callee.name : null;
         const sub = callName && this._asyncFuncs?.has(callName)
           ? this._asyncFuncs.get(callName) : null;
-        if (sub && this._selfCtx.promoted.has(elem.name)) {
+        if (sub) {
           const needsUnwrap = sub.resultCType?.startsWith('Result_');
           const rhs = needsUnwrap
             ? `self->_await_${baseIdx + j}._result.value`
             : `self->_await_${baseIdx + j}._result`;
-          lines.push(`${I}self->${elem.name} = ${rhs};`);
+          if (this._selfCtx.promoted.has(elem.name)) {
+            lines.push(`${I}self->${elem.name} = ${rhs};`);
+          } else {
+            let et;
+            if (needsUnwrap) {
+              const valIdent = sub.resultCType.slice(7, sub.resultCType.lastIndexOf('_'));
+              et = this._arrIdentToCType(valIdent);
+            } else {
+              et = sub.resultCType || 'int32_t';
+            }
+            lines.push(`${I}${et} ${elem.name} = ${rhs};`);
+          }
         }
       }
       return;

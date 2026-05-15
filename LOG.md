@@ -774,3 +774,14 @@
 > - Новые тесты: transitive-capture (phase4), string-param-retain/string-local-retain/string-await-result (phase7)
 > - 45 файлов изменено, +1691/-306 строк
 > - Результат: **1067 тестов, 0 ошибок** (no-gcc)
+
+> 2026-05-15: **Liveness optimization + demoted var fixes** — второй большой коммит:
+> - **Generator liveness scan**: `_genLivenessScan()` в scan.js — аналог `_livenessScan()` для yield-границ; переменные не пересекающие yield не промоутятся в state struct
+> - **Demoted var local declarations**: async-stmt.js — VarDecl с await init, VarDestructArr с Promise.all, ExprStmt с await: демоутед переменные теперь получают `type name = self->_await_N._result;` вместо `self->name = ...`
+> - **VarDestructArr type extraction**: корректное извлечение value type из `Result_X_Y` (через `_arrIdentToCType`)
+> - **`tsc_bool_to_string`**: добавлена в runtime.h — `STR_LIT("true")`/`STR_LIT("false")`
+> - **Generator string cleanup**: `_cleanup` label + `goto _cleanup` для string/class let-fields; retain на Ident/Member/Index init
+> - **Liveness optimization (async)**: `_livenessScan` + `_scanExprIdents` — только переменные пересекающие await-границы промоутятся; `safeLocal` whitelist для примитивов; String/class всегда промоутятся
+> - **`argsToC` side-effecting String expressions**: `_isHeapStringInit` + temp vars + `_pushPostStmtCleanup` для heap string аргументов
+> - 10 expected.c обновлены (async-await, promise-all/all-ok, promise-all/one-error, promise-any, promise-race, promise/then, while-await, while-infinite, fs/exists, generators/string-return)
+> - Результат: **1069 тестов, 0 ошибок** (no-gcc + GCC все 20 фаз)

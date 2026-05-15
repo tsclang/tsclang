@@ -35,6 +35,8 @@ static void main_poll(main_state *self) {
             a_poll(&self->_await_0);
             b_poll(&self->_await_1);
             if (!self->_await_0._done || !self->_await_1._done) return;
+            int32_t x = self->_await_0._result;
+            int32_t y = self->_await_1._result;
             printf("%d\n", x + y);
             self->_done = true;
             return;

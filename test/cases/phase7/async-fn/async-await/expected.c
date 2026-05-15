@@ -22,6 +22,7 @@ static void run_poll(run_state *self) {
         case 1:
             delay_poll(&self->_await_0);
             if (!self->_await_0._done) return;
+            int32_t x = self->_await_0._result;
             self->_result = x + 1;
             self->_done = true;
             return;
