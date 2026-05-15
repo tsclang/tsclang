@@ -1,7 +1,9 @@
-function len(arr: Ref<i32[]>): i32 {
-    return arr.length as i32;
+class Box {
+    value: i32;
 }
-const nums: i32[] = [1, 2, 3, 4];
-const a = len(nums);
-const b = len(nums);
-console.log(a + b);
+let b = new Box();
+b.value = 42;
+const r1: Ref<Box> = b;
+const r2: Ref<Box> = b;
+console.log(r1.value);
+console.log(r2.value);

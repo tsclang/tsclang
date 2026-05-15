@@ -1,0 +1,17 @@
+class Err { message: string; }
+function mayFail(): void throws Err {
+    throw new Err("fail");
+}
+function process(): void {
+    let a: string = "outer";
+    {
+        let b: string = "inner";
+        mayFail();
+    }
+    console.log(a);
+}
+try {
+    process();
+} catch (e: Err) {
+    console.log(e.message);
+}

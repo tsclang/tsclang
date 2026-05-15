@@ -1,0 +1,10 @@
+class User {
+    name: string;
+}
+function getRef(u: Ref<User>): Ref<User> {
+    return u;
+}
+let u = new User();
+u.name = "Alice";
+const r = getRef(u);
+console.log(r.name);

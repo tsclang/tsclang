@@ -1,0 +1,4 @@
+let a: i32[] = [1, 2, 3];
+let b: i32[] = [...a, 4, 5];
+console.log(b.length);
+console.log(b[3]);

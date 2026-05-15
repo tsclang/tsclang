@@ -1,0 +1,9 @@
+class Node {
+    value: i32;
+}
+function view(n: Ref<Node>): i32 {
+    return n.value;
+}
+let x: Shared<Node> = new Node();
+x.value = 42;
+console.log(view(x));

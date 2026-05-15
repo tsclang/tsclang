@@ -1,0 +1,19 @@
+class Err { message: string; }
+function mayFail(x: i32): i32 throws Err {
+    if (x < 0) throw new Err("negative");
+    return x * 2;
+}
+function process(): void {
+    let total: i32 = 0;
+    for (let i: i32 = 0; i < 3; i++) {
+        let s: string = "item";
+        try {
+            let r = mayFail(i - 1);
+            total = total + r;
+        } catch (e: Err) {
+            total = total + 100;
+        }
+    }
+    console.log(total);
+}
+process();

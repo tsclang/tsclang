@@ -1,0 +1,11 @@
+class Counter {
+    count: i32;
+}
+@static let ctr = new Counter();
+function inc(c: Mut<Counter>): void {
+    c.count += 1;
+}
+inc(ctr);
+inc(ctr);
+inc(ctr);
+console.log(ctr.count);

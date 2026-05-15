@@ -1,6 +1,6 @@
 class User {
     name: string;
 }
-const u1 = new User();
-const users: User[] = [u1];
+let users: User[] = [];
 const u = users[0];
+console.log(u.name);

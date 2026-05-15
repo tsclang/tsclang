@@ -1,0 +1,7 @@
+class Box {
+    value: i32;
+}
+let b = new Box();
+b.value = 10;
+const fn = (): i32 => b.value;
+console.log(fn());

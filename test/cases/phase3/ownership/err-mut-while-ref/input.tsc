@@ -1,7 +1,8 @@
 class Box {
     value: i32;
 }
-const b = new Box();
+let b = new Box();
 b.value = 1;
+const r: Ref<Box> = b;
 const m: Mut<Box> = b;
-console.log(m.value);
+console.log(r.value);
