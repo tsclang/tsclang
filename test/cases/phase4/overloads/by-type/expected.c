@@ -1,12 +1,10 @@
 #include "runtime.h"
 
 String process_i32(int32_t x) {
-    tsc_string_retain(tsc_string_concat(STR_LIT("int: "), tsc_i32_to_string(x)));
     return tsc_string_concat(STR_LIT("int: "), tsc_i32_to_string(x));
 }
 
 String process_string(String x) {
-    tsc_string_retain(tsc_string_concat(STR_LIT("str: "), x));
     return tsc_string_concat(STR_LIT("str: "), x);
 }
 

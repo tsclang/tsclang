@@ -41,7 +41,9 @@
             this._inReturnContext = true;
             const valC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
-            if (this.inferType(node.value) === 'String') lines.push(`${I}tsc_string_retain(${valC});`);
+            if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+              lines.push(`${I}tsc_string_retain(${valC});`);
+            }
             lines.push(`${I}return (${optType}){true, ${valC}};`);
           }
           break;
@@ -81,7 +83,9 @@
             this._inReturnContext = true;
             const retC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
-            if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${retC});`);
+            if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+              p(`tsc_string_retain(${retC});`);
+            }
             p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
           } else {
             p(`_result = (${ctx.resultType}){.ok = true};`);
@@ -97,7 +101,9 @@
           this._inReturnContext = false;
           const retType = this.inferType(node.value) ?? 'int32_t';
           const tmpName = `_ret_${this.tempCount++}`;
-          if (retType === 'String') p(`tsc_string_retain(${retC});`);
+          if (retType === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+            p(`tsc_string_retain(${retC});`);
+          }
           p(`${retType} ${tmpName} = ${retC};`);
           this._emitFuncCleanup(lines, I);
           if (this._throwsCtx) {
@@ -113,7 +119,9 @@
               this._inReturnContext = true;
               const c = this.exprToC(node.value, lines, depth);
               this._inReturnContext = false;
-              if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${c});`);
+              if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+                p(`tsc_string_retain(${c});`);
+              }
               p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
             } else {
               p(`return (${ctx.resultType}){.ok = true};`);
@@ -129,7 +137,9 @@
                   c = `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
                 }
               }
-              if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${c});`);
+              if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+                p(`tsc_string_retain(${c});`);
+              }
               p(`return ${c};`);
             } else {
               p('return;');

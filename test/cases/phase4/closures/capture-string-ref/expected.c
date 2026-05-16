@@ -9,7 +9,6 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static String _closure_0_fn(_closure_0_env *env, String name) {
-    tsc_string_retain(tsc_string_concat(tsc_string_concat(env->prefix, STR_LIT(", ")), name));
     return tsc_string_concat(tsc_string_concat(env->prefix, STR_LIT(", ")), name);
 }
 

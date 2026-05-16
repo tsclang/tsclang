@@ -1,12 +1,10 @@
 #include "runtime.h"
 
 String process_i32(int32_t x) {
-    tsc_string_retain(STR_LIT("processed"));
     return STR_LIT("processed");
 }
 
 String process_f64(double x) {
-    tsc_string_retain(STR_LIT("processed"));
     return STR_LIT("processed");
 }
 
