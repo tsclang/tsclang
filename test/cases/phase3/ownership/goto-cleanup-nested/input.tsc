@@ -1,0 +1,12 @@
+class Err { message: string }
+function process(x: i32): i32 throws Err {
+    let items: Array<i32> = new Array<i32>(4);
+    {
+        let inner: Array<i32> = new Array<i32>(2);
+        if (x < 0) throw new Err("fail");
+        inner.data[0] = x;
+        items.push(inner.data[0]);
+    }
+    return items.length;
+}
+console.log(process(1));

@@ -1,0 +1,17 @@
+class Err { message: string }
+function step(n: i32): i32 throws Err {
+    if (n <= 0) throw new Err("bad step");
+    return n * 2;
+}
+function process(count: i32): i32 throws Err {
+    let items: Array<i32> = new Array<i32>(4);
+    for (let i: i32 = 0; i < count; i++) {
+        let tmp: Array<i32> = new Array<i32>(2);
+        tmp.push(i);
+        let val = step(i)?;
+        tmp.push(val);
+        items.push(val);
+    }
+    return items.length;
+}
+console.log(process(3));

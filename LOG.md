@@ -785,3 +785,12 @@
 > - **`argsToC` side-effecting String expressions**: `_isHeapStringInit` + temp vars + `_pushPostStmtCleanup` для heap string аргументов
 > - 10 expected.c обновлены (async-await, promise-all/all-ok, promise-all/one-error, promise-any, promise-race, promise/then, while-await, while-infinite, fs/exists, generators/string-return)
 > - Результат: **1069 тестов, 0 ошибок** (no-gcc + GCC все 20 фаз)
+
+> 2026-05-17: **goto cleanup pattern fixes + nested block cleanup + Array TypeRef fix**:
+> - **`_emitFuncCleanup`**: changed `>= 3` to `>= 2` — nested block cleanups (level 2+) now emitted before `goto cleanup`
+> - **`_hasPendingCleanups`**: changed `>= 3` to `>= 2` (consistent with `_emitFuncCleanup`)
+> - **`_registerCleanup` pre-decls routing**: lifted out of loop-only condition — pre-declared var cleanups (from `_gotoCleanupPreDecls`) now routed to `_throwsOwnedVars` in nested blocks too, not just loops
+> - **`_loopBodyCleanups` dedup**: added `.includes()` check before `.push()` — prevents duplicate cleanups from multiple `push()` calls to same array
+> - **Array cleanup in general VarDecl section**: `Array<i32>` (parsed as `TypeRef`, not `TypeArray`) now registers `tsc_array_free_*` cleanup when heap-allocated. Previously only `TypeArray` (e.g. `i32[]`) registered cleanup — `TypeRef` arrays like `new Array<i32>(2)` silently leaked
+> - 3 new tests: `goto-cleanup-multi-prop`, `goto-cleanup-loop`, `goto-cleanup-nested` (all [F] fragment tests)
+> - Результат: **1086 тестов, 0 ошибок**

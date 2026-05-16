@@ -246,8 +246,21 @@ class Context {
 
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
   _registerCleanup(stmt) {
+    if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
+    if (this._usesGotoCleanup && this._gotoCleanupPreDecls) {
+      for (const vname of this._gotoCleanupPreDecls.keys()) {
+        if (stmt.includes(`&${vname})`) || stmt.includes(`(${vname})`)) {
+          if (!this._throwsOwnedVars.includes(stmt)) {
+            this._throwsOwnedVars.push(stmt);
+          }
+          return;
+        }
+      }
+    }
     if (this._loopDepth > 0 && this._loopBodyCleanups) {
-      this._loopBodyCleanups.push(stmt);
+      if (!this._loopBodyCleanups.includes(stmt)) {
+        this._loopBodyCleanups.push(stmt);
+      }
       return;
     }
     if (this._usesGotoCleanup && this._blockCleanupStack.length === 2) {
@@ -313,7 +326,7 @@ class Context {
   _hasPendingCleanups() {
     if (this._usesGotoCleanup) {
       if (this._loopBodyCleanups?.length) return true;
-      for (let b = this._blockCleanupStack.length - 1; b >= 3; b--) {
+      for (let b = this._blockCleanupStack.length - 1; b >= 2; b--) {
         if (this._blockCleanupStack[b].list.length) return true;
       }
       return false;
@@ -339,7 +352,7 @@ class Context {
           lines.push(`${I}${this._loopBodyCleanups[i]};`);
         }
       }
-      for (let b = this._blockCleanupStack.length - 1; b >= 3; b--) {
+      for (let b = this._blockCleanupStack.length - 1; b >= 2; b--) {
         const level = this._blockCleanupStack[b];
         for (let i = level.list.length - 1; i >= 0; i--) {
           lines.push(`${I}${level.list[i]};`);

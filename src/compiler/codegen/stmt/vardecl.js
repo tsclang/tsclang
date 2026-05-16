@@ -1391,6 +1391,10 @@ export default {
               if (ctype === 'String') {
                 this._registerCleanup(`tsc_string_release(${name})`);
               }
+              if (ctype?.startsWith('Array_') && HEAP_ARRAY_KEYWORDS.some(k => initC.includes(k))) {
+                const elemIdent = ctype.slice(6);
+                this._registerCleanup(`tsc_array_free_${elemIdent}(&${name})`);
+              }
             }
           }
         } else {
