@@ -317,6 +317,11 @@ class Context {
   }
 
   _emitFuncCleanup(lines, I) {
+    if (this._loopBodyCleanups?.length) {
+      for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
+        lines.push(`${I}${this._loopBodyCleanups[i]};`);
+      }
+    }
     if (!this._funcCleanup?.length) return;
     for (let i = this._funcCleanup.length - 1; i >= 0; i--) {
       lines.push(`${I}${this._funcCleanup[i]};`);
