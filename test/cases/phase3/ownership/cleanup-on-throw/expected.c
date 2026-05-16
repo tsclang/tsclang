@@ -7,15 +7,19 @@ typedef struct { bool ok; union { int32_t value; MyError error; }; } Result_i32_
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 Result_i32_MyError process_bool(bool flag) {
-    Array_i32 items = tsc_array_create_i32(4);
+    Result_i32_MyError _result = {0};
+    Array_i32 items = {0};
+    items = tsc_array_create_i32(4);
     tsc_array_push_i32(&items, 1);
     if (flag) {
-        tsc_array_free_i32(&items);
-        return (Result_i32_MyError){.ok = false, .error = MyError_new(STR_LIT("bad"))};
+        _result = (Result_i32_MyError){.ok = false, .error = MyError_new(STR_LIT("bad"))};
+        goto cleanup;
     }
-    int32_t _ret_0 = (int32_t)items.length;
-    tsc_array_free_i32(&items);
-    return (Result_i32_MyError){.ok = true, .value = _ret_0};
+    _result = (Result_i32_MyError){.ok = true, .value = (int32_t)items.length};
+    goto cleanup;
+    cleanup:
+        tsc_array_free_i32(&items);
+        return _result;
 }
 
 int main(void) {

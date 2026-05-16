@@ -95,6 +95,11 @@ class Context {
     // Cleanup: per-block stack. Level 0 = main scope, level 1+ = function/block scopes
     this._blockCleanupStack = [{ list: [], set: new Set() }];
 
+    // goto cleanup for throws functions with owned vars
+    this._usesGotoCleanup = false;
+    this._throwsOwnedVars = [];
+    this._gotoCleanupPreDecls = null;
+
     // Loop depth: loop-local owned vars use _loopBodyCleanups
     this._loopDepth = 0;
     this._loopBodyCleanups = null;
@@ -245,6 +250,12 @@ class Context {
       this._loopBodyCleanups.push(stmt);
       return;
     }
+    if (this._usesGotoCleanup && this._blockCleanupStack.length === 2) {
+      if (!this._throwsOwnedVars.includes(stmt)) {
+        this._throwsOwnedVars.push(stmt);
+      }
+      return;
+    }
     const top = this._blockCleanupStack[this._blockCleanupStack.length - 1];
     if (!top.set.has(stmt)) {
       top.set.add(stmt);
@@ -300,6 +311,13 @@ class Context {
   }
 
   _hasPendingCleanups() {
+    if (this._usesGotoCleanup) {
+      if (this._loopBodyCleanups?.length) return true;
+      for (let b = this._blockCleanupStack.length - 1; b >= 3; b--) {
+        if (this._blockCleanupStack[b].list.length) return true;
+      }
+      return false;
+    }
     if (this._loopBodyCleanups?.length) return true;
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       if (this._blockCleanupStack[b].list.length) return true;
@@ -315,6 +333,20 @@ class Context {
   }
 
   _emitFuncCleanup(lines, I) {
+    if (this._usesGotoCleanup) {
+      if (this._loopBodyCleanups?.length) {
+        for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
+          lines.push(`${I}${this._loopBodyCleanups[i]};`);
+        }
+      }
+      for (let b = this._blockCleanupStack.length - 1; b >= 3; b--) {
+        const level = this._blockCleanupStack[b];
+        for (let i = level.list.length - 1; i >= 0; i--) {
+          lines.push(`${I}${level.list[i]};`);
+        }
+      }
+      return;
+    }
     if (this._loopBodyCleanups?.length) {
       for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
         lines.push(`${I}${this._loopBodyCleanups[i]};`);

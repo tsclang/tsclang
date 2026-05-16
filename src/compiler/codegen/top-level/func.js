@@ -467,24 +467,70 @@ export default {
       lines.push(`va_list _va_args;`);
       lines.push(`va_start(_va_args, ${_lastNonRest.name});`);
     }
-    this.visitBlock(body, lines, 0);
-    if (isCtor) {
-      this._emitFuncCleanup(lines, '    ');
-      lines.push('return self;');
-    }
-    // For void Scalar-variadic functions: emit va_end cleanup before implicit fall-through
-    if (_scalarRest && retType === 'void' && !throwsCtx) {
-      const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
-      if (!lastNonEmpty?.trim().startsWith('return ')) {
-        lines.push('va_end(_va_args);');
+    // Pre-scan owned vars for goto cleanup pattern in throws functions
+    if (throwsCtx && !isCtor) {
+      const _preDecls = new Map();
+      for (const stmt of body.body) {
+        if (stmt.kind === 'VarDecl' && stmt.typeAnn) {
+          let _ctype = null;
+          if (stmt.typeAnn.kind === 'TypeArray') {
+            const _et = this.resolveType(stmt.typeAnn.element);
+            _ctype = `Array_${this.cTypeToIdent(_et)}`;
+          } else {
+            _ctype = this.resolveType(stmt.typeAnn);
+          }
+          if (_ctype?.startsWith('Array_') || _ctype === 'String' || this.classes.has(_ctype)) {
+            _preDecls.set(stmt.name, _ctype);
+          }
+        }
+      }
+      if (_preDecls.size > 0) {
+        this._usesGotoCleanup = true;
+        this._gotoCleanupPreDecls = _preDecls;
+        this._throwsOwnedVars = [];
+        lines.push(`${throwsCtx.resultType} _result = {0};`);
+        for (const [_vn, _vt] of _preDecls) {
+          lines.push(`${_vt} ${_vn} = {0};`);
+        }
       }
     }
-    // For void throws functions: add implicit {.ok=true} return if last stmt isn't a return
-    if (throwsCtx?.isVoid) {
-      const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
-      if (!lastNonEmpty?.trim().startsWith('return ')) {
+
+    this.visitBlock(body, lines, 0);
+
+    if (this._usesGotoCleanup) {
+      if (throwsCtx?.isVoid) {
+        const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+        if (!lastNonEmpty?.trim().startsWith('goto cleanup')) {
+          lines.push(`    _result = (${throwsCtx.resultType}){.ok = true};`);
+          lines.push('    goto cleanup;');
+        }
+      }
+      lines.push('cleanup:');
+      if (_scalarRest) lines.push('    va_end(_va_args);');
+      for (let i = this._throwsOwnedVars.length - 1; i >= 0; i--) {
+        lines.push(`    ${this._throwsOwnedVars[i]};`);
+      }
+      lines.push('    return _result;');
+      this._usesGotoCleanup = false;
+      this._throwsOwnedVars = [];
+      this._gotoCleanupPreDecls = null;
+    } else {
+      if (isCtor) {
         this._emitFuncCleanup(lines, '    ');
-        lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
+        lines.push('return self;');
+      }
+      if (_scalarRest && retType === 'void' && !throwsCtx) {
+        const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+        if (!lastNonEmpty?.trim().startsWith('return ')) {
+          lines.push('va_end(_va_args);');
+        }
+      }
+      if (throwsCtx?.isVoid) {
+        const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
+        if (!lastNonEmpty?.trim().startsWith('return ')) {
+          this._emitFuncCleanup(lines, '    ');
+          lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
+        }
       }
     }
     this.popScope();

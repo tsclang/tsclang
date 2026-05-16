@@ -253,8 +253,18 @@
     p(`${resultType} ${resName} = ${callC};`);
 
     if (this._throwsCtx) {
-      // Inside a throws function: propagate error (emit cleanup first if any)
-      if (this._hasPendingCleanups()) {
+      if (this._usesGotoCleanup) {
+        const _hasBlock = this._hasPendingCleanups();
+        if (_hasBlock) {
+          p(`if (!${resName}.ok) {`);
+          this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
+          p(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);
+          p(`    goto cleanup;`);
+          p(`}`);
+        } else {
+          p(`if (!${resName}.ok) { _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; goto cleanup; }`);
+        }
+      } else if (this._hasPendingCleanups()) {
         p(`if (!${resName}.ok) {`);
         this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
         p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);

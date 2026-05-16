@@ -74,6 +74,22 @@
             throw this.error(`TypeError: Cannot return mutable borrow to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
+        // goto cleanup pattern for throws functions with owned vars
+        if (this._usesGotoCleanup) {
+          const ctx = this._throwsCtx;
+          if (node.value) {
+            this._inReturnContext = true;
+            const retC = this.exprToC(node.value, lines, depth);
+            this._inReturnContext = false;
+            if (this.inferType(node.value) === 'String') p(`tsc_string_retain(${retC});`);
+            p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
+          } else {
+            p(`_result = (${ctx.resultType}){.ok = true};`);
+          }
+          this._emitFuncCleanup(lines, I);
+          p(`goto cleanup;`);
+          break;
+        }
         if (this._hasPendingCleanups() && node.value) {
           // Evaluate return value before cleanup to avoid use-after-free of owned vars
           this._inReturnContext = true;
@@ -557,24 +573,42 @@
 
         if (this._throwsCtx) {
           const ctx = this._throwsCtx;
-          this._emitFuncCleanup(lines, I);
           if (val?.kind === 'New') {
             const errClass = val.name;
             const msgArg = val.args?.[0];
             const msgC = msgArg ? this.exprToC(msgArg.expr ?? msgArg, lines, depth) : 'STR_LIT("")';
             if (ctx.throwsNames.length === 1) {
-              // Single error type
-              p(`return (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+              if (this._usesGotoCleanup) {
+                this._emitFuncCleanup(lines, I);
+                p(`_result = (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+                p(`goto cleanup;`);
+              } else {
+                this._emitFuncCleanup(lines, I);
+                p(`return (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+              }
             } else {
-              // Union error type
               const idx = ctx.throwsNames.indexOf(errClass);
               const errUnionName = `_ErrUnion_${ctx.errKey}`;
               p(`${errUnionName} _err = {.tag = _Err_${errClass}, ._${idx} = ${errClass}_new(${msgC})};`);
-              p(`return (${ctx.resultType}){.ok = false, .error = _err};`);
+              if (this._usesGotoCleanup) {
+                this._emitFuncCleanup(lines, I);
+                p(`_result = (${ctx.resultType}){.ok = false, .error = _err};`);
+                p(`goto cleanup;`);
+              } else {
+                this._emitFuncCleanup(lines, I);
+                p(`return (${ctx.resultType}){.ok = false, .error = _err};`);
+              }
             }
           } else {
             const errC = this.exprToC(val, lines, depth);
-            p(`return (${ctx.resultType}){.ok = false, .error = ${errC}};`);
+            if (this._usesGotoCleanup) {
+              this._emitFuncCleanup(lines, I);
+              p(`_result = (${ctx.resultType}){.ok = false, .error = ${errC}};`);
+              p(`goto cleanup;`);
+            } else {
+              this._emitFuncCleanup(lines, I);
+              p(`return (${ctx.resultType}){.ok = false, .error = ${errC}};`);
+            }
           }
         } else {
           // Not in throws function тАФ fall back to tsc_throw

@@ -899,7 +899,11 @@ export default {
             this._newArrayElemHint = et; // hint for new Array(N) without type args
             const initC = this.exprToC(init, lines, depth);
             this._newArrayElemHint = null;
-            p(`${qualifier}${arrName} ${name} = ${initC};`);
+            if (this._gotoCleanupPreDecls?.has(name)) {
+              p(`${name} = ${initC};`);
+            } else {
+              p(`${qualifier}${arrName} ${name} = ${initC};`);
+            }
             // Register cleanup if heap-allocated (new Array or method returning new array)
             if (HEAP_ARRAY_KEYWORDS.some(k => initC.includes(k))) {
               this._registerCleanup(`tsc_array_free_${elemIdent}(&${name})`);
@@ -1116,7 +1120,11 @@ export default {
             if (ctype === 'String') {
               p(`tsc_string_retain(${init.name});`);
             }
-            p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
+            if (this._gotoCleanupPreDecls?.has(name)) {
+              p(`${name} = ${this.exprToC(init, lines, depth)};`);
+            } else {
+              p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
+            }
             // Move semantics: mark source moved and zero out
             { const initSym2 = this.lookup(init.name);
               const structDef2 = this.classes.get(ctype);
@@ -1260,7 +1268,11 @@ export default {
               this._lastSuppressConst = undefined;
             // Heap-allocated string: emit as non-const and register cleanup
             } else if (ctype === 'String' && this._isHeapStringInit(init)) {
-              p(`String ${name} = ${initC};`);
+              if (this._gotoCleanupPreDecls?.has(name)) {
+                p(`${name} = ${initC};`);
+              } else {
+                p(`String ${name} = ${initC};`);
+              }
               this._registerCleanup(`tsc_string_release(${name})`);
             } else {
               // Suppress const if flagged by array element return or parse() result
@@ -1340,7 +1352,11 @@ export default {
               if (ctype === 'String' && init.kind === 'Member' && init.object.kind === 'Ident') {
                 p(`tsc_string_retain(${init.object.name}.${init.prop});`);
               }
-              p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
+              if (this._gotoCleanupPreDecls?.has(name)) {
+                p(`${name} = ${initC};`);
+              } else {
+                p(`${this.varDecl(effQual, ctype, name)} = ${initC};`);
+              }
               if (ctype === 'String' && init.kind === 'Index') {
                 p(`tsc_string_retain(${name});`);
               }
