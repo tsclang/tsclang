@@ -40,6 +40,8 @@ Result_i32_Err process_i32(int32_t count) {
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", process_i32(3));
+    Result_i32_Err _unwrap_1 = process_i32(3);
+    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error._base.message); }
+    printf("%d\n", _unwrap_1.value);
     return 0;
 }

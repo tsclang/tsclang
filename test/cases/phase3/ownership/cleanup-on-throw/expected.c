@@ -24,6 +24,8 @@ Result_i32_MyError process_bool(bool flag) {
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", process_bool(false));
+    Result_i32_MyError _unwrap_0 = process_bool(false);
+    if (!_unwrap_0.ok) { tsc_panic(_unwrap_0.error._base.message); }
+    printf("%d\n", _unwrap_0.value);
     return 0;
 }

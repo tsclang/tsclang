@@ -30,6 +30,8 @@ Result_i32_Err process_i32(int32_t x) {
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", process_i32(1));
+    Result_i32_Err _unwrap_0 = process_i32(1);
+    if (!_unwrap_0.ok) { tsc_panic(_unwrap_0.error._base.message); }
+    printf("%d\n", _unwrap_0.value);
     return 0;
 }

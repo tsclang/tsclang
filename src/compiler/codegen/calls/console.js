@@ -27,11 +27,25 @@ export default {
 
     for (const arg of args) {
       const expr  = arg.expr;
-      const ctype = this.inferType(expr);
+      let ctype = this.inferType(expr);
 
       if (expr.kind === 'Literal' && expr.litType === 'string') {
         fmtParts.push(expr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%'));
         continue;
+      }
+
+      // Unwrap throws function calls: store Result, check ok, use .value
+      let unwrapRes = null;
+      if (expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
+        const calleeSym = this.lookup(expr.callee.name);
+        if (calleeSym?._isThrowsFunc && ctype?.startsWith('Result_')) {
+          const I = ' '.repeat(this.indent * depth);
+          unwrapRes = `_unwrap_${this.tempCount++}`;
+          const callC = this.exprToC(expr, lines, depth);
+          lines.push(`${I}${calleeSym._resultType} ${unwrapRes} = ${callC};`);
+          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${unwrapRes}.error._base.message); }`);
+          ctype = calleeSym._resultValueType ?? 'int32_t';
+        }
       }
 
       if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
@@ -69,7 +83,7 @@ export default {
         continue;
       }
 
-      const cexpr = this.exprToC(expr, lines, depth);
+      const cexpr = unwrapRes ? `${unwrapRes}.value` : this.exprToC(expr, lines, depth);
 
       if (expr.kind === 'Binary' && ['&','|','^','<<','>>','>>>'].includes(expr.op)) {
         const hasTypedVar = (n) => {
