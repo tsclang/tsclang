@@ -92,14 +92,10 @@ class Context {
     this.currentFuncName = null;
     this.currentFuncReturnType = null;
 
-    // Cleanup: stmts to emit before return 0 in main (LIFO order)
-    this._mainCleanup = [];
-    this._cleanupSet = new Set();
+    // Cleanup: per-block stack. Level 0 = main scope, level 1+ = function/block scopes
+    this._blockCleanupStack = [{ list: [], set: new Set() }];
 
-    // Function-scoped cleanup (null when not in function)
-    this._funcCleanup = null;
-    this._funcCleanupSet = null;
-    // Loop depth: loop-local owned vars use _loopBodyCleanups instead of _funcCleanup
+    // Loop depth: loop-local owned vars use _loopBodyCleanups
     this._loopDepth = 0;
     this._loopBodyCleanups = null;
 
@@ -249,16 +245,10 @@ class Context {
       this._loopBodyCleanups.push(stmt);
       return;
     }
-    if (!this.inFunction) {
-      if (!this._cleanupSet.has(stmt)) {
-        this._cleanupSet.add(stmt);
-        this._mainCleanup.push(stmt);
-      }
-    } else if (this._funcCleanup) {
-      if (!this._funcCleanupSet.has(stmt)) {
-        this._funcCleanupSet.add(stmt);
-        this._funcCleanup.push(stmt);
-      }
+    const top = this._blockCleanupStack[this._blockCleanupStack.length - 1];
+    if (!top.set.has(stmt)) {
+      top.set.add(stmt);
+      top.list.push(stmt);
     }
   }
 
@@ -309,6 +299,14 @@ class Context {
     }
   }
 
+  _hasPendingCleanups() {
+    if (this._loopBodyCleanups?.length) return true;
+    for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
+      if (this._blockCleanupStack[b].list.length) return true;
+    }
+    return false;
+  }
+
   _emitLoopBodyCleanups(lines, indent) {
     if (!this._loopBodyCleanups?.length) return;
     for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
@@ -322,9 +320,24 @@ class Context {
         lines.push(`${I}${this._loopBodyCleanups[i]};`);
       }
     }
-    if (!this._funcCleanup?.length) return;
-    for (let i = this._funcCleanup.length - 1; i >= 0; i--) {
-      lines.push(`${I}${this._funcCleanup[i]};`);
+    for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
+      const level = this._blockCleanupStack[b];
+      for (let i = level.list.length - 1; i >= 0; i--) {
+        lines.push(`${I}${level.list[i]};`);
+      }
+      level.list = [];
+      level.set = new Set();
+    }
+  }
+
+  _snapshotCleanups() {
+    return this._blockCleanupStack.map(l => ({ list: [...l.list], set: new Set(l.set) }));
+  }
+
+  _restoreCleanups(snapshot) {
+    for (let i = 0; i < this._blockCleanupStack.length; i++) {
+      this._blockCleanupStack[i].list = snapshot[i].list;
+      this._blockCleanupStack[i].set = snapshot[i].set;
     }
   }
 
@@ -399,8 +412,9 @@ class Context {
         }
       }
       // Emit cleanup in reverse registration order (LIFO)
-      for (let i = this._mainCleanup.length - 1; i >= 0; i--) {
-        parts.push(`${this.ind()}${this._mainCleanup[i]};`);
+      const mainLevel = this._blockCleanupStack[0];
+      for (let i = mainLevel.list.length - 1; i >= 0; i--) {
+        parts.push(`${this.ind()}${mainLevel.list[i]};`);
       }
       if (this._hasExplicitMain) {
         if (this._explicitMainRetType === 'void') {

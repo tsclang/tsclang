@@ -480,22 +480,20 @@ export default {
             const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i] ?? `_p${i}`}`);
             const handlerLines = [];
             const savedInFunc = this.inFunction;
-            const savedFuncCleanup = this._funcCleanup;
-            const savedFuncCleanupSet = this._funcCleanupSet;
+            const savedStackLen = this._blockCleanupStack.length;
             this.inFunction = true;
-            this._funcCleanup = [];
-            this._funcCleanupSet = new Set();
+            this._blockCleanupStack.push({ list: [], set: new Set() });
             this.pushScope();
             for (let i = 0; i < Math.min(paramNames.length, paramTypes.length); i++) {
               this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const', _isNetParam: true });
             }
             if (cbArg.body.kind === 'Block') this.visitBlock(cbArg.body, handlerLines, 0);
             else { const c = this.exprToC(cbArg.body, handlerLines, 0); handlerLines.push(`return ${c};`); }
-            for (let i = this._funcCleanup.length - 1; i >= 0; i--) handlerLines.push(this._funcCleanup[i] + ';');
+            const handlerCleanup = this._blockCleanupStack.pop();
+            for (let i = handlerCleanup.list.length - 1; i >= 0; i--) handlerLines.push(handlerCleanup.list[i] + ';');
             this.popScope();
             this.inFunction = savedInFunc;
-            this._funcCleanup = savedFuncCleanup;
-            this._funcCleanupSet = savedFuncCleanupSet;
+            while (this._blockCleanupStack.length > savedStackLen) this._blockCleanupStack.pop();
             this.topLevel.push(`static void ${handlerName}(${paramStrs.join(', ')}) {`);
             for (const l of handlerLines) this.topLevel.push('    ' + l);
             this.topLevel.push('}');

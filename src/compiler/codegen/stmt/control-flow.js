@@ -74,7 +74,7 @@
             throw this.error(`TypeError: Cannot return mutable borrow to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
-        if (this._funcCleanup?.length && node.value) {
+        if (this._hasPendingCleanups() && node.value) {
           // Evaluate return value before cleanup to avoid use-after-free of owned vars
           this._inReturnContext = true;
           const retC = this.exprToC(node.value, lines, depth);
@@ -151,7 +151,9 @@
         }
         if (hasBraces) {
           p(`if (${testC}) {`);
+          const _snap = this._snapshotCleanups();
           this.visitBlock(node.consequent, lines, depth + 1);
+          this._restoreCleanups(_snap);
           if (upgradeReleaseVar) {
             const innerI = ' '.repeat(this.indent * (depth + 1));
             lines.push(`${innerI}tsc_arc_release(${upgradeReleaseVar});`);
@@ -168,7 +170,9 @@
           p(`if (${testC}) return;`);
         } else {
           p(`if (${testC}) {`);
+          const _snap = this._snapshotCleanups();
           this.visitStmt(node.consequent, lines, depth + 1);
+          this._restoreCleanups(_snap);
           // Do NOT emit '}' here тАФ it's emitted by the alt section or the no-alt close below
           hasBraces = true;  // treat as if braces were used, so alt/no-alt handling closes correctly
         }
@@ -176,24 +180,24 @@
           // else if: collapse into single line
           if (alt.kind === 'If') {
             p('} else if (' + this.exprToC(alt.test, lines, depth) + ') {');
-            this.visitStmtOrBlock(alt.consequent, lines, depth + 1);
+            { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(alt.consequent, lines, depth + 1); this._restoreCleanups(_snap); }
             // recurse for chained else-if
             let cur = alt.alternate;
             while (cur) {
               if (cur.kind === 'If') {
                 p('} else if (' + this.exprToC(cur.test, lines, depth) + ') {');
-                this.visitStmtOrBlock(cur.consequent, lines, depth + 1);
+                { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(cur.consequent, lines, depth + 1); this._restoreCleanups(_snap); }
                 cur = cur.alternate;
               } else {
                 p('} else {');
-                this.visitStmtOrBlock(cur, lines, depth + 1);
+                { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(cur, lines, depth + 1); this._restoreCleanups(_snap); }
                 cur = null;
               }
             }
             p('}');
           } else {
             p('} else {');
-            this.visitStmtOrBlock(alt, lines, depth + 1);
+            { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(alt, lines, depth + 1); this._restoreCleanups(_snap); }
             p('}');
           }
         } else if (hasBraces) {

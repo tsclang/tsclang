@@ -14,8 +14,10 @@ void process(void) {
     {
         String b = STR_LIT("inner");
         mayFail();
+        tsc_string_release(b);
     }
     printf("%s\n", a.data);
+    tsc_string_release(a);
 }
 
 int main(void) {

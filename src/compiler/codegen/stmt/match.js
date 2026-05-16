@@ -254,7 +254,7 @@
 
     if (this._throwsCtx) {
       // Inside a throws function: propagate error (emit cleanup first if any)
-      if (this._funcCleanup?.length) {
+      if (this._hasPendingCleanups()) {
         p(`if (!${resName}.ok) {`);
         this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
         p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);

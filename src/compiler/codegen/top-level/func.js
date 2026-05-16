@@ -394,10 +394,8 @@ export default {
   },
 
   emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null, isNever = false) {
-    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever, funcCleanup: this._funcCleanup, funcCleanupSet: this._funcCleanupSet };
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever };
     this.inFunction = true;
-    this._funcCleanup = [];
-    this._funcCleanupSet = new Set();
     this.currentFuncName = funcName;
     this.currentFuncReturnType = retType;
     this._throwsCtx = throwsCtx; // null for non-throws, ctx object for throws functions
@@ -468,7 +466,6 @@ export default {
     if (_scalarRest && _lastNonRest) {
       lines.push(`va_list _va_args;`);
       lines.push(`va_start(_va_args, ${_lastNonRest.name});`);
-      this._registerCleanup('va_end(_va_args)');
     }
     this.visitBlock(body, lines, 0);
     if (isCtor) {
@@ -479,7 +476,7 @@ export default {
     if (_scalarRest && retType === 'void' && !throwsCtx) {
       const lastNonEmpty = [...lines].reverse().find(l => l.trim() !== '');
       if (!lastNonEmpty?.trim().startsWith('return ')) {
-        this._emitFuncCleanup(lines, '');
+        lines.push('va_end(_va_args);');
       }
     }
     // For void throws functions: add implicit {.ok=true} return if last stmt isn't a return
@@ -497,8 +494,6 @@ export default {
     this.currentFuncReturnType = saved.retType;
     this._throwsCtx = saved.throwsCtx;
     this._currentFuncIsNever = saved.isNever;
-    this._funcCleanup = saved.funcCleanup;
-    this._funcCleanupSet = saved.funcCleanupSet;
     return lines;
   },
 

@@ -2,6 +2,7 @@
 export default {
   visitBlock(block, lines, depth) {
     this.pushScope();
+    this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars = [];
     const prevPoolVars = this._currentBlockPoolVars;
     this._currentBlockPoolVars = blockPoolVars;
@@ -14,6 +15,10 @@ export default {
         this._ensurePoolDrop(className);
         lines.push(`${I}${cls._poolDropFn}(${name});`);
       }
+    }
+    const blockCleanup = this._blockCleanupStack.pop();
+    for (let i = blockCleanup.list.length - 1; i >= 0; i--) {
+      lines.push(`${I}${blockCleanup.list[i]};`);
     }
     this._currentBlockPoolVars = prevPoolVars;
     this.popScope();
