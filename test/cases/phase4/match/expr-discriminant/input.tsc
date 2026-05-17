@@ -1,0 +1,12 @@
+enum Color { Red, Green, Blue }
+
+function getColor(): Color {
+    return Color.Green;
+}
+
+const name = match(getColor()) {
+    Color.Red => "red"
+    Color.Green => "green"
+    _ => "blue"
+};
+console.log(name);
