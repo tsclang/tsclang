@@ -132,17 +132,23 @@
           const elemIdent = initType.slice(6); // Array_i32 → i32
           const elemCType = this._arrIdentToCType(elemIdent);
           const srcC = this.exprToC(init, lines, depth);
+          let srcUse = srcC;
+          if (init.kind !== 'Ident') {
+            const srcTmp = `_tsc_src_${this.tempCount++}`;
+            p(`${initType} ${srcTmp} = ${srcC};`);
+            srcUse = srcTmp;
+          }
           const nonRestCount = pattern.filter(e => e && !e.rest).length;
           let idx = 0;
           for (const elem of pattern) {
             if (!elem) { idx++; continue; }
             if (elem.rest) {
               // Rest: sub-array slice
-              p(`${qual}${initType} ${elem.name} = {.data = ${srcC}.data + ${idx}, .length = ${srcC}.length - ${idx}, .capacity = 0};`);
+              p(`${qual}${initType} ${elem.name} = {.data = ${srcUse}.data + ${idx}, .length = ${srcUse}.length - ${idx}, .capacity = 0};`);
               this.define(elem.name, { ctype: initType, elemType: elemIdent, arrElemCType: elemCType, isArray: true, varKind });
             } else {
               // Regular element: direct index
-              p(`${qual}${elemCType} ${elem.name} = ${srcC}.data[${idx}];`);
+              p(`${qual}${elemCType} ${elem.name} = ${srcUse}.data[${idx}];`);
               this.define(elem.name, { ctype: elemCType, varKind });
               idx++;
             }

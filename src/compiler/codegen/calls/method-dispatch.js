@@ -68,16 +68,26 @@ export default {
           const slName = `Slice_${et}`;
           this._ensureSliceStruct(slName, etC, false);
           if (baseObject.kind === 'Ident' && sym) this._trackRefBorrow(sym);
-          const _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          let _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _ve = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
+          if (args[0] && !['Ident','Literal'].includes(args[0].expr.kind)) {
+            const vsTmp = `_tsc_vs_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}int32_t ${vsTmp} = ${_vs};`);
+            _vs = vsTmp;
+          }
           return `(${slName}){ .ptr = ${objC}.data + (${_vs}), .length = (size_t)(${_ve}) - (${_vs}) }`;
         }
         case 'viewMut': {
           const msName = `MutSlice_${et}`;
           this._ensureSliceStruct(msName, etC, true);
           if (baseObject.kind === 'Ident' && sym) this._trackRefBorrow(sym);
-          const _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          let _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _me = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(size_t)${objC}.length`;
+          if (args[0] && !['Ident','Literal'].includes(args[0].expr.kind)) {
+            const msTmp = `_tsc_vs_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}int32_t ${msTmp} = ${_ms};`);
+            _ms = msTmp;
+          }
           return `(${msName}){ .ptr = ${objC}.data + (${_ms}), .length = (size_t)(${_me}) - (${_ms}) }`;
         }
         case 'length':   return `${objC}.length`;
@@ -177,15 +187,25 @@ export default {
         case 'view': {
           const slName = `Slice_${sliceEt}`;
           this._ensureSliceStruct(slName, sliceEtC, false);
-          const _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          let _vs = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _ve = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${objC}.length`;
+          if (args[0] && !['Ident','Literal'].includes(args[0].expr.kind)) {
+            const vsTmp = `_tsc_vs_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}int32_t ${vsTmp} = ${_vs};`);
+            _vs = vsTmp;
+          }
           return `(${slName}){ .ptr = ${objC}.ptr + (${_vs}), .length = (size_t)(${_ve}) - (${_vs}) }`;
         }
         case 'viewMut': {
           const msName = `MutSlice_${sliceEt}`;
           this._ensureSliceStruct(msName, sliceEtC, true);
-          const _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          let _ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const _me = args[1] ? this.exprToC(args[1].expr, lines, depth) : `${objC}.length`;
+          if (args[0] && !['Ident','Literal'].includes(args[0].expr.kind)) {
+            const msTmp = `_tsc_vs_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}int32_t ${msTmp} = ${_ms};`);
+            _ms = msTmp;
+          }
           return `(${msName}){ .ptr = ${objC}.ptr + (${_ms}), .length = (size_t)(${_me}) - (${_ms}) }`;
         }
       }
