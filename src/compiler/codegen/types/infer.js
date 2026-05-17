@@ -159,11 +159,19 @@ export default {
         if (node.name === 'Error') return 'TscError';
         if (node.name === 'UDPSocket') return 'TscUdpSocket';
         if (node.name === 'WebSocketServer') return 'TscWebSocketServer';
+        if (node.name === 'Array' || node.name === 'ReadonlyArray') {
+          const et = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
+          return `Array_${this.cTypeToIdent(et)}`;
+        }
         if (node.name === 'Map') {
           const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
           const k = kt ? this.cTypeToIdent(kt) : 'string';
           const v = vt ? this.cTypeToIdent(vt) : 'i32';
           return `TscMap_${k}_${v}`;
+        }
+        if (node.name === 'Set') {
+          const et = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
+          return `TscSet_${this.cTypeToIdent(et)}`;
         }
         if (this._genericClasses?.has(node.name) && node.typeArgs?.length > 0) {
           const tmpl = this._genericClasses.get(node.name);
