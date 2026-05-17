@@ -227,10 +227,15 @@
     if (callee.kind === 'Ident' && callee.name === 'structuredClone' && args.length === 1) {
       const argNode = args[0].expr;
       const argType = this.inferType(argNode);
-      const argC = this.exprToC(argNode, lines, depth);
+      let argC = this.exprToC(argNode, lines, depth);
       if (argType?.startsWith('Array_')) {
-        const et = argType.slice(6); // remove 'Array_' prefix
+        const et = argType.slice(6);
         const etIdent = this.cTypeToIdent(et);
+        if (!['Ident', 'Literal'].includes(argNode.kind)) {
+          const tmp = `_tsc_clone_${this.tempCount++}`;
+          lines.push(`${' '.repeat(this.indent * depth)}${argType} ${tmp} = ${argC};`);
+          argC = tmp;
+        }
         return `tsc_array_slice_${etIdent}(${argC}, 0, (int32_t)${argC}.length)`;
       }
       // For structs/primitives: C assignment = copy by value

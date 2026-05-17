@@ -37,17 +37,20 @@
     if (callee.kind === 'OptChain') {
       const obj = callee.object;
       const objType = this.inferType(obj);
-      const objC = this.exprToC(obj, lines, depth);
+      let objC = this.exprToC(obj, lines, depth);
       if (objType?.startsWith('opt_')) {
         const innerIdent = objType.slice(4);
         if (callee.prop === 'toString') {
-          // Ensure opt_string typedef is emitted
-
           if (!this._emittedOptStructs.has('opt_string')) {
             this._emittedOptStructs.add('opt_string');
             this.addTop(`typedef struct { bool has_value; String value; } opt_string;`);
           }
           const fnName = `tsc_${innerIdent}_to_string`;
+          if (!['Ident', 'Literal'].includes(obj.kind)) {
+            const tmp = `_tsc_opt_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}${objType} ${tmp} = ${objC};`);
+            objC = tmp;
+          }
           return `${objC}.has_value ? (opt_string){true, ${fnName}(${objC}.value)} : (opt_string){false, STR_LIT("")}`;
         }
       }

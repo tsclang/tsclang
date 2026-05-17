@@ -83,12 +83,18 @@ export default {
     if (node.op === '??') {
       const leftType = this.inferType(node.left);
       if (leftType?.startsWith('opt_')) {
-        const lC = this.exprToC(node.left, lines, depth);
-        const rC = this.exprToC(node.right, lines, depth);
+        let lC = this.exprToC(node.left, lines, depth);
         // Error: || mixed with ?? requires parens
         if (node.right?.kind === 'Binary' && (node.right.op === '||' || node.right.op === '??')) {
           throw this.error(`"||" and "??" require parentheses when mixed`, node);
         }
+        if (!['Ident', 'Literal'].includes(node.left.kind)) {
+          const tmp = `_tsc_opt_${this.tempCount++}`;
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}${leftType} ${tmp} = ${lC};`);
+          lC = tmp;
+        }
+        const rC = this.exprToC(node.right, lines, depth);
         return `${lC}.has_value ? ${lC}.value : ${rC}`;
       }
     }

@@ -53,6 +53,12 @@
       p('}');
     } else {
       // if/else chain form
+      let discUse = discC;
+      if (!['Ident', 'Literal'].includes(discriminant.kind)) {
+        const discTmp = `_tsc_disc_${this.tempCount++}`;
+        p(`${discType} ${discTmp} = ${discC};`);
+        discUse = discTmp;
+      }
       for (let i = 0; i < cases.length; i++) {
         const c = cases[i];
         const isLast = i === cases.length - 1;
@@ -60,17 +66,15 @@
         const needsBindings = c.pattern.kind === 'MatchClass' || c.pattern.kind === 'MatchObjLit';
 
         if (isLast && (c.pattern.kind === 'MatchWild' || (isEnum && c.pattern.kind === 'MatchEnum'))) {
-          // Last case: emit as else
           const bodyC = this.exprToC(c.body, lines, depth);
           p(`else { ${name} = ${bodyC}; }`);
         } else {
-          const cond = this._matchPatternCond(c.pattern, discC, discType, enumDef);
+          const cond = this._matchPatternCond(c.pattern, discUse, discType, enumDef);
           if (needsBindings) {
-            // Emit block with field bindings then body
             const armLines = [];
             const armI = ' '.repeat(this.indent * (depth + 1));
             this.pushScope();
-            const bindings = this._matchPatternBindings(c.pattern, discC, discType);
+            const bindings = this._matchPatternBindings(c.pattern, discUse, discType);
             for (const b of bindings) armLines.push(armI + b);
             const bodyC = this.exprToC(c.body, armLines, depth + 1);
             armLines.push(`${armI}${name} = ${bodyC};`);
@@ -83,7 +87,6 @@
             lines.push(...armLines);
             p('}');
           } else if (cond === null) {
-            // Wildcard not at last position (just emit as else)
             const bodyC = this.exprToC(c.body, lines, depth);
             p(`else { ${name} = ${bodyC}; }`);
           } else {

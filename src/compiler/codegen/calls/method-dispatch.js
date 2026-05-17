@@ -155,7 +155,15 @@ export default {
         case 'values':  return `tsc_array_values_${et}(${objC})`;
         case 'entries': return `tsc_array_entries_${et}(${objC})`;
         case 'flat':    return `tsc_array_flat_${et}(${objC})`;
-        case 'clone':   return `tsc_array_slice_${et}(${objC}, 0, (int32_t)${objC}.length)`;
+        case 'clone': {
+          if (baseObject.kind === 'Ident') {
+            return `tsc_array_slice_${et}(${objC}, 0, (int32_t)${objC}.length)`;
+          }
+          const arrType = this.inferType(baseObject) ?? `Array_${etC}`;
+          const tmp = `_tsc_arr_${this.tempCount++}`;
+          lines.push(`${' '.repeat(this.indent * depth)}${arrType} ${tmp} = ${objC};`);
+          return `tsc_array_slice_${et}(${tmp}, 0, (int32_t)${tmp}.length)`;
+        }
       }
     }
 
@@ -215,7 +223,15 @@ export default {
       codePoints:  () => `tsc_codepoints(${objC})`,
       graphemes:   () => `tsc_graphemes(${objC})`,
       replaceAll:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${objC}, ${a[0]}, ${a[1]})`; },
-      substring:   () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_substring(${objC}, ${a[0]}, ${a[1]??objC+'.length'})`; },
+      substring:   () => {
+                     const a = args.map(a => this.exprToC(a.expr, lines, depth));
+                     if (a[1] === undefined && baseObject.kind !== 'Ident') {
+                       const tmp = `_tsc_str_${this.tempCount++}`;
+                       lines.push(`${' '.repeat(this.indent * depth)}String ${tmp} = ${objC};`);
+                       return `tsc_string_substring(${tmp}, ${a[0]}, (int32_t)${tmp}.length)`;
+                     }
+                     return `tsc_string_substring(${objC}, ${a[0]}, ${a[1] ?? `(int32_t)${objC}.length`})`;
+                   },
       trimStart:   () => `tsc_string_trim_start(${objC})`,
       trimEnd:     () => `tsc_string_trim_end(${objC})`,
     };
