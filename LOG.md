@@ -794,3 +794,12 @@
 > - **Array cleanup in general VarDecl section**: `Array<i32>` (parsed as `TypeRef`, not `TypeArray`) now registers `tsc_array_free_*` cleanup when heap-allocated. Previously only `TypeArray` (e.g. `i32[]`) registered cleanup — `TypeRef` arrays like `new Array<i32>(2)` silently leaked
 > - 3 new tests: `goto-cleanup-multi-prop`, `goto-cleanup-loop`, `goto-cleanup-nested` (all [F] fragment tests)
 > - Результат: **1086 тестов, 0 ошибок**
+
+> 2026-05-17: **String retain + double-evaluation bug fixes** (5 commits):
+> - **Selective `tsc_string_retain` on return**: removed unconditional retain from all 5 return paths in control-flow.js; added retain only for borrowed string expressions (Ident/Member/Index) — fresh strings from function calls no longer get unnecessary retain. Fixed `namespace-import` test (pre-existing bug — extra retain caused double-eval memory leak)
+> - **Console.log unwrap throws**: console.js now unwraps Result for throws function calls (`console.log(mayThrow())` works correctly)
+> - **Double-evaluation prevention (HIGH)**: `??` operator, optional chaining `.toString()`, `structuredClone(arr)`, `.clone()`, `.substring()` fallback, match discriminant — all now store complex expressions in temp variables before multi-use
+> - **Double-evaluation prevention (MEDIUM)**: compound assignment operators on non-trivial LHS (`>>>=`, `**=`, `??=`, `&&=`, `||=`, string `+=`, string index assign) — use pointer temp for Index targets
+> - **Double-evaluation prevention (LOW)**: slice `.view()`/`.viewMut()` start arg, array destruct rest — store in temp for non-trivial expressions
+> - Updated 7 expected.c files (capture-string-ref, by-type, dispatch, cleanup-on-throw, goto-cleanup-*)
+> - Результат: **1086 тестов, 0 ошибок** (no-gcc); **1085/1086** (gcc, flaky cache)
