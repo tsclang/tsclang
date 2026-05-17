@@ -88,21 +88,35 @@ export default {
 
     // >>>= → x = (int32_t)((uint32_t)x >> r)
     if (node.op === '>>>=') {
-      return `${l} = (int32_t)((uint32_t)${l} >> ${r})`;
+      if (node.left.kind === 'Ident') return `${l} = (int32_t)((uint32_t)${l} >> ${r})`;
+      const lt2 = this.inferType(node.left) ?? 'int32_t';
+      const ptr = `_tsc_ptr_${this.tempCount++}`;
+      const I = ' '.repeat(this.indent * depth);
+      lines.push(`${I}{ ${lt2} *${ptr} = &(${l}); *${ptr} = (int32_t)((uint32_t)*${ptr} >> ${r}); }`);
+      return null;
     }
 
     // **= → x = pow(x, r)
     if (node.op === '**=') {
       this.includes.add('#include <math.h>');
-      return `${l} = pow(${l}, ${r})`;
+      if (node.left.kind === 'Ident') return `${l} = pow(${l}, ${r})`;
+      const lt2 = this.inferType(node.left) ?? 'double';
+      const ptr = `_tsc_ptr_${this.tempCount++}`;
+      const I = ' '.repeat(this.indent * depth);
+      lines.push(`${I}{ ${lt2} *${ptr} = &(${l}); *${ptr} = pow(*${ptr}, ${r}); }`);
+      return null;
     }
     // ??= → if (!x.has_value) { x = (opt_T){true, rhs}; }
     if (node.op === '??=') {
       const sym = node.left.kind === 'Ident' ? this.lookup(node.left.name) : null;
       const optType = sym?.ctype;
       if (optType?.startsWith('opt_')) {
-        if (sym) sym.optIsNull = false; // after ??=, variable is guaranteed to have a value
-        return `if (!${l}.has_value) { ${l} = (${optType}){true, ${r}}; }`;
+        if (sym) sym.optIsNull = false;
+        if (node.left.kind === 'Ident') return `if (!${l}.has_value) { ${l} = (${optType}){true, ${r}}; }`;
+        const ptr = `_tsc_ptr_${this.tempCount++}`;
+        const I = ' '.repeat(this.indent * depth);
+        lines.push(`${I}{ ${optType} *${ptr} = &(${l}); if (!(*${ptr}).has_value) { *${ptr} = (${optType}){true, ${r}}; } }`);
+        return null;
       }
       return `${l} = ${l} ?? ${r}`;
     }
@@ -111,12 +125,21 @@ export default {
       const sym = node.left.kind === 'Ident' ? this.lookup(node.left.name) : null;
       const lt = sym?.ctype ?? 'int32_t';
       const tmp = `_tsc_lhs`;
+      if (node.left.kind === 'Ident') {
+        if (node.op === '&&=') {
+          return `{ ${lt} ${tmp} = ${l}; ${l} = (${tmp}) ? ${r} : ${tmp}; }`;
+        } else {
+          return `{ ${lt} ${tmp} = ${l}; ${l} = (${tmp}) ? ${tmp} : ${r}; }`;
+        }
+      }
+      const ptr = `_tsc_ptr_${this.tempCount++}`;
       const I = ' '.repeat(this.indent * depth);
       if (node.op === '&&=') {
-        return `{ ${lt} ${tmp} = ${l}; ${l} = (${tmp}) ? ${r} : ${tmp}; }`;
+        lines.push(`${I}{ ${lt} *${ptr} = &(${l}); ${lt} ${tmp} = *${ptr}; *${ptr} = (${tmp}) ? ${r} : ${tmp}; }`);
       } else {
-        return `{ ${lt} ${tmp} = ${l}; ${l} = (${tmp}) ? ${tmp} : ${r}; }`;
+        lines.push(`${I}{ ${lt} *${ptr} = &(${l}); ${lt} ${tmp} = *${ptr}; *${ptr} = (${tmp}) ? ${tmp} : ${r}; }`);
       }
+      return null;
     }
 
     const leftType = this.inferType(node.left);
@@ -124,7 +147,12 @@ export default {
     // += for string: s += "x" → eval concat first, release old, assign (ownership transfer)
     if (node.op === '+=' && leftType === 'String') {
       const I = ' '.repeat(this.indent * depth);
-      lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      if (node.left.kind === 'Ident') {
+        lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      } else {
+        const ptr = `_tsc_ptr_${this.tempCount++}`;
+        lines.push(`${I}{ String *${ptr} = &(${l}); String _tsc_tmp = ${r}; tsc_string_release(*${ptr}); *${ptr} = _tsc_tmp; }`);
+      }
       return null;
     }
 
@@ -132,7 +160,12 @@ export default {
     if (node.op === '=' && leftType === 'String' &&
         (node.left.kind === 'Member' || node.left.kind === 'Index')) {
       const I = ' '.repeat(this.indent * depth);
-      lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_retain(_tsc_tmp); tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      if (node.left.kind === 'Index') {
+        const ptr = `_tsc_ptr_${this.tempCount++}`;
+        lines.push(`${I}{ String *${ptr} = &(${l}); String _tsc_tmp = ${r}; tsc_string_retain(_tsc_tmp); tsc_string_release(*${ptr}); *${ptr} = _tsc_tmp; }`);
+      } else {
+        lines.push(`${I}{ String _tsc_tmp = ${r}; tsc_string_retain(_tsc_tmp); tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      }
       return null;
     }
 
