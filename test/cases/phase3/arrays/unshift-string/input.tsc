@@ -1,0 +1,5 @@
+let arr: string[] = [];
+arr.unshift("world");
+arr.unshift("hello");
+console.log(arr.length);
+console.log(arr[0]);

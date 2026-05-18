@@ -1,0 +1,4 @@
+let arr: string[] = ["hello", "world"];
+const first = arr.shift();
+console.log(first);
+console.log(arr.length);

@@ -872,3 +872,13 @@
 > - Codegen: `infer.js` — added type inference for all 14 methods in array section
 > - 14 новых тестов (все [R] runnable)
 > - Результат: **1125 тестов проходят, 2 отложены**
+
+> 2026-05-19: **String-версии 14 методов массива** (Stage 1):
+> - Добавлены 14 runtime macros в `runtime.h`: `tsc_array_shift_string`, `unshift_string`, `splice_string`, `at_string`, `with_string`, `last_index_of_string`, `join_string`, `flat_string`, `find_last_string`, `find_last_index_string`, `flat_map_string_string`, `to_reversed_string`, `to_sorted_string`, `to_spliced_string`
+> - Исправлен `opt_String` → `opt_string` в макросах `shift_string` и `pop_string` (codegen генерирует lowercase typedef)
+> - Исправлен `opt_ref_String` → `opt_ref_string` в `find_last_string`
+> - Добавлен `tsc_array_get_checked_string` для bounds-checked индексации string[]
+> - Добавлен `_tsc_cmp_string_asc` — string comparison helper для `toSorted`
+> - Исправлен console.log для `opt_ref_string`: теперь генерирует `printf("%s", val.value->data)` вместо `printf("%d", *val.value)`
+> - 14 новых тестов `phase3/arrays/*-string` (все [R] runnable, компилируются и выполняются через gcc)
+> - Результат: **1139 тестов проходят, 2 отложены**

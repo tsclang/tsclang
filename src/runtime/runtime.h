@@ -1313,6 +1313,13 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     _a_.data[_i_]; \
 })
 
+#define tsc_array_get_checked_string(arr, idx) ({ \
+    Array_string _a_ = (arr); int32_t _i_ = (idx); \
+    if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
+        fprintf(stderr, "Array index %d out of bounds (length %zu)\n", _i_, _a_.length); exit(1); } \
+    _a_.data[_i_]; \
+})
+
 #define tsc_array_concat_i32(a, b) ({ \
     Array_i32 _a_ = (a), _b_ = (b); \
     size_t _n_ = _a_.length + _b_.length; \
@@ -1638,8 +1645,8 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_pop_string(arr) ({ \
     Array_string *_a_ = (arr); \
-    opt_String _r_ = {false, _tsc_str_make(NULL, 0, 0)}; \
-    if (_a_->length > 0) { _r_ = (opt_String){true, _a_->data[--_a_->length]}; } \
+    opt_string _r_ = {false, _tsc_str_make(NULL, 0, 0)}; \
+    if (_a_->length > 0) { _r_ = (opt_string){true, _a_->data[--_a_->length]}; } \
     _r_; \
 })
 
@@ -1658,6 +1665,177 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     if (_n_) { memcpy(_d_, _a_.data + _s_, _n_ * sizeof(String)); \
                for (size_t _i_ = 0; _i_ < _n_; _i_++) tsc_string_retain(_d_[_i_]); } \
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_shift_string(arr) ({ \
+    Array_string *_a_ = (arr); \
+    opt_string _r_ = {false, _tsc_str_make(NULL, 0, 0)}; \
+    if (_a_->length > 0) { \
+        _r_ = (opt_string){true, _a_->data[0]}; \
+        memmove(_a_->data, _a_->data + 1, (_a_->length - 1) * sizeof(String)); \
+        _a_->length--; \
+    } \
+    _r_; \
+})
+
+#define tsc_array_unshift_string(arr, val) do { \
+    Array_string *_a_ = (arr); String _v_ = (val); \
+    if (_a_->length >= _a_->capacity) { \
+        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
+        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
+    } \
+    memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(String)); \
+    _a_->data[0] = _v_; _a_->length++; \
+} while(0)
+
+#define tsc_array_splice_string(arr, start, del_cnt, ...) ({ \
+    Array_string *_a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_->length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_->length) _s_ = (int32_t)_a_->length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_->length - (size_t)_s_) _dc_ = (int32_t)(_a_->length - (size_t)_s_); \
+    String _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(String); \
+    Array_string _r_ = {NULL, 0, 0}; \
+    if (_dc_ > 0) { \
+        _r_.data = (String*)malloc((size_t)_dc_ * sizeof(String)); \
+        memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(String)); \
+        _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
+    } \
+    size_t _tail_ = _a_->length - (size_t)_s_ - (size_t)_dc_; \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
+    if (_new_len_ > _a_->capacity) { \
+        size_t _nc_ = _new_len_ * 2; \
+        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
+    } \
+    if (_ni_ != (size_t)_dc_) { \
+        memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(String)); \
+    } \
+    memcpy(_a_->data + _s_, _ins_, _ni_ * sizeof(String)); \
+    _a_->length = _new_len_; \
+    _r_; \
+})
+
+#define tsc_array_at_string(arr, idx) ({ \
+    Array_string _a_ = (arr); int32_t _i_ = (idx); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    _a_.data[(size_t)_i_]; \
+})
+
+#define tsc_array_with_string(arr, idx, val) ({ \
+    Array_string _a_ = (arr); int32_t _i_ = (idx); String _v_ = (val); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
+    for (size_t _j_ = 0; _j_ < _a_.length; _j_++) tsc_string_retain(_d_[_j_]); \
+    tsc_string_retain(_v_); \
+    _d_[(size_t)_i_] = _v_; \
+    (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_last_index_of_string(arr, val) ({ \
+    Array_string _a_ = (arr); String _v_ = (val); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if (_tsc_str_eq(_a_.data[_i_ - 1], _v_)) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
+    const String *sa = (const String *)a, *sb = (const String *)b;
+    size_t min_len = sa->length < sb->length ? sa->length : sb->length;
+    int cmp = memcmp(sa->data, sb->data, min_len);
+    if (cmp != 0) return cmp;
+    return (sa->length > sb->length) - (sa->length < sb->length);
+}
+
+#define tsc_array_to_sorted_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
+    for (size_t _j_ = 0; _j_ < _a_.length; _j_++) tsc_string_retain(_d_[_j_]); \
+    qsort(_d_, _a_.length, sizeof(String), _tsc_cmp_string_asc); \
+    (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_join_string(arr, sep) ({ \
+    Array_string _a_ = (arr); String _sep_ = (sep); \
+    String _jr_; \
+    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    else { \
+        size_t _total_ = _a_.data[0].length; \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) _total_ += _sep_.length + _a_.data[_i_].length; \
+        char *_out_ = (char*)malloc(_total_ + 1); \
+        memcpy(_out_, _a_.data[0].data, _a_.data[0].length); \
+        size_t _w_ = _a_.data[0].length; \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
+            memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += _sep_.length; \
+            memcpy(_out_ + _w_, _a_.data[_i_].data, _a_.data[_i_].length); _w_ += _a_.data[_i_].length; \
+        } \
+        _jr_ = _tsc_str_make(_out_, _w_, _w_ + 1); \
+    } \
+    _jr_; \
+})
+
+#define tsc_array_flat_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_] = _a_.data[_i_]; tsc_string_retain(_d_[_i_]); } \
+    (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_find_last_string(arr, pred) ({ \
+    Array_string _a_ = (arr); \
+    opt_ref_string _r_ = {false, NULL}; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (opt_ref_string){true, &_a_.data[_i_ - 1]}; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_last_index_string(arr, pred) ({ \
+    Array_string _a_ = (arr); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+#define tsc_array_flat_map_string_string(arr, fn) ({ \
+    Array_string _a_ = (arr); \
+    Array_string _r_ = {NULL, 0, 0}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        Array_string _chunk_ = (fn)(_a_.data[_i_]); \
+        for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
+            if (_r_.length >= _r_.capacity) { \
+                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
+                _r_.data = (String*)realloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
+            } \
+            _r_.data[_r_.length++] = _chunk_.data[_j_]; \
+        } \
+    } \
+    _r_; \
+})
+
+#define tsc_array_to_reversed_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; tsc_string_retain(_d_[_i_]); } \
+    (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_to_spliced_string(arr, start, del_cnt, ...) ({ \
+    Array_string _a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_.length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_.length) _s_ = (int32_t)_a_.length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
+    String _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(String); \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
+    String *_d_ = (String*)malloc(_new_len_ * sizeof(String)); \
+    for (size_t _j_ = 0; _j_ < (size_t)_s_; _j_++) { _d_[_j_] = _a_.data[_j_]; tsc_string_retain(_d_[_j_]); } \
+    memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(String)); \
+    for (size_t _j_ = 0; _j_ < _ni_; _j_++) tsc_string_retain(_d_[_s_ + _j_]); \
+    for (size_t _j_ = 0; _j_ < _a_.length - (size_t)_s_ - (size_t)_dc_; _j_++) { \
+        _d_[_s_ + _ni_ + _j_] = _a_.data[_s_ + _dc_ + _j_]; tsc_string_retain(_d_[_s_ + _ni_ + _j_]); \
+    } \
+    (Array_string){ .data = _d_, .length = _new_len_, .capacity = _new_len_ }; \
 })
 
 

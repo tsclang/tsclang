@@ -1,0 +1,4 @@
+const arr: string[] = ["a", "b", "c"];
+const arr2 = arr.toReversed();
+console.log(arr2[0]);
+console.log(arr2[2]);

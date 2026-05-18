@@ -1,0 +1,5 @@
+const arr: string[] = ["hi", "yo"];
+const arr2 = arr.flatMap((s) => [s, s]);
+console.log(arr2.length);
+console.log(arr2[0]);
+console.log(arr2[1]);

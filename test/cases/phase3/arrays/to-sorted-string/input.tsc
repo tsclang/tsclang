@@ -1,0 +1,4 @@
+const arr: string[] = ["banana", "apple", "cherry"];
+const arr2 = arr.toSorted();
+console.log(arr2[0]);
+console.log(arr2[2]);
