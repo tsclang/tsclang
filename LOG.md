@@ -809,3 +809,10 @@
 > - Added `Array`/`ReadonlyArray` → `Array_T` and `Set` → `TscSet_T` mangling, consistent with `resolveType()` and `newToC()`
 > - New test: `phase3/arrays/infer-return` ([R] runnable)
 > - Результат: **1090 тестов, 0 ошибок** (GCC все фазы)
+
+> 2026-05-18: **4 безопасные оптимизации codegen + optimizer**:
+> - **Self-assign retain/release**: `assign.js` — when `l === r` (syntactic self-assignment like `h.p = h.p`), skip retain/release entirely. Updated `string-assign-safe` test
+> - **Redundant nested casts**: 3 locations — `dispatch.js` Cast node (skip when `inferType(expr) === resolveType(castType)`), `builtin-helpers.js` Math.imul (conditional casts), `literals.js` tryConstMixedBinary (removed redundant outer cast from `inner`). Updated 5 expected.c files
+> - **Unused catch variable elimination**: `match.js` (single-catch + multi-catch) + `async-stmt.js` — emit `(void)errExpr;` instead of `Type e = errExpr; (void)e;` when catch param is unused. Updated 7 expected.c files
+> - **Strength reduction in AST optimizer**: `optimizer.js` — `x * 2 → x + x`, `x * 2^n → x << n` (and commutative `2 * x`). Also extended `foldInits` to apply `foldExpr` on `Return` and `ExprStmt` expressions. New test: `phase18/optimizer/strength-reduce` ([R] runnable)
+> - Результат: **1091 тест, 0 ошибок** (GCC все фазы)
