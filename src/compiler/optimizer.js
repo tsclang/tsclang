@@ -29,6 +29,10 @@ function isLit(node) {
   return node?.kind === 'Literal';
 }
 
+function isPowerOf2(n) {
+  return n > 0 && (n & (n - 1)) === 0;
+}
+
 // Unwrap Export wrapper → inner decl
 function innerDecl(s) {
   return s?.kind === 'Export' ? s.decl : s;
@@ -73,6 +77,23 @@ function foldExpr(node) {
       if (op === '&&') return boolLit(l && r);
       if (op === '||') return boolLit(l || r);
     }
+    // Strength reduction: x * 2 → x + x, x * 2^n → x << n
+    if (op === '*') {
+      if (isNumLit(left) && !isNumLit(right) && right.kind === 'Ident') {
+        const v = Number(left.value);
+        if (isPowerOf2(v)) {
+          if (v === 2) return { ...out, op: '+', left: { ...right }, right: { ...right } };
+          return { ...out, op: '<<', left: { ...right }, right: numLit(Math.log2(v)) };
+        }
+      }
+      if (isNumLit(right) && !isNumLit(left) && left.kind === 'Ident') {
+        const v = Number(right.value);
+        if (isPowerOf2(v)) {
+          if (v === 2) return { ...out, op: '+', left: { ...left }, right: { ...left } };
+          return { ...out, op: '<<', left: { ...left }, right: numLit(Math.log2(v)) };
+        }
+      }
+    }
   }
 
   if (out.kind === 'Unary') {
@@ -98,6 +119,12 @@ function foldInits(stmts) {
       const newInit = foldExpr(decl.init);
       const newDecl = { ...decl, init: newInit };
       return decl === s ? newDecl : { ...s, decl: newDecl };
+    }
+    if (s?.kind === 'Return' && s.value) {
+      return { ...s, value: foldExpr(s.value) };
+    }
+    if (s?.kind === 'ExprStmt' && s.expr) {
+      return { ...s, expr: foldExpr(s.expr) };
     }
     return s;
   });

@@ -1,0 +1,16 @@
+// @opt
+function f(x: i32): i32 {
+  return x * 2
+}
+
+function g(x: i32): i32 {
+  return 4 * x
+}
+
+function h(x: i32): i32 {
+  return x * 8
+}
+
+console.log(f(3))
+console.log(g(5))
+console.log(h(7))
