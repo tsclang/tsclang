@@ -318,11 +318,11 @@ _closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
 **C-определение String struct:**
 
 ```c
-// Desktop (32 байта)
+// Desktop: 32 байта (64-bit: 8+8+8+8), Embedded: 24 байта (без _refcount)
 #ifdef TSC_EMBEDDED
-typedef struct { const char *data; uint32_t length; uint32_t capacity; } String;
+typedef struct { const char *data; size_t length; size_t capacity; } String;
 #else
-typedef struct { const char *data; uint32_t length; uint32_t capacity; uint32_t *_refcount; } String;
+typedef struct { const char *data; size_t length; size_t capacity; uint32_t *_refcount; } String;
 #endif
 ```
 
@@ -713,7 +713,7 @@ const copy = [...names, "Charlie"];
 
 ### Деструктуризация массивов
 
-Деструктуризация **потребляет** источник — move элементов.
+Деструктуризация **потребляет** источник — move элементов. Исключение: rest-паттерн (см. ниже) — deep copy, source остаётся живым.
 
 **Полная деструктуризация — move всех элементов:**
 
@@ -723,18 +723,19 @@ const [a, b, c] = arr;  // move трёх элементов
 console.log(arr[0]);     // ❌ E002: use after move
 ```
 
-**Rest в деструктуризации — move первого + rest:**
+**Rest в деструктуризации — copy первого + deep copy rest:**
 
 ```typescript
 let arr = [10, 20, 30];
-const [first, ...rest] = arr;  // move first + move rest
+const [first, ...rest] = arr;  // copy first + deep copy rest
 ```
 
 ```c
 int32_t first = arr.data[0];       // copy (примитив)
-Array_i32 rest = {.data = arr.data + 1, .length = arr.length - 1};
-memset(&arr, 0, sizeof(Array_i32));
+Array_i32 rest = tsc_array_slice_i32(arr, 1, (int32_t)arr.length);  // deep copy
 ```
+
+Rest-часть — **независимая копия** через `tsc_array_slice_*`: malloc + memcpy. Source остаётся живым, cleanup source и rest независимы. Для `Array<string>` — `tsc_array_slice_string` делает `tsc_string_retain` каждого элемента.
 
 **Деструктуризация массива объектов — move:**
 
@@ -752,6 +753,34 @@ const [first, ...rest] = names;
 // rest: каждый элемент retain → ARC Copy
 // names: zero-out (move), но строки живы
 ```
+
+### Array `capacity` — owning vs non-owning
+
+`Array<T>` struct имеет три поля: `data`, `length`, `capacity`. Значение `capacity` определяет owning semantics:
+
+| `capacity` | Семантика | Кто освобождает `data` |
+|------------|-----------|----------------------|
+| `> 0` | **Owning** — массив владеет `data` | `tsc_array_free_*` при cleanup |
+| `= 0` | **Non-owning** — `data` указывает на чужую память | Никто — `tsc_array_free_*` пропускает |
+
+**Источники `capacity = 0` (non-owning):**
+
+1. **Array range expression** (`arr[1..3]`): `{.data = arr.data + 1, .length = 2, .capacity = 0}` — view в оригинальный массив
+2. **Async array literals**: в async-функциях данные литерала размещаются как `static` (переживают poll-цикл), struct = `{.data = static_arr, .length = N, .capacity = 0}`
+
+**`tsc_array_free_*` guard:**
+
+```c
+#define tsc_array_free_i32(arr) do { \
+    Array_i32 *_a_ = (arr); \
+    if (_a_->data && _a_->capacity > 0) free(_a_->data); \
+    _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
+} while(0)
+```
+
+Проверка `capacity > 0` гарантирует что non-owning arrays не вызовут `free` на чужую память.
+
+**Мутация non-owning array = UB:** `push`, `pop`, `resize` на массиве с `capacity = 0` приведут к `realloc` на чужом указателе. Для мутации — используйте `.clone()` сначала.
 
 ### Desktop vs Embedded
 
@@ -1189,13 +1218,14 @@ tsc_string_retain(self->copy);
 
 ### 7.3 Cleanup — `goto _cleanup`
 
-Все exit points SM (return, throw, implicit done, catch fallthrough) перенаправляются на единую метку `_cleanup` внутри switch. Cleanup освобождает все string-поля и вызывает `_free()` для классов с string-полями:
+Все exit points SM (return, throw, implicit done, catch fallthrough) перенаправляются на единую метку `_cleanup` внутри switch. Cleanup освобождает все string-поля, вызывает `_free()` для классов с string-полями, и вызывает `tsc_array_free_*` для array-полей:
 
 ```c
 _cleanup:
     tsc_string_release(self->url);
     tsc_string_release(self->data);
     User_free(&self->user);       // класс с string-полями
+    tsc_array_free_i32(&self->items);  // array field cleanup
     self->_done = true;
     return;
 ```
@@ -1204,7 +1234,9 @@ _cleanup:
 
 **Почему безусловный release всех полей:** SM struct инициализируется `{0}` — String поля `{0}` имеют `data=NULL, _refcount=NULL`, release = no-op. Класс-поля `{0}` → `ClassName_free` с `if (!self) return;`. Безопасно.
 
-**Opt-out:** если async-функция не имеет string/class полей (только примитивы), cleanup label не генерируется — exit points остаются `self->_done = true; return;` без overhead.
+**Opt-out:** если async-функция не имеет string/class/array полей (только примитивы), cleanup label не генерируется — exit points остаются `self->_done = true; return;` без overhead.
+
+**Array-поля в cleanup:** для каждого array-поля с элементами non-примитивного типа (динамический массив) компилятор генерирует `tsc_array_free_*` в cleanup. Array-поля с `capacity=0` (non-owning) — `tsc_array_free_*` пропускает `free` (см. раздел «Array `capacity` — owning vs non-owning»).
 
 ### 7.4 Ref\<T\> через await — запрещено
 

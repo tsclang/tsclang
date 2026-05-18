@@ -338,9 +338,12 @@ export default {
       }
 
       case 'ArrayLit': {
-        // Determine element type from first element
         const elems = node.elems.filter(e => !e.spread);
-        const elemType = elems.length ? this.inferType(elems[0].expr) : 'int32_t';
+        let elemType = elems.length ? this.inferType(elems[0].expr) : null;
+        if (!elemType && this._expectedType?.startsWith('Array_')) {
+          elemType = this._arrIdentToCType(this._expectedType.slice(6));
+        }
+        if (!elemType) elemType = 'int32_t';
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
         const dataVar = `_arr_data_${this.tempCount++}`;
         const items = elems.map(e => this.exprToC(e.expr, lines, depth)).join(', ');

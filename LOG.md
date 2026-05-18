@@ -826,3 +826,20 @@
 > - New: `_ensureArrayFreeMacro()` in `types/helpers.js`; called from `async-emit.js` and `generator.js`
 > - 10 новых тестов phase3 (arr-rest-slice, arr-rest-cleanup, arr-rest-strings, arr-rest-source-ref, arr-slice-in-fn-ref, arr-slice-in-fn-owned, arr-slice-return-cleanup, arr-slice-fn-string, arr-return-owned, arr-return-rest); 3 новых теста phase7 (arr-literal, arr-across-await, arr-string-cleanup); 2 обновлённых phase19 (read-file-bytes, read-all)
 > - Результат: **1104 теста, 0 ошибок** (GCC все фазы)
+
+> 2026-05-18: **SPEC-аудит: 6 правок спецификации** (D1–D4):
+> - **D1a** (`03-types.md`): String struct — добавлен `_refcount` + `#ifdef TSC_EMBEDDED` (ранее было 3 поля, теперь совпадает с runtime.h и 05b-ownership.md)
+> - **D1b** (`05b-ownership.md`): String struct — `uint32_t` → `size_t` для length/capacity (не совпадало с runtime.h)
+> - **D2a** (`05b-ownership.md`): Rest-паттерн в деструктуризации массивов — изменён с view (pointer) на deep copy через `tsc_array_slice_*`; убран `memset` source
+> - **D2b** (`05b-ownership.md`): Caveat к общему правилу "потребляет источник" — rest-паттерн НЕ потребляет source
+> - **D3** (`05b-ownership.md`): Новый subsection "Array capacity — owning vs non-owning": `capacity=0` как non-owning marker, источники (range expressions, async static data), `tsc_array_free_*` guard, UB при мутации non-owning
+> - **D4** (`05b-ownership.md`): Async cleanup §7.3 — добавлен `tsc_array_free_*` для array-полей в cleanup пример + пояснение про opt-out
+> - Результат: **1104 теста, 0 ошибок** (без изменений codegen)
+
+> 2026-05-18: **Bugfix: empty `[]` type annotation**:
+> - **Bug**: `ArrayLit` в `dispatch.js` при пустом массиве (`[]`) хардкодил `int32_t` как тип элемента, игнорируя type annotation переменной
+> - **Fix**: использует `_expectedType` (устанавливается в `vardecl.js`) для извлечения типа элемента из `Array_T` когда массив пустой
+> - Пример: `let a: string[] = []` теперь генерирует `Array_string` вместо `Array_i32`
+> - Ограничение: работает только в VarDecl контексте; standalone `foo([])` всё ещё default `int32_t`
+> - Новый тест: `phase3/arrays/empty-typed` ([R] runnable)
+> - Результат: **1105 тестов, 0 ошибок**

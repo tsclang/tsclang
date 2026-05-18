@@ -422,12 +422,20 @@ Number("0o77")       // 63.0
 ### C-layout
 
 ```c
+#ifdef TSC_EMBEDDED
 typedef struct {
-    const char* data;   // указатель на байты: rodata (литералы) или heap (динамические)
-    size_t      length; // количество байт
-    size_t      capacity; // 0 = статическая строка (data → rodata, не освобождать)
-                          // > 0 = heap (data → malloc, освобождать при drop)
+    const char *data;
+    size_t      length;
+    size_t      capacity;   // 0 = rodata (литералы), >0 = heap
 } String;
+#else
+typedef struct {
+    const char *data;
+    size_t      length;
+    size_t      capacity;   // 0 = rodata (литералы), >0 = heap
+    uint32_t   *_refcount;  // NULL for rodata, ARC for heap (desktop only)
+} String;
+#endif
 ```
 
 `string` (non-nullable) → `String` в C (value type, передаётся по значению, встраивается в structs).
