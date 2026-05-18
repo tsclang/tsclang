@@ -429,7 +429,8 @@ export default {
         }
         const exprC = this.exprToC(node.expr, lines, depth);
         const ct = this.resolveType(node.castType);
-        // Wrap complex expressions in parens to preserve operator precedence
+        const srcType = this.inferType(node.expr);
+        if (srcType === ct) return exprC;
         const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary' || node.expr.kind === 'Logical';
         return needsParens ? `(${ct})(${exprC})` : `(${ct})${exprC}`;
       }

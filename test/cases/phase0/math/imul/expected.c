@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", (int32_t)((int32_t)(3) * (int32_t)(4)));
+    printf("%d\n", 3 * 4);
     return 0;
 }

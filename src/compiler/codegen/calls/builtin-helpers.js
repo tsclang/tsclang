@@ -60,7 +60,7 @@ export default {
       log1p: `log1p(${a0})`,
       exp: `exp(${a0})`, expm1: `expm1(${a0})`,
       clz32: `(int32_t)__builtin_clz((uint32_t)(${a0}))`,
-      imul: `(int32_t)((int32_t)(${a0}) * (int32_t)(${a1}))`,
+      imul: `${a0t !== 'int32_t' ? `(int32_t)(${a0})` : a0} * ${a1t !== 'int32_t' ? `(int32_t)(${a1})` : a1}`,
       fround: `(float)(${a0})`,
       random: `tsc_math_random()`,
     };

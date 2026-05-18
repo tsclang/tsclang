@@ -111,8 +111,8 @@ export default {
       }
       const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int64_t' ? [lC, `(int64_t)${rC}`] : [`(int64_t)${lC}`, rC];
-      const inner = `(uint32_t)(${lCast} ${node.op} ${rCast})`;
-      return targetCtype === 'uint32_t' ? inner : `(${targetCtype})(${inner})`;
+      const inner = `${lCast} ${node.op} ${rCast}`;
+      return targetCtype === 'uint32_t' ? `(uint32_t)(${inner})` : `(${targetCtype})(${inner})`;
     }
     // i32 + u32 or u32 + i32
     if ((lt === 'int32_t' && rt === 'uint32_t') || (lt === 'uint32_t' && rt === 'int32_t')) {
@@ -124,7 +124,7 @@ export default {
       }
       const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int32_t' ? [lC, `(int32_t)${rC}`] : [`(int32_t)${lC}`, rC];
-      const inner = `(int32_t)(${lCast} ${node.op} ${rCast})`;
+      const inner = `${lCast} ${node.op} ${rCast}`;
       return targetCtype === 'int32_t' ? inner : `(${targetCtype})(${inner})`;
     }
     // i64 + u32 → u8/u16: overflow check
