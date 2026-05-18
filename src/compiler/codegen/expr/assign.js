@@ -159,6 +159,7 @@ export default {
     // String property/array assign: safe temp pattern to avoid a.p = a.p destroying before retain
     if (node.op === '=' && leftType === 'String' &&
         (node.left.kind === 'Member' || node.left.kind === 'Index')) {
+      if (l === r) return null;
       const I = ' '.repeat(this.indent * depth);
       if (node.left.kind === 'Index') {
         const ptr = `_tsc_ptr_${this.tempCount++}`;
