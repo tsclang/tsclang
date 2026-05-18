@@ -131,6 +131,8 @@
           setMilliseconds: 'tsc_date_set_milliseconds', setTime: 'tsc_date_set_time',
           toISOString: 'tsc_date_to_iso_string', toString: 'tsc_date_to_string',
           toDateString: 'tsc_date_to_date_string',
+          toTimeString: 'tsc_date_to_time_string',
+          toLocaleDateString: 'tsc_date_to_locale_date_string',
         };
         const fn = nameMap[prop];
         if (fn) {

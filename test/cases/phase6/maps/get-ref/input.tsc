@@ -1,0 +1,7 @@
+let m = new Map<string, i32>();
+m.set("a", 1);
+m.set("b", 2);
+const v = m.get("a");
+if (v != null) {
+    console.log(*v);
+}

@@ -406,6 +406,22 @@ static inline String tsc_date_to_date_string(Date d) {
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
+static inline String tsc_date_to_time_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    char *buf = (char *)malloc(32);
+    snprintf(buf, 32, "%s %02d:%02d:%02d GMT+0000",
+             days[tm->tm_wday], tm->tm_hour, tm->tm_min, tm->tm_sec);
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
+}
+
+static inline String tsc_date_to_locale_date_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    char *buf = (char *)malloc(32);
+    snprintf(buf, 32, "%04d-%02d-%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
+}
+
 static inline String tsc_date_to_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
     static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
@@ -591,6 +607,34 @@ TSC_MAP_DECL(String, int32_t, string_i32)
 /* free is a no-op for flat-array maps (no heap allocation) */
 #define tsc_map_free_string_i32(m) ((void)(m))
 
+TSC_MAP_DECL(String, String, string_string)
+
+#define tsc_map_get_string_string(_m_, _key_) ({ \
+    const TscMap_string_string *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    String _vv_ = _tsc_str_make(NULL, 0, 0); bool _ff_ = false; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) \
+            { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \
+    } \
+    (opt_String){ _ff_, _vv_ }; \
+})
+
+#define tsc_map_delete_string_string(_m_, _key_) ({ \
+    TscMap_string_string *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    String _vv_ = _tsc_str_make(NULL, 0, 0); bool _ff_ = false; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) { \
+            _vv_ = _mm_->_vals[_ii_]; _ff_ = true; \
+            memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
+            memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
+            _mm_->size--; break; } } \
+    (opt_String){ _ff_, _vv_ }; \
+})
+
+#define tsc_map_free_string_string(m) ((void)(m))
+
 /* -------------------------------------------------------------------------
  * TscSet — simple array-backed set (up to 64 entries)
  * ------------------------------------------------------------------------- */
@@ -607,13 +651,89 @@ static inline void tsc_set_add_##SUFFIX(TscSet_##SUFFIX *_s, T val) { \
 static inline bool tsc_set_has_##SUFFIX(const TscSet_##SUFFIX *_s, T val) { \
     for (size_t _i = 0; _i < _s->size; _i++) if (_s->_vals[_i] == val) return true; \
     return false; } \
-static inline bool tsc_set_delete_##SUFFIX(TscSet_##SUFFIX *_s, T val) { \
-    for (size_t _i = 0; _i < _s->size; _i++) { \
-        if (_s->_vals[_i] == val) { \
-            memmove(&_s->_vals[_i], &_s->_vals[_i+1], (_s->size-_i-1)*sizeof(T)); \
-            _s->size--; return true; } } \
-    return false; } \
 static inline void tsc_set_clear_##SUFFIX(TscSet_##SUFFIX *_s) { _s->size = 0; }
+
+#define tsc_set_delete_i32(_s_, _val_) ({ \
+    TscSet_i32 *__s__ = (_s_); int32_t __v__ = (_val_); \
+    int32_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(int32_t)); \
+            __s__->size--; break; } } \
+    (opt_i32){ __ok__, __fv__ }; })
+#define tsc_set_delete_i64(_s_, _val_) ({ \
+    TscSet_i64 *__s__ = (_s_); int64_t __v__ = (_val_); \
+    int64_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(int64_t)); \
+            __s__->size--; break; } } \
+    (opt_i64){ __ok__, __fv__ }; })
+#define tsc_set_delete_u8(_s_, _val_) ({ \
+    TscSet_u8 *__s__ = (_s_); uint8_t __v__ = (_val_); \
+    uint8_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint8_t)); \
+            __s__->size--; break; } } \
+    (opt_u8){ __ok__, __fv__ }; })
+#define tsc_set_delete_u16(_s_, _val_) ({ \
+    TscSet_u16 *__s__ = (_s_); uint16_t __v__ = (_val_); \
+    uint16_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint16_t)); \
+            __s__->size--; break; } } \
+    (opt_u16){ __ok__, __fv__ }; })
+#define tsc_set_delete_u32(_s_, _val_) ({ \
+    TscSet_u32 *__s__ = (_s_); uint32_t __v__ = (_val_); \
+    uint32_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint32_t)); \
+            __s__->size--; break; } } \
+    (opt_u32){ __ok__, __fv__ }; })
+#define tsc_set_delete_u64(_s_, _val_) ({ \
+    TscSet_u64 *__s__ = (_s_); uint64_t __v__ = (_val_); \
+    uint64_t __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint64_t)); \
+            __s__->size--; break; } } \
+    (opt_u64){ __ok__, __fv__ }; })
+#define tsc_set_delete_f32(_s_, _val_) ({ \
+    TscSet_f32 *__s__ = (_s_); float __v__ = (_val_); \
+    float __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(float)); \
+            __s__->size--; break; } } \
+    (opt_f32){ __ok__, __fv__ }; })
+#define tsc_set_delete_f64(_s_, _val_) ({ \
+    TscSet_f64 *__s__ = (_s_); double __v__ = (_val_); \
+    double __fv__ = 0; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(double)); \
+            __s__->size--; break; } } \
+    (opt_f64){ __ok__, __fv__ }; })
+#define tsc_set_delete_bool(_s_, _val_) ({ \
+    TscSet_bool *__s__ = (_s_); bool __v__ = (_val_); \
+    bool __fv__ = false; bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (__s__->_vals[__i__] == __v__) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(bool)); \
+            __s__->size--; break; } } \
+    (opt_bool){ __ok__, __fv__ }; })
 
 TSC_SET_DECL_PRIM(int8_t,   i8)
 TSC_SET_DECL_PRIM(int16_t,  i16)
@@ -639,12 +759,15 @@ static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
     for (size_t _i = 0; _i < _s->size; _i++)
         if (_tsc_str_eq(_s->_vals[_i], val)) return true;
     return false; }
-static inline bool tsc_set_delete_string(TscSet_string *_s, String val) {
-    for (size_t _i = 0; _i < _s->size; _i++) {
-        if (_tsc_str_eq(_s->_vals[_i], val)) {
-            memmove(&_s->_vals[_i], &_s->_vals[_i+1], (_s->size-_i-1)*sizeof(String));
-            _s->size--; return true; } }
-    return false; }
+#define tsc_set_delete_string(_s_, _val_) ({ \
+    TscSet_string *__s__ = (_s_); String __v__ = (_val_); \
+    String __fv__ = _tsc_str_make(NULL, 0, 0); bool __ok__ = false; \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
+        if (_tsc_str_eq(__s__->_vals[__i__], __v__)) { \
+            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(String)); \
+            __s__->size--; break; } } \
+    (opt_String){ __ok__, __fv__ }; })
 static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
 /* cc65 does not support _Noreturn; guard for NES target */
@@ -1290,6 +1413,11 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_reduce_i32_i32(arr, fn, init) ({ \
     Array_i32 _a_ = (arr); int32_t _acc_ = (init); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
+    _acc_; \
+})
+#define tsc_array_reduce_i32_string(arr, fn, init) ({ \
+    Array_i32 _a_ = (arr); String _acc_ = (init); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
     _acc_; \
 })

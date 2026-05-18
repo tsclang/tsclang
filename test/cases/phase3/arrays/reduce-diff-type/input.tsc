@@ -1,0 +1,5 @@
+const arr = [1, 2, 3];
+const result: string = arr.reduce((acc: string, x: i32): string => {
+    return acc + x.toString();
+}, "");
+console.log(result);

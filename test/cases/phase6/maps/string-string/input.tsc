@@ -1,0 +1,5 @@
+let m = new Map<string, string>();
+m.set("name", "Alice");
+m.set("city", "Wonderland");
+console.log(m.get("name"));
+console.log(m.size);

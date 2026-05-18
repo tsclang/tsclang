@@ -3,10 +3,16 @@ export default {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
+      const chainLinks = [];
       while (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
-        const innerC = this.callToC(baseObject, lines, depth);
-        lines.push(`${I}${innerC};`);
+        chainLinks.push(baseObject);
         baseObject = baseObject.callee.object;
+      }
+      for (let i = chainLinks.length - 1; i >= 0; i--) {
+        const link = chainLinks[i];
+        const flatCallee = { ...link.callee, object: baseObject };
+        const innerC = this.methodCall(flatCallee, link.args, lines, depth);
+        lines.push(`${I}${innerC};`);
       }
     }
     const objC = this.exprToC(baseObject, lines, depth);
@@ -53,6 +59,21 @@ export default {
           if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
+          if (args[0] && args[0].expr.kind === 'Ident') {
+            const _pushCls = this.classes.get(et);
+            const _pushIsArr = et.startsWith('Array_');
+            if ((_pushCls?.fields || _pushIsArr)) {
+              const _pushSym = this.lookup(args[0].expr.name);
+              if (_pushSym) {
+                if (_pushSym._moved)
+                  throw this.error(`use of moved value: "${args[0].expr.name}"`, args[0].expr,
+                    { code: 'E002', secondary: _pushSym._movedSourceNode, secondaryLine: _pushSym._movedLine });
+                _pushSym._moved = true;
+                _pushSym._movedLine = args[0].expr.line;
+                _pushSym._movedSourceNode = args[0].expr;
+              }
+            }
+          }
           if (baseObject.kind === 'Ident') {
             this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
             if (sym) sym.arraySize = undefined;

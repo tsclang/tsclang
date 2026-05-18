@@ -1,0 +1,3 @@
+let arr: i32[] = [];
+arr.push(1).push(2).push(3);
+console.log(arr.length);

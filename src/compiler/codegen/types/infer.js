@@ -403,7 +403,14 @@ export default {
     }
     const _setSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     if (_setSym0?._isSet) {
-      if (prop === 'has' || prop === 'delete') return 'bool';
+      if (prop === 'has') return 'bool';
+      if (prop === 'delete') {
+        const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
+        const _setId = this.cTypeToIdent(_setElemCType);
+        const optName = `opt_${_setId}`;
+        this._ensureOptStruct(optName, _setElemCType);
+        return optName;
+      }
       if (prop === 'add' || prop === 'clear') return 'void';
     }
     const objSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;

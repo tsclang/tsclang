@@ -843,3 +843,12 @@
 > - Ограничение: работает только в VarDecl контексте; standalone `foo([])` всё ещё default `int32_t`
 > - Новый тест: `phase3/arrays/empty-typed` ([R] runnable)
 > - Результат: **1105 тестов, 0 ошибок**
+
+> 2026-05-19: **6 фиксов codegen/runtime по результатам SPEC-аудита** (M22–M27):
+> - **Date format methods**: добавлены `tsc_date_to_time_string` и `tsc_date_to_locale_date_string` в runtime.h + nameMap в builtin.js. Новый тест: `phase2/date/format-methods`
+> - **M22 — push chaining**: `method-dispatch.js` — переписан while-loop для цепочек вызовов: собирает chain links, обрабатывает inside-out через прямые вызовы `methodCall` с resolved baseObject. Устранена дубликация push-вызовов. Новый тест: `phase3/arrays/chain-mutate`
+> - **M25 — Set.delete → opt_T**: runtime.h — `tsc_set_delete_*` изменён с `static inline bool` на `#define` GCC statement expressions, возвращающие `opt_T`. Codegen: `stdlib.js` — emit opt struct, `infer.js` — infer opt type. Обновлён тест: `phase3/sets/add-has-delete`. Новый тест: `phase3/sets/delete-owned`
+> - **M26 — push move tracking**: `method-dispatch.js` — при `arr.push(ownedValue)` где `ownedValue` — класс или массив, переменная помечается `_moved = true`. Новый тест: `phase3/arrays/push-move` ([E] error)
+> - **M23 — reduce U≠T**: runtime.h — добавлен `tsc_array_reduce_i32_string` macro. Codegen уже поддерживает generic suffix. Новый тест: `phase3/arrays/reduce-diff-type`
+> - **M27 — Map<string,string>**: runtime.h — добавлены `TSC_MAP_DECL(String, String, string_string)`, `tsc_map_get/delete_string_string` macros. Новый тест: `phase6/maps/string-string`
+> - Результат: **1111 тестов проходят, 2 отложены** (M21 callbacks Ref<T>, M24 Map.get Ref<V>)

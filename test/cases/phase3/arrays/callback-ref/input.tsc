@@ -1,0 +1,4 @@
+let arr: string[] = ["hello", "world"];
+arr.forEach((s) => {
+    console.log(s);
+});
