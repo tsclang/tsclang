@@ -770,6 +770,140 @@ static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
     (opt_String){ __ok__, __fv__ }; })
 static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
+#define tsc_set_for_each_i32(_s_, _fn_) do { \
+    TscSet_i32 *__s__ = (_s_); \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) (_fn_)(__s__->_vals[__i__]); \
+} while(0)
+
+#define tsc_set_for_each_string(_s_, _fn_) do { \
+    TscSet_string *__s__ = (_s_); \
+    for (size_t __i__ = 0; __i__ < __s__->size; __i__++) (_fn_)(__s__->_vals[__i__]); \
+} while(0)
+
+#define tsc_set_values_i32(_s_) ({ \
+    TscSet_i32 __s__ = (_s_); \
+    int32_t *__d__ = (int32_t*)malloc(__s__.size * sizeof(int32_t)); \
+    memcpy(__d__, __s__._vals, __s__.size * sizeof(int32_t)); \
+    (Array_i32){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
+})
+
+#define tsc_set_values_string(_s_) ({ \
+    TscSet_string __s__ = (_s_); \
+    String *__d__ = (String*)malloc(__s__.size * sizeof(String)); \
+    for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__] = __s__._vals[__i__]; tsc_string_retain(__d__[__i__]); } \
+    (Array_string){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
+})
+
+#define tsc_set_union_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); \
+    TscSet_i32 __r__ = tsc_set_create_i32(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) tsc_set_add_i32(&__r__, __a__._vals[__i__]); \
+    for (size_t __i__ = 0; __i__ < __b__.size; __i__++) tsc_set_add_i32(&__r__, __b__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_union_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); \
+    TscSet_string __r__ = tsc_set_create_string(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) tsc_set_add_string(&__r__, __a__._vals[__i__]); \
+    for (size_t __i__ = 0; __i__ < __b__.size; __i__++) tsc_set_add_string(&__r__, __b__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_intersection_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); \
+    TscSet_i32 __r__ = tsc_set_create_i32(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (tsc_set_has_i32(&__b__, __a__._vals[__i__])) tsc_set_add_i32(&__r__, __a__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_intersection_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); \
+    TscSet_string __r__ = tsc_set_create_string(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (tsc_set_has_string(&__b__, __a__._vals[__i__])) tsc_set_add_string(&__r__, __a__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_difference_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); \
+    TscSet_i32 __r__ = tsc_set_create_i32(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (!tsc_set_has_i32(&__b__, __a__._vals[__i__])) tsc_set_add_i32(&__r__, __a__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_difference_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); \
+    TscSet_string __r__ = tsc_set_create_string(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (!tsc_set_has_string(&__b__, __a__._vals[__i__])) tsc_set_add_string(&__r__, __a__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_symmetric_difference_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); \
+    TscSet_i32 __r__ = tsc_set_create_i32(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (!tsc_set_has_i32(&__b__, __a__._vals[__i__])) tsc_set_add_i32(&__r__, __a__._vals[__i__]); \
+    for (size_t __i__ = 0; __i__ < __b__.size; __i__++) \
+        if (!tsc_set_has_i32(&__a__, __b__._vals[__i__])) tsc_set_add_i32(&__r__, __b__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_symmetric_difference_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); \
+    TscSet_string __r__ = tsc_set_create_string(); \
+    for (size_t __i__ = 0; __i__ < __a__.size; __i__++) \
+        if (!tsc_set_has_string(&__b__, __a__._vals[__i__])) tsc_set_add_string(&__r__, __a__._vals[__i__]); \
+    for (size_t __i__ = 0; __i__ < __b__.size; __i__++) \
+        if (!tsc_set_has_string(&__a__, __b__._vals[__i__])) tsc_set_add_string(&__r__, __b__._vals[__i__]); \
+    __r__; \
+})
+
+#define tsc_set_is_subset_of_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __a__.size && __r__; __i__++) \
+        if (!tsc_set_has_i32(&__b__, __a__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
+#define tsc_set_is_subset_of_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __a__.size && __r__; __i__++) \
+        if (!tsc_set_has_string(&__b__, __a__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
+#define tsc_set_is_superset_of_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __b__.size && __r__; __i__++) \
+        if (!tsc_set_has_i32(&__a__, __b__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
+#define tsc_set_is_superset_of_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __b__.size && __r__; __i__++) \
+        if (!tsc_set_has_string(&__a__, __b__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
+#define tsc_set_is_disjoint_from_i32(_a_, _b_) ({ \
+    TscSet_i32 __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __a__.size && __r__; __i__++) \
+        if (tsc_set_has_i32(&__b__, __a__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
+#define tsc_set_is_disjoint_from_string(_a_, _b_) ({ \
+    TscSet_string __a__ = (_a_), __b__ = (_b_); bool __r__ = true; \
+    for (size_t __i__ = 0; __i__ < __a__.size && __r__; __i__++) \
+        if (tsc_set_has_string(&__b__, __a__._vals[__i__])) __r__ = false; \
+    __r__; \
+})
+
 /* cc65 does not support _Noreturn; guard for NES target */
 #ifdef TSC_NES
 #define _Noreturn

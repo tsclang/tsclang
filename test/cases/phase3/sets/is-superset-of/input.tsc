@@ -1,0 +1,9 @@
+let a = new Set<i32>();
+a.add(1);
+a.add(2);
+a.add(3);
+let b = new Set<i32>();
+b.add(1);
+b.add(2);
+console.log(a.isSupersetOf(b));
+console.log(b.isSupersetOf(a));

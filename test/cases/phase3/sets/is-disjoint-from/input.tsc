@@ -1,0 +1,9 @@
+let a = new Set<i32>();
+a.add(1);
+a.add(2);
+let b = new Set<i32>();
+b.add(3);
+b.add(4);
+console.log(a.isDisjointFrom(b));
+a.add(3);
+console.log(a.isDisjointFrom(b));

@@ -1,0 +1,7 @@
+let s = new Set<i32>();
+s.add(10);
+s.add(20);
+s.add(30);
+const arr = s.values();
+console.log(arr.length);
+console.log(arr[0]);

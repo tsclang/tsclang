@@ -411,7 +411,16 @@ export default {
         this._ensureOptStruct(optName, _setElemCType);
         return optName;
       }
-      if (prop === 'add' || prop === 'clear') return 'void';
+      if (prop === 'add' || prop === 'clear' || prop === 'forEach') return 'void';
+      if (prop === 'values') {
+        const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
+        const _setId = this.cTypeToIdent(_setElemCType);
+        return `Array_${_setId}`;
+      }
+      if (prop === 'union' || prop === 'intersection' || prop === 'difference' || prop === 'symmetricDifference') {
+        return _setSym0.ctype;
+      }
+      if (prop === 'isSubsetOf' || prop === 'isSupersetOf' || prop === 'isDisjointFrom') return 'bool';
     }
     const objSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     const objType0 = objSym0?.ctype ?? this.inferType(obj);

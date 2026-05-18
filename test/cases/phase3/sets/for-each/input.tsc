@@ -1,0 +1,5 @@
+let s = new Set<i32>();
+s.add(1);
+s.add(2);
+s.add(3);
+s.forEach((v) => { console.log(v); });

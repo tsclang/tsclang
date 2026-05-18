@@ -882,3 +882,17 @@
 > - Исправлен console.log для `opt_ref_string`: теперь генерирует `printf("%s", val.value->data)` вместо `printf("%d", *val.value)`
 > - 14 новых тестов `phase3/arrays/*-string` (все [R] runnable, компилируются и выполняются через gcc)
 > - Результат: **1139 тестов проходят, 2 отложены**
+
+> 2026-05-19: **9 методов Set** (Stage 2):
+> - **forEach** (`void`): callback-based iteration — `tsc_set_for_each_i32/string`
+> - **values** (`Array<T>`): returns array of all values — `tsc_set_values_i32/string`
+> - **union** (`Set<T>`): all elements from both sets — `tsc_set_union_i32/string`
+> - **intersection** (`Set<T>`): common elements — `tsc_set_intersection_i32/string`
+> - **difference** (`Set<T>`): elements in s but not in other — `tsc_set_difference_i32/string`
+> - **symmetricDifference** (`Set<T>`): elements in only one set — `tsc_set_symmetric_difference_i32/string`
+> - **isSubsetOf** (`bool`): all elements of s in other — `tsc_set_is_subset_of_i32/string`
+> - **isSupersetOf** (`bool`): all elements of other in s — `tsc_set_is_superset_of_i32/string`
+> - **isDisjointFrom** (`bool`): no common elements — `tsc_set_is_disjoint_from_i32/string`
+> - Все 9 методов: runtime macros для i32 и string, codegen dispatch в stdlib.js, type inference в infer.js
+> - 9 новых тестов `phase3/sets/*` (все [R] runnable)
+> - Результат: **1148 тестов проходят, 2 отложены**

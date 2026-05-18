@@ -1,0 +1,10 @@
+let a = new Set<i32>();
+a.add(1);
+a.add(2);
+a.add(3);
+let b = new Set<i32>();
+b.add(2);
+b.add(3);
+b.add(4);
+const c = a.difference(b);
+console.log(c.size);

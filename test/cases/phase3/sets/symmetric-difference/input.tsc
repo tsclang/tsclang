@@ -1,0 +1,8 @@
+let a = new Set<i32>();
+a.add(1);
+a.add(2);
+let b = new Set<i32>();
+b.add(2);
+b.add(3);
+const c = a.symmetricDifference(b);
+console.log(c.size);

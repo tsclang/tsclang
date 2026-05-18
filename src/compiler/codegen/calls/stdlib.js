@@ -802,6 +802,49 @@ export default {
           return `tsc_set_delete_${_sSfx}(&${_sName}, ${_sArg0})`;
         }
         if (_sProp === 'clear')  return `tsc_set_clear_${_sSfx}(&${_sName})`;
+        if (_sProp === 'forEach') {
+          const cbArg = args[0]?.expr;
+          if (!cbArg || cbArg.kind !== 'Arrow') return null;
+          const _sElemCType = _setSym._setElemCType ?? 'int32_t';
+          this._lambdaParamHint = [_sElemCType];
+          const cbName = this.hoistArrow(cbArg, 'void');
+          this._lambdaParamHint = null;
+          return `tsc_set_for_each_${_sSfx}(&${_sName}, ${cbName})`;
+        }
+        if (_sProp === 'values') {
+          const _sElemCType = _setSym._setElemCType ?? 'int32_t';
+          const _sElemIdent = this.cTypeToIdent(_sElemCType);
+          this._ensureArrayStruct(`Array_${_sElemIdent}`, _sElemCType);
+          return `tsc_set_values_${_sSfx}(${_sName})`;
+        }
+        if (_sProp === 'union') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_union_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'intersection') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_intersection_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'difference') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_difference_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'symmetricDifference') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_symmetric_difference_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'isSubsetOf') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_is_subset_of_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'isSupersetOf') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_is_superset_of_${_sSfx}(${_sName}, ${other})`;
+        }
+        if (_sProp === 'isDisjointFrom') {
+          const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_set_is_disjoint_from_${_sSfx}(${_sName}, ${other})`;
+        }
       }
     }
 
