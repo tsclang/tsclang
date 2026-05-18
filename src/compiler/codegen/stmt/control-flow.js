@@ -83,9 +83,11 @@
             this._inReturnContext = true;
             const retC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
-            if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+            const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
+            if (!retIsOwnedIdent && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
               p(`tsc_string_retain(${retC});`);
             }
+            if (retIsOwnedIdent) this._suppressCleanupFor(node.value.name);
             p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
           } else {
             p(`_result = (${ctx.resultType}){.ok = true};`);
@@ -100,16 +102,27 @@
           const retC = this.exprToC(node.value, lines, depth);
           this._inReturnContext = false;
           const retType = this.inferType(node.value) ?? 'int32_t';
-          const tmpName = `_ret_${this.tempCount++}`;
-          if (retType === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-            p(`tsc_string_retain(${retC});`);
-          }
-          p(`${retType} ${tmpName} = ${retC};`);
-          this._emitFuncCleanup(lines, I);
-          if (this._throwsCtx) {
-            p(`return (${this._throwsCtx.resultType}){.ok = true, .value = ${tmpName}};`);
+          const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
+          if (retIsOwnedIdent) {
+            this._suppressCleanupFor(node.value.name);
+            if (this._throwsCtx) {
+              p(`return (${this._throwsCtx.resultType}){.ok = true, .value = ${retC}};`);
+            } else {
+              p(`return ${retC};`);
+            }
+            this._emitFuncCleanup(lines, I);
           } else {
-            p(`return ${tmpName};`);
+            if (retType === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+              p(`tsc_string_retain(${retC});`);
+            }
+            const tmpName = `_ret_${this.tempCount++}`;
+            p(`${retType} ${tmpName} = ${retC};`);
+            this._emitFuncCleanup(lines, I);
+            if (this._throwsCtx) {
+              p(`return (${this._throwsCtx.resultType}){.ok = true, .value = ${tmpName}};`);
+            } else {
+              p(`return ${tmpName};`);
+            }
           }
         } else {
           this._emitFuncCleanup(lines, I);

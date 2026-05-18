@@ -1,0 +1,11 @@
+function build(): i32[] {
+    let arr: i32[] = new Array<i32>(3);
+    arr.push(10);
+    arr.push(20);
+    arr.push(30);
+    return arr;
+}
+const result = build();
+console.log(result[0]);
+console.log(result[1]);
+console.log(result[2]);

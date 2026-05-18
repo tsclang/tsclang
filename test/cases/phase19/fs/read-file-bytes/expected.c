@@ -18,6 +18,9 @@ static void run_poll(run_state *self) {
             if (!self->_await_0._done) return;
             self->data = self->_await_0._result;
             printf("%zu\n", self->data.length);
+            goto _cleanup;
+        _cleanup:
+            tsc_array_free_u8(&self->data);
             self->_done = true;
             return;
     }

@@ -1,0 +1,4 @@
+async function foo(): Promise<void> {
+    const arr: i32[] = [1, 2, 3];
+    console.log(arr.length);
+}

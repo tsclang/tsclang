@@ -81,8 +81,11 @@ export default {
     for (const f of paramFields) sFields.push(`${f.ctype} ${f.name}`);
     for (const f of bodyFields) {
       sFields.push(`${f.ctype} ${f.name}`);
-      // Ensure Array_u8 struct is emitted before the state struct that references it
-      if (f.ctype === 'Array_u8') this._ensureArrayStruct('Array_u8', 'uint8_t');
+      if (f.ctype.startsWith('Array_')) {
+        const elemIdent = f.ctype.slice(6);
+        const etC = this._arrIdentToCType(elemIdent);
+        this._ensureArrayStruct(f.ctype, etC);
+      }
     }
     for (const af of awaitStates) {
       if (!af.isUnknown) sFields.push(`${af.stateType} ${af.fieldName}`);
@@ -120,9 +123,15 @@ export default {
 
     const stringFields = [];
     const classFreeFields = [];
+    const arrayFields = [];
     for (const f of [...paramFields, ...bodyFields]) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
+      } else if (f.ctype.startsWith('Array_')) {
+        const elemIdent = f.ctype.slice(6);
+        const etC = this._arrIdentToCType(elemIdent);
+        this._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
+        arrayFields.push({ name: f.name, elemIdent });
       } else {
         const cls = this.classes.get(f.ctype);
         if (cls) {
@@ -135,10 +144,10 @@ export default {
         }
       }
     }
-    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0;
+    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0 || arrayFields.length > 0;
     const paramStringFields = stringFields.filter(n => paramFields.some(f => f.name === n));
 
-    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, hasCleanup, paramStringFields };
+    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, arrayFields, hasCleanup, paramStringFields };
     this._inAsyncFunc = true;
 
     const pollLines = this._buildAsyncPoll(body);
@@ -201,6 +210,9 @@ export default {
       }
       for (const { name, freeFn } of sc.classFreeFields) {
         lines.push(`            ${freeFn}(&self->${name});`);
+      }
+      for (const { name, elemIdent } of sc.arrayFields) {
+        lines.push(`            tsc_array_free_${elemIdent}(&self->${name});`);
       }
       lines.push('            self->_done = true;');
       lines.push('            return;');

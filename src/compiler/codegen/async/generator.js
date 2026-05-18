@@ -66,9 +66,15 @@ export default {
 
     const stringFields = [];
     const classFreeFields = [];
+    const arrayFields = [];
     for (const f of letFields) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
+      } else if (f.ctype.startsWith('Array_')) {
+        const elemIdent = f.ctype.slice(6);
+        const etC = this._arrIdentToCType(elemIdent);
+        this._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
+        arrayFields.push({ name: f.name, elemIdent });
       } else {
         const cls = this.classes.get(f.ctype);
         if (cls) {
@@ -81,7 +87,7 @@ export default {
         }
       }
     }
-    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0;
+    const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0 || arrayFields.length > 0;
 
     // Emit Result_T_E typedef if needed (before state struct references it)
     if (hasThrows) {

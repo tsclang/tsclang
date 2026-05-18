@@ -1,0 +1,7 @@
+function test(): void {
+    let arr: i32[] = [1, 2, 3];
+    const [first, ...rest] = arr;
+    console.log(first);
+    console.log(rest.length);
+}
+test();

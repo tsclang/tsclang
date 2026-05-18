@@ -1,0 +1,8 @@
+function tail(arr: i32[]): i32[] {
+    const [_, ...rest] = arr;
+    return rest;
+}
+const result = tail([10, 20, 30]);
+console.log(result[0]);
+console.log(result[1]);
+console.log(result.length);

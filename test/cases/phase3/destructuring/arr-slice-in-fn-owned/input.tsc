@@ -1,0 +1,6 @@
+function process(arr: i32[]): void {
+    const sub = arr.slice(0, 2);
+    console.log(arr[0]);
+    console.log(sub[1]);
+}
+process([10, 20, 30]);

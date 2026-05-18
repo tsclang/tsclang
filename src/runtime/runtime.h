@@ -1111,6 +1111,11 @@ static inline double tsc_parse_f64(String s) {
  * ------------------------------------------------------------------------- */
 typedef struct { String  *data; size_t length; size_t capacity; } Array_string;
 typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
+#define tsc_array_free_u8(arr) do { \
+    Array_u8 *_a_ = (arr); \
+    if (_a_->data && _a_->capacity > 0) free(_a_->data); \
+    _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
+} while(0)
 
 typedef struct { bool has_value; String value; } opt_String;
 
@@ -1157,7 +1162,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_free_i32(arr) do { \
     Array_i32 *_a_ = (arr); \
-    if (_a_->data) free(_a_->data); \
+    if (_a_->data && _a_->capacity > 0) free(_a_->data); \
     _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
 } while(0)
 
@@ -1322,9 +1327,11 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_free_string(arr) do { \
     Array_string *_a_ = (arr); \
     if (_a_->data) { \
-        for (size_t _i_ = 0; _i_ < _a_->length; _i_++) \
-            tsc_string_release(_a_->data[_i_]); \
-        free(_a_->data); \
+        if (_a_->capacity > 0) { \
+            for (size_t _i_ = 0; _i_ < _a_->length; _i_++) \
+                tsc_string_release(_a_->data[_i_]); \
+            free(_a_->data); \
+        } \
     } \
     _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
 } while(0)
@@ -1358,7 +1365,8 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
     size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
     String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
-    if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(String)); \
+    if (_n_) { memcpy(_d_, _a_.data + _s_, _n_ * sizeof(String)); \
+               for (size_t _i_ = 0; _i_ < _n_; _i_++) tsc_string_retain(_d_[_i_]); } \
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
 

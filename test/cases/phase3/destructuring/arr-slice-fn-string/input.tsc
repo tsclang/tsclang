@@ -1,0 +1,7 @@
+function takeNames(names: Ref<string[]>): string[] {
+    return names.slice(1);
+}
+const src: string[] = ["Alice", "Bob", "Carol"];
+const rest = takeNames(src);
+console.log(rest[0]);
+console.log(src[0]);

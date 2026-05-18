@@ -68,10 +68,25 @@ export default {
         }
         // VarDestructArr (const [x, y] = ...)
         if (s.kind === 'VarDestructArr') {
+          let arrElemType = 'int32_t';
+          const initType = s.init ? this.inferType(s.init) : null;
+          const initSym = s.init?.kind === 'Ident' ? this.lookup(s.init.name) : null;
+          let arrType = initType;
+          if (initSym?.isRefParam && initSym?.derefType?.startsWith('Array_')) {
+            arrType = initSym.derefType;
+          }
+          if (arrType?.startsWith('Array_')) {
+            const elemIdent = arrType.slice(6);
+            arrElemType = this._arrIdentToCType(elemIdent);
+          }
           for (const elem of (s.pattern || [])) {
             if (!elem || seen.has(elem.name)) continue;
             seen.add(elem.name);
-            bodyFields.push({ name: elem.name, ctype: 'int32_t' });
+            if (elem.rest && arrType?.startsWith('Array_')) {
+              bodyFields.push({ name: elem.name, ctype: arrType });
+            } else {
+              bodyFields.push({ name: elem.name, ctype: arrElemType });
+            }
           }
         }
         if (s.kind === 'Block') walk(s.body);

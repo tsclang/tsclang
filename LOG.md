@@ -687,11 +687,11 @@
 | 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 164 | `[x]` |
-| 3  | Модель памяти | 159 | `[x]` |
+| 3  | Модель памяти | 169 | `[x]` |
 | 4  | Объектная модель | 58 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 41 | `[x]` |
-| 7  | Async/Await | 39 | `[x]` |
+| 7  | Async/Await | 42 | `[x]` |
 | 8  | Threads и конкурентность | 36 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
 | 10 | Строки и кодировки | 20 | `[x]` |
@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1067 тестов ✓** (2026-05-15)
+**Итого: 1104 тестов ✓** (2026-05-18)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -816,3 +816,13 @@
 > - **Unused catch variable elimination**: `match.js` (single-catch + multi-catch) + `async-stmt.js` — emit `(void)errExpr;` instead of `Type e = errExpr; (void)e;` when catch param is unused. Updated 7 expected.c files
 > - **Strength reduction in AST optimizer**: `optimizer.js` — `x * 2 → x + x`, `x * 2^n → x << n` (and commutative `2 * x`). Also extended `foldInits` to apply `foldExpr` on `Return` and `ExprStmt` expressions. New test: `phase18/optimizer/strength-reduce` ([R] runnable)
 > - Результат: **1091 тест, 0 ошибок** (GCC все фазы)
+
+> 2026-05-18: **5 багфиксов async codegen + array cleanup** (13 файлов, +181/-59 строк):
+> - **Bug 1** (`destruct.js`): `Ref<T[]>` + rest pattern — `initSym?.isRefParam && initSym?.derefType?.startsWith('Array_')` check; pointer dereferenced via `(*srcC)` with `isRefArray` flag
+> - **Bug 2** (`scan.js`): async `VarDestructArr` — infer correct element type from array init (handles `Ref<Array>` via `derefType`); rest elements get `Array_*` type, regular elements get element ctype
+> - **Bug 3a** (`async-emit.js`, `generator.js`): array field cleanup — `arrayFields` collection; cleanup emits `tsc_array_free_{elemIdent}(&self->{name})` for each array field in state struct
+> - **Bug 3b** (`async-emit.js`): `_ensureArrayStruct` for all array types — changed from hardcoded `Array_u8` to generic check: any field with ctype starting with `Array_` triggers `_ensureArrayStruct`
+> - **Bug 3c** (`expr/dispatch.js`): async array literal data — when `_inAsyncFunc`, emit data as `static` top-level declaration with `capacity = 0` (non-owning view); `runtime.h`: `tsc_array_free_i32/string/u8` check `capacity > 0` before `free()`; new `_ensureArrayFreeMacro()` for dynamic array types
+> - New: `_ensureArrayFreeMacro()` in `types/helpers.js`; called from `async-emit.js` and `generator.js`
+> - 10 новых тестов phase3 (arr-rest-slice, arr-rest-cleanup, arr-rest-strings, arr-rest-source-ref, arr-slice-in-fn-ref, arr-slice-in-fn-owned, arr-slice-return-cleanup, arr-slice-fn-string, arr-return-owned, arr-return-rest); 3 новых теста phase7 (arr-literal, arr-across-await, arr-string-cleanup); 2 обновлённых phase19 (read-file-bytes, read-all)
+> - Результат: **1104 теста, 0 ошибок** (GCC все фазы)

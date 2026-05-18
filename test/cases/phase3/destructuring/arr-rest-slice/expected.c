@@ -8,8 +8,11 @@ int main(void) {
     const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     const int32_t first = arr.data[0];
     Array_i32 rest = tsc_array_slice_i32(arr, 1, (int32_t)arr.length);
-    printf("%d\n", first);
+    tsc_array_push_i32(&rest, 6);
+    printf("%d\n", arr.data[0]);
     printf("%zu\n", rest.length);
+    printf("%d\n", rest.data[3]);
+    printf("%d\n", rest.data[4]);
     tsc_array_free_i32(&rest);
     return 0;
 }

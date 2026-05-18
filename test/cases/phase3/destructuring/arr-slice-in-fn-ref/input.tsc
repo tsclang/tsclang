@@ -1,0 +1,7 @@
+function take(arr: Ref<i32[]>): i32[] {
+    return arr.slice(1);
+}
+const src: i32[] = [10, 20, 30];
+const sub = take(src);
+console.log(sub[0]);
+console.log(src.length);

@@ -344,6 +344,10 @@ export default {
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
         const dataVar = `_arr_data_${this.tempCount++}`;
         const items = elems.map(e => this.exprToC(e.expr, lines, depth)).join(', ');
+        if (this._inAsyncFunc) {
+          this.topLevel.push(`static ${elemType} ${dataVar}[] = {${items}};`);
+          return `(${arrType}){.data = ${dataVar}, .length = ${elems.length}, .capacity = 0}`;
+        }
         lines.push(`${elemType} ${dataVar}[] = {${items}};`);
         return `(${arrType}){.data = ${dataVar}, .length = ${elems.length}, .capacity = ${elems.length}}`;
       }

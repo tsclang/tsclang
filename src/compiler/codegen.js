@@ -108,7 +108,7 @@ class Context {
     this._emittedArrayStructs = new Set(['Array_string', 'Array_u8']);
     this._emittedOptStructs   = new Set(['opt_u8']);
     this._emittedResultTypes = new Set();
-    this._emittedHelpers = new Set();
+    this._emittedHelpers = new Set(['free_i32', 'free_string', 'free_u8']);
     this._emittedImplicitVtables = new Set();
     this._emittedTasksPolls = new Set();
     this._emittedGenerics = new Set();
@@ -334,6 +334,43 @@ class Context {
     if (this._loopBodyCleanups?.length) return true;
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       if (this._blockCleanupStack[b].list.length) return true;
+    }
+    return false;
+  }
+
+  _suppressCleanupFor(varName) {
+    for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
+      const level = this._blockCleanupStack[b];
+      for (let i = level.list.length - 1; i >= 0; i--) {
+        const stmt = level.list[i];
+        if (stmt.includes(`&${varName})`) || stmt.includes(`(${varName})`) || stmt.includes(`(${varName},`)) {
+          level.list.splice(i, 1);
+        }
+      }
+      level.set = new Set(level.list);
+    }
+    if (this._loopBodyCleanups) {
+      this._loopBodyCleanups = this._loopBodyCleanups.filter(
+        s => !s.includes(`&${varName})`) && !s.includes(`(${varName})`) && !s.includes(`(${varName},`)
+      );
+    }
+    if (this._throwsOwnedVars) {
+      this._throwsOwnedVars = this._throwsOwnedVars.filter(
+        s => !s.includes(`&${varName})`) && !s.includes(`(${varName})`) && !s.includes(`(${varName},`)
+      );
+    }
+  }
+
+  _hasCleanupFor(varName) {
+    for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
+      for (const stmt of this._blockCleanupStack[b].list) {
+        if (stmt.includes(`&${varName})`) || stmt.includes(`(${varName})`) || stmt.includes(`(${varName},`)) return true;
+      }
+    }
+    if (this._loopBodyCleanups) {
+      for (const s of this._loopBodyCleanups) {
+        if (s.includes(`&${varName})`) || s.includes(`(${varName})`) || s.includes(`(${varName},`)) return true;
+      }
     }
     return false;
   }

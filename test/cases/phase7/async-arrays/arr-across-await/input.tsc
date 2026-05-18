@@ -1,0 +1,9 @@
+async function getValue(): Promise<i32> {
+    return 42;
+}
+async function foo(): Promise<void> {
+    const arr: i32[] = [10, 20, 30];
+    const x = await getValue();
+    console.log(arr.length);
+    console.log(x);
+}

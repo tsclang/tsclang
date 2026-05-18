@@ -1,0 +1,7 @@
+function getTail(): i32[] {
+    const arr: i32[] = [1, 2, 3, 4];
+    return arr.slice(2);
+}
+const tail = getTail();
+console.log(tail[0]);
+console.log(tail.length);

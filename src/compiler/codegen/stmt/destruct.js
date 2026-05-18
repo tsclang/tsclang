@@ -113,7 +113,13 @@
 
     } else if (node.kind === 'VarDestructArr') {
         const { varKind, pattern, init } = node;
-        const initType = this.inferType(init);
+        let initType = this.inferType(init);
+        const initSym = init.kind === 'Ident' ? this.lookup(init.name) : null;
+        let isRefArray = false;
+        if (initSym?.isRefParam && initSym?.derefType?.startsWith('Array_')) {
+          isRefArray = true;
+          initType = initSym.derefType;
+        }
         const tupleDef0 = this.classes.get(initType);
         const qual = varKind === 'const' ? 'const ' : '';
         if (tupleDef0?.isTuple) {
@@ -123,29 +129,25 @@
             const elem = pattern[i];
             if (!elem) continue;
             const field = tupleDef0.fields[i];
-            const ctype = field ? field.ctype.replace(' *', '') : 'int32_t'; // strip pointer for rest
+            const ctype = field ? field.ctype.replace(' *', '') : 'int32_t';
             p(`${qual}${ctype} ${elem.name} = ${initC}._${i};`);
             this.define(elem.name, { ctype, varKind });
           }
         } else if (initType?.startsWith('Array_')) {
           // Array_T destructuring: const [first, ...rest] = arr
-          const elemIdent = initType.slice(6); // Array_i32 → i32
+          const elemIdent = initType.slice(6);
           const elemCType = this._arrIdentToCType(elemIdent);
+          this._ensureArrayStruct(initType, elemCType);
           const srcC = this.exprToC(init, lines, depth);
-          let srcUse = srcC;
-          if (init.kind !== 'Ident') {
-            const srcTmp = `_tsc_src_${this.tempCount++}`;
-            p(`${initType} ${srcTmp} = ${srcC};`);
-            srcUse = srcTmp;
-          }
-          const nonRestCount = pattern.filter(e => e && !e.rest).length;
+          const srcUse = isRefArray ? `(*${srcC})` : srcC;
           let idx = 0;
           for (const elem of pattern) {
             if (!elem) { idx++; continue; }
             if (elem.rest) {
-              // Rest: sub-array slice
-              p(`${qual}${initType} ${elem.name} = {.data = ${srcUse}.data + ${idx}, .length = ${srcUse}.length - ${idx}, .capacity = 0};`);
+              // Rest: deep copy via tsc_array_slice_*
+              p(`${initType} ${elem.name} = tsc_array_slice_${elemIdent}(${srcUse}, ${idx}, (int32_t)${srcUse}.length);`);
               this.define(elem.name, { ctype: initType, elemType: elemIdent, arrElemCType: elemCType, isArray: true, varKind });
+              this._registerCleanup(`tsc_array_free_${elemIdent}(&${elem.name})`);
             } else {
               // Regular element: direct index
               p(`${qual}${elemCType} ${elem.name} = ${srcUse}.data[${idx}];`);

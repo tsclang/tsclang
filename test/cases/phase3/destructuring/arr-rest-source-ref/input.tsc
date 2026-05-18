@@ -1,0 +1,5 @@
+function len(r: Ref<i32[]>): usize { return r.length; }
+const arr: i32[] = [1, 2, 3];
+const [first, ...rest] = arr;
+console.log(len(arr));
+console.log(first);

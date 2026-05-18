@@ -13,15 +13,24 @@ export default {
     const prop  = callee.prop;
 
     const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
-    const et    = sym?.elemType ?? 'i32';
-    const etC   = sym?.arrElemCType ?? 'int32_t';
+    let et    = sym?.elemType ?? 'i32';
+    let etC   = sym?.arrElemCType ?? 'int32_t';
+    let arrObjC = objC;
+
+    // Ref<T[]> / Mut<T[]>: dereference pointer for array operations
+    if (sym?.isRefParam && sym?.derefType?.startsWith('Array_')) {
+      et = sym.derefType.slice(6);
+      etC = this._arrIdentToCType(et);
+      arrObjC = `(*${objC})`;
+    }
 
     const lambdaOutET = (argsC) => {
       const m = argsC.match(/_lambda_\d+_(\w+)/);
       return m ? m[1] : et;
     };
 
-    const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_');
+    const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_')
+                     || (sym?.isRefParam && sym?.derefType?.startsWith('Array_'));
     const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce']);
     let cbFnName = null;
     let cbExtraArgs = '';
@@ -130,48 +139,48 @@ export default {
           }
           return `tsc_array_reallocate_${et}(&${objC}, ${capC})`;
         }
-        case 'filter':  return `tsc_array_filter_${et}(${objC}, ${cbFnName ?? argsC})`;
-        case 'forEach': return `tsc_array_foreach_${et}(${objC}, ${cbFnName ?? argsC})`;
+        case 'filter':  return `tsc_array_filter_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'forEach': return `tsc_array_foreach_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         case 'map': {
           const outET = cbFnName ? (this._lastCbRetType ? this.cTypeToIdent(this._lastCbRetType) : et) : lambdaOutET(argsC);
-          return `tsc_array_map_${et}_${outET}(${objC}, ${cbFnName ?? argsC})`;
+          return `tsc_array_map_${et}_${outET}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
         case 'reduce': {
           const initExpr = args[1]?.expr;
           const outET = initExpr ? this.cTypeToIdent(this.inferType(initExpr)) : et;
           const reduceArgs = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
-          return `tsc_array_reduce_${et}_${outET}(${objC}, ${reduceArgs})`;
+          return `tsc_array_reduce_${et}_${outET}(${arrObjC}, ${reduceArgs})`;
         }
-        case 'every':    return `tsc_array_every_${et}(${objC}, ${cbFnName ?? argsC})`;
-        case 'some':     return `tsc_array_some_${et}(${objC}, ${cbFnName ?? argsC})`;
+        case 'every':    return `tsc_array_every_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'some':     return `tsc_array_some_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         case 'find': {
           this._ensureOptRefStruct(`opt_ref_${et}`, etC);
-          return `tsc_array_find_${et}(${objC}, ${cbFnName ?? argsC})`;
+          return `tsc_array_find_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
-        case 'findIndex': return `(int)tsc_array_find_index_${et}(${objC}, ${cbFnName ?? argsC})`;
-        case 'indexOf':  return `(int)tsc_array_index_of_${et}(${objC}, ${argsC})`;
-        case 'includes': return `tsc_array_includes_${et}(${objC}, ${argsC})`;
-        case 'concat':   return `tsc_array_concat_${et}(${objC}, ${argsC})`;
+        case 'findIndex': return `(int)tsc_array_find_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'indexOf':  return `(int)tsc_array_index_of_${et}(${arrObjC}, ${argsC})`;
+        case 'includes': return `tsc_array_includes_${et}(${arrObjC}, ${argsC})`;
+        case 'concat':   return `tsc_array_concat_${et}(${arrObjC}, ${argsC})`;
         case 'slice': {
           const s = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
-          const e = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(int32_t)${objC}.length`;
-          return `tsc_array_slice_${et}(${objC}, ${s}, ${e})`;
+          const e = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(int32_t)${arrObjC}.length`;
+          return `tsc_array_slice_${et}(${arrObjC}, ${s}, ${e})`;
         }
         case 'join': {
           const sep = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(",")';
-          return `tsc_array_join_${et}(${objC}, ${sep})`;
+          return `tsc_array_join_${et}(${arrObjC}, ${sep})`;
         }
-        case 'keys':    return `tsc_array_keys_${et}(${objC})`;
-        case 'values':  return `tsc_array_values_${et}(${objC})`;
-        case 'entries': return `tsc_array_entries_${et}(${objC})`;
-        case 'flat':    return `tsc_array_flat_${et}(${objC})`;
+        case 'keys':    return `tsc_array_keys_${et}(${arrObjC})`;
+        case 'values':  return `tsc_array_values_${et}(${arrObjC})`;
+        case 'entries': return `tsc_array_entries_${et}(${arrObjC})`;
+        case 'flat':    return `tsc_array_flat_${et}(${arrObjC})`;
         case 'clone': {
           if (baseObject.kind === 'Ident') {
-            return `tsc_array_slice_${et}(${objC}, 0, (int32_t)${objC}.length)`;
+            return `tsc_array_slice_${et}(${arrObjC}, 0, (int32_t)${arrObjC}.length)`;
           }
           const arrType = this.inferType(baseObject) ?? `Array_${etC}`;
           const tmp = `_tsc_arr_${this.tempCount++}`;
-          lines.push(`${' '.repeat(this.indent * depth)}${arrType} ${tmp} = ${objC};`);
+          lines.push(`${' '.repeat(this.indent * depth)}${arrType} ${tmp} = ${arrObjC};`);
           return `tsc_array_slice_${et}(${tmp}, 0, (int32_t)${tmp}.length)`;
         }
       }

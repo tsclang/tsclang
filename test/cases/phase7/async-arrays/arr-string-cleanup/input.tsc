@@ -1,0 +1,4 @@
+async function foo(): Promise<void> {
+    const arr: string[] = ["hello", "world"];
+    console.log(arr.length);
+}

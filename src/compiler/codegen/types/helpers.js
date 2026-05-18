@@ -65,11 +65,20 @@ export default {
   },
 
   // Emit Array_T struct typedef (idempotent)
-  _ensureArrayStruct(arrName, et) {
+  _ensureArrayStruct(arrName, et) {
+
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} *data; size_t length; size_t capacity; } ${arrName};`);
       this.addTop('');
+    }
+  },
+
+  _ensureArrayFreeMacro(elemIdent, arrName, et) {
+    const key = `free_${elemIdent}`;
+    if (!this._emittedHelpers.has(key)) {
+      this._emittedHelpers.add(key);
+      this.addTop(`#define tsc_array_free_${elemIdent}(arr) do { ${arrName} *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
     }
   },
 
