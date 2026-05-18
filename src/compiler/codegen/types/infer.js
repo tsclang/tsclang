@@ -393,7 +393,7 @@ export default {
       const _idxObjType = this.inferType(node.callee?.object);
       if (_idxObjType === 'Buffer' || _idxObjType === 'DataView') return 'uint8_t';
     }
-    if (prop === 'at') return 'opt_u8';
+    if (prop === 'at' && this.inferType(obj) === 'String') return 'opt_u8';
     if (prop === 'toFixed' || prop === 'toPrecision') return 'String';
     if (obj.kind === 'Member' &&
         obj.object.kind === 'Ident' && obj.object.name === 'process' &&
@@ -557,15 +557,21 @@ export default {
       const et = objSym?.elemType ?? objType.slice(6);
       const etCType = objSym?.arrElemCType ?? 'int32_t';
       if (prop === 'pop') return et ? `opt_${et}` : 'opt_i32';
+      if (prop === 'shift') return et ? `opt_${et}` : 'opt_i32';
       if (prop === 'remove') return etCType;
-      if (prop === 'find') return et ? `opt_ref_${et}` : 'opt_ref_i32';
+      if (prop === 'find' || prop === 'findLast') return et ? `opt_ref_${et}` : 'opt_ref_i32';
       if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;
-      if (prop === 'map') return objType;
+      if (prop === 'map' || prop === 'flatMap') return objType;
       if (prop === 'slice') return objType;
-      if (prop === 'findIndex' || prop === 'indexOf') return 'int32_t';
+      if (prop === 'toReversed' || prop === 'toSorted' || prop === 'toSpliced') return objType;
+      if (prop === 'with') return objType;
+      if (prop === 'splice') return objType;
+      if (prop === 'flat') return objType;
+      if (prop === 'findIndex' || prop === 'indexOf' || prop === 'findLastIndex' || prop === 'lastIndexOf') return 'int32_t';
       if (prop === 'includes' || prop === 'every' || prop === 'some') return 'bool';
       if (prop === 'length' || prop === 'capacity') return 'size_t';
       if (prop === 'join') return 'String';
+      if (prop === 'at') return etCType;
       if (prop === 'reduce') {
         const initExpr = node.args?.[1]?.expr;
         return initExpr ? this.inferType(initExpr) : (objSym?.arrElemCType ?? 'int32_t');

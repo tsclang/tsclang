@@ -1,0 +1,4 @@
+const arr = [1, 2, 3];
+const arr2 = arr.with(1, 99);
+console.log(arr2[1]);
+console.log(arr[1]);

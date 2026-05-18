@@ -37,7 +37,7 @@ export default {
 
     const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_')
                      || (sym?.isRefParam && sym?.derefType?.startsWith('Array_'));
-    const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce']);
+    const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce','findLast','findLastIndex','flatMap']);
     let cbFnName = null;
     let cbExtraArgs = '';
     let argsForC = args;
@@ -195,6 +195,61 @@ export default {
         case 'values':  return `tsc_array_values_${et}(${arrObjC})`;
         case 'entries': return `tsc_array_entries_${et}(${arrObjC})`;
         case 'flat':    return `tsc_array_flat_${et}(${arrObjC})`;
+        case 'shift': {
+          this._ensureOptStruct(`opt_${et}`, etC);
+          this._lastSuppressConst = true;
+          return `tsc_array_shift_${et}(&${objC})`;
+        }
+        case 'unshift': {
+          if ((sym?._refBorrowCount || 0) > 0)
+            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+          const uv = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
+          return `tsc_array_unshift_${et}(&${objC}, ${uv})`;
+        }
+        case 'splice': {
+          if ((sym?._refBorrowCount || 0) > 0)
+            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+          const spStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const spDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const spItems = argsForC.slice(2).map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const spArgs = spItems.length > 0 ? `${spStart}, ${spDel}, ${spItems.join(', ')}` : `${spStart}, ${spDel}`;
+          return `tsc_array_splice_${et}(&${objC}, ${spArgs})`;
+        }
+        case 'at': {
+          const atIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          return `tsc_array_at_${et}(${arrObjC}, ${atIdx})`;
+        }
+        case 'with': {
+          const wIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const wVal = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `tsc_array_with_${et}(${arrObjC}, ${wIdx}, ${wVal})`;
+        }
+        case 'lastIndexOf': return `(int)tsc_array_last_index_of_${et}(${arrObjC}, ${argsC})`;
+        case 'findLast': {
+          this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+          return `tsc_array_find_last_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
+        case 'findLastIndex': return `(int)tsc_array_find_last_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'flatMap': {
+          let fmOutET = et;
+          if (cbFnName && this._lastCbRetType) {
+            const fmRet = this._lastCbRetType;
+            fmOutET = fmRet.startsWith('Array_') ? fmRet.slice(6) : this.cTypeToIdent(fmRet);
+          }
+          return `tsc_array_flat_map_${et}_${fmOutET}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
+        case 'toReversed': return `tsc_array_to_reversed_${et}(${arrObjC})`;
+        case 'toSorted': {
+          const tsCmp = args.length ? (cbFnName ?? argsC) : 'NULL';
+          return tsCmp === 'NULL' ? `tsc_array_to_sorted_${et}(${arrObjC})` : `tsc_array_to_sorted_${et}(${arrObjC})`;
+        }
+        case 'toSpliced': {
+          const tsStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const tsDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const tsItems = argsForC.slice(2).map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const tsArgs = tsItems.length > 0 ? `${tsStart}, ${tsDel}, ${tsItems.join(', ')}` : `${tsStart}, ${tsDel}`;
+          return `tsc_array_to_spliced_${et}(${arrObjC}, ${tsArgs})`;
+        }
         case 'clone': {
           if (baseObject.kind === 'Ident') {
             return `tsc_array_slice_${et}(${arrObjC}, 0, (int32_t)${arrObjC}.length)`;

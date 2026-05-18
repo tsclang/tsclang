@@ -1422,6 +1422,168 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     _acc_; \
 })
 
+#define tsc_array_shift_i32(arr) ({ \
+    Array_i32 *_a_ = (arr); \
+    opt_i32 _r_ = {false, 0}; \
+    if (_a_->length > 0) { \
+        _r_ = (opt_i32){true, _a_->data[0]}; \
+        memmove(_a_->data, _a_->data + 1, (_a_->length - 1) * sizeof(int32_t)); \
+        _a_->length--; \
+    } \
+    _r_; \
+})
+
+#define tsc_array_unshift_i32(arr, val) do { \
+    Array_i32 *_a_ = (arr); int32_t _v_ = (val); \
+    if (_a_->length >= _a_->capacity) { \
+        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
+        _a_->data = (int32_t*)realloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
+    } \
+    memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(int32_t)); \
+    _a_->data[0] = _v_; _a_->length++; \
+} while(0)
+
+#define tsc_array_splice_i32(arr, start, del_cnt, ...) ({ \
+    Array_i32 *_a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_->length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_->length) _s_ = (int32_t)_a_->length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_->length - (size_t)_s_) _dc_ = (int32_t)(_a_->length - (size_t)_s_); \
+    int32_t _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(int32_t); \
+    Array_i32 _r_ = {NULL, 0, 0}; \
+    if (_dc_ > 0) { \
+        _r_.data = (int32_t*)malloc((size_t)_dc_ * sizeof(int32_t)); \
+        memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(int32_t)); \
+        _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
+    } \
+    size_t _tail_ = _a_->length - (size_t)_s_ - (size_t)_dc_; \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
+    if (_new_len_ > _a_->capacity) { \
+        size_t _nc_ = _new_len_ * 2; \
+        _a_->data = (int32_t*)realloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
+    } \
+    if (_ni_ != (size_t)_dc_) { \
+        memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(int32_t)); \
+    } \
+    memcpy(_a_->data + _s_, _ins_, _ni_ * sizeof(int32_t)); \
+    _a_->length = _new_len_; \
+    _r_; \
+})
+
+#define tsc_array_at_i32(arr, idx) ({ \
+    Array_i32 _a_ = (arr); int32_t _i_ = (idx); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    _a_.data[(size_t)_i_]; \
+})
+
+#define tsc_array_with_i32(arr, idx, val) ({ \
+    Array_i32 _a_ = (arr); int32_t _i_ = (idx); int32_t _v_ = (val); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(int32_t)); \
+    _d_[(size_t)_i_] = _v_; \
+    (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_last_index_of_i32(arr, val) ({ \
+    Array_i32 _a_ = (arr); int32_t _v_ = (val); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if (_a_.data[_i_ - 1] == _v_) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+#define tsc_array_join_i32(arr, sep) ({ \
+    Array_i32 _a_ = (arr); String _sep_ = (sep); \
+    String _jr_; \
+    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    else { \
+        char _buf_[16]; int _len_ = snprintf(_buf_, sizeof(_buf_), "%d", _a_.data[0]); \
+        size_t _total_ = (size_t)_len_; \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
+            _total_ += _sep_.length + 16; \
+        } \
+        char *_out_ = (char*)malloc(_total_ + 1); \
+        int _w_ = snprintf(_out_, _total_ + 1, "%d", _a_.data[0]); \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
+            memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += (int)_sep_.length; \
+            _w_ += snprintf(_out_ + _w_, _total_ + 1 - _w_, "%d", _a_.data[_i_]); \
+        } \
+        _jr_ = _tsc_str_make(_out_, (size_t)_w_, (size_t)_w_ + 1); \
+    } \
+    _jr_; \
+})
+
+#define tsc_array_flat_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    size_t _total_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_++; \
+    int32_t *_d_ = (int32_t*)malloc(_total_ * sizeof(int32_t)); \
+    size_t _pos_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_pos_++] = _a_.data[_i_]; \
+    (Array_i32){ .data = _d_, .length = _total_, .capacity = _total_ }; \
+})
+
+#define tsc_array_find_last_i32(arr, pred) ({ \
+    Array_i32 _a_ = (arr); \
+    opt_ref_i32 _r_ = {false, NULL}; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (opt_ref_i32){true, &_a_.data[_i_ - 1]}; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_last_index_i32(arr, pred) ({ \
+    Array_i32 _a_ = (arr); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+#define tsc_array_flat_map_i32_i32(arr, fn) ({ \
+    Array_i32 _a_ = (arr); \
+    Array_i32 _r_ = {NULL, 0, 0}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        Array_i32 _chunk_ = (fn)(_a_.data[_i_]); \
+        for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
+            if (_r_.length >= _r_.capacity) { \
+                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
+                _r_.data = (int32_t*)realloc(_r_.data, _nc_ * sizeof(int32_t)); _r_.capacity = _nc_; \
+            } \
+            _r_.data[_r_.length++] = _chunk_.data[_j_]; \
+        } \
+    } \
+    _r_; \
+})
+
+#define tsc_array_to_reversed_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; \
+    (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_to_sorted_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(int32_t)); \
+    qsort(_d_, _a_.length, sizeof(int32_t), _tsc_cmp_i32_asc); \
+    (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_to_spliced_i32(arr, start, del_cnt, ...) ({ \
+    Array_i32 _a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_.length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_.length) _s_ = (int32_t)_a_.length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
+    int32_t _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(int32_t); \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
+    int32_t *_d_ = (int32_t*)malloc(_new_len_ * sizeof(int32_t)); \
+    memcpy(_d_, _a_.data, (size_t)_s_ * sizeof(int32_t)); \
+    memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(int32_t)); \
+    memcpy(_d_ + _s_ + _ni_, _a_.data + _s_ + _dc_, (_a_.length - (size_t)_s_ - (size_t)_dc_) * sizeof(int32_t)); \
+    (Array_i32){ .data = _d_, .length = _new_len_, .capacity = _new_len_ }; \
+})
+
 #define tsc_array_remove_i32(arr, idx) ({ \
     Array_i32 *_a_ = (arr); size_t _i_ = (size_t)(idx); \
     int32_t _v_ = _a_->data[_i_]; \

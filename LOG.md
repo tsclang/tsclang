@@ -852,3 +852,23 @@
 > - **M23 — reduce U≠T**: runtime.h — добавлен `tsc_array_reduce_i32_string` macro. Codegen уже поддерживает generic suffix. Новый тест: `phase3/arrays/reduce-diff-type`
 > - **M27 — Map<string,string>**: runtime.h — добавлены `TSC_MAP_DECL(String, String, string_string)`, `tsc_map_get/delete_string_string` macros. Новый тест: `phase6/maps/string-string`
 > - Результат: **1111 тестов проходят, 2 отложены** (M21 callbacks Ref<T>, M24 Map.get Ref<V>)
+
+> 2026-05-19: **14 новых методов массива** (runtime macros + codegen dispatch + type inference):
+> - **shift** (`T | null`): `tsc_array_shift_i32` — remove first element, return opt_T
+> - **unshift** (`Self`): `tsc_array_unshift_i32` — add to beginning with realloc
+> - **splice** (`T[]`): `tsc_array_splice_i32` — remove/insert with variadic items
+> - **at** (`T`): `tsc_array_at_i32` — access by index (negative from end). Fixed infer.js: `prop === 'at'` was unconditionally returning `opt_u8` (string), now guarded by `objType === 'String'`
+> - **with** (`T[]`): `tsc_array_with_i32` — new array with replaced element
+> - **lastIndexOf** (`i32`): `tsc_array_last_index_of_i32` — search from end
+> - **join** (`String`): `tsc_array_join_i32` — concat elements with separator. Fixed GCC stmt-expr: use result variable `_jr_` instead of if/else return
+> - **flat** (`T[]`): `tsc_array_flat_i32` — flatten (identity for non-nested)
+> - **findLast** (`Ref<T> | null`): `tsc_array_find_last_i32` — find from end, callback-based
+> - **findLastIndex** (`i32`): `tsc_array_find_last_index_i32` — index from end, callback-based
+> - **flatMap** (`U[]`): `tsc_array_flat_map_i32_i32` — map+flat. Fixed codegen: extract inner element type from lambda return type (strip `Array_` prefix)
+> - **toReversed** (`T[]`): `tsc_array_to_reversed_i32` — new reversed array
+> - **toSorted** (`T[]`): `tsc_array_to_sorted_i32` — new sorted array via qsort
+> - **toSpliced** (`T[]`): `tsc_array_to_spliced_i32` — new spliced array with variadic items
+> - Codegen: `method-dispatch.js` — added `findLast`, `findLastIndex`, `flatMap` to `arrayCallbackProps` set; added 14 new case handlers
+> - Codegen: `infer.js` — added type inference for all 14 methods in array section
+> - 14 новых тестов (все [R] runnable)
+> - Результат: **1125 тестов проходят, 2 отложены**

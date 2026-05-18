@@ -1,0 +1,3 @@
+const arr = [1, 2, 3, 4];
+const found = arr.findLast((x) => x > 2);
+console.log(found);
