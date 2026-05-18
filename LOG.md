@@ -803,3 +803,9 @@
 > - **Double-evaluation prevention (LOW)**: slice `.view()`/`.viewMut()` start arg, array destruct rest — store in temp for non-trivial expressions
 > - Updated 7 expected.c files (capture-string-ref, by-type, dispatch, cleanup-on-throw, goto-cleanup-*)
 > - Результат: **1086 тестов, 0 ошибок** (no-gcc); **1085/1086** (gcc, flaky cache)
+
+> 2026-05-18: **inferType fix — new Array/Set/ReadonlyArray returns mangled type**:
+> - **Bug**: `inferType()` in `infer.js` `New` case had no handling for `Array`, `ReadonlyArray`, `Set` — functions without explicit return type that returned `new Array<T>()` got bare `Array` instead of `Array_T` in the C signature
+> - Added `Array`/`ReadonlyArray` → `Array_T` and `Set` → `TscSet_T` mangling, consistent with `resolveType()` and `newToC()`
+> - New test: `phase3/arrays/infer-return` ([R] runnable)
+> - Результат: **1090 тестов, 0 ошибок** (GCC все фазы)
