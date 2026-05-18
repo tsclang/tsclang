@@ -43,7 +43,7 @@ static void main_poll(main_state *self) {
             int32_t x = self->_await_0._result.value;
             int32_t y = self->_await_1._result.value;
             if (!self->_await_1._result.ok) {
-                Err e = self->_await_1._result.error;
+                (void)self->_await_1._result.error;
                 printf("error\n");
                 self->_done = true;
                 return;

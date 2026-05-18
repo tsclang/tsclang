@@ -28,7 +28,7 @@ static void main_poll(main_state *self) {
             fail_poll(&self->_await_0);
             if (!self->_await_0._done) return;
             if (!self->_await_0._result.ok) {
-                Err e = self->_await_0._result.error;
+                (void)self->_await_0._result.error;
                 printf("caught\n");
                 self->_done = true;
                 return;

@@ -11,8 +11,7 @@ int main(void) {
     TSC_INIT();
     Result_void_AppError _res_0 = ok_fn();
     if (!_res_0.ok) {
-        AppError e = _res_0.error;
-        (void)e;
+        (void)_res_0.error;
         printf("error\n");
     }
     printf("done\n");

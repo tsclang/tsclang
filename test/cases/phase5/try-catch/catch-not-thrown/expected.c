@@ -14,8 +14,7 @@ int main(void) {
         const int32_t x = _res_0.value;
         printf("%d\n", x);
     } else {
-        AppError e = _res_0.error;
-        (void)e;
+        (void)_res_0.error;
         printf("error\n");
     }
     return 0;

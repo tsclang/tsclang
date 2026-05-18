@@ -272,9 +272,14 @@ export default {
         }
         lines.push(`${I}if (!self->_await_${lastAwaitIdx}._result.ok) {`);
         if (param) {
-          // param is a string name; typeAnn is on the catchClause directly
           const pct = catchClause.typeAnn ? this.resolveType(catchClause.typeAnn) : 'void *';
-          lines.push(`${I}    ${pct} ${param} = self->_await_${lastAwaitIdx}._result.error;`);
+          const bodyStr = JSON.stringify(catchBody);
+          const paramUsed = bodyStr.includes(`"name":"${param}"`);
+          if (paramUsed) {
+            lines.push(`${I}    ${pct} ${param} = self->_await_${lastAwaitIdx}._result.error;`);
+          } else {
+            lines.push(`${I}    (void)self->_await_${lastAwaitIdx}._result.error;`);
+          }
         }
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
         const catchEndsReturn = (catchBody?.body || []).some(cs => cs.kind === 'Return');

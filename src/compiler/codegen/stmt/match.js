@@ -191,10 +191,13 @@
         const errExpr = isUnion
           ? `${resName}.error._${calleeSym?._resultErrTypes?.indexOf(errClass) ?? 0}`
           : `${resName}.error`;
-        lines.push(`${I}${errClass} ${c.param} = ${errExpr};`);
-        // Suppress unused-variable warning if param not referenced in body
         const bodyStr = JSON.stringify(c.body);
-        if (!bodyStr.includes(`"name":"${c.param}"`)) lines.push(`${I}(void)${c.param};`);
+        const paramUsed = bodyStr.includes(`"name":"${c.param}"`);
+        if (paramUsed) {
+          lines.push(`${I}${errClass} ${c.param} = ${errExpr};`);
+        } else {
+          lines.push(`${I}(void)${errExpr};`);
+        }
         this.pushScope();
         this.define(c.param, { ctype: errClass });
         this.visitBlock(c.body, lines, depth);
@@ -210,7 +213,14 @@
         } else {
           lines.push(`${I}} else if (${resName}.error.tag == _Err_${errClass}) {`);
         }
-        lines.push(`${II}${errClass} ${c.param} = ${resName}.error._${i};`);
+        const errExpr = `${resName}.error._${i}`;
+        const bodyStr = JSON.stringify(c.body);
+        const paramUsed = bodyStr.includes(`"name":"${c.param}"`);
+        if (paramUsed) {
+          lines.push(`${II}${errClass} ${c.param} = ${errExpr};`);
+        } else {
+          lines.push(`${II}(void)${errExpr};`);
+        }
         this.pushScope();
         this.define(c.param, { ctype: errClass });
         this.visitBlock(c.body, lines, depth + 1);

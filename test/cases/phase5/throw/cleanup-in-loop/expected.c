@@ -21,8 +21,7 @@ void process(void) {
             int32_t r = _res_0.value;
             total = total + r;
         } else {
-            Err e = _res_0.error;
-            (void)e;
+            (void)_res_0.error;
             total = total + 100;
         }
         tsc_string_release(s);

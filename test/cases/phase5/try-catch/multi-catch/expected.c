@@ -33,10 +33,10 @@ int main(void) {
     Result_void_FileError_NetworkError _res_0 = risky_bool(true);
     if (!_res_0.ok) {
         if (_res_0.error.tag == _Err_FileError) {
-            FileError e = _res_0.error._0;
+            (void)_res_0.error._0;
             printf("file err\n");
         } else if (_res_0.error.tag == _Err_NetworkError) {
-            NetworkError e = _res_0.error._1;
+            (void)_res_0.error._1;
             printf("net err\n");
         }
     }
