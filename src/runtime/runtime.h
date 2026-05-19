@@ -1594,6 +1594,12 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     _r_; \
 })
 
+#define tsc_array_set_i32(arr, src, offset) do { \
+    Array_i32 *_d_ = (arr); Array_i32 _s_ = (src); size_t _off_ = (size_t)(offset); \
+    for (size_t _i_ = 0; _i_ < _s_.length && _off_ + _i_ < _d_->length; _i_++) \
+        _d_->data[_off_ + _i_] = _s_.data[_i_]; \
+} while(0)
+
 #define tsc_array_find_i32(arr, pred) ({ \
     Array_i32 _a_ = (arr); \
     opt_ref_i32 _r_ = {false, NULL}; \
@@ -2188,6 +2194,118 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     memcpy(_dv_, _mv_->_vals, _mv_->size * sizeof(int32_t)); \
     (Array_i32){ .data = _dv_, .length = _mv_->size, .capacity = _mv_->size }; \
 })
+
+/* -------------------------------------------------------------------------
+ * String array runtime macros (mirror of i32 versions)
+ * ------------------------------------------------------------------------- */
+
+#define tsc_array_concat_string(a, b) ({ \
+    Array_string _a_ = (a), _b_ = (b); \
+    size_t _n_ = _a_.length + _b_.length; \
+    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
+    memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(String)); \
+    (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_values_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    size_t _n_ = _a_.length; \
+    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(String)); \
+    (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_keys_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    size_t _n_ = _a_.length; \
+    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    for (size_t _i_ = 0; _i_ < _n_; _i_++) _d_[_i_] = (int32_t)_i_; \
+    (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_fill_string(arr, val, start, end_idx) do { \
+    Array_string *_a_ = (arr); String _v_ = (val); int32_t _s_ = (start), _e_ = (end_idx); \
+    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_->length) _e_ = (int32_t)_a_->length; \
+    for (int32_t _i_ = _s_; _i_ < _e_; _i_++) { tsc_string_release(_a_->data[_i_]); _a_->data[_i_] = _v_; } \
+} while(0)
+
+#define tsc_array_reverse_string(arr) do { \
+    Array_string *_a_ = (arr); \
+    for (size_t _l_ = 0, _r_ = _a_->length; _l_ < _r_; ) { \
+        _r_--; String _t_ = _a_->data[_l_]; _a_->data[_l_++] = _a_->data[_r_]; _a_->data[_r_] = _t_; \
+    } \
+} while(0)
+
+#define tsc_array_includes_string(arr, val) ({ \
+    Array_string _a_ = (arr); String _v_ = (val); bool _f_ = false; \
+    for (size_t _i_ = 0; _i_ < _a_.length && !_f_; _i_++) if (_tsc_str_eq(_a_.data[_i_], _v_)) _f_ = true; \
+    _f_; \
+})
+
+#define tsc_array_index_of_string(arr, val) ({ \
+    Array_string _a_ = (arr); String _v_ = (val); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if (_tsc_str_eq(_a_.data[_i_], _v_)) { _r_ = (ptrdiff_t)_i_; break; } \
+    _r_; \
+})
+
+#define tsc_array_set_string(arr, src, offset) do { \
+    Array_string *_d_ = (arr); Array_string _s_ = (src); size_t _off_ = (size_t)(offset); \
+    for (size_t _i_ = 0; _i_ < _s_.length && _off_ + _i_ < _d_->length; _i_++) \
+        _d_->data[_off_ + _i_] = _s_.data[_i_]; \
+} while(0)
+
+#define tsc_array_resize_string(arr, new_len, def_val) do { \
+    Array_string *_a_ = (arr); size_t _nl_ = (size_t)(new_len); String _dv_ = (def_val); \
+    if (_nl_ > _a_->capacity) { \
+        String *_nd_ = (String*)malloc(_nl_ * sizeof(String)); \
+        if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(String)); \
+        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \
+        _a_->data = _nd_; _a_->capacity = _nl_; \
+    } else if (_nl_ > _a_->length) { \
+        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _a_->data[_i_] = _dv_; \
+    } \
+    _a_->length = _nl_; \
+} while(0)
+
+#define tsc_array_reallocate_string(arr, new_cap) do { \
+    Array_string *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \
+    String *_nd_ = (String*)malloc(_nc_ * sizeof(String)); \
+    size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \
+    if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(String)); \
+    _a_->data = _nd_; _a_->capacity = _nc_; \
+    if (_a_->length > _nc_) _a_->length = _nc_; \
+} while(0)
+
+/* -------------------------------------------------------------------------
+ * Map<string, string> — keys, values, entries, forEach
+ * ------------------------------------------------------------------------- */
+
+#define tsc_map_keys_string_string(_m_) ({ \
+    const TscMap_string_string *_mk_ = (_m_); \
+    String *_dk_ = (String*)malloc(_mk_->size * sizeof(String)); \
+    memcpy(_dk_, _mk_->_keys, _mk_->size * sizeof(String)); \
+    (Array_string){ .data = _dk_, .length = _mk_->size, .capacity = _mk_->size }; \
+})
+
+#define tsc_map_values_string_string(_m_) ({ \
+    const TscMap_string_string *_mv_ = (_m_); \
+    String *_dv_ = (String*)malloc(_mv_->size * sizeof(String)); \
+    memcpy(_dv_, _mv_->_vals, _mv_->size * sizeof(String)); \
+    (Array_string){ .data = _dv_, .length = _mv_->size, .capacity = _mv_->size }; \
+})
+
+#define tsc_map_entries_string_string(_m_) ({ \
+    const TscMap_string_string *_me_ = (_m_); \
+    MapEntry_string_string *_de_ = (MapEntry_string_string*)malloc(_me_->size * sizeof(MapEntry_string_string)); \
+    for (size_t _i_ = 0; _i_ < _me_->size; _i_++) { _de_[_i_].key = _me_->_keys[_i_]; _de_[_i_].value = _me_->_vals[_i_]; } \
+    (Array_MapEntry_string_string){ .data = _de_, .length = _me_->size, .capacity = _me_->size }; \
+})
+
+#define tsc_map_for_each_string_string(_m_, _fn_) do { \
+    const TscMap_string_string *_mf_ = (_m_); \
+    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_]); \
+} while(0)
 
 // StaticMap: fixed-capacity map backed by parallel arrays (no heap)
 // Generated inline in .c output; these macros implement the operations.

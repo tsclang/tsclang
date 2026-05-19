@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1104 тестов ✓** (2026-05-18)
+**Итого: 1185 тестов ✓** (2026-05-19)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -934,3 +934,50 @@
 > - Полная семантика Ref<T> (String* вместо String в callbacks) отложена — требует auto-deref в codegen
 > - groupBy отложен — требует `Map<K, Array<T>>` (не поддерживается текущим Map runtime)
 > - Результат: **1159 тестов проходят**
+
+> 2026-05-19: **String callback Ref<T> auto-deref + Map.groupBy/Object.groupBy** (P1):
+> - **String callback Ref<T>**: параметры String в lambda callbacks теперь `String *s` (указатель); `_derefStringPtr` в codegen автоматически разыменовывает `*s` при использовании; флаг `_inHoistedLambda` для корректного контекста
+> - **Map.groupBy/Object.groupBy**: статические методы (не методы массива) — диспетчеризация через `_dispatchGroupBy` в call-dispatch.js; runtime макросы `tsc_map_group_by_i32_string`/`tsc_map_group_by_i32_i32`; inferType: `Map<string, Array<T>>`
+> - 3 новых теста: `phase3/arrays/groupby-identity`, `phase3/arrays/groupby-object`, `phase3/maps/groupby`
+> - Результат: **1166 тестов проходят**
+
+> 2026-05-19: **P0: --version/--help + parser error recovery** (2 фичи, 1 коммит):
+> - **--version**: выводит версию из `package.json`; **--help**: глобальная справка + справка по подкомандам (`build --help`, `run --help`)
+> - **Parser error recovery**: `parse()` теперь возвращает `{ ast, errors }` вместо голого AST; `syncToRecovery()` с отслеживанием глубины скобок — пропускает неполные блоки, всегда продвигает `pos`; все call sites обновлены (bin/index.js, linter.js, dts-emitter.js, lsp/server.js)
+> - Результат: **1166 тестов, 0 ошибок**
+
+> 2026-05-19: **P0: --watch/-w режим** для `tsclang build`:
+> - Рефакторинг: `doBuild()` выделена из `buildCommand` для переиспользования
+> - `fs.watchFile` с debounce 150мс; SIGINT обработка; timestamp-лог при пересборке
+> - Результат: **1166 тестов, 0 ошибок**
+
+> 2026-05-19: **P1 batch 1 — Array.from/of, arr.values(), Set.keys()** (1170 pass):
+> - **Array.from<T>(arr)**: `_dispatchArrayStatic` в call-dispatch.js; повторно использует `tsc_array_slice` (clone)
+> - **Array.of<T>(a, b, c)**: генерирует temp vars + compound literals для C array construction
+> - **arr.values()**: `tsc_array_values_i32`/`tsc_array_values_string` — возвращает `Array<T>` копию
+> - **Set.keys()** = **Set.values()** — идентичные codegen и runtime call
+> - **Map.values()**: `tsc_map_values_string_i32` macro; dispatch в method-dispatch.js; inferType
+> - Новые тесты: `array-from`, `array-of`, `array-values`, `set-keys`, `map-values`
+> - Результат: **1170 тестов**
+
+> 2026-05-19: **P1 batch 2 — s.search(regex), s.match(regex)** (1173 pass):
+> - **s.search(regex)**: диспетчеризация string method → `tsc_regex_search`; возвращает `i32` byte offset (-1 если не найден); macro в regex.h; `_isRegex` check на argument
+> - **s.match(regex)**: диспетчеризация string method → `tsc_regex_match`; возвращает `opt_Array_string`; `_ensureArrayStruct('Array_string', 'String')` + `_ensureOptStruct('opt_Array_string', 'Array_string')` по требованию
+> - InferType: `search` → `int32_t`, `match` → `opt_Array_string`
+> - Новые тесты: `string-search`, `string-match`
+> - Результат: **1173 теста, 0 ошибок**
+
+> 2026-05-19: **Отложенные задачи**:
+> - `arr.entries()` / `Set.entries()`: требует тип tuple `[i32, T]` / `[T, T]` — отложено
+> - `s.matchAll(regex)`: требует тип возврата `string[][]` — отложено
+> - Map.forEach: closure capture в `tsc_closure` struct несовместим с простым function pointer в runtime macro — требует доработки
+> - Полная Ref<T> семантика для callbacks (String* auto-deref для map/filter/etc.) — частично реализовано (forEach), полное auto-deref отложено
+
+> 2026-05-19: **P1 batch 3–6** — string array runtime, Object.keys/values, arr.set, Map for-of (1185 pass):
+> - **String array runtime macros** (9 штук): `concat`, `values`, `keys`, `fill`, `reverse`, `includes`, `indexOf`, `resize`, `reallocate` — зеркальные аналоги `_i32` версий с `String*` вместо `int32_t*`, `_tsc_str_eq` для сравнения
+> - **Map string_string runtime macros** (4 штуки): `keys`, `values`, `entries`, `forEach` — для `Map<string, string>`
+> - **Object.keys/values**: `_dispatchObjectStatic` в call-dispatch.js — compile-time генерация массива ключей/значений из полей struct; inferType: `Object.keys` → `Array_string`, `Object.values` → `Array_<elemType>`; проверка что все поля одного типа для values
+> - **arr.set(src, offset)**: `_dispatchArrayStatic` → case `set` в method-dispatch.js; runtime макросы `tsc_array_set_i32/string` — memcpy-style loop с bounds check
+> - **Direct Map for-of**: `for (const [k, v] of m)` — index loop over `m._keys[i]`/`m._vals[i]` в control-flow.js; destructuring binding как для `m.entries()`
+> - Новые тесты: `concat-string`, `includes-string`, `index-of-string`, `reverse-string`, `fill-string`, `resize-string`, `reallocate-string`, `map-ss-methods`, `object-keys`, `object-values`, `array-set`, `map-forof` (12 тестов)
+> - Результат: **1185 тестов, 0 ошибок**

@@ -1,0 +1,6 @@
+// [R] arr.concat for string arrays
+const a: string[] = ["hello", "world"];
+const b: string[] = ["foo"];
+const c = a.concat(b);
+console.log(c.length);
+console.log(c[2]);

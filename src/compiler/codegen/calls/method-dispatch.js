@@ -195,6 +195,12 @@ export default {
         case 'indexOf':  return `(int)tsc_array_index_of_${et}(${arrObjC}, ${argsC})`;
         case 'includes': return `tsc_array_includes_${et}(${arrObjC}, ${argsC})`;
         case 'concat':   return `tsc_array_concat_${et}(${arrObjC}, ${argsC})`;
+        case 'set': {
+          const srcExpr = args[0]?.expr;
+          const srcC = srcExpr ? this.exprToC(srcExpr, lines, depth) : '';
+          const offsetC = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          return `tsc_array_set_${et}(&${objC}, ${srcC}, ${offsetC})`;
+        }
         case 'slice': {
           const s = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const e = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(int32_t)${arrObjC}.length`;

@@ -383,6 +383,22 @@ export default {
       }
       return 'int32_t';
     }
+    if (obj.kind === 'Ident' && obj.name === 'Object') {
+      if (prop === 'keys') return 'Array_string';
+      if (prop === 'values') {
+        const argExpr = node.args?.[0]?.expr;
+        if (argExpr) {
+          const objType = this.inferType(argExpr);
+          const cls = objType ? this.classes.get(objType) : null;
+          if (cls?.fields?.length > 0) {
+            const firstType = this.resolveType(cls.fields[0].typeAnn);
+            const etIdent = this.cTypeToIdent(firstType);
+            return `Array_${etIdent}`;
+          }
+        }
+        return 'Array_i32';
+      }
+    }
     if (obj.kind === 'Ident' && obj.name === 'console') return 'void';
     if (obj.kind === 'Ident' && this._stdTemporalImported) {
       const _tc = obj.name;
@@ -619,6 +635,7 @@ export default {
       if (prop === 'flat') return et?.startsWith('Array_') ? et : objType;
       if (prop === 'findIndex' || prop === 'indexOf' || prop === 'findLastIndex' || prop === 'lastIndexOf') return 'int32_t';
       if (prop === 'includes' || prop === 'every' || prop === 'some') return 'bool';
+      if (prop === 'set') return 'void';
       if (prop === 'length' || prop === 'capacity') return 'size_t';
       if (prop === 'join') return 'String';
       if (prop === 'at') return etCType;

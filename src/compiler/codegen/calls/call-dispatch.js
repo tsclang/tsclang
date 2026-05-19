@@ -86,6 +86,7 @@
 
     const _r = this._dispatchConcurrency(node, lines, depth); if (_r !== null) return _r;
     const _af = this._dispatchArrayStatic(node, lines, depth); if (_af !== null) return _af;
+    const _os = this._dispatchObjectStatic(node, lines, depth); if (_os !== null) return _os;
     const _gb = this._dispatchGroupBy(node, lines, depth); if (_gb !== null) return _gb;
     const _r2 = this._dispatchBuiltin(node, lines, depth); if (_r2 !== null) return _r2;
     const _r3 = this._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
@@ -494,6 +495,44 @@
     }
     lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_, i) => `${tmpArr}_${i}`).join(', ')}};`);
     lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
+    return `${tmpArr}`;
+  },
+
+  _dispatchObjectStatic(node, lines, depth) {
+    const { callee, args } = node;
+    if (callee?.kind !== 'Member') return null;
+    const obj = callee.object;
+    if (obj?.kind !== 'Ident' || obj.name !== 'Object') return null;
+    if (callee.prop !== 'keys' && callee.prop !== 'values') return null;
+    if (args.length < 1) return null;
+    const argExpr = args[0].expr;
+    const objType = this.inferType(argExpr);
+    const cls = objType ? this.classes.get(objType) : null;
+    if (!cls || !cls.fields || cls.fields.length === 0) return null;
+    const fields = cls.fields;
+    const I = ' '.repeat(this.indent * depth);
+    const argC = this.exprToC(argExpr, lines, depth);
+    const tmpObj = `_obj_${this.tempCount++}`;
+    lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
+    if (callee.prop === 'keys') {
+      this._ensureArrayStruct('Array_string', 'String');
+      const keysData = fields.map(f => `STR_LIT("${f.name}")`).join(', ');
+      const tmpArr = `_keys_${this.tempCount++}`;
+      lines.push(`${I}String ${tmpArr}_data[] = {${keysData}};`);
+      lines.push(`${I}Array_string ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
+      return `${tmpArr}`;
+    }
+    const fieldTypes = fields.map(f => this.resolveType(f.typeAnn));
+    const firstType = fieldTypes[0];
+    const allSame = fieldTypes.every(t => t === firstType);
+    if (!allSame) return null;
+    const etIdent = this.cTypeToIdent(firstType);
+    const arrName = `Array_${etIdent}`;
+    this._ensureArrayStruct(arrName, firstType);
+    const valsData = fields.map(f => `${tmpObj}.${f.name}`).join(', ');
+    const tmpArr = `_vals_${this.tempCount++}`;
+    lines.push(`${I}${firstType} ${tmpArr}_data[] = {${valsData}};`);
+    lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
     return `${tmpArr}`;
   },
 

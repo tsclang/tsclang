@@ -421,6 +421,41 @@
           }
         }
 
+        // for (const [k, v] of map) -> index loop over map._keys[i]/_vals[i]
+        {
+          const _mapSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+          const _mapType = _mapSym?.ctype ?? (node.iterable.kind === 'Ident' ? null : this.inferType(node.iterable));
+          if (_mapType?.startsWith('TscMap_') && node.binding.kind === 'ArrayPattern') {
+            const _mapSuffix = _mapType.slice(7);
+            const _parts = _mapSuffix.split('_');
+            const _kIdent = _parts[0];
+            const _vIdent = _parts.slice(1).join('_');
+            const _kCType = this._arrIdentToCType(_kIdent);
+            const _vCType = this._arrIdentToCType(_vIdent);
+            const _mapC = this.exprToC(node.iterable, lines, depth);
+            const _ivar = `_i_${this.loopCount++}`;
+            const [kElem, vElem] = node.binding.elems;
+            p(`for (size_t ${_ivar} = 0; ${_ivar} < ${_mapC}.size; ${_ivar}++) {`);
+            if (kElem) {
+              lines.push(`${II}${qual}${_kCType} ${kElem.name} = ${_mapC}._keys[${_ivar}];`);
+              this.define(kElem.name, { ctype: _kCType, varKind: node.varKind });
+            }
+            if (vElem) {
+              lines.push(`${II}${qual}${_vCType} ${vElem.name} = ${_mapC}._vals[${_ivar}];`);
+              this.define(vElem.name, { ctype: _vCType, varKind: node.varKind });
+            }
+            const savedLCm = this._loopBodyCleanups;
+            this._loopBodyCleanups = [];
+            this._loopDepth++;
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            this._loopDepth--;
+            this._emitLoopBodyCleanups(lines, II);
+            this._loopBodyCleanups = savedLCm;
+            p('}');
+            break;
+          }
+        }
+
         // Iterable<T> protocol: class implements Iterable<T>
         {
           const _forOfSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;

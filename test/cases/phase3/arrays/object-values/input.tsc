@@ -1,0 +1,8 @@
+class Point { x: i32; y: i32; }
+const p = new Point();
+p.x = 10;
+p.y = 20;
+const vals = Object.values(p);
+console.log(vals.length);
+console.log(vals[0]);
+console.log(vals[1]);

@@ -1,0 +1,3 @@
+const a: string[] = ["foo", "bar", "baz"];
+console.log(a.includes("bar"));
+console.log(a.includes("qux"));

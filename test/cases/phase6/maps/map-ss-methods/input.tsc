@@ -1,0 +1,7 @@
+let m = new Map<string, string>();
+m.set("a", "apple");
+m.set("b", "banana");
+const keys = m.keys();
+console.log(keys.length);
+const vals = m.values();
+console.log(vals.length);

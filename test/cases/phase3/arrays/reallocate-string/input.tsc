@@ -1,0 +1,4 @@
+let a: string[] = ["a", "b", "c"];
+a.reallocate(6);
+console.log(a.capacity);
+console.log(a.length);

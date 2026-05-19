@@ -1,0 +1,5 @@
+let a: string[] = ["a", "b"];
+a.resize(4, "_");
+console.log(a.length);
+console.log(a[2]);
+console.log(a[3]);

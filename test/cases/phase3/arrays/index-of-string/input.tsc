@@ -1,0 +1,3 @@
+const a: string[] = ["foo", "bar", "baz"];
+console.log(a.indexOf("bar"));
+console.log(a.indexOf("qux"));

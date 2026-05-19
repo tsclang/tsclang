@@ -1,0 +1,4 @@
+let a: string[] = ["a", "b", "c"];
+a.reverse();
+console.log(a[0]);
+console.log(a[2]);
