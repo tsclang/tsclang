@@ -906,3 +906,9 @@
 > - Обновлены 6 тестов: `set-get`, `get-missing`, `overwrite`, `string-string`, `get-ref`, `record-string`
 > - Тест `get-ref` (ранее отложен) — разблокирован и проходит
 > - Результат: **1149 тестов проходят, 1 отложен** (M21 callback-ref)
+
+> 2026-05-19: **M21 — Array forEach runtime macros** (Stage 4):
+> - Runtime: добавлены `tsc_array_foreach_i32` и `tsc_array_foreach_string` макросы
+> - Тест `callback-ref` (ранее отложен) — разблокирован, использует семантику by-value (не Ref<T>*)
+> - Полная семантика Ref<T> для callbacks (filter, map, forEach и др.) отложена — требует инвазивных изменений в codegen (auto-deref pointer params)
+> - Результат: **1150 тестов проходят, 0 отложены**

@@ -1552,6 +1552,16 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     _r_; \
 })
 
+#define tsc_array_foreach_i32(arr, fn) do { \
+    Array_i32 _a_ = (arr); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(_a_.data[_i_]); \
+} while(0)
+
+#define tsc_array_foreach_string(arr, fn) do { \
+    Array_string _a_ = (arr); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(_a_.data[_i_]); \
+} while(0)
+
 #define tsc_array_filter_i32(arr, pred) ({ \
     Array_i32 _a_ = (arr); \
     Array_i32 _r_ = {NULL, 0, 0}; \
