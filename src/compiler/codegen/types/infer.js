@@ -22,7 +22,7 @@ export default {
         if (['+','-','*','/','%'].includes(node.op)) {
           const lt = this.inferType(node.left);
           const rt = this.inferType(node.right);
-          if (lt === 'String' || rt === 'String') return 'String';
+          if (lt === 'String' || lt === 'String *' || rt === 'String' || rt === 'String *') return 'String';
           if (lt === 'double' || rt === 'double') return 'double';
           if (lt === 'float'  || rt === 'float')  return 'float';
           return lt;
@@ -354,6 +354,19 @@ export default {
         return 'int32_t';
       }
     }
+    if (obj.kind === 'Ident' && (obj.name === 'Map' || obj.name === 'Object') && prop === 'groupBy') {
+      const arrExpr = node.args?.[0]?.expr;
+      if (arrExpr) {
+        const arrType = this.inferType(arrExpr);
+        if (arrType?.startsWith('Array_')) {
+          const etIdent = arrType.slice(6);
+          const etCType = this._arrIdentToCType(etIdent);
+          this._ensureGroupByMapStruct(etIdent, etCType);
+          return `TscMap_string_array_${etIdent}`;
+        }
+      }
+      return 'int32_t';
+    }
     if (obj.kind === 'Ident' && obj.name === 'console') return 'void';
     if (obj.kind === 'Ident' && this._stdTemporalImported) {
       const _tc = obj.name;
@@ -591,7 +604,7 @@ export default {
         return initExpr ? this.inferType(initExpr) : (objSym?.arrElemCType ?? 'int32_t');
       }
     }
-    if (objType === 'String') {
+    if (objType === 'String' || objType === 'String *') {
       const _sret = {
         toLowerCase: 'String', toUpperCase: 'String', trim: 'String',
         trimStart: 'String', trimEnd: 'String', repeat: 'String',

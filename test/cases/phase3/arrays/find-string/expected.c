@@ -2,8 +2,8 @@
 
 typedef struct { bool has_value; String *value; } opt_ref_string;
 
-static bool _lambda_0_bool(String s) {
-    return s.length > 1;
+static bool _lambda_0_bool(String *s) {
+    return s->length > 1;
 }
 
 int main(void) {

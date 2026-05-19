@@ -107,10 +107,22 @@ export default {
   },
 
   // Emit opt_ref_T struct typedef (idempotent): { bool has_value; T *value; }
-  _ensureOptRefStruct(optName, ctype) {
+  _ensureOptRefStruct(optName, ctype) {
+
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
       this.addTop(`typedef struct { bool has_value; ${ctype} *value; } ${optName};`);
     }
+  },
+
+  _ensureGroupByMapStruct(etIdent, etCType) {
+    const key = `groupby_${etIdent}`;
+    if (this._emittedHelpers.has(key)) return;
+    this._emittedHelpers.add(key);
+    const arrName = `Array_${etIdent}`;
+    this._ensureArrayStruct(arrName, etCType);
+    const mapName = `TscMap_string_array_${etIdent}`;
+    this.addTop(`typedef struct { String _keys[64]; ${arrName} _vals[64]; size_t size; } ${mapName};`);
+    this.addTop('');
   }
 };

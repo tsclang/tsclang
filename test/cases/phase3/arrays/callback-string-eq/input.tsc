@@ -1,0 +1,3 @@
+const arr: string[] = ["hello", "world", "hello"];
+const filtered = arr.filter(s => s == "hello");
+console.log(filtered.length);

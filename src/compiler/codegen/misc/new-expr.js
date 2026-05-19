@@ -196,15 +196,22 @@ export default {
     const paramStrs = (node.params ?? []).map((p, i) => {
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
-      return `${ct} ${p.name}`;
+      return ct === 'String *' ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
     const lines = [];
     this.pushScope();
+    this._inHoistedLambda = true;
     for (let i = 0; i < (node.params ?? []).length; i++) {
       const p = node.params[i];
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
-      this.define(p.name, { ctype: ct, varKind: 'const' });
+      const symInfo = { ctype: ct, varKind: 'const' };
+      if (ct === 'String *') {
+        symInfo.isPointer = true;
+        symInfo.isRefParam = true;
+        symInfo.derefType = 'String';
+      }
+      this.define(p.name, symInfo);
     }
     if (node.body.kind === 'Block') {
       this.visitBlock(node.body, lines, 0);
@@ -213,6 +220,7 @@ export default {
       lines.push(`return ${c};`);
     }
     this.popScope();
+    this._inHoistedLambda = false;
     this.addLambda(`static ${ret} ${name}(${paramStrs.join(', ') || 'void'}) {`);
     for (const l of lines) this.addLambda('    ' + l);
     this.addLambda('}');
@@ -242,8 +250,9 @@ export default {
       this.pushScope();
       for (let i = 0; i < node.params.length; i++) {
         const p = node.params[i];
-        const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (this._lambdaParamHint?.[i] ?? 'void *');
-        this.define(p.name, { ctype: ct });
+        const rawCt = p.typeAnn ? this.resolveType(p.typeAnn) : (this._lambdaParamHint?.[i] ?? 'void *');
+        const inferCt = rawCt === 'String *' ? 'String' : rawCt;
+        this.define(p.name, { ctype: inferCt });
       }
     }
     let result = 'void';

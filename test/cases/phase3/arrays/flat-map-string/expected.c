@@ -1,7 +1,9 @@
 #include "runtime.h"
 
-static Array_string _lambda_0_Array_string(String s) {
-    String _arr_data_1[] = {s, s};
+static Array_string _lambda_0_Array_string(String *s) {
+    String *_arr_data_1 = (String*)malloc(2 * sizeof(String));
+    _arr_data_1[0] = (*s);
+    _arr_data_1[1] = (*s);
     return (Array_string){.data = _arr_data_1, .length = 2, .capacity = 2};
 }
 

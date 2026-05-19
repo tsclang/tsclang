@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 static String _lambda_0_string(String *s) {
-    return tsc_string_to_upper((*s));
+    return tsc_string_concat((*s), STR_LIT("!"));
 }
 
 int main(void) {
@@ -10,6 +10,7 @@ int main(void) {
     const Array_string arr = {.data = _lit_0, .length = 2, .capacity = 2};
     Array_string upper = tsc_array_map_string_string(arr, _lambda_0_string);
     printf("%s\n", upper.data[0].data);
+    printf("%s\n", upper.data[1].data);
     tsc_array_free_string(&upper);
     return 0;
 }

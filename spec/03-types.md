@@ -1053,7 +1053,6 @@ Callback получает `Ref<T>` — borrow элемента, не ownership. 
 - `arr.with(index: i32, value: T): T[]` — новый массив с заменённым элементом по индексу; оригинал не меняется; **требует `T: Clone`**
 - `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
 - `arr.reduceRight<U>(f: (U, Ref<T>) => U, init: U): U` — то же, но справа налево
-- `arr.groupBy<K>(f: (Ref<T>) => K): Map<K, T[]>` — сгруппировать элементы по ключу; **требует `T: Clone`**; возвращает `Map<K, T[]>`
 
 ```typescript
 const nums: i32[] = [1, 2, 3, 4, 5]
@@ -1194,6 +1193,41 @@ m.forEach((k, v) => { ... });
 for (const k of m.keys()) { ... }
 for (const v of m.values()) { ... }
 for (const [k, v] of m.entries()) { ... }
+```
+
+Статические методы:
+
+```typescript
+// Map.groupBy<K, T>(items, keyFn) — группировка элементов массива по ключу
+Map.groupBy<K, T>(items: T[], keyFn: (Ref<T>) => K): Map<K, T[]>
+```
+- Вызывается на `Map`, не на экземпляре
+- `keyFn` получает `Ref<T>` (заимствование элемента), возвращает ключ типа `K`
+- Возвращает `Map<K, T[]>` — каждый ключ → массив элементов
+- Элементы клонируются в группы; **требует `T: Clone`**
+- На embedded — ошибка компиляции (требуется heap для массивов-значений)
+
+```typescript
+// Object.groupBy<T>(items, keyFn) — то же, но ключи всегда string
+Object.groupBy<T>(items: T[], keyFn: (Ref<T>) => string): Map<string, T[]>
+```
+- Ключи всегда `string` (как в JS, где Object ключи — строки)
+- В остальном аналогичен `Map.groupBy`
+- На embedded — ошибка компиляции
+
+Пример:
+```typescript
+const nums: i32[] = [1, 2, 3, 4, 5]
+const groups = Map.groupBy(nums, x => x % 2 === 0 ? "even" : "odd")
+// groups: Map<string, i32[]>
+// groups.get("odd")  → [1, 3, 5]
+// groups.get("even") → [2, 4]
+
+const byFirstLetter = Object.groupBy(["apple", "banana", "apricot", "cherry"], s => s[0])
+// byFirstLetter: Map<string, string[]>
+// byFirstLetter.get("a") → ["apple", "apricot"]
+// byFirstLetter.get("b") → ["banana"]
+// byFirstLetter.get("c") → ["cherry"]
 ```
 
 ### Set

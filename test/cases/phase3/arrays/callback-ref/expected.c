@@ -1,7 +1,7 @@
 #include "runtime.h"
 
-static void _lambda_0_void(String s) {
-    printf("%s\n", s.data);
+static void _lambda_0_void(String *s) {
+    printf("%s\n", s->data);
 }
 
 int main(void) {

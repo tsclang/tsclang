@@ -42,7 +42,14 @@ export default {
     let cbExtraArgs = '';
     let argsForC = args;
     if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
-      this._lambdaParamHint = (prop === 'reduce' || prop === 'reduceRight' || prop === 'sort') ? [etC, etC] : [etC];
+      const _refHint = etC === 'String' ? 'String *' : etC;
+      if (prop === 'reduce' || prop === 'reduceRight') {
+        this._lambdaParamHint = [etC, _refHint];
+      } else if (prop === 'sort') {
+        this._lambdaParamHint = [_refHint, _refHint];
+      } else {
+        this._lambdaParamHint = [_refHint];
+      }
       cbFnName = this._extractCallbackFn(args[0], lines, depth);
       this._lambdaParamHint = null;
       if (cbFnName) {
@@ -302,11 +309,13 @@ export default {
       }
     }
 
+    const _isStrPtr = sym?.ctype === 'String *';
+    const strObjC = _isStrPtr ? `(*${objC})` : objC;
     const strMethods = {
-      length:     () => `${objC}.length`,
-      slice:      () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${objC}, ${a[0]??0}, ${a[1]??'(int32_t)'+objC+'.length'})`; },
-      indexOf:      () => `(int)tsc_string_index_of(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      lastIndexOf:  () => `(int)tsc_string_last_index_of(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      length:     () => `${_isStrPtr ? objC + '->' : objC + '.'}length`,
+      slice:      () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
+      indexOf:      () => `(int)tsc_string_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      lastIndexOf:  () => `(int)tsc_string_last_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       at:           () => {
         const idxNode = args[0]?.expr;
         const idxC = this.exprToC(idxNode, lines, depth);
@@ -315,36 +324,36 @@ export default {
         }
         const idxVal = (idxNode?.kind === 'Literal' && idxNode?.litType === 'number') ? parseFloat(idxNode.value) : NaN;
         this._lastAtNonNeg = !isNaN(idxVal) && idxVal >= 0;
-        return `tsc_string_at(${objC}, ${idxC})`;
+        return `tsc_string_at(${strObjC}, ${idxC})`;
       },
-      includes:   () => `tsc_string_includes(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      startsWith: () => `tsc_string_starts_with(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      endsWith:   () => `tsc_string_ends_with(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      split:      () => `tsc_string_split(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      trim:       () => `tsc_string_trim(${objC})`,
-      toUpperCase:() => `tsc_string_to_upper(${objC})`,
-      toLowerCase:() => `tsc_string_to_lower(${objC})`,
-      replace:    () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${objC}, ${a[0]}, ${a[1]})`; },
-      padStart:   () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${objC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
-      padEnd:     () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${objC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
-      repeat:     () => `tsc_string_repeat(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      charAt:     () => `tsc_string_char_at(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      charCodeAt: () => { const idxC = this.exprToC(args[0].expr, lines, depth); return `(unsigned)(uint8_t)TSC_STRING_GET_CHAR(${objC}, ${idxC})`; },
-      concat:     () => `tsc_string_concat(${objC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      codePoints:  () => `tsc_codepoints(${objC})`,
-      graphemes:   () => `tsc_graphemes(${objC})`,
-      replaceAll:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${objC}, ${a[0]}, ${a[1]})`; },
+      includes:   () => `tsc_string_includes(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      startsWith: () => `tsc_string_starts_with(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      endsWith:   () => `tsc_string_ends_with(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      split:      () => `tsc_string_split(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      trim:       () => `tsc_string_trim(${strObjC})`,
+      toUpperCase:() => `tsc_string_to_upper(${strObjC})`,
+      toLowerCase:() => `tsc_string_to_lower(${strObjC})`,
+      replace:    () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${strObjC}, ${a[0]}, ${a[1]})`; },
+      padStart:   () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      padEnd:     () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      repeat:     () => `tsc_string_repeat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      charAt:     () => `tsc_string_char_at(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      charCodeAt: () => { const idxC = this.exprToC(args[0].expr, lines, depth); return `(unsigned)(uint8_t)TSC_STRING_GET_CHAR(${strObjC}, ${idxC})`; },
+      concat:     () => `tsc_string_concat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      codePoints:  () => `tsc_codepoints(${strObjC})`,
+      graphemes:   () => `tsc_graphemes(${strObjC})`,
+      replaceAll:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${strObjC}, ${a[0]}, ${a[1]})`; },
       substring:   () => {
                      const a = args.map(a => this.exprToC(a.expr, lines, depth));
                      if (a[1] === undefined && baseObject.kind !== 'Ident') {
                        const tmp = `_tsc_str_${this.tempCount++}`;
-                       lines.push(`${' '.repeat(this.indent * depth)}String ${tmp} = ${objC};`);
+                       lines.push(`${' '.repeat(this.indent * depth)}String ${tmp} = ${strObjC};`);
                        return `tsc_string_substring(${tmp}, ${a[0]}, (int32_t)${tmp}.length)`;
                      }
-                     return `tsc_string_substring(${objC}, ${a[0]}, ${a[1] ?? `(int32_t)${objC}.length`})`;
+                     return `tsc_string_substring(${strObjC}, ${a[0]}, ${a[1] ?? `(int32_t)${strObjC}.length`})`;
                    },
-      trimStart:   () => `tsc_string_trim_start(${objC})`,
-      trimEnd:     () => `tsc_string_trim_end(${objC})`,
+      trimStart:   () => `tsc_string_trim_start(${strObjC})`,
+      trimEnd:     () => `tsc_string_trim_end(${strObjC})`,
     };
 
     const _smInlineSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;

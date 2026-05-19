@@ -1,7 +1,7 @@
 #include "runtime.h"
 
-static bool _lambda_0_bool(String s) {
-    return s.length > 1;
+static bool _lambda_0_bool(String *s) {
+    return s->length > 1;
 }
 
 int main(void) {

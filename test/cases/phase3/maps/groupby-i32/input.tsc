@@ -1,0 +1,5 @@
+const arr = [1, 2, 3, 4, 5, 6];
+const grouped = Map.groupBy(arr, (x) => x % 2 === 0 ? "even" : "odd");
+console.log(grouped.size);
+console.log(grouped._vals[0].length);
+console.log(grouped._vals[1].length);

@@ -85,6 +85,7 @@
 
 
     const _r = this._dispatchConcurrency(node, lines, depth); if (_r !== null) return _r;
+    const _gb = this._dispatchGroupBy(node, lines, depth); if (_gb !== null) return _gb;
     const _r2 = this._dispatchBuiltin(node, lines, depth); if (_r2 !== null) return _r2;
     const _r3 = this._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
     const _r4 = this._dispatchConversion(node, lines, depth); if (_r4 !== null) return _r4;
@@ -449,5 +450,34 @@
 
     const argsC = this.argsToC(args, lines, depth);
     return `${calleeC}(${argsC})`;
+  },
+
+  _dispatchGroupBy(node, lines, depth) {
+    const { callee, args } = node;
+    if (callee?.kind !== 'Member') return null;
+    if (callee.prop !== 'groupBy') return null;
+    const obj = callee.object;
+    if (obj?.kind !== 'Ident') return null;
+    if (obj.name !== 'Map' && obj.name !== 'Object') return null;
+    if (args.length < 2) return null;
+    if (this._isEmbedded()) {
+      throw this.error(`'${obj.name}.groupBy()' is not available on embedded targets`, node);
+    }
+    const arrExpr = args[0].expr;
+    const arrType = this.inferType(arrExpr);
+    if (!arrType?.startsWith('Array_')) return null;
+    const etIdent = arrType.slice(6);
+    const etCType = this._arrIdentToCType(etIdent);
+    const arrName = `Array_${etIdent}`;
+    this._ensureArrayStruct(arrName, etCType);
+    const keyFnArg = args[1];
+    this._lambdaParamHint = etCType === 'String' ? ['String *'] : [etCType];
+    const cbFnName = this._extractCallbackFn(keyFnArg, lines, depth);
+    this._lambdaParamHint = null;
+    if (!cbFnName) return null;
+    this._ensureGroupByMapStruct(etIdent, etCType);
+    const arrC = this.exprToC(arrExpr, lines, depth);
+    const macroSuffix = etIdent === 'string' ? 'string' : 'i32';
+    return `tsc_map_group_by_${macroSuffix}(${arrC}, ${cbFnName})`;
   },
 };

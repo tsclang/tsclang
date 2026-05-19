@@ -188,18 +188,21 @@ export default {
     // String equality: use tsc_string_eq
     if ((node.op === '==' || node.op === '===' || node.op === '!=' || node.op === '!==') &&
         this.isStringExpr(node.left)) {
-      const eq = `tsc_string_eq(${l}, ${r})`;
+      const ld = this._derefStringPtr(node.left, l);
+      const rd = this._derefStringPtr(node.right, r);
+      const eq = `tsc_string_eq(${ld}, ${rd})`;
       return (node.op === '!=' || node.op === '!==') ? `!${eq}` : eq;
     }
     // String concat via +
     if (node.op === '+' && this.isStringExpr(node.left)) {
+      const ld = this._derefStringPtr(node.left, l);
       const rType = this.inferType(node.right);
-      let rC = r;
-      if (rType !== 'String') {
+      let rC = this._derefStringPtr(node.right, r);
+      if (rType !== 'String' && rType !== 'String *') {
         const etIdent = this.cTypeToIdent(rType);
         rC = `tsc_${etIdent}_to_string(${r})`;
       }
-      return `tsc_string_concat(${l}, ${rC})`;
+      return `tsc_string_concat(${ld}, ${rC})`;
     }
     return `${l} ${op} ${r}`;
   },
@@ -208,13 +211,21 @@ export default {
     if (node.kind === 'Literal' && node.litType === 'string') return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
-      return sym?.ctype === 'String';
+      return sym?.ctype === 'String' || sym?.ctype === 'String *';
     }
     // Binary + whose left is a string → the result is also String
     if (node.kind === 'Binary' && node.op === '+') return this.isStringExpr(node.left);
     // Template literal, Call returning string, etc.
     if (node.kind === 'Call') return this.inferType(node) === 'String';
     return false;
+  },
+
+  _derefStringPtr(node, cexpr) {
+    if (node.kind === 'Ident') {
+      const sym = this.lookup(node.name);
+      if (sym?.ctype === 'String *') return `(*${cexpr})`;
+    }
+    return cexpr;
   },
 
   // ----------------------------------------------------------------

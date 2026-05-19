@@ -658,6 +658,59 @@ TSC_MAP_DECL(String, String, string_string)
 #define tsc_map_free_string_string(m) ((void)(m))
 
 /* -------------------------------------------------------------------------
+ * Map.groupBy / Object.groupBy — group array elements by key into Map<K, T[]>
+ * Struct typedef (TscMap_string_array_<T>) emitted by codegen.
+ * ------------------------------------------------------------------------- */
+
+#define tsc_map_group_by_i32(_arr_, _fn_) ({ \
+    Array_i32 _a_ = (_arr_); \
+    TscMap_string_array_i32 _r_; _r_.size = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        String _k_ = (_fn_)(_a_.data[_i_]); \
+        size_t _ki_ = 0; bool _found_ = false; \
+        for (; _ki_ < _r_.size; _ki_++) { \
+            if (_tsc_str_eq(_r_._keys[_ki_], _k_)) { _found_ = true; break; } \
+        } \
+        if (!_found_) { \
+            _ki_ = _r_.size; \
+            _r_._keys[_ki_] = _k_; \
+            _r_._vals[_ki_].data = (int32_t*)malloc(4 * sizeof(int32_t)); \
+            _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
+            _r_.size++; \
+        } \
+        Array_i32 *_slot_ = &_r_._vals[_ki_]; \
+        if (_slot_->length >= _slot_->capacity) { \
+            _slot_->capacity *= 2; \
+            _slot_->data = (int32_t*)realloc(_slot_->data, _slot_->capacity * sizeof(int32_t)); } \
+        _slot_->data[_slot_->length++] = _a_.data[_i_]; \
+    } \
+    _r_; })
+
+#define tsc_map_group_by_string(_arr_, _fn_) ({ \
+    Array_string _a_ = (_arr_); \
+    TscMap_string_array_string _r_; _r_.size = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        String _k_ = (_fn_)(&_a_.data[_i_]); \
+        size_t _ki_ = 0; bool _found_ = false; \
+        for (; _ki_ < _r_.size; _ki_++) { \
+            if (_tsc_str_eq(_r_._keys[_ki_], _k_)) { _found_ = true; break; } \
+        } \
+        if (!_found_) { \
+            _ki_ = _r_.size; \
+            _r_._keys[_ki_] = _k_; \
+            _r_._vals[_ki_].data = (String*)malloc(4 * sizeof(String)); \
+            _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
+            _r_.size++; \
+        } \
+        Array_string *_slot_ = &_r_._vals[_ki_]; \
+        if (_slot_->length >= _slot_->capacity) { \
+            _slot_->capacity *= 2; \
+            _slot_->data = (String*)realloc(_slot_->data, _slot_->capacity * sizeof(String)); } \
+        _slot_->data[_slot_->length++] = _a_.data[_i_]; \
+    } \
+    _r_; })
+
+/* -------------------------------------------------------------------------
  * TscSet — simple array-backed set (up to 64 entries)
  * ------------------------------------------------------------------------- */
 #define TSC_SET_CAP 64
@@ -1559,33 +1612,33 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_foreach_string(arr, fn) do { \
     Array_string _a_ = (arr); \
-    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(_a_.data[_i_]); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(&_a_.data[_i_]); \
 } while(0)
 
 #define tsc_array_find_string(arr, pred) ({ \
     Array_string _a_ = (arr); \
     opt_ref_string _r_ = {false, NULL}; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
-        if ((pred)(_a_.data[_i_])) { _r_ = (opt_ref_string){true, &_a_.data[_i_]}; break; } \
+        if ((pred)(&_a_.data[_i_])) { _r_ = (opt_ref_string){true, &_a_.data[_i_]}; break; } \
     _r_; \
 })
 
 #define tsc_array_find_index_string(arr, pred) ({ \
     Array_string _a_ = (arr); ptrdiff_t _r_ = -1; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
-        if ((pred)(_a_.data[_i_])) { _r_ = (ptrdiff_t)_i_; break; } \
+        if ((pred)(&_a_.data[_i_])) { _r_ = (ptrdiff_t)_i_; break; } \
     _r_; \
 })
 
 #define tsc_array_every_string(arr, pred) ({ \
     Array_string _a_ = (arr); bool _r_ = true; \
-    for (size_t _i_ = 0; _i_ < _a_.length && _r_; _i_++) if (!(pred)(_a_.data[_i_])) _r_ = false; \
+    for (size_t _i_ = 0; _i_ < _a_.length && _r_; _i_++) if (!(pred)(&_a_.data[_i_])) _r_ = false; \
     _r_; \
 })
 
 #define tsc_array_some_string(arr, pred) ({ \
     Array_string _a_ = (arr); bool _r_ = false; \
-    for (size_t _i_ = 0; _i_ < _a_.length && !_r_; _i_++) if ((pred)(_a_.data[_i_])) _r_ = true; \
+    for (size_t _i_ = 0; _i_ < _a_.length && !_r_; _i_++) if ((pred)(&_a_.data[_i_])) _r_ = true; \
     _r_; \
 })
 
@@ -1593,7 +1646,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     Array_string _a_ = (arr); \
     Array_string _r_ = {NULL, 0, 0}; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
-        if ((pred)(_a_.data[_i_])) { \
+        if ((pred)(&_a_.data[_i_])) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
                 _r_.data = (String*)realloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
@@ -1607,20 +1660,20 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_map_string_string(arr, fn) ({ \
     Array_string _a_ = (arr); \
     String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
-    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(&_a_.data[_i_]); \
     (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
 
 #define tsc_array_reduce_string_string(arr, fn, init) ({ \
     Array_string _a_ = (arr); String _acc_ = (init); \
-    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, &_a_.data[_i_]); \
     _acc_; \
 })
 
-static String (*_tsc_cmp_string_user)(String, String) = NULL;
+static int (*_tsc_cmp_string_user)(String*, String*) = NULL;
 
 static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
-    return ((int(*)(String, String))_tsc_cmp_string_user)(*(const String*)a, *(const String*)b);
+    return ((int(*)(String*, String*))_tsc_cmp_string_user)((String*)a, (String*)b);
 }
 
 #define tsc_array_sort_string(arr, cmp) do { \
@@ -1808,6 +1861,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
             } \
             _r_.data[_r_.length++] = _chunk_.data[_j_]; \
         } \
+        if (_chunk_.capacity > 0) free(_chunk_.data); \
     } \
     _r_; \
 })
@@ -2037,14 +2091,14 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     Array_string _a_ = (arr); \
     opt_ref_string _r_ = {false, NULL}; \
     for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
-        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (opt_ref_string){true, &_a_.data[_i_ - 1]}; break; } \
+        if ((pred)(&_a_.data[_i_ - 1])) { _r_ = (opt_ref_string){true, &_a_.data[_i_ - 1]}; break; } \
     _r_; \
 })
 
 #define tsc_array_find_last_index_string(arr, pred) ({ \
     Array_string _a_ = (arr); ptrdiff_t _r_ = -1; \
     for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
-        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+        if ((pred)(&_a_.data[_i_ - 1])) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
     _r_; \
 })
 
@@ -2052,7 +2106,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     Array_string _a_ = (arr); \
     Array_string _r_ = {NULL, 0, 0}; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
-        Array_string _chunk_ = (fn)(_a_.data[_i_]); \
+        Array_string _chunk_ = (fn)(&_a_.data[_i_]); \
         for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
@@ -2060,6 +2114,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
             } \
             _r_.data[_r_.length++] = _chunk_.data[_j_]; \
         } \
+        if (_chunk_.capacity > 0) free(_chunk_.data); \
     } \
     _r_; \
 })

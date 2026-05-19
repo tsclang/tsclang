@@ -1,0 +1,3 @@
+const arr: string[] = ["apple", "avocado", "banana", "blueberry", "cherry"];
+const grouped = Map.groupBy(arr, (s) => s.charAt(0));
+console.log(grouped.size);
