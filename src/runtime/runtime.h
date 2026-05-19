@@ -588,6 +588,17 @@ static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
     (opt_i32){ _ff_, _vv_ }; \
 })
 
+#define tsc_map_get_ref_string_i32(_m_, _key_) ({ \
+    const TscMap_string_i32 *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    int32_t *_vp_ = NULL; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) \
+            { _vp_ = (int32_t *)&_mm_->_vals[_ii_]; break; } \
+    } \
+    (opt_ref_i32){ _vp_ != NULL, _vp_ }; \
+})
+
 /* delete returns opt_V (the removed value, or nothing if key absent) */
 #define tsc_map_delete_string_i32(_m_, _key_) ({ \
     TscMap_string_i32 *_mm_ = (_m_); \
@@ -618,6 +629,17 @@ TSC_MAP_DECL(String, String, string_string)
             { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \
     } \
     (opt_String){ _ff_, _vv_ }; \
+})
+
+#define tsc_map_get_ref_string_string(_m_, _key_) ({ \
+    const TscMap_string_string *_mm_ = (_m_); \
+    String _kk_ = (_key_); \
+    String *_vp_ = NULL; \
+    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
+        if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) \
+            { _vp_ = (String *)&_mm_->_vals[_ii_]; break; } \
+    } \
+    (opt_ref_string){ _vp_ != NULL, _vp_ }; \
 })
 
 #define tsc_map_delete_string_string(_m_, _key_) ({ \

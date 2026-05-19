@@ -896,3 +896,13 @@
 > - Все 9 методов: runtime macros для i32 и string, codegen dispatch в stdlib.js, type inference в infer.js
 > - 9 новых тестов `phase3/sets/*` (все [R] runnable)
 > - Результат: **1148 тестов проходят, 2 отложены**
+
+> 2026-05-19: **M24 — Map.get возвращает Ref<V>|null** (Stage 3):
+> - Runtime: добавлены `tsc_map_get_ref_string_i32` и `tsc_map_get_ref_string_string` — возвращают `opt_ref_V` (указатель на значение в карте)
+> - Codegen: `method-dispatch.js` — Map.get теперь генерирует `tsc_map_get_ref_*` + `opt_ref_V` struct
+> - Infer: `infer.js` — Map.get возвращает `opt_ref_V` вместо `opt_V` (Map.delete по-прежнему `opt_V`)
+> - Operators: `operators.js` — `*v` на opt_ref типах разрешён без unsafe; внутри narrowed блока `*v.value`, снаружи `*v.value`
+> - Console: `console.js` — opt_ref типы теперь учитывают `optIsNull` (null-aware printing: "some"/"null")
+> - Обновлены 6 тестов: `set-get`, `get-missing`, `overwrite`, `string-string`, `get-ref`, `record-string`
+> - Тест `get-ref` (ранее отложен) — разблокирован и проходит
+> - Результат: **1149 тестов проходят, 1 отложен** (M21 callback-ref)

@@ -222,6 +222,17 @@ export default {
   // ----------------------------------------------------------------
   unaryToC(node, lines, depth) {
     if (node.op === '&' || node.op === '*') {
+      if (node.op === '*') {
+        const sym = node.expr.kind === 'Ident' ? this.lookup(node.expr.name) : null;
+        const ctype = sym?.ctype ?? this.inferType(node.expr);
+        if (ctype?.startsWith('opt_ref_')) {
+          const e = this.exprToC(node.expr, lines, depth);
+          if (this._narrowedVars?.has(node.expr.name)) {
+            return `*${e}`;
+          }
+          return `*${e}.value`;
+        }
+      }
       if (!this._inUnsafe) {
         throw this.error(`TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'`, node);
       }

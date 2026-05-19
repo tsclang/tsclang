@@ -421,7 +421,13 @@ export default {
           const hasSet = this._mapHasSetCalls?.has(mapVarName) ?? false;
           this._lastOptIsNull = !hasSet;
         }
-        if (prop === 'get')    return `tsc_map_get_${mapSuffix}(&${objC}, ${argsC})`;
+        if (prop === 'get') {
+          const parts = mapSuffix.split('_');
+          const vIdent = parts.slice(1).join('_');
+          const vCType = this._arrIdentToCType(vIdent);
+          this._ensureOptRefStruct(`opt_ref_${vIdent}`, vCType);
+          return `tsc_map_get_ref_${mapSuffix}(&${objC}, ${argsC})`;
+        }
         if (prop === 'delete') return `tsc_map_delete_${mapSuffix}(&${objC}, ${argsC})`;
       }
       if (prop === 'has')    return `tsc_map_has_${mapSuffix}(&${objC}, ${argsC})`;

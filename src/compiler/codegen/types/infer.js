@@ -431,7 +431,12 @@ export default {
       const kIdent = parts[0];
       const vIdent = parts.slice(1).join('_');
       const vCType = this._arrIdentToCType(vIdent);
-      if (prop === 'get' || prop === 'delete') {
+      if (prop === 'get') {
+        const optName = `opt_ref_${vIdent}`;
+        this._ensureOptRefStruct(optName, vCType);
+        return optName;
+      }
+      if (prop === 'delete') {
         const optName = `opt_${vIdent}`;
         this._ensureOptStruct(optName, vCType);
         return optName;

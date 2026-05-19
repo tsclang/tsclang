@@ -183,7 +183,11 @@ export default {
         if (ctype.startsWith('opt_ref_')) {
           const innerIdent = ctype.slice(8);
           const innerCType = this._arrIdentToCType(innerIdent);
-          if (innerCType === 'String') {
+          const sym2 = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+          if (sym2?.optIsNull) {
+            fmtParts.push('%s');
+            fmtArgs.push(`${cexpr}.has_value ? "some" : "null"`);
+          } else if (innerCType === 'String') {
             fmtParts.push('%s');
             fmtArgs.push(`${cexpr}.has_value ? ${cexpr}.value->data : "null"`);
           } else if (innerCType === 'double' || innerCType === 'float') {

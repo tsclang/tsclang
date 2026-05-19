@@ -1,6 +1,6 @@
 #include "runtime.h"
 
-TSC_MAP_DECL(String, int32_t, string_i32);
+typedef struct { bool has_value; int32_t *value; } opt_ref_i32;
 
 int main(void) {
     TSC_INIT();
