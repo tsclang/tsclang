@@ -1,0 +1,3 @@
+const arr: string[] = ["apple", "banana", "cherry", "date"];
+const filtered = arr.filter((s) => s.length > 5);
+console.log(filtered.length);

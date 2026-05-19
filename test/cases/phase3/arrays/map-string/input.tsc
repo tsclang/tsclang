@@ -1,0 +1,3 @@
+const arr: string[] = ["hello", "world"];
+const upper = arr.map((s) => s.toUpperCase());
+console.log(upper[0]);

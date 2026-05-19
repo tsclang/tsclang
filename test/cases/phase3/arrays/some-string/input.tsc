@@ -1,0 +1,2 @@
+const arr: string[] = ["a", "bb", "c"];
+console.log(arr.some((s) => s.length > 1));

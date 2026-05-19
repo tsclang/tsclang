@@ -926,3 +926,11 @@
 > - Infer: `reduceRight` возвращает accumulator type (как reduce)
 > - Тест: `[1,2,3,4].reduceRight((acc, x) => acc * 10 + x, 0)` → 4321
 > - Результат: **1152 теста проходят**
+
+> 2026-05-19: **String callback macros + string array callback methods** (Stage 4):
+> - Runtime: добавлены 10 string callback macros — `find_string`, `find_index_string`, `every_string`, `some_string`, `filter_string`, `map_string_string`, `reduce_string_string`, `sort_string`, `_tsc_cmp_string_user` adapter
+> - Все callback-методы теперь работают для `string[]`: filter, map, every, some, find, findIndex, sort, forEach, findLast, findLastIndex, flatMap, reduce, reduceRight
+> - 7 новых тестов `phase3/arrays/*-string` (все [R] runnable, gcc compile+run)
+> - Полная семантика Ref<T> (String* вместо String в callbacks) отложена — требует auto-deref в codegen
+> - groupBy отложен — требует `Map<K, Array<T>>` (не поддерживается текущим Map runtime)
+> - Результат: **1159 тестов проходят**

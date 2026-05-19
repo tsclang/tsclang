@@ -1562,6 +1562,73 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(_a_.data[_i_]); \
 } while(0)
 
+#define tsc_array_find_string(arr, pred) ({ \
+    Array_string _a_ = (arr); \
+    opt_ref_string _r_ = {false, NULL}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        if ((pred)(_a_.data[_i_])) { _r_ = (opt_ref_string){true, &_a_.data[_i_]}; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_index_string(arr, pred) ({ \
+    Array_string _a_ = (arr); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        if ((pred)(_a_.data[_i_])) { _r_ = (ptrdiff_t)_i_; break; } \
+    _r_; \
+})
+
+#define tsc_array_every_string(arr, pred) ({ \
+    Array_string _a_ = (arr); bool _r_ = true; \
+    for (size_t _i_ = 0; _i_ < _a_.length && _r_; _i_++) if (!(pred)(_a_.data[_i_])) _r_ = false; \
+    _r_; \
+})
+
+#define tsc_array_some_string(arr, pred) ({ \
+    Array_string _a_ = (arr); bool _r_ = false; \
+    for (size_t _i_ = 0; _i_ < _a_.length && !_r_; _i_++) if ((pred)(_a_.data[_i_])) _r_ = true; \
+    _r_; \
+})
+
+#define tsc_array_filter_string(arr, pred) ({ \
+    Array_string _a_ = (arr); \
+    Array_string _r_ = {NULL, 0, 0}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        if ((pred)(_a_.data[_i_])) { \
+            if (_r_.length >= _r_.capacity) { \
+                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
+                _r_.data = (String*)realloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
+            } \
+            _r_.data[_r_.length++] = _a_.data[_i_]; \
+        } \
+    } \
+    _r_; \
+})
+
+#define tsc_array_map_string_string(arr, fn) ({ \
+    Array_string _a_ = (arr); \
+    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
+    (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_reduce_string_string(arr, fn, init) ({ \
+    Array_string _a_ = (arr); String _acc_ = (init); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
+    _acc_; \
+})
+
+static String (*_tsc_cmp_string_user)(String, String) = NULL;
+
+static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
+    return ((int(*)(String, String))_tsc_cmp_string_user)(*(const String*)a, *(const String*)b);
+}
+
+#define tsc_array_sort_string(arr, cmp) do { \
+    Array_string *_a_ = (arr); \
+    if ((cmp) == NULL) { qsort(_a_->data, _a_->length, sizeof(String), _tsc_cmp_string_asc); } \
+    else { _tsc_cmp_string_user = (void*)(cmp); qsort(_a_->data, _a_->length, sizeof(String), _tsc_cmp_string_user_adapter); } \
+} while(0)
+
 #define tsc_array_filter_i32(arr, pred) ({ \
     Array_i32 _a_ = (arr); \
     Array_i32 _r_ = {NULL, 0, 0}; \

@@ -1,0 +1,2 @@
+const arr: string[] = ["abc", "def", "ghi"];
+console.log(arr.every((s) => s.length === 3));
