@@ -1,0 +1,6 @@
+let s = new Set<i32>();
+s.add(10);
+s.add(20);
+s.add(30);
+const k = s.keys();
+console.log(k.length);

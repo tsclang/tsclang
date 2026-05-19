@@ -811,7 +811,7 @@ export default {
           this._lambdaParamHint = null;
           return `tsc_set_for_each_${_sSfx}(&${_sName}, ${cbName})`;
         }
-        if (_sProp === 'values') {
+        if (_sProp === 'values' || _sProp === 'keys') {
           const _sElemCType = _setSym._setElemCType ?? 'int32_t';
           const _sElemIdent = this.cTypeToIdent(_sElemCType);
           this._ensureArrayStruct(`Array_${_sElemIdent}`, _sElemCType);

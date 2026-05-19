@@ -328,6 +328,22 @@ export default {
         if (nsEntry2?.ctype) return nsEntry2.ctype;
       }
     }
+    if (obj.kind === 'Ident' && obj.name === 'Array' && (prop === 'from' || prop === 'of')) {
+      const typeArg = node.typeArgs?.[0];
+      if (typeArg) {
+        const ct = this.resolveType(typeArg);
+        return `Array_${this.cTypeToIdent(ct)}`;
+      }
+      if (prop === 'of' && node.args?.length > 0) {
+        const et = this.inferType(node.args[0].expr);
+        return `Array_${this.cTypeToIdent(et)}`;
+      }
+      if (prop === 'from' && node.args?.[0]) {
+        const srcType = this.inferType(node.args[0].expr);
+        if (srcType?.startsWith('Array_')) return srcType;
+      }
+      return 'Array_i32';
+    }
     if (obj.kind === 'Ident' && prop === 'alloc' && this.classes.get(obj.name)?._isPool) {
       return `opt_ref_${obj.name}`;
     }
@@ -425,7 +441,7 @@ export default {
         return optName;
       }
       if (prop === 'add' || prop === 'clear' || prop === 'forEach') return 'void';
-      if (prop === 'values') {
+      if (prop === 'values' || prop === 'keys') {
         const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
         const _setId = this.cTypeToIdent(_setElemCType);
         return `Array_${_setId}`;
@@ -590,6 +606,8 @@ export default {
       if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;
       if (prop === 'map' || prop === 'flatMap') return objType;
       if (prop === 'slice') return objType;
+      if (prop === 'values') return objType;
+      if (prop === 'keys') return objType;
       if (prop === 'toReversed' || prop === 'toSorted' || prop === 'toSpliced') return objType;
       if (prop === 'with') return objType;
       if (prop === 'splice') return objType;

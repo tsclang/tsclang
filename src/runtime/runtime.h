@@ -1538,6 +1538,22 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
 
+#define tsc_array_values_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    size_t _n_ = _a_.length; \
+    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(int32_t)); \
+    (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_keys_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    size_t _n_ = _a_.length; \
+    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    for (size_t _i_ = 0; _i_ < _n_; _i_++) _d_[_i_] = (int32_t)_i_; \
+    (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
 #define tsc_array_slice_i32(arr, start, end_idx) ({ \
     Array_i32 _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
     if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \

@@ -1,0 +1,5 @@
+const src = [1, 2, 3];
+const copy = Array.from<i32>(src);
+console.log(copy.length);
+console.log(copy[0]);
+console.log(copy[2]);

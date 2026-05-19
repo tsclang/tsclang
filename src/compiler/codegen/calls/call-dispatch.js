@@ -85,6 +85,7 @@
 
 
     const _r = this._dispatchConcurrency(node, lines, depth); if (_r !== null) return _r;
+    const _af = this._dispatchArrayStatic(node, lines, depth); if (_af !== null) return _af;
     const _gb = this._dispatchGroupBy(node, lines, depth); if (_gb !== null) return _gb;
     const _r2 = this._dispatchBuiltin(node, lines, depth); if (_r2 !== null) return _r2;
     const _r3 = this._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
@@ -450,6 +451,50 @@
 
     const argsC = this.argsToC(args, lines, depth);
     return `${calleeC}(${argsC})`;
+  },
+
+  _dispatchArrayStatic(node, lines, depth) {
+    const { callee, args } = node;
+    if (callee?.kind !== 'Member') return null;
+    if (callee.prop !== 'from' && callee.prop !== 'of') return null;
+    const obj = callee.object;
+    if (obj?.kind !== 'Ident' || obj.name !== 'Array') return null;
+
+    const typeArg = node.typeArgs?.[0];
+    const etCType = typeArg ? this.resolveType(typeArg) : (args.length > 0 ? this.inferType(args[0].expr) : 'int32_t');
+    if (etCType?.startsWith('Array_')) {
+      const inner = etCType.slice(6);
+      const innerC = this._arrIdentToCType(inner);
+      this._ensureArrayStruct(etCType, innerC);
+    }
+    const etIdent = this.cTypeToIdent(etCType);
+    const arrName = `Array_${etIdent}`;
+    this._ensureArrayStruct(arrName, etCType);
+    const I = ' '.repeat(this.indent * depth);
+
+    if (callee.prop === 'from') {
+      if (args.length < 1) return null;
+      const srcExpr = args[0].expr;
+      const srcC = this.exprToC(srcExpr, lines, depth);
+      const srcType = this.inferType(srcExpr);
+      if (srcType?.startsWith('Array_')) {
+        const tmp = `_from_${this.tempCount++}`;
+        lines.push(`${I}${arrName} ${tmp} = ${srcC};`);
+        return `tsc_array_slice_${etIdent}(${tmp}, 0, (int32_t)${tmp}.length)`;
+      }
+      return `tsc_array_slice_${etIdent}(${srcC}, 0, (int32_t)${srcC}.length)`;
+    }
+
+    // Array.of
+    const itemsC = args.map(a => this.exprToC(a.expr, lines, depth));
+    const count = itemsC.length;
+    const tmpArr = `_of_${this.tempCount++}`;
+    for (let i = 0; i < count; i++) {
+      lines.push(`${I}${etCType} ${tmpArr}_${i} = ${itemsC[i]};`);
+    }
+    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_, i) => `${tmpArr}_${i}`).join(', ')}};`);
+    lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
+    return `${tmpArr}`;
   },
 
   _dispatchGroupBy(node, lines, depth) {
