@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // TSClang CLI entry point
 
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync, watchFile, unwatchFile } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
@@ -115,6 +115,7 @@ OPTIONS:
   --debug                  Compile with debug info
   --sourcemap              Generate source map
   --all-errors             Show all errors (no limit)
+  --watch, -w              Rebuild on file change
   --no-cache               Bypass compilation cache`,
   run: `tsclang run — Compile and run
 
@@ -1029,6 +1030,7 @@ if (command === 'build') {
   const debugLines = args.includes('--debug');
   const noCache    = args.includes('--no-cache');
   const sourcemap  = args.includes('--sourcemap');
+  const watchMode  = args.includes('--watch') || args.includes('-w');
   const optIdx    = args.indexOf('--optimize');
   const optimize  = optIdx !== -1 ? args[optIdx + 1] : null;
   if (optimize && !/^O[0-3sz]$/.test(optimize)) {
@@ -1036,7 +1038,6 @@ if (command === 'build') {
     process.exit(1);
   }
 
-  // Validate emit mode before reading input
   if (emit === 'hex') {
     process.stderr.write(
       `ConfigError: --emit hex requires an embedded target (avr); desktop target does not support hex output\n`
@@ -1045,105 +1046,136 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
-  let c, warnings, lineMap;
-  try {
-    ({ c, warnings, lineMap } = compileTsc(inputPath, { maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap }));
-  } catch (e) {
-    reportErrors(e, basename(inputPath));
-    process.exit(1);
-  }
+  const buildOpts = { maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap };
 
-  for (const w of warnings) {
-    process.stderr.write(renderDiagnostic(w, { contextLines: 1 }) + '\n');
-  }
-  if (warnings.length > 0) {
-    const n = warnings.length;
-    process.stderr.write(`${n} warning${n > 1 ? 's' : ''} emitted\n`);
-  }
+  function doBuild() {
+    let c, warnings, lineMap;
+    try {
+      ({ c, warnings, lineMap } = compileTsc(inputPath, buildOpts));
+    } catch (e) {
+      reportErrors(e, basename(inputPath));
+      return false;
+    }
 
-  const stem = basename(inputPath, extname(inputPath));
-  mkdirSync(outDir, { recursive: true });
+    for (const w of warnings) {
+      process.stderr.write(renderDiagnostic(w, { contextLines: 1 }) + '\n');
+    }
+    if (warnings.length > 0) {
+      const n = warnings.length;
+      process.stderr.write(`${n} warning${n > 1 ? 's' : ''} emitted\n`);
+    }
 
-  const cPath = join(outDir, stem + '.c');
-  writeFileSync(cPath, c, 'utf8');
+    const stem = basename(inputPath, extname(inputPath));
+    mkdirSync(outDir, { recursive: true });
 
-  // Write source map if requested
-  if (sourcemap && lineMap) {
-    const mapPath = join(outDir, stem + '.tsc.map');
-    const mapData = JSON.stringify({
-      version: 1,
-      file: basename(inputPath),
-      sourceC: stem + '.c',
-      mappings: lineMap,
-    }, null, 2);
-    writeFileSync(mapPath, mapData, 'utf8');
-  }
+    const cPath = join(outDir, stem + '.c');
+    writeFileSync(cPath, c, 'utf8');
 
-  if (emit === 'c') {
-    // Write CMakeLists.txt stub for project-mode builds
-    const cmakePath = join(outDir, 'CMakeLists.txt');
-    if (!existsSync(cmakePath)) {
+    if (sourcemap && lineMap) {
+      const mapPath = join(outDir, stem + '.tsc.map');
+      const mapData = JSON.stringify({
+        version: 1,
+        file: basename(inputPath),
+        sourceC: stem + '.c',
+        mappings: lineMap,
+      }, null, 2);
+      writeFileSync(mapPath, mapData, 'utf8');
+    }
+
+    if (emit === 'c') {
+      const cmakePath = join(outDir, 'CMakeLists.txt');
+      if (!existsSync(cmakePath)) {
+        const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+        const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
+        const cmakeContent = [
+          'cmake_minimum_required(VERSION 3.10)',
+          `project(${stem} C)`,
+          'set(CMAKE_C_STANDARD 11)',
+          `add_executable(${stem} ${stem}.c)`,
+          `target_include_directories(${stem} PRIVATE ${JSON.stringify(dirname(runtimeH))})`,
+          ...(useLibuv ? [
+            'find_package(PkgConfig REQUIRED)',
+            'pkg_check_modules(LIBUV REQUIRED libuv)',
+            `target_link_libraries(${stem} \${LIBUV_LIBRARIES})`,
+            `target_include_directories(${stem} PRIVATE \${LIBUV_INCLUDE_DIRS})`,
+          ] : []),
+          '',
+        ].join('\n');
+        writeFileSync(cmakePath, cmakeContent, 'utf8');
+      }
+    }
+
+    if (emit === 'binary') {
       const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+      const binPath = join(outDir, stem);
+      const gccOptimize = optimize ? [`-${optimize}`] : [];
       const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
-      const cmakeContent = [
-        'cmake_minimum_required(VERSION 3.10)',
-        `project(${stem} C)`,
-        'set(CMAKE_C_STANDARD 11)',
-        `add_executable(${stem} ${stem}.c)`,
-        `target_include_directories(${stem} PRIVATE ${JSON.stringify(dirname(runtimeH))})`,
-        ...(useLibuv ? [
-          'find_package(PkgConfig REQUIRED)',
-          'pkg_check_modules(LIBUV REQUIRED libuv)',
-          `target_link_libraries(${stem} \${LIBUV_LIBRARIES})`,
-          `target_include_directories(${stem} PRIVATE \${LIBUV_INCLUDE_DIRS})`,
-        ] : []),
-        '',
-      ].join('\n');
-      writeFileSync(cmakePath, cmakeContent, 'utf8');
+      const gcc = spawnSync('gcc', [
+        cPath, '-o', binPath,
+        '-I', dirname(runtimeH),
+        '-lpthread', '-std=c11',
+        ...gccOptimize,
+        ...(useLibuv ? ['-luv'] : []),
+      ], { stdio: 'pipe' });
+      if (gcc.status !== 0) {
+        process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
+        return false;
+      }
     }
+
+    if (emit === 'wasm') {
+      const emcc = spawnSync('emcc', ['--version'], { stdio: 'pipe' });
+      if (emcc.status !== 0 || emcc.error) {
+        process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
+        return false;
+      }
+      const runtimeH = join(ROOT, 'src/runtime/runtime_wasm.h');
+      const wasmPath = join(outDir, stem + '.wasm');
+      const jsPath   = join(outDir, stem + '.js');
+      const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
+      const emccResult = spawnSync('emcc', [
+        cPath, '-o', jsPath,
+        '-I', dirname(runtimeH),
+        '-sWASM=1',
+        '-sSTANDALONE_WASM=1',
+        '-DTSC_WASM',
+        ...emccOpts,
+      ], { stdio: 'pipe' });
+      if (emccResult.status !== 0) {
+        process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
+        return false;
+      }
+      process.stdout.write(`Built ${stem}.wasm\n`);
+    }
+
+    return true;
   }
 
-  if (emit === 'binary') {
-    const runtimeH = join(ROOT, 'src/runtime/runtime.h');
-    const binPath = join(outDir, stem);
-    const gccOptimize = optimize ? [`-${optimize}`] : [];
-    const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
-    const gcc = spawnSync('gcc', [
-      cPath, '-o', binPath,
-      '-I', dirname(runtimeH),
-      '-lpthread', '-std=c11',
-      ...gccOptimize,
-      ...(useLibuv ? ['-luv'] : []),
-    ], { stdio: 'pipe' });
-    if (gcc.status !== 0) {
-      process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
-      process.exit(1);
-    }
-  }
+  if (watchMode) {
+    const ts = () => new Date().toLocaleTimeString();
+    process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
+    let ok = doBuild();
+    if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
 
-  if (emit === 'wasm') {
-    const emcc = spawnSync('emcc', ['--version'], { stdio: 'pipe' });
-    if (emcc.status !== 0 || emcc.error) {
-      process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
-      process.exit(1);
-    }
-    const runtimeH = join(ROOT, 'src/runtime/runtime_wasm.h');
-    const wasmPath = join(outDir, stem + '.wasm');
-    const jsPath   = join(outDir, stem + '.js');
-    const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
-    const emccResult = spawnSync('emcc', [
-      cPath, '-o', jsPath,
-      '-I', dirname(runtimeH),
-      '-sWASM=1',
-      '-sSTANDALONE_WASM=1',
-      '-DTSC_WASM',
-      ...emccOpts,
-    ], { stdio: 'pipe' });
-    if (emccResult.status !== 0) {
-      process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
-      process.exit(1);
-    }
-    process.stdout.write(`Built ${stem}.wasm\n`);
+    let debounceTimer = null;
+    watchFile(inputPath, { interval: 200 }, () => {
+      if (debounceTimer) return;
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        process.stderr.write(`\n[${ts()}] Change detected — rebuilding...\n`);
+        ok = doBuild();
+        if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
+        process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
+      }, 150);
+    });
+
+    process.on('SIGINT', () => {
+      unwatchFile(inputPath);
+      process.stderr.write(`\n[${ts()}] Watch stopped\n`);
+      process.exit(0);
+    });
+  } else {
+    if (!doBuild()) process.exit(1);
   }
 
 } else if (command === 'run') {
