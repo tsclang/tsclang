@@ -817,6 +817,14 @@ export default {
           this._ensureArrayStruct(`Array_${_sElemIdent}`, _sElemCType);
           return `tsc_set_values_${_sSfx}(${_sName})`;
         }
+        if (_sProp === 'entries') {
+          const _sElemCType = _setSym._setElemCType ?? 'int32_t';
+          const _sElemIdent = this.cTypeToIdent(_sElemCType);
+          const tupleName = `Tuple_${_sElemIdent}_${_sElemIdent}`;
+          this.addTop(`typedef struct { ${_sElemCType} _0; ${_sElemCType} _1; } ${tupleName};`);
+          this._ensureArrayStruct(`Array_${tupleName}`, tupleName);
+          return `tsc_set_entries_${_sSfx}(${_sName})`;
+        }
         if (_sProp === 'union') {
           const other = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           return `tsc_set_union_${_sSfx}(${_sName}, ${other})`;

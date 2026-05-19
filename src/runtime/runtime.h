@@ -869,6 +869,20 @@ static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
     (Array_string){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
 })
 
+#define tsc_set_entries_i32(_s_) ({ \
+    TscSet_i32 __s__ = (_s_); \
+    Tuple_i32_i32 *__d__ = (Tuple_i32_i32*)malloc(__s__.size * sizeof(Tuple_i32_i32)); \
+    for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__]._0 = __s__._vals[__i__]; __d__[__i__]._1 = __s__._vals[__i__]; } \
+    (Array_Tuple_i32_i32){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
+})
+
+#define tsc_set_entries_string(_s_) ({ \
+    TscSet_string __s__ = (_s_); \
+    Tuple_string_string *__d__ = (Tuple_string_string*)malloc(__s__.size * sizeof(Tuple_string_string)); \
+    for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__]._0 = __s__._vals[__i__]; __d__[__i__]._1 = __s__._vals[__i__]; tsc_string_retain(__d__[__i__]._0); tsc_string_retain(__d__[__i__]._1); } \
+    (Array_Tuple_string_string){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
+})
+
 #define tsc_set_union_i32(_a_, _b_) ({ \
     TscSet_i32 __a__ = (_a_), __b__ = (_b_); \
     TscSet_i32 __r__ = tsc_set_create_i32(); \
@@ -1594,6 +1608,13 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     _r_; \
 })
 
+#define tsc_array_entries_i32(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    Tuple_i32_i32 *_d_ = (Tuple_i32_i32*)malloc(_a_.length * sizeof(Tuple_i32_i32)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_]._0 = (int32_t)_i_; _d_[_i_]._1 = _a_.data[_i_]; } \
+    (Array_Tuple_i32_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
 #define tsc_array_set_i32(arr, src, offset) do { \
     Array_i32 *_d_ = (arr); Array_i32 _s_ = (src); size_t _off_ = (size_t)(offset); \
     for (size_t _i_ = 0; _i_ < _s_.length && _off_ + _i_ < _d_->length; _i_++) \
@@ -2247,6 +2268,13 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     Array_string _a_ = (arr); String _v_ = (val); ptrdiff_t _r_ = -1; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if (_tsc_str_eq(_a_.data[_i_], _v_)) { _r_ = (ptrdiff_t)_i_; break; } \
     _r_; \
+})
+
+#define tsc_array_entries_string(arr) ({ \
+    Array_string _a_ = (arr); \
+    Tuple_i32_string *_d_ = (Tuple_i32_string*)malloc(_a_.length * sizeof(Tuple_i32_string)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_]._0 = (int32_t)_i_; _d_[_i_]._1 = _a_.data[_i_]; } \
+    (Array_Tuple_i32_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
 
 #define tsc_array_set_string(arr, src, offset) do { \

@@ -421,6 +421,80 @@
           }
         }
 
+        // for (const [i, v] of arr.entries()) -> cached entries loop
+        if (node.iterable.kind === 'Call' &&
+            node.iterable.callee?.kind === 'Member' &&
+            node.iterable.callee?.prop === 'entries' &&
+            node.binding.kind === 'ArrayPattern') {
+          const arrObj = node.iterable.callee.object;
+          const arrSym = arrObj.kind === 'Ident' ? this.lookup(arrObj.name) : null;
+          const arrType = arrSym?.ctype ?? this.inferType(arrObj);
+          if (arrType?.startsWith('Array_')) {
+            const etIdent = arrType.slice(6);
+            const etCType = this._arrIdentToCType(etIdent);
+            const tupleName = `Tuple_i32_${etIdent}`;
+            const tupleArrName = `Array_${tupleName}`;
+            this.addTop(`typedef struct { int32_t _0; ${etCType} _1; } ${tupleName};`);
+            this._ensureArrayStruct(tupleArrName, tupleName);
+            const arrObjC = this.exprToC(arrObj, lines, depth);
+            const entTmp = `_ent_${this.tempCount++}`;
+            const ivar = `_i_${this.loopCount++}`;
+            p(`${tupleArrName} ${entTmp} = tsc_array_entries_${etIdent}(${arrObjC});`);
+            p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmp}.length; ${ivar}++) {`);
+            const [iElem, vElem] = node.binding.elems;
+            if (iElem) {
+              lines.push(`${II}${qual}int32_t ${iElem.name} = (int32_t)${ivar};`);
+              this.define(iElem.name, { ctype: 'int32_t', varKind: node.varKind });
+            }
+            if (vElem) {
+              lines.push(`${II}${qual}${etCType} ${vElem.name} = ${entTmp}.data[${ivar}]._1;`);
+              this.define(vElem.name, { ctype: etCType, varKind: node.varKind });
+            }
+            const savedLCe = this._loopBodyCleanups;
+            this._loopBodyCleanups = [];
+            this._loopDepth++;
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            this._loopDepth--;
+            this._emitLoopBodyCleanups(lines, II);
+            this._loopBodyCleanups = savedLCe;
+            p('}');
+            break;
+          }
+          const setSym = arrSym?._isSet ? arrSym : null;
+          if (setSym) {
+            const _sElemCType = setSym._setElemCType ?? 'int32_t';
+            const _sSfx = setSym._setSuffix;
+            const _sElemIdent = this.cTypeToIdent(_sElemCType);
+            const tupleName = `Tuple_${_sElemIdent}_${_sElemIdent}`;
+            const tupleArrName = `Array_${tupleName}`;
+            this.addTop(`typedef struct { ${_sElemCType} _0; ${_sElemCType} _1; } ${tupleName};`);
+            this._ensureArrayStruct(tupleArrName, tupleName);
+            const setC = this.exprToC(arrObj, lines, depth);
+            const entTmp = `_ent_${this.tempCount++}`;
+            const ivar = `_i_${this.loopCount++}`;
+            p(`${tupleArrName} ${entTmp} = tsc_set_entries_${_sSfx}(${setC});`);
+            p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmp}.length; ${ivar}++) {`);
+            const [aElem, bElem] = node.binding.elems;
+            if (aElem) {
+              lines.push(`${II}${qual}${_sElemCType} ${aElem.name} = ${entTmp}.data[${ivar}]._0;`);
+              this.define(aElem.name, { ctype: _sElemCType, varKind: node.varKind });
+            }
+            if (bElem) {
+              lines.push(`${II}${qual}${_sElemCType} ${bElem.name} = ${entTmp}.data[${ivar}]._1;`);
+              this.define(bElem.name, { ctype: _sElemCType, varKind: node.varKind });
+            }
+            const savedLCse = this._loopBodyCleanups;
+            this._loopBodyCleanups = [];
+            this._loopDepth++;
+            this.visitStmtOrBlock(node.body, lines, depth + 1);
+            this._loopDepth--;
+            this._emitLoopBodyCleanups(lines, II);
+            this._loopBodyCleanups = savedLCse;
+            p('}');
+            break;
+          }
+        }
+
         // for (const [k, v] of map) -> index loop over map._keys[i]/_vals[i]
         {
           const _mapSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;

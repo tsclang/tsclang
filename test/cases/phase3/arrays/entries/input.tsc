@@ -1,0 +1,5 @@
+const a: i32[] = [10, 20, 30];
+for (const [i, v] of a.entries()) {
+  console.log(i);
+  console.log(v);
+}

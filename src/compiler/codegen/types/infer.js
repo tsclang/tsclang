@@ -462,6 +462,11 @@ export default {
         const _setId = this.cTypeToIdent(_setElemCType);
         return `Array_${_setId}`;
       }
+      if (prop === 'entries') {
+        const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
+        const _setId = this.cTypeToIdent(_setElemCType);
+        return `Array_Tuple_${_setId}_${_setId}`;
+      }
       if (prop === 'union' || prop === 'intersection' || prop === 'difference' || prop === 'symmetricDifference') {
         return _setSym0.ctype;
       }
@@ -599,6 +604,7 @@ export default {
     if (objSymRx?._isRegex) {
       if (prop === 'test') return 'bool';
       if (prop === 'match') return 'opt_Array_string';
+      if (prop === 'matchAll') return 'Array_Array_string';
       if (prop === 'replace' || prop === 'replaceAll') return 'String';
     }
     const objSymAC = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
@@ -629,6 +635,7 @@ export default {
       if (prop === 'slice') return objType;
       if (prop === 'values') return objType;
       if (prop === 'keys') return objType;
+      if (prop === 'entries') return `Array_Tuple_i32_${et}`;
       if (prop === 'toReversed' || prop === 'toSorted' || prop === 'toSpliced') return objType;
       if (prop === 'with') return objType;
       if (prop === 'splice') return objType;
@@ -657,6 +664,7 @@ export default {
         at: 'opt_u8',
         search: 'int32_t',
         match: 'opt_Array_string',
+        matchAll: 'Array_Array_string',
         length: 'size_t',
       };
       if (Object.hasOwn(_sret, prop)) return _sret[prop];

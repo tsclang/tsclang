@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1185 тестов ✓** (2026-05-19)
+**Итого: 1189 тестов ✓** (2026-05-20)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -981,3 +981,10 @@
 > - **Direct Map for-of**: `for (const [k, v] of m)` — index loop over `m._keys[i]`/`m._vals[i]` в control-flow.js; destructuring binding как для `m.entries()`
 > - Новые тесты: `concat-string`, `includes-string`, `index-of-string`, `reverse-string`, `fill-string`, `resize-string`, `reallocate-string`, `map-ss-methods`, `object-keys`, `object-values`, `array-set`, `map-forof` (12 тестов)
 > - Результат: **1185 тестов, 0 ошибок**
+
+> 2026-05-20: **P1 batch 7 — arr.entries(), Set.entries(), s.matchAll(regex)** (1185 → 1189):
+> - **arr.entries()**: специальный случай в control-flow.js для `for (const [i, v] of arr.entries())` — кэширует результат в temp var, генерирует `Tuple_i32_<elemIdent>` typedef, runtime макрос `tsc_array_entries_i32/string`; inferType: `entries` → `Array_Tuple_i32_<et>`
+> - **Set.entries()**: dispatch в stdlib.js, special case в control-flow.js для `for (const [a, b] of s.entries())` — `Tuple_<et>_<et>` (пары [value, value] по spec); runtime макрос `tsc_set_entries_i32/string`; inferType: `entries` → `Array_Tuple_<setId>_<setId>`
+> - **s.matchAll(regex)**: dispatch в method-dispatch.js strMethods → `tsc_regex_match_all`; runtime макрос в regex.h — итерирует string, находит все совпадения regex, возвращает `Array_Array_string`; inferType: `matchAll` → `Array_Array_string`; typedef `Array_Array_string` через `_ensureArrayStruct`
+> - Новые тесты: `entries`, `entries-string`, `set-entries`, `string-matchall` (4 теста)
+> - Результат: **1189 тестов, 0 ошибок**

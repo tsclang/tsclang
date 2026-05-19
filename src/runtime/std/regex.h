@@ -443,6 +443,53 @@ static inline bool tsc_regex_test(TscRegex *r, String s) {
     _res; \
 })
 
+/* tsc_regex_match_all — returns Array_Array_string (all matches, each match = Array_string of groups) */
+#define tsc_regex_match_all(_r, _s) ({ \
+    Array_Array_string _res = { .data = NULL, .length = 0, .capacity = 0 }; \
+    if ((_r)->_valid) { \
+        char *_sc = (char *)malloc((_s).length + 1); \
+        memcpy(_sc, (_s).data, (_s).length); _sc[(_s).length] = '\0'; \
+        const char *_pp = (_r)->_pattern; \
+        bool _anch = _pp[0] == '^'; \
+        if (_anch) _pp++; \
+        size_t _alen = _tsc_re_atom_len(_pp); \
+        bool _has_grp = (_pp[0] == '('); \
+        size_t _cap = 4; \
+        Array_string *_out = (Array_string *)malloc(_cap * sizeof(Array_string)); \
+        size_t _cnt = 0; \
+        for (size_t _i = 0; _i <= (_s).length; ) { \
+            const char *_cp = _sc + _i; \
+            if (_has_grp) { \
+                const char *_ip = _pp + 1; \
+                size_t _mlen = 0; \
+                while (*_cp) { const char *_tmp = _ip; if (!_tsc_re_atom_match(*_cp, &_tmp)) break; _mlen++; _cp++; } \
+                if (_mlen > 0) { \
+                    if (_cnt >= _cap) { _cap *= 2; _out = (Array_string*)realloc(_out, _cap * sizeof(Array_string)); } \
+                    String *_grp = (String*)malloc(sizeof(String)); \
+                    char *_full = (char*)malloc(_mlen + 1); memcpy(_full, _sc + _i, _mlen); _full[_mlen] = '\0'; \
+                    _grp[0] = (String){ .data = _full, .length = _mlen, .capacity = _mlen+1 }; \
+                    _out[_cnt++] = (Array_string){ .data = _grp, .length = 1, .capacity = 1 }; \
+                    _i += _mlen; \
+                } else { _i++; } \
+            } else { \
+                bool _m = _tsc_re_atom_match(*_cp, &_pp); \
+                if (_m) { \
+                    if (_cnt >= _cap) { _cap *= 2; _out = (Array_string*)realloc(_out, _cap * sizeof(Array_string)); } \
+                    String *_grp = (String*)malloc(sizeof(String)); \
+                    char *_full = (char*)malloc(2); _full[0] = *_cp; _full[1] = '\0'; \
+                    _grp[0] = (String){ .data = _full, .length = 1, .capacity = 2 }; \
+                    _out[_cnt++] = (Array_string){ .data = _grp, .length = 1, .capacity = 1 }; \
+                    _i++; \
+                } else { _i++; } \
+            } \
+            if (_anch) break; \
+        } \
+        free(_sc); \
+        _res = (Array_Array_string){ .data = _out, .length = _cnt, .capacity = _cap }; \
+    } \
+    _res; \
+})
+
 static inline String tsc_regex_replace(TscRegex *r, String s, String repl) {
     if (!r->_valid) return (String){ .data = s.data, .length = s.length, .capacity = 0 };
     char *sc = (char *)malloc(s.length + 1);

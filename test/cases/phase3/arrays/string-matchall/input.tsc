@@ -1,0 +1,7 @@
+import { Regex } from "std/string";
+const s = "ab1cd2ef3";
+const r = new Regex(".");
+const matches = s.matchAll(r);
+console.log(matches.length);
+console.log(matches[0][0]);
+console.log(matches[1][0]);

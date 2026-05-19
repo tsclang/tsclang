@@ -1,0 +1,8 @@
+let s = new Set<i32>();
+s.add(10);
+s.add(20);
+s.add(30);
+for (const [a, b] of s.entries()) {
+  console.log(a);
+  console.log(b);
+}

@@ -1,0 +1,5 @@
+const a: string[] = ["foo", "bar", "baz"];
+for (const [i, v] of a.entries()) {
+  console.log(i);
+  console.log(v);
+}

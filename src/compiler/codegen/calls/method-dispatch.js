@@ -376,6 +376,14 @@ export default {
                      if (rSym?._isRegex) return `tsc_regex_match(&${rArg.name}, ${strObjC})`;
                      return `tsc_regex_match(&(TscRegex){0}, ${strObjC})`;
                    },
+      matchAll:    () => {
+                     const rArg = args[0]?.expr;
+                     const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
+                     this._ensureArrayStruct('Array_string', 'String');
+                     this._ensureArrayStruct('Array_Array_string', 'Array_string');
+                     if (rSym?._isRegex) return `tsc_regex_match_all(&${rArg.name}, ${strObjC})`;
+                     return `tsc_regex_match_all(&(TscRegex){0}, ${strObjC})`;
+                   },
     };
 
     const _smInlineSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
