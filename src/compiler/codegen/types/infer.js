@@ -471,7 +471,12 @@ export default {
         return optName;
       }
       if (prop === 'has') return 'bool';
-      if (prop === 'set' || prop === 'clear') return 'void';
+      if (prop === 'set' || prop === 'clear' || prop === 'forEach') return 'void';
+      if (prop === 'values') {
+        const arrName = `Array_${vIdent}`;
+        this._ensureArrayStruct(arrName, vCType);
+        return arrName;
+      }
       if (prop === 'keys') {
         const kCType = this._arrIdentToCType(kIdent);
         const arrName = `Array_${kIdent}`;
@@ -633,6 +638,8 @@ export default {
         indexOf: 'int32_t', lastIndexOf: 'int32_t', charCodeAt: 'uint32_t',
         split: 'Array_String',
         at: 'opt_u8',
+        search: 'int32_t',
+        match: 'opt_Array_string',
         length: 'size_t',
       };
       if (Object.hasOwn(_sret, prop)) return _sret[prop];

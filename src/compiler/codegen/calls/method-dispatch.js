@@ -354,6 +354,22 @@ export default {
                    },
       trimStart:   () => `tsc_string_trim_start(${strObjC})`,
       trimEnd:     () => `tsc_string_trim_end(${strObjC})`,
+      search:      () => {
+                     const rArg = args[0]?.expr;
+                     const rC = this.exprToC(rArg, lines, depth);
+                     const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
+                     if (rSym?._isRegex) return `tsc_regex_search(&${rArg.name}, ${strObjC})`;
+                     return `tsc_regex_search(&(TscRegex){0}, ${strObjC})`;
+                   },
+      match:       () => {
+                     const rArg = args[0]?.expr;
+                     const rC = this.exprToC(rArg, lines, depth);
+                     const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
+                     this._ensureArrayStruct('Array_string', 'String');
+                     this._ensureOptStruct('opt_Array_string', 'Array_string');
+                     if (rSym?._isRegex) return `tsc_regex_match(&${rArg.name}, ${strObjC})`;
+                     return `tsc_regex_match(&(TscRegex){0}, ${strObjC})`;
+                   },
     };
 
     const _smInlineSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
@@ -447,6 +463,26 @@ export default {
       }
       if (prop === 'has')    return `tsc_map_has_${mapSuffix}(&${objC}, ${argsC})`;
       if (prop === 'clear')  return `tsc_map_clear_${mapSuffix}(&${objC})`;
+      if (prop === 'forEach') {
+        const cbArg = args[0]?.expr;
+        if (!cbArg || cbArg.kind !== 'Arrow') return null;
+        const parts = mapSuffix.split('_');
+        const vIdent = parts.slice(1).join('_');
+        const vCType = this._arrIdentToCType(vIdent);
+        this._lambdaParamHint = [vCType];
+        const cbFnName = this._extractCallbackFn(args[0], lines, depth);
+        this._lambdaParamHint = null;
+        if (!cbFnName) return null;
+        return `tsc_map_for_each_${mapSuffix}(&${objC}, ${cbFnName})`;
+      }
+      if (prop === 'values') {
+        const parts = mapSuffix.split('_');
+        const vIdent = parts.slice(1).join('_');
+        const vCType = this._arrIdentToCType(vIdent);
+        this._ensureArrayStruct(`Array_${vIdent}`, vCType);
+        this._lastSuppressConst = true;
+        return `tsc_map_values_${mapSuffix}(&${objC})`;
+      }
       if (prop === 'keys') {
         this._lastSuppressConst = true;
         return `tsc_map_keys_${mapSuffix}(&${objC})`;

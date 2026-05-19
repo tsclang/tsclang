@@ -1,0 +1,4 @@
+import { Regex } from "std/string";
+const r = new Regex("(\w+)");
+const m = "hello world".match(r);
+console.log(m.has_value);

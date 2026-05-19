@@ -1,0 +1,6 @@
+let m = new Map<string, i32>();
+m.set("a", 10);
+m.set("b", 20);
+const vals = m.values();
+console.log(vals.length);
+console.log(vals[0] + vals[1]);

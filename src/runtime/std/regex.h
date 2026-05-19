@@ -301,6 +301,23 @@ static bool _tsc_re_simple_match(const char *pat, const char *s, size_t slen,
     return false;
 }
 
+static inline int32_t tsc_regex_search(TscRegex *r, String s) {
+    if (!r->_valid) return -1;
+    char *sc = (char *)malloc(s.length + 1);
+    memcpy(sc, s.data, s.length); sc[s.length] = '\0';
+    const char *_p = r->_pattern;
+    bool _anch = _p[0] == '^';
+    const char *_pp = _p + (_anch ? 1 : 0);
+    for (size_t _i = 0; _i <= s.length; _i++) {
+        const char *_cp = sc + _i;
+        const char *_ap = _pp;
+        if (_tsc_re_atom_match(*_cp, &_ap)) { free(sc); return (int32_t)_i; }
+        if (_anch) break;
+    }
+    free(sc);
+    return -1;
+}
+
 static inline bool tsc_regex_test(TscRegex *r, String s) {
     if (!r->_valid) return false;
     char *sc = (char *)malloc(s.length + 1);

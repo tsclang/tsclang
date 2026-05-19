@@ -1,0 +1,4 @@
+import { Regex } from "std/string";
+const r = new Regex("\\d+");
+const pos = "abc123".search(r);
+console.log(pos);

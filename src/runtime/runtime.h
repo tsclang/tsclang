@@ -2177,6 +2177,18 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     (Array_MapEntry_string_i32){ .data = _de_, .length = _me_->size, .capacity = _me_->size }; \
 })
 
+#define tsc_map_for_each_string_i32(_m_, _fn_) do { \
+    const TscMap_string_i32 *_mf_ = (_m_); \
+    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_]); \
+} while(0)
+
+#define tsc_map_values_string_i32(_m_) ({ \
+    const TscMap_string_i32 *_mv_ = (_m_); \
+    int32_t *_dv_ = (int32_t*)malloc(_mv_->size * sizeof(int32_t)); \
+    memcpy(_dv_, _mv_->_vals, _mv_->size * sizeof(int32_t)); \
+    (Array_i32){ .data = _dv_, .length = _mv_->size, .capacity = _mv_->size }; \
+})
+
 // StaticMap: fixed-capacity map backed by parallel arrays (no heap)
 // Generated inline in .c output; these macros implement the operations.
 #define TSC_STATICMAP_IMPL(K, V, SUFFIX) \
