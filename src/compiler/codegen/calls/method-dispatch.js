@@ -37,12 +37,12 @@ export default {
 
     const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_')
                      || (sym?.isRefParam && sym?.derefType?.startsWith('Array_'));
-    const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce','findLast','findLastIndex','flatMap']);
+    const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap']);
     let cbFnName = null;
     let cbExtraArgs = '';
     let argsForC = args;
     if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
-      this._lambdaParamHint = (prop === 'reduce' || prop === 'sort') ? [etC, etC] : [etC];
+      this._lambdaParamHint = (prop === 'reduce' || prop === 'reduceRight' || prop === 'sort') ? [etC, etC] : [etC];
       cbFnName = this._extractCallbackFn(args[0], lines, depth);
       this._lambdaParamHint = null;
       if (cbFnName) {
@@ -171,6 +171,12 @@ export default {
           const outET = initExpr ? this.cTypeToIdent(this.inferType(initExpr)) : et;
           const reduceArgs = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
           return `tsc_array_reduce_${et}_${outET}(${arrObjC}, ${reduceArgs})`;
+        }
+        case 'reduceRight': {
+          const initExpr2 = args[1]?.expr;
+          const outET2 = initExpr2 ? this.cTypeToIdent(this.inferType(initExpr2)) : et;
+          const reduceArgs2 = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
+          return `tsc_array_reduce_right_${et}_${outET2}(${arrObjC}, ${reduceArgs2})`;
         }
         case 'every':    return `tsc_array_every_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         case 'some':     return `tsc_array_some_${et}(${arrObjC}, ${cbFnName ?? argsC})`;

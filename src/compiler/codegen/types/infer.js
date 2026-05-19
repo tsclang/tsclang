@@ -586,7 +586,7 @@ export default {
       if (prop === 'length' || prop === 'capacity') return 'size_t';
       if (prop === 'join') return 'String';
       if (prop === 'at') return etCType;
-      if (prop === 'reduce') {
+      if (prop === 'reduce' || prop === 'reduceRight') {
         const initExpr = node.args?.[1]?.expr;
         return initExpr ? this.inferType(initExpr) : (objSym?.arrElemCType ?? 'int32_t');
       }

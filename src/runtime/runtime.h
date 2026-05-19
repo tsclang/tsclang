@@ -1594,6 +1594,11 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
     _acc_; \
 })
+#define tsc_array_reduce_right_i32_i32(arr, fn, init) ({ \
+    Array_i32 _a_ = (arr); int32_t _acc_ = (init); \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) _acc_ = (fn)(_acc_, _a_.data[_i_ - 1]); \
+    _acc_; \
+})
 
 #define tsc_array_shift_i32(arr) ({ \
     Array_i32 *_a_ = (arr); \

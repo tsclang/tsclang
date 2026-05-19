@@ -919,3 +919,10 @@
 > - Codegen: корректно генерирует `Array_Array_i32` typedef и вызывает `tsc_array_flat_Array_i32`
 > - Тест: `[[1,2],[3,4,5],[6]].flat()` → length=6, [0]=1, [4]=5
 > - Результат: **1151 тест проходит**
+
+> 2026-05-19: **reduceRight**:
+> - Runtime: добавлен `tsc_array_reduce_right_i32_i32` — итерация справа налево
+> - Codegen: `reduceRight` добавлен в `arrayCallbackProps`, case handler + lambdaParamHint `[etC, etC]`
+> - Infer: `reduceRight` возвращает accumulator type (как reduce)
+> - Тест: `[1,2,3,4].reduceRight((acc, x) => acc * 10 + x, 0)` → 4321
+> - Результат: **1152 теста проходят**
