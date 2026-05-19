@@ -912,3 +912,10 @@
 > - Тест `callback-ref` (ранее отложен) — разблокирован, использует семантику by-value (не Ref<T>*)
 > - Полная семантика Ref<T> для callbacks (filter, map, forEach и др.) отложена — требует инвазивных изменений в codegen (auto-deref pointer params)
 > - Результат: **1150 тестов проходят, 0 отложены**
+
+> 2026-05-19: **flat для вложенных массивов T[][] → T[]**:
+> - Runtime: добавлен `tsc_array_flat_Array_i32` — итерирует outer array, копирует элементы каждого inner array в один плоский результат
+> - Infer: `flat` для `Array_Array_T` теперь возвращает `Array_T` (внутренний тип) вместо identity
+> - Codegen: корректно генерирует `Array_Array_i32` typedef и вызывает `tsc_array_flat_Array_i32`
+> - Тест: `[[1,2],[3,4,5],[6]].flat()` → length=6, [0]=1, [4]=5
+> - Результат: **1151 тест проходит**

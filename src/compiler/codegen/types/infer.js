@@ -580,7 +580,7 @@ export default {
       if (prop === 'toReversed' || prop === 'toSorted' || prop === 'toSpliced') return objType;
       if (prop === 'with') return objType;
       if (prop === 'splice') return objType;
-      if (prop === 'flat') return objType;
+      if (prop === 'flat') return et?.startsWith('Array_') ? et : objType;
       if (prop === 'findIndex' || prop === 'indexOf' || prop === 'findLastIndex' || prop === 'lastIndexOf') return 'int32_t';
       if (prop === 'includes' || prop === 'every' || prop === 'some') return 'bool';
       if (prop === 'length' || prop === 'capacity') return 'size_t';

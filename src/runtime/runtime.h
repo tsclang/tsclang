@@ -1696,6 +1696,19 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     (Array_i32){ .data = _d_, .length = _total_, .capacity = _total_ }; \
 })
 
+#define tsc_array_flat_Array_i32(arr) ({ \
+    Array_Array_i32 _a_ = (arr); \
+    size_t _total_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_ += _a_.data[_i_].length; \
+    int32_t *_d_ = (int32_t*)malloc(_total_ * sizeof(int32_t)); \
+    size_t _pos_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        for (size_t _j_ = 0; _j_ < _a_.data[_i_].length; _j_++) \
+            _d_[_pos_++] = _a_.data[_i_].data[_j_]; \
+    } \
+    (Array_i32){ .data = _d_, .length = _total_, .capacity = _total_ }; \
+})
+
 #define tsc_array_find_last_i32(arr, pred) ({ \
     Array_i32 _a_ = (arr); \
     opt_ref_i32 _r_ = {false, NULL}; \
