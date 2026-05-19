@@ -760,7 +760,7 @@
             } else if (part.kind === 'expr') {
               // Re-parse the expression source (same as _templateToC in misc.js)
               const toks = this._lex(part.src, this.filename);
-              const ast = this._parse(toks);
+              const { ast } = this._parse(toks);
               const exprNode = ast.body[0]?.expr ?? ast.body[0];
               nativeOut += this.exprToC(exprNode, lines, depth);
             }

@@ -14,7 +14,7 @@ export default {
       if (p.kind === 'str') return { kind: 'str', value: p.value };
       // Re-parse the expression source
       const toks = this._lex(p.src, this.filename);
-      const ast = this._parse(toks);
+      const { ast } = this._parse(toks);
       const exprNode = ast.body[0]?.expr ?? ast.body[0];
       let t = this.inferType(exprNode);
       let c = this.exprToC(exprNode, lines, depth);

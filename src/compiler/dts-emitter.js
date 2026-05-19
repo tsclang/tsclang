@@ -77,7 +77,11 @@ function emitDecl(node) {
 
 export function emitDtsSync(src, filename) {
   const tokens = lex(src, filename);
-  const ast    = parse(tokens, filename, src);
+  const { ast, errors: parseErrors } = parse(tokens, filename, src);
+  if (parseErrors.length > 0) {
+    const msg = parseErrors.map(e => e.message).join('; ');
+    throw new Error(`Parse errors: ${msg}`);
+  }
 
   const decls = [];
   for (const node of ast.body) {

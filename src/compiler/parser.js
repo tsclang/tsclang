@@ -6,6 +6,33 @@ import { TscError } from './error.js';
 
 export function parse(tokens, filename = '<input>', src = null) {
   let pos = 0;
+  const errors = [];
+
+  const STMT_KEYWORDS = new Set([
+    'let', 'const', 'var', 'function', 'async', 'class', 'interface', 'enum',
+    'type', 'return', 'if', 'for', 'while', 'do', 'break', 'continue',
+    'throw', 'try', 'switch', 'import', 'export', 'native', 'unsafe',
+    'spawn', 'declare', 'extension', 'decorator',
+  ]);
+
+  function syncToRecovery() {
+    const max = tokens.length;
+    let depth = 0;
+    while (pos < max) {
+      const t = tokens[pos];
+      if (t.type === TK.LBRACE) { depth++; pos++; continue; }
+      if (t.type === TK.RBRACE) {
+        if (depth > 0) { depth--; pos++; continue; }
+        return;
+      }
+      if (depth > 0) { pos++; continue; }
+      if (t.type === TK.SEMI) { pos++; return; }
+      if (t.type === TK.EOF) return;
+      if (t.type === TK.IDENT && STMT_KEYWORDS.has(t.value)) return;
+      if (t.type === TK.HASH && pos + 1 < max && tokens[pos + 1].type === TK.LBRACK) return;
+      pos++;
+    }
+  }
 
   function cur()  { return tokens[pos]; }
   function peek(n = 1) { return tokens[pos + n]; }
@@ -308,20 +335,36 @@ export function parse(tokens, filename = '<input>', src = null) {
     while (!done()) {
       // #[...] — profile/target annotation
       if (cur().type === TK.HASH && peek().type === TK.LBRACK) {
-        eat(TK.HASH); eat(TK.LBRACK);
-        let content = '';
-        let depth = 1;
-        while (!done() && depth > 0) {
-          if (cur().type === TK.LBRACK) depth++;
-          else if (cur().type === TK.RBRACK) { depth--; if (depth === 0) break; }
-          content += cur().value;
-          pos++;
+        try {
+          eat(TK.HASH); eat(TK.LBRACK);
+          let content = '';
+          let depth = 1;
+          while (!done() && depth > 0) {
+            if (cur().type === TK.LBRACK) depth++;
+            else if (cur().type === TK.RBRACK) { depth--; if (depth === 0) break; }
+            content += cur().value;
+            pos++;
+          }
+          eat(TK.RBRACK);
+          body.push({ kind: 'ProfileAnnotation', content });
+        } catch (e) {
+          errors.push(e);
+          syncToRecovery();
         }
-        eat(TK.RBRACK);
-        body.push({ kind: 'ProfileAnnotation', content });
         continue;
       }
-      body.push(parseStmt());
+      try {
+        body.push(parseStmt());
+      } catch (e) {
+        if (e.isTscError) {
+          errors.push(e);
+          const beforePos = pos;
+          syncToRecovery();
+          if (pos === beforePos && !done()) pos++;
+        } else {
+          throw e;
+        }
+      }
     }
     return { kind: 'Program', body };
   }
@@ -1653,5 +1696,6 @@ export function parse(tokens, filename = '<input>', src = null) {
     return expr;
   }
 
-  return parseProgram();
+  const ast = parseProgram();
+  return { ast, errors };
 }

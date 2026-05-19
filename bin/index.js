@@ -59,13 +59,102 @@ const args = process.argv.slice(2);
 
 if (args.includes('--no-color')) setColorEnabled(false);
 
+const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+
+if (args.includes('--version') || args.includes('-v')) {
+  console.log(`tsclang ${VERSION}`);
+  process.exit(0);
+}
+
+const HELP_TEXT = `tsclang ${VERSION} — TypeScript-like language that compiles to C
+
+USAGE:
+  tsclang <command> [options]
+
+COMMANDS:
+  build            Compile .tsc to C or binary
+  run              Compile and run
+  init             Create a new project
+  build-cmake      Generate CMakeLists.txt
+  lint             Run linter
+  format           Format source code
+  explain          Explain an error code
+  emit-dts         Generate .d.tsc declaration files
+  lsp              Start Language Server
+  validate-config  Validate tsc.package.json
+  install          Install a package
+  update           Update lock file
+  search           Search packages
+  publish          Publish a package
+
+OPTIONS:
+  --version, -v    Print version
+  --help, -h       Print this help
+  --no-color       Disable colored output
+  --no-cache       Bypass compilation cache
+
+Run 'tsclang <command> --help' for command-specific options.`;
+
 const command = args[0];
 
-if (!command) {
-  console.error('Usage: tsclang <command> [options]');
-  console.error('Commands: build, run, init, build-cmake, install, update, search, publish,');
-  console.error('          lint, format, explain, emit-dts, lsp, validate-config');
-  process.exit(1);
+if (!command || command === '--help' || command === '-h') {
+  console.log(HELP_TEXT);
+  process.exit(command ? 0 : 1);
+}
+
+const CMD_HELP = {
+  build: `tsclang build — Compile .tsc to C or binary
+
+USAGE:
+  tsclang build <input.tsc> [options]
+
+OPTIONS:
+  --emit <c|binary|wasm>   Output format (default: c)
+  --outDir <dir>           Output directory (default: .)
+  --optimize <O0-O3|Os|Oz> Optimization level
+  --debug                  Compile with debug info
+  --sourcemap              Generate source map
+  --all-errors             Show all errors (no limit)
+  --no-cache               Bypass compilation cache`,
+  run: `tsclang run — Compile and run
+
+USAGE:
+  tsclang run <input.tsc> [-- <args>...]
+
+OPTIONS:
+  --no-cache    Bypass compilation cache`,
+  init: `tsclang init — Create a new project
+
+USAGE:
+  tsclang init [options]
+
+OPTIONS:
+  --type <executable|library>   Project type (default: executable)
+  --library                     Shorthand for --type library`,
+  lint: `tsclang lint — Run linter
+
+USAGE:
+  tsclang lint <input.tsc> [options]
+
+OPTIONS:
+  --fix          Auto-fix issues
+  --rule=<name>  Run specific rule only`,
+  format: `tsclang format — Format source code
+
+USAGE:
+  tsclang format <input.tsc>`,
+  explain: `tsclang explain — Explain an error code
+
+USAGE:
+  tsclang explain <code>
+
+EXAMPLE:
+  tsclang explain E012`,
+};
+
+if (CMD_HELP[command] && (args.includes('--help') || args.includes('-h'))) {
+  console.log(CMD_HELP[command]);
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +514,14 @@ function compileTsc(inputPath, opts = {}) {
   const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
   const tokens   = lex(src, filename);
-  let   ast      = parse(tokens, filename, src);
+  const { ast: parsedAst, errors: parseErrors } = parse(tokens, filename, src);
+
+  if (parseErrors.length > 0) {
+    const bag = parseErrors.map(e => Object.assign(e, { kind: 'error' }));
+    throw { isTscErrorBag: true, errors: bag };
+  }
+
+  let   ast      = parsedAst;
 
   // AST optimizer: activated by "// @opt" comment or #[profile(opt: true)]
   const _wantsOpt = /\/\/\s*@opt\b/.test(src) ||
@@ -647,7 +743,12 @@ if (command === 'lint') {
   let ast;
   try {
     const tokens = lex(src, filename);
-    ast = parse(tokens, filename, src);
+    const { ast: parsedAst, errors: parseErrors } = parse(tokens, filename, src);
+    if (parseErrors.length > 0) {
+      const bag = parseErrors.map(e => Object.assign(e, { kind: 'error' }));
+      throw { isTscErrorBag: true, errors: bag };
+    }
+    ast = parsedAst;
   } catch (e) {
     reportErrors(e, filename);
     process.exit(1);
