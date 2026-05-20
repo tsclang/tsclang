@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1256 тестов ✓** (2026-05-20)
+**Итого: 1258 тестов ✓** (2026-05-20)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1080,27 +1080,30 @@
 > - **M3 fixed**: auto-propagate bare throws call теперь вызывает `_emitFuncCleanup()` + `goto cleanup` (для `_usesGotoCleanup`) вместо прямого `return`. Обновлён `inferred-throws` expected.c
 > - **M2 fixed**: добавлен guard `argSym2.isShared` в `call-dispatch.js` при `Mut<T>` параметре — `Shared<T>` не даёт exclusive access. Новый тест: `err-shared-to-mut` [E]
 > - **L2 fixed**: inline `if (cond) return;` теперь проверяет `_hasPendingCleanups()` и эмитит cleanup перед `return` при наличии owned vars
-> - Результат: **1256 тестов, 0 ошибок**
+ > - Результат: **1256 тестов, 0 ошибок**
+
+ > 2026-05-20: **Ownership audit round 3 — H2 _loopCleanupStack, M4 ForOf Labeled, L1 zero-init** (1256 → 1258):
+ > - **H2 fixed**: `_loopCleanupStack[]` — стек массивов cleanup statements, заменяет плоский `_loopBodyCleanups`. Все 10 `savedLC` пар заменены на `_pushLoopCleanups()`/`_popLoopCleanups()`. `_emitAllLoopCleanups()` эмитит cleanups всех уровней LIFO для labeled break. Обновлены Break/Continue handlers + inline if break/continue для `_emitAllLoopCleanups()` при labeled break. Новые тесты: `labeled-break-cleanup` (R), `labeled-break-forof` (R)
+ > - **M4 fixed**: `Labeled` case теперь обрабатывает `ForOf`/`ForIn` — генерирует `label_break:;` target после тела цикла. Break handler уже корректно использует `goto label_break;` с `_emitAllLoopCleanups()`. Новый тест: `labeled-break-forof` (R)
+ > - **L1 fixed**: uninitialized `String` vars → `NULL` init, uninitialized `Array_X` vars → `{0}` init в vardecl.js. Обеспечивает безопасный cleanup при throw до первого присваивания
+ > - Результат: **1258 тестов, 0 ошибок**
+
+ > 2026-05-20: **M1 отложен до phase 18** — borrow elision для field access записан в SPEC.md как открытый дизайн-вопрос
 
 ---
 
 ## Известные баги (на 2026-05-20)
 
-### High
+### Отложенные
 
-| # | Баг | Суть | Файл |
-|---|-----|------|------|
-| H2 | Labeled `break outer` не эмитит cleanups внешнего цикла | `_loopBodyCleanups` — плоская переменная, не стек. Outer cleanups в `savedLC` на call stack — недоступны. Нужен `_loopCleanupStack[]` | `codegen/stmt/control-flow.js` |
+| # | Баг | Суть | Решение |
+|---|-----|------|---------|
+| M1 | `const name = user.name` — ARC copy вместо borrow | Spec: `Ref<string>` (pointer). Реализация: `retain + copy + release`. Деструктуризация работает правильно | Отложен до phase 18 optimizer — записано в SPEC.md |
 
-### Medium
+### Исправленные
 
-| # | Баг | Суть | Файл |
-|---|-----|------|------|
-| M1 | `const name = user.name` — ARC copy вместо borrow | Spec: `Ref<string>` (pointer). Реализация: `retain + copy + release`. Деструктуризация работает правильно | `codegen/stmt/vardecl.js` |
-| M4 | `ForOf` не поддерживает labeled break/continue | `Labeled` case обрабатывает только `While`/`For` | `codegen/stmt/control-flow.js` |
-
-### Low
-
-| # | Баг | Суть | Файл |
-|---|-----|------|------|
-| L1 | NULL-init для inferred-type vars в throws-функциях | Только typed vars получают pre-declaration. Корректность сохранена | `codegen/top-level/func.js` |
+| # | Баг | Fix commit |
+|---|-----|------------|
+| H2 | Labeled `break outer` не эмитит cleanups внешнего цикла | `c4ed231` — `_loopCleanupStack[]` |
+| M4 | `ForOf` не поддерживает labeled break/continue | `c4ed231` — `label_break:;` target |
+| L1 | NULL-init для inferred-type vars в throws-функциях | `89b6700` — `String = NULL`, `Array_X = {0}` |
