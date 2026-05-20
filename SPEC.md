@@ -508,6 +508,9 @@ GCC делает машинные оптимизации — AST-оптимиз�
 | Dead branch elimination | `if (false) { ... }` | удалить ветку |
 | Unused const elimination | `const x = 5;` (не используется) | удалить |
 | Strength reduction | `x * 2` → `x + x` | (опц., если нет сдвига) |
+| Borrow elision (field access) | `const name = user.name` (String field) | `const String *name = &user.name` (borrow вместо ARC copy) |
+
+**Borrow elision для field access** — открытый дизайн-вопрос. Сейчас `const name = user.name` где `name: string` создаёт ARC copy (`tsc_string_clone`). Оптимизатор может заменить это на pointer borrow (`&user.name`), но это требует lifetime analysis — borrow не должен пережить owner. Возможные варианты: (а) pointer borrow + lifetime guard, (б) copy-on-write с defer, или (в) оставить как есть. Финальное решение отложено до реализации phase 18.
 
 Реализация: `src/compiler/optimizer.js` — рекурсивный `foldExpr(node)` и `deadCode(stmts)`.
 Вызывается из `compileTsc()` после парсинга, до codegen, если `--opt` передан.
