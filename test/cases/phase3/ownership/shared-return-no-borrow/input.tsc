@@ -1,4 +1,4 @@
-// [R] Shared<T> return does not create borrow — source remains accessible
+// [R] Shared<T> return retains — source remains accessible (ARC)
 class Node { value: i32; }
 function share(n: Shared<Node>): Shared<Node> {
   return n;

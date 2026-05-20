@@ -3,6 +3,7 @@
 typedef struct { int32_t _refcount; int32_t value; } Node;
 
 Node *share_shared_Node(Node *n) {
+    tsc_arc_retain(n);
     return n;
 }
 

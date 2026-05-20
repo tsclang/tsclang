@@ -1,4 +1,17 @@
 ﻿export default {
+  _emitRetainIfNeeded(valC, valNode, p) {
+    if (valNode.kind === 'Ident') {
+      const sym = this.lookup(valNode.name);
+      if (sym?.isShared) {
+        p(`tsc_arc_retain(${valC});`);
+        return;
+      }
+    }
+    if (this.inferType(valNode) === 'String' && ['Ident', 'Member', 'Index'].includes(valNode.kind)) {
+      p(`tsc_string_retain(${valC});`);
+    }
+  },
+
   _visitControlFlow(node, lines, depth) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
@@ -41,9 +54,7 @@
             this._inReturnContext = true;
             const valC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
-            if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-              lines.push(`${I}tsc_string_retain(${valC});`);
-            }
+            this._emitRetainIfNeeded(valC, node.value, p);
             lines.push(`${I}return (${optType}){true, ${valC}};`);
           }
           break;
@@ -93,9 +104,7 @@
             const retC = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
             this._inReturnContext = false;
             const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
-            if (!_isUnknownReturn && !retIsOwnedIdent && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-              p(`tsc_string_retain(${retC});`);
-            }
+            if (!_isUnknownReturn && !retIsOwnedIdent) this._emitRetainIfNeeded(retC, node.value, p);
             if (retIsOwnedIdent) this._suppressCleanupFor(node.value.name);
             p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
           } else {
@@ -121,9 +130,7 @@
             }
             this._emitFuncCleanup(lines, I);
           } else {
-            if (retType === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-              p(`tsc_string_retain(${retC});`);
-            }
+            this._emitRetainIfNeeded(retC, node.value, p);
             const tmpName = `_ret_${this.tempCount++}`;
             p(`${retType} ${tmpName} = ${retC};`);
             this._emitFuncCleanup(lines, I);
@@ -141,9 +148,7 @@
               this._inReturnContext = true;
               const c = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
               this._inReturnContext = false;
-              if (!_isUnknownReturn && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-                p(`tsc_string_retain(${c});`);
-              }
+              if (!_isUnknownReturn) this._emitRetainIfNeeded(c, node.value, p);
               p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
             } else {
               p(`return (${ctx.resultType}){.ok = true};`);
@@ -159,9 +164,7 @@
                   c = `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
                 }
               }
-              if (!_isUnknownReturn && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
-                p(`tsc_string_retain(${c});`);
-              }
+              if (!_isUnknownReturn) this._emitRetainIfNeeded(c, node.value, p);
               p(`return ${c};`);
             } else {
               p('return;');
