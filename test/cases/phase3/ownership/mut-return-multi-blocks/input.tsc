@@ -1,0 +1,11 @@
+// [E] Both sources quarantined when Mut<T> return from multi-param call is alive
+class Box { x: i32; }
+function pickMut(a: Mut<Box>, b: Mut<Box>): Mut<Box> {
+  return a;
+}
+let b1 = new Box();
+b1.x = 10;
+let b2 = new Box();
+b2.x = 20;
+const m = pickMut(b1, b2);
+b2.x = 99;

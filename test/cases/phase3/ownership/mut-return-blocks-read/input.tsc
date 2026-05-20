@@ -1,0 +1,9 @@
+// [E] Read blocked while Mut<T> return result is alive (total quarantine)
+class Box { x: i32; }
+function getMut(b: Mut<Box>): Mut<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+const m = getMut(box);
+console.log(box.x);

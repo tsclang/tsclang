@@ -1,0 +1,9 @@
+// [E] Mutation blocked while Mut<T> return result is alive
+class Box { x: i32; }
+function getMut(b: Mut<Box>): Mut<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+const m = getMut(box);
+box.x = 99;

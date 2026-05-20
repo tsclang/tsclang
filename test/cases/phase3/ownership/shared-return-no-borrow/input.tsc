@@ -1,0 +1,10 @@
+// [R] Shared<T> return does not create borrow — source remains accessible
+class Node { value: i32; }
+function share(n: Shared<Node>): Shared<Node> {
+  return n;
+}
+let x: Shared<Node> = new Node();
+x.value = 42;
+const s = share(x);
+x.value = 99;
+console.log(x.value);

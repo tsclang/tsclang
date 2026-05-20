@@ -916,7 +916,8 @@ export default {
         }
 
         // Inferred Array_T type (no typeAnn, e.g. result of arr.filter/map/concat/slice)
-        if (!typeAnn && ctype?.startsWith('Array_') && init) {
+        // Exclude pointer types (Array_T * = Ref/Mut<Array<T>>) which need different handling
+        if (!typeAnn && ctype?.startsWith('Array_') && !ctype.endsWith(' *') && init) {
           const elemIdent = ctype.slice(6); // Array_i32 тЖТ i32
           const etC2 = this._arrIdentToCType(elemIdent);
           this._ensureArrayStruct(ctype, etC2);
@@ -1275,10 +1276,24 @@ export default {
               }
               this._registerCleanup(`tsc_string_release(${name})`);
             } else {
-              // Suppress const if flagged by array element return or parse() result
-              const effQual = (this._lastArrayElemReturn || this._lastSuppressConst) ? '' : qualifier;
+              // Detect Ref/Mut return before effQual — Mut return suppresses const qualifier
+              let _retBorrowMode = null;
+              if (init?.kind === 'Call' && init.callee?.kind === 'Ident') {
+                const _fnSym = this.lookup(init.callee.name);
+                const _retAnn = _fnSym?.returnType;
+                if (_retAnn?.kind === 'TypeRef') {
+                  if (_retAnn.name === 'Ref') _retBorrowMode = 'Ref';
+                  else if (_retAnn.name === 'Mut') _retBorrowMode = 'Mut';
+                }
+              }
+              // Suppress const if flagged by array element return, parse() result, or Mut return
+              const effQual = (this._lastArrayElemReturn || this._lastSuppressConst || _retBorrowMode === 'Mut') ? '' : qualifier;
               this._lastArrayElemReturn = undefined;
               this._lastSuppressConst = undefined;
+              // D6: Conservative lifetime binding — borrow all Ref/Mut arguments
+              if (_retBorrowMode) {
+                this._trackBorrowForRefReturn(init, name, _retBorrowMode);
+              }
               // Borrow check before emit (with typeAnn path)
               // Skip when source and target are different struct types (cross-type cast, not a move)
               if (init.kind === 'Ident') {

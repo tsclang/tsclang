@@ -28,6 +28,9 @@ export default {
         // Function reference (not a func-ptr variable): use mangled name
         const sym = this.lookup(node.name);
         this._checkMoved(sym, node, node.name);
+        if (sym?._mutQuarantined) {
+          throw this.error(`cannot access '${node.name}' while a mutable borrow is active`, node);
+        }
         if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
         // Async/generator self context: inlined consts → literal, promoted vars → self->name
@@ -104,6 +107,9 @@ export default {
           }
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+        if (sym?._mutQuarantined) {
+          throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+        }
         // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
         if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
           const ident = sym._channelIdent;
@@ -219,6 +225,12 @@ export default {
       }
 
       case 'Index': {
+        if (node.object.kind === 'Ident') {
+          const _idxQSym = this.lookup(node.object.name);
+          if (_idxQSym?._mutQuarantined) {
+            throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+          }
+        }
         // req.params["key"] → tsc_request_param(req, STR_LIT("key"))
         if (this._stdNetImported && node.object.kind === 'Member' && node.object.prop === 'params') {
           const reqSym = node.object.object.kind === 'Ident' ? this.lookup(node.object.object.name) : null;

@@ -1,0 +1,11 @@
+// [E] Method call blocked while Mut<T> return result is alive (total quarantine)
+class Box { x: i32; }
+function getMut(b: Mut<Box>): Mut<Box> {
+  return b;
+}
+let arr = [1, 2, 3];
+function firstMut(a: Mut<i32[]>): Mut<i32[]> {
+  return a;
+}
+const m = firstMut(arr);
+console.log(arr.length);

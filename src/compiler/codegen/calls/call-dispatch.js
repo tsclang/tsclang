@@ -285,6 +285,12 @@
       const coercedArgs = args.map((a, i) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
+        if (a.expr.kind === 'Ident') {
+          const _argQSym = this.lookup(a.expr.name);
+          if (_argQSym?._mutQuarantined) {
+            throw this.error(`cannot access '${a.expr.name}' while a mutable borrow is active`, a.expr);
+          }
+        }
         const paramType = param.typeAnn ? this.resolveType(param.typeAnn) : null;
         const paramEnumDef = paramType ? this.classes.get(paramType) : null;
         if (paramEnumDef?.isStringLiteralUnion && a.expr.kind === 'Literal' && a.expr.litType === 'string') {

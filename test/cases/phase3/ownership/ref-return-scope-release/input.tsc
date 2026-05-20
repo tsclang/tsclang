@@ -1,0 +1,13 @@
+// [R] Borrow released when Ref-return result goes out of scope
+class Box { x: i32; }
+function getRef(b: Ref<Box>): Ref<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+{
+  const r = getRef(box);
+  console.log(r.x);
+}
+box.x = 99;
+console.log(box.x);

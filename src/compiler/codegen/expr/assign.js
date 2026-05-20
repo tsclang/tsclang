@@ -30,13 +30,20 @@ export default {
         const classDef = this.classes.get(objSym.ctype);
         const field = classDef?.fields?.find(f => f.name === node.left.prop);
         if (field?.modifiers?.includes('readonly')) {
-          // We are inside the constructor if currentFuncName is 'new' (before mangling) and self.ctype matches
           const thisSym = this.lookup('this') ?? this.lookup('self');
           const inCtor = this.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
           if (!inCtor) {
             throw this.error(`cannot assign to readonly field "${node.left.prop}" outside the constructor`, node);
           }
         }
+      }
+      // Borrow check: cannot mutate field while an immutable borrow is active
+      if ((objSym?._refBorrowCount || 0) > 0) {
+        throw this.error(`cannot mutate '${node.left.object.name}' while a borrow is active`, node);
+      }
+      // Mut quarantine: cannot access field while a mutable borrow return is active
+      if (objSym?._mutQuarantined) {
+        throw this.error(`cannot access '${node.left.object.name}' while a mutable borrow is active`, node);
       }
     }
     // Check readonly tuple assignment: t[n] = ...

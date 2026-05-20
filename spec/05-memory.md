@@ -445,40 +445,87 @@ function bad3(arr: Mut<i32[]>): Mut<i32> {
 }
 ```
 
-**Правило 3: Возвращаемый `Ref<T>` и привязка к источнику**
+**Правило 3: Conservative Union — `Ref<T>` и `Mut<T>` return**
 
-**Один входной `Ref<T>`** — возвращаемый `Ref<T>` автоматически привязан к нему:
+Когда функция возвращает `Ref<T>` или `Mut<T>`, компилятор применяет **Conservative Union**: заимствуются **все** аргументы, переданные в `Ref<T>`/`Mut<T>` параметры. Результат привязан ко всем источникам одновременно.
+
+### `Ref<T>` return — immutable borrow
+
+Мутация источников блокируется. Чтение разрешено.
 
 ```typescript
-function first(a: Ref<string>, n: i32): Ref<string> {
-    return a   // ✅ результат привязан к a — компилятор знает источник точно
+function getRef(b: Ref<Box>): Ref<Box> {
+    return b
 }
 
-const s = "hello"
-const r = first(s, 42)
-console.log(r)  // ✅ валиден пока жив s
+let box = new Box()
+box.x = 42
+const r = getRef(box)    // box заимствован (immutable)
+// box.x = 99            // ❌ мутация заблокирована
+console.log(box.x)       // ✅ чтение разрешено
 ```
 
-**Несколько входных `Ref<T>`** — компилятор консервативно считает что результат привязан к **минимальному** lifetime из всех входных Ref. Результат валиден пока живы **все** источники:
+### `Mut<T>` return — total quarantine (эксклюзивный borrow)
+
+**Полная блокировка** источника: чтение, запись, методы, передача аргументом — всё запрещено пока `Mut` результат жив. Это как `&mut` в Rust — эксклюзивный доступ.
 
 ```typescript
-function getLonger(a: Ref<string>, b: Ref<string>): Ref<string> {
-    return a.length > b.length ? a : b
+function getMut(b: Mut<Box>): Mut<Box> {
+    return b
 }
 
-const s1 = "hello"
-const s2 = "world!"
-const longer = getLonger(s1, s2)
-// longer валиден пока живы и s1, и s2 — borrow checker проверяет оба
-console.log(longer)   // ✅
-
-// ❌ если s1 или s2 dropped раньше longer — ошибка компилятора
+let box = new Box()
+box.x = 42
+const m = getMut(box)    // box под тотальным карантином
+// box.x = 99            // ❌ мутация заблокирована
+// console.log(box.x)    // ❌ чтение заблокировано
+// console.log(box)       // ❌ любой доступ заблокирован
+m.x = 10                 // ✅ ok — через сам Mut
 ```
 
-Это **консервативно**: при нескольких Ref-параметрах компилятор может отклонить валидный код если не может доказать что конкретный источник переживёт результат. В таких случаях — использовать `clone()` или `Shared<T>`:
+**Несколько `Mut<T>` параметров** — все источники под карантином:
 
 ```typescript
-// если нужно чтобы результат пережил источники — clone
+function pickMut(a: Mut<Box>, b: Mut<Box>): Mut<Box> {
+    return a
+}
+
+let b1 = new Box()
+let b2 = new Box()
+const m = pickMut(b1, b2)
+// b1.x = 1   // ❌ под карантином
+// b2.x = 2   // ❌ под карантином
+```
+
+**Освобождение** — при выходе из scope:
+
+```typescript
+{
+    const m = getMut(box)
+    m.x = 10
+}   // m умер → карантин снят
+box.x = 99   // ✅ ok
+```
+
+### `Shared<T>` / `Weak<T>` return — нет borrow tracking
+
+Возврат `Shared<T>` и `Weak<T>` **не создаёт borrow** — они управляют памятью через refcount. Источник остаётся полностью доступен:
+
+```typescript
+function share(n: Shared<Node>): Shared<Node> {
+    return n   // refcount++ — без borrow
+}
+
+let x: Shared<Node> = new Node()
+const s = share(x)
+x.value = 99   // ✅ ok — Shared не блокирует источник
+```
+
+### Почему консервативно
+
+При нескольких Ref/Mut-параметрах компилятор заимствует **все**, даже если функция возвращает только один. Это sound: компилятор не может знать какой именно параметр вернётся. Обход — `clone()` или `Shared<T>`:
+
+```typescript
 function getLongerOwned(a: Ref<string>, b: Ref<string>): string {
     return (a.length > b.length ? a : b).clone()
 }

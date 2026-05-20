@@ -1,0 +1,14 @@
+// [R] Quarantine released when Mut<T> return result goes out of scope
+class Box { x: i32; }
+function getMut(b: Mut<Box>): Mut<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+{
+  const m = getMut(box);
+  m.x = 10;
+  console.log(m.x);
+}
+box.x = 99;
+console.log(box.x);

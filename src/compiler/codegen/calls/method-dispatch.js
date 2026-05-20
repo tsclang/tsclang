@@ -19,6 +19,9 @@ export default {
     const prop  = callee.prop;
 
     const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (sym?._mutQuarantined) {
+      throw this.error(`cannot access '${baseObject.name}' while a mutable borrow is active`, baseObject);
+    }
     let et    = sym?.elemType ?? 'i32';
     let etC   = sym?.arrElemCType ?? 'int32_t';
     let arrObjC = objC;

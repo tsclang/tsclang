@@ -687,7 +687,7 @@
 | 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 164 | `[x]` |
-| 3  | Модель памяти | 169 | `[x]` |
+| 3  | Модель памяти | 172 | `[x]` |
 | 4  | Объектная модель | 58 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 41 | `[x]` |
@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1189 тестов ✓** (2026-05-20)
+**Итого: 1202 тестов ✓** (2026-05-20)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -988,3 +988,19 @@
 > - **s.matchAll(regex)**: dispatch в method-dispatch.js strMethods → `tsc_regex_match_all`; runtime макрос в regex.h — итерирует string, находит все совпадения regex, возвращает `Array_Array_string`; inferType: `matchAll` → `Array_Array_string`; typedef `Array_Array_string` через `_ensureArrayStruct`
 > - Новые тесты: `entries`, `entries-string`, `set-entries`, `string-matchall` (4 теста)
 > - Результат: **1189 тестов, 0 ошибок**
+
+> 2026-05-20: **D6 — Ref lifetime binding (Conservative Union)** (1189 → 1194):
+> - Реализован `_trackBorrowForRefReturn()` в codegen.js — при `const r = fn(a, b)` с `Ref<T>` return, заимствуются все `Ref`/`Mut` аргументы
+> - Добавлена проверка borrow в assign.js — мутация поля (`obj.x = val`) блокируется при активном borrow на объекте
+> - 5 новых тестов: `ref-return-single` (R), `ref-return-scope-release` (R), `ref-return-multi-source` (R), `ref-return-blocks-mutation` (E), `ref-return-multi-blocks` (E)
+> - Обновлён SPEC `05-memory.md` правило 3 — Conservative Union с примерами
+> - Результат: **1194 теста, 0 ошибок**
+
+> 2026-05-20: **D6+ — Conservative Union для Mut<T>, Shared<T>, Weak<T>** (1194 → 1202):
+> - **Mut<T> return: total quarantine** — `_trackMutQuarantine()` + `_scopeMutQuarantineStack` для scope-based cleanup; блокирует чтение, запись, методы, передачу аргументом
+> - **Shared<T>/Weak<T> return**: нет borrow tracking — они управляют памятью через refcount
+> - **vardecl.js**: условие хука уточнено — проверяет `returnType` функции вместо `ctype.endsWith(' *')`; исправлен false match `Array_T *` в inferred Array branch
+> - **assign.js, method-dispatch.js, call-dispatch.js, expr/dispatch.js**: проверка `_mutQuarantined` на всех точках доступа
+> - 8 новых тестов: `mut-return-single` (R), `mut-return-blocks-mutation` (E), `mut-return-blocks-read` (E), `mut-return-blocks-method` (E), `mut-return-multi-blocks` (E), `mut-return-scope-release` (R), `shared-return-no-borrow` (R), `weak-return-no-borrow` (R)
+> - Обновлён SPEC `05-memory.md` правило 3 — Ref (immutable borrow) vs Mut (total quarantine) vs Shared/Weak (no tracking)
+> - Результат: **1202 теста, 0 ошибок**

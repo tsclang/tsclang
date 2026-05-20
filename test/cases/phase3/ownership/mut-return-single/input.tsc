@@ -1,0 +1,10 @@
+// [R] Mut<T> return from single parameter — total quarantine tracked
+class Box { x: i32; }
+function getMut(b: Mut<Box>): Mut<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+const m = getMut(box);
+m.x = 10;
+console.log(m.x);

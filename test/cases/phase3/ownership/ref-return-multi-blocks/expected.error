@@ -1,0 +1,1 @@
+error: cannot mutate 'b2' while a borrow is active

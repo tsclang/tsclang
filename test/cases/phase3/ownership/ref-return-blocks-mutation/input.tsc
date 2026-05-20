@@ -1,0 +1,9 @@
+// [E] Mutation blocked while Ref-return result is alive
+class Box { x: i32; }
+function getRef(b: Ref<Box>): Ref<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+const r = getRef(box);
+box.x = 99;

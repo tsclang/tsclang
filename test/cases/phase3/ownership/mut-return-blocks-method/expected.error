@@ -1,0 +1,1 @@
+error: cannot access 'arr' while a mutable borrow is active

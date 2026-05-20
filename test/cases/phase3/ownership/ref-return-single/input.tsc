@@ -1,0 +1,9 @@
+// [R] Ref return from single parameter — borrow tracked
+class Box { x: i32; }
+function getRef(b: Ref<Box>): Ref<Box> {
+  return b;
+}
+let box = new Box();
+box.x = 42;
+const r = getRef(box);
+console.log(r.x);

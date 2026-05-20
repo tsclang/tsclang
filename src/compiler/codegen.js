@@ -81,6 +81,7 @@ class Context {
     // Symbol table: name → { ctype, varKind }
     this.scopes = [new Map()];
     this._scopeBorrowStack = [[]];
+    this._scopeMutQuarantineStack = [[]];
     // Known classes: name → { fields, methods }
     this.classes = new Map();
     // Known interfaces
@@ -179,7 +180,11 @@ class Context {
   // ----------------------------------------------------------------
   // Scope helpers
   // ----------------------------------------------------------------
-  pushScope() { this.scopes.push(new Map()); this._scopeBorrowStack.push([]); }
+  pushScope() {
+    this.scopes.push(new Map());
+    this._scopeBorrowStack.push([]);
+    this._scopeMutQuarantineStack.push([]);
+  }
   popScope()  {
     this.scopes.pop();
     const borrows = this._scopeBorrowStack.pop();
@@ -187,12 +192,49 @@ class Context {
       sym._refBorrowCount = (sym._refBorrowCount || 0) - 1;
       if (sym._refBorrowCount <= 0) sym._refBorrowCount = 0;
     }
+    const mutQ = this._scopeMutQuarantineStack.pop();
+    for (const sym of mutQ) {
+      delete sym._mutQuarantined;
+    }
   }
   _trackRefBorrow(sym) {
     if (!sym) return;
     sym._refBorrowCount = (sym._refBorrowCount || 0) + 1;
     const current = this._scopeBorrowStack[this._scopeBorrowStack.length - 1];
     if (current) current.push(sym);
+  }
+  _trackMutQuarantine(sym) {
+    if (!sym) return;
+    sym._mutQuarantined = true;
+    const current = this._scopeMutQuarantineStack[this._scopeMutQuarantineStack.length - 1];
+    if (current) current.push(sym);
+  }
+  _trackBorrowForRefReturn(callNode, resultName, mode) {
+    if (!callNode?.args?.length) return;
+    const callee = callNode.callee;
+    if (!callee || callee.kind !== 'Ident') return;
+    const fnSym = this.lookup(callee.name);
+    const params = fnSym?.params;
+    if (!params) return;
+    for (let i = 0; i < params.length && i < callNode.args.length; i++) {
+      const param = params[i];
+      const isRefMut = param.typeAnn?.kind === 'TypeRef' &&
+        (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut');
+      if (!isRefMut) continue;
+      const innerName = param.typeAnn.typeArgs?.[0]?.name;
+      if (innerName && this.interfaces.has(innerName)) continue;
+      const argExpr = callNode.args[i].expr;
+      if (argExpr?.kind !== 'Ident') continue;
+      const argSym = this.lookup(argExpr.name);
+      if (!argSym) continue;
+      if (mode === 'Mut') {
+        this._trackMutQuarantine(argSym);
+      } else {
+        if ((argSym._refBorrowCount || 0) === 0) {
+          this._trackRefBorrow(argSym);
+        }
+      }
+    }
   }
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
   _isEmbedded()          { return EMBEDDED_TARGETS.has(this._targetName); }
