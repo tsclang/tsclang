@@ -369,6 +369,12 @@
             const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
             if (argSym2 && a.expr.kind === 'Ident') {
               if (param.typeAnn.name === 'Mut') {
+                if (argSym2.isShared) {
+                  throw this.error(
+                    `TypeError: Cannot create mutable borrow of Shared<T> '${a.expr.name}' — Shared does not give exclusive access`,
+                    a.expr
+                  );
+                }
                 // Cannot mutably borrow while an immutable borrow is active
                 if ((argSym2._refBorrowCount || 0) > 0) {
                   throw this.error(

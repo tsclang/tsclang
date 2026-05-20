@@ -11,7 +11,9 @@ Result_void_MyError risky(void) {
 
 Result_void_MyError wrapper(void) {
     Result_void_MyError _res_0 = risky();
-    if (!_res_0.ok) { return (Result_void_MyError){.ok = false, .error = _res_0.error}; }
+    if (!_res_0.ok) {
+        return (Result_void_MyError){.ok = false, .error = _res_0.error};
+    }
     return (Result_void_MyError){.ok = true};
 }
 

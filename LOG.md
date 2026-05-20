@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1254 тестов ✓** (2026-05-20)
+**Итого: 1256 тестов ✓** (2026-05-20)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1075,6 +1075,13 @@
 > - Spec обновлён: добавлена строка "break/continue в цикле" в таблицу cleanup-правил + пример C-output
 > - Результат: **1254 теста, 0 ошибок**
 
+> 2026-05-20: **Ownership audit round 2 — H1 RangeIndex infer, M3 auto-propagate cleanup, M2 Shared→Mut, L2 inline return cleanup** (1254 → 1256):
+> - **H1 fixed**: добавлен `case 'RangeIndex'` в `types/infer.js` — `arr[1..3]` теперь выводит `Array_i32` вместо `int32_t`. Новый тест: `range-slice-array` [R]
+> - **M3 fixed**: auto-propagate bare throws call теперь вызывает `_emitFuncCleanup()` + `goto cleanup` (для `_usesGotoCleanup`) вместо прямого `return`. Обновлён `inferred-throws` expected.c
+> - **M2 fixed**: добавлен guard `argSym2.isShared` в `call-dispatch.js` при `Mut<T>` параметре — `Shared<T>` не даёт exclusive access. Новый тест: `err-shared-to-mut` [E]
+> - **L2 fixed**: inline `if (cond) return;` теперь проверяет `_hasPendingCleanups()` и эмитит cleanup перед `return` при наличии owned vars
+> - Результат: **1256 тестов, 0 ошибок**
+
 ---
 
 ## Известные баги (на 2026-05-20)
@@ -1083,7 +1090,6 @@
 
 | # | Баг | Суть | Файл |
 |---|-----|------|------|
-| H1 | RangeIndex `inferType` возвращает `int32_t` | `const s = arr[1..3]` генерирует невалидный C. Нет `case 'RangeIndex'` в `types/infer.js`. Работает только с explicit type annotation (`Ref<string>`) | `codegen/types/infer.js` |
 | H2 | Labeled `break outer` не эмитит cleanups внешнего цикла | `_loopBodyCleanups` — плоская переменная, не стек. Outer cleanups в `savedLC` на call stack — недоступны. Нужен `_loopCleanupStack[]` | `codegen/stmt/control-flow.js` |
 
 ### Medium
@@ -1091,8 +1097,6 @@
 | # | Баг | Суть | Файл |
 |---|-----|------|------|
 | M1 | `const name = user.name` — ARC copy вместо borrow | Spec: `Ref<string>` (pointer). Реализация: `retain + copy + release`. Деструктуризация работает правильно | `codegen/stmt/vardecl.js` |
-| M2 | `Shared<T>` → `Mut<T>` не проверяется | Нет guard в call-dispatch. `isShared` используется только для ARC, не для borrow compatibility | `codegen/calls/call-dispatch.js` |
-| M3 | Auto-propagate bare throws call в цикле — пропускает cleanup | `control-flow.js:31` делает `return` напрямую, без `_emitFuncCleanup` | `codegen/stmt/control-flow.js` |
 | M4 | `ForOf` не поддерживает labeled break/continue | `Labeled` case обрабатывает только `While`/`For` | `codegen/stmt/control-flow.js` |
 
 ### Low
@@ -1100,4 +1104,3 @@
 | # | Баг | Суть | Файл |
 |---|-----|------|------|
 | L1 | NULL-init для inferred-type vars в throws-функциях | Только typed vars получают pre-declaration. Корректность сохранена | `codegen/top-level/func.js` |
-| L2 | Inline `if (cond) return;` без cleanup check | Строка 273 — bare `return` | `codegen/stmt/control-flow.js` |

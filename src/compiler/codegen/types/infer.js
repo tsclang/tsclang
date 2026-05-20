@@ -273,6 +273,12 @@ export default {
         return this.inferType(node.expr);
       }
       case 'Typeof': return 'String';
+      case 'RangeIndex': {
+        const objType = this.inferType(node.object);
+        if (objType === 'String') return 'String';
+        if (objType?.startsWith('Array_')) return objType;
+        return 'int32_t';
+      }
       default: return 'int32_t';
     }
   },

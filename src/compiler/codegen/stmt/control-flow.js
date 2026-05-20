@@ -28,7 +28,16 @@
             const resName = `_res_${this.tempCount++}`;
             const callC = this.exprToC(expr, lines, depth);
             p(`${sym._resultType} ${resName} = ${callC};`);
-            p(`if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+            p(`if (!${resName}.ok) {`);
+            if (this._usesGotoCleanup) {
+              this._emitFuncCleanup(lines, I + '    ');
+              p(`    _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+              p(`    goto cleanup;`);
+            } else {
+              this._emitFuncCleanup(lines, I + '    ');
+              p(`    return (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+            }
+            p(`}`);
             this._flushPostStmtCleanups(lines);
             break;
           }
@@ -270,7 +279,15 @@
             p(`if (${testC}) ${_bLabel ? `goto ${_bLabel}_break` : 'break'};`);
           }
         } else if (!alt && node.consequent.kind === 'Return' && !node.consequent.value) {
-          p(`if (${testC}) return;`);
+          if (this._hasPendingCleanups()) {
+            const innerI = ' '.repeat(this.indent * (depth + 1));
+            p(`if (${testC}) {`);
+            this._emitFuncCleanup(lines, innerI);
+            lines.push(`${innerI}return;`);
+            p(`}`);
+          } else {
+            p(`if (${testC}) return;`);
+          }
         } else {
           p(`if (${testC}) {`);
           const _snap = this._snapshotCleanups();
