@@ -1451,8 +1451,14 @@ export default {
             }
           }
         } else {
-          // No initializer: declare without init
-          p(`${this.varDecl(qualifier, ctype, name)};`);
+          // No initializer: zero-init owned types for safe cleanup
+          if (ctype === 'String') {
+            p(`${this.varDecl(qualifier, ctype, name)} = NULL;`);
+          } else if (ctype?.startsWith('Array_')) {
+            p(`${this.varDecl(qualifier, ctype, name)} = {0};`);
+          } else {
+            p(`${this.varDecl(qualifier, ctype, name)};`);
+          }
         }
         // Store compile-time value for const variables with literal init (used for const-cast overflow checking)
         let constValue = undefined;
