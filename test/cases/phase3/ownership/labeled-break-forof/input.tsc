@@ -1,0 +1,12 @@
+let arr: Array<i32> = [1, 2, 3, 4, 5];
+let sum: i32 = 0;
+outer: for (let i: i32 = 0; i < 3; i++) {
+    let s: string = "row";
+    for (const v of arr) {
+        let t: string = "item";
+        if (v === 3) break outer;
+        sum = sum + v;
+    }
+    sum = sum + i;
+}
+console.log(sum);

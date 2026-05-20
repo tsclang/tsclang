@@ -101,8 +101,9 @@ class Context {
     this._throwsOwnedVars = [];
     this._gotoCleanupPreDecls = null;
 
-    // Loop depth: loop-local owned vars use _loopBodyCleanups
+    // Loop depth: loop-local owned vars use _loopCleanupStack
     this._loopDepth = 0;
+    this._loopCleanupStack = [];
     this._loopBodyCleanups = null;
 
     // Types predefined in runtime.h — prevent codegen from re-emitting them
@@ -419,6 +420,28 @@ class Context {
       }
     }
     return false;
+  }
+
+  _pushLoopCleanups() {
+    const arr = [];
+    this._loopCleanupStack.push(arr);
+    this._loopBodyCleanups = arr;
+  }
+
+  _popLoopCleanups() {
+    this._loopCleanupStack.pop();
+    this._loopBodyCleanups = this._loopCleanupStack.length > 0
+      ? this._loopCleanupStack[this._loopCleanupStack.length - 1]
+      : null;
+  }
+
+  _emitAllLoopCleanups(lines, indent) {
+    for (let l = this._loopCleanupStack.length - 1; l >= 0; l--) {
+      const arr = this._loopCleanupStack[l];
+      for (let i = arr.length - 1; i >= 0; i--) {
+        lines.push(`${indent}${arr[i]};`);
+      }
+    }
   }
 
   _emitLoopBodyCleanups(lines, indent) {

@@ -1,0 +1,10 @@
+let total: i32 = 0;
+outer: for (let i: i32 = 0; i < 3; i++) {
+    let s: string = "hello";
+    for (let j: i32 = 0; j < 3; j++) {
+        let t: string = "world";
+        if (i === 1 && j === 1) break outer;
+    }
+    total = total + i;
+}
+console.log(total);
