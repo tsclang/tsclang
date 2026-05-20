@@ -157,6 +157,7 @@ class Context {
     this._narrowedVars = new Set();
     this._narrowedUnknownVars = new Map();
     this._emittedUnknownStruct = false;
+    this._inDeclare = false;
 
     // Collected warnings (printed after compilation, don't abort)
     this._warnings = [];

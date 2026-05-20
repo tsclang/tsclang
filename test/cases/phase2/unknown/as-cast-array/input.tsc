@@ -1,0 +1,6 @@
+let x: unknown = [10, 20, 30];
+if (typeof x === "array") {
+    const arr = x as Array<i32>;
+    console.log(arr[0]);
+    console.log(arr[1]);
+}

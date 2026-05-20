@@ -1,1 +1,3 @@
-let x: any | null = null;
+unsafe {
+    let x: any | null = null;
+}

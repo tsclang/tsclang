@@ -1,0 +1,3 @@
+let x: unknown = 42;
+const val = x as i32;
+console.log(val);

@@ -218,8 +218,16 @@ export default {
                              f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
           return primMap2[etIdent] ?? etIdent;
         }
+        // Pointer to Array_T * → element type
+        const _ptrArr = objType?.match(/^(?:const )?Array_(\w+) \*$/);
+        if (_ptrArr) {
+          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+                            u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+                            f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
+          return primMap[_ptrArr[1]] ?? _ptrArr[1];
+        }
         // Array_T → T (array element type)
-        if (objType.startsWith('Array_')) {
+        if (objType?.startsWith('Array_')) {
           const etIdent = objType.slice(6);
           const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
                             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
@@ -230,7 +238,14 @@ export default {
         if (objType.endsWith(' *')) return objType.slice(0, -2);
         return 'int32_t';
       }
-      case 'Cast':   return this.resolveType(node.castType);
+      case 'Cast': {
+        const ct = this.resolveType(node.castType);
+        const srcType = this.inferType(node.expr);
+        if (srcType === 'tsc_unknown' && ct !== 'tsc_unknown') {
+          return ct;
+        }
+        return ct;
+      }
       case 'Ternary': return this.inferType(node.yes);
       case 'Unary': {
         if (node.op === '!') return 'bool';

@@ -152,7 +152,7 @@ export default {
   },
 
   _tsNameToTypeId(tsName) {
-    const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'bool': 5, 'number': 4, 'string': 6 };
+    const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'bool': 5, 'number': 4, 'string': 6, 'array': 7, 'object': 8 };
     return m[tsName] ?? 0;
   },
 
@@ -163,12 +163,66 @@ export default {
 
   _unknownPackerFor(ctype) {
     const m = { 'int8_t': 'tsc_unknown_from_i32', 'int16_t': 'tsc_unknown_from_i32', 'int32_t': 'tsc_unknown_from_i32', 'int64_t': 'tsc_unknown_from_i64', 'uint8_t': 'tsc_unknown_from_i32', 'uint16_t': 'tsc_unknown_from_i32', 'uint32_t': 'tsc_unknown_from_i32', 'uint64_t': 'tsc_unknown_from_i64', 'float': 'tsc_unknown_from_f32', 'double': 'tsc_unknown_from_f64', 'bool': 'tsc_unknown_from_bool', 'String': 'tsc_unknown_from_string' };
-    return m[ctype] ?? 'tsc_unknown_from_i32';
+    if (m[ctype]) return m[ctype];
+    if (ctype.startsWith('Array_')) {
+      if (this._isEmbedded()) {
+        throw this.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
+      }
+      const elemIdent = ctype.slice(6);
+      const et = this._arrIdentToCType(elemIdent);
+      this._ensureUnknownPackerArray(elemIdent, ctype, et);
+      return `tsc_unknown_from_${ctype}`;
+    }
+    if (this._isEmbedded()) {
+      throw this.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
+    }
+    if (this.classes.has(ctype)) {
+      this._ensureUnknownPackerClass(ctype);
+      return `tsc_unknown_from_${ctype}`;
+    }
+    return 'tsc_unknown_from_i32';
   },
 
   _unknownGetterFor(ctype) {
     const m = { 'int8_t': 'tsc_unknown_get_i32', 'int16_t': 'tsc_unknown_get_i32', 'int32_t': 'tsc_unknown_get_i32', 'int64_t': 'tsc_unknown_get_i64', 'uint8_t': 'tsc_unknown_get_i32', 'uint16_t': 'tsc_unknown_get_i32', 'uint32_t': 'tsc_unknown_get_i32', 'uint64_t': 'tsc_unknown_get_i64', 'float': 'tsc_unknown_get_f32', 'double': 'tsc_unknown_get_f64', 'bool': 'tsc_unknown_get_bool', 'String': 'tsc_unknown_get_string' };
-    return m[ctype] ?? 'tsc_unknown_get_i32';
+    if (m[ctype]) return m[ctype];
+    if (ctype.startsWith('Array_')) {
+      const elemIdent = ctype.slice(6);
+      const et = this._arrIdentToCType(elemIdent);
+      this._ensureUnknownPackerArray(elemIdent, ctype, et);
+      return `tsc_unknown_get_${ctype}`;
+    }
+    if (this.classes.has(ctype)) {
+      this._ensureUnknownPackerClass(ctype);
+      return `tsc_unknown_get_${ctype}`;
+    }
+    return 'tsc_unknown_get_i32';
+  },
+
+  _ensureUnknownPackerArray(elemIdent, arrName, et) {
+    const key = `unknown_array_${elemIdent}`;
+    if (this._emittedHelpers.has(key)) return;
+    this._emittedHelpers.add(key);
+    this._ensureUnknownStruct();
+    this._ensureArrayStruct(arrName, et);
+    this._ensureArrayFreeMacro(elemIdent, arrName, et);
+    this.addTop(`static void _tsc_unknown_drop_${arrName}(void *buf) { ${arrName} *ptr; memcpy(&ptr, buf, sizeof(ptr)); tsc_array_free_${elemIdent}(ptr); free(ptr); }`);
+    this.addTop(`static void _tsc_unknown_clone_${arrName}(const void *src, void *dst) { ${arrName} *sp; memcpy(&sp, src, sizeof(${arrName}*)); ${arrName} *dp = (${arrName}*)malloc(sizeof(${arrName})); *dp = *sp; dp->data = (${et}*)malloc(sizeof(${et}) * dp->capacity); memcpy(dp->data, sp->data, sizeof(${et}) * sp->length); memcpy(dst, &dp, sizeof(dp)); }`);
+    this.addTop(`static const tsc_unknown_vtable _tsc_vt_${arrName} = {_tsc_unknown_drop_${arrName}, _tsc_unknown_clone_${arrName}};`);
+    this.addTop(`static inline tsc_unknown tsc_unknown_from_${arrName}(${arrName} arr) { ${arrName} *heap = (${arrName}*)malloc(sizeof(${arrName})); *heap = arr; if (arr.data && arr.length > 0) { size_t _cap = arr.capacity > 0 ? arr.capacity : arr.length; heap->data = (${et}*)malloc(sizeof(${et}) * _cap); memcpy(heap->data, arr.data, sizeof(${et}) * arr.length); heap->capacity = _cap; } else { heap->data = NULL; heap->length = 0; heap->capacity = 0; } tsc_unknown u = {.type_id = 7, .vtable = &_tsc_vt_${arrName}}; memcpy(u.buffer, &heap, sizeof(heap)); return u; }`);
+    this.addTop(`static inline ${arrName}* tsc_unknown_get_${arrName}(const tsc_unknown *self) { ${arrName} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
+  },
+
+  _ensureUnknownPackerClass(className) {
+    const key = `unknown_class_${className}`;
+    if (this._emittedHelpers.has(key)) return;
+    this._emittedHelpers.add(key);
+    this._ensureUnknownStruct();
+    this.addTop(`static void _tsc_unknown_drop_${className}(void *buf) { ${className} *ptr; memcpy(&ptr, buf, sizeof(ptr)); free(ptr); }`);
+    this.addTop(`static void _tsc_unknown_clone_${className}(const void *src, void *dst) { ${className} *sp; memcpy(&sp, src, sizeof(${className}*)); ${className} *dp = (${className}*)malloc(sizeof(${className})); *dp = *sp; memcpy(dst, &dp, sizeof(dp)); }`);
+    this.addTop(`static const tsc_unknown_vtable _tsc_vt_${className} = {_tsc_unknown_drop_${className}, _tsc_unknown_clone_${className}};`);
+    this.addTop(`static inline tsc_unknown tsc_unknown_from_${className}(${className} obj) { ${className} *heap = (${className}*)malloc(sizeof(${className})); *heap = obj; tsc_unknown u = {.type_id = 8, .vtable = &_tsc_vt_${className}}; memcpy(u.buffer, &heap, sizeof(heap)); return u; }`);
+    this.addTop(`static inline ${className}* tsc_unknown_get_${className}(const tsc_unknown *self) { ${className} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
   },
 
   _ensureGroupByMapStruct(etIdent, etCType) {

@@ -1,0 +1,10 @@
+class Point {
+    x: f64;
+    y: f64;
+}
+function test(): void {
+    let p = new Point();
+    p.x = 1.0;
+    let x: unknown = p;
+}
+test();

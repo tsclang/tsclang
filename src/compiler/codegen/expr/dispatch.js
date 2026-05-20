@@ -25,6 +25,9 @@ export default {
           const sym2 = this.lookup(node.name);
           if (sym2?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.name)) {
             const narrowedCtype = this._narrowedUnknownVars.get(node.name);
+            if (narrowedCtype === '__array__' || narrowedCtype === '__object__') {
+              return node.name;
+            }
             const getter = this._unknownGetterFor(narrowedCtype);
             return `${getter}(&${node.name})`;
           }
@@ -114,6 +117,11 @@ export default {
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
         if (sym?._mutQuarantined) {
           throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+        }
+        if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.object.name)) {
+          const _nc = this._narrowedUnknownVars.get(node.object.name);
+          if (_nc === '__array__') throw this.error(`Cannot access '.${node.prop}' on '${node.object.name}' after typeof "array"; use '${node.object.name} as Array<T>' first`, node);
+          if (_nc === '__object__') throw this.error(`Cannot access '.${node.prop}' on '${node.object.name}' after typeof "object"; use '${node.object.name} as ClassName' first`, node);
         }
         // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
         if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
@@ -234,6 +242,11 @@ export default {
           const _idxQSym = this.lookup(node.object.name);
           if (_idxQSym?._mutQuarantined) {
             throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+          }
+          if (_idxQSym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.object.name)) {
+            const _nc = this._narrowedUnknownVars.get(node.object.name);
+            if (_nc === '__array__') throw this.error(`Cannot index '${node.object.name}' after typeof "array"; use '${node.object.name} as Array<T>' first`, node);
+            if (_nc === '__object__') throw this.error(`Cannot index '${node.object.name}' after typeof "object"; use '${node.object.name} as ClassName' first`, node);
           }
         }
         // req.params["key"] → tsc_request_param(req, STR_LIT("key"))
@@ -475,6 +488,19 @@ export default {
         const exprC = this.exprToC(node.expr, lines, depth);
         const ct = this.resolveType(node.castType);
         const srcType = this.inferType(node.expr);
+        if (ct === 'tsc_unknown' && srcType !== 'tsc_unknown') {
+          this._ensureUnknownStruct();
+          const packer = this._unknownPackerFor(srcType);
+          return `${packer}(${exprC})`;
+        }
+        if ((srcType === 'tsc_unknown' || srcType === '__array__' || srcType === '__object__') && ct !== 'tsc_unknown') {
+          this._ensureUnknownStruct();
+          const getter = this._unknownGetterFor(ct);
+          if (ct.startsWith('Array_') || this.classes.has(ct)) {
+            return `*${getter}(&${exprC})`;
+          }
+          return `${getter}(&${exprC})`;
+        }
         if (srcType === ct) return exprC;
         const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary' || node.expr.kind === 'Logical';
         return needsParens ? `(${ct})(${exprC})` : `(${ct})${exprC}`;

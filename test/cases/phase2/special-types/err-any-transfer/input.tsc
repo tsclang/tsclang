@@ -1,4 +1,4 @@
-function foo(x: any): void {}
+declare function foo(x: any): void;
 function bar(): void {
     const val: i32 = 42;
     foo(val);

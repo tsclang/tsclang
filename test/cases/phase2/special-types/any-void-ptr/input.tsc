@@ -1,3 +1,1 @@
-function passthrough(x: any): any {
-    return x;
-}
+declare function passthrough(x: any): any;

@@ -12,6 +12,9 @@ export default {
       if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';
       if (name in PRIMITIVE_MAP) {
         if (name === 'unknown') this._ensureUnknownStruct();
+        if (name === 'any' && !this._inUnsafe && !this._inDeclare) {
+          throw this.error(`"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values`, typeNode);
+        }
         return PRIMITIVE_MAP[name];
       }
 

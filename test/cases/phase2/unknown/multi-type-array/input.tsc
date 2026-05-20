@@ -1,0 +1,8 @@
+let x: unknown = 42;
+if (typeof x === "array") {
+    console.log("not array");
+} else {
+    if (typeof x === "i32") {
+        console.log(x + 1);
+    }
+}

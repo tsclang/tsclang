@@ -1,0 +1,13 @@
+class Point {
+    x: f64;
+    y: f64;
+}
+let p = new Point();
+p.x = 10.0;
+p.y = 20.0;
+let x: unknown = p;
+if (typeof x === "object") {
+    const obj = x as Point;
+    console.log(obj.x);
+    console.log(obj.y);
+}

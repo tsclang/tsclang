@@ -200,7 +200,13 @@
               const sym = this.lookup(typeofSide.expr.name);
               if (sym?.ctype === 'tsc_unknown') {
                 unknownNarrowVar = typeofSide.expr.name;
-                unknownNarrowCtype = this._tsNameToCType(nameSide.value);
+                if (nameSide.value === 'array') {
+                  unknownNarrowCtype = '__array__';
+                } else if (nameSide.value === 'object') {
+                  unknownNarrowCtype = '__object__';
+                } else {
+                  unknownNarrowCtype = this._tsNameToCType(nameSide.value);
+                }
                 unknownNarrowInElse = (node.test.op === '!==');
               }
             }

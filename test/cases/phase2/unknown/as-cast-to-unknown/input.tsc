@@ -1,0 +1,2 @@
+const u = 42 as unknown;
+console.log(typeof u === "i32");

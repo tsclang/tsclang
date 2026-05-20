@@ -1,0 +1,8 @@
+class Point {
+    x: f64;
+    y: f64;
+}
+let p = new Point();
+p.x = 1.5;
+p.y = 2.5;
+let x: unknown = p;

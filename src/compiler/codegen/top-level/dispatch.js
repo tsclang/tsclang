@@ -338,6 +338,8 @@ export default {
   },
 
   visitDeclareConst(node) {
+    const prevDeclare = this._inDeclare;
+    this._inDeclare = true;
     const { name, typeAnn, init } = node;
     const ct = this.resolveType(typeAnn);
     const initC = init ? this.exprToC(init, [], 0) : '0';
@@ -345,9 +347,12 @@ export default {
     this.topLevel.push('');
     // Register in scope so later references work
     this.define(name, { ctype: ct, varKind: 'const' });
+    this._inDeclare = prevDeclare;
   },
 
   visitDeclareFunction(node) {
+    const prevDeclare = this._inDeclare;
+    this._inDeclare = true;
     const { name, params, returnType } = node;
     const retC = returnType ? this.resolveType(returnType) : 'void';
     const paramParts = (params ?? []).map(p => {
@@ -362,5 +367,6 @@ export default {
     this.topLevel.push('');
     // Register in scope
     this.define(name, { ctype: retC, varKind: 'const', funcName: name, params: node.params ?? [] });
+    this._inDeclare = prevDeclare;
   },
 };
