@@ -645,7 +645,7 @@ typedef struct {
 } tsc_unknown;
 ```
 
-- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64, 5=bool, 6=string)
+- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64, 5=bool, 6=string, 7=array, 8=object)
 - `vtable` — указатель на drop/clone виртуальные функции
 - `buffer` — inline хранилище на 3 машинных слова (достаточно для примитивов и String)
 
@@ -702,6 +702,8 @@ if (typeof x === "string") {
 | `"f64"` | 4 | |
 | `"bool"` | 5 | |
 | `"string"` | 6 | desktop: heap pointer + retain; embedded: inline |
+| `"array"` | 7 | heap pointer; narrow → `__array__` marker, access via `as Array<T>` |
+| `"object"` | 8 | heap pointer; narrow → `__object__` marker, access via `as ClassName` |
 
 #### Auto-wrap
 
@@ -731,10 +733,11 @@ Safe для rodata строк (литералы): `tsc_string_retain` на rodat
 
 #### Ограничения (текущая реализация)
 
-- Array и классы в `unknown` — не поддерживаются (отложено до Phase 3)
-- `unknown[]` — не поддерживается (мини-задача после Phase 3)
-- else-if chains не поддерживают narrowing — используйте отдельные `if`
-- `any` warning вне extern/unsafe — отложен до Phase 3
+- else-if chains не поддерживают unknown narrowing — используйте отдельные `if`
+- `typeof x === "number"` → type_id 4 (f64); i32/f32/i64 не матчятся — используйте конкретный тип
+- `any` вне `declare`/`unsafe` → compile-time error (Phase 3 lock-down)
+- Embedded: unknown поддерживает только `{i32,i64,f32,f64,bool,String}` — Array/Class → error
+- `unknown[]` элементы: auto-pack при push/literal, per-element drop при free
 function connect(): void throws IOError { ... }
 // → typedef struct { bool ok; IOError error; } _Result_void_IOError;
 

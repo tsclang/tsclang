@@ -1032,3 +1032,15 @@
 > - **Skip packer for unknown init**: `let x: unknown = funcReturningUnknown()` → direct assign без double-wrap
 > - 8 новых тестов в `test/cases/phase2/unknown/`: from-string, narrow-string, narrow-string-concat, narrow-string-method, string-else-branch, string-drop-scope, string-param-return, multi-type-check
 > - Результат: **1222 теста, 0 ошибок**
+
+> 2026-05-20: **M26 Phase 3 — any lock-down, Arrays/Classes в unknown, unknown[]** (1222 → 1240):
+> - **Задача 1: any lock-down** — `any` вне `declare`/`unsafe` → compile-time error; декораторы exempt (AST-level processing)
+> - **Задача 2: Embedded whitelist** — compile-time check в `_unknownPackerFor`: `{i32,i64,f32,f64,bool,String}` только; остальное → error на embedded
+> - **Задача 3: as cast из/в unknown** — packer для unknown→unknown, getter для unknown→T; auto-pack/unpack в Cast dispatch
+> - **Задача 4: Arrays в unknown** — type_id=7, typeof "array", `__array__` marker (не сужает C-тип); vtable drop/clone с deep copy данных; borrow freeze при narrowing
+> - **Задача 5: Classes в unknown** — type_id=8, typeof "object", `__object__` marker; heap-copy packer (malloc + copy); vtable drop: `free(ptr)`; clone: malloc + copy
+> - **Задача 6: `unknown[]`** — `Array_tsc_unknown` специализация; special free macro с per-element `tsc_unknown_drop`; push macro + auto-pack; array literal auto-pack; for-of + typeof narrowing
+> - **as-cast fix**: getter для Array/Class возвращает pointer, `as` cast разыменовывает (`*getter(&x)`) для получения value copy; `inferType` возвращает plain type (не pointer)
+> - **Member/Index block**: `obj.field` и `arr[i]` после typeof "array"/"object" → compile-time error; нужен `as Array<T>`/`as ClassName` first
+> - 18 новых тестов: any lock-down (3), embedded whitelist (1), as-cast (2), array (5), class (4), unknown[] (3)
+> - Результат: **1240 тестов, 0 ошибок**
