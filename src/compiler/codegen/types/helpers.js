@@ -71,6 +71,10 @@ export default {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} *data; size_t length; size_t capacity; } ${arrName};`);
       this.addTop('');
+      if (et === 'tsc_unknown') {
+        this._ensureArrayFreeMacro('tsc_unknown', arrName, et);
+        this._ensureArrayPushMacro('tsc_unknown', arrName, et);
+      }
     }
   },
 
@@ -78,7 +82,19 @@ export default {
     const key = `free_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
-      this.addTop(`#define tsc_array_free_${elemIdent}(arr) do { ${arrName} *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      if (elemIdent === 'tsc_unknown') {
+        this.addTop(`#define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      } else {
+        this.addTop(`#define tsc_array_free_${elemIdent}(arr) do { ${arrName} *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      }
+    }
+  },
+
+  _ensureArrayPushMacro(elemIdent, arrName, et) {
+    const key = `push_${elemIdent}`;
+    if (!this._emittedHelpers.has(key)) {
+      this._emittedHelpers.add(key);
+      this.addTop(`#define tsc_array_push_${elemIdent}(arr, val) do { ${arrName} *_a_ = (arr); ${et} _v_ = (val); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (${et}*)realloc(_a_->data, _nc_ * sizeof(${et})); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)`);
     }
   },
 

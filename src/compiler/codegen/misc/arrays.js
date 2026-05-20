@@ -4,7 +4,6 @@ export default {
     const result = [];
     for (const e of node.elems) {
       if (e.spread) {
-        // Expand spread from known array
         const sym = e.expr?.kind === 'Ident' ? this.lookup(e.expr.name) : null;
         if (sym?.isArray && sym.arraySize >= 0) {
           const useData = sym.ctype?.startsWith('Array_');
@@ -15,7 +14,16 @@ export default {
           result.push(`/* ...${this.exprToC(e.expr, lines, depth)} */`);
         }
       } else {
-        result.push(this.exprToC(e.expr, lines, depth));
+        let c = this.exprToC(e.expr, lines, depth);
+        if (_elemType === 'tsc_unknown') {
+          const _argType = this.inferType(e.expr);
+          if (_argType !== 'tsc_unknown') {
+            this._ensureUnknownStruct();
+            const _packer = this._unknownPackerFor(_argType);
+            c = `${_packer}(${c})`;
+          }
+        }
+        result.push(c);
       }
     }
     return result;

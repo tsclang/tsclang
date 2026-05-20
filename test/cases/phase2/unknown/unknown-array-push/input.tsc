@@ -1,0 +1,10 @@
+// [R] unknown[] with push and for-of
+let arr: unknown[] = [];
+arr.push(42);
+arr.push("world");
+console.log(arr.length);
+for (const x of arr) {
+    if (typeof x === "i32") {
+        console.log(x as i32);
+    }
+}

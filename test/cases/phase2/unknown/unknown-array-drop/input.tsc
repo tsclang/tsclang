@@ -1,0 +1,7 @@
+// [R] unknown[] drop scope — elements dropped when function returns
+function test(): void {
+    let arr: unknown[] = [1, "hello"];
+    console.log(arr.length);
+}
+test();
+console.log("done");

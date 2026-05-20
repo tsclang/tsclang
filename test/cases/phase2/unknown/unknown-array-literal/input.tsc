@@ -1,0 +1,8 @@
+// [R] unknown[] literal with for-of and typeof narrowing
+let arr: unknown[] = [42, "hello", true];
+console.log(arr.length);
+for (const x of arr) {
+    if (typeof x === "string") {
+        console.log(x as string);
+    }
+}

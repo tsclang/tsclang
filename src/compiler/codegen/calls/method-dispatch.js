@@ -68,7 +68,15 @@ export default {
         case 'push': {
           if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
-          const elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
+          let elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
+          if (et === 'tsc_unknown' && args[0]) {
+            const _argType = this.inferType(args[0].expr);
+            if (_argType !== 'tsc_unknown') {
+              this._ensureUnknownStruct();
+              const _packer = this._unknownPackerFor(_argType);
+              elemC = `${_packer}(${elemC})`;
+            }
+          }
           if (args[0] && args[0].expr.kind === 'Ident') {
             const _pushCls = this.classes.get(et);
             const _pushIsArr = et.startsWith('Array_');

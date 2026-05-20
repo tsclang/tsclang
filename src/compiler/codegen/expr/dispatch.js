@@ -378,10 +378,18 @@ export default {
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
         const dataVar = `_arr_data_${this.tempCount++}`;
         const items = elems.map(e => {
-          const c = this.exprToC(e.expr, lines, depth);
+          let c = this.exprToC(e.expr, lines, depth);
           if (e.expr.kind === 'Ident') {
             const sym = this.lookup(e.expr.name);
             if (sym?.ctype === 'String *' && elemType === 'String') return `(*${c})`;
+          }
+          if (elemType === 'tsc_unknown') {
+            const _argType = this.inferType(e.expr);
+            if (_argType !== 'tsc_unknown') {
+              this._ensureUnknownStruct();
+              const _packer = this._unknownPackerFor(_argType);
+              c = `${_packer}(${c})`;
+            }
           }
           return c;
         }).join(', ');
