@@ -1,0 +1,4 @@
+let x: unknown = "hello";
+if (typeof x === "string") {
+    console.log(x.toUpperCase());
+}

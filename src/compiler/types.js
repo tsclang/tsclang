@@ -19,7 +19,8 @@ export const PRIMITIVE_MAP = {
   string: 'String',
   void:  'void',
   never: 'void',
-  any:   'void *',
+  any:     'void *',
+  unknown: 'tsc_unknown',
 };
 
 export function isPrimitive(name) { return name in PRIMITIVE_MAP; }

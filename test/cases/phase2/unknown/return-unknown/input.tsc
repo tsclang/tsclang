@@ -1,0 +1,3 @@
+function makeVal(): unknown {
+    return 42;
+}

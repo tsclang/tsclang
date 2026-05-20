@@ -1002,6 +1002,28 @@ export default {
           }
         }
 
+        // unknown type: pack value into tsc_unknown container
+        if (ctype === 'tsc_unknown' && init) {
+          this._ensureUnknownStruct();
+          const initCtype = this.inferType(init);
+          const initC = this.exprToC(init, lines, depth);
+          if (initCtype === 'tsc_unknown') {
+            p(`${qualifier}tsc_unknown ${name} = ${initC};`);
+          } else {
+            const packer = this._unknownPackerFor(initCtype);
+            p(`${qualifier}tsc_unknown ${name} = ${packer}(${initC});`);
+          }
+          this.define(name, { ctype: 'tsc_unknown', varKind });
+          this._registerCleanup(`tsc_unknown_drop(&${name})`);
+          return;
+        }
+        if (ctype === 'tsc_unknown' && !init) {
+          this._ensureUnknownStruct();
+          p(`${qualifier}tsc_unknown ${name} = {0};`);
+          this.define(name, { ctype: 'tsc_unknown', varKind });
+          return;
+        }
+
         // TypeFunc: single closure variable
         if (typeAnn?.kind === 'TypeFunc') {
           let initC;

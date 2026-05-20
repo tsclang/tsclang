@@ -1,0 +1,5 @@
+function inspect(val: unknown): void {
+    if (typeof val === "i32") {
+        console.log(val + 1);
+    }
+}

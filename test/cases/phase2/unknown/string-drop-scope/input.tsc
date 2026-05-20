@@ -1,0 +1,7 @@
+{
+    let x: unknown = "hello";
+    if (typeof x === "string") {
+        console.log(x);
+    }
+}
+console.log(99);

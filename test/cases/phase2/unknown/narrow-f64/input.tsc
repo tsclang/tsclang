@@ -1,0 +1,4 @@
+let x: unknown = 3.14;
+if (typeof x === "f64") {
+    console.log(x * 2);
+}

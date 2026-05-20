@@ -1,0 +1,14 @@
+function check(val: unknown): void {
+    if (typeof val === "i32") {
+        console.log(val + 1);
+    }
+    if (typeof val === "string") {
+        console.log(val.toUpperCase());
+    }
+    if (typeof val === "f64") {
+        console.log(val * 2);
+    }
+}
+check(42);
+check("hello");
+check(3.14);

@@ -76,15 +76,24 @@
             throw this.error(`TypeError: Cannot return mutable borrow to local variable '${node.value.name}' that does not outlive the function`);
           }
         }
+        // Unknown return: auto-wrap primitive in tsc_unknown_from_XXX
+        const _isUnknownReturn = this.currentFuncReturnType === 'tsc_unknown';
+        const _wrapUnknownReturn = (valC, valNode) => {
+          if (!_isUnknownReturn) return valC;
+          const valType = this.inferType(valNode);
+          const packer = this._unknownPackerFor(valType);
+          this._ensureUnknownStruct();
+          return `${packer}(${valC})`;
+        };
         // goto cleanup pattern for throws functions with owned vars
         if (this._usesGotoCleanup) {
           const ctx = this._throwsCtx;
           if (node.value) {
             this._inReturnContext = true;
-            const retC = this.exprToC(node.value, lines, depth);
+            const retC = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
             this._inReturnContext = false;
             const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
-            if (!retIsOwnedIdent && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+            if (!_isUnknownReturn && !retIsOwnedIdent && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
               p(`tsc_string_retain(${retC});`);
             }
             if (retIsOwnedIdent) this._suppressCleanupFor(node.value.name);
@@ -99,9 +108,9 @@
         if (this._hasPendingCleanups() && node.value) {
           // Evaluate return value before cleanup to avoid use-after-free of owned vars
           this._inReturnContext = true;
-          const retC = this.exprToC(node.value, lines, depth);
+          const retC = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
           this._inReturnContext = false;
-          const retType = this.inferType(node.value) ?? 'int32_t';
+          const retType = _isUnknownReturn ? 'tsc_unknown' : (this.inferType(node.value) ?? 'int32_t');
           const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
           if (retIsOwnedIdent) {
             this._suppressCleanupFor(node.value.name);
@@ -130,9 +139,9 @@
             const ctx = this._throwsCtx;
             if (node.value) {
               this._inReturnContext = true;
-              const c = this.exprToC(node.value, lines, depth);
+              const c = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
               this._inReturnContext = false;
-              if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+              if (!_isUnknownReturn && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
                 p(`tsc_string_retain(${c});`);
               }
               p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
@@ -142,7 +151,7 @@
           } else {
             if (node.value) {
               this._inReturnContext = true;
-              let c = this.exprToC(node.value, lines, depth);
+              let c = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
               this._inReturnContext = false;
               if (this.currentFuncReturnType === 'tsc_closure' && node.value.kind === 'Ident') {
                 const retSym = this.lookup(node.value.name);
@@ -150,7 +159,7 @@
                   c = `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
                 }
               }
-              if (this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
+              if (!_isUnknownReturn && this.inferType(node.value) === 'String' && ['Ident', 'Member', 'Index'].includes(node.value.kind)) {
                 p(`tsc_string_retain(${c});`);
               }
               p(`return ${c};`);
@@ -180,6 +189,25 @@
             }
           }
         }
+        // Detect unknown narrowing: typeof x === "typename" → narrow x inside if-block
+        let unknownNarrowVar = null;
+        let unknownNarrowCtype = null;
+        let unknownNarrowInElse = false;
+        if (node.test.kind === 'Binary' && (node.test.op === '===' || node.test.op === '!==')) {
+          const _checkUnknownNarrow = (typeofSide, nameSide) => {
+            if (typeofSide.kind === 'Typeof' && typeofSide.expr.kind === 'Ident' &&
+                nameSide.kind === 'Literal' && nameSide.litType === 'string') {
+              const sym = this.lookup(typeofSide.expr.name);
+              if (sym?.ctype === 'tsc_unknown') {
+                unknownNarrowVar = typeofSide.expr.name;
+                unknownNarrowCtype = this._tsNameToCType(nameSide.value);
+                unknownNarrowInElse = (node.test.op === '!==');
+              }
+            }
+          };
+          _checkUnknownNarrow(node.test.left, node.test.right);
+          _checkUnknownNarrow(node.test.right, node.test.left);
+        }
         const testC = this.exprToC(node.test, lines, depth);
         const alt = node.alternate;
         // Single statement consequent (no braces)?
@@ -188,6 +216,15 @@
 
           this._narrowedVars.add(narrowVar);
         }
+        // Unknown narrowing: add to narrowedVars + narrowedUnknownVars for if-block
+        if (unknownNarrowVar && !unknownNarrowInElse) {
+          this._narrowedVars.add(unknownNarrowVar);
+          this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype);
+          const _uSym = this.lookup(unknownNarrowVar);
+          if (_uSym) this._trackRefBorrow(_uSym);
+        }
+        // Unknown narrowing in else: add AFTER if-block, BEFORE else-block
+        let _unknownNarrowInElseActive = false;
         if (hasBraces) {
           p(`if (${testC}) {`);
           const _snap = this._snapshotCleanups();
@@ -215,7 +252,20 @@
           // Do NOT emit '}' here тАФ it's emitted by the alt section or the no-alt close below
           hasBraces = true;  // treat as if braces were used, so alt/no-alt handling closes correctly
         }
+        // Remove unknown narrowing from if-block
+        if (unknownNarrowVar && !unknownNarrowInElse) {
+          this._narrowedVars.delete(unknownNarrowVar);
+          this._narrowedUnknownVars.delete(unknownNarrowVar);
+        }
         if (alt) {
+          // Set up unknown narrowing for else-block
+          if (unknownNarrowVar && unknownNarrowInElse) {
+            this._narrowedVars.add(unknownNarrowVar);
+            this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype);
+            const _uSym2 = this.lookup(unknownNarrowVar);
+            if (_uSym2) this._trackRefBorrow(_uSym2);
+            _unknownNarrowInElseActive = true;
+          }
           // else if: collapse into single line
           if (alt.kind === 'If') {
             p('} else if (' + this.exprToC(alt.test, lines, depth) + ') {');
@@ -238,6 +288,11 @@
             p('} else {');
             { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(alt, lines, depth + 1); this._restoreCleanups(_snap); }
             p('}');
+          }
+          // Remove unknown narrowing from else-block
+          if (_unknownNarrowInElseActive) {
+            this._narrowedVars.delete(unknownNarrowVar);
+            this._narrowedUnknownVars.delete(unknownNarrowVar);
           }
         } else if (hasBraces) {
           p('}');

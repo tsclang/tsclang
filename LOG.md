@@ -1004,3 +1004,31 @@
 > - 8 новых тестов: `mut-return-single` (R), `mut-return-blocks-mutation` (E), `mut-return-blocks-read` (E), `mut-return-blocks-method` (E), `mut-return-multi-blocks` (E), `mut-return-scope-release` (R), `shared-return-no-borrow` (R), `weak-return-no-borrow` (R)
 > - Обновлён SPEC `05-memory.md` правило 3 — Ref (immutable borrow) vs Mut (total quarantine) vs Shared/Weak (no tracking)
 > - Результат: **1202 теста, 0 ошибок**
+
+> 2026-05-20: **M26 Phase 1 — `unknown` type** (1202 → 1214):
+> - **UnknownContainer**: `typedef struct { uint32_t type_id; const tsc_unknown_vtable *vtable; uint8_t buffer[3 * sizeof(void*)]; } tsc_unknown;` — type-tagged container, 3 слова inline buffer
+> - **Vtable**: `typedef struct tsc_unknown_vtable { void (*drop)(void *buf); void (*clone_into)(const void *src, void *dst); } tsc_unknown_vtable;` — drop + clone виртуальные функции
+> - **Primitive packers/getters**: `tsc_unknown_from_i32/i64/f32/f64/bool` + `tsc_unknown_get_i32/i64/f32/f64/bool` — type_id 1–5
+> - **`typeof x === "i32"`**: компилируется в `x.type_id == 1` (runtime check); `_tsNameToTypeId` lookup map
+> - **Narrowing через CFA**: `if (typeof x === "string")` → `_narrowedUnknownVars` Map (varName → narrowedCtype); внутри блока var получает narrowed type
+> - **Borrow freeze**: при narrowing → `_trackRefBorrow()` → контейнер заморожен (immutable) на время narrowed scope
+> - **Auto-wrap return**: return 42 из `function(): unknown` → `return tsc_unknown_from_i32(42)` (4 места через `_wrapUnknownReturn`)
+> - **Auto-wrap args**: при вызове `func(val: unknown)` аргумент автоматически оборачивается через packer в `coercedArgs`
+> - **Skip double-wrap**: `let x: unknown = funcReturningUnknown()` → direct assign без packer
+> - **Type-check error**: арифметика на unknown без narrowing → compile-time ошибка
+> - **`typeof x` вне narrowing**: возвращает `"unknown"` (compile-time строка)
+> - Файлы: `codegen.js` (`_emittedUnknownStruct`, `_narrowedUnknownVars`), `types/helpers.js` (`_ensureUnknownStruct`, `_tsNameToTypeId`, `_tsNameToCType`, `_unknownPackerFor`, `_unknownGetterFor`), `types/resolve.js`, `types/infer.js`, `stmt/vardecl.js`, `stmt/control-flow.js`, `expr/operators.js`, `expr/dispatch.js`, `calls/call-dispatch.js`
+> - 12 новых тестов в `test/cases/phase2/unknown/`: assign-primitive, auto-wrap-return, basic-assign, call-param, cleanup-scope, if-narrowing, multi-check, non-primitive-error, typeof-basic, typeof-check, typeof-unknown, var-decl
+> - Результат: **1214 тестов, 0 ошибок**
+
+> 2026-05-20: **M26 Phase 2 — String в unknown** (1214 → 1222):
+> - **String vtable**: `_tsc_vt_string` с drop/clone через `#ifdef TSC_EMBEDDED`; desktop: heap pointer + retain/release; embedded: inline memcpy + no-op drop
+> - **String type ID = 6**; обновлены lookup maps: `'string': 6` в `_tsNameToTypeId`, `'string': 'String'` в `_tsNameToCType`
+> - **String packer**: `tsc_unknown_from_string` — desktop хранит `String*` (heap pointer) в buffer с `tsc_string_retain` (shared ownership); embedded хранит inline
+> - **String getter**: `tsc_unknown_get_string` — извлекает narrowed String из container
+> - **Borrow freeze + String retain**: 3 места `tsc_string_retain` → skip при unknown return (`!_isUnknownReturn`) в control-flow.js
+> - **Narrowed unknown method dispatch**: `_inferMemberCall` проверяет `_narrowedUnknownVars` для корректного String method dispatch
+> - **`isStringExpr` + narrowed unknown**: распознаёт narrowed unknown String для concat
+> - **Skip packer for unknown init**: `let x: unknown = funcReturningUnknown()` → direct assign без double-wrap
+> - 8 новых тестов в `test/cases/phase2/unknown/`: from-string, narrow-string, narrow-string-concat, narrow-string-method, string-else-branch, string-drop-scope, string-param-return, multi-type-check
+> - Результат: **1222 теста, 0 ошибок**

@@ -570,6 +570,7 @@ s.replaceAll(regex, replace) // string — замена всех совпаде�
 | `void` | `void` | отсутствие значения — только для возвращаемого типа функции |
 | `never` | `_Noreturn void` | функция никогда не возвращается; bottom type |
 | `any` | `void*` | неизвестный тип — borrow checker не применяется |
+| `unknown` | `tsc_unknown` | type-safe top-type — type-tagged container с runtime narrowing |
 
 ```typescript
 function log(msg: string): void { ... }  // void — нет return value
@@ -615,8 +616,125 @@ declare function lib_on_event(
 ): void
 ```
 
+### `unknown` — type-safe top-type
+
+`unknown` — type-safe альтернатива `any` для пользовательского кода. Значение хранится в type-tagged container с runtime type information, что позволяет безопасное narrowing через `typeof`.
+
+**Отличие от `any`:**
+
+| Свойство | `any` | `unknown` |
+|----------|-------|-----------|
+| C-представление | `void*` | `tsc_unknown` struct |
+| Type safety | нет — raw pointer | да — type_id + vtable |
+| Доступ к значению | `as T` (unsafe cast) | `typeof` narrowing (safe) |
+| Borrow checker | отключён | активен |
+| Область применения | C interop (`.d.tsc`, extern) | пользовательский код |
+
+#### C-layout
+
+```c
+typedef struct tsc_unknown_vtable {
+    void (*drop)(void *buf);
+    void (*clone_into)(const void *src, void *dst);
+} tsc_unknown_vtable;
+
+typedef struct {
+    uint32_t                type_id;
+    const tsc_unknown_vtable *vtable;
+    uint8_t                 buffer[3 * sizeof(void*)];  // 12 bytes embedded / 24 bytes desktop
+} tsc_unknown;
+```
+
+- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64, 5=bool, 6=string)
+- `vtable` — указатель на drop/clone виртуальные функции
+- `buffer` — inline хранилище на 3 машинных слова (достаточно для примитивов и String)
+
+#### Packer / Getter
+
+Компилятор генерирует packer/getter функции по требованию:
+
+```c
+// Primitives — inline в buffer
+tsc_unknown tsc_unknown_from_i32(int32_t val);
+int32_t     tsc_unknown_get_i32(const tsc_unknown *u);
+
+// String — heap pointer (desktop) / inline (embedded)
+tsc_unknown tsc_unknown_from_string(String val);  // desktop: tsc_string_retain (shared ownership)
+String      tsc_unknown_get_string(const tsc_unknown *u);
+```
+
+#### `typeof` narrowing
+
+`typeof x === "typename"` компилируется в runtime type_id check + automatic CFA narrowing:
+
 ```typescript
-// void + throws — Result без value-поля в C
+let x: unknown = getValue()
+
+if (typeof x === "i32") {
+    // x narrowed to i32 — можно использовать как число
+    const sum = x + 1           // ok
+    console.log(x)              // prints i32 value
+}
+
+if (typeof x === "string") {
+    // x narrowed to String — доступны методы строк
+    const len = x.length        // ok
+    const upper = x.toUpperCase()  // ok
+    console.log(x)
+}
+```
+
+**Правила narrowing:**
+
+1. `typeof x === "typename"` → `x.type_id == N` (runtime check)
+2. Внутри `if`-блока: `x` получает narrowed C-type, доступна full семантика типа
+3. `else`-блока: narrowed scope снимается
+4. Borrow freeze: при narrowing контейнер замораживается (immutable) на время scope
+5. `typeof x` вне narrowing context → возвращает `"unknown"` (compile-time)
+
+**Поддерживаемые типы в typeof:**
+
+| typeof строка | type_id | Примечание |
+|---------------|---------|------------|
+| `"i32"` | 1 | |
+| `"i64"` | 2 | |
+| `"f32"` | 3 | |
+| `"f64"` | 4 | |
+| `"bool"` | 5 | |
+| `"string"` | 6 | desktop: heap pointer + retain; embedded: inline |
+
+#### Auto-wrap
+
+Компилятор автоматически оборачивает значения при необходимости:
+
+```typescript
+function identity(val: unknown): unknown {
+    return val   // ok — no wrap needed (already unknown)
+}
+
+function wrap(val: i32): unknown {
+    return val   // auto-wrap → return tsc_unknown_from_i32(val)
+}
+
+function accept(val: unknown): void { ... }
+accept(42)       // auto-wrap → tsc_unknown_from_i32(42)
+```
+
+#### String vtable
+
+String в `unknown` использует shared ownership:
+
+- **Desktop**: buffer хранит `String*` (heap pointer); packer делает `tsc_string_retain`; vtable drop — `tsc_string_release` + `free`; clone — malloc + copy + retain
+- **Embedded**: buffer хранит String inline (memcpy); vtable drop — no-op; clone — memcpy
+
+Safe для rodata строк (литералы): `tsc_string_retain` на rodata — no-op.
+
+#### Ограничения (текущая реализация)
+
+- Array и классы в `unknown` — не поддерживаются (отложено до Phase 3)
+- `unknown[]` — не поддерживается (мини-задача после Phase 3)
+- else-if chains не поддерживают narrowing — используйте отдельные `if`
+- `any` warning вне extern/unsafe — отложен до Phase 3
 function connect(): void throws IOError { ... }
 // → typedef struct { bool ok; IOError error; } _Result_void_IOError;
 

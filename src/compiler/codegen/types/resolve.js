@@ -10,7 +10,10 @@ export default {
       // usize = u16 on 16-bit targets
       if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
       if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';
-      if (name in PRIMITIVE_MAP) return PRIMITIVE_MAP[name];
+      if (name in PRIMITIVE_MAP) {
+        if (name === 'unknown') this._ensureUnknownStruct();
+        return PRIMITIVE_MAP[name];
+      }
 
       if (name === 'Shared' || name === 'Weak') {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;

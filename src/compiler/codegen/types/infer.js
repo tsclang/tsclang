@@ -10,6 +10,10 @@ export default {
         if (node.name === 'true' || node.name === 'false') return 'bool';
         if (node.name === 'null') return 'void *';
         const sym = this.lookup(node.name);
+        // Narrowed unknown variable: return narrowed C type
+        if (this._narrowedVars?.has(node.name) && sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.name)) {
+          return this._narrowedUnknownVars.get(node.name);
+        }
         // Narrowed opt variable: return inner C type
         if (this._narrowedVars?.has(node.name) && sym?.ctype?.startsWith('opt_')) {
           const innerIdent = sym.ctype.slice(4);
@@ -622,7 +626,10 @@ export default {
       if (prop === 'isLocked') return 'bool';
     }
     const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
-    const objType = objSym?.ctype ?? this.inferType(obj);
+    let objType = objSym?.ctype ?? this.inferType(obj);
+    if (objSym?.ctype === 'tsc_unknown' && obj.kind === 'Ident' && this._narrowedUnknownVars?.has(obj.name)) {
+      objType = this._narrowedUnknownVars.get(obj.name);
+    }
     if (objType?.startsWith('Array_')) {
       const et = objSym?.elemType ?? objType.slice(6);
       const etCType = objSym?.arrElemCType ?? 'int32_t';

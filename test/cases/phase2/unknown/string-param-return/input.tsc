@@ -1,0 +1,11 @@
+function wrap(s: string): unknown {
+    return s;
+}
+function unwrap(val: unknown): string {
+    if (typeof val === "string") {
+        return val;
+    }
+    return "default";
+}
+let u: unknown = wrap("test");
+console.log(unwrap(u));

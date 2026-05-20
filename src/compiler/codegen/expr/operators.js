@@ -164,6 +164,45 @@ export default {
       }
     }
 
+    // Error: binary operations on unknown type (must narrow first via typeof)
+    const _allBinaryOps = ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>'];
+    if (_allBinaryOps.includes(node.op)) {
+      const lt = this.inferType(node.left);
+      const rt = this.inferType(node.right);
+      if (lt === 'tsc_unknown') throw this.error(`Cannot perform binary operation '${node.op}' on type 'unknown'`, node);
+      if (rt === 'tsc_unknown') throw this.error(`Cannot perform binary operation '${node.op}' on type 'unknown'`, node);
+    }
+
+    // typeof x === "typename" runtime check for unknown variables
+    if ((node.op === '===' || node.op === '!==') && node.left.kind === 'Typeof') {
+      const inner = node.left.expr;
+      if (inner.kind === 'Ident') {
+        const sym = this.lookup(inner.name);
+        if (sym?.ctype === 'tsc_unknown') {
+          this._ensureUnknownStruct();
+          if (node.right.kind === 'Literal' && node.right.litType === 'string') {
+            const tid = this._tsNameToTypeId(node.right.value);
+            const cOp = node.op === '===' ? '==' : '!=';
+            return `${inner.name}.type_id ${cOp} ${tid}`;
+          }
+        }
+      }
+    }
+    if ((node.op === '===' || node.op === '!==') && node.right.kind === 'Typeof') {
+      const inner = node.right.expr;
+      if (inner.kind === 'Ident') {
+        const sym = this.lookup(inner.name);
+        if (sym?.ctype === 'tsc_unknown') {
+          this._ensureUnknownStruct();
+          if (node.left.kind === 'Literal' && node.left.litType === 'string') {
+            const tid = this._tsNameToTypeId(node.left.value);
+            const cOp = node.op === '===' ? '==' : '!=';
+            return `${inner.name}.type_id ${cOp} ${tid}`;
+          }
+        }
+      }
+    }
+
     const lRaw = this.exprToC(node.left,  lines, depth);
     const rRaw = this.exprToC(node.right, lines, depth);
     const l = needsParens(node.left,  node.op, false) ? `(${lRaw})` : lRaw;
@@ -211,7 +250,11 @@ export default {
     if (node.kind === 'Literal' && node.litType === 'string') return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
-      return sym?.ctype === 'String' || sym?.ctype === 'String *';
+      if (sym?.ctype === 'String' || sym?.ctype === 'String *') return true;
+      if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.name)) {
+        return this._narrowedUnknownVars.get(node.name) === 'String';
+      }
+      return false;
     }
     // Binary + whose left is a string → the result is also String
     if (node.kind === 'Binary' && node.op === '+') return this.isStringExpr(node.left);

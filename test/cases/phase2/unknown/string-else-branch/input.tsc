@@ -1,0 +1,6 @@
+let x: unknown = 42;
+if (typeof x !== "string") {
+    console.log("not string");
+} else {
+    console.log(x);
+}

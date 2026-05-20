@@ -421,6 +421,14 @@
           return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
         }
         const _argC = this.exprToC(a.expr, lines, depth);
+        if (paramType === 'tsc_unknown') {
+          const _argType = this.inferType(a.expr);
+          if (_argType !== 'tsc_unknown') {
+            this._ensureUnknownStruct();
+            const _packer = this._unknownPackerFor(_argType);
+            return `${_packer}(${_argC})`;
+          }
+        }
         // Move semantics: class/array-by-value arg passed to function → mark source as moved
         if (a.expr.kind === 'Ident' && paramType) {
           const _moveClassDef = this.classes.get(paramType);

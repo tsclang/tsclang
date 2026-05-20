@@ -155,6 +155,8 @@ class Context {
     this._typeAliases = new Map();
     this._pendingOptTypedefs = new Map();
     this._narrowedVars = new Set();
+    this._narrowedUnknownVars = new Map();
+    this._emittedUnknownStruct = false;
 
     // Collected warnings (printed after compilation, don't abort)
     this._warnings = [];

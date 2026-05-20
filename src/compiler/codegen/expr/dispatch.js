@@ -23,6 +23,11 @@ export default {
         // Narrowed optional variable: x → x.value inside if(x != null) block
         if (this._narrowedVars?.has(node.name)) {
           const sym2 = this.lookup(node.name);
+          if (sym2?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.name)) {
+            const narrowedCtype = this._narrowedUnknownVars.get(node.name);
+            const getter = this._unknownGetterFor(narrowedCtype);
+            return `${getter}(&${node.name})`;
+          }
           if (sym2?.ctype?.startsWith('opt_')) return `${node.name}.value`;
         }
         // Function reference (not a func-ptr variable): use mangled name
@@ -477,9 +482,12 @@ export default {
 
       case 'Typeof': {
         const exprC = this.exprToC(node.expr, lines, depth);
-        // Return the type string as known at compile time
         const sym = node.expr.kind === 'Ident' ? this.lookup(node.expr.name) : null;
         const ctype = sym?.ctype ?? 'int32_t';
+        if (ctype === 'tsc_unknown') {
+          this._ensureUnknownStruct();
+          return `STR_LIT("unknown")`;
+        }
         const tsName = this.ctypeToTsName(ctype);
         return `STR_LIT("${tsName}")`;
       }

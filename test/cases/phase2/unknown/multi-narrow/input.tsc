@@ -1,0 +1,10 @@
+let x: unknown = 42;
+if (typeof x === "i32") {
+    let a = x + 1;
+    console.log(a);
+}
+if (typeof x === "f64") {
+    console.log(x * 2);
+} else {
+    console.log(0);
+}

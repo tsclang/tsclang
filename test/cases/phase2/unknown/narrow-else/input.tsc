@@ -1,0 +1,6 @@
+let x: unknown = 42;
+if (typeof x === "f64") {
+    console.log(x * 2);
+} else {
+    console.log(0);
+}
