@@ -39,6 +39,9 @@ export default {
         if (sym?._mutQuarantined) {
           throw this.error(`cannot access '${node.name}' while a mutable borrow is active`, node);
         }
+        if (sym?.isWeak && !this._inWeakUpgrade) {
+          throw this.error(`cannot dereference '${node.name}' (Weak<T>); use '${node.name}.upgrade()' and check for null`, node);
+        }
         if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
         // Async/generator self context: inlined consts → literal, promoted vars → self->name

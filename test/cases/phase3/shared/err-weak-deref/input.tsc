@@ -1,0 +1,7 @@
+// [E] cannot dereference Weak<T> directly — must use .upgrade()
+class Data {
+    x: i32;
+}
+let d = new Shared<Data>();
+let w = new Weak<Data>(d);
+console.log(w.x);

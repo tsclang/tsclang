@@ -629,7 +629,9 @@ export default {
           const weakSym2 = init.callee.object?.kind === 'Ident' ? this.lookup(init.callee.object.name) : null;
           if (weakSym2?.isWeak) {
             const innerType2 = weakSym2.derefType;
+            this._inWeakUpgrade = true;
             const weakC2 = this.exprToC(init.callee.object, lines, depth);
+            this._inWeakUpgrade = false;
             p(`${innerType2} *${name} = tsc_weak_upgrade(${weakC2});`);
             this.define(name, { ctype: `${innerType2} *`, varKind, isPointer: true, isSharedUpgrade: true, derefType: innerType2 });
             return;
