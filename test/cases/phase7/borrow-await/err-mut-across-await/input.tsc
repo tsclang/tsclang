@@ -1,0 +1,6 @@
+// [E] Mut<T> cannot cross await boundary
+async function foo(arr: Mut<i32[]>): Promise<void> {
+    arr[0] = 42;
+    await sleep(10);
+    console.log(arr[0]);
+}

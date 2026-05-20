@@ -42,12 +42,12 @@ export default {
     const stateType = `${name}_state`;
     const pollFn = `${name}_poll`;
 
-    // Ref<T> across await: check if any Ref param is used (Ref types can't cross await)
+    // Ref<T>/Mut<T> across await: borrow types can't cross await
     const awaitStatesCount = this._collectAwaitStates(body).length;
     if (awaitStatesCount > 0) {
       for (const p of (params || [])) {
-        if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'Ref') {
-          throw this.error(`"Ref<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
+        if (p.typeAnn?.kind === 'TypeRef' && (p.typeAnn.name === 'Ref' || p.typeAnn.name === 'Mut')) {
+          throw this.error(`"${p.typeAnn.name}<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
         }
       }
     }
