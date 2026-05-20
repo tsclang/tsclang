@@ -1561,6 +1561,62 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Match', discriminant, cases, hasParens };
   }
 
+  function isCaptureListStart() {
+    const saved = pos;
+    try {
+      pos++; // skip [
+      if (cur().type !== TK.IDENT) { pos = saved; return false; }
+      pos++; // skip ident
+      if (cur().type !== TK.COLON) { pos = saved; return false; }
+      pos = saved;
+      return true;
+    } catch { pos = saved; return false; }
+  }
+
+  function parseCaptureList() {
+    eat(TK.LBRACK);
+    const captures = [];
+    while (cur().type !== TK.RBRACK) {
+      const name = eat(TK.IDENT).value;
+      eat(TK.COLON);
+      const typeAnn = parseTypeAnnotation();
+      captures.push({ name, typeAnn });
+      if (cur().type !== TK.RBRACK) eat(TK.COMMA);
+    }
+    eat(TK.RBRACK);
+    return captures;
+  }
+
+  function parseParenOrArrowWithCaptures(captures) {
+    const savedPos = pos;
+    try {
+      eat(TK.LPAREN);
+      const params = [];
+      while (cur().type !== TK.RPAREN) {
+        let rest = false;
+        if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
+        const name = eat(TK.IDENT).value;
+        let typeAnn = null, optional = false;
+        if (cur().type === TK.QUEST) { eat(TK.QUEST); optional = true; }
+        if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
+        let defaultVal = null;
+        if (tryEat(TK.EQ)) defaultVal = parseExpr();
+        params.push({ name, typeAnn, rest, optional, defaultVal });
+        if (cur().type !== TK.RPAREN) eat(TK.COMMA);
+      }
+      eat(TK.RPAREN);
+      let retType = null;
+      if (tryEat(TK.COLON)) retType = parseTypeAnnotation();
+      if (cur().type === TK.ARROW) {
+        eat(TK.ARROW);
+        const body = cur().type === TK.LBRACE ? parseBlock() : parseExpr();
+        return { kind: 'Arrow', captures, params, returnType: retType, body };
+      }
+      pos = savedPos;
+    } catch { pos = savedPos; }
+    err('Expected arrow function after capture list');
+  }
+
   function parsePrimary() {
     const t = cur();
 
@@ -1580,6 +1636,21 @@ export function parse(tokens, filename = '<input>', src = null) {
 
     // Grouped / arrow function
     if (t.type === TK.LPAREN) return parseParenOrArrow();
+
+    // Capture list + arrow: [name: Type](params) => body
+    if (t.type === TK.LBRACK && isCaptureListStart()) {
+      const captures = parseCaptureList();
+      if (cur().type === TK.LPAREN) {
+        return parseParenOrArrowWithCaptures(captures);
+      }
+      if (cur().type === TK.IDENT && peek().type === TK.ARROW) {
+        const name = eat(TK.IDENT).value;
+        eat(TK.ARROW);
+        const body = cur().type === TK.LBRACE ? parseBlock() : parseExpr();
+        return { kind: 'Arrow', captures, params: [{ name, typeAnn: null, rest: false, optional: false, defaultVal: null }], body };
+      }
+      err('Expected function parameters after capture list');
+    }
 
     // Array literal
     if (t.type === TK.LBRACK) {

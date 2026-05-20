@@ -327,9 +327,12 @@ export default {
       }
 
       case 'RangeIndex': {
-        // s[start..end], s[..], s[6..], s[..5] — string/array slice
         const obj = this.exprToC(node.object, lines, depth);
         const objType2 = this.inferType(node.object);
+        if (node.object.kind === 'Ident' && objType2 !== 'String') {
+          const _riSym = this.lookup(node.object.name);
+          if (_riSym) this._trackRefBorrow(_riSym);
+        }
         const start = node.start ? this.exprToC(node.start, lines, depth) : null;
         const end   = node.end   ? this.exprToC(node.end,   lines, depth) : null;
         // Compute length as literal if both bounds are numeric literals

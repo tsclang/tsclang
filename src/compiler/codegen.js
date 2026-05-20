@@ -341,6 +341,7 @@ class Context {
   }
 
   _checkMoved(sym, node, name) {
+    if (sym?._closureEnvVar) return;
     if (sym?._moved) {
       const ms = sym._movedSourceNode;
       throw this.error(`use of moved value: "${name}"`, node, {

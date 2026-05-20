@@ -1,0 +1,7 @@
+let total: i32 = 0;
+for (let i: i32 = 0; i < 5; i++) {
+    let s: string = "hello";
+    if (i === 2) continue;
+    total = total + i;
+}
+console.log(total);

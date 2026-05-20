@@ -1,0 +1,8 @@
+class Counter {
+    count: i32;
+}
+let c = new Counter();
+c.count = 0;
+const inc = [c: Mut<Counter>](): i32 => { c.count += 1; return c.count; };
+console.log(inc());
+console.log(inc());

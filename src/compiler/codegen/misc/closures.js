@@ -104,7 +104,35 @@ export default {
   // Returns null if no captures (use regular hoistArrow).
   hoistClosure(arrowNode, varName) {
     const paramNames = (arrowNode.params ?? []).map(p => p.name);
-    const captured = this._findFreeVars(arrowNode.body, paramNames);
+    let captured;
+    let explicitCaptures = null;
+    if (arrowNode.captures?.length > 0) {
+      captured = new Map();
+      explicitCaptures = [];
+      for (const cap of arrowNode.captures) {
+        const sym = this.lookup(cap.name);
+        if (!sym) throw this.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
+        captured.set(cap.name, sym);
+        let mode = 'move';
+        if (cap.typeAnn?.kind === 'TypeRef') {
+          if (cap.typeAnn.name === 'Ref') mode = 'ref';
+          else if (cap.typeAnn.name === 'Mut') mode = 'mut';
+        }
+        explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn });
+        if (mode === 'move') {
+          sym._moved = true;
+          sym._movedLine = arrowNode.line ?? 0;
+        }
+        if (mode === 'mut') {
+          this._trackMutQuarantine(sym);
+        }
+        if (mode === 'ref') {
+          this._trackRefBorrow(sym);
+        }
+      }
+    } else {
+      captured = this._findFreeVars(arrowNode.body, paramNames);
+    }
     if (captured.size === 0) return null;
 
     const n = this.closureCount++;
@@ -118,9 +146,23 @@ export default {
     const capturedStringFields = [];
     for (const [nm, sym] of captured) {
       const ct = sym.ctype ?? 'void *';
-      if (ct.endsWith(' *')) envFields.push(`${ct.slice(0,-2)} *${nm};`);
-      else envFields.push(`${ct} ${nm};`);
-      if (ct === 'String') capturedStringFields.push(nm);
+      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      if (capInfo) {
+        if (capInfo.mode === 'ref') {
+          const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
+          envFields.push(`const ${innerCt} *${nm};`);
+        } else if (capInfo.mode === 'mut') {
+          const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
+          envFields.push(`${innerCt} *${nm};`);
+        } else {
+          envFields.push(`${ct} ${nm};`);
+          if (ct === 'String') capturedStringFields.push(nm);
+        }
+      } else {
+        if (ct.endsWith(' *')) envFields.push(`${ct.slice(0,-2)} *${nm};`);
+        else envFields.push(`${ct} ${nm};`);
+        if (ct === 'String') capturedStringFields.push(nm);
+      }
     }
     const hasStringCapture = capturedStringFields.length > 0;
     this.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
@@ -146,7 +188,14 @@ export default {
 
     this.pushScope();
     for (const [nm, sym] of captured) {
-      this.define(nm, { ...sym, _closureEnvVar: nm });
+      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
+        const ct = sym.ctype ?? 'void *';
+        const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
+        this.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
+      } else {
+        this.define(nm, { ...sym, _closureEnvVar: nm });
+      }
     }
     for (const p of (arrowNode.params ?? [])) {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
@@ -174,6 +223,11 @@ export default {
     }
     const envInit = '{' + [...captured.entries()].map(([nm, sym]) => {
       const src = sym._closureEnvVar ? `env->${nm}` : nm;
+      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
+        if (sym.ctype?.endsWith(' *')) return `.${nm} = ${nm}`;
+        return `.${nm} = &${nm}`;
+      }
       return `.${nm} = ${src}`;
     }).join(', ') + '}';
 

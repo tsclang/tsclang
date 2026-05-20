@@ -687,8 +687,8 @@
 | 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 164 | `[x]` |
-| 3  | Модель памяти | 172 | `[x]` |
-| 4  | Объектная модель | 58 | `[x]` |
+| 3  | Модель памяти | 179 | `[x]` |
+| 4  | Объектная модель | 62 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 41 | `[x]` |
 | 7  | Async/Await | 42 | `[x]` |
@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1202 тестов ✓** (2026-05-20)
+**Итого: 1254 тестов ✓** (2026-05-20)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1033,14 +1033,71 @@
 > - 8 новых тестов в `test/cases/phase2/unknown/`: from-string, narrow-string, narrow-string-concat, narrow-string-method, string-else-branch, string-drop-scope, string-param-return, multi-type-check
 > - Результат: **1222 теста, 0 ошибок**
 
-> 2026-05-20: **M26 Phase 3 — any lock-down, Arrays/Classes в unknown, unknown[]** (1222 → 1240):
-> - **Задача 1: any lock-down** — `any` вне `declare`/`unsafe` → compile-time error; декораторы exempt (AST-level processing)
-> - **Задача 2: Embedded whitelist** — compile-time check в `_unknownPackerFor`: `{i32,i64,f32,f64,bool,String}` только; остальное → error на embedded
-> - **Задача 3: as cast из/в unknown** — packer для unknown→unknown, getter для unknown→T; auto-pack/unpack в Cast dispatch
-> - **Задача 4: Arrays в unknown** — type_id=7, typeof "array", `__array__` marker (не сужает C-тип); vtable drop/clone с deep copy данных; borrow freeze при narrowing
-> - **Задача 5: Classes в unknown** — type_id=8, typeof "object", `__object__` marker; heap-copy packer (malloc + copy); vtable drop: `free(ptr)`; clone: malloc + copy
-> - **Задача 6: `unknown[]`** — `Array_tsc_unknown` специализация; special free macro с per-element `tsc_unknown_drop`; push macro + auto-pack; array literal auto-pack; for-of + typeof narrowing
-> - **as-cast fix**: getter для Array/Class возвращает pointer, `as` cast разыменовывает (`*getter(&x)`) для получения value copy; `inferType` возвращает plain type (не pointer)
-> - **Member/Index block**: `obj.field` и `arr[i]` после typeof "array"/"object" → compile-time error; нужен `as Array<T>`/`as ClassName` first
-> - 18 новых тестов: any lock-down (3), embedded whitelist (1), as-cast (2), array (5), class (4), unknown[] (3)
-> - Результат: **1240 тестов, 0 ошибок**
+ > 2026-05-20: **M26 Phase 3 — any lock-down, Arrays/Classes в unknown, unknown[]** (1222 → 1240):
+ > - **Задача 1: any lock-down** — `any` вне `declare`/`unsafe` → compile-time error; декораторы exempt (AST-level processing)
+ > - **Задача 2: Embedded whitelist** — compile-time check в `_unknownPackerFor`: `{i32,i64,f32,f64,bool,String}` только; остальное → error на embedded
+ > - **Задача 3: as cast из/в unknown** — packer для unknown→unknown, getter для unknown→T; auto-pack/unpack в Cast dispatch
+ > - **Задача 4: Arrays в unknown** — type_id=7, typeof "array", `__array__` marker (не сужает C-тип); vtable drop/clone с deep copy данных; borrow freeze при narrowing
+ > - **Задача 5: Classes в unknown** — type_id=8, typeof "object", `__object__` marker; heap-copy packer (malloc + copy); vtable drop: `free(ptr)`; clone: malloc + copy
+ > - **Задача 6: `unknown[]`** — `Array_tsc_unknown` специализация; special free macro с per-element `tsc_unknown_drop`; push macro + auto-pack; array literal auto-pack; for-of + typeof narrowing
+ > - as-cast fix: getter для Array/Class возвращает pointer, `as` cast разыменовывает (`*getter(&x)`) для получения value copy; `inferType` возвращает plain type (не pointer)
+ > - Member/Index block: `obj.field` и `arr[i]` после typeof "array"/"object" → compile-time error; нужен `as Array<T>`/`as ClassName` first
+ > - 18 новых тестов: any lock-down (3), embedded whitelist (1), as-cast (2), array (5), class (4), unknown[] (3)
+ > - Результат: **1240 тестов, 0 ошибок**
+
+> 2026-05-20: **D7/D9/D10 — Mut через await, Weak null-check, Shared retain on return** (1240 → 1243):
+> - **D7**: Mut через await — `sym._mutQuarantined` check в async state machine poll function; если переменная quarantined через `await` — ошибка компиляции
+> - **D9**: Weak null-check — `_inWeakUpgrade` флаг в vardecl.js; `w.upgrade()` разрешён, но прямой Ident/Member доступ через Weak — ошибка
+> - **D10**: Shared retain on return — `_emitRetainIfNeeded(valC, valNode, p)` helper; retain для String + Shared при возврате из функции; `isShared: true` для Shared параметров в func.js
+> - 3 новых теста: `mut-await` (E), `weak-upgrade-access` (R), `shared-retain-return` (R)
+> - Результат: **1243 теста, 0 ошибок**
+
+> 2026-05-20: **Task 2 — Object.values Ref + Object.entries** (1243 → 1246):
+> - **Object.values**: uniform `Ref<T>[]` — `Array_ref_T` с `T **data`; `&src.field` адреса полей; borrow freeze через `_trackRefBorrow`; mixed-type fields → compile-time error
+> - **Object.entries**: `Tuple_string_ref_T` typedef + `Array_Tuple_string_ref_T`; register tuple in `this.classes`; borrow tracking как Object.values
+> - inferType: `Object.values` → `Array_ref_*`, `Object.entries` → `Array_Tuple_string_ref_*`; subscript `Array_ref_T` → `T *`
+> - vardecl: early return для `Array_ref_` и `Array_Tuple_` (skip default array handling)
+> - 3 новых теста: `object-values-ref` (R), `object-entries` (R), `err-object-mixed-fields` (E)
+> - Результат: **1246 тестов, 0 ошибок**
+
+> 2026-05-20: **Task 1 — Explicit capture list: codegen + _checkMoved fix** (1246 → 1250):
+> - **_checkMoved fix**: добавлен `if (sym?._closureEnvVar) return;` в `_checkMoved()` (codegen.js) — символы захваченные через env pointer не должны проверяться на move внутри тела closure
+> - **capture-move-explicit** [R]: `[d: Data]()` → `Data d;` в env struct, owned copy
+> - **capture-ref-explicit** [F]: `[b: Ref<Box>]()` → `const Box *b;` в env struct, `&b` init
+> - **capture-mut-explicit** [F]: `[c: Mut<Counter>]()` → `Counter *c;` в env struct, `&c` init, mutation через `env->c->count += 1`
+> - **err-capture-move-use** [E]: использование переменной после move-capture `[b: Box]()` → `use of moved value: "b"`
+> - Результат: **1250 тестов, 0 ошибок**
+
+> 2026-05-20: **Ownership audit fixes — break/continue cleanup + RangeIndex borrow** (1250 → 1254):
+> - **break/continue cleanup**: `_emitLoopBodyCleanups()` перед `break;`/`continue;` в control-flow.js; inline `if (cond) break;` → `if (cond) { cleanup; break; }` когда есть loop-local cleanups; labeled break/continue в inline if корректно генерирует `goto label_break;`/`goto label_continue;`
+> - **RangeIndex borrow tracking**: `_trackRefBorrow(sym)` при `arr[1..3]` для Ident-объектов в dispatch.js — mutation блокируется пока slice жив
+> - 4 новых теста: `break-cleanup` (R), `continue-cleanup` (R), `nested-break-cleanup` (R), `err-range-slice-borrow-blocks-mutation` (E)
+> - Spec обновлён: добавлена строка "break/continue в цикле" в таблицу cleanup-правил + пример C-output
+> - Результат: **1254 теста, 0 ошибок**
+
+---
+
+## Известные баги (на 2026-05-20)
+
+### High
+
+| # | Баг | Суть | Файл |
+|---|-----|------|------|
+| H1 | RangeIndex `inferType` возвращает `int32_t` | `const s = arr[1..3]` генерирует невалидный C. Нет `case 'RangeIndex'` в `types/infer.js`. Работает только с explicit type annotation (`Ref<string>`) | `codegen/types/infer.js` |
+| H2 | Labeled `break outer` не эмитит cleanups внешнего цикла | `_loopBodyCleanups` — плоская переменная, не стек. Outer cleanups в `savedLC` на call stack — недоступны. Нужен `_loopCleanupStack[]` | `codegen/stmt/control-flow.js` |
+
+### Medium
+
+| # | Баг | Суть | Файл |
+|---|-----|------|------|
+| M1 | `const name = user.name` — ARC copy вместо borrow | Spec: `Ref<string>` (pointer). Реализация: `retain + copy + release`. Деструктуризация работает правильно | `codegen/stmt/vardecl.js` |
+| M2 | `Shared<T>` → `Mut<T>` не проверяется | Нет guard в call-dispatch. `isShared` используется только для ARC, не для borrow compatibility | `codegen/calls/call-dispatch.js` |
+| M3 | Auto-propagate bare throws call в цикле — пропускает cleanup | `control-flow.js:31` делает `return` напрямую, без `_emitFuncCleanup` | `codegen/stmt/control-flow.js` |
+| M4 | `ForOf` не поддерживает labeled break/continue | `Labeled` case обрабатывает только `While`/`For` | `codegen/stmt/control-flow.js` |
+
+### Low
+
+| # | Баг | Суть | Файл |
+|---|-----|------|------|
+| L1 | NULL-init для inferred-type vars в throws-функциях | Только typed vars получают pre-declaration. Корректность сохранена | `codegen/top-level/func.js` |
+| L2 | Inline `if (cond) return;` без cleanup check | Строка 273 — bare `return` | `codegen/stmt/control-flow.js` |

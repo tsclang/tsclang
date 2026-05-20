@@ -782,7 +782,22 @@ cleanup:
 | Несколько `?`-точек | одна метка `cleanup`, `NULL`-инициализация всех указателей |
 | `goto` через объявления (C99) | объявить все owned указатели `NULL` в начале блока |
 | Loop-local переменные | inline free перед `goto`, затем outer `cleanup` |
+| `break` / `continue` в цикле | inline free loop-local переменных перед `break`/`continue` |
 | Вложенные scopes | scope-local переменные: inline free; outer: через `cleanup` |
+
+Пример cleanup при `break`:
+
+```c
+for (int32_t i = 0; i < 5; i++) {
+    String s = STR_LIT("hello");
+    if (i == 2) {
+        tsc_string_release(s);   // ← inline free перед break
+        break;
+    }
+    total = total + i;
+    tsc_string_release(s);       // нормальный путь — конец итерации
+}
+```
 
 ## Iterable\<T\> — пользовательские итерируемые типы
 

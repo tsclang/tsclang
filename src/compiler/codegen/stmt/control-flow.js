@@ -248,9 +248,27 @@
           const exprC = this.exprToC(node.consequent.expr, lines, depth);
           p(`if (${testC}) ${exprC};`);
         } else if (!alt && node.consequent.kind === 'Continue') {
-          p(`if (${testC}) continue;`);
+          const _cLabel = node.consequent.label;
+          if (this._loopBodyCleanups?.length) {
+            const innerI = ' '.repeat(this.indent * (depth + 1));
+            p(`if (${testC}) {`);
+            this._emitLoopBodyCleanups(lines, innerI);
+            lines.push(`${innerI}${_cLabel ? `goto ${_cLabel}_continue;` : 'continue;'}`);
+            p(`}`);
+          } else {
+            p(`if (${testC}) ${_cLabel ? `goto ${_cLabel}_continue` : 'continue'};`);
+          }
         } else if (!alt && node.consequent.kind === 'Break') {
-          p(`if (${testC}) break;`);
+          const _bLabel = node.consequent.label;
+          if (this._loopBodyCleanups?.length) {
+            const innerI = ' '.repeat(this.indent * (depth + 1));
+            p(`if (${testC}) {`);
+            this._emitLoopBodyCleanups(lines, innerI);
+            lines.push(`${innerI}${_bLabel ? `goto ${_bLabel}_break;` : 'break;'}`);
+            p(`}`);
+          } else {
+            p(`if (${testC}) ${_bLabel ? `goto ${_bLabel}_break` : 'break'};`);
+          }
         } else if (!alt && node.consequent.kind === 'Return' && !node.consequent.value) {
           p(`if (${testC}) return;`);
         } else {
@@ -698,10 +716,12 @@
       }
 
       case 'Break':
+        this._emitLoopBodyCleanups(lines, I);
         if (node.label) p(`goto ${node.label}_break;`);
         else p('break;');
         break;
       case 'Continue':
+        this._emitLoopBodyCleanups(lines, I);
         if (node.label) p(`goto ${node.label}_continue;`);
         else p('continue;');
         break;
