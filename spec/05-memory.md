@@ -344,6 +344,8 @@ function qux(u: Shared<User>): void {
 | `Mut<T>`                 | ✅ понижение | ✅ re-borrow | ❌ | ❌ |
 | `Shared<T>`              | ✅ borrow | ❌ | ❌ | ✅ retain |
 
+> **Примечание к реализации:** Все ❌-ячейки матрицы проверяются компилятором на этапе codegen. Для `Ref→Mut`, `Mut→Shared`, `Ref→owned`, `Mut→owned`, `Shared→owned` — compile-time error с понятным сообщением. `const→Mut` и `const→owned` — тоже error (const binding нельзя переместить или мутировать).
+
 ## Interior Mutability — почему её нет
 
 `Shared<T>` — строго read-only (матрица: `Shared<T>` → `Mut<T>` = ❌). Это намеренное ограничение.
@@ -385,8 +387,10 @@ tasks.add(inputTask)   // ok — второй Mut<Tasks<8>> к тому же о�
 
 ```typescript
 @static let counter: i32 = 0
-Thread.spawn(() => { counter++ })  // ошибка: @static let 'counter' accessed from thread — use Atomic<i32>
+Thread.spawn(() => { counter++ })  // ошибка: @static variable captured in spawn — use Atomic<T>
 ```
+
+> **Реализовано:** Компилятор проверяет захват `@static let` переменных (с `_isStaticArray` / `_isStaticMap` маркерами) в spawn-блоках и выбрасывает ошибку. Также реализована рекурсивная Send-проверка: Array, Set, Map, opt-типы и классы с непримитивными полями отвергаются. Разрешены: примитивы, String, Atomic, Readonly.
 
 **На desktop** event loop однопоточный. `Shared<T>` с мутацией нужен только при `Thread.spawn`. Реальные кейсы и их решения:
 

@@ -453,9 +453,10 @@ console.log(base);  // ❌ E002: use after move
 
 ```c
 // C-output (упрощённо):
-BaseType extended = base;
+tsc_string_retain(base.name);   // retain string-полей перед копированием
+BaseType extended = {.x = base.x, .name = base.name};
 extended.extra = 42;
-memset(&base, 0, sizeof(BaseType));
+memset(&base, 0, sizeof(BaseType));  // zero source
 ```
 
 Все поля копируются в новый объект, оригинал обнуляется.
@@ -990,7 +991,17 @@ function swap(t: [i32, string]): [string, i32] {
 
 ### Почему так
 
-Кортеж — value type: копируется если все элементы примитивы, перемещается если есть сложные. Spread — только compile-time размер (fixed tuple) или rest-tuple с heap. Деструктуризация из `Ref<tuple>` — borrow элементов, из owned — move. String-элементы — ARC Copy, как поля объекта.
+Кортеж — value type: копируется если все элементы примитивы, перемещается если есть сложные. Spread — только compile-time размер (fixed tuple) или rest-tuple с heap. Деструктуризация из `Ref<tuple>` — borrow элементов, из owned `let` — move (string-поля: retain + memset source field). Из `const` — ARC Copy (retain без zeroing, источник жив). String-элементы — ARC Copy, как поля объекта.
+
+```typescript
+// let → move + retain + zero source
+let pair: [i32, string] = [1, "hello"];
+const [a, b] = pair;  // b: retain("hello"), pair._1 = NULL
+
+// const → retain (source alive)
+const pair2: [i32, string] = [2, "world"];
+const [c, d] = pair2;  // d: retain("world"), pair2 жив
+```
 
 ---
 

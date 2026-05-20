@@ -1158,10 +1158,13 @@ class Server {
 - Мутабельный `let` или глобаль → ошибка компилятора
 - `Shared<T>` или `Weak<T>` → ошибка компилятора
 - `Ref<T>` / `Mut<T>` → ошибка компилятора
+- `@static let` → ошибка компилятора (используй `Atomic<T>`)
 - `await` внутри callback → ошибка компилятора
 - Owned `T` → неявный move, **с рекурсивной проверкой полей** (см. ниже)
 - Примитив → copy
 - `Atomic<T>` / `AtomicArray<T>` / `Readonly<T>` → retain/release автоматически
+
+> **Реализовано:** Все правила выше проверяются в `_emitSpawnBlock()` (emit-helpers.js). Рекурсивная Send-проверка обходит поля класса; Array/Set/Map/opt-типы отвергаются как не-Send. Разрешённые типы: примитивы, String, Atomic, Readonly.
 
 **Рекурсивная Send-проверка owned типов:**
 
