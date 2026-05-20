@@ -1,0 +1,13 @@
+// [R] Object.values returns Ref<T>[] for string fields — pointer array with borrow
+class Names {
+    first: string;
+    last: string;
+}
+let n = new Names();
+n.first = "Alice";
+n.last = "Smith";
+{
+    const vals = Object.values(n);
+    console.log(vals.length);
+}
+console.log(n.first);

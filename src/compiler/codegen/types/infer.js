@@ -226,6 +226,15 @@ export default {
                             f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
           return primMap[_ptrArr[1]] ?? _ptrArr[1];
         }
+        // Array_ref_T → T * (ref array element is a pointer)
+        if (objType?.startsWith('Array_ref_')) {
+          const innerIdent = objType.slice(10);
+          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+                            u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+                            f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
+          const innerCType = primMap[innerIdent] ?? innerIdent;
+          return `${innerCType} *`;
+        }
         // Array_T → T (array element type)
         if (objType?.startsWith('Array_')) {
           const etIdent = objType.slice(6);
@@ -404,7 +413,7 @@ export default {
     }
     if (obj.kind === 'Ident' && obj.name === 'Object') {
       if (prop === 'keys') return 'Array_string';
-      if (prop === 'values') {
+      if (prop === 'values' || prop === 'entries') {
         const argExpr = node.args?.[0]?.expr;
         if (argExpr) {
           const objType = this.inferType(argExpr);
@@ -412,10 +421,12 @@ export default {
           if (cls?.fields?.length > 0) {
             const firstType = this.resolveType(cls.fields[0].typeAnn);
             const etIdent = this.cTypeToIdent(firstType);
-            return `Array_${etIdent}`;
+            if (prop === 'values') return `Array_ref_${etIdent}`;
+            const tupleName = `Tuple_string_ref_${etIdent}`;
+            return `Array_${tupleName}`;
           }
         }
-        return 'Array_i32';
+        return prop === 'values' ? 'Array_ref_i32' : 'Array_Tuple_string_ref_i32';
       }
     }
     if (obj.kind === 'Ident' && obj.name === 'console') return 'void';

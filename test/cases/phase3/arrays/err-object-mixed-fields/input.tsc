@@ -1,0 +1,7 @@
+// [E] Object.values/entries on mixed-type fields — compile error
+class Mixed {
+    x: i32;
+    name: string;
+}
+let m = new Mixed();
+const vals = Object.values(m);

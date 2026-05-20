@@ -1,0 +1,7 @@
+// [R] Object.entries returns Tuple<string, Ref<T>>[] for i32 fields
+class Point { x: i32; y: i32; }
+let p = new Point();
+p.x = 10;
+p.y = 20;
+const entries = Object.entries(p);
+console.log(entries.length);

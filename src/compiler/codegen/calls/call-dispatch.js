@@ -517,7 +517,8 @@
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
     if (obj?.kind !== 'Ident' || obj.name !== 'Object') return null;
-    if (callee.prop !== 'keys' && callee.prop !== 'values') return null;
+    const prop = callee.prop;
+    if (prop !== 'keys' && prop !== 'values' && prop !== 'entries') return null;
     if (args.length < 1) return null;
     const argExpr = args[0].expr;
     const objType = this.inferType(argExpr);
@@ -525,10 +526,10 @@
     if (!cls || !cls.fields || cls.fields.length === 0) return null;
     const fields = cls.fields;
     const I = ' '.repeat(this.indent * depth);
-    const argC = this.exprToC(argExpr, lines, depth);
-    const tmpObj = `_obj_${this.tempCount++}`;
-    lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
-    if (callee.prop === 'keys') {
+    if (prop === 'keys') {
+      const argC = this.exprToC(argExpr, lines, depth);
+      const tmpObj = `_obj_${this.tempCount++}`;
+      lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
       this._ensureArrayStruct('Array_string', 'String');
       const keysData = fields.map(f => `STR_LIT("${f.name}")`).join(', ');
       const tmpArr = `_keys_${this.tempCount++}`;
@@ -539,14 +540,48 @@
     const fieldTypes = fields.map(f => this.resolveType(f.typeAnn));
     const firstType = fieldTypes[0];
     const allSame = fieldTypes.every(t => t === firstType);
-    if (!allSame) return null;
+    if (!allSame) {
+      throw this.error('Object.values/entries requires uniform field types', node);
+    }
     const etIdent = this.cTypeToIdent(firstType);
-    const arrName = `Array_${etIdent}`;
-    this._ensureArrayStruct(arrName, firstType);
-    const valsData = fields.map(f => `${tmpObj}.${f.name}`).join(', ');
-    const tmpArr = `_vals_${this.tempCount++}`;
-    lines.push(`${I}${firstType} ${tmpArr}_data[] = {${valsData}};`);
-    lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
+    const refArrName = `Array_ref_${etIdent}`;
+    this._ensureRefArrayStruct(refArrName, firstType);
+    let srcExpr;
+    const srcIsIdent = argExpr.kind === 'Ident';
+    if (srcIsIdent) {
+      srcExpr = argExpr.name;
+      const srcSym = this.lookup(argExpr.name);
+      if (srcSym) this._trackRefBorrow(srcSym);
+    } else {
+      const argC = this.exprToC(argExpr, lines, depth);
+      const tmpObj = `_obj_${this.tempCount++}`;
+      lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
+      srcExpr = tmpObj;
+    }
+    if (prop === 'values') {
+      const valsData = fields.map(f => `&${srcExpr}.${f.name}`).join(', ');
+      const tmpArr = `_vals_${this.tempCount++}`;
+      lines.push(`${I}${firstType} *${tmpArr}_data[] = {${valsData}};`);
+      lines.push(`${I}${refArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
+      return `${tmpArr}`;
+    }
+    const tupleName = `Tuple_string_ref_${etIdent}`;
+    const tupleArrName = `Array_${tupleName}`;
+    if (!this._emittedTuples?.has(tupleName)) {
+      if (!this._emittedTuples) this._emittedTuples = new Set();
+      this._emittedTuples.add(tupleName);
+      this.addTop(`typedef struct { String _0; ${firstType} *_1; } ${tupleName};`);
+      this.addTop('');
+      this.classes.set(tupleName, { isTuple: true, fields: [
+        { name: '_0', label: undefined, ctype: 'String', const: false },
+        { name: '_1', label: undefined, ctype: `${firstType} *`, const: false }
+      ], readonly: false });
+    }
+    this._ensureArrayStruct(tupleArrName, tupleName);
+    const entriesData = fields.map(f => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
+    const tmpArr = `_entries_${this.tempCount++}`;
+    lines.push(`${I}${tupleName} ${tmpArr}_data[] = {${entriesData}};`);
+    lines.push(`${I}${tupleArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
     return `${tmpArr}`;
   },
 

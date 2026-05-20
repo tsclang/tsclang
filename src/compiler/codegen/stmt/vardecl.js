@@ -920,6 +920,20 @@ export default {
         // Inferred Array_T type (no typeAnn, e.g. result of arr.filter/map/concat/slice)
         // Exclude pointer types (Array_T * = Ref/Mut<Array<T>>) which need different handling
         if (!typeAnn && ctype?.startsWith('Array_') && !ctype.endsWith(' *') && init) {
+          if (ctype.startsWith('Array_ref_')) {
+            const initC = this.exprToC(init, lines, depth);
+            const qualifier = varKind === 'const' ? 'const ' : '';
+            p(`${qualifier}${ctype} ${name} = ${initC};`);
+            this.define(name, { ctype, varKind });
+            return;
+          }
+          if (ctype.startsWith('Array_Tuple_')) {
+            const initC = this.exprToC(init, lines, depth);
+            const qualifier = varKind === 'const' ? 'const ' : '';
+            p(`${qualifier}${ctype} ${name} = ${initC};`);
+            this.define(name, { ctype, varKind });
+            return;
+          }
           const elemIdent = ctype.slice(6); // Array_i32 тЖТ i32
           const etC2 = this._arrIdentToCType(elemIdent);
           this._ensureArrayStruct(ctype, etC2);

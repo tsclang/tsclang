@@ -64,9 +64,16 @@ export default {
     }
   },
 
+  _ensureRefArrayStruct(arrName, et) {
+    if (!this._emittedArrayStructs.has(arrName)) {
+      this._emittedArrayStructs.add(arrName);
+      this.addTop(`typedef struct { ${et} **data; size_t length; size_t capacity; } ${arrName};`);
+      this.addTop('');
+    }
+  },
+
   // Emit Array_T struct typedef (idempotent)
   _ensureArrayStruct(arrName, et) {
-
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} *data; size_t length; size_t capacity; } ${arrName};`);
