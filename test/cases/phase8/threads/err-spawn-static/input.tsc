@@ -1,0 +1,6 @@
+@static let counter: Array<i32> = new Array<i32>(10);
+let t = Thread.spawn(() => {
+    counter.push(1);
+});
+await t.join();
+console.log(counter.length);

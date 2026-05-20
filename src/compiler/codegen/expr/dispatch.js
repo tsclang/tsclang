@@ -432,9 +432,28 @@ export default {
             const srcType = this.inferType(sp.expr);
             const cls = this.classes.get(srcType);
             if (cls?.fields) {
+              const stringFields = [];
               for (const f of cls.fields) {
                 if (!explicitMap.has(f.name)) {
+                  const ftype = f._ctype || (f.typeAnn ? this.resolveType(f.typeAnn) : null);
                   resultProps.push([f.name, `${srcC}.${f.name}`, true]);
+                  if (ftype === 'String') {
+                    stringFields.push(f.name);
+                  }
+                }
+              }
+              if (stringFields.length > 0) {
+                const I = ' '.repeat(this.indent * depth);
+                for (const fn of stringFields) {
+                  lines.push(`${I}tsc_string_retain(${srcC}.${fn});`);
+                }
+              }
+              if (sp.expr.kind === 'Ident') {
+                const srcSym = this.lookup(sp.expr.name);
+                if (srcSym && srcSym.varKind !== 'const') {
+                  srcSym._moved = true;
+                  const srcName = sp.expr.name;
+                  this._pushPostStmtCleanup(`memset(&${srcName}, 0, sizeof(${srcType}));`);
                 }
               }
             }
@@ -442,7 +461,6 @@ export default {
           for (const [key, val] of explicitMap) {
             resultProps.push([key, this.exprToC(val, lines, depth), false]);
           }
-          // Sort: spread fields first (in field order), then explicit overrides
           const props = resultProps.map(([k, v]) => `.${k} = ${v}`);
           return props.length > 0 ? `{${props.join(', ')}}` : `{}`;
         }

@@ -123,8 +123,8 @@
         const tupleDef0 = this.classes.get(initType);
         const qual = varKind === 'const' ? 'const ' : '';
         if (tupleDef0?.isTuple) {
-          // Tuple destructuring: const [a, b] = pair → typed field access
           const initC = this.exprToC(init, lines, depth);
+          const srcIsLet = init?.kind === 'Ident' && this.lookup(init.name)?.varKind === 'let';
           for (let i = 0; i < pattern.length; i++) {
             const elem = pattern[i];
             if (!elem) continue;
@@ -132,6 +132,16 @@
             const ctype = field ? field.ctype.replace(' *', '') : 'int32_t';
             p(`${qual}${ctype} ${elem.name} = ${initC}._${i};`);
             this.define(elem.name, { ctype, varKind });
+            if (ctype === 'String') {
+              p(`tsc_string_retain(${elem.name});`);
+              if (srcIsLet && init.kind === 'Ident') {
+                p(`memset(&${init.name}._${i}, 0, sizeof(String));`);
+              }
+            }
+          }
+          if (srcIsLet && init.kind === 'Ident') {
+            const srcSym = this.lookup(init.name);
+            if (srcSym) srcSym._moved = true;
           }
         } else if (initType?.startsWith('Array_')) {
           // Array_T destructuring: const [first, ...rest] = arr

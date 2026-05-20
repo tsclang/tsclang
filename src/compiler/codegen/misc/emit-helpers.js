@@ -121,10 +121,32 @@ export default {
     findWrites(bodyStmts);
 
     // Validate captures
+    const _sendSafeTypes = new Set(['int8_t','int16_t','int32_t','int64_t',
+      'uint8_t','uint16_t','uint32_t','uint64_t','float','double','bool','size_t','String']);
+    const _checkSend = (ctype, seen = new Set()) => {
+      if (_sendSafeTypes.has(ctype) || ctype.startsWith('Atomic') || ctype.startsWith('Readonly')) return true;
+      if (ctype.startsWith('Array_') || ctype.startsWith('TscSet_') || ctype.startsWith('Map_') ||
+          ctype.startsWith('TscMap_') || ctype.startsWith('opt_')) return false;
+      const cls = this.classes.get(ctype);
+      if (!cls?.fields) return true;
+      if (seen.has(ctype)) return false;
+      seen.add(ctype);
+      for (const f of cls.fields) {
+        const ft = f._ctype || (f.typeAnn ? this.resolveType(f.typeAnn) : null);
+        if (ft && !_checkSend(ft, seen)) return false;
+      }
+      return true;
+    };
     for (const fv of freeVars) {
       const sym = this.lookup(fv.name);
       if (fv.ctype.endsWith(' *') && fv.ctype.includes('const ')) {
         throw this.error(`thread closure cannot capture "Ref<T>": not Send`);
+      }
+      if (sym?.isShared) {
+        throw this.error(`thread closure cannot capture "Shared<T>": use Atomic<T> for thread-safe shared state`);
+      }
+      if (sym?._isStaticArray || sym?._isStaticMap) {
+        throw this.error(`TypeError: Cannot capture @static variable '${fv.name}' in spawn block; use Atomic<T> for thread-safe access`);
       }
       if (writtenVars.has(fv.name) && sym?.varKind === 'let') {
         const classDef = this.classes.get(fv.ctype);
@@ -133,6 +155,9 @@ export default {
         } else {
           throw this.error(`TypeError: Cannot capture mutable variable '${fv.name}' by reference in a spawn block; use Shared<T> or Atomic<T>`);
         }
+      }
+      if (!_checkSend(fv.ctype)) {
+        throw this.error(`TypeError: Type '${fv.ctype}' is not Send — cannot be safely shared across threads; use Shared<T> or Atomic<T>`);
       }
     }
 

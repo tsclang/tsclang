@@ -361,6 +361,23 @@
             return fatName;
           }
         }
+        if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Shared') {
+          const argSymSh = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          if (argSymSh && a.expr.kind === 'Ident') {
+            if (argSymSh.isRefParam) {
+              throw this.error(
+                `TypeError: Cannot pass Ref<T> '${a.expr.name}' as Shared<T> — incompatible borrow types`,
+                a.expr
+              );
+            }
+            if (argSymSh.isMutParam) {
+              throw this.error(
+                `TypeError: Cannot pass Mut<T> '${a.expr.name}' as Shared<T> — mutable borrow cannot become shared reference`,
+                a.expr
+              );
+            }
+          }
+        }
         // Ref<T>/Mut<T> param: pass &var (for non-interface inner types)
         if (param.typeAnn?.kind === 'TypeRef' &&
             (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut')) {
@@ -369,6 +386,12 @@
             const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
             if (argSym2 && a.expr.kind === 'Ident') {
               if (param.typeAnn.name === 'Mut') {
+                if (argSym2.isRefParam) {
+                  throw this.error(
+                    `TypeError: Cannot re-borrow Ref<T> '${a.expr.name}' as Mut<T> — immutable borrow cannot become mutable`,
+                    a.expr
+                  );
+                }
                 if (argSym2.isShared) {
                   throw this.error(
                     `TypeError: Cannot create mutable borrow of Shared<T> '${a.expr.name}' — Shared does not give exclusive access`,
@@ -445,6 +468,24 @@
           if ((_hasFields || _isArray) && !_isBorrow) {
             const _moveArgSym = this.lookup(a.expr.name);
             if (_moveArgSym) {
+              if (_moveArgSym.isRefParam) {
+                throw this.error(
+                  `TypeError: Cannot pass Ref<T> '${a.expr.name}' as owned parameter — borrow cannot be consumed`,
+                  a.expr
+                );
+              }
+              if (_moveArgSym.isMutParam) {
+                throw this.error(
+                  `TypeError: Cannot pass Mut<T> '${a.expr.name}' as owned parameter — mutable borrow cannot be consumed`,
+                  a.expr
+                );
+              }
+              if (_moveArgSym.isShared) {
+                throw this.error(
+                  `TypeError: Cannot pass Shared<T> '${a.expr.name}' as owned parameter — shared reference cannot be consumed`,
+                  a.expr
+                );
+              }
               if (_moveArgSym.varKind === 'const') {
                 throw this.error(`cannot move out of "const" binding`, a.expr, { code: 'E003' });
               }

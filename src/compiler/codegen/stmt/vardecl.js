@@ -1412,6 +1412,15 @@ export default {
               }
               if (ctype === 'String' && init.kind === 'Index') {
                 p(`tsc_string_retain(${name});`);
+                if (init.object.kind === 'Ident' && init.index.kind === 'Literal' && init.index.litType === 'number') {
+                  const objSym = this.lookup(init.object.name);
+                  const objType = objSym?.ctype;
+                  const tupleDef = objType ? this.classes.get(objType) : null;
+                  if (tupleDef?.isTuple && objSym?.varKind === 'let') {
+                    const fieldIdx = parseInt(init.index.value, 10);
+                    p(`memset(&${init.object.name}._${fieldIdx}, 0, sizeof(String));`);
+                  }
+                }
               }
               // Move semantics: mark source moved and zero out (after emit)
               if (init.kind === 'Ident') {

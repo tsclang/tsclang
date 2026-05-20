@@ -1,0 +1,7 @@
+class Box { value: i32 = 0; }
+function mutate(b: Mut<Box>): void {
+    b.value = 42;
+}
+function read(b: Ref<Box>): void {
+    mutate(b);
+}

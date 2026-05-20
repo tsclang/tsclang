@@ -1,0 +1,7 @@
+class Box { value: i32 = 0; }
+function consume(b: Box): void {
+    console.log(b.value);
+}
+function read(b: Ref<Box>): void {
+    consume(b);
+}

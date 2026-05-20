@@ -460,6 +460,7 @@ export default {
           : undefined;
         const _funcRet = _isFuncParam ? (p.typeAnn.ret ? this.resolveType(p.typeAnn.ret) : 'void') : undefined;
         this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
+                              ...(_isMut ? { isMutParam: true } : {}),
                               ...(_isShared ? { isShared: true, derefType: _derefType } : {}),
                               ...(_isFuncParam ? { funcPtr: true, closureRetType: _funcRet } : {}),
                               ...(_derefType && !_isShared ? { derefType: _derefType } : {}) });

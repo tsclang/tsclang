@@ -7,6 +7,7 @@ int main(void) {
     const tuple_i32_string pair = {._0 = 42, ._1 = STR_LIT("answer")};
     const int32_t a = pair._0;
     const String b = pair._1;
+    tsc_string_retain(b);
     printf("%d\n", a);
     printf("%s\n", b.data);
     return 0;

@@ -1,0 +1,4 @@
+let pair: [i32, string] = [1, "hello"];
+let [a, b] = pair;
+console.log(a);
+console.log(b);
