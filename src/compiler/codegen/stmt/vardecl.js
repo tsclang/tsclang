@@ -782,6 +782,10 @@ export default {
           } // end if innerInit2?.kind === 'Ident'
         }
         let ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'double');
+        if (ctype === 'String *' && init?.kind === 'Ident') {
+          const initSym = this.lookup(init.name);
+          if (initSym?.isRefParam && initSym?.derefType === 'String') ctype = 'String';
+        }
         // Reading a volatile variable into a local gives a plain (non-volatile) type
         if (!typeAnn && ctype.startsWith('volatile ')) ctype = ctype.slice('volatile '.length);
         // Untyped number literals: integer тЖТ int32_t, float/decimal тЖТ double
@@ -1169,12 +1173,16 @@ export default {
               }
             }
             if (ctype === 'String') {
-              p(`tsc_string_retain(${init.name});`);
+              const initSymS = this.lookup(init.name);
+              const derefInit = this._derefStrPtr(initSymS, init.name);
+              p(`tsc_string_retain(${derefInit});`);
             }
             if (this._gotoCleanupPreDecls?.has(name)) {
-              p(`${name} = ${this.exprToC(init, lines, depth)};`);
+              const initSymS = this.lookup(init.name);
+              p(`${name} = ${this._derefStrPtr(initSymS, this.exprToC(init, lines, depth))};`);
             } else {
-              p(`${this.varDecl(qualifier, ctype, name)} = ${this.exprToC(init, lines, depth)};`);
+              const initSymS = this.lookup(init.name);
+              p(`${this.varDecl(qualifier, ctype, name)} = ${this._derefStrPtr(initSymS, this.exprToC(init, lines, depth))};`);
             }
             // Move semantics: mark source moved and zero out
             { const initSym2 = this.lookup(init.name);

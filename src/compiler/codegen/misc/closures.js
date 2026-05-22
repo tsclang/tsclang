@@ -31,11 +31,12 @@ export default {
     });
 
     // If all expressions are strings → use tsc_string_concat chain
-    const allStrings = compiled.every(p => p.kind === 'str' || p.t === 'String');
+    const allStrings = compiled.every(p => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
     if (allStrings) {
       const pieces = [];
       for (const p of compiled) {
         if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${p.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`); }
+        else if (p.t === 'String *') pieces.push(`(*${p.c})`);
         else pieces.push(p.c);
       }
       if (pieces.length === 0) return 'STR_LIT("")';
@@ -59,6 +60,7 @@ export default {
         else if (t === 'float')    { fmt += '%g'; fmtArgs.push(`(double)${c}`); }
         else if (t === 'bool')     { fmt += '%s'; fmtArgs.push(`(${c}) ? "true" : "false"`); }
         else if (t === 'String')   { fmt += '%.*s'; fmtArgs.push(`(int)${c}.length, ${c}.data`); }
+        else if (t === 'String *') { fmt += '%.*s'; fmtArgs.push(`(int)(*${c}).length, (*${c}).data`); }
         else                       { fmt += '%d'; fmtArgs.push(c); }
       }
     }
@@ -181,9 +183,11 @@ export default {
     }
 
     const paramStrs = [`${envName} *env`];
-    for (const p of (arrowNode.params ?? [])) {
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
-      paramStrs.push(`${ct} ${p.name}`);
+    for (let i = 0; i < (arrowNode.params ?? []).length; i++) {
+      const p = arrowNode.params[i];
+      const hinted = this._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
+      paramStrs.push(ct === 'String *' ? `${ct}${p.name}` : `${ct} ${p.name}`);
     }
 
     this.pushScope();
@@ -197,16 +201,25 @@ export default {
         this.define(nm, { ...sym, _closureEnvVar: nm });
       }
     }
-    for (const p of (arrowNode.params ?? [])) {
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'void *';
-      this.define(p.name, { ctype: ct });
+    for (let i = 0; i < (arrowNode.params ?? []).length; i++) {
+      const p = arrowNode.params[i];
+      const hinted = this._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
+      const symInfo = { ctype: ct };
+      if (ct === 'String *') {
+        symInfo.isPointer = true;
+        symInfo.isRefParam = true;
+        symInfo.derefType = 'String';
+      }
+      this.define(p.name, symInfo);
     }
     const bodyLines = [];
     if (arrowNode.body.kind === 'Block') {
       this.visitBlock(arrowNode.body, bodyLines, 0);
     } else {
       const c = this.exprToC(arrowNode.body, bodyLines, 0);
-      bodyLines.push(`return ${c};`);
+      const bodySym = arrowNode.body.kind === 'Ident' ? this.lookup(arrowNode.body.name) : null;
+      bodyLines.push(`return ${this._derefStrPtr(bodySym, c)};`);
     }
     this.popScope();
 

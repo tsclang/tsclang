@@ -174,7 +174,8 @@
                 }
               }
               if (!_isUnknownReturn) this._emitRetainIfNeeded(c, node.value, p);
-              p(`return ${c};`);
+              const retSym = node.value.kind === 'Ident' ? this.lookup(node.value.name) : null;
+              p(`return ${this._derefStrPtr(retSym, c)};`);
             } else {
               p('return;');
             }

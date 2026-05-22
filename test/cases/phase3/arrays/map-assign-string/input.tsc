@@ -1,0 +1,7 @@
+const arr: string[] = ["hello", "world"];
+const result = arr.map(s => {
+  const x = s;
+  return x;
+});
+console.log(result[0]);
+console.log(result[1]);

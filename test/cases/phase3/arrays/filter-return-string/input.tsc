@@ -1,0 +1,3 @@
+const arr: string[] = ["hi", "hello", "hey"];
+const result = arr.filter(s => s.length > 3);
+console.log(result.length);

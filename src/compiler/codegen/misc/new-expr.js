@@ -223,7 +223,8 @@ export default {
       this.visitBlock(node.body, lines, 0);
     } else {
       const c = this.exprToC(node.body, lines, 0);
-      lines.push(`return ${c};`);
+      const bodySym = node.body.kind === 'Ident' ? this.lookup(node.body.name) : null;
+      lines.push(`return ${this._derefStrPtr(bodySym, c)};`);
     }
     this.popScope();
     this._inHoistedLambda = false;
@@ -265,6 +266,12 @@ export default {
     if (node.body.kind !== 'Block') {
       result = this.inferType(node.body) ?? 'void';
     } else {
+      for (const stmt of (node.body.body ?? [])) {
+        if (stmt.kind === 'VarDecl' && stmt.init) {
+          const initCt = this.inferType(stmt.init);
+          if (initCt) this.define(stmt.name, { ctype: initCt === 'String *' ? 'String' : initCt });
+        }
+      }
       const retExpr = this._scanReturnExpr(node.body);
       if (retExpr) result = this.inferType(retExpr) ?? 'void';
     }

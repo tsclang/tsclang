@@ -96,6 +96,10 @@ export default {
             this._registerCleanup(`tsc_array_free_${et}(&${objC})`);
             if (sym) sym.arraySize = undefined;
           }
+          if (args[0]?.expr.kind === 'Ident') {
+            const _pushArgSym = this.lookup(args[0].expr.name);
+            elemC = this._derefStrPtr(_pushArgSym, elemC);
+          }
           return `tsc_array_push_${et}(&${objC}, ${elemC})`;
         }
         case 'pop': {

@@ -250,6 +250,9 @@ class Context {
       }
     }
   }
+  _derefStrPtr(sym, cexpr) {
+    return sym?.ctype === 'String *' ? `(*${cexpr})` : cexpr;
+  }
   _checkBorrowsAcrossAwait(awaitNode) {
     for (const scopeLevel of this.scopes) {
       for (const [sname, sym] of scopeLevel) {
