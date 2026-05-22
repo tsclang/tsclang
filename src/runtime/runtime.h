@@ -533,10 +533,16 @@ static inline void *_tsc_arc_alloc(size_t sz) {
 }
 #define tsc_arc_alloc(sz) _tsc_arc_alloc(sz)
 #define tsc_arc_retain(ptr) ((ptr)->_refcount++, (ptr))
-#define tsc_arc_release(ptr) do { if (--(ptr)->_refcount <= 0) free(ptr); } while(0)
+#define tsc_arc_release(ptr) do { \
+    --(ptr)->_refcount; \
+    if ((ptr)->_refcount <= 0 && (ptr)->_weakcount <= 0) free(ptr); \
+} while(0)
 #define tsc_weak_create(ptr) ((ptr)->_weakcount++, (ptr))
 #define tsc_weak_upgrade(ptr) ((ptr)->_refcount > 0 ? ((ptr)->_refcount++, (ptr)) : NULL)
-#define tsc_weak_release(ptr) do { --(ptr)->_weakcount; } while(0)
+#define tsc_weak_release(ptr) do { \
+    --(ptr)->_weakcount; \
+    if ((ptr)->_weakcount <= 0 && (ptr)->_refcount <= 0) free(ptr); \
+} while(0)
 
 /* Optional byte (for string.at()) */
 typedef struct { bool has_value; uint8_t value; } opt_u8;
@@ -2206,7 +2212,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_map_for_each_string_i32(_m_, _fn_) do { \
     const TscMap_string_i32 *_mf_ = (_m_); \
-    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_]); \
+    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_], _mf_->_keys[_i_]); \
 } while(0)
 
 #define tsc_map_values_string_i32(_m_) ({ \
@@ -2332,7 +2338,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_map_for_each_string_string(_m_, _fn_) do { \
     const TscMap_string_string *_mf_ = (_m_); \
-    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_]); \
+    for (size_t _i_ = 0; _i_ < _mf_->size; _i_++) _fn_(_mf_->_vals[_i_], _mf_->_keys[_i_]); \
 } while(0)
 
 // StaticMap: fixed-capacity map backed by parallel arrays (no heap)

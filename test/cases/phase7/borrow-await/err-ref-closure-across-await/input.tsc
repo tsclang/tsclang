@@ -1,0 +1,11 @@
+class Box { value: i32 = 0; }
+async function foo(): Promise<void> {
+    let b = new Box();
+    b.value = 42;
+    const fn = [b: Ref<Box>](): i32 => {
+        return b.value;
+    };
+    await sleep(100);
+    const x = fn();
+    console.log(x);
+}

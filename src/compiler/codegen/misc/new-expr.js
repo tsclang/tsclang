@@ -198,6 +198,12 @@ export default {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
       return ct === 'String *' ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
+    if (this._lambdaParamHint) {
+      for (let i = (node.params?.length ?? 0); i < this._lambdaParamHint.length; i++) {
+        const ct = this._lambdaParamHint[i];
+        paramStrs.push(ct === 'String *' ? `${ct} _unused_${i}` : `${ct} _unused_${i}`);
+      }
+    }
     const lines = [];
     this.pushScope();
     this._inHoistedLambda = true;

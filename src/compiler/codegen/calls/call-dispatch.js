@@ -159,10 +159,12 @@
       const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
       if (sym.isClosure) {
+        this._releaseQuarantineBy(callee.name);
         const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
         const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
         return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
       }
+      this._releaseQuarantineBy(callee.name);
       const sigArgs = paramTypes.join(', ') || 'void';
       return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${argsC})`;
     }
@@ -261,6 +263,7 @@
     const hasSpreadArgs = args.some(a => a.spread);
     if (symParams && !hasSpreadArgs) {
       const I = ' '.repeat(this.indent * depth);
+      const _callMutBorrowedSyms = [];
       // Pre-pass: detect same variable passed as Mut<T> to multiple params of the same call
       {
         const mutArgNames = new Map();
@@ -413,6 +416,7 @@
                   );
                 }
                 argSym2._mutBorrowedBy = calleeC;
+                _callMutBorrowedSyms.push(argSym2);
               } else {
                 // Ref<T>: mark as immutably borrowed (for future Mut<T> checks)
                 this._trackRefBorrow(argSym2);
@@ -508,7 +512,9 @@
         }
         return _argC;
       });
-      return `${calleeC}(${coercedArgs.join(', ')})`;
+      const result = `${calleeC}(${coercedArgs.join(', ')})`;
+      for (const sym of _callMutBorrowedSyms) delete sym._mutBorrowedBy;
+      return result;
     }
 
     const argsC = this.argsToC(args, lines, depth);

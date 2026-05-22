@@ -2,6 +2,11 @@
 
 typedef struct { int32_t _refcount; int32_t _weakcount; String name; } Node;
 
+static void Node_free(Node *self) {
+    if (!self) return;
+    tsc_string_release(self->name);
+}
+
 int main(void) {
     TSC_INIT();
     Node *n = tsc_arc_alloc(sizeof(Node));
@@ -13,6 +18,6 @@ int main(void) {
         tsc_arc_release(strong);
     }
     tsc_weak_release(w);
-    tsc_arc_release(n);
+    Node_free(n); tsc_arc_release(n);
     return 0;
 }

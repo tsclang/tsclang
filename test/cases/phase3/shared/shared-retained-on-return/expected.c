@@ -1,6 +1,6 @@
 #include "runtime.h"
 
-typedef struct { int32_t _refcount; int32_t val; } Counter;
+typedef struct { int32_t _refcount; int32_t _weakcount; int32_t val; } Counter;
 
 Counter *identity_shared_Counter(Counter *c) {
     tsc_arc_retain(c);

@@ -124,7 +124,7 @@ export default {
           sym._movedLine = arrowNode.line ?? 0;
         }
         if (mode === 'mut') {
-          this._trackMutQuarantine(sym);
+          this._trackMutQuarantine(sym, varName);
         }
         if (mode === 'ref') {
           this._trackRefBorrow(sym);
@@ -231,8 +231,12 @@ export default {
       return `.${nm} = ${src}`;
     }).join(', ') + '}';
 
+    const captureModes = explicitCaptures
+      ? new Map(explicitCaptures.map(c => [c.name, c.mode]))
+      : null;
+
     return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,
-             retainLines, hasStringCapture, destroyFnName, capturedStringFields, envName };
+             retainLines, hasStringCapture, destroyFnName, capturedStringFields, envName, captureModes };
   },
 
   // Special codegen for iter() method of Iterable<T> class.

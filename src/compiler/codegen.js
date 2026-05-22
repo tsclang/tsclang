@@ -82,6 +82,7 @@ class Context {
     this.scopes = [new Map()];
     this._scopeBorrowStack = [[]];
     this._scopeMutQuarantineStack = [[]];
+    this._scopeMutBorrowStack = [[]];
     // Known classes: name → { fields, methods }
     this.classes = new Map();
     // Known interfaces
@@ -188,9 +189,24 @@ class Context {
     this.scopes.push(new Map());
     this._scopeBorrowStack.push([]);
     this._scopeMutQuarantineStack.push([]);
+    this._scopeMutBorrowStack.push([]);
   }
   popScope()  {
-    this.scopes.pop();
+    const scope = this.scopes.pop();
+    const dyingClosures = new Set();
+    for (const [name, sym] of scope) {
+      if (sym.funcPtr || sym.isClosure) dyingClosures.add(name);
+    }
+    if (dyingClosures.size > 0) {
+      for (const scopeLevel of this.scopes) {
+        for (const [, sym] of scopeLevel) {
+          if (sym._quarantinedBy && dyingClosures.has(sym._quarantinedBy)) {
+            delete sym._mutQuarantined;
+            delete sym._quarantinedBy;
+          }
+        }
+      }
+    }
     const borrows = this._scopeBorrowStack.pop();
     for (const sym of borrows) {
       sym._refBorrowCount = (sym._refBorrowCount || 0) - 1;
@@ -199,6 +215,11 @@ class Context {
     const mutQ = this._scopeMutQuarantineStack.pop();
     for (const sym of mutQ) {
       delete sym._mutQuarantined;
+      delete sym._quarantinedBy;
+    }
+    const mutB = this._scopeMutBorrowStack.pop();
+    for (const sym of mutB) {
+      delete sym._mutBorrowedBy;
     }
   }
   _trackRefBorrow(sym) {
@@ -207,11 +228,45 @@ class Context {
     const current = this._scopeBorrowStack[this._scopeBorrowStack.length - 1];
     if (current) current.push(sym);
   }
-  _trackMutQuarantine(sym) {
+  _trackMutBorrow(sym) {
+    if (!sym) return;
+    const current = this._scopeMutBorrowStack[this._scopeMutBorrowStack.length - 1];
+    if (current) current.push(sym);
+  }
+  _trackMutQuarantine(sym, closureVarName = null) {
     if (!sym) return;
     sym._mutQuarantined = true;
+    if (closureVarName) sym._quarantinedBy = closureVarName;
     const current = this._scopeMutQuarantineStack[this._scopeMutQuarantineStack.length - 1];
     if (current) current.push(sym);
+  }
+  _releaseQuarantineBy(closureVarName) {
+    for (const scopeLevel of this.scopes) {
+      for (const [, sym] of scopeLevel) {
+        if (sym._quarantinedBy === closureVarName) {
+          delete sym._mutQuarantined;
+          delete sym._quarantinedBy;
+        }
+      }
+    }
+  }
+  _checkBorrowsAcrossAwait(awaitNode) {
+    for (const scopeLevel of this.scopes) {
+      for (const [sname, sym] of scopeLevel) {
+        if (sym._mutQuarantined) {
+          throw this.error(
+            `Cannot hold mutable reference to "${sname}" across "await" (potential asynchronous aliasing)`,
+            awaitNode
+          );
+        }
+        if ((sym._refBorrowCount || 0) > 0) {
+          throw this.error(
+            `"${sname}" cannot live across "await"; use ".clone()" to make an owned copy`,
+            awaitNode
+          );
+        }
+      }
+    }
   }
   _trackBorrowForRefReturn(callNode, resultName, mode) {
     if (!callNode?.args?.length) return;

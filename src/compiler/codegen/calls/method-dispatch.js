@@ -492,9 +492,11 @@ export default {
         const cbArg = args[0]?.expr;
         if (!cbArg || cbArg.kind !== 'Arrow') return null;
         const parts = mapSuffix.split('_');
+        const kIdent = parts[0];
         const vIdent = parts.slice(1).join('_');
+        const kCType = this._arrIdentToCType(kIdent);
         const vCType = this._arrIdentToCType(vIdent);
-        this._lambdaParamHint = [vCType];
+        this._lambdaParamHint = [vCType, kCType];
         const cbFnName = this._extractCallbackFn(args[0], lines, depth);
         this._lambdaParamHint = null;
         if (!cbFnName) return null;

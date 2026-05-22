@@ -1,6 +1,6 @@
 #include "runtime.h"
 
-typedef struct { int32_t _refcount; int32_t value; } Node;
+typedef struct { int32_t _refcount; int32_t _weakcount; int32_t value; } Node;
 
 int32_t view_ref_Node(const Node *n) {
     return n->value;

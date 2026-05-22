@@ -156,12 +156,10 @@ export default {
 
       if (arcInfo) {
         const arcPre = arcInfo.refFirst ? [
-          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
-          ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
+          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ] : [];
         const arcPost = arcInfo.refFirst ? [] : [
-          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;'] : []),
-          ...(arcInfo.weak ? ['int32_t _weakcount;'] : []),
+          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
         const isSelfRef = fields.some(f => {

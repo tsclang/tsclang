@@ -1,0 +1,6 @@
+let m = new Map<string, i32>();
+m.set("x", 1);
+m.set("y", 2);
+m.forEach((v) => {
+    console.log(v);
+});

@@ -1,0 +1,6 @@
+class Counter { count: i32 = 0; }
+let c = new Counter();
+c.count = 5;
+const fn = [c: Mut<Counter>](): void => { c.count += 10; };
+fn();
+console.log(c.count);

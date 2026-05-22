@@ -581,7 +581,15 @@ export default {
             }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
             this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
-            this._registerCleanup(`tsc_arc_release(${name})`);
+            const sFields = this._getStringFields(innerType);
+            if (sFields.length > 0) {
+              this._ensureClassFree(innerType);
+              const freeFn = this.classes.get(innerType)?._classFreeFn;
+              if (freeFn) this._registerCleanup(`${freeFn}(${name}); tsc_arc_release(${name})`);
+              else this._registerCleanup(`tsc_arc_release(${name})`);
+            } else {
+              this._registerCleanup(`tsc_arc_release(${name})`);
+            }
             return;
           }
         }
@@ -1060,6 +1068,8 @@ export default {
               }
               const closureLine = (node.line ?? 1) - 1;
               for (const [nm] of closure.capturedVars) {
+                const mode = closure.captureModes?.get(nm);
+                if (mode === 'mut' || mode === 'ref') continue;
                 const capSym = this.lookup(nm);
                 if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
               }
@@ -1127,6 +1137,8 @@ export default {
               }
               const closureLine = (node.line ?? 1) - 1;
               for (const [nm] of closure.capturedVars) {
+                const mode = closure.captureModes?.get(nm);
+                if (mode === 'mut' || mode === 'ref') continue;
                 const capSym = this.lookup(nm);
                 if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
               }
@@ -1397,6 +1409,7 @@ export default {
                     );
                   }
                   srcSym._mutBorrowedBy = `_mut_var_${name}`;
+                  this._trackMutBorrow(srcSym);
                 }
               }
               if (ctype === 'String' && init.kind === 'Ident') {

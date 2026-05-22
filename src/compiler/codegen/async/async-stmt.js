@@ -25,6 +25,7 @@ export default {
     // ── await in VarDecl ──
     if (s.kind === 'VarDecl' && s.init?.kind === 'Await') {
       this._checkAwaitTarget(s.init);
+      this._checkBorrowsAcrossAwait(s.init);
       const ai = this._awaitInfoOf(s.init);
       if (!ai) return;
 
@@ -134,6 +135,7 @@ export default {
 
     // ── await in VarDestructArr (const [x,y] = await Promise.all([...])) ──
     if (s.kind === 'VarDestructArr' && s.init?.kind === 'Await') {
+      this._checkBorrowsAcrossAwait(s.init);
       const ai = this._awaitInfoOf(s.init);
       if (!ai || ai.kind !== 'promise-all') return;
 
@@ -206,6 +208,7 @@ export default {
         }
       }
       this._checkAwaitTarget(s.expr);
+      this._checkBorrowsAcrossAwait(s.expr);
       const ai = this._awaitInfoOf(s.expr);
       if (!ai) return;
 
