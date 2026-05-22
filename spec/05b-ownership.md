@@ -306,14 +306,14 @@ _closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
 | String struct | 32 байта (`data`, `length`, `capacity`, `_refcount`) | 24 байта (нет `_refcount`) |
 | Литералы (`"hello"`) | rodata, `capacity=0`, `_refcount=NULL` | rodata, `capacity=0` (без `_refcount`) |
 | `tsc_string_retain` | `if (_refcount) (*_refcount)++` | No-op (пустая inline функция) |
-| `tsc_string_release` | `if (_refcount && --*_refcount == 0) { free(_refcount); free(data); }` | `if (capacity > 0) free(data)` |
-| Heap-строки (concat, slice, etc.) | `malloc` для data + `_refcount`, ARC | `malloc` для data только, нет refcount |
-| Safe temp pattern | retain new → release old → assign | Присваивание без retain (no-op), release = `free(old data)` |
+| `tsc_string_release` | `if (_refcount && --*_refcount == 0) { free(_refcount); free(data); }` | No-op `(void)s` |
+| Heap-строки (concat, slice, etc.) | `malloc` для data + `_refcount`, ARC | Ring buffer (`_tsc_str_alloc`) — нет индивидуального `free` |
+| Safe temp pattern | retain new → release old → assign | Присваивание без retain/release (no-ops) |
 | Implicit borrow параметров | Caller не retain, callee не release | Аналогично |
-| Замыкания с string capture | Retain в env, release в destroy fn | No-op retain, release = `free(data)` в destroy fn |
+| Замыкания с string capture | Retain в env, release в destroy fn | No-op retain/release |
 | `Shared<string>` | Не поддерживается (свой ARC) | Не поддерживается |
 
-**Ключевое отличие:** на embedded нет ARC — нет `_refcount`, retain всегда no-op, release = `free(data)` при `capacity>0`. Строки на embedded — «один владелец»: нет sharing, нет refcount. Каждая heap-строка освобождается ровно один раз.
+**Ключевое отличие:** на embedded нет ARC — нет `_refcount`, `retain`/`release` = no-ops. Строки выделяются из ring buffer (`_tsc_str_pool`) при конкатенации/slice; литералы — rodata (`capacity = 0`). Ring buffer не поддерживает индивидуальный `free` — память переиспользуется при переполнении. Нет sharing, нет refcount.
 
 **C-определение String struct:**
 
@@ -392,7 +392,7 @@ const m: Mut<User> = container.user;  // ❌ Cannot borrow a class field
 
 ### Классы с string-полями
 
-Компилятор автоматически генерирует `ClassName_free()` — деструктор, который вызывает `tsc_string_release` для каждого string-поля:
+Компилятор автоматически генерирует `ClassName_free()` — деструктор, который вызывает `tsc_string_release` для каждого string-поля. Функция **не** вызывает `free(self)` — классы размещаются на стеке как value types. Генерируется только для классов, имеющих string-поля.
 
 ```typescript
 class User {
@@ -403,12 +403,13 @@ class User {
 
 ```c
 static void User_free(User *self) {
+    if (!self) return;
     tsc_string_release(self->name);
     tsc_string_release(self->email);
 }
 ```
 
-Деструктор вызывается в cleanup-секции при выходе из scope, где класс был создан или перемещён.
+Деструктор вызывается в cleanup-секции при выходе из scope, где класс был создан или перемещён: `User_free(&u)`.
 
 ### Поведение внутри функций
 
@@ -536,16 +537,16 @@ const { name, email } = user;
 
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
-| `new User()` | `User *u = malloc(sizeof(User)); memset(u, 0, sizeof(User));` | Статический аллокатор: `User u = {0};` (на стеке или в BSS) |
+| `new User()` | `User u = User_new(args);` — stack value, return by value | Аналогично: `User u = {0};` (на стеке или в BSS) |
 | Move (zero-out) | `memset(&src, 0, sizeof(T))` | Аналогично |
 | Ref/Mut borrow | Pointer (`const T*` / `T*`) | Pointer (идентично) |
-| `ClassName_free()` | `free(ptr)` + release string-полей | No-op или static reset (string-поля — no-op retain/release) |
+| `ClassName_free()` | Release string-полей только (без `free(self)`) | No-op (string-поля — no-op retain/release) |
 | Замыкания с class capture | Pointer в env struct (borrow) | Pointer (идентично) |
 | Spread объекта | Move полей + retain string-полей | Move полей (string — no-op retain) |
 | Деструктуризация объекта | Move полей + retain string-полей + cleanup release | Move полей (string — no-op) |
-| Деструктор при exit | Cleanup loop: `for (...) free(...)` | Cleanup loop: `for (...) {0}` (reset без free) |
+| Деструктор при exit | `User_free(&u)` — release string-полей | No-op |
 
-**Ключевое отличие:** на embedded нет heap → нет `malloc`/`free`. Объекты размещаются на стеке или в статической памяти (BSS). Move = копирование struct + zero-out оригинала, но без освобождения памяти (нечего освобождать). String-поля на embedded — no-op retain/release (строки всегда rodata).
+**Ключевое отличие:** классы — **value types**, размещаются на стеке как struct. Конструктор возвращает struct by value (`User User_new(args) { User self = {0}; ... return self; }`), call site: `User u = User_new(args)`. Нет `malloc`/`free` для самого объекта. `ClassName_free(&u)` освобождает только string-поля, не вызывает `free(self)`. На embedded нет heap → нет `malloc`/`free` вообще. String-поля на embedded — no-op retain/release (ring buffer).
 
 ### Почему так
 
@@ -1243,7 +1244,7 @@ _cleanup:
 
 **Почему `goto _cleanup`, а не inline cleanup:** один блок cleanup вместо N копий release/free вызовов на каждом exit point. На AVR/NES экономия ROM критична.
 
-**Почему безусловный release всех полей:** SM struct инициализируется `{0}` — String поля `{0}` имеют `data=NULL, _refcount=NULL`, release = no-op. Класс-поля `{0}` → `ClassName_free` с `if (!self) return;`. Безопасно.
+**Почему безусловный release всех полей:** SM struct инициализируется `{0}` — String поля `{0}` имеют `data=NULL, _refcount=NULL`, release = no-op. Класс-поля `{0}` → `ClassName_free` с `if (!self) return;`. Классы — value types на стеке, `_free` освобождает только string-поля, не `free(self)`. Безопасно.
 
 **Opt-out:** если async-функция не имеет string/class/array полей (только примитивы), cleanup label не генерируется — exit points остаются `self->_done = true; return;` без overhead.
 
@@ -1266,8 +1267,8 @@ Borrow не может быть сохранён в SM struct — нет гар�
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
 | `tsc_string_retain` на capture | `if (_refcount) (*_refcount)++` | No-op |
-| `tsc_string_release` в cleanup | Decrement refcount, free при 0 | `if (capacity > 0) free(data)` |
-| `ClassName_free` в cleanup | `free(ptr)` + release string-полей | No-op или static reset |
+| `tsc_string_release` в cleanup | Decrement refcount, free при 0 | No-op (ring buffer, нет индивидуального free) |
+| `ClassName_free` в cleanup | Release string-полей (без `free(self)`) | No-op |
 | Cleanup label | Генерируется при наличии string/class полей | Аналогично (no-op retain/release) |
 | `goto _cleanup` overhead | Нет (внутри switch) | Нет |
 

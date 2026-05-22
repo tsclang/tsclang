@@ -31,7 +31,7 @@
 
 - **Примитивы** (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) — всегда **копируются**, borrow checker не применяется; `T | null` компилируется в struct с флагом
 - **Сложные типы** (массивы, объекты, классы) — управляются ownership системой (move при присвоении)
-  - **Строки (`string`)** — **immutable + ARC**. Каждый владелец `String` делает `tsc_string_retain` при получении и `tsc_string_release` при потере значения. Литералы не выделяют heap (`capacity = 0`, data → rodata, `_refcount = NULL`); heap-строки получают `_refcount` через `_tsc_str_make`. На embedded (`TSC_EMBEDDED`) строки всегда rodata, ARC не используется, struct не содержит `_refcount`. `s[i]` возвращает `u8` (примитив, copy) — индексация не создаёт borrow. Подробности ARC — см. раздел «String ARC» ниже.
+  - **Строки (`string`)** — **immutable + ARC**. Каждый владелец `String` делает `tsc_string_retain` при получении и `tsc_string_release` при потере значения. Литералы не выделяют heap (`capacity = 0`, data → rodata, `_refcount = NULL`); heap-строки получают `_refcount` через `_tsc_str_make`. На embedded (`TSC_EMBEDDED`) нет ARC — `retain`/`release` = no-op, строки выделяются из ring buffer (`_tsc_str_pool`) при конкатенации/slice; литералы — rodata (`capacity = 0`). Ring buffer не поддерживает индивидуальный `free` — память переиспользуется при переполнении. `s[i]` возвращает `u8` (примитив, copy) — индексация не создаёт borrow. Подробности ARC — см. раздел «String ARC» ниже.
 
 ## Owner (T) — владение
 
@@ -613,25 +613,24 @@ const greet = (name: string): string => {
 
 ## Автоматический Drop
 
-Компилятор вставляет `free()` в конце scope владельца:
+Компилятор вставляет `_free()` в конце scope владельца. Классы размещаются на стеке как value types — `User u = User_new(args)`. Деструктор `ClassName_free(User *self)` освобождает только string-поля (`tsc_string_release`), не вызывает `free(self)`.
 
 ```c
 {
-    User* b = User_new();
+    User b = User_new();
     // ... логика ...
-    User_free(b);  // вставлено автоматически
+    User_free(&b);  // вставлено автоматически — release string-полей, не free()
 }
 ```
 
 При множественных `return` — единая точка очистки:
 
 ```c
-void process(User* u) {
-    if (!u) goto cleanup;
+void process(User u) {
     if (error) goto cleanup;
     // ... работа ...
 cleanup:
-    if (u_is_owned) User_free(u);
+    if (u_is_owned) User_free(&u);
 }
 ```
 
