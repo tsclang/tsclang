@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1258 тестов ✓** (2026-05-20)
+**Итого: 1265 тестов ✓** (2026-05-21)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1090,9 +1090,23 @@
 
  > 2026-05-20: **M1 отложен до phase 18** — borrow elision для field access записан в SPEC.md как открытый дизайн-вопрос
 
+ > 2026-05-21: **Ownership audit round 4 — S1-S10 (spread, borrow guards, Send check, tuple move)** (1258 → 1265):
+ > - **S1 fixed**: Object spread string double-free — `tsc_string_retain()` для String-полей + `memset(&src, 0, ...)` для `let` source. `const` source — retain без zeroing (source жив). Обновлён `spread-string` expected.c
+ > - **S2 fixed**: Ref→Mut в call args — guard в `call-dispatch.js`: `argSym2.isRefParam` при `Mut<T>` param → compile-time error. Тест: `err-ref-to-mut-call` (E)
+ > - **S3 fixed**: Mut→Shared в call args — guard: `argSymSh.isMutParam` при `Shared<T>` param → compile-time error. Добавлен `isMutParam` флаг в func.js. Тест: `err-mut-to-shared-call` (E)
+ > - **S4 fixed**: Tuple String field extraction — `tsc_string_retain()` + `memset(&pair._N, 0, sizeof(String))` для `let` source. Обновлён `string-ownership` expected.c. Tuple destruct из `let` — retain + zero source field
+ > - **S5 fixed**: @static let + Thread.spawn — guard в `emit-helpers.js`: `_isStaticArray`/`_isStaticMap` → compile-time error. Тест: `err-spawn-static` (E)
+ > - **S6 fixed**: Recursive Send-check — `_checkSend()` в emit-helpers.js: примитивы, String, Atomic, Readonly → OK; Array, Set, Map, opt, Shared, Weak, Ref, Mut → error. Рекурсивная проверка полей класса
+ > - **S7**: Weak upgrade тест — `weak-null-after-free` (R): Shared→Weak→upgrade→alive path
+ > - **S8 fixed**: Ref/Mut/Shared→owned param guards — 3 новых guard'а в move-semantics block. Тест: `err-ref-to-owned-call` (E)
+ > - **S9**: Spread use-after-move тест — `err-spread-use-after-move` (E): `let b = { ...a }; console.log(a)` → E002
+ > - **S10**: Tuple destruct let move — `destruct-let-move` (R): retain + memset source field для String
+ > - Spec обновлён: 05-memory.md (матрица guards), 05b-ownership.md (spread retain, tuple move), 07-concurrency.md (Send check, @static spawn)
+ > - Результат: **1265 тестов, 0 ошибок**
+
 ---
 
-## Известные баги (на 2026-05-20)
+## Известные баги (на 2026-05-21)
 
 ### Отложенные
 
@@ -1104,6 +1118,17 @@
 
 | # | Баг | Fix commit |
 |---|-----|------------|
+| H1 | RangeIndex inferType возвращает int32_t | `9619ba5` — `case 'RangeIndex'` в infer.js |
 | H2 | Labeled `break outer` не эмитит cleanups внешнего цикла | `c4ed231` — `_loopCleanupStack[]` |
-| M4 | `ForOf` не поддерживает labeled break/continue | `c4ed231` — `label_break:;` target |
+| M2 | Shared→Mut не проверяется | `9619ba5` — `argSym2.isShared` guard |
+| M3 | Auto-propagate bare throws call пропускает cleanup | `9619ba5` — `_emitFuncCleanup()` + `goto cleanup` |
+| M4 | ForOf не поддерживает labeled break/continue | `c4ed231` — `label_break:;` target |
 | L1 | NULL-init для inferred-type vars в throws-функциях | `89b6700` — `String = NULL`, `Array_X = {0}` |
+| L2 | Inline if return без cleanup check | `9619ba5` — `_hasPendingCleanups()` |
+| S1 | Object spread string double-free | `be42d8a` — retain + memset source |
+| S2 | Ref→Mut в call args | `be42d8a` — `isRefParam` guard |
+| S3 | Mut→Shared в call args | `be42d8a` — `isMutParam` guard |
+| S4 | Tuple String extraction без retain/zero | `be42d8a` — retain + memset field |
+| S5 | @static let + Thread.spawn | `be42d8a` — static capture guard |
+| S6 | Recursive Send-check для spawn | `be42d8a` — `_checkSend()` |
+| S8 | Ref/Mut/Shared→owned param | `be42d8a` — move-semantics guards |
