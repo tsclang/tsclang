@@ -687,11 +687,11 @@
 | 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 164 | `[x]` |
-| 3  | Модель памяти | 179 | `[x]` |
+| 3  | Модель памяти | 184 | `[x]` |
 | 4  | Объектная модель | 62 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 41 | `[x]` |
-| 7  | Async/Await | 42 | `[x]` |
+| 7  | Async/Await | 44 | `[x]` |
 | 8  | Threads и конкурентность | 36 | `[x]` |
 | 9  | CLI core | 25 | `[x]` |
 | 10 | Строки и кодировки | 20 | `[x]` |
@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1265 тестов ✓** (2026-05-21)
+**Итого: 1272 тестов ✓** (2026-05-23)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1104,6 +1104,14 @@
  > - Spec обновлён: 05-memory.md (матрица guards), 05b-ownership.md (spread retain, tuple move), 07-concurrency.md (Send check, @static spawn)
  > - Результат: **1265 тестов, 0 ошибок**
 
+> 2026-05-23: **5 багфиксов borrow-системы** (1265 → 1272):
+> - **Bug #1**: Mut quarantine release — `_movedIntoClosureLine` устанавливается только для move-captures, не Mut/Ref. `captureModes` Map передаётся из `hoistClosure` в `vardecl.js`. Post-call `_releaseQuarantineBy` снимает quarantine после direct closure call. `popScope` снимает при выходе из scope. Новый тест: `mut-closure-direct-call-release` [R]
+> - **Bug #2**: Mut/ref closure across await — `_checkBorrowsAcrossAwait` проверяет `_mutQuarantined` и `_refBorrowCount > 0` перед каждым await. Новые тесты: `err-mut-closure-across-await` [E], `err-ref-closure-across-await` [E]
+> - **Bug #3**: Map.forEach — runtime макросы передают `(val, key)` в callback, `_lambdaParamHint` для pad неиспользуемых hint-параметров. Новые тесты: `for-each-value` [R], `for-each-value-key` [R]
+> - **Bug #4**: Weak runtime — `tsc_arc_release` не free при `_weakcount > 0`, `tsc_weak_release` free при обоих count=0. `_weakcount` всегда добавляется в Shared struct. Shared string cleanup вызывает `ClassName_free` перед `tsc_arc_release`. Новые тесты: `weak-upgrade-after-drop` [R], `shared-string-cleanup` [R]
+> - **Bug #5**: `_mutBorrowedBy` never cleared — `_scopeMutBorrowStack` + `_trackMutBorrow()` для scope-based cleanup. Function calls очищают `_mutBorrowedBy` после call expression. `err-two-mut` обновлён: последовательные `Mut<T>` вызовы разных функций теперь разрешены
+> - Результат: **1272 теста, 0 ошибок** (commit `39dfecc`)
+
 ---
 
 ## Известные баги (на 2026-05-21)
@@ -1132,3 +1140,8 @@
 | S5 | @static let + Thread.spawn | `be42d8a` — static capture guard |
 | S6 | Recursive Send-check для spawn | `be42d8a` — `_checkSend()` |
 | S8 | Ref/Mut/Shared→owned param | `be42d8a` — move-semantics guards |
+| #1 | Mut-closure quarantine не снимается | `39dfecc` — captureModes + post-call release |
+| #2 | Mut/ref closure через await | `39dfecc` — _checkBorrowsAcrossAwait |
+| #3 | Map.forEach callback signature | `39dfecc` — runtime macros + _lambdaParamHint |
+| #4 | Weak runtime + Shared string cleanup | `39dfecc` — _weakcount + ClassName_free |
+| #5 | _mutBorrowedBy never cleared | `39dfecc` — _scopeMutBorrowStack |
