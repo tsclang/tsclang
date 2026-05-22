@@ -1,0 +1,6 @@
+// [R] forEach with captured i32 multiplier inside function
+function printScaled(items: Array<i32>, factor: i32): void {
+    items.forEach(x => { console.log(x * factor); });
+}
+let arr: Array<i32> = [10, 20, 30];
+printScaled(arr, 3);

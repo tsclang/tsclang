@@ -1,0 +1,7 @@
+// [R] map with captured i32 multiplier inside function
+function scaleItems(items: Array<i32>, factor: i32): Array<i32> {
+    return items.map(x => x * factor);
+}
+let arr: Array<i32> = [1, 2, 3];
+let result = scaleItems(arr, 10);
+console.log(result.join(", "));

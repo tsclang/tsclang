@@ -1,0 +1,7 @@
+// [R] filter with captured i32 threshold inside function
+function filterAbove(items: Array<i32>, threshold: i32): Array<i32> {
+    return items.filter(x => x > threshold);
+}
+let arr: Array<i32> = [1, 5, 3, 8, 2];
+let result = filterAbove(arr, 3);
+console.log(result.join(", "));

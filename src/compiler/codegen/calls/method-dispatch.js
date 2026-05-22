@@ -15,10 +15,11 @@ export default {
         lines.push(`${I}${innerC};`);
       }
     }
-    const objC = this.exprToC(baseObject, lines, depth);
     const prop  = callee.prop;
-
     const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = true;
+    const objC = this.exprToC(baseObject, lines, depth);
+    if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = false;
     if (sym?._mutQuarantined) {
       throw this.error(`cannot access '${baseObject.name}' while a mutable borrow is active`, baseObject);
     }
@@ -574,6 +575,10 @@ export default {
       }
     }
 
+    if (prop === 'upgrade' && sym?.isWeak) {
+      return `tsc_weak_upgrade(${objC})`;
+    }
+
     if (baseObject.kind === 'Ident' && this.classes.has(baseObject.name)) {
       const classDef = this.classes.get(baseObject.name);
       const methodInfo = classDef?._methodNames?.get(prop);
@@ -671,10 +676,26 @@ export default {
           const I = ' '.repeat(this.indent * depth);
           for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
         }
-        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _cb_env_${this.closureCount - 1} = ${closure.envInit};`);
-        lines.push(`${' '.repeat(this.indent * depth)}tsc_closure _cb_${this.closureCount - 1} = (tsc_closure){.env = &_cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}};`);
+        const envIdx = this.closureCount - 1;
+        const envLocal = `_cb_env_${envIdx}`;
+        const envGlobal = `_tsc_cb_env_${envIdx}`;
+        this.addLambda(`static ${closure.envName} *${envGlobal};`);
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} ${envLocal} = ${closure.envInit};`);
+        lines.push(`${' '.repeat(this.indent * depth)}${envGlobal} = &${envLocal};`);
+        const hint = this._lambdaParamHint ?? [];
+        const adapterParams = hint.length > 0
+          ? hint.map((ct, i) => `${ct} _p${i}`).join(', ')
+          : 'void *_elem';
+        const adapterArgs = hint.length > 0
+          ? hint.map((_, i) => `_p${i}`).join(', ')
+          : '_elem';
+        const adapterName = `${closure.closureName}_adapter`;
+        this.addLambda(`static ${closure.ret} ${adapterName}(${adapterParams}) {`);
+        this.addLambda(`    return ${closure.fnName}(${envGlobal}, ${adapterArgs});`);
+        this.addLambda(`}`);
+        this.addLambda('');
         this._lastCbRetType = closure.ret;
-        return closure.fnName;
+        return adapterName;
       }
       const fnName = this.hoistArrow(expr, 'void', '_cb');
       this._lastCbRetType = this.inferArrowReturn(expr);
