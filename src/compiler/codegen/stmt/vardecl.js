@@ -218,7 +218,7 @@ export default {
           if (!this._emittedAtomicTypes.has(sharedType)) {
             this._emittedAtomicTypes.add(sharedType);
             this.includes.add('#include <stdatomic.h>');
-            this.addTop(`typedef struct { int32_t _refcount; _Atomic ${innerCtype} value; } ${sharedType};`);
+            this.addTop(`typedef struct { int32_t _refcount; int32_t _weakcount; _Atomic ${innerCtype} value; } ${sharedType};`);
             this.addTop('');
           }
           const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';

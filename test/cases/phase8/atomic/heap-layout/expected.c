@@ -1,7 +1,7 @@
 #include "runtime.h"
 #include <stdatomic.h>
 
-typedef struct { int32_t _refcount; _Atomic int32_t value; } Atomic_i32_shared;
+typedef struct { int32_t _refcount; int32_t _weakcount; _Atomic int32_t value; } Atomic_i32_shared;
 
 int main(void) {
     TSC_INIT();
