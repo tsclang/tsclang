@@ -303,23 +303,34 @@ class Rect   implements Drawable { w: f64; h: f64; draw(): void { ... } }
 
 let shape: Drawable = new Circle();
 
+### Сужение типов через instanceof (Type Narrowing) — [NOT YET IMPLEMENTED]
+
+В стандартной семантике TypeScript проверка `if (x instanceof User)` автоматически сужает тип переменной `x` до `User` внутри лексического блока `if`.
+
+В текущей версии компилятора автоматическое сужение типов (Type Narrowing) на базе рантайм-проверок vtable находится в стадии разработки. Внутри блока `if` переменная сохраняет свой исходный базовый тип. Для доступа к полям дочернего класса разработчик обязан использовать явное приведение типов (Type Assertion) через оператор `as`: `(x as User).radius`. Полноценный статический анализ графа сужения типов запланирован в рамках следующих релизов Type Checker'а.
+
+```typescript
+interface Drawable { draw(): void }
+class Circle implements Drawable { r: f64; draw(): void { ... } }
+class Rect   implements Drawable { w: f64; h: f64; draw(): void { ... } }
+
+let shape: Drawable = new Circle();
+
 if (shape instanceof Circle) {
-    // компилятор сужает тип: shape — Circle здесь
-    console.log(shape.r);   // ok
+    // type narrowing ещё не реализован — shape всё ещё Drawable
+    console.log((shape as Circle).r);   // ok через явный cast
 }
 ```
 
-C-output:
+C-output (vtable comparison):
 ```c
-if (shape.vtable == &Circle_Drawable_vtable) {
-    Circle* _shape = (Circle*)shape.self;
-    printf("%f\n", _shape->r);
+if (shape.vtable == &_Circle_Drawable_vtable) {
+    printf("%f\n", ((Circle *)shape.self)->r);
 }
 ```
 
 - `instanceof` работает **только** для interface-переменных (fat pointer)
-- `instanceof` с классом напрямую (`let c: Circle; c instanceof Circle`) — ошибка компилятора, тип и так известен статически
-- Компилятор выполняет type narrowing внутри `if (x instanceof T)` — тип переменной сужается до `T`
+- `instanceof` с классом напрямую (`let c: Circle; c instanceof Circle`) — компилируется в `1` (compile-time constant, всегда true)
 - Каждый класс, реализующий interface, имеет уникальный vtable — сравнение O(1), без RTTI overhead
 
 - Класс может реализовывать несколько интерфейсов: `class Foo implements A, B`
@@ -756,6 +767,52 @@ class Inefficient {
 ```
 
 В режиме `embedded` с `allocator: "none"` — предупреждение становится ошибкой (каждый байт RAM критичен).
+
+---
+
+## Автоматический cleanup (`_free`)
+
+Компилятор автоматически генерирует функцию `ClassName_free(ClassName *self)` для классов, содержащих `string`-поля. Эта функция вызывается при выходе переменной из scope.
+
+**Правила:**
+- Генерируется **только** если класс имеет хотя бы одно `string`-поле
+- Вызывает `tsc_string_release()` для каждого string-поля
+- **Не вызывает** `free(self)` — классы являются stack value types
+- Внутренний guard: `if (!self) return;` — безопасен для zero-init переменных
+
+```typescript
+class User {
+    name: string;
+    age: i32;
+}
+let u = new User("Alice", 30);
+// ... использование ...
+// конец scope → auto cleanup
+```
+
+```c
+// генерируемый C:
+static void User_free(User *self) {
+    if (!self) return;
+    tsc_string_release(self->name);
+}
+
+int main(void) {
+    User u = {0};                      // stack value type
+    u = User_new(STR_LIT("Alice"), 30);
+    // ... использование ...
+    User_free(&u);                     // auto cleanup при выходе из scope
+    return 0;
+}
+```
+
+Для `Shared<T>` cleanup дополнительно вызывает `tsc_arc_release`:
+
+```c
+// Shared<User> cleanup:
+User_free(user);                       // release string-полей
+tsc_arc_release(user);                 // decrement refcount, free если 0
+```
 
 ---
 

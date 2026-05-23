@@ -22,8 +22,8 @@
 | `string` | `String` struct + ARC | immutable, copy + retain на присвоении, release при выходе из scope |
 | `Ref<T>` | `const T* ptr` | read-only pointer |
 | `Mut<T>` | `T* ptr` | read-write pointer |
-| `Shared<T>` | `T* ptr` + `atomic_size_t refcount` | ARC |
-| `Weak<T>` | `T* ptr` + `atomic_size_t weak_refcount` | не удерживает объект |
+| `Shared<T>` | `int32_t _refcount; int32_t _weakcount;` встроены в struct T | ARC |
+| `Weak<T>` | Тот же struct что Shared; `tsc_weak_create` = инкремент `_weakcount` | не удерживает объект |
 
 > **`Move<T>` не существует** — move это операция передачи ownership, а не режим хранения. В C нет нового типа: `Move<T>` = `T`. Bare `T` в параметрах и возвращаемых типах уже означает move.
 
@@ -239,13 +239,11 @@ if (node2.prev != null) {
 
 Генерируемый C:
 ```c
-Node* node1 = Node_new();
-RC_retain(node1);   // refcount = 1
-Node* node2 = Node_new();
-RC_retain(node2);   // refcount = 1
+Node *node1 = tsc_arc_alloc(sizeof(Node));   // _refcount = 1, _weakcount = 0 (calloc)
+Node *node2 = tsc_arc_alloc(sizeof(Node));   // _refcount = 1, _weakcount = 0
 node1->next = node2;
-RC_retain(node2);   // refcount = 2
-node2->prev = node1; // weak — RC_retain не вызывается
+tsc_arc_retain(node2);   // node2._refcount = 2
+node2->prev = node1; // weak — tsc_weak_create, node1._weakcount = 1
 ```
 
 ## Правила Borrow Checker

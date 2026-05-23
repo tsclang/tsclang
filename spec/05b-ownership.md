@@ -125,7 +125,7 @@ int main(void) {
 | `usize` | `size_t` (4/8 байт) | `uint16_t` на 16-bit (nes, spectrum) |
 | Retain/release | Нет (примитивы — copy) | Нет (примитивы — copy) |
 | Замыкания | Stack-allocated struct | Stack-allocated struct (идентично) |
-| `new` (классы) | `malloc(sizeof(T))` | Статический аллокатор или stack |
+| `new` (классы) | Stack value type: `T var = {0}` | Статический аллокатор или stack |
 
 Примитивы — **одинаковы** на всех платформах. Zero overhead везде. Никаких различий в поведении.
 
@@ -427,7 +427,7 @@ void view(const User *u) { /* borrow pointer */ }
 void modify(User *u) { /* mutable borrow pointer */ }
 ```
 
-**Замыкания с class capture** — implicit `Ref<T>` (copy pointer в env struct):
+**Замыкания с class capture** — implicit **copy-by-value** (struct copy в env struct):
 
 ```typescript
 let u = new User();
@@ -435,10 +435,10 @@ const fn = (): i32 => u.value;
 ```
 
 ```c
-typedef struct { User *u; } _closure_0_env;  // pointer — borrow
+typedef struct { User u; } _closure_0_env;  // struct copy — value
 ```
 
-Класс захватывается как pointer (borrow), не как полная копия struct. Замыкание не владеет объектом.
+Класс захватывается как struct copy. Оригинал помечается как moved (E002 при использовании после захвата). Для borrow-захвата используйте explicit capture list: `[u: Ref<User>]`.
 
 ### Spread объектов
 
@@ -495,9 +495,12 @@ const copy = { ...base };  // name: retain("Alice"), age: copy
 
 ### Деструктуризация объектов
 
-Деструктуризация **потребляет** источник — move полей.
+Семантика зависит от наличия аннотации типа (см. `spec/05-memory.md` — «Доступ к полям и деструктуризация»):
 
-**Полная деструктуризация — move всех полей:**
+- **Без аннотации типа** — borrow: `const { name, age } = user;` → `const String *name = &user.name;`. Источник жив.
+- **С аннотацией типа** — move: `const { name, age }: User = user;` → copy + zero-out. Источник мёртв (E002).
+
+**Полная деструктуризация с аннотацией — move всех полей:**
 
 ```typescript
 let user = { name: "Alice", age: 30 };
@@ -652,7 +655,7 @@ void process_Array_i32(Array_i32 arr) { /* arr перемещён, caller обн
 void view_Array_i32(const Array_i32 *arr) { /* borrow pointer */ }
 ```
 
-**Замыкания с array capture** — implicit `Ref<T>` (copy pointer в env struct), как с классами:
+**Замыкания с array capture** — implicit **copy-by-value** (struct copy в env struct), как с классами:
 
 ```typescript
 let data = [1, 2, 3];
@@ -660,10 +663,10 @@ const fn = (): i32 => data.length;
 ```
 
 ```c
-typedef struct { Array_i32 *data; } _closure_0_env;  // pointer — borrow
+typedef struct { Array_i32 data; } _closure_0_env;  // struct copy — value
 ```
 
-Массив захватывается как pointer (borrow). Замыкание не владеет массивом.
+Массив захватывается как struct copy (data ptr + length + capacity). Оригинал помечается как moved. Для borrow-захвата используйте explicit capture list: `[data: Ref<i32[]>]`.
 
 ### Spread массивов
 
@@ -944,8 +947,9 @@ let t: [i32, string, string] = [1, ...runtimeArray];
 
 | Паттерн | Семантика |
 |---------|-----------|
-| `const [a, b] = pair` | Move элементов, tuple обнулён |
-| `const [x, , z] = triple` | Move с пропуском элемента |
+| `const [a, b] = pair` (source `const`) | Copy элементов, tuple жив |
+| `let [a, b] = pair` (source `let`) | Move: string-поля zeroed + `_moved` flag (E002) |
+| `const [x, , z] = triple` | Copy/Move в зависимости от source |
 | `const [user, name] = t` (owned) | Move: `user: User`, `name: string` |
 | `const [user, name] = t` (Ref\<tuple\>) | Borrow: `user: Ref<User>`, `name: Ref<string>` |
 
@@ -975,7 +979,7 @@ function swap(t: [i32, string]): [string, i32] {
 
 **Ref\<tuple\>** — borrow, деструктуризация даёт `Ref<T>` для каждого элемента.
 
-**Замыкания с tuple capture** — как класс: pointer в env struct (borrow).
+**Замыкания с tuple capture** — как класс: struct copy в env (value type, move). Для borrow используйте explicit `[t: Ref<tuple>]`.
 
 ### Desktop vs Embedded
 
@@ -1136,7 +1140,7 @@ Node *getPrev(Node *node) { return node->prev; }
 | `Shared<T>` | Доступен (ARC через `_refcount` в объекте) | **Недоступен** — ошибка компиляции (нет heap) |
 | `Weak<T>` | Доступен | **Недоступен** |
 | `tsc_arc_retain` | `ptr->_refcount++` | — |
-| `tsc_arc_release` | `if (--ptr->_refcount <= 0) free(ptr)` | — |
+| `tsc_arc_release` | `--ptr->_refcount; if (ptr->_refcount <= 0 && ptr->_weakcount <= 0) free(ptr)` | — |
 | `tsc_weak_upgrade` | `ptr->_refcount > 0 ? (ptr->_refcount++, ptr) : NULL` | — |
 | Null-check Weak | `w != NULL && w->_refcount > 0` | — |
 | Создание | `Node *n = tsc_arc_alloc(sizeof(Node));` | — |

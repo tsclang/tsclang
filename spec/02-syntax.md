@@ -475,7 +475,7 @@ function foo(x: i32): void { ... }
     x = null;
     fn();  // 5 — захвачена копия на момент создания
     ```
-  - Захват **по ссылке** для сложных типов (следует правилам borrow checker) — по умолчанию
+  - Захват **по значению** (copy) для всех типов — по умолчанию. Struct copy для классов/массивов, value copy для примитивов. Для borrow-захвата — explicit capture list `[x: Ref<T>]` / `[x: Mut<T>]`
   - Явный список захвата — те же типы что везде: `T`, `Ref<T>`, `Mut<T>`, `Shared<T>`:
     ```typescript
     const fn = [data: Data]() => process(data);          // T — move (Owner)

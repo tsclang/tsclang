@@ -165,7 +165,7 @@
 
 ## Числовые типы
 
-- Полный набор: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`
+- Полный набор: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `isize`, `usize`, `f32`, `f64`
 - **`char`** — внутренний тип компилятора для символьных литералов (`'A'`, `'\n'`). Эквивалентен `u8`. Намеренно не специфицирован как отдельный примитивный тип: символьные литералы автоматически получают тип `u8`. Использование `char` в type-аннотациях возможно, но не рекомендуется — используйте `u8`.
 
 ### Числовые литералы
@@ -262,13 +262,13 @@ const n64: i64 = n      // неявно — без потерь
   - На 8-bit таргетах (`"target": "avr"` и др.) — **`number` автоматически = `f32`** без явного `defaultNumber`
   ```typescript
   // Десктоп (defaultNumber = f64)
-  const a = 1;           // f64
-  const b: number = 1;   // f64
+  const a = 1;           // i32 (целочисленный литерал → int32_t)
+  const b: number = 1;   // f64 (number = f64)
   const c: f32 = 1;      // f32 (явно)
 
   // AVR (defaultNumber автоматически = f32)
-  const a = 1;           // f32
-  const b: number = 1;   // f32
+  const a = 1;           // i32 (целочисленный литерал → int32_t)
+  const b: number = 1;   // f32 (number = f32)
   const c: f32 = 1;      // f32 (явно)
   const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
   ```
@@ -298,7 +298,7 @@ const n64: i64 = n      // неявно — без потерь
 
   `i16`/`u16` и меньше — нет warning (нативные для AVR). `i32`/`u32` — нет warning (обычны, avr-gcc оптимизирует).
 - Type inference выводит конкретный тип для всех значений:
-  - числа → `number` (= `f64` или переопределённый тип)
+  - целые числа → `i32` (int32_t), числа с точкой → `f64` (double), или переопределённый `defaultNumber`
   - строки → `string`, булевые → `boolean`, массивы → `number[]` и т.д.
   - явная аннотация переопределяет: `const i: i32 = 1` → `i32`
 - Сообщения об ошибках используют конкретный тип: `expected f64, got i32`
@@ -439,7 +439,7 @@ typedef struct {
 ```
 
 `string` (non-nullable) → `String` в C (value type, передаётся по значению, встраивается в structs).
-`string | null` → `String*` в C (указатель, `NULL` = null).
+`string | null` → `opt_String` в C (struct: `bool has_value; String value;`). Проверка: `if (val.has_value)`.
 
 Строковые литералы не выделяют heap:
 ```c
@@ -547,7 +547,7 @@ s.padStart(len, fill?)       // string
 s.padEnd(len, fill?)         // string
 s.repeat(n)                  // string
 s.charAt(i)                  // string — s[i..i+1] по байтовому смещению
-s.charCodeAt(i)              // u8 — байт по смещению (синоним s[i])
+s.charCodeAt(i)              // u32 — код байта по смещению (синоним s[i], расширен до uint32_t)
 s.lastIndexOf(sub)           // i32 — байтовое смещение последнего вхождения, -1 если не найдено
 s.at(i)                      // u8 | null — байт по смещению, отрицательные индексы считаются с конца
 ```

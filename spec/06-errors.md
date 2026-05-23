@@ -87,18 +87,6 @@ try {
 }
 ```
 
-Несколько `catch`-блоков — диспатч по типу:
-
-```typescript
-try {
-    fetch("https://...");
-} catch (e: IOError) {
-    console.log("io:", e.message);
-} catch (e: NetworkError) {
-    console.log("net:", e.message);
-}
-```
-
 > **Union catch без привязки `e`.** `catch (e: IOError | NetworkError)` компилируется, но переменная `e` не создаётся — компилятор не знает конкретный тип. Используйте несколько `catch`-блоков, если нужен доступ к полям ошибки.
 >
 > **instanceof в catch.** `instanceof` требует interface type справа; с классами ошибок (`extends Error`) используйте несколько `catch`-блоков вместо `instanceof`.
