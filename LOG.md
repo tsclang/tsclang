@@ -1148,6 +1148,7 @@
 | #10 | Weak upgrade только в vardecl context | `99f4643` — _inWeakUpgrade flag в method-dispatch |
 | CC | Capturing closures UB в array callbacks | `99f4643` — trampoline adapter (static env ptr + adapter fn) |
 | WD | Weak null-after-drop test gap | `793b151` — `let w: Weak<T>;` declaration support + null-after-scope test |
+| AT | Atomic `_weakcount` missing | `51571a2` — добавлен `_weakcount` в `Atomic_X_shared` typedef |
 
 > 2026-05-23: **D14 — String* auto-deref для array callbacks** (1272 → 1276):
 > - `_derefStrPtr(sym, cexpr)` helper в codegen.js — автоматически разыменовывает `String *` → `String` в value-context сайтах
@@ -1176,3 +1177,8 @@
 > - **Тест `weak-upgrade-null-after-scope`**: Shared в inner scope, Weak в outer, `w.upgrade()` после drop → `NULL` → выводит `"safe"`
 > - **Spec goto-cleanup**: переписаны примеры `spec/05-memory.md:660-789` с pointer-паттернов (`Foo* a = NULL`) на value-type (`Foo a = {0}`), обновлена таблица правил
 > - Результат: **1283 теста, 0 ошибок** (commit `793b151`)
+
+> 2026-05-23: **Atomic `_weakcount` fix**:
+> - `vardecl.js:221` — добавлен `int32_t _weakcount;` в `Atomic_X_shared` typedef. Предсуществующий баг: `tsc_arc_release` проверяет `_weakcount`, но Atomic special-case path обходил нормальный class codegen и не включал поле
+> - Тест `phase8/atomic/heap-layout` — GCC-компиляция теперь проходит
+> - Результат: **1283 теста, 0 ошибок** (commit `51571a2`)
