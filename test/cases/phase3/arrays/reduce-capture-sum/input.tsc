@@ -1,0 +1,7 @@
+// [R] reduce with captured multiplier inside function
+function sumScaled(items: Array<i32>, factor: i32): i32 {
+    return items.reduce((acc, x) => acc + x * factor, 0);
+}
+let arr: Array<i32> = [1, 2, 3, 4];
+let result = sumScaled(arr, 10);
+console.log(result);

@@ -687,7 +687,7 @@
 | 0  | Core runtime | 24 | `[x]` |
 | 1  | Базовый парсинг и кодогенерация | 166 | `[x]` |
 | 2  | Система типов | 164 | `[x]` |
-| 3  | Модель памяти | 184 | `[x]` |
+| 3  | Модель памяти | 331 | `[x]` |
 | 4  | Объектная модель | 62 | `[x]` |
 | 5  | Обработка ошибок | 21 | `[x]` |
 | 6  | Модульная система | 41 | `[x]` |
@@ -705,7 +705,7 @@
 | 18 | Оптимизатор | 17 | `[x]` |
 | 19 | IO/Net/WS | 74 | `[x]` |
 
-**Итого: 1272 тестов ✓** (2026-05-23)
+**Итого: 1281 тестов ✓** (2026-05-23)
 
 > 2026-05-13: Рефакторинг компилятора:
 > - Все 7 codegen-монолитов разбиты на 38 подмодулей (calls/ 8, stmt/ 4, top-level/ 6, async/ 5, expr/ 4, types/ 3, misc/ 4)
@@ -1109,7 +1109,7 @@
 > - **Bug #2**: Mut/ref closure across await — `_checkBorrowsAcrossAwait` проверяет `_mutQuarantined` и `_refBorrowCount > 0` перед каждым await. Новые тесты: `err-mut-closure-across-await` [E], `err-ref-closure-across-await` [E]
 > - **Bug #3**: Map.forEach — runtime макросы передают `(val, key)` в callback, `_lambdaParamHint` для pad неиспользуемых hint-параметров. Новые тесты: `for-each-value` [R], `for-each-value-key` [R]
 > - **Bug #4**: Weak runtime — `tsc_arc_release` не free при `_weakcount > 0`, `tsc_weak_release` free при обоих count=0. `_weakcount` всегда добавляется в Shared struct. Shared string cleanup вызывает `ClassName_free` перед `tsc_arc_release`. Новые тесты: `weak-upgrade-after-drop` [R], `shared-string-cleanup` [R]
-> - **Bug #5**: `_mutBorrowedBy` never cleared — `_scopeMutBorrowStack` + `_trackMutBorrow()` для scope-based cleanup. Function calls очищают `_mutBorrowedBy` после call expression. `err-two-mut` обновлён: последовательные `Mut<T>` вызовы разных функций теперь разрешены
+> - **Bug #5**: `_mutBorrowedBy` never cleared — `_scopeMutBorrowStack` + `_trackMutBorrow()` для scope-based cleanup. Function calls очищают `_mutBorrowedBy` после call expression. `err-two-mut` переименован в `seq-mut-diff-call`: последовательные `Mut<T>` вызовы разных функций теперь разрешены
 > - Результат: **1272 теста, 0 ошибок** (commit `39dfecc`)
 
 ---
@@ -1145,3 +1145,19 @@
 | #3 | Map.forEach callback signature | `39dfecc` — runtime macros + _lambdaParamHint |
 | #4 | Weak runtime + Shared string cleanup | `39dfecc` — _weakcount + ClassName_free |
 | #5 | _mutBorrowedBy never cleared | `39dfecc` — _scopeMutBorrowStack |
+| #10 | Weak upgrade только в vardecl context | `99f4643` — _inWeakUpgrade flag в method-dispatch |
+| CC | Capturing closures UB в array callbacks | `99f4643` — trampoline adapter (static env ptr + adapter fn) |
+
+> 2026-05-23: **D14 — String* auto-deref для array callbacks** (1272 → 1276):
+> - `_derefStrPtr(sym, cexpr)` helper в codegen.js — автоматически разыменовывает `String *` → `String` в value-context сайтах
+> - Применён в: return statement, template strings, vardecl String* init, array push, expression body return
+> - `hoistClosure`: `_lambdaParamHint` support для String* params (добавляет `*` к имени параметра)
+> - `inferArrowReturn`: scan block body for VarDecls, define with stripped types (`String *` → `String`)
+> - `vardecl.js`: String* init → `String` ctype + `(*s)` deref
+> - Новые тесты: `map-identity-string` [R], `map-template-string` [R], `map-assign-string` [R], `filter-return-string` [R]
+> - Результат: **1276 тестов, 0 ошибок** (commit `dcee750`)
+
+> 2026-05-23: **Weak inline upgrade + capturing closure trampoline adapter** (1276 → 1281):
+> - **Weak guard fix**: `_inWeakUpgrade` flag set around `exprToC` when `prop === 'upgrade'` and `sym?.isWeak` — allows Weak dereference during `.upgrade()` call in any context (not just `let x = w.upgrade()`). New dispatch case returns `tsc_weak_upgrade(objC)`. Новые тесты: `weak-inline-upgrade` [R], `weak-double-upgrade` [R]
+> - **Capturing closure trampoline**: `_extractCallbackFn` now emits file-scope static env pointer + adapter function when closure has captures. Adapter takes `(elem)` params matching `_lambdaParamHint` and delegates to real closure fn `(env, elem)` via global pointer. Новые тесты: `map-capture-string` [R], `filter-capture-string` [R], `foreach-capture-push` [R]
+> - Результат: **1281 тест, 0 ошибок** (commit `99f4643`)

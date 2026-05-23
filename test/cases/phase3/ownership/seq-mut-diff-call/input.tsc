@@ -1,3 +1,4 @@
+// [F] sequential Mut<T> calls to different functions are allowed
 class Box {
     x: i32;
 }
