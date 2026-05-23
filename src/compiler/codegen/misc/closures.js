@@ -90,6 +90,19 @@ export default {
         }
         return;
       }
+      if (n.kind === 'TemplateLit') {
+        for (const part of (n.parts ?? [])) {
+          if (part.kind === 'expr' && part.src) {
+            try {
+              const toks = this._lex(part.src, this.filename);
+              const { ast } = this._parse(toks);
+              const exprNode = ast.body[0]?.expr ?? ast.body[0];
+              if (exprNode) walk(exprNode, localDefs);
+            } catch (_) { /* ignore parse errors in template parts */ }
+          }
+        }
+        return;
+      }
       const inner = new Set(localDefs);
       if (n.kind === 'VarDecl') inner.add(n.name);
       for (const key of Object.keys(n)) {

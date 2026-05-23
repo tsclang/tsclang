@@ -576,12 +576,12 @@ async function ok2(arr: i32[]): Promise<void> {
 
 **Правило 5: Замыкания и borrow**
 
-Замыкание (arrow function) захватывает сложные типы как implicit `Ref<T>` — копия указателя/struct в env struct. Замыкание стековое и не может пережить источник:
+Замыкание (arrow function) захватывает все переменные **по значению** (copy) — env struct содержит копии, не ссылки. Замыкание стековое и не может пережить источник:
 
 ```typescript
 let prefix = "Hello";
 const greet = (name: string): string => {
-    return prefix + ", " + name;   // prefix захвачен как Ref<string>
+    return prefix + ", " + name;   // prefix скопирован в env struct
 };
 ```
 
@@ -1131,11 +1131,11 @@ x = 99;
 fn();  // вернёт 43, не 100 — x скопирован в момент создания замыкания
 ```
 
-**Сложные типы** (массивы, объекты, строки, классы) — по умолчанию захватываются по `Ref`:
+**Сложные типы** (массивы, объекты, строки, классы) — по умолчанию **копируются** (shallow copy struct/pointer в env struct):
 
 ```typescript
 const items = [1, 2, 3];
-const fn = (): i32 => items.length;  // fn держит Ref<items>
+const fn = (): i32 => items.length;  // fn держит копию items (struct copy)
 fn();  // ok — items жив
 ```
 
@@ -1143,10 +1143,12 @@ fn();  // ok — items жив
 let fn: () => i32;
 {
     const items = [1, 2, 3];
-    fn = (): i32 => items.length;  // захватывает Ref<items>
+    fn = (): i32 => items.length;  // копия items — shallow, data ptr тот же
 }
-fn();  // ошибка: items мёртв
+fn();  // undefined behaviour: items data может быть уже освобождена
 ```
+
+> **Примечание:** для явного borrow-захвата (Ref/Mut) используйте explicit capture list — `[items: Ref<i32[]>]()` или `[items: Mut<i32[]>()`. Implicit capture всегда copy-by-value.
 
 ### Явный список захвата
 
@@ -1154,7 +1156,7 @@ fn();  // ошибка: items мёртв
 
 ```typescript
 [data: Data]()          // T — move, замыкание становится владельцем
-[data: Ref<Data>]()     // Ref — immutable borrow (явно, то же что по умолчанию)
+[data: Ref<Data>]()     // Ref — immutable borrow (явный, не по умолчанию)
 [data: Mut<Data>]()     // Mut — mutable borrow
 ```
 
@@ -1207,6 +1209,33 @@ static void callTwice_Closure_0(Closure_0* f) {
     f->fn(f);
 }
 ```
+
+### Trampoline adapter для capturing callbacks
+
+Runtime-макросы (например, `Array.map`, `Array.filter`, `Array.forEach`) ожидают callback вида `void (*fn)(elem)` — без env-параметра. Когда callback является capturing closure (env struct ≠ пустой), компилятор генерирует **trampoline adapter**:
+
+```c
+// capturing closure: env содержит captured variable
+typedef struct {
+    String prefix;
+} Closure_0;
+
+static Closure_0* _tramp_env_0;  // file-scope static env pointer
+
+static String _tramp_adapter_0(int32_t elem) {
+    return Closure_0_fn(_tramp_env_0, elem);  // делегирует к реальной closure fn
+}
+
+// использование в макросе:
+Closure_0 _env = { .prefix = prefix };
+_tramp_env_0 = &_env;
+Array_String result = Array_String_map(arr, _tramp_adapter_0);
+```
+
+**Ограничения:**
+- File-scope static pointer — **не реентрантно**. Вложенные capturing callbacks не поддерживаются.
+- Приемлемо для TSClang: JS однопоточный, macros синхронные, вложенные capturing callbacks — редкий паттерн.
+- Если captures = 0 (bare function), adapter не генерируется — передаётся напрямую.
 
 Mut-захват — замыкание мутирует внешний объект через явный `Mut<T>`:
 
