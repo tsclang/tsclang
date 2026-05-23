@@ -1147,6 +1147,7 @@
 | #5 | _mutBorrowedBy never cleared | `39dfecc` — _scopeMutBorrowStack |
 | #10 | Weak upgrade только в vardecl context | `99f4643` — _inWeakUpgrade flag в method-dispatch |
 | CC | Capturing closures UB в array callbacks | `99f4643` — trampoline adapter (static env ptr + adapter fn) |
+| WD | Weak null-after-drop test gap | `793b151` — `let w: Weak<T>;` declaration support + null-after-scope test |
 
 > 2026-05-23: **D14 — String* auto-deref для array callbacks** (1272 → 1276):
 > - `_derefStrPtr(sym, cexpr)` helper в codegen.js — автоматически разыменовывает `String *` → `String` в value-context сайтах
@@ -1167,3 +1168,11 @@
 > - **Spec: implicit capture = copy-by-value**: исправлено противоречие в `spec/05-memory.md` — строки 579, 584, 1134, 1138, 1146, 1148, 1159. Implicit capture всегда copy, Ref/Mut только через explicit capture list
 > - **Spec: trampoline adapter раздел**: новый раздел в `spec/05-memory.md` после строки 1210 — описание static env pointer + adapter fn, ограничения (не реентрантно)
 > - Результат: **1282 теста, 0 ошибок** (commit `e820a81`)
+
+> 2026-05-23: **Weak `let w: Weak<T>;` declaration + spec goto-cleanup fix** (1282 → 1283):
+> - **`let w: Weak<T>;` без init**: `vardecl.js` — перехват `typeAnn.name === 'Weak'` без init, emit `Type *w = NULL;`, define с `isWeak: true`, cleanup `tsc_weak_release(w)`
+> - **`w = new Weak<T>(d)` присвоение**: `assign.js` — перехват до `exprToC(LHS)` (bypass Weak guard), emit `w = tsc_weak_create(d)`
+> - **`tsc_weak_release` NULL-guard**: `runtime.h` — `if (ptr)` guard для безопасного cleanup при NULL
+> - **Тест `weak-upgrade-null-after-scope`**: Shared в inner scope, Weak в outer, `w.upgrade()` после drop → `NULL` → выводит `"safe"`
+> - **Spec goto-cleanup**: переписаны примеры `spec/05-memory.md:660-789` с pointer-паттернов (`Foo* a = NULL`) на value-type (`Foo a = {0}`), обновлена таблица правил
+> - Результат: **1283 теста, 0 ошибок** (commit `793b151`)
