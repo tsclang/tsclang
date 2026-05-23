@@ -1160,4 +1160,10 @@
 > 2026-05-23: **Weak inline upgrade + capturing closure trampoline adapter** (1276 → 1281):
 > - **Weak guard fix**: `_inWeakUpgrade` flag set around `exprToC` when `prop === 'upgrade'` and `sym?.isWeak` — allows Weak dereference during `.upgrade()` call in any context (not just `let x = w.upgrade()`). New dispatch case returns `tsc_weak_upgrade(objC)`. Новые тесты: `weak-inline-upgrade` [R], `weak-double-upgrade` [R]
 > - **Capturing closure trampoline**: `_extractCallbackFn` now emits file-scope static env pointer + adapter function when closure has captures. Adapter takes `(elem)` params matching `_lambdaParamHint` and delegates to real closure fn `(env, elem)` via global pointer. Новые тесты: `map-capture-string` [R], `filter-capture-string` [R], `foreach-capture-push` [R]
-> - Результат: **1281 тест, 0 ошибок** (commit `99f4643`)
+ > - Результат: **1281 тест, 0 ошибок** (commit `99f4643`)
+
+> 2026-05-23: **_findFreeVars для template literals + spec fixes** (1281 → 1282):
+> - **TemplateLit in _findFreeVars**: `closures.js` — TemplateLit handler парсит `part.src` через `_lex`+`_parse`, обходит AST для поиска free vars. try/catch для safety
+> - **Spec: implicit capture = copy-by-value**: исправлено противоречие в `spec/05-memory.md` — строки 579, 584, 1134, 1138, 1146, 1148, 1159. Implicit capture всегда copy, Ref/Mut только через explicit capture list
+> - **Spec: trampoline adapter раздел**: новый раздел в `spec/05-memory.md` после строки 1210 — описание static env pointer + adapter fn, ограничения (не реентрантно)
+> - Результат: **1282 теста, 0 ошибок** (commit `e820a81`)
