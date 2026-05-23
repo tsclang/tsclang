@@ -1182,3 +1182,19 @@
 > - `vardecl.js:221` — добавлен `int32_t _weakcount;` в `Atomic_X_shared` typedef. Предсуществующий баг: `tsc_arc_release` проверяет `_weakcount`, но Atomic special-case path обходил нормальный class codegen и не включал поле
 > - Тест `phase8/atomic/heap-layout` — GCC-компиляция теперь проходит
 > - Результат: **1283 теста, 0 ошибок** (commit `51571a2`)
+
+> 2026-05-23: **Mass spec audit — 16 fixes across 6 files** (commit `41843a6`):
+> - **H1**: Closure capture = copy-by-value, не implicit Ref — исправлено в `02-syntax.md`, `05b-ownership.md` (class + array capture sections)
+> - **H2/H3/H7/M5**: ARC inline model — `_refcount` + `_weakcount` встроены в struct, `int32_t` не `atomic_size_t` — `05-memory.md:25`, `05b-ownership.md:1139`
+> - **H4**: instanceof narrowing → «NOT YET IMPLEMENTED» с описанием обходного пути (`as` cast) — `04-classes.md:300-324`
+> - **H5**: Добавлен раздел `_free()` cleanup в `04-classes.md`
+> - **H6**: Integer literal inference → `i32`, не `f64` — `03-types.md:265,300`
+> - **C1**: Деструктуризация — описаны оба варианта (borrow без аннотации, move с аннотацией / let source) — `05b-ownership.md:496-506,946-953`
+> - **M1/M2**: `RC_retain` → `tsc_arc_retain`, `Node_new()` → `tsc_arc_alloc` — `05-memory.md:242`
+> - **M3**: `malloc(sizeof(T))` → stack `{0}` для owned классов — `05b-ownership.md:128`
+> - **M4**: `string | null` → `opt_String`, не `String*` — `03-types.md:442`
+> - **M6**: `instanceof` same-class → компилирует в `1`, не error — `04-classes.md`
+> - **M7**: Добавлен `isize` → `ptrdiff_t` в числовые типы — `03-types.md:168`
+> - **M8**: `charCodeAt` return `u32`, не `u8` — `03-types.md:550`
+> - **M9**: Удалена дублирующая секция catch-блоков — `06-errors.md:90-99`
+> - Результат: **1283 теста, 0 ошибок**
