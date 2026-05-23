@@ -540,8 +540,10 @@ static inline void *_tsc_arc_alloc(size_t sz) {
 #define tsc_weak_create(ptr) ((ptr)->_weakcount++, (ptr))
 #define tsc_weak_upgrade(ptr) ((ptr)->_refcount > 0 ? ((ptr)->_refcount++, (ptr)) : NULL)
 #define tsc_weak_release(ptr) do { \
-    --(ptr)->_weakcount; \
-    if ((ptr)->_weakcount <= 0 && (ptr)->_refcount <= 0) free(ptr); \
+    if (ptr) { \
+        --(ptr)->_weakcount; \
+        if ((ptr)->_weakcount <= 0 && (ptr)->_refcount <= 0) free(ptr); \
+    } \
 } while(0)
 
 /* Optional byte (for string.at()) */

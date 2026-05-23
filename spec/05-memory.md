@@ -661,59 +661,48 @@ void _free_Result_SharedUser_Error(Result_SharedUser_Error* r) {
 
 ```c
 // TSClang:
-// let a = new Foo()
-// let b = new Bar()
+// let items = [1, 2, 3]
 // doSomething()?
 // doOther()?
 
 // C-output:
-Foo* a = NULL;   // ← все указатели объявлены NULL в начале функции
-Bar* b = NULL;
-
-a = Foo_new();
-b = Bar_new();
+Array_i32 items = {0};                // ← value type, zero-init
+items = tsc_array_create_i32(4);
 
 _r = doSomething();
-if (!_r.ok) goto cleanup;   // один goto — не дублируем free
+if (!_r.ok) goto cleanup;            // один goto — не дублируем free
 
 _r2 = doOther();
 if (!_r2.ok) goto cleanup;
 
-use(a, b);
+use(&items);
 
 cleanup:
-    if (b) Bar_free(b);   // NULL-check безопасен — b мог не быть создан
-    if (a) Foo_free(a);
+    tsc_array_free_i32(&items);      // direct free, no NULL-check
     return ...;
 ```
+
+Классы и массивы — **value types на стеке** (`{0}` init). Cleanup вызывает `_free(&var)` напрямую — `if (!self) return;` внутри `_free` гарантирует безопасность для zero-init переменных.
 
 **Три нетривиальных случая:**
 
 **1. `goto` через объявления переменных — нарушение C99**
 
-В C99 `goto` не может перепрыгивать через объявление переменной. Решение — объявлять все owned указатели как `NULL` в самом начале функции, присвоение отдельно:
+В C99 `goto` не может перепрыгивать через объявление переменной. Для value types это не проблема — `Type var = {0};` не вызывает конструктор. Для `Result` и других локальных переменных компилятор использует `{0}`:
 
 ```c
-// ❌ нарушение C99:
+// ❌ нарушение C99 (гипотетический pointer-паттерн):
 Foo* a = Foo_new();
 if (!r.ok) goto cleanup;
 Bar* b = Bar_new();  // goto перепрыгнул это объявление → UB
 
-// ✅ правильно — объявления в начале, присвоения отдельно:
-Foo* a = NULL;
-Bar* b = NULL;       // объявлены до любого goto → C99 ok
+// ✅ реально генерируемый паттерн — value types с {0}:
+Result_i32_Err _result = {0};
+Array_i32 items = {0};
+items = tsc_array_create_i32(4);
 
-a = Foo_new();
-if (!r.ok) goto cleanup;
-b = Bar_new();
-if (!r2.ok) goto cleanup;
-
-cleanup:
-    if (b) Bar_free(b);
-    if (a) Foo_free(a);
+if (!r.ok) goto cleanup;  // goto не перепрыгивает объявления
 ```
-
-Компилятор **всегда** генерирует этот паттерн — объявления всех owned переменных функции в начале блока.
 
 **2. Owned переменные внутри циклов**
 
@@ -722,20 +711,21 @@ cleanup:
 ```c
 // TSClang:
 // for (let i = 0; i < n; i++) {
-//     let item = new Item()
-//     process(item)?
+//     let tmp = [1, 2]
+//     process(tmp)?
 // }
 
-for (int i = 0; i < n; i++) {
-    Item* item = Item_new();
+for (int32_t i = 0; i < count; i++) {
+    Array_i32 tmp = tsc_array_create_i32(2);   // immediate init
 
-    _r = process(item);
-    if (!_r.ok) {
-        Item_free(item);   // ← inline free: loop-local переменная
-        goto cleanup;      // ← затем outer cleanup
+    Result_i32_Err _res_0 = process(i);
+    if (!_res_0.ok) {
+        tsc_array_free_i32(&tmp);              // ← inline free: loop-local
+        _result = ...error...;
+        goto cleanup;                          // ← затем outer cleanup
     }
 
-    Item_free(item);       // нормальный путь — конец итерации
+    tsc_array_free_i32(&tmp);                  // нормальный путь — конец итерации
 }
 ```
 
@@ -747,46 +737,44 @@ for (int i = 0; i < n; i++) {
 
 ```c
 // TSClang:
-// let a = new Foo()
+// let items = [1, 2, 3]
 // {
-//     let b = new Bar()
-//     if (fail1) throw ...   // нужны: a + b
-// }                          // b умирает здесь
-// let c = new Baz()
-// if (fail2) throw ...       // нужны: a + c (b уже мёртв)
+//     let inner = [4, 5]
+//     if (fail1) throw ...   // нужны: items + inner
+// }                          // inner умирает здесь
+// if (fail2) throw ...       // нужны: только items (inner уже мёртв)
 
-Foo* a = NULL;
-Baz* c = NULL;
-
-a = Foo_new();
+Array_i32 items = {0};
+items = tsc_array_create_i32(4);
 
 {
-    Bar* b = NULL;
-    b = Bar_new();
-    if (!r.ok) {
-        Bar_free(b);       // inline: b scope-local
-        goto cleanup;      // outer cleanup знает про a (не b)
+    Array_i32 inner = tsc_array_create_i32(2);   // immediate init
+    if (x < 0) {
+        tsc_array_free_i32(&inner);              // inline: inner scope-local
+        _result = ...error...;
+        goto cleanup;                            // outer cleanup знает про items (не inner)
     }
-    Bar_free(b);           // нормальный выход из вложенного scope
+    tsc_array_free_i32(&inner);                  // нормальный выход из вложенного scope
 }
 
-c = Baz_new();
-if (!r2.ok) goto cleanup;  // cleanup: a + c (b уже мёртв)
+if (!r2.ok) goto cleanup;                        // cleanup: только items
 
 cleanup:
-    if (c) Baz_free(c);
-    if (a) Foo_free(a);
+    tsc_array_free_i32(&items);
+    return _result;
 ```
+
+Компилятор **всегда** генерирует value-type паттерн: `Type var = {0};` для outer переменных, `Type var = create(...)` для inner-scope/loop-local.
 
 **Итоговые правила кодогенерации:**
 
 | Случай | Решение |
 |--------|---------|
-| Несколько `?`-точек | одна метка `cleanup`, `NULL`-инициализация всех указателей |
-| `goto` через объявления (C99) | объявить все owned указатели `NULL` в начале блока |
-| Loop-local переменные | inline free перед `goto`, затем outer `cleanup` |
-| `break` / `continue` в цикле | inline free loop-local переменных перед `break`/`continue` |
-| Вложенные scopes | scope-local переменные: inline free; outer: через `cleanup` |
+| Несколько `?`-точек | одна метка `cleanup`, `{0}` инициализация value types |
+| `goto` через объявления (C99) | value types: `Type var = {0};` — goto не перепрыгивает через init |
+| Loop-local переменные | inline `free(&var)` перед `goto`, затем outer `cleanup` |
+| `break` / `continue` в цикле | inline `free(&var)` loop-local переменных перед `break`/`continue` |
+| Вложенные scopes | scope-local: inline `free(&var)`; outer: через `cleanup` |
 
 Пример cleanup при `break`:
 

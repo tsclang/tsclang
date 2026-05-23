@@ -74,6 +74,14 @@ export default {
         }
       }
     }
+    // Weak<T> assignment: w = new Weak<T>(src) → w = tsc_weak_create(src)
+    if (node.left.kind === 'Ident' && node.op === '=') {
+      const sym = this.lookup(node.left.name);
+      if (sym?.isWeak && node.right?.kind === 'New' && node.right.name === 'Weak') {
+        const argC = node.right.args?.[0] ? this.exprToC(node.right.args[0].expr ?? node.right.args[0], lines, depth) : 'NULL';
+        return `${node.left.name} = tsc_weak_create(${argC})`;
+      }
+    }
     const l = this.exprToC(node.left, lines, depth);
     // Type-directed literal emit: float field = 1.0 → 1.0f
     let r;

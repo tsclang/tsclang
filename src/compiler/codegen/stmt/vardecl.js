@@ -607,6 +607,18 @@ export default {
           }
         }
 
+        // let w: Weak<T>; without init → NULL-init weak pointer
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Weak' && !init) {
+          const tArg = typeAnn.typeArgs?.[0];
+          if (tArg?.kind === 'TypeRef') {
+            const innerType = tArg.name;
+            p(`${innerType} *${name} = NULL;`);
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isWeak: true, derefType: innerType });
+            this._registerCleanup(`tsc_weak_release(${name})`);
+            return;
+          }
+        }
+
         // Borrow check: Shared<T> requires a heap allocator
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
           throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
