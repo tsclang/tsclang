@@ -1198,3 +1198,16 @@
 > - **M8**: `charCodeAt` return `u32`, не `u8` — `03-types.md:550`
 > - **M9**: Удалена дублирующая секция catch-блоков — `06-errors.md:90-99`
 > - Результат: **1283 теста, 0 ошибок**
+
+> 2026-05-23: **Spec C-output accuracy — 12 fixes across 5 files**:
+> - **A**: Class capture table Pointer (borrow) -> Struct copy (move) — `05b-ownership.md:547`
+> - **B1/B2**: `RC_retain`/`RC_release` -> `tsc_arc_retain`/`tsc_arc_release` — `05b-ownership.md:13,1027-1028`
+> - **D1/D2**: Optional chaining / nullish coalescing `String*` -> `opt_String` struct — `02-syntax.md:734,769-773`
+> - **E**: Generic monomorphization `String*` -> `String` (value type) — `11-compiler.md:334`
+> - **C1**: Atomic heap/stack C-output -> `Atomic_i32_shared` with `tsc_arc_alloc`/`tsc_arc_release` — `07-concurrency.md:780-793`
+> - **C2**: AtomicArray C-output -> `AtomicArray_i32` with `calloc` — `07-concurrency.md:815-823`
+> - **C3**: Channel C-output -> SPSC ring buffer `TscChannel_i32` — `07-concurrency.md:901-912`
+> - **C4**: SelectState C-output -> `_SelectResult_0` + sequential `try_receive` — `07-concurrency.md:944-972`
+> - **C5**: Readonly C-output -> `const T` (zero overhead) — `07-concurrency.md:1032-1041`
+> - **F**: Generator `String*` -> `String` inline — `07-concurrency.md:1893-1903`
+> - Result: **1283 tests, 0 failures**

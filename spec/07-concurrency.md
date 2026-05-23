@@ -778,16 +778,16 @@ enum RmwOrdering   { Relaxed, Acquire, Release, AcqRel, SeqCst }  // read-modify
 C-output — два варианта в зависимости от escape analysis:
 
 ```c
-// Heap layout — если Atomic<T> уходит в Thread.spawn (компилятор вставляет retain/release):
-struct Atomic_i32 {
-    _Atomic int32_t value;
-    atomic_size_t ref_count;
-};
+// Stack layout — если Atomic<T> не выходит за пределы текущего стека:
+typedef struct { _Atomic int32_t value; } Atomic_i32;
+Atomic_i32 a = {.value = 0};
 
-// Stack layout — если Atomic<T> не выходит за пределы текущего стека (нет ref_count):
-struct Atomic_i32_stack {
-    _Atomic int32_t value;
-};
+// Heap (shared) layout — если Atomic<T> уходит в Thread.spawn (ARC retain/release):
+typedef struct { int32_t _refcount; int32_t _weakcount; _Atomic int32_t value; } Atomic_i32_shared;
+Atomic_i32_shared *a = tsc_arc_alloc(sizeof(Atomic_i32_shared));
+atomic_init(&a->value, 0);
+// ... использование через atomic_store_explicit / atomic_load_explicit ...
+tsc_arc_release(a);
 ```
 
 Escape analysis: компилятор обходит все передачи `Atomic<T>` — если ни одна не попадает в `Thread.spawn` и не возвращается наружу, используется stack layout без ref count.
@@ -812,14 +812,13 @@ arr.compareExchange(0, expected, desired,
 arr.length                                     // i32 — bounds checking при каждом обращении
 ```
 
-C-output (FAM — одна аллокация):
+C-output (calloc для данных):
 ```c
-struct AtomicArray_i32 {
-    atomic_size_t ref_count;
-    size_t length;
-    _Atomic int32_t data[];  // данные идут сразу за метаданными (C99 FAM)
-};
-// аллокация: malloc(sizeof(struct AtomicArray_i32) + sizeof(int32_t) * n)
+typedef struct { int32_t length; _Atomic int32_t *data; } AtomicArray_i32;
+AtomicArray_i32 arr = {.length = 4, .data = calloc(4, sizeof(_Atomic int32_t))};
+atomic_store_explicit(&arr.data[0], 42, memory_order_release);
+const int32_t v = atomic_load_explicit(&arr.data[0], memory_order_acquire);
+// ... cleanup: free(arr.data);
 ```
 
 Заметки компилятора:
@@ -898,18 +897,12 @@ function onFrame(): void {
 
 Ownership: `tx.send(msg)` — move `msg` в канал. При удалении канала с непрочитанными элементами компилятор вызывает деструкторы всех оставшихся объектов.
 
-C-output — кольцевой буфер с MPMC:
+C-output — SPSC ring buffer (thin wrapper над runtime `TscChannel_TNAME`):
 ```c
-typedef struct {
-    pthread_mutex_t  mutex;
-    pthread_cond_t   not_full;
-    pthread_cond_t   not_empty;
-    void**           buf;          // ring buffer
-    size_t           capacity;
-    size_t           head, tail, count;
-    atomic_size_t    ref_count;
-    bool             closed;
-} Channel;
+typedef struct { TscChannel_i32 *_inner; } Channel_i32;
+Channel_i32 ch = { ._inner = tsc_channel_create_i32(10) };
+tsc_channel_send_i32(ch._inner, 42);
+tsc_channel_release_i32(ch._inner);
 ```
 
 ### select
@@ -941,36 +934,20 @@ match (result) {
 
 Fairness: перед регистрацией callbacks компилятор обходит каналы в случайном порядке через `tryReceive()`. Если хотя бы один готов — возвращает сразу без регистрации в event loop.
 
-C-output — SelectState:
+C-output — sequential try_receive с tagged result:
 ```c
-typedef struct {
-    void*    channel;      // указатель на канал или таймер
-    void*    result_buf;   // куда писать значение
-    size_t   val_size;     // сколько байт копировать
-    int      arm_id;       // индекс → имя поля (msg=0, err=1, timeout=2)
-} SelectArm;
-
-typedef struct {
-    SelectArm*    arms;
-    size_t        count;
-    atomic_bool   resolved;   // CAS — только один arm побеждает
-    atomic_size_t ref_count;  // = count; каждый callback делает release()
-    void*         promise;    // резолвить при победе
-} SelectState;
+typedef struct { int32_t _arm; int32_t a; int32_t b; } _SelectResult_0;
+typedef struct { bool has_value; int32_t value; } opt_i32;
+_SelectResult_0 result = {-1, 0, 0};
+// arm 0 — try ch1:
+{ opt_i32 _sel_a = tsc_channel_try_receive_i32(ch1._inner);
+  if (_sel_a.has_value) { result.a = _sel_a.value; result._arm = 0; } }
+// arm 1 — try ch2 (only if arm 0 missed):
+if (result._arm < 0) {
+  opt_i32 _sel_b = tsc_channel_try_receive_i32(ch2._inner);
+  if (_sel_b.has_value) { result.b = _sel_b.value; result._arm = 1; } }
 ```
-
-Результат select — tagged union (экономия стека: в каждый момент заполнено ровно одно поле):
-```c
-struct SelectResult {
-    int arm_id;   // дискриминант: 0=msg, 1=err, 2=timeout
-    union {
-        Message*  msg;
-        AppError* err;
-        // для timeout поле не нужно
-    } data;
-};
-```
-Компилятор генерирует `SelectResult` по конкретному вызову `select{}` — типы в union известны на этапе компиляции.
+Компилятор генерирует `_SelectResult_N` по конкретному вызову `select{}` — типы полей известны на этапе компиляции. `_arm == -1` означает «ни один канал не готов».
 
 Жизненный цикл `SelectState`: `ref_count = arms_count`. Каждый callback (победитель или нет) делает `dec_ref`. Последний вошедший освобождает память. После победы одного — остальные отписываются от своих каналов.
 
@@ -1029,16 +1006,13 @@ const cfg = new Readonly({ maxRetries: 3 })
 
 Нельзя создать `Readonly<T>` если `T` содержит `Shared<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` или мутабельное поле — ошибка компилятора.
 
-C-output — одна аллокация (`atomic_size_t ref_count` + inline данные):
+C-output — zero overhead (`const` copy, без аллокации):
 ```c
-struct Readonly_Config {
-    atomic_size_t ref_count;
-    Config data;               // данные сразу за счётчиком
-};
-// аллокация: malloc(sizeof(struct Readonly_Config))
+// Readonly<Point> ro = p;
+const Point ro = p;
 ```
 
-Retain/release генерируется компилятором автоматически на границе `Thread.spawn`. `ref_count` доходит до нуля → вызов деструктора `data` → `free`.
+Thread-safe retain/release для `Readonly<T>` в `Thread.spawn` — планируется. Текущая реализация: `const` copy без refcount.
 
 Зачем не `const`: `const` локальная переменная — это гарантия компилятора только в текущем потоке. `Readonly<T>`:
 1. **Thread-safe** — атомарный ref count, safe для `Thread.spawn`
@@ -1893,14 +1867,14 @@ typedef enum {
 typedef struct {
     ReadLinesState state;
     FileHandle*    fd;
-    String*        yielded_value;   // значение между yield и next()
+    String         yielded_value;   // inline value (не указатель)
     IOError*       error;
     bool           close_requested;
 } ReadLinesGen;
 
 // next() принимает callback: (value, done, error, userdata)
 void readlines_next(ReadLinesGen* g,
-    void (*cb)(String* val, bool done, IOError* err, void* ud), void* ud);
+    void (*cb)(String val, bool done, IOError* err, void* ud), void* ud);
 void readlines_close(ReadLinesGen* g, void (*cb)(void* ud), void* ud);
 ```
 

@@ -10,7 +10,7 @@
 | **Move** | Ownership transfer. Оригинал обнуляется (`{0}`), доступ к нему — ошибка компиляции |
 | **ARC Copy** | Копирование struct-by-value + `tsc_string_retain` нового владельца + `tsc_string_release` в cleanup |
 | **Borrow** | Pointer (`&a`) без transfer ownership. Владение остаётся у оригинала |
-| **ARC Retain** | `RC_retain()` — increment refcount, shared ownership |
+| **ARC Retain** | `tsc_arc_retain()` — increment refcount, shared ownership |
 
 ---
 
@@ -544,7 +544,7 @@ const { name, email } = user;
 | Move (zero-out) | `memset(&src, 0, sizeof(T))` | Аналогично |
 | Ref/Mut borrow | Pointer (`const T*` / `T*`) | Pointer (идентично) |
 | `ClassName_free()` | Release string-полей только (без `free(self)`) | No-op (string-поля — no-op retain/release) |
-| Замыкания с class capture | Pointer в env struct (borrow) | Pointer (идентично) |
+| Замыкания с class capture | Struct copy в env (move) | Struct copy (идентично) |
 | Spread объекта | Move полей + retain string-полей | Move полей (string — no-op retain) |
 | Деструктуризация объекта | Move полей + retain string-полей + cleanup release | Move полей (string — no-op) |
 | Деструктор при exit | `User_free(&u)` — release string-полей | No-op |
@@ -1024,8 +1024,8 @@ let node: Shared<Node> = new Node();  // refcount = 1
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `let b = a` | ARC Retain | `Node *b = a; RC_retain(b);` + cleanup: `RC_release(b);` |
-| `const b = a` | ARC Retain | `const Node *b = a; RC_retain(b);` + cleanup: `RC_release(b);` |
+| `let b = a` | ARC Retain | `Node *b = a; tsc_arc_retain(b);` + cleanup: `tsc_arc_release(b);` |
+| `const b = a` | ARC Retain | `const Node *b = a; tsc_arc_retain(b);` + cleanup: `tsc_arc_release(b);` |
 | `b = a` (reassign) | ARC Retain | retain new + release old + assign |
 
 ### Weak\<T\> — weak reference

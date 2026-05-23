@@ -730,8 +730,9 @@ if (s->length > 0) { ... }
   // методы
   const upper = user?.getName()?.toUpperCase();
 
-  // C-output (вложенные тернарные операторы или if-цепочки)
-  // String* name = (user != NULL && user->profile != NULL) ? user->profile->name : NULL;
+  // C-output (opt_String с has_value)
+  // opt_String name = user.has_value && user.value.profile.has_value
+  //     ? (opt_String){true, user.value.profile} : (opt_String){false, {0}};
   ```
   Тип результата `?.` всегда nullable: `T | null`.
 
@@ -766,11 +767,11 @@ if (s->length > 0) { ... }
   // const x: i32 | null = getSomething(); const y = x ?? 0;
   int32_t y = x.has_value ? x.value : 0;
 
-  // Сложный тип (указатель) — move: разыменовываем и обнуляем s:
+  // Сложный тип (opt_String) — move: извлекаем value и обнуляем s:
   // let s: string | null = getString(); const result = s ?? "default";
-  // s: String* (string | null → указатель), result: String (string → value)
-  String result = s != NULL ? *s : (String){ "default", 7, 0 };
-  s = NULL;  // s обнуляется после move
+  // s: opt_String (string | null → struct с has_value), result: String (string → value)
+  String result = s.has_value ? s.value : (String){ "default", 7, 0 };
+  s = (opt_String){false, {0}};  // s обнуляется после move
   ```
 
 ## Индексация и срезы (массивы и строки)
