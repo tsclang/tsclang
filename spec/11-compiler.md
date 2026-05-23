@@ -334,7 +334,7 @@ int32_t  identity_i32(int32_t x)   { return x; }
 String  identity_string(String x) { return x; }
 
 // Box<User>
-typedef struct { User* value; } Box_User;
+typedef struct { User value; } Box_User;
 ```
 
 Плюсы:

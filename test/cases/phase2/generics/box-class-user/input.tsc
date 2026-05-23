@@ -1,0 +1,12 @@
+class User {
+    name: string;
+    constructor(name: string) { this.name = name; }
+    greet(): string { return "Hello, " + this.name; }
+}
+class Box<T> {
+    value: T;
+    constructor(v: T) { this.value = v; }
+    get(): T { return this.value; }
+}
+const b = new Box<User>(new User("Alice"));
+console.log(b.get().greet());
