@@ -262,12 +262,12 @@ const n64: i64 = n      // неявно — без потерь
   - На 8-bit таргетах (`"target": "avr"` и др.) — **`number` автоматически = `f32`** без явного `defaultNumber`
   ```typescript
   // Десктоп (defaultNumber = f64)
-  const a = 1;           // i32 (целочисленный литерал → int32_t)
-  const b: number = 1;   // f64 (number = f64)
+  const a = 1;           // number (f64, double) — целочисленный литрал без аннотации
+  const b: number = 1;   // f64 (number = f64) — то же самое, явно
   const c: f32 = 1;      // f32 (явно)
 
   // AVR (defaultNumber автоматически = f32)
-  const a = 1;           // i32 (целочисленный литерал → int32_t)
+  const a = 1;           // number (f32, float) — целочисленный литрал без аннотации
   const b: number = 1;   // f32 (number = f32)
   const c: f32 = 1;      // f32 (явно)
   const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
@@ -298,8 +298,8 @@ const n64: i64 = n      // неявно — без потерь
 
   `i16`/`u16` и меньше — нет warning (нативные для AVR). `i32`/`u32` — нет warning (обычны, avr-gcc оптимизирует).
 - Type inference выводит конкретный тип для всех значений:
-  - целые числа → `i32` (int32_t), числа с точкой → `f64` (double), или переопределённый `defaultNumber`
-  - строки → `string`, булевые → `boolean`, массивы → `number[]` и т.д.
+  - целые числа → `number` (= `f64` по умолчанию, переопределяется через `defaultNumber`), числа с точкой → `f64` (double)
+  - строки → `string`, булевые → `boolean`, массивы → `T[]` (где `T` выводится по элементам)
   - явная аннотация переопределяет: `const i: i32 = 1` → `i32`
 - Сообщения об ошибках используют конкретный тип: `expected f64, got i32`
 - Все числа — примитивы, передаются по значению

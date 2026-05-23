@@ -18,6 +18,6 @@ tsc_closure getOp_bool(bool inc) {
 int main(void) {
     TSC_INIT();
     tsc_closure op = getOp_bool(true);
-    printf("%d\n", ((int32_t (*)(int32_t))op.fn)(10));
+    printf("%d\n", ((int32_t (*)(double))op.fn)(10));
     return 0;
 }

@@ -35,7 +35,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 int main(void) {
     TSC_INIT();
-    tsc_unknown x = tsc_unknown_from_i32(42);
+    tsc_unknown x = tsc_unknown_from_f64(42);
     if (x.type_id != 6) {
         printf("not string\n");
     } else {

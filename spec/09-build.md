@@ -1659,34 +1659,33 @@ if (s.isOutOfBounds()) {
 ```
 
 ```c
-static Sprite _sprites_pool[16];
-static uint8_t _sprites_used[16] = {0};
+typedef struct { bool active; } Spark;
+typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
 
-Sprite* Sprite_new(int16_t x, int16_t y) {
-    for (int i = 0; i < 16; i++) {
-        if (!_sprites_used[i]) {
-            _sprites_used[i] = 1;
-            _sprites_pool[i].x = x;
-            _sprites_pool[i].y = y;
-            return &_sprites_pool[i];
+static Spark _spark_pool[4];
+static uint8_t _spark_pool_mask = 0;
+
+static opt_ref_Spark Spark_alloc(void) {
+    for (int _i = 0; _i < 4; _i++) {
+        if (!(_spark_pool_mask & (1 << _i))) {
+            _spark_pool_mask |= (1 << _i);
+            return (opt_ref_Spark){true, &_spark_pool[_i], _i};
         }
     }
-    return NULL;  // пул полон
+    return (opt_ref_Spark){false, NULL, -1};  // пул полон
 }
 
-// Возврат слота — не free() памяти, просто сброс флага
-void Sprite_pool_release(Sprite* s) {
-    _sprites_used[s - _sprites_pool] = 0;
+static void Spark_drop(opt_ref_Spark s) {
+    if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
 }
 
-// Автоматический вызов при выходе из scope (оба случая генерируют одинаковый C)
+// Автоматический вызов при выходе из scope:
 {
-    Sprite* s = Sprite_new(10, 20);
-    Sprite_move(s, 5, 0);
-    Sprite_pool_release(s);   // вставлено компилятором
+    opt_ref_Spark s = Spark_alloc();
+    Spark_drop(s);   // вставлено компилятором
 }
 
-// drop(s) → тот же Sprite_pool_release(s), но явно в коде
+// drop(s) → тот же Spark_drop(s), но явно в коде
 ```
 
 `new` на `allocator: "none"` без `@embedded.pool` → ошибка компилятора.

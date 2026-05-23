@@ -212,17 +212,17 @@ function process(): void throws IOError {
 Генерируется:
 ```c
 // try-ветка
-Foo* a = Foo_new();
-Bar* b = Bar_new();
+Foo a = Foo_new();
+Bar b = Bar_new();
 _Result_void_IOError _r = riskyOp();
 if (!_r.ok) {
-    Foo_free(a);   // компилятор генерирует cleanup
-    Bar_free(b);
+    Foo_free(&a);   // компилятор генерирует cleanup
+    Bar_free(&b);
     return (_Result_void_IOError){ .ok = false, ._err = _r._err };
 }
-use(a, b);
-Foo_free(a);
-Bar_free(b);
+use(&a, &b);
+Foo_free(&a);
+Bar_free(&b);
 ```
 
 ## Ограничения

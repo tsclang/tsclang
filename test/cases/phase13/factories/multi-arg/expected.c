@@ -7,7 +7,7 @@ static void Calc_set_inner(const Calc *self, int32_t x) {
 }
 
 static void Calc_set(const Calc *self, int32_t x) {
-    const int32_t v = (x < 0) ? 0 : (x > 100) ? 100 : x;
+    const double v = (x < 0) ? 0 : (x > 100) ? 100 : x;
     Calc_set_inner(self, v);
 }
 

@@ -6,12 +6,12 @@ typedef struct {
     int32_t _state; bool _done;
     Array_i32 arr;
 } foo_state;
-static int32_t _arr_data_0[] = {1, 2, 3};
+static double _arr_data_0[] = {1, 2, 3};
 
 static void foo_poll(foo_state *self) {
     switch (self->_state) {
         case 0:
-            self->arr = (Array_i32){.data = _arr_data_0, .length = 3, .capacity = 0};
+            self->arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 0};
             printf("%zu\n", self->arr.length);
             goto _cleanup;
         _cleanup:

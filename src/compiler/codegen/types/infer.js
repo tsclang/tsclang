@@ -2,7 +2,7 @@ import { inferLiteralCType } from '../../types.js';
 // infer.js
 export default {
   inferType(node) {
-    if (!node) return 'int32_t';
+    if (!node) return 'double';
     switch (node.kind) {
       case 'Literal':  return inferLiteralCType(node);
       case 'TemplateLit': return 'String';

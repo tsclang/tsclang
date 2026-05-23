@@ -1211,3 +1211,19 @@
 > - **C5**: Readonly C-output -> `const T` (zero overhead) — `07-concurrency.md:1032-1041`
 > - **F**: Generator `String*` -> `String` inline — `07-concurrency.md:1893-1903`
 > - Result: **1283 tests, 0 failures**
+
+> 2026-05-23: **Integer literal inference -> number (f64) + spec contradictions fix**:
+> - **Compiler**: inferLiteralCType() in 	ypes.js:92, ardecl.js:807, infer.js:5 — integer literal without annotation now infers double (number = f64), not int32_t
+> - **98 tests updated**: Array_i32 -> Array_f64, int32_t x = 42 -> double x = 42.0, %d -> %g, _i32 -> _f64 mangling, etc.
+> - **Spec  3-types.md**: const a = 1 now documented as 
+umber (f64), not i32. Array inference -> T[].
+> - **Spec 12-migration.md**: Rewritten number section — let x = 42 = 
+umber, / = float division (JS semantics), explicit i32 for integer ops
+> - **Spec contradictions fixed (6 items)**:
+>   -  7-concurrency.md:848 MPMC -> SPSC
+>   -  6-errors.md:215 Foo* -> Foo (value type)
+>   -  5b-ownership.md:507 move-destructuring example: added : User annotation
+>   -  5b-ownership.md:637 	sc_array_free_string signature -> macro taking Array_string*
+>   -  9-build.md:1662 Pool allocator -> bitmask + opt_ref_T + Spark_alloc/Spark_drop
+>   -  5b-ownership.md:795 malloc(sizeof(Array_i32)) -> 	sc_array_create_i32() (stack struct)
+> - Result: **1283 tests, 0 failures**

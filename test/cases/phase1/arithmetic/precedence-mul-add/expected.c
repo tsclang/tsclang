@@ -2,6 +2,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", 2 + 3 * 4);
+    printf("%g\n", 2 + 3 * 4);
     return 0;
 }

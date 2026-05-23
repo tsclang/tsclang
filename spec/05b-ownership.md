@@ -504,7 +504,7 @@ const copy = { ...base };  // name: retain("Alice"), age: copy
 
 ```typescript
 let user = { name: "Alice", age: 30 };
-const { name, age } = user;  // move обоих полей
+const { name, age }: User = user;  // move обоих полей
 console.log(user.name);      // ❌ E002: use after move
 ```
 
@@ -631,14 +631,17 @@ const s = arr[0];  // ✅ ARC Copy (String struct)
 
 ### Массивы строк
 
-`Array<string>` — при уничтожении массива释放 каждая строка через `tsc_array_free_string`:
+`Array<string>` — при уничтожении массива освобождается каждая строка через `tsc_array_free_string` (макрос, принимает `Array_string *`):
 
 ```c
-void tsc_array_free_string(String *parts, int32_t len) {
-    for (int32_t i = 0; i < len; i++) {
-        tsc_string_release(parts[i]);
-    }
-}
+// runtime macro (simplified):
+#define tsc_array_free_string(arr) do { \
+    Array_string *_a_ = (arr); \
+    for (size_t _i_ = 0; _i_ < _a_->length; _i_++) \
+        tsc_string_release(_a_->data[_i_]); \
+    free(_a_->data); \
+    _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
+} while(0)
 ```
 
 ### Поведение внутри функций
@@ -792,7 +795,7 @@ const [first, ...rest] = names;
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
 | `Array<T>` | Heap, динамический рост через `realloc` | Фиксированный `T[capacity]` (статический или стековый) |
-| `new Array<T>(100)` | `malloc(sizeof(Array_i32))` | `Array_i32 arr = {.data = buf, .capacity = 100, .length = 0};` |
+| `new Array<T>(100)` | `Array_i32 arr = tsc_array_create_i32(100);` (stack struct, heap data buffer) | `Array_i32 arr = {.data = buf, .capacity = 100, .length = 0};` |
 | Move (zero-out) | `memset(&src, 0, sizeof(Array_i32))` | Аналогично |
 | Ref/Mut borrow | Pointer (`const Array_i32*` / `Array_i32*`) | Pointer (идентично) |
 | `arr.push(val)` | `realloc` при росте | Только если `length < capacity`, иначе ошибка |

@@ -38,7 +38,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 int main(void) {
     TSC_INIT();
-    tsc_unknown _lit_0[] = {tsc_unknown_from_i32(42), tsc_unknown_from_string(STR_LIT("hello")), tsc_unknown_from_bool(true)};
+    tsc_unknown _lit_0[] = {tsc_unknown_from_f64(42), tsc_unknown_from_string(STR_LIT("hello")), tsc_unknown_from_bool(true)};
     Array_tsc_unknown arr = {.data = _lit_0, .length = 3, .capacity = 3};
     printf("%zu\n", arr.length);
     for (size_t _i_0 = 0; _i_0 < arr.length; _i_0++) {

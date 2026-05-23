@@ -34,7 +34,7 @@ static inline String tsc_unknown_get_string(const tsc_unknown *self) { String *p
 static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }
 
 tsc_unknown makeVal(void) {
-    return tsc_unknown_from_i32(42);
+    return tsc_unknown_from_f64(42);
 }
 
 int main(void) {

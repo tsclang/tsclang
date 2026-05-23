@@ -11,7 +11,7 @@ void process_Array_i32(Array_i32 arr) {
 
 int main(void) {
     TSC_INIT();
-    int32_t _arr_data_0[] = {10, 20, 30};
-    process_Array_i32((Array_i32){.data = _arr_data_0, .length = 3, .capacity = 3});
+    double _arr_data_0[] = {10, 20, 30};
+    process_Array_i32((Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3});
     return 0;
 }

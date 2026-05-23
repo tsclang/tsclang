@@ -21,8 +21,8 @@ Array_i32 scaleItems_Array_i32_i32(Array_i32 items, int32_t factor) {
 
 int main(void) {
     TSC_INIT();
-    int32_t _arr_data_0[] = {1, 2, 3};
-    Array_i32 arr = (Array_i32){.data = _arr_data_0, .length = 3, .capacity = 3};
+    double _arr_data_0[] = {1, 2, 3};
+    Array_i32 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     Array_i32 result = scaleItems_Array_i32_i32(arr, 10);
     printf("%s\n", tsc_array_join_i32(result, STR_LIT(", ")).data);
     return 0;

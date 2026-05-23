@@ -1,13 +1,13 @@
 #include "runtime.h"
 
-typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
+typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 int main(void) {
     TSC_INIT();
-    int32_t _arr_data_0[] = {1, 2, 3};
-    Array_i32 arr = (Array_i32){.data = _arr_data_0, .length = 3, .capacity = 3};
-    tsc_array_unshift_i32(&arr, 0);
+    double _arr_data_0[] = {1, 2, 3};
+    Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
+    tsc_array_unshift_f64(&arr, 0);
     printf("%zu\n", arr.length);
-    printf("%d\n", arr.data[0]);
+    printf("%g\n", arr.data[0]);
     return 0;
 }

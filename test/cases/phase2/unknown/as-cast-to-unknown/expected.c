@@ -35,7 +35,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 int main(void) {
     TSC_INIT();
-    const tsc_unknown u = tsc_unknown_from_i32(42);
+    const tsc_unknown u = tsc_unknown_from_f64(42);
     printf("%s\n", (u.type_id == 1) ? "true" : "false");
     tsc_unknown_drop(&u);
     return 0;

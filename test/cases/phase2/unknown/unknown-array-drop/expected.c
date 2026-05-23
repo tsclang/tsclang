@@ -37,7 +37,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 #define tsc_array_push_tsc_unknown(arr, val) do { Array_tsc_unknown *_a_ = (arr); tsc_unknown _v_ = (val); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (tsc_unknown*)realloc(_a_->data, _nc_ * sizeof(tsc_unknown)); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)
 
 void test(void) {
-    tsc_unknown _lit_0[] = {tsc_unknown_from_i32(1), tsc_unknown_from_string(STR_LIT("hello"))};
+    tsc_unknown _lit_0[] = {tsc_unknown_from_f64(1), tsc_unknown_from_string(STR_LIT("hello"))};
     Array_tsc_unknown arr = {.data = _lit_0, .length = 2, .capacity = 2};
     printf("%zu\n", arr.length);
 }

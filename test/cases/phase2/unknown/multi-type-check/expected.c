@@ -35,7 +35,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 void check_unknown(tsc_unknown val) {
     if (val.type_id == 1) {
-        printf("%d\n", tsc_unknown_get_i32(&val) + 1);
+        printf("%g\n", tsc_unknown_get_i32(&val) + 1);
     }
     if (val.type_id == 6) {
         String _tmp_0 = tsc_string_to_upper(tsc_unknown_get_string(&val));
@@ -49,7 +49,7 @@ void check_unknown(tsc_unknown val) {
 
 int main(void) {
     TSC_INIT();
-    check_unknown(tsc_unknown_from_i32(42));
+    check_unknown(tsc_unknown_from_f64(42));
     check_unknown(tsc_unknown_from_string(STR_LIT("hello")));
     check_unknown(tsc_unknown_from_f64(3.14));
     return 0;

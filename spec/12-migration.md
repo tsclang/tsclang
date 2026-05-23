@@ -139,20 +139,25 @@ const x = maybeNull ?? defaultValue  // move maybeNull если не null
 // Нельзя использовать maybeNull после ??
 ```
 
-### Числовые типы — явные аннотации
+### Числовые типы — `number` по умолчанию
 
 ```typescript
 // TypeScript:
 let x = 42           // number (f64)
 let y = 3.14         // number
 
-// TSClang — поведение то же самое (number = f64):
-let x = 42           // f64 (через number — как в TypeScript)
-let y = 3.14         // f64
-let z: i64 = 42      // явно i64
-let n: i32 = 42      // явно i32
+// TSClang — поведение аналогичное (number = f64):
+let x = 42           // number (f64, double) — целочисленный литерал → number
+let y = 3.14         // f64 (double) — литерал с точкой → f64
+let z = 10 / 3       // number (f64, double) = 3.333... — JavaScript-семантика деления
+let n: i32 = 42      // явно i32 — конкретный тип
 let w: f32 = 3.14    // явно f32 — будет усечение!
 ```
+
+Ключевые отличия от TypeScript:
+- Явные типы (`i32`, `f32`, `u8`) — примитивы, не `number`. `let x: i32 = 42; let y = x / 3` → **целочисленное деление** (C-семантика), результат `i32`.
+- Без явной аннотации — всегда `number` (= `f64`), деление **float** (JavaScript-семантика).
+- На AVR `number` автоматически = `f32`. Переопределяется через `"defaultNumber"` в `tsc.package.json`.
 
 ### `string[i]` для slice
 

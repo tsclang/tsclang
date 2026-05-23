@@ -800,10 +800,8 @@ export default {
         }
         // Reading a volatile variable into a local gives a plain (non-volatile) type
         if (!typeAnn && ctype.startsWith('volatile ')) ctype = ctype.slice('volatile '.length);
-        // Untyped number literals: integer тЖТ int32_t, float/decimal тЖТ double
         if (!typeAnn && init && init.kind === 'Literal' && init.litType === 'number') {
-          const v = init.value;
-          ctype = (v.includes('.') || v.includes('e') || v.includes('E')) ? 'double' : 'int32_t';
+          ctype = 'double';
         }
         // ObjLit with named fields and no type annotation тЖТ defer as individual consts (expanded at destructuring)
         if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {

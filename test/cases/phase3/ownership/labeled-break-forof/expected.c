@@ -4,8 +4,8 @@ typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 int main(void) {
     TSC_INIT();
-    int32_t _arr_data_0[] = {1, 2, 3, 4, 5};
-    Array_i32 arr = (Array_i32){.data = _arr_data_0, .length = 5, .capacity = 5};
+    double _arr_data_0[] = {1, 2, 3, 4, 5};
+    Array_i32 arr = (Array_f64){.data = _arr_data_0, .length = 5, .capacity = 5};
     int32_t sum = 0;
     for (int32_t i = 0; i < 3; i++) {
         String s = STR_LIT("row");

@@ -845,7 +845,7 @@ const int32_t v = atomic_load_explicit(&arr.data[0], memory_order_acquire);
 
 ### channel<T>
 
-**Bounded MPMC** — кольцевой буфер, одна аллокация. Capacity обязателен.
+**Bounded SPSC** — кольцевой буфер, одна аллокация. Capacity обязателен.
 
 ```typescript
 import { Thread, channel, select, after } from "std/threads"
