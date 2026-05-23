@@ -12,8 +12,31 @@ export default {
         const link = chainLinks[i];
         const flatCallee = { ...link.callee, object: baseObject };
         const innerC = this.methodCall(flatCallee, link.args, lines, depth);
-        lines.push(`${I}${innerC};`);
+        const resultType = this.inferType(link);
+        const nextProp = (i > 0) ? chainLinks[i - 1].callee.prop : callee.prop;
+        const nextTargetClass = this.classes.get(resultType);
+        const nextTargetIface = this.interfaces.get(resultType);
+        const hasNextMethod = (nextTargetClass?.methods?.some(m => m.name === nextProp))
+          || (nextTargetIface?.some(m => m.kind === 'MethodSig' && m.name === nextProp))
+          || (resultType.startsWith('Array_') && ['map','filter','slice','join','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap','keys','values','entries','flat','concat','includes','indexOf','lastIndexOf','at','with','toReversed','toSorted','toSpliced','clone','pop','shift','unshift','splice','reverse','push','resize','reallocate','fill','set','view','viewMut','length','capacity'].includes(nextProp))
+          || (resultType === 'String' && ['slice','indexOf','lastIndexOf','at','includes','startsWith','endsWith','split','trim','toUpperCase','toLowerCase','replace','padStart','padEnd','repeat','charAt','charCodeAt','concat','codePoints','graphemes','replaceAll','substring','trimStart','trimEnd','search','match','matchAll','length','toString'].includes(nextProp));
+        if (hasNextMethod) {
+          const tmpName = `_chain_${this.tempCount++}`;
+          lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
+          this.define(tmpName, { ctype: resultType, varKind: 'const' });
+          baseObject = { kind: 'Ident', name: tmpName };
+        } else {
+          lines.push(`${I}${innerC};`);
+        }
       }
+    } else if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Ident') {
+      const I = ' '.repeat(this.indent * depth);
+      const resultType = this.inferType(baseObject);
+      const tmpName = `_chain_${this.tempCount++}`;
+      const innerC = this.callToC(baseObject, lines, depth);
+      lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
+      this.define(tmpName, { ctype: resultType, varKind: 'const' });
+      baseObject = { kind: 'Ident', name: tmpName };
     }
     const prop  = callee.prop;
     const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;

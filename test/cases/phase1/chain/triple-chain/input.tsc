@@ -1,0 +1,2 @@
+const arr: i32[] = [1, 2, 3, 4, 5];
+console.log(arr.map(x => x * 2).filter(x => x > 4).length);

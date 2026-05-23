@@ -327,17 +327,17 @@ export default {
     if (node.callee.kind === 'Member') {
       const obj2 = node.callee.object;
       const sym2 = obj2.kind === 'Ident' ? this.lookup(obj2.name) : null;
-      const cls2 = sym2 ? this.classes.get(sym2.ctype) : null;
+      const objType2 = sym2?.ctype ?? this.inferType(obj2);
+      const cls2 = this.classes.get(objType2);
       if (cls2?.methods) {
         const m2 = cls2.methods.find(m => m.name === node.callee.prop);
         if (m2?.returnType) return this.resolveType(m2.returnType);
       }
-      if (sym2) {
-        const ifaceDef = this.interfaces.get(sym2.ctype);
-        if (ifaceDef) {
-          const m3 = ifaceDef.find(m => m.kind === 'MethodSig' && m.name === node.callee.prop);
-          if (m3?.returnType) return this.resolveType(m3.returnType);
-        }
+      const ifaceType = sym2?.ctype ?? objType2;
+      const ifaceDef = this.interfaces.get(ifaceType);
+      if (ifaceDef) {
+        const m3 = ifaceDef.find(m => m.kind === 'MethodSig' && m.name === node.callee.prop);
+        if (m3?.returnType) return this.resolveType(m3.returnType);
       }
     }
     if (node.callee.kind === 'Ident') {

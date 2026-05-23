@@ -163,7 +163,14 @@ export default {
     // Register class so method dispatch works
     this.classes.set(monoName, {
       fields: fields.map(f => ({ ...f, typeAnn: f.typeAnn ? this.substType(f.typeAnn, subst) : f.typeAnn })),
-      methods,
+      methods: methods.map(m => ({
+        ...m,
+        returnType: m.returnType ? this.substType(m.returnType, subst) : m.returnType,
+        params: m.params.map(p => ({
+          ...p,
+          typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn,
+        })),
+      })),
       isStruct: false,
     });
 

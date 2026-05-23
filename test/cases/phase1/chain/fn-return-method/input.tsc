@@ -1,0 +1,7 @@
+class User {
+    name: string;
+    constructor(name: string) { this.name = name; }
+    greet(): string { return "Hello, " + this.name; }
+}
+function getUser(): User { return new User("Bob"); }
+console.log(getUser().greet());

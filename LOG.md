@@ -1227,3 +1227,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   -  9-build.md:1662 Pool allocator -> bitmask + opt_ref_T + Spark_alloc/Spark_drop
 >   -  5b-ownership.md:795 malloc(sizeof(Array_i32)) -> 	sc_array_create_i32() (stack struct)
 > - Result: **1283 tests, 0 failures**
+
+> 2026-05-24: **Chain call fix + Box<User> test + spec contradictions round 2**:
+> - **Fix chain call bug**: method-dispatch.js — intermediate results stored in temp vars for method→method chains (map.filter, slice.join, get().greet()) and function→method chains (getUser().greet())
+> - **Fix generic monomorphization**: generics.js:169 — method return types/params now substituted (T -> User)
+> - **Fix type inference**: infer.js:327 — non-Ident receiver fallback to inferType() for chained method calls
+> - **6 new chain tests**: array-map-field, array-slice-join, string-split-length, string-trim-length, fn-return-method, triple-chain
+> - **1 new generic test**: box-class-user (Box<User> — inline value type, not pointer)
+> - **Spec fixes**: 08-modules.md (module-level class = value), 06-errors.md (_free with &), 05-memory.md (_free with &), 07-concurrency.md (Readonly planned), 11-compiler.md (Box<User> inline)
+> - Result: **1290 tests, 0 failures**
