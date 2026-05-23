@@ -1015,7 +1015,7 @@ const Point ro = p;
 Thread-safe retain/release для `Readonly<T>` в `Thread.spawn` — планируется. Текущая реализация: `const` copy без refcount.
 
 Зачем не `const`: `const` локальная переменная — это гарантия компилятора только в текущем потоке. `Readonly<T>`:
-1. **Thread-safe** — атомарный ref count, safe для `Thread.spawn`
+1. **Thread-safe** *(запланировано)* — атомарный ref count, safe для `Thread.spawn`
 2. **Deep** — рекурсивная проверка; `const obj` может хранить `Shared<T>` внутри
 3. **Owned** — автоматическое управление памятью
 

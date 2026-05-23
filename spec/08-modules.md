@@ -126,7 +126,7 @@ const defaultUser = new User("guest") // owned, инициализация пр�
 | `const x: i32 = 5` | `static const int32_t x = 5` | compile-time |
 | `let x: i32 = 0` | `static int32_t x = 0` | compile-time |
 | `const arr: i32[4] = [...]` | `static int32_t arr[4] = {...}` | compile-time |
-| `const x = new Foo()` | `static Foo* x = NULL` | в `_init()` при старте |
+| `const x = new Foo()` | `static Foo x = {0}` | в `_init()` при старте (`x = Foo_new(...)`) |
 
 **Thread safety:** мутабельный `let` на уровне модуля небезопасен для многопоточного доступа — ошибка компилятора если `Thread.spawn` захватывает такую переменную. Используй `Atomic<T>`:
 ```typescript

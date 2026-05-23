@@ -168,15 +168,15 @@ _Result_Response_IOError_NetworkError _r = fetch(str("https://..."));
 if (_r.ok) {
     Response r = _r.value;
     process(r);
-    Response_free(r);
+    Response_free(&r);
 } else if (_r._kind == _ERR_IO) {
     IOError e = _r._err.io;
     printf("IO: %s\n", e.message.data);
-    IOError_free(e);
+    IOError_free(&e);
 } else if (_r._kind == _ERR_NETWORK) {
     NetworkError e = _r._err.net;
     printf("Network: %s\n", e.message.data);
-    NetworkError_free(e);
+    NetworkError_free(&e);
 }
 // finally
 closeConnection();

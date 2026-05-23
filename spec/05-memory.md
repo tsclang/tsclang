@@ -644,7 +644,7 @@ void _free_Result_SharedUser_Error(Result_SharedUser_Error* r) {
         SharedUser_release(r->value.ok);
     } else {
         // ошибка — освобождаем Error
-        Error_free(r->value.err);
+        Error_free(&r->value.err);
     }
 }
 ```
