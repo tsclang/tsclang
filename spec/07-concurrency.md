@@ -196,7 +196,7 @@ function readFile(path: string): Promise<string> {
 - `reject(error)` — завершает Promise ошибкой; тип ошибки должен совпадать с `throws`
 - Вызов `resolve` или `reject` после первого вызова — no-op
 
-### Promise.then / .catch / .finally
+### Promise.then / .catch / .finally *[NOT YET IMPLEMENTED]*
 
 Методы для inline-трансформации и обработки ошибок без `await`. Полезны для коротких преобразований результата.
 
@@ -866,10 +866,10 @@ ch.isEmpty()   // boolean — length == 0
 **Адаптивный producer в ISR** — типичный паттерн для робототехники и real-time систем:
 
 ```typescript
-// isFull — бинарная адаптация: два режима качества
+// isFull — *[NOT YET IMPLEMENTED]* бинарная адаптация: два режима качества
 @embedded.isr("LIDAR_SCAN")
 function onScan(): void {
-    const resolution = tx.isFull ? Resolution.Low : Resolution.High
+    const resolution = tx.isFull ? Resolution.Low : Resolution.High  // *[NOT YET IMPLEMENTED]*
     tx.trySend(captureScan(resolution))   // drop если всё ещё полный
 }
 

@@ -3,6 +3,11 @@
 ## Фазы компиляции
 
 ```
+Parse → AST → Decorator pass → Typecheck → Codegen (AST → C)
+```
+
+*[PLANNED] IR/SSA pipeline:*
+```
 Parse → AST → Decorator pass → Typecheck → Lower to IR → Ownership Analysis → Codegen
                                                   ↑              ↑
                                              Flatten CFG    Borrow checker / ARC injection
@@ -35,7 +40,7 @@ Parse → AST → Decorator pass → Typecheck → Lower to IR → Ownership Ana
 
 ---
 
-## IR (Intermediate Representation)
+## IR (Intermediate Representation) *[PLANNED]*
 
 IR — SSA-подобное представление между AST и C на основе **basic blocks**. Flattens вложенность, делает порядок выполнения явным.
 
@@ -279,7 +284,7 @@ log/          — логи компонентов
 src/          — исходный код компилятора
 ```
 
-## Consumer-side monomorphization
+## Consumer-side monomorphization *[PLANNED]*
 
 Дженерики инстанцируются у потребителя, а не в библиотеке.
 

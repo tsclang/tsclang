@@ -103,8 +103,7 @@ user.toJson()   // ✅
 **C-output** — статический вызов, zero overhead:
 ```c
 // import { charCount } from "std/string"  →
-#include "std_string.h"
-int32_t n = tsc_std_string_charCount(s);   // статический вызов, нет vtable
+int32_t n = _ext_string_charCount(s);   // статический вызов, нет vtable
 ```
 
 **Конфликт двух extensions с одинаковым именем:**

@@ -490,8 +490,9 @@ for (const ch of "hello") {
 }
 
 // итерация по графемным кластерам — через .graphemes()
-for (const g of "привет❤️".graphemes()) {
-    // g: string — "п", "р", "и", "в", "е", "т", "❤️"
+// NOTE: текущая реализация — один codepoint = один grapheme (❤️ будет два элемента)
+for (const g of "привет".graphemes()) {
+    // g: string — "п", "р", "и", "в", "е", "т"
 }
 ```
 
@@ -522,7 +523,7 @@ s.sliceChars(start, end)   // string — срез по codepoint-индекса�
 
 `codePointAt(byteIdx)` и `graphemeAt(byteIdx)` принимают **байтовое смещение** — удобно после `indexOf`: смещение уже известно, сканировать с начала не нужно.
 
-Для сегментации графем — **utf8proc** (UAX #29, ~300KB, C-native). **Недоступен на embedded:** платформы с `flash < 300KB` не могут включить utf8proc — импорт `graphemes`, `graphemeAt`, `sliceChars` на таких платформах является **ошибкой компилятора**. `chars`, `charCount`, `codePointAt`, `indexOf`, `slice` (байтовый) — доступны везде, без utf8proc.
+Для сегментации графем — *[PLANNED]* **utf8proc** (UAX #29, ~300KB, C-native). Текущая реализация — упрощённая: один codepoint = один grapheme.
 
 ### Встроенные методы строк (JS-совместимые)
 

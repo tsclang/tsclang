@@ -218,7 +218,7 @@ class ref_User { } // ❌ ошибка: type name uses reserved mangling prefix
 class User { }     // ✅
 ```
 
-Зарезервированные префиксы имён типов: `ref_`, `mut_`, `arc_`, `opt_`, `arr_`. Это гарантирует отсутствие коллизий с encoding ownership-квалификаторов.
+Зарезервированные префиксы имён типов: `ref_`, `mut_`, `shared_`, `weak_`, `opt_`, `Array_`. Это гарантирует отсутствие коллизий с encoding ownership-квалификаторов.
 
 ### Кодирование типов
 
@@ -231,28 +231,29 @@ class User { }     // ✅
 | `UserType` (non-generic) | `UserType` |
 | `Ref<T>` | `ref_` + enc(T) |
 | `Mut<T>` | `mut_` + enc(T) |
-| `Shared<T>` | `arc_` + enc(T) |
-| `T \| null` | `opt_` + enc(T) |
-| `T[]` | `arr_` + enc(T) |
-| `Generic<T, U>` (N type-params) | `GenericN_` + enc(T) `_` enc(U) |
+| `Shared<T>` | `shared_` + enc(T) |
+| `Weak<T>` | `weak_` + enc(T) |
+| `T | null` | `opt_` + enc(T) |
+| `T[]` | `Array_` + enc(T) |
+| `Generic<T, U>` (N type-params) | `Generic_` + enc(T) `_` enc(U) |
 
-Generic-типы кодируют арность числом сразу после имени — это позволяет деманглеру однозначно разобрать параметры без внешних метаданных:
+Generic-типы кодируются без арности — суффикс состоит из закодированных параметров через `_`:
 
 ```
-Map<string, User>           →  Map2_string_User
-Box<i32>                    →  Box1_i32
-Box<Ref<User>>              →  Box1_ref_User
-Map<string, arr_i32>        →  Map2_string_arr_i32
+Map<string, User>           →  Map_string_User
+Box<i32>                    →  Box_i32
+Box<Ref<User>>              →  Box_ref_User
+Map<string, Array_i32>      →  Map_string_Array_i32
 ```
 
 Примеры составных типов:
 
 ```
 Ref<User>                   →  ref_User
-Mut<i32[]>                  →  mut_arr_i32
+Mut<i32[]>                  →  mut_Array_i32
 User | null                 →  opt_User
-Map<string, User[]>         →  Map2_string_arr_User
-Shared<Node>                →  arc_Node
+Map<string, User[]>         →  Map_string_Array_User
+Shared<Node>                →  shared_Node
 ```
 
 ### Манглинг функций
@@ -267,7 +268,7 @@ Shared<Node>                →  arc_Node
 
 ```typescript
 function foo(a: i32, b: Ref<User>, c: Map<string, i32[]>): void
-// → foo_i32_ref_User_Map2_string_arr_i32
+// → foo_i32_ref_User_Map_string_Array_i32
 
 function process(x: string): void   // → process_string
 function process(x: i32): void      // → process_i32

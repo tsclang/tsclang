@@ -60,7 +60,15 @@ export function mangleType(typeNode) {
     return name + '_' + typeArgs.map(mangleType).join('_');
   }
   if (typeNode.kind === 'TypeArray')  return 'Array_' + mangleType(typeNode.element);
-  if (typeNode.kind === 'TypeUnion')  return typeNode.types.map(mangleType).join('_or_');
+  if (typeNode.kind === 'TypeUnion') {
+    const types = typeNode.types;
+    const nullIdx = types.findIndex(t => t.kind === 'TypeRef' && t.name === 'null');
+    if (nullIdx >= 0 && types.length === 2) {
+      const inner = types[1 - nullIdx];
+      return 'opt_' + mangleType(inner);
+    }
+    return types.map(mangleType).join('_or_');
+  }
   if (typeNode.kind === 'TypeFunc') {
     const parts = typeNode.params.map(mangleType);
     parts.push(mangleType(typeNode.ret));

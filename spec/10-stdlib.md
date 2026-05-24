@@ -217,22 +217,12 @@ counts.set("hits", 42)
 const n: i32 | null = counts.get("hits")    // copy
 ```
 
-C-output — монорфизированная flat struct:
+C-output — монорфизированная flat struct с fixed capacity:
 ```c
-// desktop: heap-allocated
+// TSC_MAP_CAP = 64 (compile-time constant)
 typedef struct {
-    String* keys;
-    int32_t* values;
-    bool* occupied;
-    size_t capacity;
-    size_t size;
-} TscMap_string_i32;
-
-// static allocator: compile-time capacity, BSS
-typedef struct {
-    String _keys[16];
-    int32_t _vals[16];
-    bool _occupied[16];
+    String _keys[TSC_MAP_CAP];
+    int32_t _vals[TSC_MAP_CAP];
     size_t size;
 } TscMap_string_i32;
 ```
@@ -455,13 +445,14 @@ C-output:
 typedef struct {
     uint8_t* data;
     size_t   length;
-    size_t   capacity;
 } Buffer;
 ```
 
 ## DataView
 
 Чтение и запись примитивных типов в `Buffer` по произвольным смещениям с контролем byte order (endianness). Импорт не нужен. Критично для парсинга бинарных протоколов.
+
+*Текущая реализация:* LE-only методы (`getU16LE`, `setU32LE`, и т.д.), без `byteOffset`/`byteLength`. Полный API с endianness parameter — *[PLANNED]*.
 
 ```typescript
 const buf = Buffer.alloc(64)
@@ -984,7 +975,7 @@ s.sliceChars(start, end)   // string — безопасный срез по code
 
 `codePointAt(byteIdx)` и `graphemeAt(byteIdx)` принимают **байтовое смещение** — удобно после `indexOf`: смещение уже известно, сканировать с начала не нужно. Декодирование одного UTF-8 символа — O(1..4 байта).
 
-utf8proc (UAX #29, ~300KB, C-native) — используется для сегментации графемных кластеров. **Недоступен на embedded:** платформы с `flash < 300KB` не могут включить utf8proc. Импорт `graphemes`, `graphemeAt`, `sliceChars` на таких платформах — **ошибка компилятора**:
+utf8proc (UAX #29, ~300KB, C-native) — *[PLANNED]* будет использоваться для сегментации графемных кластеров. Текущая реализация — упрощённая: один codepoint = один grapheme (без UAX #29 boundary rules). Комбинирующие символы и emoji-последовательности (`❤️`) не группируются.
 
 ```
 error: grapheme methods require utf8proc (~300KB) — unavailable on platform "avr-atmega328p" (flash: 32KB)
