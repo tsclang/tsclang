@@ -3,7 +3,7 @@
 
 int main(void) {
     TSC_INIT();
-    opt_String val = tsc_env_get(STR_LIT("PATH"));
+    opt_string val = tsc_env_get(STR_LIT("PATH"));
     if (val.has_value) {
         printf("has PATH\n");
     } else {

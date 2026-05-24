@@ -1,6 +1,5 @@
 #include "runtime.h"
 
-typedef struct { bool has_value; String value; } opt_string;
 
 int main(void) {
     TSC_INIT();

@@ -109,7 +109,7 @@ class Context {
 
     // Types predefined in runtime.h — prevent codegen from re-emitting them
     this._emittedArrayStructs = new Set(['Array_string', 'Array_u8']);
-    this._emittedOptStructs   = new Set(['opt_u8']);
+    this._emittedOptStructs   = new Set(['opt_u8', 'opt_string']);
     this._emittedResultTypes = new Set();
     this._emittedHelpers = new Set(['free_i32', 'free_string', 'free_u8']);
     this._emittedImplicitVtables = new Set();

@@ -1,7 +1,6 @@
 #include "runtime.h"
 
 typedef struct { bool has_value; int32_t value; } opt_i32;
-typedef struct { bool has_value; String value; } opt_string;
 
 int main(void) {
     TSC_INIT();

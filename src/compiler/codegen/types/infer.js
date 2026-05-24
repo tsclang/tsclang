@@ -479,7 +479,7 @@ export default {
     if (obj.kind === 'Member' &&
         obj.object.kind === 'Ident' && obj.object.name === 'process' &&
         obj.prop === 'env') {
-      if (prop === 'get') return 'opt_String';
+      if (prop === 'get') return 'opt_string';
       if (prop === 'has') return 'bool';
     }
     const _setSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;

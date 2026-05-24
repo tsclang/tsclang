@@ -8,15 +8,21 @@
  *   f32→float   f64→double    bool→bool      usize→size_t
  *   string→String
  *
- * console.log(x) rules:
+ * console.log(x) rules (see codegen/calls/console.js):
  *   string literal  → printf("...\n")
- *   i32/i16/i8      → printf("%d\n", v)
- *   u32/u16/u8      → printf("%u\n", v)
+ *   i32             → printf("%d\n", v)
+ *   i16/i8          → printf("%d\n", (int)v)
+ *   u32             → printf("%u\n", v)
+ *   u16/u8          → printf("%u\n", (unsigned)v)
  *   i64             → printf("%lld\n", (long long)v)
  *   u64             → printf("%llu\n", (unsigned long long)v)
  *   f64             → printf("%g\n", v)
  *   f32             → printf("%g\n", (double)v)
- *   bool            → printf("%s\n", (v) ? "true" : "false")
+ *   bool            → printf("%s\n", v ? "true" : "false")
+ *   char            → printf("%c\n", v)
+ *   size_t          → printf("%zu\n", v)
+ *   String          → printf("%s\n", v.data)  (%.*s for string refs)
+ *   String* (deref) → printf("%s\n", v->data)
  *   multi-arg       → single printf with merged format string
  * console.error/warn/debug → fprintf(stderr, ...)
  */
@@ -636,7 +642,7 @@ TSC_MAP_DECL(String, String, string_string)
         if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) \
             { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \
     } \
-    (opt_String){ _ff_, _vv_ }; \
+    (opt_string){ _ff_, _vv_ }; \
 })
 
 #define tsc_map_get_ref_string_string(_m_, _key_) ({ \
@@ -660,7 +666,7 @@ TSC_MAP_DECL(String, String, string_string)
             memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             _mm_->size--; break; } } \
-    (opt_String){ _ff_, _vv_ }; \
+    (opt_string){ _ff_, _vv_ }; \
 })
 
 #define tsc_map_free_string_string(m) ((void)(m))
@@ -850,7 +856,7 @@ static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
             __fv__ = __s__->_vals[__i__]; __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(String)); \
             __s__->size--; break; } } \
-    (opt_String){ __ok__, __fv__ }; })
+    (opt_string){ __ok__, __fv__ }; })
 static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
 #define tsc_set_for_each_i32(_s_, _fn_) do { \
@@ -1471,13 +1477,13 @@ typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
     _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
 } while(0)
 
-typedef struct { bool has_value; String value; } opt_String;
+typedef struct { bool has_value; String value; } opt_string;
 
-/* process.env.get(key) → opt_String  (key must be null-terminated — string literals are) */
-static inline opt_String tsc_env_get(String key) {
+/* process.env.get(key) → opt_string  (key must be null-terminated — string literals are) */
+static inline opt_string tsc_env_get(String key) {
     const char *v = getenv(key.data);
-    if (!v) return (opt_String){false, _tsc_str_make(NULL, 0, 0)};
-    return (opt_String){true, _tsc_str_make((char *)v, strlen(v), 0)};
+    if (!v) return (opt_string){false, _tsc_str_make(NULL, 0, 0)};
+    return (opt_string){true, _tsc_str_make((char *)v, strlen(v), 0)};
 }
 static inline bool tsc_env_has(String key) { return getenv(key.data) != NULL; }
 
