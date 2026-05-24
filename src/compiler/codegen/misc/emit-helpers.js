@@ -94,7 +94,7 @@ export default {
     if (this._emittedPromiseTypes.has(promiseType)) return;
     this._emittedPromiseTypes.add(promiseType);
     this._topBlank();
-    this.topLevel.push(`typedef struct { bool _done; ${innerType} _result; bool _ok; } ${promiseType};`);
+    this.topLevel.push(`typedef struct { bool _done; ${innerType} _result; bool _ok; ${innerType} _error; } ${promiseType};`);
   },
 
   // Emit a spawn block: generate env struct, fn, and call site code

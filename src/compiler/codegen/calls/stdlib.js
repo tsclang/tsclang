@@ -676,72 +676,122 @@ export default {
 
   _dispatchStdDataView(node, lines, depth) {
     const { callee, args } = node;
-    // DataView method calls: dv.setU8(), dv.getU8(), dv.setU16LE(), dv.getU16LE(), etc.
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _dvSym = this.lookup(callee.object.name);
       if (_dvSym?._isDataView || _dvSym?.ctype === 'DataView') {
         const _dvName = callee.object.name;
         const _dvProp = callee.prop;
-        const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
-        if (_dvProp === 'setU8') {
-          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          return `${_dvName}.data[${_dvIdx}] = ${val}`;
-        }
-        if (_dvProp === 'getU8') return `${_dvName}.data[${_dvIdx}]`;
+        const base = `${_dvName}.data + ${_dvName}.byte_offset`;
         const I = ' '.repeat(this.indent * depth);
-        // Static bounds check for get operations
-        const _dvOpSizes = { getU8:1, getU16LE:2, getU32LE:4, getF64LE:8, setU8:1, setU16LE:2, setU32LE:4, setF64LE:8 };
-        if (_dvOpSizes[_dvProp] && _dvSym._dvCap != null) {
-          const opSize = _dvOpSizes[_dvProp];
-          const offsetNode = args[0]?.expr;
-          const offsetVal = (offsetNode?.kind === 'Literal' && offsetNode?.litType === 'number') ? parseInt(offsetNode.value) : null;
-          if (offsetVal != null && offsetVal + opSize > _dvSym._dvCap) {
-            const suffix = _dvProp.startsWith('set') ? `requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}` : `requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}`;
-            throw this.error(`TypeError: DataView.${_dvProp} at offset ${offsetVal} requires ${opSize} bytes, but buffer length is ${_dvSym._dvCap}`);
-          }
+
+        // Backward compat: *LE aliases
+        const leAliases = {
+          getU16LE: ['get', 'U16', true], setU16LE: ['set', 'U16', true],
+          getU32LE: ['get', 'U32', true], setU32LE: ['set', 'U32', true],
+          getF64LE: ['get', 'F64', true], setF64LE: ['set', 'F64', true],
+        };
+        if (leAliases[_dvProp]) {
+          const [dir, type, le] = leAliases[_dvProp];
+          const fakeProp = dir + type;
+          const fakeArgs = dir === 'get' ? args : args;
+          return this._dvOp(_dvName, base, I, dir, type, le, fakeArgs, lines, depth, _dvSym);
         }
-        if (_dvProp === 'setU16LE') {
-          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const n = this._dvW16n = (this._dvW16n ?? 0); this._dvW16n++;
-          const tmp = `_w16_${n}`;
-          lines.push(`${I}uint16_t ${tmp} = ${val};`);
-          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 2)`;
-        }
-        if (_dvProp === 'getU16LE') {
-          const tmp = `_v16`;
-          lines.push(`${I}uint16_t ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 2);`);
-          return `(uint16_t)${tmp}`;
-        }
-        if (_dvProp === 'setU32LE') {
-          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const n = this._dvW32n = (this._dvW32n ?? 0); this._dvW32n++;
-          const tmp = `_w32_${n}`;
-          lines.push(`${I}uint32_t ${tmp} = ${val};`);
-          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 4)`;
-        }
-        if (_dvProp === 'getU32LE') {
-          const n = this._dvR32n = (this._dvR32n ?? 0); this._dvR32n++;
-          const tmp = `_r32_${n}`;
-          lines.push(`${I}uint32_t ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 4);`);
-          return tmp;
-        }
-        if (_dvProp === 'setF64LE') {
-          const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const n = this._dvWF64n = (this._dvWF64n ?? 0); this._dvWF64n++;
-          const tmp = `_wf64_${n}`;
-          lines.push(`${I}double ${tmp} = ${val};`);
-          return `memcpy(${_dvName}.data + ${_dvIdx}, &${tmp}, 8)`;
-        }
-        if (_dvProp === 'getF64LE') {
-          const n = this._dvRF64n = (this._dvRF64n ?? 0); this._dvRF64n++;
-          const tmp = `_rf64_${n}`;
-          lines.push(`${I}double ${tmp}; memcpy(&${tmp}, ${_dvName}.data + ${_dvIdx}, 8);`);
-          return tmp;
+
+        // Standard methods: getU8, getI8, getU16, getI16, ..., setU8, setI8, ...
+        const dvMethods = {
+          getU8:['get','U8',1], getI8:['get','I8',1],
+          getU16:['get','U16',2], getI16:['get','I16',2],
+          getU32:['get','U32',4], getI32:['get','I32',4],
+          getU64:['get','U64',8], getI64:['get','I64',8],
+          getF32:['get','F32',4], getF64:['get','F64',8],
+          setU8:['set','U8',1], setI8:['set','I8',1],
+          setU16:['set','U16',2], setI16:['set','I16',2],
+          setU32:['set','U32',4], setI32:['set','I32',4],
+          setU64:['set','U64',8], setI64:['set','I64',8],
+          setF32:['set','F32',4], setF64:['set','F64',8],
+        };
+
+        if (_dvProp === 'byteLength') return `(size_t)${_dvName}.byte_length`;
+        if (_dvProp === 'byteOffset') return `(size_t)${_dvName}.byte_offset`;
+
+        const m = dvMethods[_dvProp];
+        if (m) {
+          const [dir, type, sz] = m;
+          const leArgIdx = dir === 'get' ? 1 : 2;
+          const leNode = args[leArgIdx]?.expr;
+          const le = leNode ? (leNode.kind === 'Literal' && (leNode.value === true || leNode.value === 'true')) : false;
+          return this._dvOp(_dvName, base, I, dir, type, le, args, lines, depth, _dvSym);
         }
       }
     }
 
     return null;
+  },
+
+  _dvOp(_dvName, base, I, dir, type, le, args, lines, depth, _dvSym) {
+    const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+    const ptr = `(${base} + ${_dvIdx})`;
+    const sz = { U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 }[type];
+    const cType = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
+    const castCType = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
+
+    // Bounds check
+    if (_dvSym?._dvCap != null) {
+      const offsetNode = args[0]?.expr;
+      const offsetVal = (offsetNode?.kind === 'Literal' && offsetNode?.litType === 'number') ? parseInt(offsetNode.value) : null;
+      if (offsetVal != null && offsetVal + sz > _dvSym._dvCap) {
+        throw this.error(`TypeError: DataView.${dir}${type} at offset ${offsetVal} requires ${sz} bytes, but buffer length is ${_dvSym._dvCap}`);
+      }
+    }
+
+    if (sz === 1) {
+      if (dir === 'set') {
+        const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+        return `${ptr}[0] = (${cType})${val}`;
+      }
+      return `(${castCType})${ptr}[0]`;
+    }
+
+    // Multi-byte
+    const n = this._dvTmpCount = (this._dvTmpCount ?? 0) + 1;
+    const tmp = `_dv_${n}`;
+
+    if (dir === 'get') {
+      if (le) {
+        lines.push(`${I}${cType} ${tmp}; memcpy(&${tmp}, ${ptr}, ${sz});`);
+      } else {
+        lines.push(`${I}${cType} ${tmp};`);
+        lines.push(`${I}uint8_t *_p = (uint8_t*)&${tmp};`);
+        lines.push(`${I}uint8_t *_s = ${ptr};`);
+        if (sz === 2) {
+          lines.push(`${I}_p[1] = _s[0]; _p[0] = _s[1];`);
+        } else if (sz === 4) {
+          lines.push(`${I}_p[3] = _s[0]; _p[2] = _s[1]; _p[1] = _s[2]; _p[0] = _s[3];`);
+        } else if (sz === 8) {
+          lines.push(`${I}_p[7] = _s[0]; _p[6] = _s[1]; _p[5] = _s[2]; _p[4] = _s[3]; _p[3] = _s[4]; _p[2] = _s[5]; _p[1] = _s[6]; _p[0] = _s[7];`);
+        }
+      }
+      return `(${castCType})${tmp}`;
+    }
+
+    // set
+    const val = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+    if (le) {
+      lines.push(`${I}${cType} ${tmp} = (${cType})${val};`);
+      lines.push(`${I}memcpy((void*)${ptr}, &${tmp}, ${sz});`);
+    } else {
+      lines.push(`${I}${cType} ${tmp} = (${cType})${val};`);
+      lines.push(`${I}uint8_t *_p = (uint8_t*)&${tmp};`);
+      lines.push(`${I}uint8_t *_s = (uint8_t*)${ptr};`);
+      if (sz === 2) {
+        lines.push(`${I}_s[0] = _p[1]; _s[1] = _p[0];`);
+      } else if (sz === 4) {
+        lines.push(`${I}_s[0] = _p[3]; _s[1] = _p[2]; _s[2] = _p[1]; _s[3] = _p[0];`);
+      } else if (sz === 8) {
+        lines.push(`${I}_s[0] = _p[7]; _s[1] = _p[6]; _s[2] = _p[5]; _s[3] = _p[4]; _s[4] = _p[3]; _s[5] = _p[2]; _s[6] = _p[1]; _s[7] = _p[0];`);
+      }
+    }
+    return `(void)0`;
   },
 
   _dispatchStdHashMap(node, lines, depth) {

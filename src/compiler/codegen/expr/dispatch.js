@@ -133,6 +133,11 @@ export default {
           const fn = node.prop === 'length' ? 'length' : 'capacity';
           return `tsc_channel_${fn}_${ident}(${objC}._inner)`;
         }
+        if (sym?._isDataView || sym?.ctype === 'DataView') {
+          const objC = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
+          if (node.prop === 'byteLength') return `(size_t)${objC}.byte_length`;
+          if (node.prop === 'byteOffset') return `(size_t)${objC}.byte_offset`;
+        }
         this._checkMoved(sym, node, node.object.name);
         this._checkFieldMoved(sym, node.prop, node, node.object.name);
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)

@@ -354,13 +354,15 @@ export default {
           }
           if (!this._emittedDataViewTypeDef) {
             this._emittedDataViewTypeDef = true;
-            this.addTop('typedef struct { uint8_t *data; size_t length; } DataView;');
+            this.addTop('typedef struct { uint8_t *data; size_t byte_offset; size_t byte_length; } DataView;');
             this.addTop('');
           }
           const _dvSrcName = init.args?.[0]?.expr?.kind === 'Ident' ? init.args[0].expr.name : null;
           const _dvSrcSym = _dvSrcName ? this.lookup(_dvSrcName) : null;
-          const srcName = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'buf';
-          p(`DataView ${name} = {.data = ${srcName}.data, .length = ${srcName}.length};`);
+          const srcExpr = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'buf';
+          const offsetExpr = init.args?.[1] ? this.exprToC(init.args[1].expr, lines, depth) : '0';
+          const lengthExpr = init.args?.[2] ? this.exprToC(init.args[2].expr, lines, depth) : `${srcExpr}.length`;
+          p(`DataView ${name} = {.data = ${srcExpr}.data, .byte_offset = (size_t)(${offsetExpr}), .byte_length = (size_t)(${lengthExpr})};`);
           this.define(name, { ctype: 'DataView', varKind: 'let', _isDataView: true, _dvCap: _dvSrcSym?._bufCap ?? null });
           return;
         }

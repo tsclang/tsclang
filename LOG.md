@@ -332,6 +332,7 @@
 
 > 2026-04-18: реализована фаза 7 — async/await state machine. Async functions → poll struct (state field + captured vars через await), `for await` → generator state machine, `Promise<T>` (.then/.catch/.finally), `Promise.all`, `setTimeout`/`setInterval`/`clearTimeout`, `sleep` (uv_sleep / _delay_ms на embedded), borrow-checker: Ref запрещён через await-точку, owned — разрешён. `async main` → desktop event loop, embedded while-poll. `@static async function*` → кооперативный планировщик. **Статус: 31/31 ✓**
 > 2026-04-22: добавлены Promise.race, Promise.any, Promise.allSettled (3 теста), AbortController/AbortSignal (runtime struct + codegen), AsyncMutex (tryLock/unlock/isLocked), @embedded.singleton (=@static generator instance), @embedded.stack (static uintptr_t stack[] + push/pop/empty macros). **+7 тестов**
+> 2026-05-25: реализован dispatch Promise.then/catch/finally — перемещён из мёртвого кода в _extractCallbackFn в methodCall. Promise struct расширен полем `_error`. Spec: убран `[NOT YET IMPLEMENTED]`. **+2 теста** (promise-catch-method, promise-finally-method)
 
 ---
 
@@ -433,6 +434,7 @@
 
 > 2026-04-19: реализована фаза 12 — стандартная библиотека. Math (все тригонометрические и логарифмические функции через `<math.h>`), String (base64 atob/btoa, UTF-8 encode/decode, codepoints, graphemes, Regex NFA), IO (Reader/Writer vtable, pipe, streams), FS (read/write/watch через libuv), Net (fetch, HTTP server, TCP), WS (WebSocket), Random/SecureRandom/HardwareRandom, Temporal (PlainDate/PlainTime/ZonedDateTime/Now), URL/URLSearchParams, Blob, Buffer, DataView, console.time/timeEnd/trace, Reactive (Signal/effect/computed/readonly через closure chain), HAL (UART/I2C write-read), AVR (ADC/PWM/sleep/watchdog), Embedded (HashMap open-addressing, StaticMap, Tasks scheduler). **Статус: 130/130 ✓**
 > 2026-04-22: добавлен std/json — JSON.stringify (i32/string/bool) + JSON.parse<T> (i32/f64/bool); tsc_json_stringify_string в runtime.h. **+4 теста**
+> 2026-05-25: DataView full API — struct расширен (byte_offset, byte_length), new DataView(buf, offset?, length?), все get/set методы (U8/I8/U16/I16/U32/I32/U64/I64/F32/F64), endianness parameter (littleEndian?: boolean, по умолчанию BE), LE-алиасы сохранены, property access byteLength/byteOffset. Spec: убран `[PLANNED]`. **+4 теста** (get-u32-be, get-i16-le, get-f32-le, byte-offset-length)
 
 ---
 

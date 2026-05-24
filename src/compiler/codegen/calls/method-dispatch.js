@@ -94,6 +94,17 @@ export default {
         }
       }
     }
+    const _objType = this.inferType(baseObject);
+    if (_objType?.startsWith('Promise_') && ['then','catch','finally'].includes(prop) && args.length > 0) {
+      const innerType = _objType.slice(8);
+      const innerCType = this._arrIdentToCType(innerType);
+      if (prop !== 'finally') this._lambdaParamHint = [innerCType];
+      cbFnName = this._extractCallbackFn(args[0], lines, depth);
+      this._lambdaParamHint = null;
+      if (cbFnName) {
+        argsForC = [];
+      }
+    }
     const argsC = this.argsToC(argsForC, lines, depth);
     if (isArrayObj) {
       switch (prop) {
@@ -624,6 +635,35 @@ export default {
       return `${objC}.vtable->${prop}(${objC}.self${ifaceArgsC})`;
     }
 
+    const objType = this.inferType(baseObject);
+    if (objType?.startsWith('Promise_') && (prop === 'then' || prop === 'catch' || prop === 'finally')) {
+      const innerType = objType.slice(8);
+      const innerCType = this._arrIdentToCType(innerType);
+      const I = ' '.repeat(this.indent * depth);
+      const cbRetType = this._lastCbRetType ?? innerCType;
+      const cbRetIdent = this.cTypeToIdent(cbRetType);
+      const resultPromiseType = `Promise_${cbRetIdent}`;
+
+      if (prop === 'then') {
+        this._emitPromiseTypedef(resultPromiseType, cbRetType);
+        const tmpName = `_then_${this.tempCount++}`;
+        lines.push(`${I}${cbRetType} ${tmpName} = ${cbFnName}(${objC}._result);`);
+        this.define(tmpName, { ctype: cbRetType, varKind: 'const' });
+        return `(${resultPromiseType}){._done = true, ._result = ${tmpName}, ._ok = true}`;
+      }
+      if (prop === 'catch') {
+        this._emitPromiseTypedef(resultPromiseType, cbRetType);
+        const tmpName = `_catch_${this.tempCount++}`;
+        lines.push(`${I}${cbRetType} ${tmpName} = ${objC}._ok ? ${objC}._result : ${cbFnName}(${objC}._error);`);
+        this.define(tmpName, { ctype: cbRetType, varKind: 'const' });
+        return `(${resultPromiseType}){._done = true, ._result = ${tmpName}, ._ok = true}`;
+      }
+      if (prop === 'finally') {
+        lines.push(`${I}${cbFnName}();`);
+        return objC;
+      }
+    }
+
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (classSym?.ctype && this.classes.has(classSym.ctype)) {
       const classDef2 = this.classes.get(classSym.ctype);
@@ -737,6 +777,7 @@ export default {
       if (sym?._closureFnName) { this._lastCbRetType = sym.closureRetType; return sym._closureFnName; }
       if (sym?.funcName) { this._lastCbRetType = sym.ctype; return sym.funcName; }
     }
+
     return null;
   },
 

@@ -452,7 +452,7 @@ typedef struct {
 
 Чтение и запись примитивных типов в `Buffer` по произвольным смещениям с контролем byte order (endianness). Импорт не нужен. Критично для парсинга бинарных протоколов.
 
-*Текущая реализация:* LE-only методы (`getU16LE`, `setU32LE`, и т.д.), без `byteOffset`/`byteLength`. Полный API с endianness parameter — *[PLANNED]*.
+Старые LE-only методы (`getU16LE`, `setU32LE`, и т.д.) сохранены как алиасы (`LE` = `littleEndian: true`). Новый API с endianness parameter поддерживает все типы и big/little endian.
 
 ```typescript
 const buf = Buffer.alloc(64)

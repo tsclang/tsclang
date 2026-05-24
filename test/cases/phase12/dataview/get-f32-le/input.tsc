@@ -1,0 +1,5 @@
+import { DataView } from "std/buffer";
+const buf = new Buffer(8);
+const dv = new DataView(buf);
+dv.setF32(0, 3.14 as f32, true);
+console.log(dv.getF32(0, true));

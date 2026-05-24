@@ -1,0 +1,5 @@
+import { DataView } from "std/buffer";
+const buf = new Buffer(16);
+const dv = new DataView(buf, 4, 8);
+console.log(dv.byteOffset);
+console.log(dv.byteLength);

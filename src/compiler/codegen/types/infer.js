@@ -463,11 +463,10 @@ export default {
         if (prop === 'fill') return 'void';
       }
       if (_bSym?._isDataView || _bSym?.ctype === 'DataView') {
-        if (prop === 'getU8') return 'uint32_t';
-        if (prop === 'getU16LE') return 'uint32_t';
-        if (prop === 'getU32LE') return 'uint32_t';
-        if (prop === 'getF64LE') return 'double';
-        if (prop === 'setU8' || prop === 'setU16LE' || prop === 'setU32LE' || prop === 'setF64LE') return 'void';
+        const dvGetTypes = { getU8:'uint8_t', getI8:'int8_t', getU16:'uint16_t', getI16:'int16_t', getU32:'uint32_t', getI32:'int32_t', getU64:'uint64_t', getI64:'int64_t', getF32:'float', getF64:'double', getU16LE:'uint16_t', getU32LE:'uint32_t', getF64LE:'double' };
+        if (dvGetTypes[prop]) return dvGetTypes[prop];
+        if (prop.startsWith('set')) return 'void';
+        if (prop === 'byteLength' || prop === 'byteOffset') return 'size_t';
       }
     }
     if (node.callee?.kind === 'Index') {
@@ -741,6 +740,18 @@ export default {
       const etId = this.cTypeToIdent(cT);
       if (node.callee.prop === 'parse') return cT;
       if (node.callee.prop === 'tryParse') return `opt_${etId}`;
+    }
+    const objTypePromise = this.inferType(obj);
+    if (objTypePromise?.startsWith('Promise_') && node.callee.prop === 'then') {
+      const cbArg = node.args[0];
+      if (cbArg?.expr?.kind === 'Arrow') {
+        const retType = cbArg.expr.returnType ? this.resolveType(cbArg.expr.returnType) : null;
+        if (retType) return `Promise_${this.cTypeToIdent(retType)}`;
+      }
+      return objTypePromise;
+    }
+    if (objTypePromise?.startsWith('Promise_') && (node.callee.prop === 'catch' || node.callee.prop === 'finally')) {
+      return objTypePromise;
     }
     return null;
   },

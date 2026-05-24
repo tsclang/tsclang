@@ -1,6 +1,6 @@
 #include "runtime.h"
 
-typedef struct { bool _done; int32_t _result; bool _ok; } Promise_i32;
+typedef struct { bool _done; int32_t _result; bool _ok; int32_t _error; } Promise_i32;
 
 static int32_t _lambda_0_i32_result;
 static bool _lambda_0_done = false;

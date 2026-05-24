@@ -196,7 +196,7 @@ function readFile(path: string): Promise<string> {
 - `reject(error)` — завершает Promise ошибкой; тип ошибки должен совпадать с `throws`
 - Вызов `resolve` или `reject` после первого вызова — no-op
 
-### Promise.then / .catch / .finally *[NOT YET IMPLEMENTED]*
+### Promise.then / .catch / .finally
 
 Методы для inline-трансформации и обработки ошибок без `await`. Полезны для коротких преобразований результата.
 

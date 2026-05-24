@@ -8,10 +8,10 @@ int main(void) {
     uint8_t _buf_data_0[8] = {0};
     const Buffer buf = {.data = _buf_data_0, .length = 8};
     DataView dv = {.data = buf.data, .byte_offset = (size_t)(0), .byte_length = (size_t)(buf.length)};
-    double _dv_1 = (double)1.5;
-    memcpy((void*)(dv.data + dv.byte_offset + 0), &_dv_1, 8);
+    float _dv_1 = (float)(float)3.14;
+    memcpy((void*)(dv.data + dv.byte_offset + 0), &_dv_1, 4);
     (void)0;
-    double _dv_2; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 8);
-    printf("%g\n", (double)_dv_2);
+    float _dv_2; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 4);
+    printf("%g\n", (double)(float)_dv_2);
     return 0;
 }
