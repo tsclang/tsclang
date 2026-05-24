@@ -118,6 +118,8 @@ export default {
     for (const [k, v] of Object.entries(node)) {
       if (k === 'typeAnn' || k === 'returnType' || k === 'castType') {
         result[k] = this.substType(v, subst);
+      } else if (k === 'typeArgs') {
+        result[k] = Array.isArray(v) ? v.map(t => this.substType(t, subst)) : v;
       } else {
         result[k] = this.substNode(v, subst);
       }

@@ -1,0 +1,14 @@
+class Box<T> {
+    value: T;
+    constructor(v: T) {
+        this.value = v;
+    }
+}
+class Wrapper<U> {
+    inner: Box<U>;
+    constructor(val: U) {
+        this.inner = new Box<U>(val);
+    }
+}
+const w = new Wrapper<i32>(99);
+console.log(w.inner.value);

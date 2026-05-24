@@ -130,6 +130,23 @@ export default {
         return aliased;
       }
 
+      // Generic class with typeArgs → trigger monomorphization
+      if (typeArgs?.length > 0 && this._genericClasses?.has(name)) {
+        const tmpl = this._genericClasses.get(name);
+        const gSubst = new Map();
+        for (let i = 0; i < tmpl.typeParams.length; i++) {
+          const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
+          gSubst.set(tmpl.typeParams[i].name, ct);
+        }
+        const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(gSubst.get(tp.name) ?? 'void')).join('_');
+        const monoName = `${name}_${suffix}`;
+        if (!this._emittedGenericClasses.has(monoName)) {
+          this._emittedGenericClasses.add(monoName);
+          this.emitMonoClass(tmpl, monoName, gSubst);
+        }
+        return monoName;
+      }
+
       // User-defined type — use C name if registered with a module prefix
       const _cls = this.classes.get(name);
       return _cls?._cname ?? name;

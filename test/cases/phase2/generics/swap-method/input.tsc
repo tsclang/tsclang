@@ -1,0 +1,15 @@
+class Pair<A, B> {
+    first: A;
+    second: B;
+    constructor(a: A, b: B) {
+        this.first = a;
+        this.second = b;
+    }
+    swap(): Pair<B, A> {
+        return new Pair<B, A>(this.second, this.first);
+    }
+}
+const p = new Pair<i32, f64>(1, 2.5);
+const s = p.swap();
+console.log(s.first);
+console.log(s.second);
