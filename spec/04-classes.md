@@ -716,7 +716,9 @@ class Bad { ... }
 
 TSClang генерирует C, а не машинный код. `__attribute__((packed))` указывает C-компилятору (avr-gcc, arm-gcc) самостоятельно генерировать корректный код для платформы — побайтовые load'ы там, где это необходимо.
 
-Поведение компилятора зависит от `unaligned_access` в Platform Profile:
+Текущая реализация: `@packed` всегда генерирует `__attribute__((packed))` без unaligned access helpers.
+
+Запланированное поведение зависит от `unaligned_access` в Platform Profile *[NOT YET IMPLEMENTED]*:
 
 | `unaligned_access` | Что делает компилятор |
 |-------------------|----------------------|
@@ -754,7 +756,7 @@ declare platform {
 }
 ```
 
-### Диагностика padding
+### Диагностика padding *[NOT YET IMPLEMENTED]*
 
 В режиме `debug` компилятор предупреждает о неэффективных структурах:
 

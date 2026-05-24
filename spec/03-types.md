@@ -267,9 +267,9 @@ const n64: i64 = n      // неявно — без потерь
   const c: f32 = 1;      // f32 (явно)
   const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
   ```
-  Переопределить явно — можно: `{ "defaultNumber": "f64" }` в `tsc.package.json` (нестандартно, потребует подтверждения).
+  Переопределить явно — можно: `{ "defaultNumber": "f64" }` в `tsc.package.json` *[NOT YET IMPLEMENTED]* (нестандартно, потребует подтверждения).
 
-- **Performance warnings на 8-bit таргетах (AVR)**
+- **Performance warnings на 8-bit таргетах (AVR)** *[NOT YET IMPLEMENTED]*
 
   На `"target": "avr"` компилятор выдаёт предупреждения для типов, которые дороги на 8-bit ALU:
 

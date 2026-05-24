@@ -1275,3 +1275,26 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **New tests**: err-prop-no-throws, arr-string-retain, platform-before-export
 > - Updated: arr-rest-strings (добавлен retain/release)
 > - Result: **1323 tests, 0 failures**
+
+> 2026-05-25: **Spec↔impl audit batch 2 — 19 spec updates (категории B+C)**:
+> - **Spec updates (impl → spec, пометки [NOT YET IMPLEMENTED]):**
+>   - Performance warnings на AVR (03-types.md)
+>   - `defaultNumber` config option (03-types.md)
+>   - Padding diagnostic (04-classes.md)
+>   - Unaligned access helpers для @packed (04-classes.md)
+>   - `tsc_init_all()` topological sort (08-modules.md)
+>   - `FnPtr<T>` / closure macros (08-modules.md)
+>   - `tsclang dev` hot-reload (09-build.md)
+>   - Atomic escape analysis → manual `Shared<Atomic<T>>` (07-concurrency.md)
+> - **Spec updates (документация реальности):**
+>   - `Math.LN10` = `log(10.0)` runtime (10-stdlib.md)
+>   - Single-quote = char literal, не string (02-syntax.md)
+>   - Semicolons: "semicolon-optional", не "ASI как в JS" (02-syntax.md)
+>   - Timer ID = `i32`, не `i64` (10-stdlib.md)
+>   - `Map.size` = `usize`, не `i32` (10-stdlib.md)
+>   - `throws` auto-inference: убрано противоречие (06-errors.md)
+>   - String retain ordering: retain(source) перед copy (05b-ownership.md)
+>   - Move zero-out: `(T){0}` вместо `memset` (05b-ownership.md)
+>   - compareExchange failure ordering default: Acquire (07-concurrency.md)
+>   - Module-level vars: только promoted → static (08-modules.md)
+> - Result: **1323 tests, 0 failures**

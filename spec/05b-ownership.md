@@ -145,8 +145,8 @@ Copy-типам не нужен ownership management — значение коп
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `let b = a` | ARC Copy (retain + cleanup release) | `String b = a; tsc_string_retain(b);` + cleanup: `tsc_string_release(b);` |
-| `const b = a` | ARC Copy (retain + cleanup release) | `const String b = a; tsc_string_retain(b);` + cleanup: `tsc_string_release(b);` |
+| `let b = a` | ARC Copy (retain + cleanup release) | `tsc_string_retain(a); String b = a;` + cleanup: `tsc_string_release(b);` |
+| `const b = a` | ARC Copy (retain + cleanup release) | `tsc_string_retain(a); const String b = a;` + cleanup: `tsc_string_release(b);` |
 | `b = a` (reassign) | ARC Copy | `b = a;` (cleanup release уже зарегистрирован) |
 
 ### В полях объекта / элементах массива (Member / Index)
@@ -340,9 +340,11 @@ typedef struct { const char *data; size_t length; size_t capacity; uint32_t *_re
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `let b = a` | Move + zero-out | `User b = a; memset(&a, 0, sizeof(User));` |
-| `const b = a` | Move + zero-out | `const User b = a; memset(&a, 0, sizeof(User));` |
-| `b = a` (reassign) | Move + zero-out | `b = a; memset(&a, 0, sizeof(User));` |
+| `let b = a` | Move + zero-out | `User b = a; a = (User){0};` |
+
+| `const b = a` | Move + zero-out | `const User b = a; a = (User){0};` |
+
+| `b = a` (reassign) | Move + zero-out | `b = a; a = (User){0};` |
 
 После move `a` обнуляется, доступ к `a` — ошибка компиляции (`E002: use after move`).
 
@@ -350,7 +352,7 @@ typedef struct { const char *data; size_t length; size_t capacity; uint32_t *_re
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `foo(a)` (param: `T`) | Move + zero-out после вызова | `foo(a); memset(&a, 0, sizeof(User));` (через `_postStmtCleanups`) |
+| `foo(a)` (param: `T`) | Move + zero-out после вызова | `foo(a); a = (User){0};` (через `_postStmtCleanups`) |
 
 ### Ref\<T\> / Mut\<T\>
 
@@ -565,9 +567,11 @@ Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `let b = a` | Move + zero-out | `Array_i32 b = a; memset(&a, 0, sizeof(Array_i32));` |
-| `const b = a` | Move + zero-out | `const Array_i32 b = a; memset(&a, 0, sizeof(Array_i32));` |
-| `b = a` (reassign) | Move + zero-out | `b = a; memset(&a, 0, sizeof(Array_i32));` |
+| `let b = a` | Move + zero-out | `Array_i32 b = a; a = (Array_i32){0};` |
+
+| `const b = a` | Move + zero-out | `const Array_i32 b = a; a = (Array_i32){0};` |
+
+| `b = a` (reassign) | Move + zero-out | `b = a; a = (Array_i32){0};` |
 
 После move `a` обнуляется, доступ к `a` — ошибка компиляции (`E002: use after move`).
 
@@ -575,7 +579,7 @@ Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `foo(a)` (param: `T[]`) | Move + zero-out после вызова | `foo(a); memset(&a, 0, sizeof(Array_i32));` (через `_postStmtCleanups`) |
+| `foo(a)` (param: `T[]`) | Move + zero-out после вызова | `foo(a); a = (Array_i32){0};` (через `_postStmtCleanups`) |
 
 ```typescript
 function sum(arr: i32[]): i32 { ... }
@@ -832,11 +836,11 @@ typedef struct {
 | Паттерн | Элементы | Семантика | C-вывод |
 |---------|----------|-----------|---------|
 | `let b = a` | Все примитивы | Copy struct | `tuple_i32_f64 b = a;` |
-| `let b = a` | Есть string/класс | Move + zero-out | `tuple_i32_string b = a; memset(&a, 0, sizeof(...));` |
+| `let b = a` | Есть string/класс | Move + zero-out | `tuple_i32_string b = a; a = (tuple_i32_string){0};` |
 | `const b = a` | Все примитивы | Copy struct (const) | `const tuple_i32_f64 b = a;` |
-| `const b = a` | Есть string/класс | Move + zero-out | `const tuple_i32_string b = a; memset(&a, 0, sizeof(...));` |
-| `b = a` (reassign) | Все примитивы | Copy | `b = a;` |
-| `b = a` (reassign) | Есть string/класс | Move + zero-out | `b = a; memset(&a, 0, sizeof(...));` |
+| `const b = a` | Есть string/класс | Move + zero-out | `const tuple_i32_string b = a; a = (tuple_i32_string){0};` |
+
+| `b = a` (reassign) | Есть string/класс | Move + zero-out | `b = a; a = (tuple_i32_string){0};` |
 
 Кортеж со сложными элементами ведёт себя как класс: move + zero-out. Кортеж со всеми примитивами — как примитив: copy.
 

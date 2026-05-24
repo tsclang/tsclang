@@ -72,7 +72,11 @@ import AnyName from "./user"   // ❌ если нет экспорта с име
 typedef int32_t UserId;  // или forward declaration
 ```
 
-## Порядок инициализации модулей
+## Порядок инициализации модулей *[NOT YET IMPLEMENTED]*
+
+Текущая реализация: module-level код встраивается напрямую в `main()`. Переменные, на которые ссылаются функции, продвигаются в `static` globals. `TSC_INIT()` инициализирует платформу (libuv на desktop).
+
+Запланированная полная версия:
 
 Каждый модуль с module-level переменными получает `_init()` функцию в C. Порядок вызовов определяется **топологической сортировкой** графа импортов — зависимости инициализируются раньше.
 
@@ -111,15 +115,17 @@ int main() {
 
 ## Module-level переменные
 
-Переменные объявленные вне функций и классов — module-level. Компилируются в статическую память C.
+Переменные объявленные вне функций и классов — module-level.
+
+Текущая реализация: переменные, на которые ссылаются top-level функции, продвигаются в `static` globals. Остальные остаются как локальные переменные внутри `main()`. В library mode все переменные становятся `static`.
 
 ```typescript
 const MAX_CONNECTIONS: i32 = 100      // compile-time constant
-let requestCount: i32 = 0             // mutable global
+let requestCount: i32 = 0             // mutable global (static если используется в функциях)
 const defaultUser = new User("guest") // owned, инициализация при старте
 ```
 
-**C-представление:**
+**C-представление (полная версия *[NOT YET IMPLEMENTED]*):**
 
 | TSClang | C | Инициализация |
 |---------|---|---------------|
@@ -521,7 +527,7 @@ warning: native block — C code inserted verbatim, memory management is manual
 
 C-библиотеки ожидают функцию-указатель. TSClang closure — это struct с captures + function pointer. Их нельзя совместить напрямую.
 
-**В `.d.tsc` для C callback используется `FnPtr<T>`** — чистый C function pointer без captures:
+**В `.d.tsc` для C callback используется `FnPtr<T>`** *[NOT YET IMPLEMENTED]* — чистый C function pointer без captures:
 
 ```typescript
 // .d.tsc

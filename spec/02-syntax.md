@@ -21,7 +21,7 @@ tsclang lint -f       # алиас
 
 TSC следует соглашениям TypeScript/JavaScript.
 
-**Точки с запятой** — опциональны, ASI как в JS:
+**Точки с запятой** — опциональны. Компилятор не требует `;` в конце statements (semicolon-optional, не полный ASI):
 ```typescript
 const x = 1       // без ;
 const y = 2;      // со ; — тоже ok
@@ -47,10 +47,10 @@ function bar(): void     // ✅ допустимо (линтер может пр
 
 **Отступы** — не значимы (не Python). Рекомендуется 4 пробела или 2 пробела; табы допустимы.
 
-**Кавычки** — одинарные и двойные эквивалентны:
+**Кавычки** — двойные для строк, одинарные для символов (`char` / `u8`), обратные для template literals:
 ```typescript
-const a = "hello"
-const b = 'hello'   // то же самое
+const a = "hello"        // string
+const b = 'A'            // char (u8) — одинарная кавычка = один символ
 const c = `Hello, ${name}!`   // template literal — обратные кавычки
 ```
 

@@ -2318,9 +2318,11 @@ tsclang run
   # запускает: ./build/desktop/myapp --port 8080 --verbose
   ```
 
-## `tsclang dev` подробно
+## `tsclang dev` подробно *[NOT YET IMPLEMENTED]*
 
-Запускает сборку в режиме Hot Reload / Hot Restart.
+Текущая реализация: `tsclang build --watch` / `-w` — отслеживает изменения файлов и пересобирает.
+
+Запланированная полная версия:
 
 Аргументы идентичны команде `tsclang run`.
 

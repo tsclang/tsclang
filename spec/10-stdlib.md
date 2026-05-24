@@ -116,9 +116,9 @@ console.warn("warning")
 console.debug("debug")
 
 // таймеры — все платформы
-const id = setTimeout(() => console.log("hello"), 1000)  // i64 — id таймера
+const id = setTimeout(() => console.log("hello"), 1000)  // i32 — id таймера
 clearTimeout(id)
-const tick = setInterval(() => update(), 100)             // i64 — id интервала
+const tick = setInterval(() => update(), 100)             // i32 — id интервала
 clearInterval(tick)
 
 // sleep — все платформы (только внутри async)
@@ -184,7 +184,7 @@ m.has("alice")    // boolean
 m.delete("alice") // V | null — удалённое значение или null если ключа не было
 
 // размер
-m.size   // i32, readonly
+m.size   // usize, readonly
 
 // итерация
 for (const [key, value] of m) { ... }   // по парам
@@ -860,7 +860,7 @@ Math.E        // 2.718281828459045
 Math.SQRT2    // 1.4142135623730951
 Math.SQRT1_2  // 0.7071067811865476  (1 / √2)
 Math.LN2      // 0.6931471805599453
-Math.LN10     // 2.302585092994046
+Math.LN10     // 2.302585092994046  (runtime: log(10.0))
 Math.LOG2E    // 1.4426950408889634
 Math.LOG10E   // 0.4342944819032518
 ```

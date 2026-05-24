@@ -731,7 +731,7 @@ await mutex.runExclusive(async () => {
 
 ### Atomic<T>
 
-Единственный способ разделить значение между потоками без канала. Heap-allocated, встроенный атомарный ref count. Compiler делает escape analysis: если `Atomic<T>` не уходит в `Thread.spawn` — размещается на стеке без ref count.
+Единственный способ разделить значение между потоками без канала. Текущая реализация: два явных варианта — `new Atomic<T>(val)` (stack, без ref count) и `new Shared<Atomic<T>>(val)` (heap, с ARC). Автоматический escape analysis *[NOT YET IMPLEMENTED]*.
 
 ```typescript
 import { Atomic, AtomicArray, LoadOrdering, StoreOrdering, RmwOrdering } from "std/threads"
@@ -755,7 +755,7 @@ counter.swap(42, RmwOrdering.AcqRel)        // i32 — старое значен
 counter.compareExchange(
     expected, desired,
     RmwOrdering.AcqRel,   // success ordering
-    LoadOrdering.Acquire  // failure ordering — провал только читает
+    LoadOrdering.Acquire  // failure ordering — провал только читает (default: Acquire)
 ): { success: boolean, value: i32 }
 ```
 
