@@ -188,7 +188,7 @@ closeConnection();
 Оператор `?`:
 ```c
 Result_string_FileError _res = readFile_string(STR_LIT("x"));
-if (!_res.ok) { return (Result_string_NetworkError){.ok = false, .error = _res.error}; }
+if (!_res.ok) { return (Result_string_FileError){.ok = false, .error = _res.error}; }
 String content = _res.value;
 ```
 
@@ -219,13 +219,13 @@ Foo a = Foo_new();
 Bar b = Bar_new();
 Result_void_IOError _r = riskyOp();
 if (!_r.ok) {
-    _free(&a);   // компилятор генерирует cleanup
-    _free(&b);
+    Foo_free(&a);   // компилятор генерирует cleanup для каждого owned
+    Bar_free(&b);
     return (Result_void_IOError){.ok = false, .error = _r.error};
 }
 use(&a, &b);
-_free(&a);
-_free(&b);
+Foo_free(&a);
+Bar_free(&b);
 ```
 
 ## Ограничения

@@ -100,8 +100,8 @@ for (let x of arr) { ... }  // ok
 
 // TSClang:
 const arr = [1, 2, 3]
-for (const x of arr) { ... }  // ✅ — borrow checker требует const
-// let x создаёт move-семантику, что не работает для примитивов в for-of
+for (const x of arr) { ... }  // ✅ — borrow checker предпочитает const
+for (let x of arr) { ... }    // ok — mutable copy каждого элемента
 ```
 
 ### Классовое наследование → композиция

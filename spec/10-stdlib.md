@@ -144,7 +144,7 @@ console.trace("reached here")   // выводит: "reached here (__FILE__:__LIN
 // process — только desktop/server
 process.exit(0)
 process.argv   // string[] — аргументы командной строки
-process.env    // Map<string, string> — переменные окружения
+process.env    // env API: .get(key), .has(key) — не Map, итерация недоступна
 ```
 
 На **embedded** targets `process.*` — ошибка компилятора (нет OS, нет процесса). Вместо этого используются `std/serial`, `std/gpio` и др.
@@ -159,7 +159,7 @@ process.env    // Map<string, string> — переменные окружени�
 
 ## Map\<K, V\>
 
-Глобальный класс — импорт не нужен. Hash map с открытой адресацией. Ключи и значения управляются ownership-системой.
+Глобальный класс — импорт не нужен. Ассоциативный массив с ключами и значениями, управляемыми ownership-системой.
 
 **Допустимые типы ключей K:** все примитивы (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`), `string`, `enum`. Классы и интерфейсы — ошибка компилятора.
 
@@ -217,16 +217,24 @@ counts.set("hits", 42)
 const n: i32 | null = counts.get("hits")    // copy
 ```
 
-C-output — open addressing hash map:
+C-output — монорфизированная flat struct:
 ```c
+// desktop: heap-allocated
 typedef struct {
-    void**  keys;      // массив указателей на ключи (или inlined для примитивов)
-    void**  values;    // массив указателей на значения
-    bool*   occupied;  // маска занятых слотов
-    size_t  capacity;
-    size_t  size;
-} Map;
-// монорфизируется: Map_string_i32, Map_string_User и т.д.
+    String* keys;
+    int32_t* values;
+    bool* occupied;
+    size_t capacity;
+    size_t size;
+} TscMap_string_i32;
+
+// static allocator: compile-time capacity, BSS
+typedef struct {
+    String _keys[16];
+    int32_t _vals[16];
+    bool _occupied[16];
+    size_t size;
+} TscMap_string_i32;
 ```
 
 ### Map\<K, V\> на embedded

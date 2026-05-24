@@ -106,32 +106,25 @@ sizeof(StateMachine) = sizeof(_state) + sum(sizeof(V) for V in live_vars_across_
 
 где `live_vars_across_any_await` — переменные, живые хотя бы через одну точку `await` (минимизируются компилятором).
 
-**Размер поля `_state` по платформам:**
+**Поле `_state`:** всегда `int32_t` (4 байта) на всех платформах. Компилятор не использует platform-specific типы для state field.
 
-| Платформа      | Тип `_state` | Размер | Alignment |
-|----------------|-------------|--------|-----------|
-| AVR            | `uint8_t`   | 1 B    | 1 B       |
-| ARM Cortex-M   | `uint32_t`  | 4 B    | 4 B       |
-| x86-64         | `int32_t`   | 4 B    | 8 B       |
-
-Максимальное число состояний (255 для AVR): количество `await`-точек в функции + 2 (STATE_INIT, STATE_DONE). Если функция содержит больше 253 `await` точек — ошибка компилятора на AVR.
+Максимальное число состояний: количество `await`-точек в функции + 2 (STATE_INIT, STATE_DONE).
 
 **Overhead `async fn throws E`:**
 
 `async` функция с `throws` добавляет к state machine хранение результата ошибки:
 
 ```c
-typedef struct {
-    uint8_t        _state;
-    /* живые переменные */
-    bool           _ok;           // результат: успех или ошибка
-    union {
-        ReturnType _value;        // при успехе
-        ErrorType  _error;        // при ошибке
-    };
-} AsyncThrowsTask;
+// throws генерирует отдельный Result typedef
+typedef struct { bool ok; union { ReturnType value; ErrorType error; }; } Result_ReturnType_ErrorType;
 
-// sizeof = sizeof(_state) + sizeof(live vars) + sizeof(bool) + max(sizeof(T), sizeof(E)) + padding
+// State machine включает Result как поле
+typedef struct {
+    int32_t _state;
+    Result_ReturnType_ErrorType _result;
+    bool _done;
+    /* живые переменные */
+} AsyncThrowsTask;
 ```
 
 **Пример расчёта (AVR):**
@@ -863,8 +856,8 @@ const msg = ch.receive()         // thread-контекст: блокирует 
 ch.tryReceive()                  // Message | null — не блокирует (async, thread, ISR ✅)
 
 // состояние канала — snapshot (ISR-safe ✅, только для мониторинга и адаптивной логики)
-ch.length      // i32 — текущее кол-во элементов
-ch.capacity    // i32 — максимальная ёмкость
+ch.length      // size_t — текущее кол-во элементов
+ch.capacity    // size_t — максимальная ёмкость
 ch.isEmpty()   // boolean — length == 0
 ```
 
@@ -880,18 +873,18 @@ function onScan(): void {
     tx.trySend(captureScan(resolution))   // drop если всё ещё полный
 }
 
-// size — градуальная адаптация: три ступени качества
+// length — градуальная адаптация: три ступени качества
 @embedded.isr("CAMERA_FRAME")
 function onFrame(): void {
-    const quality = tx.size < tx.capacity / 3  ? Quality.High
-                  : tx.size < tx.capacity * 2/3 ? Quality.Medium
+    const quality = ch.length < ch.capacity / 3  ? Quality.High
+                  : ch.length < ch.capacity * 2/3 ? Quality.Medium
                   : Quality.Low
 
-    tx.trySend(captureFrame(quality))   // drop если всё ещё полный после адаптации
+    ch.trySend(captureFrame(quality))   // drop если всё ещё полный после адаптации
 }
 ```
 
-`size` и `isFull` — snapshot: значение может измениться к моменту следующей инструкции. Для control flow это допустимо (worst case — один кадр не того качества). Для гарантий «exactly once» использовать `trySend()` — он атомарен.
+`length` и `isEmpty()` — snapshot: значение может измениться к моменту следующей инструкции. Для control flow это допустимо (worst case — один кадр не того качества). Для гарантий «exactly once» использовать `trySend()` — он атомарен.
 
 Ownership: `tx.send(msg)` — move `msg` в канал. При удалении канала с непрочитанными элементами компилятор вызывает деструкторы всех оставшихся объектов.
 
@@ -990,9 +983,8 @@ const cfg = new Readonly<Config>(d)
 //   field 'logLevel: string' would be silently dropped
 //   hint: new Readonly<Config>({ maxRetries: d.maxRetries, timeout: d.timeout, hosts: d.hosts })
 
-// ❌ <T> опущен
-const cfg = new Readonly({ maxRetries: 3 })
-// error: type parameter required: new Readonly<YourType>(...)
+// <T> может быть выведен из аргумента
+const cfg = new Readonly({ maxRetries: 3 })  // ok: T inferred
 ```
 
 Нельзя создать `Readonly<T>` если `T` содержит `Shared<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` или мутабельное поле — ошибка компилятора.
@@ -1042,12 +1034,12 @@ const result = await t.join()   // из async-контекста — не бло
 // const result = t.join()      // из другого потока — блокирует OS thread
 
 // Форма 2: явный канал — для сложных случаев (стриминг, несколько значений, select)
-const [tx, rx] = channel<HeavyResult>(1)
-Thread.spawn(() => { tx.send(heavyComputation()) })
-const result = await rx.receive()
+const ch = new Channel<HeavyResult>(1)
+Thread.spawn(() => { ch.send(heavyComputation()) })
+const result = await ch.receive()
 ```
 
-Под капотом `Thread<T>` — это `channel<T>(1)`, генерируемый компилятором автоматически. Никакой скрытой магии — только удобная обёртка над явным примитивом.
+Под капотом `Thread<T>` — это `new Channel<T>(1)`, генерируемый компилятором автоматически. Никакой скрытой магии — только удобная обёртка над явным примитивом.
 
 Если поток бросает — ошибка propagates через `join()`:
 
@@ -1089,18 +1081,18 @@ Thread:       tx.send(result)  ────────────────�
 ```
 
 ```typescript
-import { Thread, channel, select, after } from "std/threads"
+import { Thread, select } from "std/threads"
 
 async function main(): void {
-    const [tx, rx] = channel<i32[]>(64)
+    const ch = new Channel<i32[]>(64)
 
     const t = Thread.spawn(() => {
         // тяжёлые вычисления в отдельном потоке
         const result = heavyComputation()
-        tx.send(result)   // move владения в канал
+        ch.send(result)   // move владения в канал
     })
 
-    const result = await rx.receive()   // ждём результат
+    const result = await ch.receive()   // ждём результат
     t.join()
     console.log(result)
 }
@@ -1233,7 +1225,7 @@ import { Atomic, RmwOrdering } from "std/threads"
 type TimerEvent = { irq: u32; tick: u32 }
 
 static readonly irqCount = new Atomic<u32>(0)
-static readonly [tx, rx] = channel<TimerEvent>(32)
+static readonly irqCh = new Channel<TimerEvent>(32)
 
 @embedded.isr(14)   // ARM Cortex-M: IRQ14
 function onTimerInterrupt(): void {
@@ -1256,8 +1248,8 @@ function onTimerOverflow(): void {
 
 Компилятор генерирует платформенный атрибут:
 ```c
-// GCC/Clang (ARM Cortex) — числовой аргумент
-__attribute__((interrupt("IRQ")))
+// AVR — строковый аргумент
+ISR(TIMER1_OVF_vect) {
 void onTimerInterrupt(void) { ... }
 
 // AVR — строковый аргумент
@@ -1339,7 +1331,7 @@ error[TSC-E081]: heap allocation in ISR context
 
 ```typescript
 // ✅ Примитив на стеке + канал
-const _sensorChannel = channel<u16>(32)
+const _sensorChannel = new Channel<u16>(32)
 
 @embedded.isr(14)
 function handler(): void {
@@ -1876,18 +1868,19 @@ for (const sample of sampler) {
 ```
 
 ```c
-/* C-output */
-typedef struct { uint8_t channel; uint8_t _state; } _AdcSamplerGen;
-static _AdcSamplerGen _adcSampler_instance;   /* BSS, не heap */
+/* C-output — same struct/result convention as regular generators */
+typedef struct { int32_t _state; uint8_t channel; bool _done; uint16_t _value; } _AdcSampler_state;
+typedef struct { uint16_t value; bool done; } _AdcSampler_result;
+static _AdcSampler_state _adcSampler_instance;   /* BSS, не heap */
 
-static bool adcSampler_next(_AdcSamplerGen* g, uint16_t* out) {
-    switch (g->_state) {
-    case 0: g->_state = 1;
+static _AdcSampler_result adcSampler_next(_AdcSampler_state *self) {
+    switch (self->_state) {
+    case 0: self->_state = 1; /* fall through */
     case 1:
-        *out = ADC_read(g->channel);
-        return true;
+        self->_value = ADC_read(self->channel);
+        return (_AdcSampler_result){self->_value, false};
     }
-    return false;
+    return (_AdcSampler_result){0, true};
 }
 ```
 
