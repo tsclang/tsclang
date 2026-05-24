@@ -137,12 +137,11 @@ typedef struct {
 **Пример расчёта (AVR):**
 
 ```typescript
-async function readConfig(): string throws IOError {
-    const fd = await openFile("cfg")    // fd: FileHandle (4 B) — живёт через await
-    const s  = await readAll(fd)        // s: string (8 B) — живёт через return
-    return s
+async function greet(name: string): void {
+    await sleep(10)                     // name: string (8 B) — живёт через await
+    console.log(name)
 }
-// StateMachine: _state(1) + fd(4) + s(8) + _ok(1) + max(string,IOError)(8) + padding = ~24 B
+// StateMachine: _state(4) + name(8) + _done(1) + _await_0(TscSleepAwaitable) + padding
 ```
 
 ### Borrows через await — запрещено
@@ -608,18 +607,18 @@ async function readSocket(fd: i32, signal?: AbortSignal): Buffer {
 Когда state machine обнаруживает `signal.aborted`, она не прерывается немедленно — она переходит в режим **unwind**: проходит все cleanup-состояния для живых ресурсов точно так же, как при обычном завершении или ошибке. Owned ресурсы всегда освобождаются:
 
 ```typescript
-async function processFile(path: string, signal?: AbortSignal): Buffer {
-    const file = await openFile(path)       // file: owned FileHandle
-    // ← если signal.aborted здесь → unwind: file._free() вызывается автоматически
-    const data = await readAll(file)
-    // ← если signal.aborted здесь → unwind: data._free() + file._free()
-    return data
+async function process(name: string, signal?: AbortSignal): void {
+    const line = await readLine()            // line: owned String
+    // ← если signal.aborted здесь → unwind: tsc_string_release(line)
+    await sleep(100)
+    // ← если signal.aborted здесь → unwind: tsc_string_release(line)
+    console.log(line)
 }
 ```
 
 C-output — при отмене state machine переходит в `STATE_CLEANUP`, не в немедленный выход:
 ```c
-case STATE_READ_ALL:
+case STATE_SLEEP:
     if (signal && atomic_load(&signal->aborted)) {
         ctx->error = signal->reason ? ... : &AbortError_default;
         ctx->state = STATE_CLEANUP;   // → cleanup, не abort
@@ -628,7 +627,7 @@ case STATE_READ_ALL:
     // ...
 
 case STATE_CLEANUP:
-    if (ctx->file) FileHandle_free(ctx->file);   // owned ресурсы освобождаются
+    tsc_string_release(ctx->line);    // owned ресурсы освобождаются
     ctx->state = STATE_ERROR;
     break;
 ```
@@ -1733,17 +1732,9 @@ interface AsyncIterator<T> {
 ### async function\*
 
 ```typescript
-async function* readLines(path: string): AsyncIterator<string> throws IOError {
-    const fd = await openFile(path)
-    try {
-        while (true) {
-            const line: string | null = await fd.readLine()
-            if (line == null) break
-            yield line   // move semantics — передаёт ownership caller'у
-        }
-    } finally {
-        await fd.close()   // выполняется и при break, и при close()
-    }
+function* greet(prefix: string): Generator<string> {
+    let name: string = prefix
+    yield name   // move semantics — передаёт ownership caller'у
 }
 ```
 
@@ -1761,27 +1752,25 @@ async function* gen(): AsyncIterator<string> throws IOError {
 ### for await
 
 ```typescript
-for await (const line of readLines("data.txt")) {
-    if (line.startsWith("#")) break   // → вызывает gen.close() → finally
-    process(line)
+const g = greet("hello")
+for (const v of g) {
+    if (v == "stop") break   // → вызывает cleanup генератора
+    process(v)
 }
-// close() вызывается автоматически при: break, throw, нормальном завершении
+// cleanup вызывается автоматически при: break, нормальном завершении
 ```
 
-`for await` — sugar над `AsyncIterator<T>`:
+`for-of` — sugar над `Generator<T>`:
 
 ```typescript
 // десахаривается в:
-const _gen = readLines("data.txt")
-try {
-    while (true) {
-        const line = await _gen.next()
-        if (line == null) break
-        // body
-        if (shouldBreak) break
-    }
-} finally {
-    await _gen.close()
+const _gen = greet("hello")
+while (true) {
+    const result = _gen.next()
+    if (result.done) break
+    const v = result.value
+    // body
+    if (shouldBreak) break
 }
 ```
 
@@ -1790,10 +1779,10 @@ try {
 `close()` не прерывает pending `await` — устанавливает флаг. Генератор проверяет флаг после текущего `await`, пропускает следующий `yield`, выполняет `finally`.
 
 ```typescript
-// close() вызван пока генератор ждёт fd.readLine()
-// → readLine() завершается нормально
-// → генератор видит флаг close
-// → не делает yield, переходит в finally → fd.close()
+// генератор приостановлен на yield
+// → вызван break в for-of
+// → генератор видит что больше не нужен
+// → выполняет cleanup (tsc_string_release и т.д.)
 ```
 
 Параллельный вызов `next()` (пока предыдущий не завершён) — runtime panic. `for await` гарантирует последовательность автоматически.
@@ -1816,8 +1805,8 @@ interface AsyncIterator<T> {
 `throw(error)` — инъектирует ошибку: генератор получит её в точке ожидания следующего `next()` как брошенное исключение. Если генератор не поймает — пробрасывается наружу.
 
 ```typescript
-const gen = readLines("data.txt")
-gen.throw(new IOError("injected"))   // генератор увидит ошибку при следующем yield
+const gen = greet("hello")
+gen.throw(new Error("injected"))   // генератор увидит ошибку при следующем yield
 ```
 
 Синхронный `Generator<T>` (без `async`) имеет аналогичный интерфейс без `Promise`:
@@ -1856,26 +1845,36 @@ Async generator компилируется в state machine с двумя тип
 ```c
 typedef enum {
     GEN_STATE_INIT,
-    GEN_STATE_AWAIT_OPEN,      // await openFile
-    GEN_STATE_AWAIT_READLINE,  // await fd.readLine
-    GEN_STATE_YIELDED,         // ожидание следующего next()
-    GEN_STATE_FINALLY,         // await fd.close()
+    GEN_STATE_YIELD_0,         // yield name
     GEN_STATE_DONE,
-    GEN_STATE_ERROR
-} ReadLinesState;
+} greet_gen_state;
 
 typedef struct {
-    ReadLinesState state;
-    FileHandle*    fd;
-    String         yielded_value;   // inline value (не указатель)
-    IOError*       error;
-    bool           close_requested;
-} ReadLinesGen;
+    greet_gen_state state;
+    String name;                // inline value (не указатель)
+    bool _done;
+    String _value;              // yielded value
+} greet_state;
 
-// next() принимает callback: (value, done, error, userdata)
-void readlines_next(ReadLinesGen* g,
-    void (*cb)(String val, bool done, IOError* err, void* ud), void* ud);
-void readlines_close(ReadLinesGen* g, void (*cb)(void* ud), void* ud);
+typedef struct { String value; bool done; } greet_result;
+
+// next() возвращает struct { value, done }
+greet_result greet_next(greet_state *self, String prefix) {
+    switch (self->_state) {
+        case 0:
+            self->name = prefix;
+            tsc_string_retain(self->name);
+            self->_state = 1;
+            return (greet_result){self->name, false};
+        case 1:
+            goto _cleanup;
+        _cleanup:
+            tsc_string_release(self->name);
+            self->_done = true;
+            return (greet_result){(String){0}, true};
+    }
+    return (greet_result){(String){0}, true};
+}
 ```
 
 State machine аллоцируется на heap по умолчанию. На `allocator: "static"` — используй `@static`, тогда struct генератора идёт в BSS:
