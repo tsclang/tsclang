@@ -135,7 +135,7 @@ const entry = performance.measure("my-work", "start", "end")
 // console.time / timeEnd — удобный сахар над performance.mark/measure
 console.time("parse")
 parseData(buf)
-console.timeEnd("parse")    // выводит: "parse: 12.3ms"
+console.timeEnd("parse")    // выводит в stderr: "parse: 12.3ms"
 
 // console.trace — упрощённый трейс, только desktop
 console.trace("reached here")   // выводит: "reached here (__FILE__:__LINE__)"
@@ -587,7 +587,7 @@ import { Thread } from "threads"       // краткая форма
 2. `std/name` — stdlib
 3. ошибка компилятора
 
-Подробнее о форматах импорта — в spec/08-build.md.
+Подробнее о форматах импорта — в spec/09-build.md.
 
 ## Официальные пакеты в реестре (`@tsc/*`)
 
@@ -1489,7 +1489,7 @@ export interface I2C {
 }
 ```
 
-Platform profile предоставляет реализацию через `declare module "std/hal" { ... }` — подробнее в [Platform Profile → Структура пакета](08-build.md).
+Platform profile предоставляет реализацию через `declare module "std/hal" { ... }` — подробнее в [Platform Profile → Структура пакета](09-build.md).
 
 Библиотека написанная через `std/hal` портируется на любую платформу сменой профиля — без изменения кода.
 

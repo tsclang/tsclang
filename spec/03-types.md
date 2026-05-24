@@ -646,7 +646,7 @@ typedef struct {
 } tsc_unknown;
 ```
 
-- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64, 5=bool, 6=string, 7=array, 8=object)
+- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64/number, 5=bool, 6=string, 7=array, 8=object, 10=i8, 11=i16, 12=u8, 13=u16, 14=u32, 15=u64)
 - `vtable` — указатель на drop/clone виртуальные функции
 - `buffer` — inline хранилище на 3 машинных слова (достаточно для примитивов и String)
 
@@ -1533,6 +1533,8 @@ tuple_i32_string pair = {
     ._1 = (String){ .data = "hello", .length = 5, .capacity = 0 }
 };
 ```
+
+*Note:* Internal iterator-возвращаемые кортежи (entries, map pairs) используют `Tuple_` (uppercase) — например `Tuple_i32_string` для `Array.entries()`.
 
 ### Labeled Tuples
 
