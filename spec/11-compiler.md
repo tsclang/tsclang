@@ -331,7 +331,7 @@ const box = new Box<User>({...}) // Box<User>
 int32_t  identity_i32(int32_t x)   { return x; }
 
 // identity<string>
-String  identity_string(String x) { return x; }
+String  identity_string(String x) { tsc_string_retain(x); return x; }
 
 // Box<User>
 typedef struct { User value; } Box_User;

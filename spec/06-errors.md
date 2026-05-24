@@ -26,17 +26,20 @@ function fetch(url: string): Response throws IOError | NetworkError { ... }
 ```typescript
 class Error {
     readonly message: string   // человекочитаемое описание
-    readonly stack:   string   // упрощённый трейс (только desktop)
 }
 ```
 
-**`error.stack`** — только desktop/server. Содержит `__FILE__:__LINE__` точки `throw`. Полный call stack недоступен (нет рантайм-стека в C-output):
+**`error.stack`** — опциональное поле, добавляется пользователем в subclass при необходимости (desktop-only). Полный call stack недоступен (нет рантайм-стека в C-output). На embedded обращение к `stack` — ошибка компилятора.
 
+Пример использования `stack` на desktop:
 ```typescript
+class AppError extends Error {
+    readonly stack: string   // desktop-only трейс
+}
 try {
-    throw new IOError("not found")
-} catch (e: IOError) {
-    console.log(e.stack)   // "IOError at src/main.tsc:42"
+    throw new AppError("not found")
+} catch (e: AppError) {
+    console.log(e.stack)   // "AppError at src/main.tsc:42"
 }
 ```
 
@@ -138,62 +141,62 @@ function main(): void {
 
 ## C-output
 
-`throws` меняет C-сигнатуру функции: возвращаемый тип оборачивается в Result-структуру. Для `throws IOError | NetworkError`:
+`throws` меняет C-сигнатуру функции: возвращаемый тип оборачивается в Result-структуру. Для `throws FileError | NetworkError`:
 
 ```c
-// Генерируется компилятором
-typedef enum { _ERR_IO, _ERR_NETWORK } _fetch_err_kind;
+// Error classes get TscError _base wrapper
+typedef struct { TscError _base; } FileError;
+typedef struct { TscError _base; } NetworkError;
 
+// Error tag enum — one value per error type
+typedef enum { _Err_FileError = 0, _Err_NetworkError = 1 } _ErrTag_FileError_NetworkError;
+
+// Error union — separate typedef
+typedef struct {
+    _ErrTag_FileError_NetworkError tag;
+    union { FileError _0; NetworkError _1; };
+} _ErrUnion_FileError_NetworkError;
+
+// Result struct — bool ok + anonymous union of value/error
 typedef struct {
     bool ok;
-    union {
-        Response value;
-        struct {
-            _fetch_err_kind _kind;
-            union {
-                IOError io;
-                NetworkError net;
-            } _err;
-        };
-    };
-} _Result_Response_IOError_NetworkError;
+    union { String value; _ErrUnion_FileError_NetworkError error; };
+} Result_string_FileError_NetworkError;
 
-_Result_Response_IOError_NetworkError fetch(String url) { ... }
+// Function name includes parameter type suffix
+Result_string_FileError_NetworkError fetch_string(String url) { ... }
 ```
 
-`try/catch` компилируется в `if/else` по полю `ok` и `_kind`:
+`try/catch` компилируется в `if/else` по полю `ok` и `error.tag`:
 
 ```c
-_Result_Response_IOError_NetworkError _r = fetch(str("https://..."));
+Result_string_FileError_NetworkError _r = fetch_string(STR_LIT("https://..."));
 if (_r.ok) {
-    Response r = _r.value;
+    String r = _r.value;
     process(r);
-    Response_free(&r);
-} else if (_r._kind == _ERR_IO) {
-    IOError e = _r._err.io;
-    printf("IO: %s\n", e.message.data);
-    IOError_free(&e);
-} else if (_r._kind == _ERR_NETWORK) {
-    NetworkError e = _r._err.net;
-    printf("Network: %s\n", e.message.data);
-    NetworkError_free(&e);
+    tsc_string_release(r);
+} else if (_r.error.tag == _Err_FileError) {
+    FileError e = _r.error._0;
+    printf("IO: %s\n", e._base.message.data);
+} else if (_r.error.tag == _Err_NetworkError) {
+    NetworkError e = _r.error._1;
+    printf("Network: %s\n", e._base.message.data);
 }
-// finally
 closeConnection();
 ```
 
 Оператор `?`:
 ```c
-_Result_String_IOError _r = readFile(str("x"));
-if (!_r.ok) return (_Result_String_NetworkError){ .ok = false, ._err = ... };
-String content = _r.value;
+Result_string_FileError _res = readFile_string(STR_LIT("x"));
+if (!_res.ok) { return (Result_string_NetworkError){.ok = false, .error = _res.error}; }
+String content = _res.value;
 ```
 
 Оператор `!`:
 ```c
-_Result_String_IOError _r = readFile(str("config.txt"));
-if (!_r.ok) { fprintf(stderr, "panic\n"); abort(); }
-String content = _r.value;
+Result_string_FileError _res = readFile_string(STR_LIT("config.txt"));
+if (!_res.ok) { tsc_panic(_res.error._base.message); }
+String content = _res.value;
 ```
 
 ## Ownership при ошибках
@@ -214,15 +217,15 @@ function process(): void throws IOError {
 // try-ветка
 Foo a = Foo_new();
 Bar b = Bar_new();
-_Result_void_IOError _r = riskyOp();
+Result_void_IOError _r = riskyOp();
 if (!_r.ok) {
-    Foo_free(&a);   // компилятор генерирует cleanup
-    Bar_free(&b);
-    return (_Result_void_IOError){ .ok = false, ._err = _r._err };
+    _free(&a);   // компилятор генерирует cleanup
+    _free(&b);
+    return (Result_void_IOError){.ok = false, .error = _r.error};
 }
 use(&a, &b);
-Foo_free(&a);
-Bar_free(&b);
+_free(&a);
+_free(&b);
 ```
 
 ## Ограничения

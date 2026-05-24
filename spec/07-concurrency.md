@@ -52,8 +52,8 @@ async function main(): void {
 
 ```c
 // async fn → конечный автомат
-typedef struct { int _state; /* захваченные переменные */ } FetchUserTask;
-bool FetchUserTask_poll(FetchUserTask* t) { switch (t->_state) { ... } }
+typedef struct { int32_t _state; /* захваченные переменные */ bool _done; } FetchUserTask;
+void FetchUserTask_poll(FetchUserTask* t) { switch (t->_state) { ... } }
 ```
 
 ### State machine size и stack safety на embedded
@@ -462,7 +462,7 @@ void traverse_poll(Traverse_SM* sm) {
             nodes_stack[nodes_stack_top++] = sm->root;
             sm->_state = 1; break;
         case 1:
-            if (nodes_stack_top == 0) { sm->_state = 0xFF; return; }
+            if (nodes_stack_top == 0) { sm->_done = true; return; }
             sm->n = nodes_stack[--nodes_stack_top];
             process_poll(&sm->n_state);
             sm->_state = 2; break;
@@ -847,29 +847,28 @@ const int32_t v = atomic_load_explicit(&arr.data[0], memory_order_acquire);
 **Bounded SPSC** — кольцевой буфер, одна аллокация. Capacity обязателен.
 
 ```typescript
-import { Thread, channel, select, after } from "std/threads"
+import { Thread, select } from "std/threads"
 
-const [tx, rx] = channel<Message>(128)   // capacity = 128
+const ch = new Channel<Message>(128)   // capacity = 128
 
-// sender
-await tx.send(msg)   // async-контекст: yield event loop если полный (backpressure)
-tx.send(msg)         // thread-контекст: блокирует OS-поток если полный
-tx.trySend(msg)      // boolean — false если полный, не блокирует (async, thread, ISR ✅)
-tx.close()           // закрыть канал; получатель вычитает остаток, затем получает null
+// send
+await ch.send(msg)   // async-контекст: yield event loop если полный (backpressure)
+ch.send(msg)         // thread-контекст: блокирует OS-поток если полный
+ch.trySend(msg)      // boolean — false если полный, не блокирует (async, thread, ISR ✅)
+ch.close()           // закрыть канал; получатель вычитает остаток, затем получает null
 
-// receiver
-const msg = await rx.receive()   // async-контекст: yield event loop пока пуст
-const msg = rx.receive()         // thread-контекст: блокирует OS-поток пока пуст
-rx.tryReceive()                  // Message | null — не блокирует (async, thread, ISR ✅)
+// receive
+const msg = await ch.receive()   // async-контекст: yield event loop пока пуст
+const msg = ch.receive()         // thread-контекст: блокирует OS-поток пока пуст
+ch.tryReceive()                  // Message | null — не блокирует (async, thread, ISR ✅)
 
 // состояние канала — snapshot (ISR-safe ✅, только для мониторинга и адаптивной логики)
-tx.size       // i32 — текущее кол-во элементов
-tx.capacity   // i32 — максимальная ёмкость
-tx.isFull     // boolean — size == capacity
-tx.isEmpty    // boolean — size == 0
+ch.length      // i32 — текущее кол-во элементов
+ch.capacity    // i32 — максимальная ёмкость
+ch.isEmpty()   // boolean — length == 0
 ```
 
-**ISR-safe операции** (`trySend`, `tryReceive`, `size`, `capacity`, `isFull`, `isEmpty`) не делают системных вызовов и не аллоцируют память — безопасны для вызова из прерываний.
+**ISR-safe операции** (`trySend`, `tryReceive`, `length`, `capacity`, `isEmpty`) не делают системных вызовов и не аллоцируют память — безопасны для вызова из прерываний.
 
 **Адаптивный producer в ISR** — типичный паттерн для робототехники и real-time систем:
 
@@ -908,30 +907,25 @@ tsc_channel_release_i32(ch._inner);
 
 Ждёт первого готового из нескольких каналов. Ровно одно поле результата non-null.
 
-`select` — только для **async-контекста** (event loop). В `Thread.spawn` `await` запрещён, поэтому `await select(...)` там не скомпилируется автоматически. Из потока используй `rx.receive()` напрямую.
+`select` — синхронная операция, не требует `await`.
 
 ```typescript
-const result = await select({
-    msg:     rx1.receive(),   // ждём Message
-    err:     errCh.receive(), // ждём AppError
-    timeout: after(500)    // таймаут 500 мс
+const result = select({
+    a: ch1.receive(),   // ждём i32
+    b: ch2.receive(),   // ждём i32
 })
 
-// match — единственный type-safe способ потребить result
-// компилятор знает все поля select → exhaustiveness проверяется
-// внутри каждого arm тип сужен: msg: Message (не Message | null)
-match (result) {
-    { msg }     => handleMsg(msg),
-    { err }     => handleErr(err),
-    { timeout } => handleTimeout(),
+// result — struct с _arm полем для диспатча
+if (result._arm === 0) {
+    console.log(result.a);
+} else if (result._arm === 1) {
+    console.log(result.b);
 }
 ```
 
-`result` — непрозрачный тип (opaque), обращение к полям напрямую (`result.msg`) — ошибка компилятора. Потреблять только через `match`.
+`result` — struct с полями `_arm` (int) и именованными полями для каждого канала. Доступ к полям — прямой (`result.a`). `_arm == -1` означает «ни один канал не готов».
 
-`after(ms)` — Timer Task в event loop, не полноценный канал (нет аллокации буфера).
-
-Fairness: перед регистрацией callbacks компилятор обходит каналы в случайном порядке через `tryReceive()`. Если хотя бы один готов — возвращает сразу без регистрации в event loop.
+Fairness: компилятор обходит каналы последовательно через `tryReceive()`. Если хотя бы один готов — возвращает сразу.
 
 C-output — sequential try_receive с tagged result:
 ```c
@@ -947,8 +941,6 @@ if (result._arm < 0) {
   if (_sel_b.has_value) { result.b = _sel_b.value; result._arm = 1; } }
 ```
 Компилятор генерирует `_SelectResult_N` по конкретному вызову `select{}` — типы полей известны на этапе компиляции. `_arm == -1` означает «ни один канал не готов».
-
-Жизненный цикл `SelectState`: `ref_count = arms_count`. Каждый callback (победитель или нет) делает `dec_ref`. Последний вошедший освобождает память. После победы одного — остальные отписываются от своих каналов.
 
 ### Readonly<T>
 
@@ -1461,11 +1453,11 @@ bool readADC_poll(ReadADC_SM* sm) {
         sm->_state = 1;
         return false;
     case 1:
-        if (!_sig_adcReady) return false;   // ещё не готово — выходим
-        _sig_adcReady = false;              // auto-reset
+        if (!_sig_adcReady) return;   // ещё не готово — выходим
+        _sig_adcReady = false;        // auto-reset
         sm->_result = ADCL | (ADCH << 8);
-        sm->_state = 0xFF;
-        return true;
+        sm->_done = true;
+        return;
     }
 }
 ```
@@ -1843,19 +1835,7 @@ for await (const chunk of ch) {
 Async generator компилируется в state machine с двумя типами suspension points:
 
 ```c
-typedef enum {
-    GEN_STATE_INIT,
-    GEN_STATE_YIELD_0,         // yield name
-    GEN_STATE_DONE,
-} greet_gen_state;
-
-typedef struct {
-    greet_gen_state state;
-    String name;                // inline value (не указатель)
-    bool _done;
-    String _value;              // yielded value
-} greet_state;
-
+typedef struct { int32_t _state; String name; bool _done; String _value; } greet_state;
 typedef struct { String value; bool done; } greet_result;
 
 // next() возвращает struct { value, done }
@@ -1930,15 +1910,30 @@ function* scanline(): Generator<u8[256]> {
 
 ```c
 // C-output — статическая state machine
-static struct {
-    uint8_t state;
-    uint8_t line[256];
-} scanline_gen;
+typedef struct { int32_t _state; int32_t n; bool _done; int32_t _value; } counter_state;
+typedef struct { int32_t value; bool done; } counter_result;
 
-bool scanline_next(void) {
-    renderLine(scanline_gen.line);
-    return true;  // бесконечный
+static counter_result counter_next(counter_state *self) {
+    switch (self->_state) {
+        case 0:
+            self->n = 0;
+            self->_state = 1;
+            /* fall through */
+        case 1:
+            if (self->n < 10) {
+                self->_value = self->n;
+                self->n++;
+                return (counter_result){self->_value, false};
+            }
+            goto _cleanup;
+        _cleanup:
+            self->_done = true;
+            return (counter_result){0, true};
+    }
+    return (counter_result){0, true};
 }
+
+static counter_state _counter_instance;
 ```
 
 `@embedded.singleton` применяется только к `function*` — ошибка компилятора на любом другом таргете.

@@ -152,8 +152,8 @@ enum Color { Red = 1, Green = 2, Blue = 4 }   // явные значения (б
 
 C-output:
 ```c
-typedef enum { North, South, East, West } Direction;
-static const Direction Direction_values[] = { North, South, East, West };
+typedef enum { Direction_North = 0, Direction_South = 1, Direction_East = 2, Direction_West = 3 } Direction;
+static const Direction Direction_values[] = { Direction_North, Direction_South, Direction_East, Direction_West };
 static const char*    Direction_names[]  = { "North", "South", "East", "West" };
 ```
 
@@ -179,7 +179,7 @@ const enum Pin { PA0 = 0, PA1 = 1, PB0 = 8, PB1 = 9 }
 
 C-output:
 ```c
-typedef enum { PA0 = 0, PA1 = 1, PB0 = 8, PB1 = 9 } Pin;
+typedef enum { Pin_PA0 = 0, Pin_PA1 = 1, Pin_PB0 = 8, Pin_PB1 = 9 } Pin;
 // больше ничего — нет таблиц
 ```
 
@@ -288,7 +288,7 @@ typedef struct {
 
 typedef struct {
     void* self;
-    Drawable_vtable* vtable;
+    const Drawable_vtable *vtable;
 } Drawable;
 ```
 

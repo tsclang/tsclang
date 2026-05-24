@@ -96,9 +96,8 @@ throw new MyClass()                 // ❌ ошибка компилятора: 
 
 C-output — `Error`-иерархия через C-поля, без vtable:
 ```c
-typedef struct { String message; } Error;
-typedef struct { Error base; } IOError;    // наследование = первое поле
-typedef struct { Error base; int32_t code; } NetworkError;
+typedef struct { TscError _base; } IOError;    // наследование = первое поле (TscError)
+typedef struct { TscError _base; int32_t code; } NetworkError;
 ```
 
 ## Globals

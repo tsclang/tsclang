@@ -227,13 +227,8 @@ let mask: i32 = flags as i32  // ✅
 - возвращаемых значений системных вызовов (количество байт)
 
 ```typescript
-const buf = Buffer.alloc(1024)
+const buf = new Buffer(1024)
 const len: usize = buf.length    // usize, не i32
-
-// арифметика с usize — не может быть отрицательным
-function copyTo(src: Ref<Buffer>, dst: Mut<Buffer>, offset: usize): usize {
-    return src.copy(dst, offset)   // возвращает количество скопированных байт
-}
 ```
 
 Автокаст `usize` → `i64` без потерь на всех платформах. `usize` → `i32` — требует явный `as` (может усечь на 64-bit).
@@ -439,7 +434,7 @@ typedef struct {
 ```
 
 `string` (non-nullable) → `String` в C (value type, передаётся по значению, встраивается в structs).
-`string | null` → `opt_String` в C (struct: `bool has_value; String value;`). Проверка: `if (val.has_value)`.
+`string | null` → `opt_string` в C (struct: `bool has_value; String value;`). Проверка: `if (val.has_value)`.
 
 Строковые литералы не выделяют heap:
 ```c
@@ -450,7 +445,7 @@ String s = { .data = "hello", .length = 5, .capacity = 0 };  // data → rodata,
 Heap выделяется только при динамическом построении:
 ```c
 // const s = a + b  (конкатенация)
-String s = tsc_str_concat(a, b);  // capacity > 0, data → malloc
+String s = tsc_string_concat(a, b);  // capacity > 0, data → malloc
 ```
 
 ### Индексация и длина
@@ -489,9 +484,14 @@ const p: u8 = 'п'    // ошибка компилятора: 'п' — муль�
 ### Итерация
 
 ```typescript
-// for...of — итерация по графемным кластерам (string)
-for (const ch of "привет❤️") {
-    // ch: string — "п", "р", "и", "в", "е", "т", "❤️"
+// for...of — итерация по байтам (char = u8)
+for (const ch of "hello") {
+    // ch: char — 'h', 'e', 'l', 'l', 'o'
+}
+
+// итерация по графемным кластерам — через .graphemes()
+for (const g of "привет❤️".graphemes()) {
+    // g: string — "п", "р", "и", "в", "е", "т", "❤️"
 }
 ```
 
@@ -738,12 +738,6 @@ Safe для rodata строк (литералы): `tsc_string_retain` на rodat
 - `any` вне `declare`/`unsafe` → compile-time error (Phase 3 lock-down)
 - Embedded: unknown поддерживает только `{i32,i64,f32,f64,bool,String}` — Array/Class → error
 - `unknown[]` элементы: auto-pack при push/literal, per-element drop при free
-function connect(): void throws IOError { ... }
-// → typedef struct { bool ok; IOError error; } _Result_void_IOError;
-
-connect()?;   // ok — propagate
-connect()!;   // ok — panic on error
-```
 
 ### `never` — bottom type
 
@@ -990,19 +984,20 @@ d.valueOf()              // i64 — то же что getTime()
 ```c
 typedef struct { int64_t ms; } Date;
 
-// Date.now()
-Date Date_now() {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (Date){ ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL };
-}
+// new Date() / Date.now()
+Date d = tsc_date_now();
+
+// new Date(ms)
+Date d = tsc_date_from_ms((int64_t)(ms));
 
 // getFullYear()
-int32_t Date_getFullYear(Date d) {
-    time_t t = d.ms / 1000;
-    struct tm* tm = gmtime(&t);
-    return tm->tm_year + 1900;
-}
+int32_t year = tsc_date_get_full_year(d);
+
+// getTime()
+int64_t ms = tsc_date_get_time(d);
+
+// toISOString()
+String iso = tsc_date_to_iso_string(d);
 ```
 
 > На embedded `gmtime` / `localtime` могут быть недоступны — используй `PlainDateTime` (Temporal, в разработке).
