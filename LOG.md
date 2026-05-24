@@ -1239,3 +1239,8 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **1 new generic test**: box-class-user (Box<User> — inline value type, not pointer)
 > - **Spec fixes**: 08-modules.md (module-level class = value), 06-errors.md (_free with &), 05-memory.md (_free with &), 07-concurrency.md (Readonly planned), 11-compiler.md (Box<User> inline)
 > - Result: **1290 tests, 0 failures**
+
+> 2026-05-25: **Spec audit complete — 20/20 files read, 1 fix**:
+> - Read all 20 spec files looking for internal contradictions (spec↔spec)
+> - No contradictions found — all cross-references, type definitions, and API descriptions are consistent
+> - Fixed 1 inaccuracy: 12-migration.md:192 `import { Regex } from "std/string"` → `"std/regex"` (Regex lives in std/regex, not std/string)

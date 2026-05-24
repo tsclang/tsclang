@@ -189,7 +189,7 @@ const sub = sliceChars(s, 1, 3)  // codepoints 1..2 ✅
 | `typeof x === "object"` | Runtime type checks через union | Exhaustive match по union типу |
 | Regex backreferences `\1` | `std/regex` — NFA, нет backtracking | `@tsc/pcre` если нужны |
 | Regex lookahead `(?=...)` | `std/regex` — NFA, нет backtracking | `@tsc/pcre` если нужны |
-| `RegExp` литерал `/pattern/flags` | Поддерживается: `/^\d+$/` = `new Regex(r"^\d+$")` | `import { Regex } from "std/string"` |
+| `RegExp` литерал `/pattern/flags` | Поддерживается: `/^\d+$/` = `new Regex(r"^\d+$")` | `import { Regex } from "std/regex"` |
 
 ---
 
