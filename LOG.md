@@ -80,6 +80,7 @@
 
 > 2026-04-02: написаны lexer.js, parser.js, codegen.js, types.js — первый черновой проход
 > 2026-04-10: все тесты phase1 проходят. **Статус: 166/166 ✓**
+> 2026-05-24: fix — postfix chain after `new` (`new User("A").greet()`, `new Box<T>(v).field`, `new Array<T>(n).length`). Parser: postfix loop in `parseNew()` (DOT/LPAREN/LBRACK/generic-call). Codegen: `New` as chain baseObject in `method-dispatch.js` with temp var (`varKind: 'let'`). 5 new tests. **Статус: 171/171 ✓**
 
 ---
 

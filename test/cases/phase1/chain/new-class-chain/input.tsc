@@ -1,0 +1,12 @@
+class Pair {
+    a: i32;
+    b: i32;
+    constructor(a: i32, b: i32) { this.a = a; this.b = b; }
+    sum(): i32 { return this.a + this.b; }
+}
+class Wrapper {
+    pair: Pair;
+    constructor(x: i32, y: i32) { this.pair = new Pair(x, y); }
+    getPair(): Pair { return this.pair; }
+}
+console.log(new Wrapper(3, 4).getPair().sum());

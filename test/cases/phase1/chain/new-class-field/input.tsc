@@ -1,0 +1,6 @@
+class Point {
+    x: f64;
+    y: f64;
+    constructor(x: f64, y: f64) { this.x = x; this.y = y; }
+}
+console.log(new Point(1.0, 2.0).x);

@@ -37,6 +37,14 @@ export default {
       lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
       this.define(tmpName, { ctype: resultType, varKind: 'const' });
       baseObject = { kind: 'Ident', name: tmpName };
+    } else if (baseObject.kind === 'New') {
+      const I = ' '.repeat(this.indent * depth);
+      const resultType = this.inferType(baseObject);
+      const tmpName = `_chain_${this.tempCount++}`;
+      const innerC = this.exprToC(baseObject, lines, depth);
+      lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
+      this.define(tmpName, { ctype: resultType, varKind: 'let' });
+      baseObject = { kind: 'Ident', name: tmpName };
     }
     const prop  = callee.prop;
     const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;

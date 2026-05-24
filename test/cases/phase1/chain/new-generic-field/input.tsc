@@ -1,0 +1,5 @@
+class Box<T> {
+    value: T;
+    constructor(v: T) { this.value = v; }
+}
+console.log(new Box<i32>(42).value);

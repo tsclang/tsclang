@@ -1,0 +1,1 @@
+console.log(new Array<i32>(5).length);

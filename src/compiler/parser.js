@@ -1332,7 +1332,46 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       eat(TK.RPAREN);
     }
-    return { kind: 'New', name, typeArgs, args, arraySize, line: newTok.line, col: newTok.col };
+    let result = { kind: 'New', name, typeArgs, args, arraySize, line: newTok.line, col: newTok.col };
+    while (true) {
+      if (cur().type === TK.DOT) {
+        eat(TK.DOT);
+        const propTok = eat(TK.IDENT);
+        result = { kind: 'Member', object: result, prop: propTok.value, line: propTok.line, col: propTok.col, endCol: propTok.endCol };
+      } else if (cur().type === TK.LPAREN) {
+        const callTok = cur();
+        const callArgs = parseCallArgs();
+        result = { kind: 'Call', callee: result, args: callArgs, line: callTok.line, col: callTok.col };
+      } else if (cur().type === TK.LBRACK) {
+        eat(TK.LBRACK);
+        if (cur().type === TK.DOTDOT) {
+          eat(TK.DOTDOT);
+          const end = cur().type !== TK.RBRACK ? parseExpr() : null;
+          eat(TK.RBRACK);
+          result = { kind: 'RangeIndex', object: result, start: null, end };
+        } else {
+          const startExpr = parseExpr();
+          if (cur().type === TK.DOTDOT) {
+            eat(TK.DOTDOT);
+            const end = cur().type !== TK.RBRACK ? parseExpr() : null;
+            eat(TK.RBRACK);
+            result = { kind: 'RangeIndex', object: result, start: startExpr, end };
+          } else {
+            eat(TK.RBRACK);
+            result = { kind: 'Index', object: result, index: startExpr };
+          }
+        }
+      } else if (cur().type === TK.LT && isGenericCall()) {
+        const callTok2 = cur();
+        eat(TK.LT);
+        const typeArgs2 = [];
+        while (cur().type !== TK.GT) { typeArgs2.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
+        eat(TK.GT);
+        const callArgs2 = parseCallArgs();
+        result = { kind: 'Call', callee: result, typeArgs: typeArgs2, args: callArgs2, line: callTok2.line, col: callTok2.col };
+      } else break;
+    }
+    return result;
   }
 
   function parsePostfix() {
