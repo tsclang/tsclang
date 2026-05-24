@@ -286,7 +286,10 @@
         p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; }`);
       }
     } else {
-      // Outside throws function: panic on error (!), error on ? (already caught above)
+      if (isProp) {
+        const fnName = this.currentFuncName ?? '<function>';
+        throw this.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
+      }
       p(`if (!${resName}.ok) { tsc_panic(${resName}.error._base.message); }`);
     }
 

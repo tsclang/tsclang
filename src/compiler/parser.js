@@ -369,13 +369,13 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Program', body };
   }
 
-  function parseStmt() {
-    const decorators = parseDecorators();
+  function parseStmt(preConsumedDecorators = []) {
+    const decorators = preConsumedDecorators.length > 0 ? preConsumedDecorators : parseDecorators();
 
     const t = cur();
 
     if (t.type === TK.IDENT && t.value === 'import') return parseImport();
-    if (t.type === TK.IDENT && t.value === 'export') return parseExport();
+    if (t.type === TK.IDENT && t.value === 'export') return parseExport(decorators);
     if (t.type === TK.IDENT && t.value === 'let')    return parseVarDecl('let', decorators);
     if (t.type === TK.IDENT && t.value === 'const')  return parseVarDecl('const', decorators);
     if (t.type === TK.IDENT && t.value === 'var')    return parseVarDecl('var', decorators);
@@ -528,7 +528,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Import', names, source, namespace, typeOnly: isTypeOnly };
   }
 
-  function parseExport() {
+  function parseExport(preConsumedDecorators = []) {
     eat(TK.IDENT, 'export');
     if (cur().type === TK.IDENT && cur().value === 'default') {
       eat(TK.IDENT);
@@ -552,7 +552,9 @@ export function parse(tokens, filename = '<input>', src = null) {
       eatSemi();
       return { kind: 'ExportFrom', names, source };
     }
-    const decl = parseStmt();
+    const innerDecs = parseDecorators();
+    const allDecs = [...preConsumedDecorators, ...innerDecs];
+    const decl = parseStmt(allDecs);
     return { kind: 'Export', default: false, decl };
   }
 

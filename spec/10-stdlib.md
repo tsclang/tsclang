@@ -1335,6 +1335,38 @@ const rng = new Random(seed)        // использовать как seed дл
 // на desktop/server — ошибка компилятора
 ```
 
+## Legacy Date (desktop only)
+
+Для совместимости с TypeScript. Рекомендуется использовать `std/temporal` для новых проектов.
+
+```typescript
+const now = Date.now()           // f64 — milliseconds since epoch
+const d = new Date()             // current date/time
+const d2 = new Date(1700000000000) // from timestamp
+
+d.getFullYear()    // i32
+d.getMonth()       // i32 (0-11)
+d.getDate()        // i32 (1-31)
+d.getHours()       // i32 (0-23)
+d.getMinutes()     // i32
+d.getSeconds()     // i32
+d.getMilliseconds() // i32
+d.getTime()        // f64 — timestamp
+d.toISOString()    // string — "2024-01-15T12:30:00.000Z"
+d.toLocaleDateString() // string
+d.toLocaleTimeString() // string
+d.toString()       // string
+d.toTimeString()   // string
+d.toDateString()   // string
+
+d.setFullYear(y)   // etc.
+d.setMonth(m)
+d.setDate(d)
+d.setHours(h)
+d.setMinutes(m)
+d.setSeconds(s)
+```
+
 ## std/temporal
 
 Полноценная замена legacy `Date`. Основан на TC39 Temporal proposal. Все объекты **иммутабельны**. Месяцы **1-based** (январь = 1).

@@ -1,0 +1,4 @@
+const names: string[] = ["Alice", "Bob"];
+const [first, second] = names;
+console.log(first);
+console.log(second);

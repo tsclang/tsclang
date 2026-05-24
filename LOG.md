@@ -1258,3 +1258,20 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   - `?` propagation: extended terminators to include `}`, EOF, and line breaks (ASI-like)
 > - **New tests**: clear-interval, and-nullish-no-parens, prop-no-semi
 > - Result: **1320 tests, 0 failures**
+
+> 2026-05-25: **Глубокий spec↔impl аудит — 75 расхождений найдено, 5 bugs исправлено, 5 spec updates**:
+> - **Code fixes:**
+>   - `?` в non-throws функции: compile error вместо runtime panic (match.js)
+>   - String array destructuring: добавлен `tsc_string_retain/release` для String элементов (destruct.js)
+>   - String `arr[i]`: разрешён доступ к String элементам массива с ARC copy вместо E009 (vardecl.js)
+>   - `@platform` перед `export`: parser больше не теряет decorator (parser.js)
+>   - `vardecl.js` структура восстановлена после редактирования
+> - **Spec updates (impl → spec):**
+>   - `undefined` задокументирован как синоним `null` (03-types.md, 12-migration.md)
+>   - `var` задокументирован как синоним `let` (02-syntax.md)
+>   - `--emit wasm` добавлен в список emit types (09-build.md)
+>   - Legacy Date API описан в spec (10-stdlib.md)
+>   - Auto-constructor помечен `[NOT YET IMPLEMENTED]` (04-classes.md)
+> - **New tests**: err-prop-no-throws, arr-string-retain, platform-before-export
+> - Updated: arr-rest-strings (добавлен retain/release)
+> - Result: **1323 tests, 0 failures**

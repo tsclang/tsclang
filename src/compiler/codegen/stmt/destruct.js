@@ -147,6 +147,7 @@
           // Array_T destructuring: const [first, ...rest] = arr
           const elemIdent = initType.slice(6);
           const elemCType = this._arrIdentToCType(elemIdent);
+          const srcIsLet = init?.kind === 'Ident' && this.lookup(init.name)?.varKind === 'let';
           this._ensureArrayStruct(initType, elemCType);
           const srcC = this.exprToC(init, lines, depth);
           const srcUse = isRefArray ? `(*${srcC})` : srcC;
@@ -162,8 +163,16 @@
               // Regular element: direct index
               p(`${qual}${elemCType} ${elem.name} = ${srcUse}.data[${idx}];`);
               this.define(elem.name, { ctype: elemCType, varKind });
+              if (elemCType === 'String') {
+                p(`tsc_string_retain(${elem.name});`);
+                this._registerCleanup(`tsc_string_release(${elem.name})`);
+              }
               idx++;
             }
+          }
+          if (srcIsLet && init.kind === 'Ident' && elemCType === 'String') {
+            const srcSym = this.lookup(init.name);
+            if (srcSym) srcSym._moved = true;
           }
         } else {
           const initC = this.exprToC(init, lines, depth);

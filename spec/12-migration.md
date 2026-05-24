@@ -18,7 +18,7 @@ tsclang migrate ./src --check    # CI: завалить сборку если е
 
 | TypeScript | TSClang | Причина |
 |------------|---------|---------|
-| `undefined` | `null` | TSClang не имеет `undefined` |
+| `undefined` | `null` (или `undefined` — синоним) | `undefined` компилируется в `NULL`, идентично `null` |
 | `throw "message"` | `throw new Error("message")` | Бросать можно только экземпляры `Error` |
 | `export default X` | `export { X }` | `export default` запрещён |
 | `import X from "./m"` | `import X from "./m"` | Имя — namespace, не default |

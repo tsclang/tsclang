@@ -577,7 +577,9 @@ const line = new Line(p1, p2);
 console.log(p1);  // ошибка: p1 перемещён в line
 ```
 
-Автогенерация конструктора — если конструктор не написан, компилятор генерирует его из полей:
+Автогенерация конструктора *[NOT YET IMPLEMENTED]* — в текущей реализации, если конструктор не написан, `new ClassName()` генерирует zero-init: `(ClassName){0}`. Поля инициализируются дефолтными значениями (0 для чисел, NULL для ссылок).
+
+Запланированная полная версия:
 
 - Поля **с дефолтом** → параметр со значением по умолчанию
 - Поля **без дефолта** → обязательный параметр (в порядке объявления)
@@ -593,13 +595,14 @@ class User {
     age: i32 = 0;       // есть дефолт → необязательный параметр
     active: boolean = true;
 }
-// компилятор генерирует:
+// *[NOT YET IMPLEMENTED]* компилятор генерирует:
 // constructor(name: string, age: i32 = 0, active: boolean = true)
 
-new User("Alice");           // ok — name="Alice", age=0, active=true
-new User("Alice", 30);       // ok — name="Alice", age=30, active=true
-new User("Alice", 30, false); // ok
-new User();                  // ошибка: name обязателен
+// Текущая реализация: new User() → (User){0}
+new User("Alice");           // *[NOT YET IMPLEMENTED]*
+new User("Alice", 30);       // *[NOT YET IMPLEMENTED]*
+new User("Alice", 30, false); // *[NOT YET IMPLEMENTED]*
+new User();                  // текущая: ok (zero-init)
 
 class Point {
     x: f64 = 0.0;
@@ -608,7 +611,7 @@ class Point {
 }
 
 let p = new Point();       // ok — x=0.0, y=0.0
-let p2 = new Point(1.0);   // ok — x=1.0, y=0.0
+let p2 = new Point(1.0);   // *[NOT YET IMPLEMENTED]*
 ```
 
 Если написан явный `constructor` — автогенерация не происходит.

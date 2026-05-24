@@ -1244,12 +1244,11 @@ export default {
               this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}) });
               return;
             }
-            // Borrow check: cannot move out of array by index (no-typeAnn path)
             if (init.kind === 'Index' && !ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {
               const _arrT2 = this.inferType(init.object);
               if (_arrT2?.startsWith('Array_')) {
                 const _elem2 = _arrT2.slice(6);
-                if (!PRIMITIVE_IDENTS.has(_elem2)) {
+                if (!PRIMITIVE_IDENTS.has(_elem2) && _elem2 !== 'string') {
                   throw this.error(`cannot move out of array by index`, init, {
                     code: 'E009', help: ['use .remove(i) to take ownership'],
                   });
@@ -1381,18 +1380,16 @@ export default {
                 }
               } else if (init.kind === 'Index') {
                 if (!ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {
-                  // Cannot move out of array by index (only borrow via Ref<T>)
                   const _arrT = this.inferType(init.object);
                   if (_arrT?.startsWith('Array_')) {
                     const _elem = _arrT.slice(6);
-                    if (!PRIMITIVE_IDENTS.has(_elem)) {
+                    if (!PRIMITIVE_IDENTS.has(_elem) && _elem !== 'string') {
                       throw this.error(`cannot move out of array by index`, init, {
                         code: 'E009', help: ['use .remove(i) to take ownership'],
                       });
                     }
                   }
                 } else if (typeAnn?.name === 'Ref' && init.object.kind === 'Ident') {
-                  // Ref<T> borrow of array element тЖТ mark array as borrowed
                   const _arrSym = this.lookup(init.object.name);
                   if (_arrSym) this._trackRefBorrow(_arrSym);
                 }
@@ -1445,6 +1442,7 @@ export default {
               }
               if (ctype === 'String' && init.kind === 'Index') {
                 p(`tsc_string_retain(${name});`);
+                this._registerCleanup(`tsc_string_release(${name})`);
                 if (init.object.kind === 'Ident' && init.index.kind === 'Literal' && init.index.litType === 'number') {
                   const objSym = this.lookup(init.object.name);
                   const objType = objSym?.ctype;

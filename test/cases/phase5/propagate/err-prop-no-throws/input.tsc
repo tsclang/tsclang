@@ -1,0 +1,9 @@
+class Err { message: string }
+function step(n: i32): i32 throws Err {
+    if (n <= 0) throw new Err("bad");
+    return n * 2;
+}
+function process(n: i32): i32 {
+    const val = step(n)?;
+    return val;
+}
