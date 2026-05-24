@@ -859,17 +859,18 @@ ch.tryReceive()                  // Message | null — не блокирует (
 ch.length      // size_t — текущее кол-во элементов
 ch.capacity    // size_t — максимальная ёмкость
 ch.isEmpty()   // boolean — length == 0
+ch.isFull()    // boolean — length >= capacity
 ```
 
-**ISR-safe операции** (`trySend`, `tryReceive`, `length`, `capacity`, `isEmpty`) не делают системных вызовов и не аллоцируют память — безопасны для вызова из прерываний.
+**ISR-safe операции** (`trySend`, `tryReceive`, `length`, `capacity`, `isEmpty`, `isFull`) не делают системных вызовов и не аллоцируют память — безопасны для вызова из прерываний.
 
 **Адаптивный producer в ISR** — типичный паттерн для робототехники и real-time систем:
 
 ```typescript
-// isFull — *[NOT YET IMPLEMENTED]* бинарная адаптация: два режима качества
+// isFull — бинарная адаптация: два режима качества
 @embedded.isr("LIDAR_SCAN")
 function onScan(): void {
-    const resolution = tx.isFull ? Resolution.Low : Resolution.High  // *[NOT YET IMPLEMENTED]*
+    const resolution = tx.isFull ? Resolution.Low : Resolution.High
     tx.trySend(captureScan(resolution))   // drop если всё ещё полный
 }
 

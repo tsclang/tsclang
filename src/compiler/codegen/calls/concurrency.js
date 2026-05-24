@@ -119,7 +119,7 @@ export default {
       }
     }
 
-    // Channel<T> methods: .send(), .receive(), .tryReceive(), .trySend(), .close(), .isEmpty()
+    // Channel<T> methods: .send(), .receive(), .tryReceive(), .trySend(), .close(), .isEmpty(), .isFull()
     if (callee.kind === 'Member') {
       const objName3 = callee.object?.kind === 'Ident' ? callee.object.name : null;
       const chanSym = objName3 ? this.lookup(objName3) : null;
@@ -153,6 +153,9 @@ export default {
         }
         if (callee.prop === 'isEmpty') {
           return `tsc_channel_is_empty_${ident}(${inner_name})`;
+        }
+        if (callee.prop === 'isFull') {
+          return `tsc_channel_is_full_${ident}(${inner_name})`;
         }
       }
     }

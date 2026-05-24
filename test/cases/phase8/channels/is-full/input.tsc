@@ -1,0 +1,4 @@
+const ch = new Channel<i32>(1);
+console.log(ch.isFull());
+ch.send(42);
+console.log(ch.isFull());

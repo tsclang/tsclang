@@ -2644,6 +2644,9 @@ static inline void tsc_channel_close_##TNAME(TscChannel_##TNAME *ch) { \
 static inline bool tsc_channel_is_empty_##TNAME(TscChannel_##TNAME *ch) { \
     return !ch || ch->_len == 0; \
 } \
+static inline bool tsc_channel_is_full_##TNAME(TscChannel_##TNAME *ch) { \
+    return ch && ch->_len >= ch->_cap; \
+} \
 static inline size_t tsc_channel_length_##TNAME(TscChannel_##TNAME *ch) { \
     return ch ? ch->_len : 0; \
 } \

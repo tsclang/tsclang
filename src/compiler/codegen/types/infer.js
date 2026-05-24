@@ -571,7 +571,7 @@ export default {
     if (objSymA?._isChannel) {
       if (prop === 'receive') return objSymA._channelInner ?? 'int32_t';
       if (prop === 'tryReceive') return `opt_${objSymA._channelIdent}`;
-      if (prop === 'trySend' || prop === 'isEmpty') return 'bool';
+      if (prop === 'trySend' || prop === 'isEmpty' || prop === 'isFull') return 'bool';
       if (prop === 'length' || prop === 'capacity') return 'size_t';
       if (prop === 'send' || prop === 'close') return 'void';
     }
