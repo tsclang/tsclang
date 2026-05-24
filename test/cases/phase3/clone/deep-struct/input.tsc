@@ -1,0 +1,7 @@
+type Point = { x: f64; y: f64 };
+type Shape = { center: Point; radius: f64 };
+const s: Shape = { center: { x: 1.0, y: 2.0 }, radius: 5.0 };
+const s2 = structuredClone(s);
+s2.radius = 10.0;
+console.log(s.radius);
+console.log(s2.radius);

@@ -1,0 +1,6 @@
+console.log(Math.sign(42));
+console.log(Math.sign(-42));
+console.log(Math.sign(0));
+console.log(Math.clamp(5, 0, 10));
+console.log(Math.clamp(-5, 0, 10));
+console.log(Math.clamp(15, 0, 10));

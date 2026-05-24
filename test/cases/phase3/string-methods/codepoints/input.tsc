@@ -1,0 +1,4 @@
+const s: string = "ABC";
+for (const cp of s.codePoints()) {
+  console.log(cp);
+}

@@ -1,0 +1,4 @@
+const s: string = "hi";
+for (const g of s.graphemes()) {
+  console.log(g);
+}

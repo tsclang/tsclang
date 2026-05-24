@@ -1,0 +1,4 @@
+console.log(Math.abs(-5));
+console.log(Math.abs(3.14));
+console.log(Math.min(1, 2));
+console.log(Math.max(1, 2));

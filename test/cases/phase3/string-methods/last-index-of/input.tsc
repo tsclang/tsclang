@@ -1,0 +1,4 @@
+const s: string = "hello hello";
+console.log(s.lastIndexOf("hello"));
+console.log(s.lastIndexOf("lo"));
+console.log(s.lastIndexOf("xyz"));

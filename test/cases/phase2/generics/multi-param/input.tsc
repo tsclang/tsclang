@@ -1,0 +1,5 @@
+function makePair<A, B>(a: A, b: B): string {
+    return `${a},${b}`;
+}
+console.log(makePair<i32, f64>(1, 2.5));
+console.log(makePair<string, i32>("hi", 3));

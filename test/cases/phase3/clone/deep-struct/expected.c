@@ -1,0 +1,14 @@
+#include "runtime.h"
+
+typedef struct { double x; double y; } Point;
+typedef struct { Point center; double radius; } Shape;
+
+int main(void) {
+    TSC_INIT();
+    const Shape s = { .center = { .x = 1.0, .y = 2.0 }, .radius = 5.0 };
+    const Shape s2 = (Shape)(s);
+    s2.radius = 10.0;
+    printf("%g\n", s.radius);
+    printf("%g\n", s2.radius);
+    return 0;
+}
