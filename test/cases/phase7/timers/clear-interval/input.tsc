@@ -1,0 +1,4 @@
+const id = setInterval(() => {
+    console.log("tick");
+}, 100);
+clearInterval(id);

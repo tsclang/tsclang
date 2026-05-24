@@ -76,6 +76,8 @@ class Error {
 
 **Правило:** `throw` принимает только экземпляры классов, наследующих `Error`. Бросить произвольный класс или примитив — ошибка компилятора.
 
+> *[NOT YET IMPLEMENTED]* Проверка наследования от `Error` — текущая реализация отвергает строковые литералы, но не проверяет что класс-аргумент `throw new X()` фактически наследует `Error`.
+
 ```typescript
 class IOError extends Error { }
 class NetworkError extends Error {
@@ -409,12 +411,12 @@ uint8_t opcodes_get(const char* key) {
 
 ```typescript
 // создание
-const buf = Buffer.alloc(1024)                         // нули, size=1024
-const buf = Buffer.alloc(256, 0xFF)                    // заполнен 0xFF
-const buf = Buffer.from([0x48, 0x65, 0x6c, 0x6c, 0x6f]) // из u8[]
-const buf = Buffer.from("hello", "utf8")               // из строки
-const buf = Buffer.from("aGVsbG8=", "base64")
-const buf = Buffer.concat([buf1, buf2, buf3])           // объединить
+const buf = new Buffer(1024)                            // нули, size=1024
+// Buffer.alloc(size)                                   // [NOT YET IMPLEMENTED]
+// Buffer.alloc(size, fill)                             // [NOT YET IMPLEMENTED]
+// Buffer.from(u8[])                                    // [NOT YET IMPLEMENTED]
+// Buffer.from(string, encoding)                        // [NOT YET IMPLEMENTED]
+// Buffer.concat([buf1, buf2, buf3])                    // [NOT YET IMPLEMENTED]
 
 // размер
 buf.length   // usize, readonly
@@ -424,20 +426,26 @@ buf[0]        // u8 — чтение
 buf[0] = 0xFF // запись
 
 // zero-copy view
-const s: Slice<u8>    = buf.view(4, 12)     // байты 4..11, не копирует
-const ms: MutSlice<u8> = buf.viewMut(0, 4)  // мутабельный view
+// buf.view(4, 12): Slice<u8>                           // [NOT YET IMPLEMENTED]
+// buf.viewMut(0, 4): MutSlice<u8>                      // [NOT YET IMPLEMENTED]
+
+// zero-copy slice (текущая реализация)
+buf.slice(4, 12)           // Buffer — zero-copy view, байты 4..11
 
 // копирование
-buf.copy(target, targetStart?: usize, sourceStart?: usize, sourceEnd?: usize): usize  // возвращает кол-во скопированных байт
+// buf.copy(target, targetStart?, sourceStart?, sourceEnd?): usize  // [NOT YET IMPLEMENTED]
 
 // заполнение
-buf.fill(value: u8, start?: usize, end?: usize): void
+buf.fill(value: u8)         // void — заполняет весь буфер
+// buf.fill(value, start?, end?)                        // [NOT YET IMPLEMENTED] start/end параметры
 
 // поиск
-buf.indexOf(value: u8, start?: i32): i32   // -1 если не найдено
+// buf.indexOf(value: u8, start?: i32): i32             // [NOT YET IMPLEMENTED]
+// buf.includes(value: u8): boolean                     // [NOT YET IMPLEMENTED]
+// buf.equals(other: Buffer): boolean                   // [NOT YET IMPLEMENTED]
 
 // конвертация в строку
-buf.toString("utf8" | "ascii" | "hex" | "base64"): string
+// buf.toString("utf8" | "ascii" | "hex" | "base64"): string  // [NOT YET IMPLEMENTED]
 ```
 
 C-output:
@@ -996,12 +1004,12 @@ if (idx >= 0) {
 
 `Regex` живёт в `std/regex` — единственный источник. Импорт из `std/string` отсутствует.
 
-Литеральный синтаксис `/pattern/flags` — сахар для `new Regex(r"pattern", "flags")`:
+Литеральный синтаксис `/pattern/flags` — сахар для `new Regex("pattern", "flags")`:
 ```typescript
 import { Regex } from "std/regex"
 
-const re = /^\d+$/           // = new Regex(r"^\d+$")
-const rei = /hello/i         // = new Regex(r"hello", "i")
+const re = /^\d+$/           // = new Regex("^\\d+$")
+const rei = /hello/i         // = new Regex("hello", "i")
 ```
 
 Строковые методы принимают `Regex` из `std/regex`:
@@ -1234,8 +1242,8 @@ NFA-based движок регулярных выражений. Гарантир
 ```typescript
 import { Regex, Match } from "std/regex"
 
-const re = new Regex(r"\d{3}-\d{4}")   // raw string — compile-time проверка синтаксиса
-const re = /\d{3}-\d{4}/              // литеральный синтаксис — эквивалентно
+const re = new Regex("\\d{3}-\\d{4}")   // backslash экранируется в обычной строке
+const re = /\d{3}-\d{4}/              // литеральный синтаксис — эквивалентно, экранирование не нужно
 const m: Match | null = re.match("тел: 123-4567")
 
 if (m != null) {

@@ -249,6 +249,10 @@ type ClassType<T = any> = new (...args: any[]) => T;
 
 ## Дескрипторный API
 
+> **Статус реализации:** из всего API ниже реализованы только `MethodDesc.before()` / `MethodDesc.after()`,
+> `FunctionDesc.before()` / `FunctionDesc.after()`, и ограниченный `target._field = <literal>` для добавления
+> `bool`/`int32_t` полей в класс. Остальное помечено `[NOT YET IMPLEMENTED]`.
+
 ### MethodDesc
 
 `MethodDesc` — generic по типам параметров и возвращаемому значению метода.
@@ -257,20 +261,20 @@ Generics в декораторе опциональны: без них `ctx.args
 
 ```ts
 interface MethodCtx<Params extends any[] = any[], Return = any> {
-  self:   SelfRef;  // доступ к полям экземпляра
-  args:   Params;
-  result: Return;   // только в after()
+  self:   SelfRef;  // [NOT YET IMPLEMENTED] доступ к полям экземпляра
+  args:   Params;   // [NOT YET IMPLEMENTED]
+  result: Return;   // [NOT YET IMPLEMENTED] только в after()
 }
 
 interface MethodDesc<Params extends any[] = any[], Return = any> {
-  params:     ParamDesc[];
-  returnType: string;
-  isAsync:    boolean;
+  params:     ParamDesc[];                    // [NOT YET IMPLEMENTED]
+  returnType: string;                         // [NOT YET IMPLEMENTED]
+  isAsync:    boolean;                        // [NOT YET IMPLEMENTED]
 
   before(fn: (ctx: MethodCtx<Params, Return>) => void): void;
   after(fn: (ctx: MethodCtx<Params, Return>) => void): void;
 
-  meta: MetaStore;
+  meta: MetaStore;  // [NOT YET IMPLEMENTED]
 }
 ```
 
@@ -303,7 +307,7 @@ decorator function validate<P extends any[], R>(
 }
 ```
 
-### PropDesc
+### PropDesc *[NOT YET IMPLEMENTED]*
 
 ```ts
 interface PropDesc {
@@ -320,7 +324,7 @@ interface PropDesc {
 }
 ```
 
-### ParamDesc
+### ParamDesc *[NOT YET IMPLEMENTED]*
 
 ```ts
 interface ParamDesc {
@@ -340,20 +344,20 @@ interface ParamDesc {
 
 ```ts
 interface FunctionCtx<Params extends any[] = any[], Return = any> {
-  args:   Params;
-  result: Return;
+  args:   Params;   // [NOT YET IMPLEMENTED]
+  result: Return;   // [NOT YET IMPLEMENTED]
 }
 
 interface FunctionDesc<Params extends any[] = any[], Return = any> {
-  name:       string;
-  params:     ParamDesc[];
-  returnType: string;
-  isAsync:    boolean;
+  name:       string;         // [NOT YET IMPLEMENTED]
+  params:     ParamDesc[];    // [NOT YET IMPLEMENTED]
+  returnType: string;         // [NOT YET IMPLEMENTED]
+  isAsync:    boolean;        // [NOT YET IMPLEMENTED]
 
   before(fn: (ctx: FunctionCtx<Params, Return>) => void): void;
   after(fn: (ctx: FunctionCtx<Params, Return>) => void): void;
 
-  meta: MetaStore;
+  meta: MetaStore;  // [NOT YET IMPLEMENTED]
 }
 ```
 
@@ -375,21 +379,23 @@ interface FieldOptions {
 }
 
 interface ClassDesc {
-  name:            string;
-  baseClass:       string | null;
-  interfaces:      string[];
-  instanceMethods: string[];
-  staticMethods:   string[];
-  constructor:     MethodDesc | null;
+  name:            string;                  // [NOT YET IMPLEMENTED]
+  baseClass:       string | null;           // [NOT YET IMPLEMENTED]
+  interfaces:      string[];                // [NOT YET IMPLEMENTED]
+  instanceMethods: string[];                // [NOT YET IMPLEMENTED]
+  staticMethods:   string[];                // [NOT YET IMPLEMENTED]
+  constructor:     MethodDesc | null;       // [NOT YET IMPLEMENTED]
 
-  implements(name: string): boolean;
-  method(key: string): MethodDesc;
+  implements(name: string): boolean;        // [NOT YET IMPLEMENTED]
+  method(key: string): MethodDesc;          // [NOT YET IMPLEMENTED]
   addField(name: string, type: string, options?: FieldOptions): void;
+  // Частично реализовано: только target._field = <bool|int literal>
+  // Полная версия с произвольными типами и FieldOptions — [NOT YET IMPLEMENTED]
   // Коллизия имён → ошибка компилятора
-  addMethod(name: string, impl: (...args: any[]) => any): void;
+  addMethod(name: string, impl: (...args: any[]) => any): void;  // [NOT YET IMPLEMENTED]
   // Коллизия имён → ошибка компилятора
 
-  meta: MetaStore;
+  meta: MetaStore;  // [NOT YET IMPLEMENTED]
 }
 ```
 
@@ -432,7 +438,7 @@ class Foo {
 **Инкрементальная компиляция:** не является отдельной проблемой — декоратор всегда
 импортируется, импорт создаёт зависимость в графе компилятора автоматически.
 
-### SelfRef
+### SelfRef *[NOT YET IMPLEMENTED]*
 
 ```ts
 interface SelfRef {
@@ -442,7 +448,7 @@ interface SelfRef {
 }
 ```
 
-### MetaStore
+### MetaStore *[NOT YET IMPLEMENTED]*
 
 ```ts
 interface MetaStore {
@@ -785,3 +791,46 @@ const char* User_get_name(User* self) {
     return self->name;
 }
 ```
+
+---
+
+## PropertyDescriptor-стиль: детали реализации
+
+Компилятор поддерживает два стиля записи декораторов для методов:
+
+### 1. TSClang descriptor style (`desc.before` / `desc.after`)
+
+Реализовано. Декоратор вызывает `desc.before(...)` и/или `desc.after(...)` с lambda-выражениями, компилятор разворачивает их в обёртку.
+
+### 2. TypeScript PropertyDescriptor style (`desc.value = function`)
+
+**Внутренняя деталь компилятора** — работает на уровне кодогенерации, но не экспортирует типизированный `PropDesc` API.
+
+Поддерживаемый паттерн:
+
+```ts
+function log(cls: any, key: string, desc: any) {
+  const orig = desc.value;
+  desc.value = function(...args: any[]) {
+    console.log(`call ${key}`);
+    const r = orig.apply(this, args);
+    console.log(`done ${key}`);
+    return r;
+  };
+}
+```
+
+Компилятор распознаёт `desc.value = function(...) { ... orig.apply(...) ... }` и разбивает тело на before/after относительно вызова `orig.apply`. Поддерживаются:
+
+- `orig.apply(this, args)` — прямой вызов
+- `const r = orig.apply(this, args)` — с сохранением результата
+- `return orig.apply(this, args)` — с немедленным возвратом
+- `orig.apply` внутри вложенных конструкций (if/else и т.д.) — deep substitution
+
+Ограничения (на уровне компилятора):
+
+- Фабричные параметры (capture) работают через подстановку литералов
+- Параметр `method` (2-й аргумент декоратора) подставляется как имя метода
+- Нельзя обратиться к `desc` как к объекту в runtime — это compile-time конструкт
+
+Полный `PropDesc` interface (`addValidation`, `makeAccessor`, `meta`) описан выше в разделе *[NOT YET IMPLEMENTED]*.

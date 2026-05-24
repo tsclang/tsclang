@@ -116,6 +116,10 @@
       const id = this.exprToC(args[0].expr, lines, depth);
       return `tsc_clear_timeout(${id})`;
     }
+    if (callee.kind === 'Ident' && callee.name === 'clearInterval') {
+      const id = this.exprToC(args[0].expr, lines, depth);
+      return `tsc_clear_interval(${id})`;
+    }
 
     // parseFloat / tryParseFloat / parseInt / tryParseInt / Number
     // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number.

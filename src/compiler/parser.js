@@ -1220,8 +1220,7 @@ export function parse(tokens, filename = '<input>', src = null) {
   }
 
   const binaryLevels = [
-    [[TK.QUEST2],       'left'],  // ??
-    [[TK.PIPE2],        'left'],  // ||
+    [[TK.QUEST2, TK.PIPE2], 'left'],  // ?? || (same precedence, mixing disallowed without parens)
     [[TK.AMP2],         'left'],  // &&
     [[TK.PIPE],         'left'],  // |
     [[TK.CARET],        'left'],  // ^
@@ -1240,16 +1239,35 @@ export function parse(tokens, filename = '<input>', src = null) {
     while (ops.includes(cur().type) ||
            (cur().type === TK.IDENT && (cur().value === 'instanceof' || cur().value === 'in') && level === 6)) {
       const op = cur().value;
-      // Disallow mixing || and ?? without parentheses
-      if (op === '??' && left.kind === 'Binary' && (left.op === '||' || left.op === '&&')) {
-        err(`"||" and "??" require parentheses when mixed`);
-      }
-      if ((op === '||' || op === '&&') && left.kind === 'Binary' && left.op === '??') {
-        err(`"||" and "??" require parentheses when mixed`);
+      const isNullish = op === '??';
+      const isLogic = op === '||' || op === '&&';
+      if (isNullish || isLogic) {
+        const checkMixed = (node) => {
+          if (node.kind !== 'Binary') return;
+          if (node._paren) return;
+          const nodeIsNullish = node.op === '??';
+          const nodeIsLogic = node.op === '||' || node.op === '&&';
+          if ((isNullish && nodeIsLogic) || (isLogic && nodeIsNullish)) {
+            err(`"||" and "??" require parentheses when mixed`);
+          }
+        };
+        checkMixed(left);
       }
       pos++;
       const right = parseBinary(level + 1);
       left = { kind: 'Binary', op, left, right };
+      if (isNullish || isLogic) {
+        const checkMixedRight = (node) => {
+          if (node.kind !== 'Binary') return;
+          if (node._paren) return;
+          const nodeIsNullish = node.op === '??';
+          const nodeIsLogic = node.op === '||' || node.op === '&&';
+          if ((isNullish && nodeIsLogic) || (isLogic && nodeIsNullish)) {
+            err(`"||" and "??" require parentheses when mixed`);
+          }
+        };
+        checkMixedRight(right);
+      }
     }
     return left;
   }
@@ -1422,10 +1440,13 @@ export function parse(tokens, filename = '<input>', src = null) {
         // x! — non-null assertion / error propagation
         eat(TK.BANG);
         expr = { kind: 'NonNull', expr };
-      } else if (cur().type === TK.QUEST && peek().type === TK.SEMI) {
-        // x? — error propagation
-        eat(TK.QUEST);
-        expr = { kind: 'Propagate', expr };
+      } else if (cur().type === TK.QUEST) {
+        const next = peek();
+        const isLineBreak = next && cur().line < next.line;
+        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak) {
+          eat(TK.QUEST);
+          expr = { kind: 'Propagate', expr };
+        } else break;
       } else if (cur().type === TK.PLUS2) {
         eat(TK.PLUS2); expr = { kind: 'Unary', op: '++post', expr };
       } else if (cur().type === TK.MINUS2) {
@@ -1803,6 +1824,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     eat(TK.LPAREN);
     const expr = parseExpr();
     eat(TK.RPAREN);
+    if (expr.kind === 'Binary') expr._paren = true;
     return expr;
   }
 

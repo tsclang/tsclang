@@ -1244,3 +1244,17 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Read all 20 spec files looking for internal contradictions (spec↔spec)
 > - No contradictions found — all cross-references, type definitions, and API descriptions are consistent
 > - Fixed 1 inaccuracy: 12-migration.md:192 `import { Regex } from "std/string"` → `"std/regex"` (Regex lives in std/regex, not std/string)
+
+> 2026-05-25: **Spec↔implementation audit — 9 discrepancies fixed, 3 code bugs fixed**:
+> - **Spec fixes**:
+>   - #1: Removed `r"..."` raw strings from spec/10-stdlib.md — regex literals `/pattern/` replace them
+>   - #2: Marked unimplemented decorator API in spec/13-decorators.md (`MethodCtx`, `PropDesc`, `ParamDesc`, etc.)
+>   - #3: Rewrote Buffer API in spec/10-stdlib.md — `new Buffer(n)` + `slice()` + `fill()` as current, rest `[NOT YET IMPLEMENTED]`
+>   - #7: Added `[NOT YET IMPLEMENTED]` to `throw extends Error` rule in spec/10-stdlib.md
+>   - #9: Added PropertyDescriptor internal detail section to spec/13-decorators.md
+> - **Code fixes**:
+>   - `clearInterval` dispatch added to conversion.js (runtime already had `tsc_clear_interval`)
+>   - `??` mixing check: merged `??`/`||` at same precedence level, added `_paren` tracking for `(a||b)??c`, added `&&` vs `??` mixing check
+>   - `?` propagation: extended terminators to include `}`, EOF, and line breaks (ASI-like)
+> - **New tests**: clear-interval, and-nullish-no-parens, prop-no-semi
+> - Result: **1320 tests, 0 failures**
