@@ -178,6 +178,9 @@ export function lex(src, filename = '<input>') {
         num += advance() + advance(); // 0o
         while (i < src.length && /[0-7_]/.test(cur())) num += advance();
       } else {
+        if (ch === '0' && peek() >= '0' && peek() <= '9') {
+          throw new Error(`${filename}:${startLine}:${startCol}: legacy octal notation is not supported; use 0o prefix`);
+        }
         while (i < src.length && (cur() >= '0' && cur() <= '9' || cur() === '_')) num += advance();
         if (i < src.length && cur() === '.' && peek() >= '0' && peek() <= '9') {
           num += advance();
@@ -199,8 +202,8 @@ export function lex(src, filename = '<input>') {
       while (i < src.length && /[\w$]/.test(cur())) id += advance();
       if (id === 'true' || id === 'false') {
         tokens.push(new Token(TK.BOOL, id, startLine, startCol));
-      } else if (id === 'null') {
-        tokens.push(new Token(TK.NULL, id, startLine, startCol));
+      } else if (id === 'null' || id === 'undefined') {
+        tokens.push(new Token(TK.NULL, 'null', startLine, startCol));
       } else {
         tokens.push(new Token(TK.IDENT, id, startLine, startCol));
       }

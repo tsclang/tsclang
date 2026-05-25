@@ -1292,6 +1292,16 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - `type point = ...` → compile error
 > - New tests: interface/lowercase-reject, enum/lowercase-reject, type-alias/lowercase-reject
 > - Result: **1334 tests, 0 failures**
+
+> 2026-05-25: **Spec audit batch 5 — 6 validation fixes + `move` modifier + `undefined` synonym**:
+> - Legacy octal (`0123`) → lexer error (was silently treated as C octal)
+> - `null` as standalone type annotation → compile error
+> - `undefined` keyword → lexer synonym for `null` (spec conformance)
+> - `static + move` method → compile error (no `this` in static)
+> - `move` modifier added to parser (was only in codegen — dead code path)
+> - Duplicate field/method names in class → compile error
+> - New tests: legacy-octal-reject, null-type-reject, static-move-reject, duplicate-field-reject
+> - Result: **1338 tests, 0 failures**
 > 2026-05-25: **Spec↔impl audit batch 3 — 4 fixed, 1 deferred**:
 > - **C-50 DONE**: `size_t` byte size = 8 на desktop, 4 на embedded (helpers.js)
 > - **C-51 DONE**: String literal union `.toString()` → `STR_LIT_RUNTIME()` вместо raw `const char*` (conversion.js)

@@ -843,7 +843,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     while (cur().type !== TK.RBRACE) {
       const memberDecorators = parseDecorators();
       const modifiers = [];
-      while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override','mut'].includes(cur().value)) {
+      while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override','mut','move'].includes(cur().value)) {
         const mod = eat(TK.IDENT).value;
         if (mod === 'protected') err(`'protected' is not supported — there is no inheritance in TSClang`);
         if (mod === 'abstract') err(`'abstract' is not supported — there is no inheritance in TSClang`);

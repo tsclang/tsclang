@@ -7,6 +7,9 @@ export default {
 
     if (typeNode.kind === 'TypeRef') {
       const { name, typeArgs } = typeNode;
+      if (name === 'null' || name === 'undefined') {
+        throw this.error(`"${name}" cannot be used as a standalone type; use T | ${name}`, typeNode);
+      }
       // usize = u16 on 16-bit targets
       if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
       if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';

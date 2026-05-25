@@ -1,0 +1,7 @@
+class Foo {
+  x: i32 = 0;
+  static move bar(): Foo {
+    const f = Foo();
+    return f;
+  }
+}

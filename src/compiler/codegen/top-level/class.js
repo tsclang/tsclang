@@ -84,6 +84,14 @@ export default {
 
     const allFields_ = members.filter(m => m.kind === 'Field');
     const methods = members.filter(m => m.kind === 'Method');
+    const seen = new Set();
+    for (const m of [...allFields_, ...methods]) {
+      const n = typeof m.name === 'string' ? m.name : null;
+      if (n && seen.has(n)) {
+        throw this.error(`duplicate member "${n}" in class "${name}"`, m);
+      }
+      if (n) seen.add(n);
+    }
     const throwsInfo = this._throwsClasses?.get(name);
     const isThrowsClass = !!throwsInfo;
 

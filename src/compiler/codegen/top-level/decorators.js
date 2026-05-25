@@ -455,6 +455,9 @@ export default {
     if (isStatic && m.modifiers?.includes('mut')) {
       throw this.error(`"static" methods cannot be "mut"`);
     }
+    if (isStatic && m.modifiers?.includes('move')) {
+      throw this.error(`"static" methods cannot be "move"`);
+    }
 
     // Methods are NOT mangled by param types (class prefix already disambiguates)
     const retType = m.returnTypeOverride ?? (m.returnType ? this.resolveType(m.returnType) : 'void');
