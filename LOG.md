@@ -1302,6 +1302,15 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Duplicate field/method names in class → compile error
 > - New tests: legacy-octal-reject, null-type-reject, static-move-reject, duplicate-field-reject
 > - Result: **1338 tests, 0 failures**
+
+> 2026-05-25: **`Math.min/max` variadic**:
+> - Поддержка N≥1 аргументов (было только 2)
+> - N≤2: inline ternary (int) / `fmin`/`fmax` (float)
+> - N>2: helper var + цепочка `if`-сравнений
+> - 0 аргументов → compile error
+> - Spec update: `(...args: T): T` вместо `(a, b)`
+> - New tests: min-max-variadic, min-max-i32, min-max-zero-args
+> - Result: **1341 tests, 0 failures**
 > 2026-05-25: **Spec↔impl audit batch 3 — 4 fixed, 1 deferred**:
 > - **C-50 DONE**: `size_t` byte size = 8 на desktop, 4 на embedded (helpers.js)
 > - **C-51 DONE**: String literal union `.toString()` → `STR_LIT_RUNTIME()` вместо raw `const char*` (conversion.js)

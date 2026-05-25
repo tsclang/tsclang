@@ -907,8 +907,8 @@ Math.exp(1.0)         // Math.E
 Math.expm1(0.0)       // f64 → f64 — 0.0  (e^x - 1, точнее при x→0)
 
 // утилиты
-Math.min(3, 1, 4, 1)       // перегрузка: i32|f64 → тот же тип
-Math.max(3, 1, 4, 1)       // перегрузка: i32|f64 → тот же тип
+Math.min(3, 1, 4, 1)       // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
+Math.max(3, 1, 4, 1)       // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
 Math.clamp(15, 0, 10)      // перегрузка: i32|f64 → тот же тип — 10
 Math.sign(-5.0)            // f64 → f64 — -1.0
 Math.sign(0.0)             // 0.0
@@ -953,8 +953,8 @@ Math.random()              // f64 — [0.0, 1.0)
 | `log1p` | `(x: f64): f64` | `log1p(x)` |
 | `exp` | `(x: f64): f64` | `exp(x)` |
 | `expm1` | `(x: f64): f64` | `expm1(x)` |
-| `min` | `(a: f64, b: f64): f64` / `(a: i32, b: i32): i32` | inline |
-| `max` | `(a: f64, b: f64): f64` / `(a: i32, b: i32): i32` | inline |
+| `min` | `(...args: f64): f64` / `(...args: i32): i32` (≥1 arg) | inline / helper var |
+| `max` | `(...args: f64): f64` / `(...args: i32): i32` (≥1 arg) | inline / helper var |
 | `clamp` | `(v: f64, lo: f64, hi: f64): f64` / i32 | inline |
 | `sign` | `(x: f64): f64` | inline |
 | `clz32` | `(x: i32): i32` | `__builtin_clz(x)` (GCC/Clang) |

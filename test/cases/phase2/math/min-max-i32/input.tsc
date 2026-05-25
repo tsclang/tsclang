@@ -1,0 +1,5 @@
+const a: i32 = 3;
+const b: i32 = 1;
+const c: i32 = 7;
+console.log(Math.min(a, b, c));
+console.log(Math.max(a, b, c));

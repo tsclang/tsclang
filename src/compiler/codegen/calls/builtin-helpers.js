@@ -21,15 +21,28 @@ export default {
       if (!isFloat(a0t)) return `(int)abs(${a0})`;
       return `fabs(${a0})`;
     }
-    if (prop === 'min') {
-      if (!isFloat(a0t) && !isFloat(a1t)) return `(${a0} < ${a1}) ? ${a0} : ${a1}`;
-      this.includes.add('#include <math.h>');
-      return `fmin(${a0}, ${a1})`;
-    }
-    if (prop === 'max') {
-      if (!isFloat(a0t) && !isFloat(a1t)) return `(${a0} > ${a1}) ? ${a0} : ${a1}`;
-      this.includes.add('#include <math.h>');
-      return `fmax(${a0}, ${a1})`;
+    if (prop === 'min' || prop === 'max') {
+      if (args.length === 0) {
+        throw this.error(`Math.${prop}() requires at least 1 argument`);
+      }
+      const isMin = prop === 'min';
+      const op = isMin ? '<' : '>';
+      const hasFloat = args.some(a => isFloat(this.inferType(a.expr)));
+      const allC = args.map(a => this.exprToC(a.expr, lines, depth));
+      const resType = hasFloat ? 'double' : a0t;
+      if (args.length === 1) return allC[0];
+      if (args.length === 2) {
+        if (!hasFloat) return `(${allC[0]} ${op} ${allC[1]}) ? ${allC[0]} : ${allC[1]}`;
+        this.includes.add('#include <math.h>');
+        return `${isMin ? 'fmin' : 'fmax'}(${allC[0]}, ${allC[1]})`;
+      }
+      const vname = `_${prop}_${this.tempCount++}`;
+      const I = ' '.repeat(this.indent * depth);
+      lines.push(`${I}${resType} ${vname} = ${allC[0]};`);
+      for (let i = 1; i < allC.length; i++) {
+        lines.push(`${I}if (${allC[i]} ${op} ${vname}) ${vname} = ${allC[i]};`);
+      }
+      return vname;
     }
     if (prop === 'clamp') {
       if (!this._emittedTscClamp) {
