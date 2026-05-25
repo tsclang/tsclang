@@ -907,8 +907,10 @@ Math.exp(1.0)         // Math.E
 Math.expm1(0.0)       // f64 → f64 — 0.0  (e^x - 1, точнее при x→0)
 
 // утилиты
-Math.min(3, 1, 4, 1)       // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
-Math.max(3, 1, 4, 1)       // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
+Math.min(3, 1, 4, 1)            // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
+Math.max(3, 1, 4, 1)            // variadic (≥1 arg): i32|f64 → тот же тип; 0 args → compile error
+Math.min(...arr)                 // spread: числовой массив → тип элемента; пустой массив → runtime error
+Math.max(...arr)                 // mixed spread + non-spread → compile error; non-numeric array → compile error
 Math.clamp(15, 0, 10)      // перегрузка: i32|f64 → тот же тип — 10
 Math.sign(-5.0)            // f64 → f64 — -1.0
 Math.sign(0.0)             // 0.0

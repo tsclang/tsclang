@@ -1341,3 +1341,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   - compareExchange failure ordering default: Acquire (07-concurrency.md)
 >   - Module-level vars: только promoted → static (08-modules.md)
 > - Result: **1323 tests, 0 failures**
+
+> 2026-05-25: **`Math.min/max(...arr)` spread array support**:
+> - Spread syntax: `Math.min(...arr)` — runtime loop over numeric array
+> - Type check: element must be numeric (compile error for String[] etc.)
+> - Mixed spread + non-spread → compile error
+> - Empty array → runtime error (fprintf + exit, same pattern as bounds check)
+> - `inferType` fix: correctly resolve return type for spread min/max
+> - Runner: new `[RE]` test kind (runtime error) — `expected.runtime-error`
+> - New tests: min-max-spread, min-max-spread-string, min-max-spread-mixed, min-max-spread-empty
+> - Result: **1345 tests, 0 failures** (no-gcc)

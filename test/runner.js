@@ -154,14 +154,16 @@ async function classifyTest(testDir) {
   const inputType = detectInput(testDir);
   if (!inputType) return null;
 
-  const hasC   = existsSync(join(testDir, 'expected.c'));
-  const hasOut = existsSync(join(testDir, 'expected.out'));
-  const hasErr = existsSync(join(testDir, 'expected.error'));
+  const hasC          = existsSync(join(testDir, 'expected.c'));
+  const hasOut        = existsSync(join(testDir, 'expected.out'));
+  const hasErr        = existsSync(join(testDir, 'expected.error'));
+  const hasRuntimeErr = existsSync(join(testDir, 'expected.runtime-error'));
 
   if (hasErr) return { kind: 'E', inputType };
 
   if (inputType === 'tsc') {
     if (hasC && hasOut) return { kind: 'R', inputType };
+    if (hasC && hasRuntimeErr) return { kind: 'RE', inputType };
     if (hasC)           return { kind: 'F', inputType };
     return null; // tsc test with no expected files — skip
   }
@@ -303,6 +305,8 @@ async function executeTscTest(testDir, kind, tmpBase) {
   const gccResult = await gccCompile(generatedC, binary);
   if (gccResult.code !== 0) return fail(testDir, 'gcc', 'C does not compile', gccResult.stderr);
 
+  if (kind === 'RE') return runAndCheckRuntimeError(testDir, binary);
+
   return runAndCompare(testDir, binary, []);
 }
 
@@ -397,8 +401,8 @@ async function executeShTest(testDir, kind, tmpBase) {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-async function checkErrorOutput(testDir, combined) {
-  const expected = await readFile(join(testDir, 'expected.error'), 'utf8');
+async function checkErrorOutput(testDir, combined, errFile = 'expected.error') {
+  const expected = await readFile(join(testDir, errFile), 'utf8');
   const expectedLines = expected.split('\n').map(l => l.trim()).filter(Boolean);
   const missing = expectedLines.filter(line => !combined.includes(line));
   if (missing.length > 0) {
@@ -426,7 +430,6 @@ async function compareCOutput(testDir, generatedCPath) {
 }
 
 async function runAndCompare(testDir, binary, runArgs) {
-  // On Windows: run compiled binary via MSYS2 bash to handle path and DLL issues
   const runResult = MSYS2_BASH
     ? await runShell(`"${toMsysPath(binary)}"`)
     : await run(binary, runArgs);
@@ -437,6 +440,16 @@ async function runAndCompare(testDir, binary, runArgs) {
     return fail(testDir, 'run', 'stdout mismatch', diffSummary(expected, actual));
   }
   return pass(testDir);
+}
+
+async function runAndCheckRuntimeError(testDir, binary) {
+  const runResult = MSYS2_BASH
+    ? await runShell(`"${toMsysPath(binary)}"`)
+    : await run(binary, []);
+  if (runResult.code === 0) {
+    return fail(testDir, 'runtime-error', 'Expected non-zero exit code but exited 0', runResult.stdout || runResult.stderr);
+  }
+  return checkErrorOutput(testDir, runResult.stderr + runResult.stdout, 'expected.runtime-error');
 }
 
 function pass(testDir) {

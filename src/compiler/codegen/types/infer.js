@@ -389,7 +389,16 @@ export default {
       if (prop === 'clz32' || prop === 'imul') return 'int32_t';
       if (prop === 'fround') return 'float';
       if (prop === 'abs' || prop === 'min' || prop === 'max') {
-        const a0t = node.args?.[0] ? this.inferType(node.args[0].expr) : 'int32_t';
+        const a0 = node.args?.[0];
+        if (a0?.spread) {
+          const arrType = this.inferType(a0.expr);
+          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+            u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+            f32:'float', f64:'double', bool:'bool', usize:'size_t', number:'double' };
+          const etIdent = arrType?.startsWith('Array_') ? arrType.slice(6) : null;
+          if (etIdent && primMap[etIdent]) return primMap[etIdent];
+        }
+        const a0t = a0 ? this.inferType(a0.expr) : 'int32_t';
         if (a0t !== 'double' && a0t !== 'float') return 'int32_t';
       }
       return 'double';

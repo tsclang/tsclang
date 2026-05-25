@@ -1,0 +1,2 @@
+const arr: i32[] = [];
+console.log(Math.min(...arr));

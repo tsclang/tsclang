@@ -1,0 +1,7 @@
+const arr_i32: i32[] = [3, 1, 7, 4];
+console.log(Math.min(...arr_i32));
+console.log(Math.max(...arr_i32));
+
+const arr_f64: f64[] = [3.0, 1.0, 7.0, 4.0];
+console.log(Math.min(...arr_f64));
+console.log(Math.max(...arr_f64));

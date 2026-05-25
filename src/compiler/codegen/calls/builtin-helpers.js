@@ -27,6 +27,35 @@ export default {
       }
       const isMin = prop === 'min';
       const op = isMin ? '<' : '>';
+      const hasSpread = args.some(a => a.spread);
+      if (hasSpread) {
+        if (args.length > 1) {
+          throw this.error(`Math.${prop}/max does not support mixed spread and non-spread arguments`);
+        }
+        const arrExpr = args[0].expr;
+        const arrType = this.inferType(arrExpr);
+        const NUMERIC_ET = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+          f32:'float', f64:'double', bool:'bool', usize:'size_t', isize:'intptr_t',
+          number:'double', char:'char' };
+        const etIdent = arrType.startsWith('Array_') ? arrType.slice(6) : null;
+        if (!etIdent || !(etIdent in NUMERIC_ET)) {
+          throw this.error(`Math.${prop}(...arr) requires a numeric array, got ${etIdent || 'non-array'} elements`);
+        }
+        const etCType = NUMERIC_ET[etIdent];
+        const arrC = this.exprToC(arrExpr, lines, depth);
+        const I = ' '.repeat(this.indent * depth);
+        const vname = `_${prop}_${this.tempCount++}`;
+        const ivar = `_i_${this.tempCount++}`;
+        this.includes.add('#include <stdio.h>');
+        this.includes.add('#include <stdlib.h>');
+        lines.push(`${I}if (${arrC}.length == 0) { fprintf(stderr, "Math.${prop}: empty array\\n"); exit(1); }`);
+        lines.push(`${I}${etCType} ${vname} = ${arrC}.data[0];`);
+        lines.push(`${I}for (size_t ${ivar} = 1; ${ivar} < ${arrC}.length; ${ivar}++) {`);
+        lines.push(`${I}    if (${arrC}.data[${ivar}] ${op} ${vname}) ${vname} = ${arrC}.data[${ivar}];`);
+        lines.push(`${I}}`);
+        return vname;
+      }
       const hasFloat = args.some(a => isFloat(this.inferType(a.expr)));
       const allC = args.map(a => this.exprToC(a.expr, lines, depth));
       const resType = hasFloat ? 'double' : a0t;

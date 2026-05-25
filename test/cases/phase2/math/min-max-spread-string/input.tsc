@@ -1,0 +1,2 @@
+const arr: string[] = ["a", "b"];
+console.log(Math.min(...arr));
