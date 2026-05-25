@@ -689,7 +689,9 @@ console.log(nums);             // ok — nums жив
 
 Примитивы — copy by value. Spread не потребляет источник. Каждый элемент побитово копируется.
 
-**Массивы сложных типов из `const` — ошибка (move невозможен):**
+**Массивы сложных типов из `const` — ошибка (move невозможен):** *[NOT YET IMPLEMENTED]*
+
+Текущая реализация: spread из `const` массива со сложными типами молча генерирует shallow copy без retain. Рекомендуется использовать `let` для источника spread.
 
 ```typescript
 const admins: Admin[] = [admin1, admin2];

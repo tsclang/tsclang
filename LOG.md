@@ -1276,6 +1276,14 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Updated: arr-rest-strings (добавлен retain/release)
 > - Result: **1323 tests, 0 failures**
 
+> 2026-05-25: **Spec↔impl audit batch 3 — 4 fixed, 1 deferred**:
+> - **C-50 DONE**: `size_t` byte size = 8 на desktop, 4 на embedded (helpers.js)
+> - **C-51 DONE**: String literal union `.toString()` → `STR_LIT_RUNTIME()` вместо raw `const char*` (conversion.js)
+> - **C-20 DONE**: Primitive tuple `let b = a` — copy вместо move+zero-out. `isPrimitiveTuple()` check в vardecl.js. Тест: `test/cases/phase3/ownership/tuple-primitive-copy/`
+> - **C-18 investigated**: `readonly` keyword → `const` в C struct не работает с `_new()` паттерном — оставлен compile-time protection только
+> - **C-21 deferred**: Const array spread non-primitives — static init path обходит `arrayLitToC`, помечен `[NOT YET IMPLEMENTED]` в spec
+> - Result: **1324 tests, 0 failures**
+
 > 2026-05-25: **Spec↔impl audit batch 2 — 19 spec updates (категории B+C)**:
 > - **Spec updates (impl → spec, пометки [NOT YET IMPLEMENTED]):**
 >   - Performance warnings на AVR (03-types.md)

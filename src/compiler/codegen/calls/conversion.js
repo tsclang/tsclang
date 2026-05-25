@@ -8,7 +8,7 @@
         const objEnumDef = objSym ? this.classes.get(objSym.ctype) : null;
         if (objEnumDef?.isStringLiteralUnion) {
           const objC = this.exprToC(callee.object, lines, depth);
-          return `${objSym.ctype}_values[(int)${objC}]`;
+          return `STR_LIT_RUNTIME(${objSym.ctype}_values[(int)${objC}])`;
         }
       }
       // EnumMember.toString() вЂ” callee.object is Member (Dir.North), prop is 'toString'

@@ -1,0 +1,5 @@
+let pair: [i32, f64] = [1, 2.0];
+let b = pair;
+console.log(b._0);
+console.log(b._1);
+console.log(pair._0);
