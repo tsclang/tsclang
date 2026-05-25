@@ -7,4 +7,3 @@ int main(void) {
     printf("%s\n", (haspath) ? "true" : "false");
     return 0;
 }
-

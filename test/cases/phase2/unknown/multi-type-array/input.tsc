@@ -1,8 +1,9 @@
-let x: unknown = 42;
-if (typeof x === "array") {
+let x: i32 = 42;
+let y: unknown = x;
+if (typeof y === "array") {
     console.log("not array");
 } else {
-    if (typeof x === "i32") {
-        console.log(x + 1);
+    if (typeof y === "i32") {
+        console.log(y + 1);
     }
 }

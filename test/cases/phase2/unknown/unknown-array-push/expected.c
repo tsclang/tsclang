@@ -39,7 +39,8 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 int main(void) {
     TSC_INIT();
     Array_tsc_unknown arr = {.data = NULL, .length = 0, .capacity = 0};
-    tsc_array_push_tsc_unknown(&arr, tsc_unknown_from_f64(42));
+    int32_t v = 42;
+    tsc_array_push_tsc_unknown(&arr, tsc_unknown_from_i32(v));
     tsc_array_push_tsc_unknown(&arr, tsc_unknown_from_string(STR_LIT("world")));
     printf("%zu\n", arr.length);
     for (size_t _i_0 = 0; _i_0 < arr.length; _i_0++) {

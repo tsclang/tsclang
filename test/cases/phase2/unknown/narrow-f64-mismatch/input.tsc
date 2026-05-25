@@ -1,0 +1,4 @@
+let x: unknown = 42;
+if (typeof x === "i32") {
+    console.log(99);
+}

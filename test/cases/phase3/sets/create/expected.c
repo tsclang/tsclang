@@ -6,4 +6,3 @@ int main(void) {
     printf("%zu\n", s.size);
     return 0;
 }
-

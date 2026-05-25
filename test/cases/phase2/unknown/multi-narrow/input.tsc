@@ -1,10 +1,11 @@
-let x: unknown = 42;
-if (typeof x === "i32") {
-    let a = x + 1;
+let x: i32 = 42;
+let y: unknown = x;
+if (typeof y === "i32") {
+    let a = y + 1;
     console.log(a);
 }
-if (typeof x === "f64") {
-    console.log(x * 2);
+if (typeof y === "f64") {
+    console.log(y * 2);
 } else {
     console.log(0);
 }

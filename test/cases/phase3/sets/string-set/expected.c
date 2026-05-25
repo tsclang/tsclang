@@ -11,4 +11,3 @@ int main(void) {
     printf("%s\n", tsc_set_has_string(&s, STR_LIT("foo")) ? "true" : "false");
     return 0;
 }
-

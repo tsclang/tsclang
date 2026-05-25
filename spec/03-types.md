@@ -299,6 +299,29 @@ const n64: i64 = n      // неявно — без потерь
 - Сообщения об ошибках используют конкретный тип: `expected f64, got i32`
 - Все числа — примитивы, передаются по значению
 
+### Literal overflow *[NOT YET IMPLEMENTED]*
+
+Числовой литерал без явной аннотации получает тип `number` = `defaultNumber`. Если значение не помещается в диапазон `defaultNumber` → compile error.
+
+```typescript
+// defaultNumber = f64 (desktop, по умолчанию)
+let a = 100          // ok — double
+let b = 100500       // ok — double
+let c = 3.14         // ok — double
+
+// defaultNumber = i8 (old platform, конфигурируется)
+let a = 100          // ok — i8 (-128..127)
+let b = 100500       // error: literal 100500 overflows i8 (-128..127)
+                      // hint: use explicit type, e.g. let b: i32 = 100500
+let c: i32 = 100500  // ok — явная аннотация, тип i32
+
+// В выражениях — та же проверка:
+if (x < 100500) ...             // error при defaultNumber = i8
+if (x < (100500 as i32)) ...    // ok — as снимает overflow check (программист явно указал тип)
+```
+
+**Правило**: `as T` снимает overflow check — программист берёт ответственность на себя. Без `as` — compile error при выходе за диапазон `defaultNumber`.
+
 ## Конвертация типов
 
 ### Число → строка
@@ -720,7 +743,12 @@ function wrap(val: i32): unknown {
 }
 
 function accept(val: unknown): void { ... }
-accept(42)       // auto-wrap → tsc_unknown_from_i32(42)
+accept(42)       // auto-wrap → tsc_unknown_from_f64(42)  (42 — это number = f64)
+accept(3.14)     // auto-wrap → tsc_unknown_from_f64(3.14)
+
+// Для конкретного типа — используйте явную аннотацию:
+let x: i32 = 42
+accept(x)        // auto-wrap → tsc_unknown_from_i32(x)  (x имеет тип i32)
 ```
 
 #### String vtable

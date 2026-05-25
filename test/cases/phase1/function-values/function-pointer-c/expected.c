@@ -10,6 +10,6 @@ int main(void) {
     TSC_INIT();
     tsc_closure _fns_lit[] = {(tsc_closure){.env = NULL, .fn = (void*)square_i32}};
     const Array_tsc_closure fns = {.data = _fns_lit, .length = 1, .capacity = 1};
-    printf("%d\n", ((int32_t (*)(double))fns.data[0].fn)(4));
+    printf("%d\n", ((int32_t (*)(int32_t))fns.data[0].fn)(4));
     return 0;
 }

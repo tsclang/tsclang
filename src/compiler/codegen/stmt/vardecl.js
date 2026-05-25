@@ -1066,6 +1066,7 @@ export default {
 
         // TypeFunc: single closure variable
         if (typeAnn?.kind === 'TypeFunc') {
+          const _closureParamCtypes = (typeAnn.params ?? []).map(p => this.resolveType(p));
           let initC;
           if (init?.kind === 'Arrow') {
             const closure = this.hoistClosure(init, name);
@@ -1075,7 +1076,7 @@ export default {
               }
               p(`${closure.envName} ${name}_env = ${closure.envInit};`);
               p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
-              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
+              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _closureParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
                                   ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
               if (closure.hasStringCapture) {
                 for (const nm of closure.capturedStringFields ?? []) {
@@ -1094,27 +1095,29 @@ export default {
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);
             p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${lambdaName}};`);
-            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet });
+            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet, closureParamTypes: _closureParamCtypes });
             return;
           } else {
             const initSym = init?.kind === 'Ident' ? this.lookup(init.name) : null;
             if (initSym?.funcName) {
               initC = `(tsc_closure){.env = NULL, .fn = (void*)${initSym.funcName}}`;
               p(`tsc_closure ${name} = ${initC};`);
-              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: initSym.ctype, funcName: initSym.funcName });
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: initSym.ctype, closureParamTypes: _closureParamCtypes, funcName: initSym.funcName });
               return;
             } else {
               initC = init ? this.exprToC(init, lines, depth) : '(tsc_closure){0}';
             }
           }
           p(`tsc_closure ${name} = ${initC};`);
-          this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind });
+          this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureParamTypes: _closureParamCtypes });
           return;
         }
 
         // TypeArray of TypeFunc: array of closures
         if (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind === 'TypeFunc') {
           const arrCtype = 'Array_tsc_closure';
+          const _arrElemClosureParams = (typeAnn.element.params ?? []).map(p => this.resolveType(p));
+          const _arrElemClosureRet = typeAnn.element.ret ? this.resolveType(typeAnn.element.ret) : undefined;
           this.addTop(`typedef struct { tsc_closure *data; size_t length; size_t capacity; } ${arrCtype};`);
           if (init?.kind === 'ArrayLit') {
             const elems = init.elems.map(e => {
@@ -1127,16 +1130,17 @@ export default {
             const litName = `_${name}_lit`;
             p(`tsc_closure ${litName}[] = {${elems.map(e => `(tsc_closure){.env = NULL, .fn = (void*)${e}}`).join(', ')}};`);
             p(`${qualifier}${arrCtype} ${name} = {.data = ${litName}, .length = ${elems.length}, .capacity = ${elems.length}};`);
-            this.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', arraySize: elems.length, varKind });
+            this.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', arraySize: elems.length, varKind, _arrElemClosureParams, _arrElemClosureRet });
             return;
           }
           p(`${qualifier}${arrCtype} ${name} = {0};`);
-          this.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', varKind });
+          this.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', varKind, _arrElemClosureParams, _arrElemClosureRet });
           return;
         }
 
         if (init) {
           if (init.kind === 'Arrow') {
+            const _arrowParamCtypes = (init.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *');
             const closure = this.hoistClosure(init, name);
             if (closure) {
               if (closure.retainLines?.length) {
@@ -1144,7 +1148,7 @@ export default {
               }
               p(`${closure.envName} ${name}_env = ${closure.envInit};`);
               p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
-              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
+              this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _arrowParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
                                   ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
               if (closure.hasStringCapture) {
                 for (const nm of closure.capturedStringFields ?? []) {
@@ -1163,13 +1167,15 @@ export default {
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);
             p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${lambdaName}};`);
-            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet });
+            this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: lambdaRet, closureParamTypes: _arrowParamCtypes });
             return;
           } else if (!typeAnn && init.kind === 'Ident') {
             const sym = this.lookup(init.name);
             if (sym?.funcName && sym?.params) {
               p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${sym.funcName}};`);
-              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName, closureRetType: sym.ctype });
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName, closureRetType: sym.ctype,
+                                  ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } :
+                                    sym.params ? { closureParamTypes: sym.params.map(pp => pp.typeAnn ? this.resolveType(pp.typeAnn) : 'void *') } : {}) });
               return;
             }
             // Move semantics borrow check (before emit, but set _moved AFTER)
@@ -1243,7 +1249,8 @@ export default {
             if (!typeAnn && callSym?.returnType?.kind === 'TypeFunc') {
               const initC = this.exprToC(init, lines, depth);
               p(`${this.typeDecl(callSym.returnType, name)} = ${initC};`);
-              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}) });
+              const _retFuncParams = callSym.returnType.params ? callSym.returnType.params.map(pt => this.resolveType(pt)) : undefined;
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}), ...(_retFuncParams ? { closureParamTypes: _retFuncParams } : {}) });
               return;
             }
             if (init.kind === 'Index' && !ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {

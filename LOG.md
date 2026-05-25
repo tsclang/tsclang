@@ -1359,3 +1359,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Runner: new `[RE]` test kind (runtime error) — `expected.runtime-error`
 > - New tests: min-max-spread, min-max-spread-string, min-max-spread-mixed, min-max-spread-empty
 > - Result: **1345 tests, 0 failures** (no-gcc)
+
+> 2026-05-25: **Spec alignment: literal typing + closure cast fix**:
+> - **Spec (03-types.md)**: fixed contradiction — `accept(42)` auto-wraps as `tsc_unknown_from_f64(42)` (number=f64), not `from_i32`. Added "Literal overflow" section: literal = defaultNumber, overflow = compile error, `as T` bypasses check. Marked `[NOT YET IMPLEMENTED]` until `defaultNumber` is configurable.
+> - **Unknown tests rewritten** (7 tests): bare literal `42` → `number` = f64 → `typeof x === "i32"` was never true. Fixed by using explicit `i32` annotation or testing `"f64"` instead. Tests: narrow-i32, narrow-not-match, drop-scope, multi-narrow, multi-type-array, multi-type-check, narrow-else.
+> - **Closure cast fix (RC2)**: `closureParamTypes` stored in sym at define-time — closure call cast now uses declared param types, not `inferType(arg)`. Fixes UB where `(int32_t (*)(double))` was generated instead of `(int32_t (*)(int32_t))`. Applied to: TypeFunc vars, inferred arrow closures, func params, array-of-closures expressions.
+> - **New tests (+4)**: narrow-f64-from-bare, narrow-f64-mismatch, bare-literal-number, as-cast-from-f64-unknown
+> - **RC3 resolved**: `as-cast-from-unknown` now uses `tsc_unknown_get_f64` for f64-stored unknown (was `get_i32` = UB)
+> - Result: **1349 tests (no-gcc), 1303 tests (gcc)** — was 1286 gcc

@@ -20,4 +20,3 @@ int main(void) {
     User_free(&u);
     return 0;
 }
-

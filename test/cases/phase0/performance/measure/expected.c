@@ -8,4 +8,3 @@ int main(void) {
     printf("%s\n", entry.name.data);
     return 0;
 }
-

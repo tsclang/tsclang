@@ -7,4 +7,3 @@ int main(void) {
     printf("marked\n");
     return 0;
 }
-

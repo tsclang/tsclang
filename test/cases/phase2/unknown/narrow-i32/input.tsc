@@ -1,4 +1,5 @@
-let x: unknown = 42;
-if (typeof x === "i32") {
-    console.log(x + 1);
+let x: i32 = 42;
+let y: unknown = x;
+if (typeof y === "i32") {
+    console.log(y + 1);
 }

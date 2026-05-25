@@ -11,6 +11,6 @@ int main(void) {
     const int32_t base = 10;
     _closure_0_env add_env = {.base = base};
     tsc_closure add = {.env = &add_env, .fn = (void*)_closure_0_fn};
-    printf("%d\n", ((int32_t (*)(void *, double))add.fn)(add.env, 5));
+    printf("%d\n", ((int32_t (*)(void *, int32_t))add.fn)(add.env, 5));
     return 0;
 }

@@ -49,7 +49,8 @@ void check_unknown(tsc_unknown val) {
 
 int main(void) {
     TSC_INIT();
-    check_unknown(tsc_unknown_from_f64(42));
+    int32_t a = 42;
+    check_unknown(tsc_unknown_from_i32(a));
     check_unknown(tsc_unknown_from_string(STR_LIT("hello")));
     check_unknown(tsc_unknown_from_f64(3.14));
     return 0;

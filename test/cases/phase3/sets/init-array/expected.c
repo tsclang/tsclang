@@ -12,4 +12,3 @@ int main(void) {
     printf("%s\n", tsc_set_has_i32(&s, 2) ? "true" : "false");
     return 0;
 }
-

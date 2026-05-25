@@ -152,7 +152,7 @@
     // tsc_closure call: closure variable or func-ptr variable (not a regular function)
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = this.argsToC(args, lines, depth);
-      const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
+      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
       if (sym.isClosure) {
         this._releaseQuarantineBy(callee.name);
@@ -170,8 +170,14 @@
       const calleeType = this.inferType(callee);
       if (calleeType === 'tsc_closure') {
         const argsC = this.argsToC(args, lines, depth);
-        const paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
-        const retType = this.inferType(node) ?? 'void';
+        let paramTypes = null;
+        let retType = this.inferType(node) ?? 'void';
+        if (callee.kind === 'Index' && callee.object.kind === 'Ident') {
+          const arrSym = this.lookup(callee.object.name);
+          if (arrSym?._arrElemClosureParams) paramTypes = arrSym._arrElemClosureParams;
+          if (arrSym?._arrElemClosureRet) retType = arrSym._arrElemClosureRet;
+        }
+        if (!paramTypes) paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
         const sigArgs = paramTypes.join(', ') || 'void';
         return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
       }

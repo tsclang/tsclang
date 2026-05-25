@@ -35,10 +35,11 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 int main(void) {
     TSC_INIT();
-    tsc_unknown x = tsc_unknown_from_f64(42);
-    if (x.type_id == 1) {
-        printf("%g\n", (double)(tsc_unknown_get_i32(&x) + 1));
+    int32_t x = 42;
+    tsc_unknown y = tsc_unknown_from_i32(x);
+    if (y.type_id == 1) {
+        printf("%g\n", (double)(tsc_unknown_get_i32(&y) + 1));
     }
-    tsc_unknown_drop(&x);
+    tsc_unknown_drop(&y);
     return 0;
 }

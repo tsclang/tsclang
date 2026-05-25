@@ -1,0 +1,6 @@
+let a = 100;
+let b = 100500;
+let c: i32 = 100500;
+console.log(a);
+console.log(b);
+console.log(c);

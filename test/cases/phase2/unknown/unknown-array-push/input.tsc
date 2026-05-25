@@ -1,6 +1,6 @@
-// [R] unknown[] with push and for-of
 let arr: unknown[] = [];
-arr.push(42);
+let v: i32 = 42;
+arr.push(v);
 arr.push("world");
 console.log(arr.length);
 for (const x of arr) {

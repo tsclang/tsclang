@@ -1,6 +1,5 @@
 #include "runtime.h"
 
-
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("hello"), STR_LIT("world")};

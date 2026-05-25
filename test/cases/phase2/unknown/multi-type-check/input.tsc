@@ -9,6 +9,7 @@ function check(val: unknown): void {
         console.log(val * 2);
     }
 }
-check(42);
+let a: i32 = 42;
+check(a);
 check("hello");
 check(3.14);
