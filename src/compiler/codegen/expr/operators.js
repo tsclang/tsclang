@@ -243,6 +243,11 @@ export default {
       }
       return `tsc_string_concat(${ld}, ${rC})`;
     }
+    if (node.op === '%') {
+      const lt = this.inferType(node.left);
+      const rt = this.inferType(node.right);
+      if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
+    }
     return `${l} ${op} ${r}`;
   },
 

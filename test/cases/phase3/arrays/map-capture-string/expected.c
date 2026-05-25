@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
+typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 typedef struct { int32_t factor; } _closure_0_env;
 

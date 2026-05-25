@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
+typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 typedef struct { const int32_t *ptr; size_t length; } Slice_i32;
 
 int main(void) {

@@ -922,9 +922,11 @@ export default {
             p(`${et} ${litVar}[] = {${elems.join(', ')}};`);
             p(`${qualifier}${arrName} ${name} = {.data = ${litVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
           } else {
-            this._newArrayElemHint = et; // hint for new Array(N) without type args
+            this._expectedType = arrName;
+            this._newArrayElemHint = et;
             const initC = this.exprToC(init, lines, depth);
             this._newArrayElemHint = null;
+            this._expectedType = undefined;
             if (this._gotoCleanupPreDecls?.has(name)) {
               p(`${name} = ${initC};`);
             } else {

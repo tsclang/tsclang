@@ -2029,6 +2029,409 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
 
+// ---- f64 (double) array macros ----
+static int _tsc_cmp_f64_asc(const void *a, const void *b) {
+    double x = *(const double*)a, y = *(const double*)b;
+    return (x > y) - (x < y);
+}
+
+#define tsc_array_values_f64(arr) ({ \
+    Array_f64 _a_ = (arr); \
+    size_t _n_ = _a_.length; \
+    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(double)); \
+    (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_at_f64(arr, idx) ({ \
+    Array_f64 _a_ = (arr); int32_t _i_ = (idx); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    _a_.data[(size_t)_i_]; \
+})
+
+#define tsc_array_with_f64(arr, idx, val) ({ \
+    Array_f64 _a_ = (arr); int32_t _i_ = (idx); double _v_ = (val); \
+    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
+    _d_[(size_t)_i_] = _v_; \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_last_index_of_f64(arr, val) ({ \
+    Array_f64 _a_ = (arr); double _v_ = (val); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if (_a_.data[_i_ - 1] == _v_) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+#define tsc_array_join_f64(arr, sep) ({ \
+    Array_f64 _a_ = (arr); String _sep_ = (sep); \
+    String _jr_; \
+    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    else { \
+        char _buf_[32]; int _len_ = snprintf(_buf_, sizeof(_buf_), "%g", _a_.data[0]); \
+        size_t _total_ = (size_t)_len_; \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) _total_ += _sep_.length + 32; \
+        char *_out_ = (char*)malloc(_total_ + 1); \
+        int _w_ = snprintf(_out_, _total_ + 1, "%g", _a_.data[0]); \
+        for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
+            memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += (int)_sep_.length; \
+            _w_ += snprintf(_out_ + _w_, _total_ + 1 - _w_, "%g", _a_.data[_i_]); \
+        } \
+        _jr_ = _tsc_str_make(_out_, (size_t)_w_, (size_t)_w_ + 1); \
+    } \
+    _jr_; \
+})
+
+#define tsc_array_map_i32_f64(arr, fn) ({ \
+    Array_i32 _a_ = (arr); \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_map_f64_f64(arr, fn) ({ \
+    Array_f64 _a_ = (arr); \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_reduce_f64_string(arr, fn, init) ({ \
+    Array_f64 _a_ = (arr); String _acc_ = (init); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
+    _acc_; \
+})
+
+#define tsc_array_reduce_i32_f64(arr, fn, init) ({ \
+    Array_i32 _a_ = (arr); double _acc_ = (init); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, _a_.data[_i_]); \
+    _acc_; \
+})
+
+#define tsc_array_reduce_right_i32_f64(arr, fn, init) ({ \
+    Array_i32 _a_ = (arr); double _acc_ = (init); \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) _acc_ = (fn)(_acc_, _a_.data[_i_ - 1]); \
+    _acc_; \
+})
+
+#define tsc_array_shift_f64(arr) ({ \
+    Array_f64 *_a_ = (arr); \
+    opt_f64 _r_ = {false, 0}; \
+    if (_a_->length > 0) { \
+        _r_ = (opt_f64){true, _a_->data[0]}; \
+        memmove(_a_->data, _a_->data + 1, (_a_->length - 1) * sizeof(double)); \
+        _a_->length--; \
+    } \
+    _r_; \
+})
+
+#define tsc_array_unshift_f64(arr, val) do { \
+    Array_f64 *_a_ = (arr); double _v_ = (val); \
+    if (_a_->length >= _a_->capacity) { \
+        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
+        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
+    } \
+    memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(double)); \
+    _a_->data[0] = _v_; _a_->length++; \
+} while(0)
+
+#define tsc_array_splice_f64(arr, start, del_cnt, ...) ({ \
+    Array_f64 *_a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_->length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_->length) _s_ = (int32_t)_a_->length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_->length - (size_t)_s_) _dc_ = (int32_t)(_a_->length - (size_t)_s_); \
+    double _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(double); \
+    Array_f64 _r_ = {NULL, 0, 0}; \
+    if (_dc_ > 0) { \
+        _r_.data = (double*)malloc((size_t)_dc_ * sizeof(double)); \
+        memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(double)); \
+        _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
+    } \
+    size_t _tail_ = _a_->length - (size_t)_s_ - (size_t)_dc_; \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
+    if (_new_len_ > _a_->capacity) { \
+        size_t _nc_ = _new_len_ * 2; \
+        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
+    } \
+    if (_ni_ != (size_t)_dc_) { \
+        memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(double)); \
+    } \
+    memcpy(_a_->data + _s_, _ins_, _ni_ * sizeof(double)); \
+    _a_->length = _new_len_; \
+    _r_; \
+})
+
+#define tsc_array_flat_f64(arr) ({ \
+    Array_f64 _a_ = (arr); \
+    size_t _total_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_++; \
+    double *_d_ = (double*)malloc(_total_ * sizeof(double)); \
+    size_t _pos_ = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_pos_++] = _a_.data[_i_]; \
+    (Array_f64){ .data = _d_, .length = _total_, .capacity = _total_ }; \
+})
+
+#define tsc_array_flat_map_f64_f64(arr, fn) ({ \
+    Array_f64 _a_ = (arr); \
+    Array_f64 _r_ = {NULL, 0, 0}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        Array_f64 _chunk_ = (fn)(_a_.data[_i_]); \
+        for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
+            if (_r_.length >= _r_.capacity) { \
+                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
+                _r_.data = (double*)realloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
+            } \
+            _r_.data[_r_.length++] = _chunk_.data[_j_]; \
+        } \
+        if (_chunk_.capacity > 0) free(_chunk_.data); \
+    } \
+    _r_; \
+})
+
+#define tsc_array_find_last_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); \
+    opt_ref_f64 _r_ = {false, NULL}; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (opt_ref_f64){true, &_a_.data[_i_ - 1]}; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_last_index_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = _a_.length; _i_ > 0; _i_--) \
+        if ((pred)(_a_.data[_i_ - 1])) { _r_ = (ptrdiff_t)(_i_ - 1); break; } \
+    _r_; \
+})
+
+#define tsc_array_to_reversed_f64(arr) ({ \
+    Array_f64 _a_ = (arr); \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_to_sorted_f64(arr) ({ \
+    Array_f64 _a_ = (arr); \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
+    qsort(_d_, _a_.length, sizeof(double), _tsc_cmp_f64_asc); \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_to_spliced_f64(arr, start, del_cnt, ...) ({ \
+    Array_f64 _a_ = (arr); \
+    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_.length + _s_; \
+    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_.length) _s_ = (int32_t)_a_.length; \
+    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \
+    if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
+    double _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(double); \
+    size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
+    double *_d_ = (double*)malloc(_new_len_ * sizeof(double)); \
+    memcpy(_d_, _a_.data, (size_t)_s_ * sizeof(double)); \
+    memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(double)); \
+    memcpy(_d_ + _s_ + _ni_, _a_.data + _s_ + _dc_, (_a_.length - (size_t)_s_ - (size_t)_dc_) * sizeof(double)); \
+    (Array_f64){ .data = _d_, .length = _new_len_, .capacity = _new_len_ }; \
+})
+
+static double (*_tsc_cmp_f64_user)(double, double) = NULL;
+static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
+    return (int)_tsc_cmp_f64_user(*(const double*)a, *(const double*)b);
+}
+
+#define tsc_array_create_f64(cap) ({ \
+    size_t _c_ = (size_t)(cap); \
+    double *_d_ = (double*)malloc(_c_ * sizeof(double)); \
+    (Array_f64){ .data = _d_, .length = 0, .capacity = _c_ }; \
+})
+
+#define tsc_array_free_f64(arr) do { \
+    Array_f64 *_a_ = (arr); \
+    if (_a_->data && _a_->capacity > 0) free(_a_->data); \
+    _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; \
+} while(0)
+
+#define tsc_array_push_f64(arr, val) do { \
+    Array_f64 *_a_ = (arr); double _v_ = (val); \
+    if (_a_->length >= _a_->capacity) { \
+        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
+        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); \
+        _a_->capacity = _nc_; \
+    } \
+    _a_->data[_a_->length++] = _v_; \
+} while(0)
+
+#define tsc_array_pop_f64(arr) ({ \
+    Array_f64 *_a_ = (arr); \
+    opt_f64 _r_ = {false, 0}; \
+    if (_a_->length > 0) { _r_ = (opt_f64){true, _a_->data[--_a_->length]}; } \
+    _r_; \
+})
+
+#define tsc_array_concat_f64(a, b) ({ \
+    Array_f64 _a_ = (a), _b_ = (b); \
+    size_t _n_ = _a_.length + _b_.length; \
+    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
+    memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(double)); \
+    (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_slice_f64(arr, start, end_idx) ({ \
+    Array_f64 _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
+    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
+    size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
+    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(double)); \
+    (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
+})
+
+#define tsc_array_fill_f64(arr, val, start, end_idx) do { \
+    Array_f64 *_a_ = (arr); double _v_ = (val); int32_t _s_ = (start), _e_ = (end_idx); \
+    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_->length) _e_ = (int32_t)_a_->length; \
+    for (int32_t _i_ = _s_; _i_ < _e_; _i_++) _a_->data[_i_] = _v_; \
+} while(0)
+
+#define tsc_array_reverse_f64(arr) do { \
+    Array_f64 *_a_ = (arr); \
+    for (size_t _l_ = 0, _r_ = _a_->length; _l_ < _r_; ) { \
+        _r_--; double _t_ = _a_->data[_l_]; _a_->data[_l_++] = _a_->data[_r_]; _a_->data[_r_] = _t_; \
+    } \
+} while(0)
+
+#define tsc_array_sort_f64(arr, cmp) do { \
+    Array_f64 *_a_ = (arr); \
+    if ((cmp) == NULL) { qsort(_a_->data, _a_->length, sizeof(double), _tsc_cmp_f64_asc); } \
+    else { _tsc_cmp_f64_user = (cmp); qsort(_a_->data, _a_->length, sizeof(double), _tsc_cmp_f64_user_adapter); } \
+} while(0)
+
+#define tsc_array_includes_f64(arr, val) ({ \
+    Array_f64 _a_ = (arr); double _v_ = (val); bool _f_ = false; \
+    for (size_t _i_ = 0; _i_ < _a_.length && !_f_; _i_++) if (_a_.data[_i_] == _v_) _f_ = true; \
+    _f_; \
+})
+
+#define tsc_array_index_of_f64(arr, val) ({ \
+    Array_f64 _a_ = (arr); double _v_ = (val); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if (_a_.data[_i_] == _v_) { _r_ = (ptrdiff_t)_i_; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); \
+    opt_ref_f64 _r_ = {false, NULL}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        if ((pred)(_a_.data[_i_])) { _r_ = (opt_ref_f64){true, &_a_.data[_i_]}; break; } \
+    _r_; \
+})
+
+#define tsc_array_find_index_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); ptrdiff_t _r_ = -1; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        if ((pred)(_a_.data[_i_])) { _r_ = (ptrdiff_t)_i_; break; } \
+    _r_; \
+})
+
+#define tsc_array_every_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); bool _r_ = true; \
+    for (size_t _i_ = 0; _i_ < _a_.length && _r_; _i_++) if (!(pred)(_a_.data[_i_])) _r_ = false; \
+    _r_; \
+})
+
+#define tsc_array_some_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); bool _r_ = false; \
+    for (size_t _i_ = 0; _i_ < _a_.length && !_r_; _i_++) if ((pred)(_a_.data[_i_])) _r_ = true; \
+    _r_; \
+})
+
+#define tsc_array_foreach_f64(arr, fn) do { \
+    Array_f64 _a_ = (arr); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(_a_.data[_i_]); \
+} while(0)
+
+#define tsc_array_filter_f64(arr, pred) ({ \
+    Array_f64 _a_ = (arr); \
+    Array_f64 _r_ = {NULL, 0, 0}; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        if ((pred)(_a_.data[_i_])) { \
+            if (_r_.length >= _r_.capacity) { \
+                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
+                _r_.data = (double*)realloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
+            } \
+            _r_.data[_r_.length++] = _a_.data[_i_]; \
+        } \
+    } \
+    _r_; \
+})
+
+#define tsc_array_set_f64(arr, src, offset) do { \
+    Array_f64 *_d_ = (arr); Array_f64 _s_ = (src); size_t _off_ = (size_t)(offset); \
+    for (size_t _i_ = 0; _i_ < _s_.length && _off_ + _i_ < _d_->length; _i_++) \
+        _d_->data[_off_ + _i_] = _s_.data[_i_]; \
+} while(0)
+
+#define tsc_array_remove_f64(arr, idx) ({ \
+    Array_f64 *_a_ = (arr); size_t _i_ = (size_t)(idx); \
+    double _v_ = _a_->data[_i_]; \
+    memmove(_a_->data + _i_, _a_->data + _i_ + 1, (_a_->length - _i_ - 1) * sizeof(double)); \
+    _a_->length--; _v_; \
+})
+
+#define tsc_array_resize_f64(arr, new_len, def_val) do { \
+    Array_f64 *_a_ = (arr); size_t _nl_ = (size_t)(new_len); double _dv_ = (def_val); \
+    if (_nl_ > _a_->capacity) { \
+        double *_nd_ = (double*)malloc(_nl_ * sizeof(double)); \
+        if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(double)); \
+        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \
+        _a_->data = _nd_; _a_->capacity = _nl_; \
+    } else if (_nl_ > _a_->length) { \
+        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _a_->data[_i_] = _dv_; \
+    } \
+    _a_->length = _nl_; \
+} while(0)
+
+#define tsc_array_reallocate_f64(arr, new_cap) do { \
+    Array_f64 *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \
+    double *_nd_ = (double*)malloc(_nc_ * sizeof(double)); \
+    size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \
+    if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(double)); \
+    _a_->data = _nd_; _a_->capacity = _nc_; \
+    if (_a_->length > _nc_) _a_->length = _nc_; \
+} while(0)
+
+#define tsc_array_get_checked_f64(arr, idx) ({ \
+    Array_f64 _a_ = (arr); int32_t _i_ = (idx); \
+    if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
+        fprintf(stderr, "Array index %d out of bounds (length %zu)\n", _i_, _a_.length); exit(1); } \
+    _a_.data[_i_]; \
+})
+
+#define tsc_map_group_by_f64(_arr_, _fn_) ({ \
+    Array_f64 _a_ = (_arr_); \
+    TscMap_string_array_f64 _r_; _r_.size = 0; \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
+        String _k_ = (_fn_)(_a_.data[_i_]); \
+        size_t _ki_ = 0; bool _found_ = false; \
+        for (; _ki_ < _r_.size; _ki_++) { \
+            if (_tsc_str_eq(_r_._keys[_ki_], _k_)) { _found_ = true; break; } \
+        } \
+        if (!_found_) { \
+            _ki_ = _r_.size; \
+            _r_._keys[_ki_] = _k_; \
+            _r_._vals[_ki_].data = (double*)malloc(4 * sizeof(double)); \
+            _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
+            _r_.size++; \
+        } \
+        Array_f64 *_slot_ = &_r_._vals[_ki_]; \
+        if (_slot_->length >= _slot_->capacity) { \
+            _slot_->capacity *= 2; \
+            _slot_->data = (double*)realloc(_slot_->data, _slot_->capacity * sizeof(double)); } \
+        _slot_->data[_slot_->length++] = _a_.data[_i_]; \
+    } \
+    _r_; })
+
 #define tsc_array_shift_string(arr) ({ \
     Array_string *_a_ = (arr); \
     opt_string _r_ = {false, _tsc_str_make(NULL, 0, 0)}; \

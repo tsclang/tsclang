@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
+typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 void process_Array_i32(Array_i32 arr) {
     Array_i32 sub = tsc_array_slice_i32(arr, 0, 2);

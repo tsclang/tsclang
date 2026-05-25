@@ -2,6 +2,7 @@
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 typedef struct { Array_i32 *data; size_t length; size_t capacity; } Array_Array_i32;
+typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 int main(void) {
     TSC_INIT();

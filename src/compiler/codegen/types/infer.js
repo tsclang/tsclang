@@ -678,7 +678,15 @@ export default {
       if (prop === 'remove') return etCType;
       if (prop === 'find' || prop === 'findLast') return et ? `opt_ref_${et}` : 'opt_ref_i32';
       if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;
-      if (prop === 'map' || prop === 'flatMap') return objType;
+      if (prop === 'map' || prop === 'flatMap') {
+        const cbArg = node.args?.[0]?.expr ?? node.args?.[0];
+        if (cbArg?.kind === 'Arrow' && cbArg.body?.kind !== 'Block') {
+          const outCType = this.inferTypeWithParams(cbArg, etCType);
+          const outIdent = this.cTypeToIdent(outCType);
+          return `Array_${outIdent}`;
+        }
+        return objType;
+      }
       if (prop === 'slice') return objType;
       if (prop === 'values') return objType;
       if (prop === 'keys') return objType;
@@ -763,5 +771,20 @@ export default {
       return objTypePromise;
     }
     return null;
+  },
+
+  inferTypeWithParams(arrowNode, paramCType) {
+    const hasParams = arrowNode.params?.length > 0;
+    if (hasParams) {
+      this.pushScope();
+      for (let i = 0; i < arrowNode.params.length; i++) {
+        const p = arrowNode.params[i];
+        const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (i === 0 ? paramCType : 'void *');
+        this.define(p.name, { ctype: ct === 'String *' ? 'String' : ct });
+      }
+    }
+    const result = this.inferType(arrowNode.body) ?? 'double';
+    if (hasParams) this.popScope();
+    return result;
   },
 };

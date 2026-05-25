@@ -387,6 +387,7 @@ export default {
         }
         if (!elemType) elemType = 'int32_t';
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
+        this._ensureArrayStruct(arrType, elemType);
         const dataVar = `_arr_data_${this.tempCount++}`;
         const items = elems.map(e => {
           let c = this.exprToC(e.expr, lines, depth);

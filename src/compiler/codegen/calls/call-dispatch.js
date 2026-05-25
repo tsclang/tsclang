@@ -665,7 +665,7 @@
     if (!cbFnName) return null;
     this._ensureGroupByMapStruct(etIdent, etCType);
     const arrC = this.exprToC(arrExpr, lines, depth);
-    const macroSuffix = etIdent === 'string' ? 'string' : 'i32';
+    const macroSuffix = etIdent;
     return `tsc_map_group_by_${macroSuffix}(${arrC}, ${cbFnName})`;
   },
 };
