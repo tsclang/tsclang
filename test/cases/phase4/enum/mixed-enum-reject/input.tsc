@@ -1,0 +1,4 @@
+enum Color {
+  A = "hello",
+  B = 42,
+}

@@ -66,6 +66,12 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   function eatSemi() { tryEat(TK.SEMI); } // optional semicolons
 
+  function checkThrowsTypes(types) {
+    for (const t of types) {
+      if (t.kind === 'TypeRef' && t.name === 'never') err('"never" cannot be used in "throws"');
+    }
+  }
+
   // Eat a closing '>' for type args; handles >> and >>> by splitting them into single GT tokens
   function eatGT() {
     if (cur().type === TK.RSHIFT) {
@@ -668,6 +674,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
         throwsTypes.push(parseTypeAnnotation());
         while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+        checkThrowsTypes(throwsTypes);
       }
     }
     // Overload signature (no body)
@@ -717,6 +724,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
         throwsTypes.push(parseTypeAnnotation());
         while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+        checkThrowsTypes(throwsTypes);
       }
     }
     const body = cur().type === TK.LBRACE ? parseBlock() : null;
@@ -836,7 +844,11 @@ export function parse(tokens, filename = '<input>', src = null) {
       const memberDecorators = parseDecorators();
       const modifiers = [];
       while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override','mut'].includes(cur().value)) {
-        modifiers.push(eat(TK.IDENT).value);
+        const mod = eat(TK.IDENT).value;
+        if (mod === 'protected') err(`'protected' is not supported — there is no inheritance in TSClang`);
+        if (mod === 'abstract') err(`'abstract' is not supported — there is no inheritance in TSClang`);
+        if (mod === 'override') err(`'override' is not supported — there is no inheritance in TSClang`);
+        modifiers.push(mod);
       }
       let generator = false;
       if (cur().type === TK.STAR) { eat(TK.STAR); generator = true; }
@@ -862,6 +874,7 @@ export function parse(tokens, filename = '<input>', src = null) {
           if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
             throwsTypes.push(parseTypeAnnotation());
             while (cur().type === TK.PIPE) { eat(TK.PIPE); throwsTypes.push(parseTypeAnnotation()); }
+            checkThrowsTypes(throwsTypes);
           }
         }
         let body = null;
@@ -1167,6 +1180,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
       throwsTypes.push(parseTypeAnnotation());
+      checkThrowsTypes(throwsTypes);
     }
     const body = parseBlock();
     eatSemi();
@@ -1762,6 +1776,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (cur().type === TK.IDENT && cur().value === 'throws') {
         eat(TK.IDENT);
         throwsTypes2.push(parseTypeAnnotation());
+        checkThrowsTypes(throwsTypes2);
       }
       const spawnBody = parseBlock();
       return { kind: 'Spawn', throwsTypes: throwsTypes2, body: spawnBody };

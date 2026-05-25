@@ -6,6 +6,9 @@ export default {
     let counter = 0;
     // Detect string enum: first member with a string value
     const isStringEnum = members.some(m => m.value?.litType === 'string');
+    if (isStringEnum && members.some(m => m.value && m.value.litType !== 'string')) {
+      throw this.error(`mixed string and number values in enum "${name}" are not allowed`, node);
+    }
     const entries = members.map(m => {
       if (isStringEnum) {
         const strVal = m.value ? m.value.value : m.name;

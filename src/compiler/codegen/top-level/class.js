@@ -10,7 +10,7 @@ export default {
     }
 
     // Reserved prefix check (runs before PascalCase to give precise message)
-    for (const pfx of ['ref_']) {
+    for (const pfx of ['ref_', 'mut_', 'shared_', 'weak_', 'opt_', 'Array_']) {
       if (name.startsWith(pfx)) {
         throw this.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
       }
@@ -144,6 +144,9 @@ export default {
         // Ref<T>/Mut<T> cannot be stored in class fields
         if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
           throw this.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
+        }
+        if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
+          throw this.error(`"never" cannot be used as a field type`);
         }
         const isReadonly = (f.decorators ?? []).some(d => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';

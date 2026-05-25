@@ -1274,8 +1274,17 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   - Auto-constructor помечен `[NOT YET IMPLEMENTED]` (04-classes.md)
 > - **New tests**: err-prop-no-throws, arr-string-retain, platform-before-export
 > - Updated: arr-rest-strings (добавлен retain/release)
-> - Result: **1323 tests, 0 failures**
+> - Result: **1324 tests, 0 failures**
 
+> 2026-05-25: **Spec audit batch 4 — 7 validation fixes + reserved prefixes**:
+> - `protected`/`abstract`/`override` → compile error (no inheritance in TSClang)
+> - Mixed string/number enum values → compile error
+> - Empty object literal `{}` → compile error
+> - `never` as class field type → compile error
+> - `throws never` → compile error
+> - Reserved prefixes expanded: `ref_`, `mut_`, `shared_`, `weak_`, `opt_`, `Array_`
+> - New tests: protected-reject, abstract-reject, override-reject, mixed-enum-reject, empty-obj-lit-reject, never-field-reject, throws-never-reject
+> - Result: **1331 tests, 0 failures**
 > 2026-05-25: **Spec↔impl audit batch 3 — 4 fixed, 1 deferred**:
 > - **C-50 DONE**: `size_t` byte size = 8 на desktop, 4 на embedded (helpers.js)
 > - **C-51 DONE**: String literal union `.toString()` → `STR_LIT_RUNTIME()` вместо raw `const char*` (conversion.js)

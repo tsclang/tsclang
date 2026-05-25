@@ -426,6 +426,9 @@ export default {
       }
 
       case 'ObjLit': {
+        if (node.props.length === 0) {
+          throw this.error(`empty object literal is forbidden; use a typed variable or Map<K, V>`, node);
+        }
         const spreads = node.props.filter(p => p.spread);
         const explicit = node.props.filter(p => !p.spread && !p.computed);
         // If there are spread elements, expand struct fields inline
