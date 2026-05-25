@@ -1285,6 +1285,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Reserved prefixes expanded: `ref_`, `mut_`, `shared_`, `weak_`, `opt_`, `Array_`
 > - New tests: protected-reject, abstract-reject, override-reject, mixed-enum-reject, empty-obj-lit-reject, never-field-reject, throws-never-reject
 > - Result: **1331 tests, 0 failures**
+
+> 2026-05-25: **PascalCase enforcement for interface/enum/type-alias**:
+> - `interface myShape` → compile error (must be PascalCase)
+> - `enum color` → compile error
+> - `type point = ...` → compile error
+> - New tests: interface/lowercase-reject, enum/lowercase-reject, type-alias/lowercase-reject
+> - Result: **1334 tests, 0 failures**
 > 2026-05-25: **Spec↔impl audit batch 3 — 4 fixed, 1 deferred**:
 > - **C-50 DONE**: `size_t` byte size = 8 на desktop, 4 на embedded (helpers.js)
 > - **C-51 DONE**: String literal union `.toString()` → `STR_LIT_RUNTIME()` вместо raw `const char*` (conversion.js)

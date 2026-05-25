@@ -1,0 +1,4 @@
+interface myShape {
+  x: f64;
+  y: f64;
+}

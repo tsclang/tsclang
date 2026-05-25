@@ -2,6 +2,9 @@
 export default {
   visitInterface(node) {
     const { name, members } = node;
+    if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
+      throw this.error(`interface name "${name}" must start with uppercase (PascalCase)`, node);
+    }
     this.interfaces.set(name, members);
 
     const props = members.filter(m => m.kind === 'PropSig');
@@ -45,6 +48,9 @@ export default {
   // ----------------------------------------------------------------
   visitTypeAlias(node) {
     const { name, typeAnn } = node;
+    if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
+      throw this.error(`type alias name "${name}" must start with uppercase (PascalCase)`, node);
+    }
     // String literal union: type Dir = "north" | "south"
     // → typedef enum + static const char* values[]
     if (this.isStringLiteralUnion(typeAnn)) {

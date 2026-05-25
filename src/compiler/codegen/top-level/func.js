@@ -3,6 +3,9 @@ import { mangleParams } from '../../types.js';
 export default {
   visitEnum(node) {
     const { name, members, isConst } = node;
+    if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
+      throw this.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
+    }
     let counter = 0;
     // Detect string enum: first member with a string value
     const isStringEnum = members.some(m => m.value?.litType === 'string');
