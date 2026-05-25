@@ -8,6 +8,6 @@ int main(void) {
     Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     tsc_array_unshift_f64(&arr, 0);
     printf("%zu\n", arr.length);
-    printf("%g\n", arr.data[0]);
+    printf("%g\n", (double)(arr.data[0]));
     return 0;
 }

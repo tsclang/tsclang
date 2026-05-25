@@ -5,6 +5,6 @@ int main(void) {
     const int32_t a = -1;
     const uint32_t b = 2U;
     const double c = (double)(a + (int32_t)b);
-    printf("%g\n", c);
+    printf("%g\n", (double)(c));
     return 0;
 }

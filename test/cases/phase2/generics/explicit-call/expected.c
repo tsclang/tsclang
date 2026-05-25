@@ -12,6 +12,6 @@ int main(void) {
     TSC_INIT();
     const int32_t a = wrap_i32(10);
     const double b = wrap_f64(20);
-    printf("%g\n", a + b);
+    printf("%g\n", (double)(a + b));
     return 0;
 }

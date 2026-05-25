@@ -154,7 +154,7 @@ export default {
         fmtArgs.push(`${needsParens ? `(${cexpr})` : cexpr} ? "true" : "false"`);
       } else if (ctype === 'double') {
         fmtParts.push('%g');
-        fmtArgs.push(cexpr);
+        fmtArgs.push(`(double)(${cexpr})`);
       } else if (ctype === 'float') {
         fmtParts.push('%g');
         fmtArgs.push(`(double)${cexpr}`);

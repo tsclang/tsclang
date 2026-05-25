@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", log2(8.0));
+    printf("%g\n", (double)(log2(8.0)));
     return 0;
 }

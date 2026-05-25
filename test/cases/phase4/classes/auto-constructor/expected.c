@@ -12,7 +12,7 @@ static Point Point_new(double x, double y) {
 int main(void) {
     TSC_INIT();
     Point p = Point_new(3.0, 4.0);
-    printf("%g\n", p.x);
-    printf("%g\n", p.y);
+    printf("%g\n", (double)(p.x));
+    printf("%g\n", (double)(p.y));
     return 0;
 }

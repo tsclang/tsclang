@@ -7,7 +7,7 @@ extern double floor(double x);
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", fabs(-3.5));
-    printf("%g\n", floor(2.9));
+    printf("%g\n", (double)(fabs(-3.5)));
+    printf("%g\n", (double)(floor(2.9)));
     return 0;
 }

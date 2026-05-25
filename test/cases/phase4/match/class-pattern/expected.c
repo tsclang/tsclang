@@ -38,7 +38,6 @@ int main(void) {
         a = w * h;
     }
     else { a = 0.0; }
-    printf("%g\n", a);
+    printf("%g\n", (double)(a));
     return 0;
 }
-

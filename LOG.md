@@ -1342,6 +1342,14 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   - Module-level vars: только promoted → static (08-modules.md)
 > - Result: **1323 tests, 0 failures**
 
+> 2026-05-25: **gcc-failure fix batch 1 — printf %g double cast + STR_LIT_RUNTIME .data**:
+> - `console.log` для `double` типа: добавлен `(double)(expr)` cast — исправляет UB когда C-выражение int, а формат `%g`
+> - `STR_LIT_RUNTIME(...)` для string-literal-union `.toString()`: добавлен `.data` — исправляет передачу String struct вместо `const char*`
+> - Регенерированы 136+111 `expected.c` файлов
+> - Исправлено 11 runtime failures (70 → 59)
+> - Оставшиеся: RC2 (closure cast — 7), RC3 (unknown packer — 7), gcc compile errors (45)
+> - Result: **1345 tests (no-gcc), 1286 tests (gcc)**
+
 > 2026-05-25: **`Math.min/max(...arr)` spread array support**:
 > - Spread syntax: `Math.min(...arr)` — runtime loop over numeric array
 > - Type check: element must be numeric (compile error for String[] etc.)

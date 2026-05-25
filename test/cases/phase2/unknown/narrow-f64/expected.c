@@ -37,7 +37,7 @@ int main(void) {
     TSC_INIT();
     tsc_unknown x = tsc_unknown_from_f64(3.14);
     if (x.type_id == 4) {
-        printf("%g\n", tsc_unknown_get_f64(&x) * 2);
+        printf("%g\n", (double)(tsc_unknown_get_f64(&x) * 2));
     }
     tsc_unknown_drop(&x);
     return 0;

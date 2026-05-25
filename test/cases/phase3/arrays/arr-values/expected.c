@@ -8,7 +8,7 @@ int main(void) {
     const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     const Array_f64 v = tsc_array_values_f64(arr);
     printf("%zu\n", v.length);
-    printf("%g\n", v.data[0]);
-    printf("%g\n", v.data[2]);
+    printf("%g\n", (double)(v.data[0]));
+    printf("%g\n", (double)(v.data[2]));
     return 0;
 }

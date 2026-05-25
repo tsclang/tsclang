@@ -38,10 +38,10 @@ int main(void) {
     tsc_unknown x = tsc_unknown_from_f64(42);
     if (x.type_id == 1) {
         double a = tsc_unknown_get_i32(&x) + 1;
-        printf("%g\n", a);
+        printf("%g\n", (double)(a));
     }
     if (x.type_id == 4) {
-        printf("%g\n", tsc_unknown_get_f64(&x) * 2);
+        printf("%g\n", (double)(tsc_unknown_get_f64(&x) * 2));
     } else {
         printf("%g\n", 0.0);
     }

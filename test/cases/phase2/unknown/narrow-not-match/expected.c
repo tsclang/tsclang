@@ -39,7 +39,7 @@ int main(void) {
     if (x.type_id != 1) {
         printf("%g\n", 99.0);
     } else {
-        printf("%g\n", tsc_unknown_get_i32(&x) + 1);
+        printf("%g\n", (double)(tsc_unknown_get_i32(&x) + 1));
     }
     tsc_unknown_drop(&x);
     return 0;

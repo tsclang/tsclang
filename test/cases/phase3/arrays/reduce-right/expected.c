@@ -11,6 +11,6 @@ int main(void) {
     int32_t _lit_0[] = {1, 2, 3, 4};
     const Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
     const double result = tsc_array_reduce_right_i32_f64(arr, _lambda_0_f64, 0);
-    printf("%g\n", result);
+    printf("%g\n", (double)(result));
     return 0;
 }

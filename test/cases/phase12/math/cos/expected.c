@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", cos(0.0));
+    printf("%g\n", (double)(cos(0.0)));
     return 0;
 }

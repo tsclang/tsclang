@@ -11,6 +11,6 @@ int main(void) {
     Point p = {0};
     p.x = 3.0;
     p.y = 4.0;
-    printf("%g\n", Point_distSquared(&p));
+    printf("%g\n", (double)(Point_distSquared(&p)));
     return 0;
 }

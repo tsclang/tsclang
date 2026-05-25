@@ -4,6 +4,6 @@
 int main(void) {
     TSC_INIT();
     const double v = log(2.718281828);
-    printf("%g\n", v);
+    printf("%g\n", (double)(v));
     return 0;
 }

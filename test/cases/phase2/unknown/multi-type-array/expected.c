@@ -40,7 +40,7 @@ int main(void) {
         printf("not array\n");
     } else {
         if (x.type_id == 1) {
-            printf("%g\n", tsc_unknown_get_i32(&x) + 1);
+            printf("%g\n", (double)(tsc_unknown_get_i32(&x) + 1));
         }
     }
     tsc_unknown_drop(&x);

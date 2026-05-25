@@ -7,6 +7,6 @@ int main(void) {
     Point p = {0};
     p.x = 1.0;
     p.y = 2.0;
-    printf("%g\n", p.x);
+    printf("%g\n", (double)(p.x));
     return 0;
 }

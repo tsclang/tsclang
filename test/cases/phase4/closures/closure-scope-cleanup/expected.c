@@ -15,6 +15,6 @@ int main(void) {
         tsc_closure f = {.env = &f_env, .fn = (void*)_closure_0_fn};
         result = ((int32_t (*)(void *))f.fn)(f.env);
     }
-    printf("%g\n", result);
+    printf("%g\n", (double)(result));
     return 0;
 }

@@ -7,7 +7,7 @@ int main(void) {
     double _arr_data_0[] = {3, 1, 2};
     const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     const Array_f64 sorted = tsc_array_to_sorted_f64(arr);
-    printf("%g\n", sorted.data[0]);
-    printf("%g\n", arr.data[0]);
+    printf("%g\n", (double)(sorted.data[0]));
+    printf("%g\n", (double)(arr.data[0]));
     return 0;
 }

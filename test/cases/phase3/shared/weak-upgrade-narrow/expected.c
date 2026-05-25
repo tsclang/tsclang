@@ -18,4 +18,3 @@ int main(void) {
     tsc_arc_release(d);
     return 0;
 }
-

@@ -17,7 +17,6 @@ int main(void) {
         area = a * b;
     }
     else { area = 0.0; }
-    printf("%g\n", area);
+    printf("%g\n", (double)(area));
     return 0;
 }
-
