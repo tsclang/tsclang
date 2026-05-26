@@ -1,0 +1,4 @@
+// [F] const a: i32[] = [1, 2, 3] — literal uses int32_t, not double
+const a: i32[] = [1, 2, 3];
+console.log(a[0]);
+console.log(a[2]);

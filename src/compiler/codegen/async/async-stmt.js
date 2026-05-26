@@ -395,10 +395,12 @@ export default {
       if (ctx?.inlined.has(name)) return;
       if (ctx?.promoted.has(name)) {
         if (init) {
-          // In assignment context, bare {0} is not valid — need compound literal cast
-          let initC = this._selfE(init);
           const ct = stmt.typeAnn ? this.resolveType(stmt.typeAnn)
                    : (init ? (this.inferType(init) || null) : null);
+          const prevExpected = this._expectedType;
+          if (ct?.startsWith('Array_')) this._expectedType = ct;
+          let initC = this._selfE(init);
+          this._expectedType = prevExpected;
           if (initC === '{0}' && ct) initC = `(${ct}){0}`;
           lines.push(`${I}self->${name} = ${initC};`);
           if (ctx.stringFields.includes(name) &&

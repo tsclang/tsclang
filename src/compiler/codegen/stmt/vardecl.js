@@ -823,7 +823,7 @@ export default {
         const isGenericClassInst = !enumDef2 && this._genericClasses &&
           [...this._genericClasses.keys()].some(n => ctype.startsWith(n + '_'));
         // opt_ types suppress const only when inferred (no type annotation); with explicit T|null annotation, keep const
-        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date';
+        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || enumDef2?.isStruct || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date';
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
         // Optional type (opt_T): handle null/value init
@@ -918,7 +918,9 @@ export default {
             p(`${qualifier}${arrName} ${name} = {.data = NULL, .length = 0, .capacity = 0};`);
           } else if (init.kind === 'ArrayLit') {
             const litVar = `_lit_${this.tempCount++}`;
+            this._expectedType = et?.startsWith('Array_') ? et : null;
             const elems = this.arrayLitToC(init, et, lines, depth);
+            this._expectedType = undefined;
             p(`${et} ${litVar}[] = {${elems.join(', ')}};`);
             p(`${qualifier}${arrName} ${name} = {.data = ${litVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
           } else {
@@ -1320,12 +1322,18 @@ export default {
                 }
               }
             }
-            // computed() тЖТ Signal_T var (Signal is the result type, not raw T)
+            // computed() → Signal_T var (Signal is the result type, not raw T)
             if (this._lastComputedSigType) {
               const _sigType = this._lastComputedSigType;
               const _sigElemIdent = this._lastComputedElemType;
               this._lastComputedSigType = undefined;
               this._lastComputedElemType = undefined;
+              if (!this._emittedSignalTypedefs.has(_sigType)) {
+                this._emittedSignalTypedefs.add(_sigType);
+                const _sigElemCType = this._arrIdentToCType(_sigElemIdent);
+                this.addTop(`typedef struct { ${_sigElemCType} _value; void (**_effects)(void); size_t _effect_count; ${_sigElemCType} (*_compute)(void); } ${_sigType};`);
+                this.addTop('');
+              }
               p(`${_sigType} ${name} = ${initC};`);
               this.define(name, { ctype: _sigType, varKind, _isSignal: true, _signalElemType: _sigElemIdent });
               return;

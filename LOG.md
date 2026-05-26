@@ -1367,3 +1367,25 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **New tests (+4)**: narrow-f64-from-bare, narrow-f64-mismatch, bare-literal-number, as-cast-from-f64-unknown
 > - **RC3 resolved**: `as-cast-from-unknown` now uses `tsc_unknown_get_f64` for f64-stored unknown (was `get_i32` = UB)
 > - Result: **1349 tests (no-gcc), 1303 tests (gcc)** — was 1286 gcc
+
+> 2026-05-26: **3 gcc failures fixed — struct const + _expectedType propagation**:
+> - **Struct `const` suppression**: TS `const` for structs only prevents reassignment, not property mutation — compiler no longer emits C `const` for struct-typed variables. Fix in `vardecl.js:826`.
+> - **`_expectedType` propagation in function call args**: array literal passed to typed function parameter now uses correct element type (e.g. `[10,20,30]` → `int32_t` for `i32[]` param). Fix in `call-dispatch.js:458`.
+> - Updated 18 expected.c files across phases 2-6, 19.
+> - Result: **1351 tests (no-gcc), 343 phase3 gcc — 0 failures**
+
+> 2026-05-26: **7 more gcc failures fixed — .map() typedef, String.split(), async arrays, Promise .finally(), setInterval**:
+> - **`.map()` output typedef** (`method-dispatch.js`): `_ensureArrayStruct` now called for output array type when map changes element type. Fixes `Array_f64` undeclared.
+> - **Chain handler `elemType`** (`method-dispatch.js`): chain temp variables now store `elemType`/`arrElemCType` — chained `.filter()` after `.map()` uses correct element type.
+> - **`String.split()` expression context** (`runtime.h` + `method-dispatch.js`): added `tsc_string_split_expr` macro that returns `Array_string`; codegen uses it in expression contexts.
+> - **Async `_expectedType`** (`async-stmt.js`): promoted VarDecl in async functions now sets `_expectedType` before compiling array literal init. Fixes `Array_i32` struct field assigned `Array_f64`.
+> - **Promise `.finally()` typedef** (`method-dispatch.js`): added `_emitPromiseTypedef` call in `finally` branch.
+> - **`setInterval` callback** (`conversion.js`): fallthrough path now uses `hoistArrow` instead of `exprToC`, matching `setTimeout` pattern. Fixes `tsc_closure` passed where `void (*)(void)` expected.
+> - Updated 7 expected.c files in phase1/chain, phase7.
+> - Result: **1351 no-gcc — 0 failures; phase1 chain 11 gcc — 0 failures; phase7 54 gcc — 0 failures**
+
+> 2026-05-26: **8 more gcc failures fixed — Signal_f64 typedef, signal.get() inferType, runtime.h misleading-indentation warnings pending**:
+> - **`computed()` Signal typedef** (`vardecl.js`): `computed()` returning `Signal_f64` now emits typedef for the result signal type. Previously only `new Signal<T>()` emitted typedefs.
+> - **Signal `.get()` type inference** (`infer.js`): `inferType` now returns correct C type for `signal.get()` based on `_signalElemType`. Fixes `console.log` using `%d` instead of `%g` for f64 signals.
+> - **Full gcc audit passed**: 1314 gcc tests across 17 phases — 0 failures. 1351 no-gcc — 0 failures.
+> - Updated `test/cases/phase12/reactive/computed/expected.c`.

@@ -455,7 +455,10 @@
           const lambdaName = this.hoistArrow(a.expr, 'void', '_cb');
           return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
         }
+        const _prevExpected = this._expectedType;
+        if (paramType?.startsWith('Array_')) this._expectedType = paramType;
         const _argC = this.exprToC(a.expr, lines, depth);
+        this._expectedType = _prevExpected;
         if (paramType === 'tsc_unknown') {
           const _argType = this.inferType(a.expr);
           if (_argType !== 'tsc_unknown') {
@@ -548,9 +551,11 @@
       const srcC = this.exprToC(srcExpr, lines, depth);
       const srcType = this.inferType(srcExpr);
       if (srcType?.startsWith('Array_')) {
-        const tmp = `_from_${this.tempCount++}`;
-        lines.push(`${I}${arrName} ${tmp} = ${srcC};`);
-        return `tsc_array_slice_${etIdent}(${tmp}, 0, (int32_t)${tmp}.length)`;
+        if (srcType === arrName) {
+          return `tsc_array_slice_${etIdent}(${srcC}, 0, (int32_t)${srcC}.length)`;
+        }
+        const srcIdent = srcType.slice(6);
+        return `tsc_array_cast_${srcIdent}_${etIdent}(${srcC})`;
       }
       return `tsc_array_slice_${etIdent}(${srcC}, 0, (int32_t)${srcC}.length)`;
     }

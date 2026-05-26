@@ -7,7 +7,7 @@ int main(void) {
     Point p = {0};
     p.x = 1;
     p.y = 2;
-    const Point p2 = {.x = p.x, .y = p.y};
+    Point p2 = {.x = p.x, .y = p.y};
     printf("%d\n", p2.x);
     printf("%d\n", p2.y);
     return 0;

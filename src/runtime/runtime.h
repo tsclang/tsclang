@@ -1338,6 +1338,13 @@ static inline void tsc_string_array_free(String *parts, int32_t len) {
     free(parts);
 }
 
+/* tsc_string_split_expr: returns Array_string for expression-context split (e.g. s.split(" ").length) */
+#define tsc_string_split_expr(s, sep) ({ \
+    String *_sp_; int32_t _sl_; \
+    tsc_string_split(s, sep, &_sp_, &_sl_); \
+    (Array_string){ .data = _sp_, .length = (size_t)_sl_, .capacity = (size_t)_sl_ }; \
+})
+
 /* JSON stringify: wraps a String value in double-quotes with basic escaping */
 static inline String tsc_json_stringify_string(String s) {
     size_t cap = s.length * 2 + 3;
@@ -2431,6 +2438,22 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
         _slot_->data[_slot_->length++] = _a_.data[_i_]; \
     } \
     _r_; })
+
+#define tsc_array_cast_f64_i32(arr) ({ \
+    Array_f64 _a_ = (arr); \
+    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        _d_[_i_] = (int32_t)_a_.data[_i_]; \
+    (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
+
+#define tsc_array_cast_i32_f64(arr) ({ \
+    Array_i32 _a_ = (arr); \
+    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
+        _d_[_i_] = (double)_a_.data[_i_]; \
+    (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
+})
 
 #define tsc_array_shift_string(arr) ({ \
     Array_string *_a_ = (arr); \

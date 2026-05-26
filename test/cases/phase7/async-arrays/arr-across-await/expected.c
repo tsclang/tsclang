@@ -1,7 +1,6 @@
 #include "runtime.h"
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
-typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 typedef struct { int32_t _state; int32_t _result; bool _done; } getValue_state;
 
@@ -19,12 +18,12 @@ typedef struct {
     Array_i32 arr;
     getValue_state _await_0;
 } foo_state;
-static double _arr_data_0[] = {10, 20, 30};
+static int32_t _arr_data_0[] = {10, 20, 30};
 
 static void foo_poll(foo_state *self) {
     switch (self->_state) {
         case 0:
-            self->arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 0};
+            self->arr = (Array_i32){.data = _arr_data_0, .length = 3, .capacity = 0};
             self->_await_0 = (getValue_state){0};
             self->_state = 1;
             /* fall through */

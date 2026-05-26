@@ -4,7 +4,7 @@ typedef struct { int32_t kind; double a; double b; } Shape;
 
 int main(void) {
     TSC_INIT();
-    const Shape shape = { .kind = 1, .a = 5.0, .b = 0.0 };
+    Shape shape = { .kind = 1, .a = 5.0, .b = 0.0 };
     double area;
     if (shape.kind == 1) {
         double a = shape.a;

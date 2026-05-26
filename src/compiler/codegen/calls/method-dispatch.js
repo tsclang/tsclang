@@ -23,7 +23,14 @@ export default {
         if (hasNextMethod) {
           const tmpName = `_chain_${this.tempCount++}`;
           lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
-          this.define(tmpName, { ctype: resultType, varKind: 'const' });
+          const chainDef = { ctype: resultType, varKind: 'const' };
+          if (resultType.startsWith('Array_')) {
+            const chainElemIdent = resultType.slice(6);
+            chainDef.elemType = chainElemIdent;
+            chainDef.arrElemCType = this._arrIdentToCType(chainElemIdent);
+            chainDef.isArray = true;
+          }
+          this.define(tmpName, chainDef);
           baseObject = { kind: 'Ident', name: tmpName };
         } else {
           lines.push(`${I}${innerC};`);
@@ -229,6 +236,11 @@ export default {
         case 'forEach': return `tsc_array_foreach_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         case 'map': {
           const outET = cbFnName ? (this._lastCbRetType ? this.cTypeToIdent(this._lastCbRetType) : et) : lambdaOutET(argsC);
+          if (outET !== et) {
+            const outArrName = `Array_${outET}`;
+            const outElemCType = this._arrIdentToCType(outET);
+            this._ensureArrayStruct(outArrName, outElemCType);
+          }
           return `tsc_array_map_${et}_${outET}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
         case 'reduce': {
@@ -393,7 +405,7 @@ export default {
       includes:   () => `tsc_string_includes(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       startsWith: () => `tsc_string_starts_with(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       endsWith:   () => `tsc_string_ends_with(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
-      split:      () => `tsc_string_split(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
+      split:      () => { this._ensureArrayStruct('Array_string', 'String'); return `tsc_string_split_expr(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`; },
       trim:       () => `tsc_string_trim(${strObjC})`,
       toUpperCase:() => `tsc_string_to_upper(${strObjC})`,
       toLowerCase:() => `tsc_string_to_lower(${strObjC})`,
@@ -659,6 +671,7 @@ export default {
         return `(${resultPromiseType}){._done = true, ._result = ${tmpName}, ._ok = true}`;
       }
       if (prop === 'finally') {
+        this._emitPromiseTypedef(objType, innerCType);
         lines.push(`${I}${cbFnName}();`);
         return objC;
       }

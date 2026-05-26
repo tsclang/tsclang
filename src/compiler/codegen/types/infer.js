@@ -665,6 +665,11 @@ export default {
       if (prop === 'unlock') return 'void';
       if (prop === 'isLocked') return 'bool';
     }
+    const _sigSymInf = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
+    if (_sigSymInf?._isSignal) {
+      if (prop === 'get') return this._arrIdentToCType(_sigSymInf._signalElemType);
+      if (prop === 'set') return 'void';
+    }
     const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     let objType = objSym?.ctype ?? this.inferType(obj);
     if (objSym?.ctype === 'tsc_unknown' && obj.kind === 'Ident' && this._narrowedUnknownVars?.has(obj.name)) {
@@ -682,7 +687,10 @@ export default {
         const cbArg = node.args?.[0]?.expr ?? node.args?.[0];
         if (cbArg?.kind === 'Arrow' && cbArg.body?.kind !== 'Block') {
           const outCType = this.inferTypeWithParams(cbArg, etCType);
-          const outIdent = this.cTypeToIdent(outCType);
+          let outIdent = this.cTypeToIdent(outCType);
+          if (prop === 'flatMap' && outCType?.startsWith('Array_')) {
+            outIdent = outCType.slice(6);
+          }
           return `Array_${outIdent}`;
         }
         return objType;

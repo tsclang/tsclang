@@ -11,7 +11,7 @@ static void Minimal_free(Minimal *self) {
 
 int main(void) {
     TSC_INIT();
-    const Minimal u = { .name = STR_LIT("X"), .role = STR_LIT("admin") };
+    Minimal u = { .name = STR_LIT("X"), .role = STR_LIT("admin") };
     printf("%s\n", u.role.data);
     Minimal_free(&u);
     return 0;

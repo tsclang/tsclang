@@ -380,15 +380,20 @@ export default {
 
       case 'ArrayLit': {
         const elems = node.elems.filter(e => !e.spread);
-        let elemType = elems.length ? this.inferType(elems[0].expr) : null;
-        if (elemType === 'String *') elemType = 'String';
-        if (!elemType && this._expectedType?.startsWith('Array_')) {
+        let elemType;
+        if (this._expectedType?.startsWith('Array_')) {
           elemType = this._arrIdentToCType(this._expectedType.slice(6));
         }
+        if (!elemType) elemType = elems.length ? this.inferType(elems[0].expr) : null;
+        if (elemType === 'String *') elemType = 'String';
         if (!elemType) elemType = 'int32_t';
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
         this._ensureArrayStruct(arrType, elemType);
         const dataVar = `_arr_data_${this.tempCount++}`;
+        const prevExpected = this._expectedType;
+        if (arrType?.startsWith('Array_') && this._expectedType?.startsWith('Array_')) {
+          this._expectedType = arrType;
+        }
         const items = elems.map(e => {
           let c = this.exprToC(e.expr, lines, depth);
           if (e.expr.kind === 'Ident') {
@@ -405,6 +410,7 @@ export default {
           }
           return c;
         }).join(', ');
+        this._expectedType = prevExpected;
         if (this._inAsyncFunc) {
           this.topLevel.push(`static ${elemType} ${dataVar}[] = {${items}};`);
           return `(${arrType}){.data = ${dataVar}, .length = ${elems.length}, .capacity = 0}`;

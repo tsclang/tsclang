@@ -1,7 +1,6 @@
 #include "runtime.h"
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
-typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
 typedef struct { int32_t threshold; } _closure_0_env;
 
@@ -22,8 +21,8 @@ Array_i32 filterAbove_Array_i32_i32(Array_i32 items, int32_t threshold) {
 
 int main(void) {
     TSC_INIT();
-    double _arr_data_0[] = {1, 5, 3, 8, 2};
-    Array_i32 arr = (Array_f64){.data = _arr_data_0, .length = 5, .capacity = 5};
+    int32_t _arr_data_0[] = {1, 5, 3, 8, 2};
+    Array_i32 arr = (Array_i32){.data = _arr_data_0, .length = 5, .capacity = 5};
     Array_i32 result = filterAbove_Array_i32_i32(arr, 3);
     printf("%s\n", tsc_array_join_i32(result, STR_LIT(", ")).data);
     return 0;

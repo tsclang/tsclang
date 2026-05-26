@@ -9,6 +9,6 @@ Point merge_Point__partial_Point(Point base, _partial_Point patch) {
 
 int main(void) {
     TSC_INIT();
-    const Point p = merge_Point__partial_Point((Point){.x = 1, .y = 2}, (_partial_Point){.y = 99});
+    Point p = merge_Point__partial_Point((Point){.x = 1, .y = 2}, (_partial_Point){.y = 99});
     return 0;
 }

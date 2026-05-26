@@ -11,7 +11,7 @@ static void UserContact_free(UserContact *self) {
 
 int main(void) {
     TSC_INIT();
-    const UserContact u = { .name = STR_LIT("Bob"), .email = STR_LIT("bob@x.com") };
+    UserContact u = { .name = STR_LIT("Bob"), .email = STR_LIT("bob@x.com") };
     printf("%s\n", u.email.data);
     UserContact_free(&u);
     return 0;

@@ -10,7 +10,7 @@ static void ReadonlyUser_free(ReadonlyUser *self) {
 
 int main(void) {
     TSC_INIT();
-    const ReadonlyUser u = { .name = STR_LIT("Bob"), .age = 25 };
+    ReadonlyUser u = { .name = STR_LIT("Bob"), .age = 25 };
     printf("%s\n", u.name.data);
     ReadonlyUser_free(&u);
     return 0;

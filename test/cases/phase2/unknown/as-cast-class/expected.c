@@ -46,7 +46,7 @@ int main(void) {
     p.y = 20.0;
     tsc_unknown x = tsc_unknown_from_Point(p);
     if (x.type_id == 8) {
-        const Point obj = *tsc_unknown_get_Point(&x);
+        Point obj = *tsc_unknown_get_Point(&x);
         printf("%g\n", (double)(obj.x));
         printf("%g\n", (double)(obj.y));
     }

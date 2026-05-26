@@ -16,7 +16,7 @@ static void Config_free(Config *self) {
 
 int main(void) {
     TSC_INIT();
-    const Config c = Config_new(STR_LIT("localhost"), 8080);
+    Config c = Config_new(STR_LIT("localhost"), 8080);
     printf("%s\n", c.host.data);
     printf("%d\n", c.port);
     Config_free(&c);

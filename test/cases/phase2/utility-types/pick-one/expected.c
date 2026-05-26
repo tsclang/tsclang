@@ -10,7 +10,7 @@ static void UserName_free(UserName *self) {
 
 int main(void) {
     TSC_INIT();
-    const UserName u = { .name = STR_LIT("Alice") };
+    UserName u = { .name = STR_LIT("Alice") };
     printf("%s\n", u.name.data);
     UserName_free(&u);
     return 0;

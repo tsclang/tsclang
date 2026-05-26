@@ -108,7 +108,18 @@
           return `tsc_set_interval(${prefix}_fn, ${ms})`;
         }
       }
-      const fn = this.exprToC(args[0].expr, lines, depth);
+      let fn;
+      const lambdaArg2 = args[0]?.expr;
+      if (lambdaArg2?.kind === 'Arrow') {
+        const closure = this.hoistClosure(lambdaArg2, `_cb_${this.closureCount ?? 0}`);
+        if (closure) {
+          fn = closure.fnName;
+        } else {
+          fn = this.hoistArrow(lambdaArg2, 'void', '_cb');
+        }
+      } else {
+        fn = this.exprToC(args[0].expr, lines, depth);
+      }
       const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_interval(${fn}, ${ms})`;
     }

@@ -1,0 +1,6 @@
+// [R] Array.from<i32> on number[] — element-wise cast (truncation)
+const src = [1.5, 2.7, 3.9];
+const copy = Array.from<i32>(src);
+console.log(copy[0]);
+console.log(copy[1]);
+console.log(copy[2]);
