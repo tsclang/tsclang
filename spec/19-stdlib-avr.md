@@ -6,7 +6,7 @@
 ## Назначение
 
 `std/avr` — низкоуровневый API для AVR-микроконтроллеров (ATmega328P и совместимые).
-Только `#[target(avr)]` — ошибка компилятора на desktop/arm/esp32.
+Только при `--target avr` — ошибка компилятора на desktop/arm/esp32.
 Дополняет `std/hal` прямым доступом к периферии (delay, serial, ADC, PWM, interrupts).
 
 ## Зависимости
@@ -103,7 +103,7 @@ void tsc_avr_interrupt_disable(void) { cli(); }
 ### Стаб для desktop (уже готово)
 
 В `src/runtime/std/avr.h` все функции — no-op stubs, компилируются gcc.
-Реальная реализация выбирается через `cmake/toolchain-avr.cmake` при `#[target(avr)]`.
+Реальная реализация выбирается через `cmake/toolchain-avr.cmake` при `--target avr`.
 
 ## Тесты
 

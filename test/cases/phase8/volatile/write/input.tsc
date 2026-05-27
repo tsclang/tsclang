@@ -1,3 +1,2 @@
-#[target(avr)]
 let reg: volatile<u8> = 0x00;
 reg = 0xAB;

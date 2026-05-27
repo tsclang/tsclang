@@ -1,4 +1,3 @@
-#[target(avr)]
 import { fetch } from "std/net";
 async function run(): void {
     await fetch("https://example.com");

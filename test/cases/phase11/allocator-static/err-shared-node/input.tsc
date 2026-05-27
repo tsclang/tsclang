@@ -1,3 +1,2 @@
-#[profile(allocator: "static")]
 class Node { value: i32; }
 let n = new Shared<Node>();

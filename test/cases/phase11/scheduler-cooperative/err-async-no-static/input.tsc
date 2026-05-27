@@ -1,2 +1,1 @@
-#[profile(allocator: "static", scheduler: "cooperative")]
 async function run(): void { console.log("x"); }

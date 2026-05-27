@@ -1,5 +1,3 @@
-// @target: nes
-
 class Sprite {
     x: u8;
     y: u8;

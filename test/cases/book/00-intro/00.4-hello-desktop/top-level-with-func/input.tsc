@@ -1,0 +1,9 @@
+let x: i32 = 42
+const name = "TSClang"
+
+function greet(who: string): void {
+    console.log("Hello, " + who)
+}
+
+greet(name)
+console.log("x =", x)

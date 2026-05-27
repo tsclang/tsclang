@@ -1,1 +1,1 @@
-TypeError: Cannot use 'await' inside an ISR handler 'onTimer'
+TypeError: Cannot use 'async' with @embedded.isr on 'onTimer'

@@ -1,4 +1,4 @@
-// AST optimizer — activated by "// @opt" annotation or #[profile(opt: true)]
+// AST optimizer — activated by --optimize flag
 // Strategy:
 //   Phase 1: fold constant binary/unary expressions everywhere (bottom-up)
 //   Phase 2: propagate const literals into OTHER const initializers only

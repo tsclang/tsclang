@@ -1,3 +1,2 @@
-#[profile(allocator: "static")]
 class Sprite { x: i32; y: i32; }
 @static const sprites = new Array<Sprite>(64);

@@ -1,5 +1,3 @@
-// @target: nes
-
 function addrOf(ptr: usize): u8 {
     return 0;
 }

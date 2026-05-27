@@ -111,6 +111,10 @@ USAGE:
 OPTIONS:
   --emit <c|binary|wasm>   Output format (default: c)
   --outDir <dir>           Output directory (default: .)
+  --target <name>          Target platform (desktop, avr, nes, wasm, ...)
+  --default-number <type>  Default number type (f64, f32, i32, ...)
+  --allocator <type>       Allocator strategy (default, static, none)
+  --scheduler <type>       Scheduler (default, cooperative, libuv)
   --optimize <O0-O3|Os|Oz> Optimization level
   --debug                  Compile with debug info
   --sourcemap              Generate source map
@@ -524,10 +528,7 @@ function compileTsc(inputPath, opts = {}) {
 
   let   ast      = parsedAst;
 
-  // AST optimizer: activated by "// @opt" comment or #[profile(opt: true)]
-  const _wantsOpt = /\/\/\s*@opt\b/.test(src) ||
-    ast.body.some(n => n.kind === 'ProfileAnnotation' && /\bopt:\s*true\b/.test(n.content));
-  if (_wantsOpt || opts.optimize) ast = optimize(ast);
+  if (opts.optimize) ast = optimize(ast);
 
   // Recursively compile local imports (./… or ../…) depth-first
   const importedModules = { ...(opts.importedModules || {}) };
@@ -1038,6 +1039,20 @@ if (command === 'build') {
     process.exit(1);
   }
 
+  const _validNumberTypes = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64']);
+  const _flagVal = (name) => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : null; };
+  const _targetFlag       = _flagVal('--target');
+  const _defaultNumberFlag = _flagVal('--default-number');
+  const _allocatorFlag    = _flagVal('--allocator');
+  const _schedulerFlag    = _flagVal('--scheduler');
+  const _noRecursionFlag  = args.includes('--no-recursion');
+  const _ramSizeFlag      = _flagVal('--ram-size');
+  const _stackSizeFlag    = _flagVal('--stack-size');
+  if (_defaultNumberFlag && !_validNumberTypes.has(_defaultNumberFlag)) {
+    process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${[..._validNumberTypes].join(', ')}\n`);
+    process.exit(1);
+  }
+
   if (emit === 'hex') {
     process.stderr.write(
       `ConfigError: --emit hex requires an embedded target (avr); desktop target does not support hex output\n`
@@ -1046,7 +1061,14 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
-  const buildOpts = { maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap };
+  const buildOpts = {
+    maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
+    target: _targetFlag, defaultNumber: _defaultNumberFlag,
+    allocator: _allocatorFlag, scheduler: _schedulerFlag,
+    noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
+    stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
+    optimize: !!optimize,
+  };
 
   function doBuild() {
     let c, warnings, lineMap;

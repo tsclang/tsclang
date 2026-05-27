@@ -12,7 +12,7 @@ export default {
       }
       // usize = u16 on 16-bit targets
       if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
-      if (name === 'number') return (this._targetName === 'avr') ? 'float' : 'double';
+      if (name === 'number') return PRIMITIVE_MAP[this._defaultNumber] || 'double';
       if (name in PRIMITIVE_MAP) {
         if (name === 'unknown') this._ensureUnknownStruct();
         if (name === 'any' && !this._inUnsafe && !this._inDeclare) {

@@ -29,7 +29,6 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (t.type === TK.SEMI) { pos++; return; }
       if (t.type === TK.EOF) return;
       if (t.type === TK.IDENT && STMT_KEYWORDS.has(t.value)) return;
-      if (t.type === TK.HASH && pos + 1 < max && tokens[pos + 1].type === TK.LBRACK) return;
       pos++;
     }
   }
@@ -339,23 +338,20 @@ export function parse(tokens, filename = '<input>', src = null) {
   function parseProgram() {
     const body = [];
     while (!done()) {
-      // #[...] — profile/target annotation
-      if (cur().type === TK.HASH && peek().type === TK.LBRACK) {
-        try {
-          eat(TK.HASH); eat(TK.LBRACK);
-          let content = '';
+      if (cur().type === TK.HASH) {
+        errors.push(new TscError(`SyntaxError: unexpected '#[...]' directive; use CLI flags (--target, --allocator, --scheduler) or tsc.package.json instead`, {
+          kind: 'error', filename, line: cur().line, col: cur().col, endCol: cur().col + 1, src, label: null, spans: [], help: ['replace #[target(avr)] with: --target avr (CLI) or {"target":"avr"} in tsc.package.json'], notes: [], code: null,
+        }));
+        pos++;
+        if (cur()?.type === TK.LBRACK) {
+          pos++;
           let depth = 1;
           while (!done() && depth > 0) {
             if (cur().type === TK.LBRACK) depth++;
             else if (cur().type === TK.RBRACK) { depth--; if (depth === 0) break; }
-            content += cur().value;
             pos++;
           }
-          eat(TK.RBRACK);
-          body.push({ kind: 'ProfileAnnotation', content });
-        } catch (e) {
-          errors.push(e);
-          syncToRecovery();
+          if (cur()?.type === TK.RBRACK) pos++;
         }
         continue;
       }

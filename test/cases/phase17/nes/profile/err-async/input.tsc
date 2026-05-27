@@ -1,5 +1,3 @@
-// @target: nes
-
 async function loadData(addr: u16): Promise<u8> {
     return 0;
 }

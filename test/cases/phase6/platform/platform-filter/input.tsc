@@ -1,5 +1,3 @@
-// @target: avr
-
 @platform("desktop")
 function deskOnly(): void {
     console.log("desktop");

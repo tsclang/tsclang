@@ -1,0 +1,2 @@
+import { fetch } from "std/net";
+console.log("x");

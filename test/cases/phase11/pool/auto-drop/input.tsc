@@ -1,4 +1,3 @@
-#[target(avr)]
 @embedded.pool(4) class Spark { active: bool; }
 {
     const s = Spark.alloc();

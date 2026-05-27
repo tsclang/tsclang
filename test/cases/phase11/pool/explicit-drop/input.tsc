@@ -1,4 +1,3 @@
-#[target(avr)]
 @embedded.pool(4) class Gem { value: i32; }
 let g = Gem.alloc();
 if (g != null) {

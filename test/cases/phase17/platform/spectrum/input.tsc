@@ -1,5 +1,3 @@
-// @target: spectrum
-
 let border: u8 = 0;
 let screen: usize = 0x4000;
 

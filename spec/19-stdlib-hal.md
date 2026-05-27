@@ -13,7 +13,7 @@
 
 - Embedded: реализуется через `declare module "std/hal"` в platform profile
 - Desktop: mock-стаб (no-op) — `src/runtime/std/hal.h`
-- Таргет `avr`: директива `#[target(avr)]` обязательна
+- Таргет `avr`: требуется `--target avr` (CLI) или `"target": "avr"` (tsc.package.json)
 
 ## Типы
 

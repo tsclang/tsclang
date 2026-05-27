@@ -3,10 +3,6 @@ export default {
   visitTopLevel(node) {
     if (!node) return;
     switch (node.kind) {
-      case 'ProfileAnnotation': {
-        if (node.content.startsWith('isr(')) this._pendingIsrAnnotation = node.content;
-        break;
-      }
       case 'Import':
         // Check if source is a declared ambient module (declare module "name" { ... })
         if (this._declaredModules?.has(node.source)) {
@@ -66,8 +62,8 @@ export default {
           this.includes.add('#include "std/temporal.h"');
           this._stdTemporalImported = true;
         } else if (node.source === 'std/fs') {
-          if (this._isEmbeddedOrRetro()) {
-            throw this.error(`TypeError: 'std/fs' is not available on embedded targets`);
+          if (this._isEmbeddedOrRetro() || this._isWasmBare()) {
+            throw this.error(`TypeError: 'std/fs' is not available on ${this._targetName} targets`);
           }
           this.includes.add('#include "std/fs.h"');
           this._stdFsImported = true;
@@ -84,6 +80,9 @@ export default {
           // #include "std/blob.h" only added when TscBlob is actually used (isTscBlob path in stmt.js)
           this._stdBlobImported = true;
         } else if (node.source === 'std/io') {
+          if (this._isWasmBare()) {
+            throw this.error(`TypeError: 'std/io' is not available on wasm targets`);
+          }
           this.includes.add('#include "std/io.h"');
           this._stdIoImported = true;
           // Register Reader/Writer as vtable interface types
@@ -125,11 +124,14 @@ export default {
           this._reactiveClosureCount = 0;
           this._capturedSignalMap = new Map(); // varName → pointer expr like "_closure_0_captured.x"
         } else if (node.source === 'std/ws') {
+          if (this._isWasmBare()) {
+            throw this.error(`TypeError: 'std/ws' is not available on wasm targets`);
+          }
           this.includes.add('#include "std/ws.h"');
           this._stdWsImported = true;
         } else if (node.source === 'std/net') {
-          if (this._isEmbeddedOrRetro()) {
-            throw this.error(`TypeError: 'std/net' is not available on embedded targets`);
+          if (this._isEmbeddedOrRetro() || this._isWasmBare()) {
+            throw this.error(`TypeError: 'std/net' is not available on ${this._targetName} targets`);
           }
           this.includes.add('#include "std/net.h"');
           this._stdNetImported = true;
@@ -148,6 +150,9 @@ export default {
         } else if (node.source === 'std/hal') {
           if (!this._isEmbeddedOrRetro()) {
             throw this.error(`TypeError: 'std/hal' requires an embedded platform target`);
+          }
+          if (this._isWasmBare()) {
+            throw this.error(`TypeError: 'std/hal' is not available on wasm targets`);
           }
           this.includes.add('#include "std/hal.h"');
           this._stdHalImported = true;

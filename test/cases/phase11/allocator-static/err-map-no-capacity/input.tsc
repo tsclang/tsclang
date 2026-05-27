@@ -1,2 +1,1 @@
-#[profile(allocator: "static")]
 let m = new Map<u8, i32>();

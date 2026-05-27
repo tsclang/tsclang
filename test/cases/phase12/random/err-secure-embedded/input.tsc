@@ -1,3 +1,2 @@
-// @target: avr
 import { SecureRandom } from "std/random";
 const r = new SecureRandom();

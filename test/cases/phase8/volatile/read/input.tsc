@@ -1,4 +1,3 @@
-#[target(avr)]
 let reg: volatile<u8> = 0xFF;
 const v = reg;
 console.log(v);

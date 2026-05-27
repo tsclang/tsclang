@@ -1,5 +1,3 @@
-// @opt
-
 function check(x: i32): i32 {
     if (false) {
         return -1;

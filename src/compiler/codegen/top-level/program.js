@@ -86,29 +86,20 @@ export default {
       }
     }
 
-    // Pre-scan: detect target and allocator annotations
-    this._targetName = 'desktop';
-    this._allocatorName = 'default';
-    // Also check comment-style annotation: // @target: avr
-    if (this.src) {
-      const mCommentTarget = this.src.match(/\/\/\s*@target:\s*(\w+)/);
-      if (mCommentTarget) this._targetName = mCommentTarget[1];
-    }
-    for (const node of ast.body) {
-      if (node.kind === 'ProfileAnnotation') {
-        const mTarget = node.content.match(/target\((\w+)\)/);
-        if (mTarget) this._targetName = mTarget[1];
-        const mAlloc = node.content.match(/allocator[:(]"?(\w+)"?\)?/);
-        if (mAlloc) this._allocatorName = mAlloc[1]; // 'none', 'static', 'dynamic'
-        const mNoRec = /no_recursion:true/.test(node.content);
-        if (mNoRec) this._noRecursion = true;
-        const mSched = node.content.match(/scheduler:(\w+)/);
-        if (mSched) this._schedulerName = mSched[1]; // 'cooperative'
-        const mRam = node.content.match(/ram_size:(\d+)/);
-        if (mRam) this._ramSize = parseInt(mRam[1]);
-        const mStack = node.content.match(/stack_size:(\d+)/);
-        if (mStack) this._stackSize = parseInt(mStack[1]);
-      }
+    // Pre-scan: detect target and allocator from opts or defaults
+    // Priority: opts > default
+    this._targetName = this._optsTarget || 'desktop';
+    this._allocatorName = this._optsAllocator || 'default';
+    this._noRecursion = this._optsNoRecursion || false;
+    this._schedulerName = this._optsScheduler || null;
+    this._ramSize = this._optsRamSize || null;
+    this._stackSize = this._optsStackSize || null;
+
+    // Default number type: opts > auto-detect by target
+    const _autoDefaultNumber = this._isEmbedded() ? 'f32' : 'f64';
+    this._defaultNumber = this._optsDefaultNumber || _autoDefaultNumber;
+    if (this._defaultNumber === 'f64' && this._isEmbedded()) {
+      this.warn(`Warning: 'f64' default-number on embedded target '${this._targetName}' may be slow; consider 'f32'`);
     }
 
     // Pre-scan: platform-specific profile restrictions
@@ -132,17 +123,29 @@ export default {
           }
         }
         // No async on real-time targets without RTOS
-        const _noAsyncTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
-        if (_noAsyncTargets.includes(this._targetName)) {
-          if (n.kind === 'FuncDecl' && n.async) {
-            throw this.error(`TypeError: async functions are not supported on ${this._targetName} target`);
-          }
+        if (n.kind === 'FuncDecl' && n.async) {
+          throw this.error(`TypeError: async functions are not supported on ${this._targetName} target`);
         }
         for (const k of Object.keys(n)) {
           if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
         }
       };
       for (const node of ast.body) _walkForRestrictions(node);
+    }
+
+    // Pre-scan: wasm bare restrictions
+    if (this._isWasmBare()) {
+      const _walkWasm = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
+        if (n.kind === 'FuncDecl' && n.async) {
+          throw this.error(`TypeError: async functions are not supported on wasm target`);
+        }
+        for (const k of Object.keys(n)) {
+          if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkWasm(v); }
+        }
+      };
+      for (const node of ast.body) _walkWasm(node);
     }
 
     // Pre-scan: recursion detection when no_recursion is true

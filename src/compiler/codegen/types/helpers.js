@@ -176,12 +176,14 @@ export default {
   },
 
   _tsNameToTypeId(tsName) {
-    const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'bool': 5, 'number': 4, 'string': 6, 'array': 7, 'object': 8 };
+    if (tsName === 'number') return this._tsNameToTypeId(this._defaultNumber);
+    const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'bool': 5, 'string': 6, 'array': 7, 'object': 8 };
     return m[tsName] ?? 0;
   },
 
   _tsNameToCType(tsName) {
-    const m = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'bool': 'bool', 'number': 'double', 'string': 'String' };
+    if (tsName === 'number') return this._tsNameToCType(this._defaultNumber);
+    const m = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'bool': 'bool', 'string': 'String' };
     return m[tsName] ?? 'int32_t';
   },
 

@@ -1,2 +1,1 @@
-#[target(avr)]
 @embedded.pool class Bad { x: i32; }

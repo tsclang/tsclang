@@ -1,2 +1,1 @@
-#[target(avr)]
 setTimeout(() => {}, 100);

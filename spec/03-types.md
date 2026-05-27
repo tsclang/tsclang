@@ -289,7 +289,7 @@ const n64: i64 = n      // неявно — без потерь
   const w: f32 = 3.14      // ✅ no warning
   ```
 
-  Предупреждения не блокируют сборку — код валиден, просто неэффективен. Подавить через `// @ts-ignore-perf` или `"performanceWarnings": false` в `tsc.package.json`.
+  Предупреждения не блокируют сборку — код валиден, просто неэффективен. Подавить через `"performanceWarnings": false` в `tsc.package.json`.
 
   `i16`/`u16` и меньше — нет warning (нативные для AVR). `i32`/`u32` — нет warning (обычны, avr-gcc оптимизирует).
 - Type inference выводит конкретный тип для всех значений:

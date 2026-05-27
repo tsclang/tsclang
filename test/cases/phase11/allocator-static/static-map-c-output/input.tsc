@@ -1,3 +1,2 @@
-#[profile(allocator: "static")]
 @static const m = new Map<u8, i32>(16);
 m.set(1, 100);

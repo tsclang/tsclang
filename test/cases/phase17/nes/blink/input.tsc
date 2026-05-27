@@ -1,5 +1,3 @@
-// @target: nes
-
 let frameCount: u16 = 0;
 
 function onNmi(): void {

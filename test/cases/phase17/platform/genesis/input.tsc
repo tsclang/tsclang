@@ -1,5 +1,3 @@
-// @target: genesis
-
 let palette: u16 = 0x0EEE;
 
 function setColor(idx: u8, rgb: u16): void {

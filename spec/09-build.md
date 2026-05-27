@@ -1864,8 +1864,50 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
-| `wasm32` | WebAssembly (браузер) | — | wasm32-unknown-unknown | .wasm / .html | emscripten | -s WASM=1, --no-entry |
+| `wasm` | WebAssembly bare (минимальный runtime) | — | wasm32-unknown-unknown | .wasm | emscripten | -s WASM=1, -s STANDALONE_WASM=1, -DTSC_WASM |
+| `wasm32` | WebAssembly + полный emscripten POSIX | — | wasm32-unknown-unknown | .wasm / .html | emscripten | -s WASM=1, --no-entry |
 | `wasi` | WebAssembly System Interface | `wasm32` | wasm32-wasi | .wasm | wasi-sdk | --target=wasm32-wasi |
+
+#### `wasm` — bare режим
+
+Минимальный runtime (`runtime_wasm.h`) без POSIX. Для встраивания TSClang-кода как библиотеки в JS-приложение.
+
+**Компиляция:** `tsclang build input.tsc --target wasm --emit wasm`
+
+**Особенности runtime:**
+- `console.log` → JS import `env.log(ptr, len)`
+- `throw` → wasm trap (`__builtin_trap()`)
+- `new Random(seed)` → xorshift64 PRNG, seed через JS import `env.random_seed()`
+- `console.time` / `console.timeEnd` → JS import `env.time_now()` (обёртка над `performance.now()`)
+- `printf` → перенаправлен в `env.log` через `snprintf`
+
+**JS-хост должен предоставить import-функции:**
+
+| Import | Сигнатура | Описание |
+|--------|-----------|----------|
+| `env.log` | `(ptr: number, len: number) => void` | Вывод строки в консоль |
+| `env.random_seed` | `() => number` | Возвращает seed для PRNG (из `Math.random()`) |
+| `env.time_now` | `() => number` | Возвращает время в ms (из `performance.now()`) |
+
+**Ограничения компилятора** (compile-time ошибки):
+
+| Конструкция | Ошибка |
+|-------------|--------|
+| `async function` | Нет event loop |
+| `import { ... } from "std/fs"` | Нет файловой системы |
+| `import { ... } from "std/net"` | Нет сети |
+| `import { ... } from "std/ws"` | Нет WebSocket |
+| `import { ... } from "std/io"` | Нет stdio |
+| `import { ... } from "std/hal"` | Не железо |
+| `console.trace()` | Нет stack trace |
+
+#### `wasm32` — полный emscripten
+
+Для компилятора `wasm32` = `desktop`. Никаких ограничений на уровне компилятора. Разница только на этапе C-компиляции: `emcc` вместо `gcc`, полный emscripten POSIX runtime.
+
+**Компиляция:** `tsclang build input.tsc --target wasm32 --emit wasm`
+
+**Доступно:** async (libuv через emscripten), stdio, файловая система (MEMFS/NODEFS), потоки (pthreads через Web Workers), сеть (WebSocket/HTTP fetch).
 
 ### Embedded & IoT
 

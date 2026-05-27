@@ -1,0 +1,2 @@
+import { readFileSync } from "std/fs";
+console.log("x");

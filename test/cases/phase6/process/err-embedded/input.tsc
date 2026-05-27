@@ -1,2 +1,1 @@
-#[target(avr)]
 process.exit(0);

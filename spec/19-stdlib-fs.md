@@ -6,7 +6,7 @@
 
 - Sync: `<stdio.h>`, `<sys/stat.h>`, `<dirent.h>`, Windows `<io.h>`/`<direct.h>`
 - Async (шаг 3b): libuv `uv_fs_*` family
-- Desktop only — `#[target(avr)]` → ошибка компилятора
+- Desktop only — недоступен при `--target avr`, ошибка компилятора
 
 ## Типы
 

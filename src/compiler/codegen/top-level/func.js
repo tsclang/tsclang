@@ -89,23 +89,12 @@ export default {
       return;
     }
 
-    // #[isr(...)] annotation → forbid await and throw inside
-    if (this._pendingIsrAnnotation) {
-      const pendingIsr = this._pendingIsrAnnotation;
-      this._pendingIsrAnnotation = null;
-      if (node.async) throw this.error(`TypeError: Cannot use 'await' inside an ISR handler '${name}'`);
-      const bodyHasThrowIsr = (stmts) => (stmts ?? []).some(s => s.kind === 'Throw' || bodyHasThrowIsr(s.body?.body ?? s.body ?? []));
-      if (bodyHasThrowIsr(body?.body ?? [])) throw this.error(`"throw" is not allowed inside ISR handler '${name}'`);
-    } else {
-      this._pendingIsrAnnotation = null;
-    }
-
     // @embedded.isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
     const isrDecorator = (decorators ?? []).find(d => d.name === 'embedded.isr');
     if (isrDecorator) {
+      if (node.async) throw this.error(`TypeError: Cannot use 'async' with @embedded.isr on '${name}'`);
       const vectorArg = isrDecorator.args?.[0];
       const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
-      // Throw not allowed inside ISR
       const bodyHasThrow = (stmts) => (stmts ?? []).some(s => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
       if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @embedded.isr handlers`);
       const funcLines = [];
@@ -152,7 +141,7 @@ export default {
       const allOverloads = [];
       for (const sig of pendingSigs) {
         // Build a synthetic node with this signature's params but the implementation's body
-        const sigSuffix = mangleParams(sig.params);
+        const sigSuffix = mangleParams(sig.params, this._defaultNumber);
         const sigCname = `${name}${sigSuffix}`;
         const synth = { ...node, params: sig.params, _monoName: sigCname };
         this.visitFuncDecl(synth, isTopLevel);
@@ -220,7 +209,7 @@ export default {
       }
     }
 
-    const suffix = node._monoName ? '' : mangleParams(params);
+    const suffix = node._monoName ? '' : mangleParams(params, this._defaultNumber);
     let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
     if (this._modulePrefix && name && !node._noPrefix) cname = this._modulePrefix + cname;
     // Rename user-defined main() to avoid conflict with generated int main()

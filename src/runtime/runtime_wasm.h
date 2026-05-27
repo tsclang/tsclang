@@ -45,4 +45,76 @@ __attribute__((noreturn)) static inline void tsc_panic(const char *msg) { tsc_lo
 // WASM exports: functions to be exported to JavaScript
 #define WASM_EXPORT  __attribute__((visibility("default")))
 
+// -------------------------------------------------------------------------
+// TscRandom — xorshift64 PRNG (same algorithm as runtime.h)
+// -------------------------------------------------------------------------
+typedef struct { uint64_t state; } TscRandom;
+static inline TscRandom tsc_random_seed(uint64_t seed) {
+    if (seed == 0) seed = 1;
+    return (TscRandom){ seed };
+}
+static inline uint64_t _tsc_xorshift64(uint64_t *s) {
+    uint64_t x = *s;
+    x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+    return *s = x;
+}
+static inline int32_t tsc_random_next_i32(TscRandom *r) {
+    return (int32_t)(_tsc_xorshift64(&r->state) >> 32);
+}
+static inline int64_t tsc_random_next_i64(TscRandom *r) {
+    return (int64_t)_tsc_xorshift64(&r->state);
+}
+static inline double tsc_random_next_f64(TscRandom *r) {
+    return (double)(_tsc_xorshift64(&r->state) >> 11) / (double)(UINT64_C(1) << 53);
+}
+static inline int32_t tsc_random_range_i32(TscRandom *r, int32_t lo, int32_t hi) {
+    if (hi <= lo) return lo;
+    return lo + (int32_t)(_tsc_xorshift64(&r->state) % (uint32_t)(hi - lo));
+}
+
+// JS import: random_seed() — returns uint64_t seed from Math.random()
+__attribute__((import_module("env"), import_name("random_seed")))
+uint64_t _wasm_random_seed(void);
+static inline TscRandom tsc_random_default(void) {
+    uint64_t seed = _wasm_random_seed();
+    if (seed == 0) seed = 1;
+    return (TscRandom){ seed };
+}
+
+// -------------------------------------------------------------------------
+// console.time / console.timeEnd via JS performance.now()
+// -------------------------------------------------------------------------
+__attribute__((import_module("env"), import_name("time_now")))
+double _wasm_time_now(void);
+
+#define TSC_MAX_TIMERS 8
+static struct { const char *label; double start; } _tsc_timers[TSC_MAX_TIMERS];
+static int _tsc_timer_count = 0;
+
+static inline void tsc_console_time(const char *label) {
+    if (_tsc_timer_count < TSC_MAX_TIMERS) {
+        _tsc_timers[_tsc_timer_count].label = label;
+        _tsc_timers[_tsc_timer_count].start = _wasm_time_now();
+        _tsc_timer_count++;
+    }
+}
+static inline void tsc_console_time_end(const char *label) {
+    double end = _wasm_time_now();
+    for (int i = _tsc_timer_count - 1; i >= 0; i--) {
+        if (strcmp(_tsc_timers[i].label, label) == 0) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s: %.3fms", label, end - _tsc_timers[i].start);
+            tsc_wasm_puts(buf);
+            for (int j = i; j < _tsc_timer_count - 1; j++) _tsc_timers[j] = _tsc_timers[j + 1];
+            _tsc_timer_count--;
+            return;
+        }
+    }
+}
+
+// printf → _wasm_log via snprintf buffer
+#include <stdio.h>
+#define printf(...) do { char _tsc_buf[512]; snprintf(_tsc_buf, sizeof(_tsc_buf), __VA_ARGS__); tsc_wasm_puts(_tsc_buf); } while(0)
+#define fprintf(stream, ...) do { char _tsc_buf[512]; snprintf(_tsc_buf, sizeof(_tsc_buf), __VA_ARGS__); tsc_wasm_puts(_tsc_buf); } while(0)
+
 #endif /* TSCLANG_RUNTIME_WASM_H */

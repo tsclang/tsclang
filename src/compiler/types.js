@@ -44,47 +44,46 @@ export function fmtSpec(ctype) {
 }
 
 // Mangle a type for use in C function/struct names
-export function mangleType(typeNode) {
+export function mangleType(typeNode, defaultNumber = 'f64') {
   if (!typeNode) return '';
   if (typeNode.kind === 'TypeRef') {
     const { name, typeArgs } = typeNode;
-    if (name === 'Ref')    return 'ref_' + mangleType(typeArgs[0]);
-    if (name === 'Mut')    return 'mut_' + mangleType(typeArgs[0]);
-    if (name === 'Shared') return 'shared_' + mangleType(typeArgs[0]);
-    if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0]);
+    if (name === 'Ref')    return 'ref_' + mangleType(typeArgs[0], defaultNumber);
+    if (name === 'Mut')    return 'mut_' + mangleType(typeArgs[0], defaultNumber);
+    if (name === 'Shared') return 'shared_' + mangleType(typeArgs[0], defaultNumber);
+    if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0], defaultNumber);
     if (typeArgs.length === 0) {
-      // Use the TSClang name directly (i32, f64, etc.) not the C type (int32_t, double)
-      if (name === 'number') return 'f64';
+      if (name === 'number') return defaultNumber;
       return PRIMITIVE_MAP[name] ? name : name;
     }
-    return name + '_' + typeArgs.map(mangleType).join('_');
+    return name + '_' + typeArgs.map(t => mangleType(t, defaultNumber)).join('_');
   }
-  if (typeNode.kind === 'TypeArray')  return 'Array_' + mangleType(typeNode.element);
+  if (typeNode.kind === 'TypeArray')  return 'Array_' + mangleType(typeNode.element, defaultNumber);
   if (typeNode.kind === 'TypeUnion') {
     const types = typeNode.types;
     const nullIdx = types.findIndex(t => t.kind === 'TypeRef' && t.name === 'null');
     if (nullIdx >= 0 && types.length === 2) {
       const inner = types[1 - nullIdx];
-      return 'opt_' + mangleType(inner);
+      return 'opt_' + mangleType(inner, defaultNumber);
     }
-    return types.map(mangleType).join('_or_');
+    return types.map(t => mangleType(t, defaultNumber)).join('_or_');
   }
   if (typeNode.kind === 'TypeFunc') {
-    const parts = typeNode.params.map(mangleType);
-    parts.push(mangleType(typeNode.ret));
+    const parts = typeNode.params.map(t => mangleType(t, defaultNumber));
+    parts.push(mangleType(typeNode.ret, defaultNumber));
     return 'fn_' + parts.join('_');
   }
   return 'unknown';
 }
 
 // Mangle param types for function name suffix: foo(a: i32, b: f64) → foo_i32_f64
-export function mangleParams(params) {
+export function mangleParams(params, defaultNumber = 'f64') {
   const parts = [];
   for (const p of params) {
-    if (p.rest) continue;       // rest params are not included in name mangling
-    if (p.destructArr) continue; // destructured params are not included in name mangling
-    if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'any') continue; // any params not mangled
-    if (p.typeAnn) parts.push(mangleType(p.typeAnn));
+    if (p.rest) continue;
+    if (p.destructArr) continue;
+    if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'any') continue;
+    if (p.typeAnn) parts.push(mangleType(p.typeAnn, defaultNumber));
   }
   return parts.length ? '_' + parts.join('_') : '';
 }

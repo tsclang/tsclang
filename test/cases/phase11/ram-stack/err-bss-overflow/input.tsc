@@ -1,2 +1,1 @@
-#[profile(allocator: "static", ram_size: 2048)]
 @static const buf: u8[4096] = [0];

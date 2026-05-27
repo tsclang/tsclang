@@ -9,8 +9,8 @@ export default {
       return `tsc_console_time_end(${label})`;
     }
     if (method === 'trace') {
-      if (this._isEmbedded()) {
-        throw this.error(`"console.trace()" is not available on embedded targets`);
+      if (this._isEmbedded() || this._isWasmBare()) {
+        throw this.error(`"console.trace()" is not available on ${this._targetName} targets`);
       }
       const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       return `tsc_console_trace(${label})`;

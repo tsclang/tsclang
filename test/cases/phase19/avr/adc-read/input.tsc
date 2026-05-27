@@ -1,3 +1,2 @@
-#[target(avr)]
 import { ADC } from "std/avr";
 const v = ADC.read(0);

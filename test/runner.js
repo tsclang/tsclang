@@ -248,6 +248,28 @@ async function executeTest(testDir, { kind, inputType }, tmpBase) {
 }
 
 // ---------------------------------------------------------------------------
+// Test metadata (meta.json)
+// ---------------------------------------------------------------------------
+function readMeta(testDir) {
+  const p = join(testDir, 'meta.json');
+  if (!existsSync(p)) return [];
+  try {
+    const meta = JSON.parse(readFileSync(p, 'utf8'));
+    const flags = [];
+    if (meta.target)         flags.push('--target', meta.target);
+    if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
+    if (meta.allocator)      flags.push('--allocator', meta.allocator);
+    if (meta.scheduler)      flags.push('--scheduler', meta.scheduler);
+    if (meta.noRecursion)    flags.push('--no-recursion');
+    if (meta.ramSize)        flags.push('--ram-size', String(meta.ramSize));
+    if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
+    if (meta.optimize)       flags.push('--optimize', 'O2');
+    if (meta.debug)          flags.push('--debug');
+    return flags;
+  } catch { return []; }
+}
+
+// ---------------------------------------------------------------------------
 // .tsc tests — full compiler pipeline
 // ---------------------------------------------------------------------------
 async function executeTscTest(testDir, kind, tmpBase) {
@@ -258,12 +280,15 @@ async function executeTscTest(testDir, kind, tmpBase) {
   const inputSrc = join(testDir, 'input.tsc');
 
   // Step 1: Run tsclang
+  const extraFlags = [
+    ...(existsSync(join(testDir, 'flags.txt'))
+      ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
+      : []),
+    ...readMeta(testDir),
+  ];
   const tscResult = await run(
     process.execPath,
-    [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase,
-     ...(existsSync(join(testDir, 'flags.txt'))
-       ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
-       : [])],
+    [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase, ...extraFlags],
   );
 
   if (kind === 'E') {

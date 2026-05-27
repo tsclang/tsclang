@@ -1,3 +1,2 @@
-#[target(avr)]
 import { GPIO } from "std/hal";
 GPIO.output(13);

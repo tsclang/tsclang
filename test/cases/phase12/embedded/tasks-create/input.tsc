@@ -1,3 +1,2 @@
-#[target(avr)]
 import { Tasks } from "std/embedded";
 const tasks = new Tasks<4>();

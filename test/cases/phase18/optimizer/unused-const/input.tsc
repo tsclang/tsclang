@@ -1,5 +1,3 @@
-// @opt
-
 const UNUSED: i32 = 42;
 const USED: i32 = 7;
 console.log(USED);

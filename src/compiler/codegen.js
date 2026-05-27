@@ -8,6 +8,7 @@ import { TscError } from './error.js';
 
 const EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32']);
 const ALL_EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum']);
+const WASM_BARE_TARGET = 'wasm';
 
 // Returns { c: string, warnings: TscError[], exports: Object }
 // opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
@@ -15,11 +16,18 @@ const ALL_EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32', 'nes', 'genesis', '
 // opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
 // opts.sourceToPath    — { [importSource]: resolvedPath } for namespace import lookup
 export function codegen(ast, filename = 'input', src = null, opts = {}) {
-  const ctx = new Context(filename, src);
+  const ctx = new Context(filename, src, opts);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
   if (opts.libraryMode) ctx._libraryMode = true;
   if (opts.modulePrefix) ctx._modulePrefix = opts.modulePrefix;
+  if (opts.target) ctx._optsTarget = opts.target;
+  if (opts.defaultNumber) ctx._optsDefaultNumber = opts.defaultNumber;
+  if (opts.allocator) ctx._optsAllocator = opts.allocator;
+  if (opts.scheduler) ctx._optsScheduler = opts.scheduler;
+  if (opts.noRecursion) ctx._optsNoRecursion = true;
+  if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
+  if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
 
   // Build namespace set from import nodes (before pre-populating scope)
   const namespaceImports = new Map(); // localName → resolvedPath
@@ -62,11 +70,11 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
 
 // ============================================================
 class Context {
-  constructor(filename, src = null) {
+  constructor(filename, src = null, opts = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
-    this.includes = new Set(['#include "runtime.h"']);
+    this.includes = new Set([opts.target === 'wasm' ? '#include "runtime_wasm.h"' : '#include "runtime.h"']);
     this.typedefs = [];    // struct typedefs (emitted first)
     this.topLevel = [];    // named function definitions (emitted after lambdas)
     this.mainStmts = [];    // statements inside main()
@@ -172,6 +180,16 @@ class Context {
     this._libraryMode = false;
     // Exported symbols: name → scope entry (populated by case 'Export')
     this._exports = new Map();
+
+    // CLI/config opts — set by codegen() from buildOpts
+    this._optsTarget = null;
+    this._optsDefaultNumber = null;
+    this._optsAllocator = null;
+    this._optsScheduler = null;
+    this._optsNoRecursion = false;
+    this._optsRamSize = null;
+    this._optsStackSize = null;
+    this._defaultNumber = 'f64';
 
     // Explicit user-defined main() — rename to __main and call from generated int main()
     this._hasExplicitMain = false;
@@ -301,6 +319,7 @@ class Context {
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
   _isEmbedded()          { return EMBEDDED_TARGETS.has(this._targetName); }
   _isEmbeddedOrRetro()   { return ALL_EMBEDDED_TARGETS.has(this._targetName); }
+  _isWasmBare()          { return this._targetName === WASM_BARE_TARGET; }
   lookup(name) {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
       if (this.scopes[i].has(name)) return this.scopes[i].get(name);

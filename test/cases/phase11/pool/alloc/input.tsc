@@ -1,4 +1,3 @@
-#[target(avr)]
 @embedded.pool(4) class Particle { x: i32; }
 const p = Particle.alloc();
 if (p != null) {

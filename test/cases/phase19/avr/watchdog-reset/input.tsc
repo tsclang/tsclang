@@ -1,3 +1,2 @@
-#[target(avr)]
 import { avr } from "std/avr";
 avr.watchdogReset();
