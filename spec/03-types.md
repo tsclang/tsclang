@@ -488,7 +488,7 @@ s[0..2]     // string — срез по байтовым смещениям, O(1
 error: expected string, got u8
 hint: s[i] returns a raw byte in TSC (strings are UTF-8 byte arrays).
   - s[i..i+1]  — однобайтовый срез как Ref<string>
-  - for...of   — итерация по графемным кластерам
+  - for...of   — итерация по байтам (char = u8)
   - import { graphemeAt } from "std/string"  — графемный кластер по байтовому смещению
 ```
 
@@ -847,17 +847,29 @@ switch (dir) {
 
 ### C-представление `T | null`
 
+> **Подробная спецификация nullable в контексте for-of и итераторов** — в `spec/05c-for-of-iteration.md`. При конфликте — доминирует 05c.
+
 `T | null` компилируется в struct с bool-флагом:
 
 ```c
+// Примитивы — inline value:
 typedef struct {
     bool    has_value;   // 1 байт
     // padding до выравнивания T
     int32_t value;       // 4 байта
 } opt_i32;
+
+// Complex types (class, nested array) — pointer:
+typedef struct {
+    bool    has_value;   // 1 байт
+    // padding до выравнивания указателя
+    User   *value;       // 8 байт (desktop) / 2 байта (AVR)
+} opt_User;
 ```
 
-Размер с учётом выравнивания:
+**Правило (тернарное):** `isPrimitive(T)` → `T value`; `isString(T)` → `String value`; иначе (class/nested array) → `T *value`. Причина: String — ARC Copy (immutable), inline struct без overhead; complex types в TSClang — уже value types (struct), `opt_T` с inline struct = двойная вложенность + лишний padding, pointer — компактнее и семантически точнее (borrow/null). См. `spec/05c-for-of-iteration.md` §5.4.
+
+Размер с учётом выравнивания (примитивы):
 
 | Тип | C struct | Размер |
 |-----|----------|--------|
@@ -867,6 +879,16 @@ typedef struct {
 | `i64 \| null` | `bool + pad(7) + i64` | 16 байт |
 | `f32 \| null` | `bool + pad(3) + f32` | 8 байт |
 | `f64 \| null` | `bool + pad(7) + f64` | 16 байт |
+
+Complex types:
+
+| Тип | C struct | Размер (desktop) |
+|-----|----------|------------------|
+| `string \| null` | `bool + pad(7) + String (24 байта)` | 32 байта |
+| `User \| null` | `bool + pad(7) + User*` | 16 байт |
+| `i32[] \| null` | `bool + pad(7) + Array_i32*` | 16 байт |
+
+String — ARC Copy, `String value` inline (не pointer). `sizeof(String)` = 24 байта на desktop (`char*` + `size_t` length + `size_t` capacity).
 
 На desktop это некритично. На embedded (AVR: 2KB RAM) overhead padding может быть значимым.
 

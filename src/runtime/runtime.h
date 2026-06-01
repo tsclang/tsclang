@@ -2823,22 +2823,34 @@ static inline void tsc_staticmap_clear_##SUFFIX(void *_sm) { \
 /* -------------------------------------------------------------------------
  * UTF-8 codepoint iteration
  * ------------------------------------------------------------------------- */
-typedef struct { const char *_p; size_t _rem; } TscCodePointIter;
+typedef struct { const char *_p; size_t _rem; int _progmem; } TscCodePointIter;
 
 static inline TscCodePointIter tsc_codepoints(String s) {
-    return (TscCodePointIter){ ._p = s.data, ._rem = s.length };
+    int _pm = 0;
+#ifdef __AVR__
+    if (s.capacity == 0) _pm = 1;
+#endif
+    (void)_pm;
+    return (TscCodePointIter){ ._p = s.data, ._rem = s.length, ._progmem = _pm };
+}
+
+static inline char _tsc_iter_getc(const TscCodePointIter *it, size_t i) {
+#ifdef __AVR__
+    if (it->_progmem) return (char)pgm_read_byte((const uint8_t*)&it->_p[i]);
+#endif
+    return it->_p[i];
 }
 
 static inline bool tsc_codepoints_next(TscCodePointIter *it, uint32_t *out) {
     if (it->_rem == 0) return false;
-    unsigned char c = (unsigned char)*it->_p;
+    unsigned char c = (unsigned char)_tsc_iter_getc(it, 0);
     uint32_t cp; size_t bytes;
     if      (c < 0x80) { cp = c; bytes = 1; }
     else if (c < 0xE0) { cp = c & 0x1F; bytes = 2; }
     else if (c < 0xF0) { cp = c & 0x0F; bytes = 3; }
     else               { cp = c & 0x07; bytes = 4; }
     for (size_t i = 1; i < bytes && i < it->_rem; i++)
-        cp = (cp << 6) | ((unsigned char)it->_p[i] & 0x3F);
+        cp = (cp << 6) | ((unsigned char)_tsc_iter_getc(it, i) & 0x3F);
     *out = cp;
     size_t advance = bytes < it->_rem ? bytes : it->_rem;
     it->_p += advance; it->_rem -= advance;
@@ -2860,8 +2872,18 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
     uint32_t _cp_dummy;
     tsc_codepoints_next(&it->_cp, &_cp_dummy);
     size_t len = (size_t)(it->_cp._p - start);
+#ifdef TSC_EMBEDDED
+    char *buf = _tsc_str_alloc(len + 1);
+    if (it->_cp._progmem) {
+        for (size_t i = 0; i < len; i++) buf[i] = (char)pgm_read_byte((const uint8_t*)&start[i]);
+    } else {
+        memcpy(buf, start, len);
+    }
+#else
     char *buf = (char *)malloc(len + 1);
-    memcpy(buf, start, len); buf[len] = '\0';
+    memcpy(buf, start, len);
+#endif
+    buf[len] = '\0';
     *out = _tsc_str_make(buf, len, len + 1);
     return true;
 }

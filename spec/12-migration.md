@@ -101,8 +101,18 @@ for (let x of arr) { ... }  // ok
 // TSClang:
 const arr = [1, 2, 3]
 for (const x of arr) { ... }  // ✅ — borrow checker предпочитает const
-for (let x of arr) { ... }    // ok — mutable copy каждого элемента
+for (let x of arr) { ... }    // ok — примитивы: mutable copy, arr не затронут
 ```
+
+Для **complex types** (class, nested array) — `const` источник + `let` binding = ошибка:
+
+```typescript
+const users = [user1, user2]
+for (let u of users) { ... }   // ❌ error: cannot obtain Mut<T> from const source
+for (const u of users) { ... } // ✅ — const T* (immutable borrow)
+```
+
+См. `spec/05c-for-of-iteration.md` — полная таблица const/let × type.
 
 ### Классовое наследование → композиция
 

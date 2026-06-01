@@ -108,7 +108,7 @@ export default {
 
   // Emit opt_T struct typedef (idempotent): { bool has_value; T value; }
   // Inserts before any trailing blank line so typedefs group together.
-  _ensureOptStruct(optName, ctype) {
+  _ensureOptStruct(optName, ctype) {
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
       this.addTop(`typedef struct { bool has_value; ${ctype} value; } ${optName};`);

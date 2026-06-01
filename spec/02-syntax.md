@@ -818,67 +818,79 @@ let b2 = arr2;     // ok — retain, не move
 
 ## For-of цикл
 
-Тип loop-переменной определяется **объявлением** (`const`/`let`), а не источником:
+> **Подробная спецификация for-of** — в `spec/05c-for-of-iteration.md`. При конфликте — доминирует 05c.
 
-- `for (const item of ...)` — **всегда** `Ref<T>` для сложных типов, copy для примитивов
-- `for (let item of ...)` — `Mut<T>`, **только если источник `let`**; если источник `const` — ошибка компилятора
+`const`/`let` в for-of означают то же, что и везде в языке:
 
-```typescript
-const arr = [obj1, obj2, obj3];
+- `const item` — нельзя менять `item`
+- `let item` — можно менять `item`
 
-for (const item of arr) {    // ok — item: Ref<Obj>
-    item.doSomething();       // ok — immutable метод
-    item.mutMethod();         // ошибка — item это Ref
-}
+Семантика `item` зависит от типа элемента (Copy vs Borrow), не от цикла:
 
-for (let item of arr) {      // ошибка: источник const, используй for (const item of arr)
-}
-```
+| Тип элемента | `item` в C | `const item` | `let item` |
+|-------------|-----------|-------------|-----------|
+| Primitive | Copy | `const T item = arr.data[i]` | `T item = arr.data[i]` (mutable local) |
+| String | ARC Copy | `const String item = arr.data[i]` | `String item = arr.data[i]` (mutable local) |
+| Class | Borrow | `const T *item = &arr.data[i]` | `T *item = &arr.data[i]` (mutable pointer) |
+| Array\<U\> | Borrow | `const T *item = &arr.data[i]` | `T *item = &arr.data[i]` (mutable pointer) |
 
 ```typescript
 let arr = [obj1, obj2, obj3];
 
-for (const item of arr) {    // ok — item: Ref<Obj>
-    item.doSomething();       // ok
-    item.mutMethod();         // ошибка — item это Ref
+for (const item of arr) {    // ok — item: const T* (immutable borrow)
+    item.doSomething();       // ok — чтение
+    item.mutMethod();         // ошибка — const pointer
 }
 
-for (let item of arr) {      // ok — item: Mut<Obj>
+for (let item of arr) {      // ok — item: T* (mutable borrow)
     item.mutMethod();         // ok — изменения попадают в arr
     arr.push(obj4);           // ошибка — arr заимствован во время итерации
 }
 ```
 
-**Переприсвоение `item` — всегда ошибка компилятора**, независимо от типа:
+`const` честнее чем TypeScript — для классов `const item` запрещает мутацию полей (в TS разрешает):
 
 ```typescript
-for (let item of arr) {
-    item = newValue  // ошибка: cannot assign to loop variable
-                     // hint: to replace element use index-based loop:
-                     //   for (let i = 0; i < arr.length; i++) { arr[i] = newValue }
+for (const item of users) {
+    item.age = 99;     // ❌ compile error: const pointer, field mutation forbidden
+    // В TypeScript этот код бы работал — TSClang строже
 }
 ```
 
-Мутация через `Mut<T>` (методы) — разрешена и попадает в массив:
+**const source + let binding — зависит от типа:**
+
+```typescript
+const scores = [10, 20, 3];
+for (let item of scores) {    // ✅ ok — item = Copy, arr не затронут
+    item = item * 2;
+}
+
+const users = [user1, user2];
+for (let item of users) {     // ❌ error: cannot obtain Mut<T> from const source
+    item.age = 99;            //    hint: use 'const item' or change source to 'let'
+}
+```
+
+**Мутация через `let item` для классов — попадает в массив:**
+
 ```typescript
 let arr = [obj1, obj2, obj3];
 for (let item of arr) {
-    item.mutMethod();  // ok — изменения попадают в arr
-    item = newObj;     // ошибка: cannot assign to loop variable
+    item.field = 42;   // ok — мутирует элемент массива через pointer
 }
 ```
 
-Примитивы — `item` всегда копируется независимо от `let`/`const`:
+**Примитивы — `item` всегда копия, мутация локальна:**
 
 ```typescript
 let nums = [1, 2, 3];
 for (let item of nums) {
-    item++;          // ошибка: cannot assign to loop variable
+    item = item * 2;   // ok — меняет локальную копию, nums не затронут
 }
 
-// чтобы изменить элементы — используй индекс:
+// чтобы изменить элементы массива — используй индекс:
 for (let i = 0; i < nums.length; i++) {
-    nums[i]++;  // ok
+    nums[i] = nums[i] * 2;  // ok — мутирует массив
 }
 ```
 

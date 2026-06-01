@@ -246,7 +246,7 @@ export default {
     const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
     const classInfo_ = this.classes.get(cname);
     if (classInfo_?._iterableElemType) {
-      const iterMethod_ = methods.find(m => m.name === 'iter');
+      const iterMethod_ = methods.find(m => m.name === 'iter' || m.isIterator);
       if (iterMethod_) this._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
     }
 
@@ -254,7 +254,7 @@ export default {
     const explicitImplements = (node.implements_ ?? []).filter(i => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
-      if (m.name === 'iter' && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
+      if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
       const isStatic = m.modifiers.includes('static');
       const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {

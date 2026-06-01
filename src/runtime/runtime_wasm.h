@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 // No libuv (no POSIX event loop on WASM)
 #define TSC_NO_LIBUV 1
@@ -113,7 +114,6 @@ static inline void tsc_console_time_end(const char *label) {
 }
 
 // printf → _wasm_log via snprintf buffer
-#include <stdio.h>
 #define printf(...) do { char _tsc_buf[512]; snprintf(_tsc_buf, sizeof(_tsc_buf), __VA_ARGS__); tsc_wasm_puts(_tsc_buf); } while(0)
 #define fprintf(stream, ...) do { char _tsc_buf[512]; snprintf(_tsc_buf, sizeof(_tsc_buf), __VA_ARGS__); tsc_wasm_puts(_tsc_buf); } while(0)
 

@@ -841,6 +841,9 @@ platform/
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
+| `stringBufferSize` | размер static buffer (байт) для string escape analysis на embedded | `64` |
+
+**`stringBufferSize`** — максимальный размер статического буфера, выделяемого компилятором на embedded, когда ring-buffer строка может покинуть scope (escape analysis). Компилятор оценивает верхнюю границу где возможно (литерал + литерал = точный размер); если оценить нельзя — использует `stringBufferSize`. Только для embedded (desktop использует ARC, проблем нет). См. `spec/05c-for-of-iteration.md`.
 
 **`"binaryMode": "small"`** — режим для сильно ограниченных embedded платформ (AVR Arduino: 32 КБ flash). Включает type erasure для generic pointer types:
 - `Array<T>` где T — pointer/complex type → единая реализация через `void*` (одна копия кода для всех Array типов)

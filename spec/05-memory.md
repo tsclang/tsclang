@@ -790,6 +790,8 @@ for (int32_t i = 0; i < 5; i++) {
 
 ## Iterable\<T\> — пользовательские итерируемые типы
 
+> **Подробная спецификация for-of и Iterable** — в `spec/05c-for-of-iteration.md`. При конфликте — доминирует 05c.
+
 `for...of` работает с любым типом реализующим встроенный interface `Iterable<T>`:
 
 ```typescript
@@ -831,7 +833,7 @@ for (const x of list) {   // ✅ работает через Iterable<T>
 }
 ```
 
-**Как компилятор разворачивает `for...of`:**
+**Как компилятор разворачивает `for...of` (см. `spec/05c-for-of-iteration.md` §4.1):**
 
 ```typescript
 for (const x of list) { body }
@@ -843,6 +845,19 @@ for (const x of list) { body }
         const x = _x
         body  // break/return работают — обычный while
     }
+    // _iter auto-drop (RAII scope drop)
+}
+
+for (let x of list) { body }
+// ↓ desugars to:
+{
+    let _iter = list.iter()
+    let _x: T | null
+    while ((_x = _iter()) != null) {
+        let x = _x       // let — mutable local
+        body
+    }
+    // _iter auto-drop (RAII scope drop)
 }
 ```
 
@@ -858,16 +873,36 @@ drop(list)    // ошибка компилятора: iter захватил Ref 
 **C-output** — closure компилируется в struct на стеке, без heap:
 
 ```c
-// для LinkedList<i32>
+// для LinkedList<i32> (примитив — value, не pointer)
 typedef struct {
-    Node_i32* current;   // захваченный Ref<Node<i32>>
+    Node_i32* current;
 } LinkedList_i32_iter_t;
 
-static int32_t* LinkedList_i32_iter_next(LinkedList_i32_iter_t* self) {
-    if (self->current == NULL) return NULL;
-    int32_t* val = &self->current->value;
+// opt_i32: примитив → T value
+typedef struct { bool has_value; int32_t value; } opt_i32;
+
+static opt_i32 LinkedList_i32_iter_next(LinkedList_i32_iter_t* self) {
+    if (self->current == NULL) return (opt_i32){false};
+    int32_t val = self->current->value;               // Copy — примитив
     self->current = self->current->next;
-    return val;
+    return (opt_i32){true, val};
+}
+```
+
+```c
+// для LinkedList<User> (class — pointer, P2 borrow protocol)
+typedef struct {
+    Node_User* current;
+} LinkedList_User_iter_t;
+
+// opt_User: complex type → T *value
+typedef struct { bool has_value; User *value; } opt_User;
+
+static opt_User LinkedList_User_iter_next(LinkedList_User_iter_t* self) {
+    if (self->current == NULL) return (opt_User){false};
+    User *val = &self->current->value;                 // Pointer — borrow
+    self->current = self->current->next;
+    return (opt_User){true, val};
 }
 ```
 

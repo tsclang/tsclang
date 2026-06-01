@@ -13,13 +13,17 @@ export default {
     if (!returnedArrow) return false;
 
     const elemIdent = this.cTypeToIdent(elemCType);
-    const optType = `opt_${elemIdent}`;
     const iterStructName = `${className}_iter_t`;
+    const _isComplex = !this._isSimpleCType(elemCType);
+    const optType = _isComplex ? `iter_opt_${elemIdent}` : `opt_${elemIdent}`;
 
-    // Ensure opt_T struct is defined
+    // Ensure opt_T struct is defined
+    // Primitive: { bool has_value; T value; } — shared with _ensureOptStruct
+    // Complex:   { bool has_value; T *value; } — iterator-specific, separate name
     if (!this._emittedOptStructs.has(optType)) {
       this._emittedOptStructs.add(optType);
-      this.addTop(`typedef struct { bool has_value; ${elemCType} value; } ${optType};`);
+      const valField = _isComplex ? `${elemCType} *value` : `${elemCType} value`;
+      this.addTop(`typedef struct { bool has_value; ${valField}; } ${optType};`);
       this.addTop('');
     }
 
@@ -56,6 +60,7 @@ export default {
     this._inIterNextBody = true;
     this._iterNextElemType = elemCType;
     this._iterNextOptType = optType;
+    this._iterNextIsComplex = _isComplex;
 
     const nextBodyLines = [];
     if (returnedArrow.body?.kind === 'Block') {
@@ -64,7 +69,8 @@ export default {
       this._inReturnContext = true;
       const c = this.exprToC(returnedArrow.body, nextBodyLines, 0);
       this._inReturnContext = false;
-      nextBodyLines.push(`return (${optType}){true, ${c}};`);
+      const retVal = _isComplex ? `&(${c})` : c;
+      nextBodyLines.push(`return (${optType}){true, ${retVal}};`);
     }
 
     this._inIterNextBody = false;

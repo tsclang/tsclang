@@ -849,9 +849,16 @@ export function parse(tokens, filename = '<input>', src = null) {
       let generator = false;
       if (cur().type === TK.STAR) { eat(TK.STAR); generator = true; }
 
-      const memberName = cur().type === TK.LBRACK
+      let memberName = cur().type === TK.LBRACK
         ? (() => { eat(TK.LBRACK); const e = parseExpr(); eat(TK.RBRACK); return { computed: true, expr: e }; })()
         : eat(TK.IDENT).value;
+      let isIterator = false;
+      if (typeof memberName !== 'string' && memberName.computed &&
+          memberName.expr?.kind === 'Member' && memberName.expr.object?.kind === 'Ident' &&
+          memberName.expr.object.name === 'Symbol' && memberName.expr.prop === 'iterator') {
+        isIterator = true;
+        memberName = 'iter';
+      }
 
       if (cur().type === TK.LPAREN || cur().type === TK.LT) {
         // Method
@@ -876,7 +883,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         let body = null;
         if (cur().type === TK.LBRACE) body = parseBlock();
         else eatSemi();
-        members.push({ kind: 'Method', name: memberName, modifiers, params, returnType, throwsTypes, body, generator, decorators: memberDecorators });
+        members.push({ kind: 'Method', name: memberName, modifiers, params, returnType, throwsTypes, body, generator, decorators: memberDecorators, isIterator });
       } else {
         // Field
         let typeAnn = null, optional = false;

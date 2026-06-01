@@ -64,7 +64,8 @@
             const valC = this.exprToC(node.value, lines, depth);
             this._inReturnContext = false;
             this._emitRetainIfNeeded(valC, node.value, p);
-            lines.push(`${I}return (${optType}){true, ${valC}};`);
+            const retVal = this._iterNextIsComplex ? `&(${valC})` : valC;
+            lines.push(`${I}return (${optType}){true, ${retVal}};`);
           }
           break;
         }
@@ -407,6 +408,7 @@
             const entTmpName = `_entries_${this.tempCount++}`;
             const ivar = `_i_${this.loopCount++}`;
             p(`${arrType} ${entTmpName} = tsc_map_entries_${mapSuffix}(&${mapObjC});`);
+            if (mapSym) { this.pushScope(); this._trackRefBorrow(mapSym); }
             p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmpName}.length; ${ivar}++) {`);
             const [kElem, vElem] = node.binding.elems;
             if (kElem) {
@@ -419,6 +421,7 @@
             }
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             p('}');
+            if (mapSym) this.popScope();
             break;
           }
         }
@@ -505,6 +508,7 @@
             const _setC = this.exprToC(node.iterable, lines, depth);
             const _ivar = `_i_${this.loopCount++}`;
             const _bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
+            if (_setSym) { this.pushScope(); this._trackRefBorrow(_setSym); }
             p(`for (size_t ${_ivar} = 0; ${_ivar} < ${_setC}.size; ${_ivar}++) {`);
             if (_bindName) {
               lines.push(`${II}${qual}${_eC} ${_bindName} = ${_setC}._vals[${_ivar}];`);
@@ -517,6 +521,7 @@
             this._emitLoopBodyCleanups(lines, II);
             this._popLoopCleanups();
             p('}');
+            if (_setSym) this.popScope();
             break;
           }
         }
@@ -540,6 +545,7 @@
             const entTmp = `_ent_${this.tempCount++}`;
             const ivar = `_i_${this.loopCount++}`;
             p(`${tupleArrName} ${entTmp} = tsc_array_entries_${etIdent}(${arrObjC});`);
+            if (arrSym) { this.pushScope(); this._trackRefBorrow(arrSym); }
             p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmp}.length; ${ivar}++) {`);
             const [iElem, vElem] = node.binding.elems;
             if (iElem) {
@@ -557,6 +563,7 @@
             this._emitLoopBodyCleanups(lines, II);
             this._popLoopCleanups();
             p('}');
+            if (arrSym) this.popScope();
             break;
           }
           const setSym = arrSym?._isSet ? arrSym : null;
@@ -572,6 +579,7 @@
             const entTmp = `_ent_${this.tempCount++}`;
             const ivar = `_i_${this.loopCount++}`;
             p(`${tupleArrName} ${entTmp} = tsc_set_entries_${_sSfx}(${setC});`);
+            if (setSym) { this.pushScope(); this._trackRefBorrow(setSym); }
             p(`for (size_t ${ivar} = 0; ${ivar} < ${entTmp}.length; ${ivar}++) {`);
             const [aElem, bElem] = node.binding.elems;
             if (aElem) {
@@ -589,6 +597,7 @@
             this._emitLoopBodyCleanups(lines, II);
             this._popLoopCleanups();
             p('}');
+            if (setSym) this.popScope();
             break;
           }
         }
@@ -607,6 +616,7 @@
             const _mapC = this.exprToC(node.iterable, lines, depth);
             const _ivar = `_i_${this.loopCount++}`;
             const [kElem, vElem] = node.binding.elems;
+            if (_mapSym) { this.pushScope(); this._trackRefBorrow(_mapSym); }
             p(`for (size_t ${_ivar} = 0; ${_ivar} < ${_mapC}.size; ${_ivar}++) {`);
             if (kElem) {
               lines.push(`${II}${qual}${_kCType} ${kElem.name} = ${_mapC}._keys[${_ivar}];`);
@@ -623,6 +633,7 @@
             this._emitLoopBodyCleanups(lines, II);
             this._popLoopCleanups();
             p('}');
+            if (_mapSym) this.popScope();
             break;
           }
         }
@@ -635,18 +646,27 @@
             const _clsName = _forOfSym.ctype;
             const _elemC = _forOfClass._iterableElemType;
             const _elemIdent = this.cTypeToIdent(_elemC);
-            const _optType = `opt_${_elemIdent}`;
+            const _isComplex = !this._isSimpleCType(_elemC);
+            const _optType = _isComplex ? `iter_opt_${_elemIdent}` : `opt_${_elemIdent}`;
             const _n = this.loopCount++;
             const _iterVar = `_iter_${_n}`;
             const _elemVar = `_elem_${_n}`;
             const _objC = this.exprToC(node.iterable, lines, depth);
+            if (_forOfSym) { this.pushScope(); this._trackRefBorrow(_forOfSym); }
             p(`${_forOfClass._iterStructName} ${_iterVar} = ${_clsName}_iter(&${_objC});`);
             p(`${_optType} ${_elemVar};`);
             p(`while ((${_elemVar} = ${_clsName}_iter_next(&${_iterVar})).has_value) {`);
             const _bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
             if (_bindName) {
-              lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
-              this.define(_bindName, { ctype: _elemC, varKind: node.varKind });
+              const _isComplex = !this._isSimpleCType(_elemC);
+              if (_isComplex) {
+                const ptrQual = node.varKind === 'const' ? 'const ' : '';
+                lines.push(`${II}${ptrQual}${_elemC} *${_bindName} = ${_elemVar}.value;`);
+                this.define(_bindName, { ctype: `${_elemC} *`, varKind: node.varKind });
+              } else {
+                lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
+                this.define(_bindName, { ctype: _elemC, varKind: node.varKind });
+              }
             }
             this._pushLoopCleanups();
             this._loopDepth++;
@@ -655,13 +675,13 @@
             this._emitLoopBodyCleanups(lines, II);
             this._popLoopCleanups();
             p('}');
+            if (_forOfSym) this.popScope();
             break;
           }
         }
 
         const iterC = this.exprToC(node.iterable, lines, depth);
         const ivar = `_i_${this.loopCount++}`;
-        // Infer element type: explicit annotation > array symbol > string char > default i32
         let elemType = 'int32_t';
         const iterSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
         if (node.binding.kind === 'Ident' && node.binding.typeAnn) {
@@ -673,10 +693,19 @@
         }
         const bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
 
+        const _isComplexType = !this._isSimpleCType(elemType);
+
+        if (iterSym) { this.pushScope(); this._trackRefBorrow(iterSym); }
         p(`for (size_t ${ivar} = 0; ${ivar} < ${iterC}.length; ${ivar}++) {`);
         if (bindName) {
-          lines.push(`${II}${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
-          this.define(bindName, { ctype: elemType, varKind: node.varKind });
+          if (_isComplexType) {
+            const ptrQual = node.varKind === 'const' ? 'const ' : '';
+            lines.push(`${II}${ptrQual}${elemType} *${bindName} = &${iterC}.data[${ivar}];`);
+            this.define(bindName, { ctype: `${elemType} *`, varKind: node.varKind });
+          } else {
+            lines.push(`${II}${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
+            this.define(bindName, { ctype: elemType, varKind: node.varKind });
+          }
         } else if (node.binding.kind === 'ArrayPattern') {
           for (let i = 0; i < node.binding.elems.length; i++) {
             const elem = node.binding.elems[i];
@@ -692,6 +721,7 @@
         this._emitLoopBodyCleanups(lines, II);
         this._popLoopCleanups();
         p('}');
+        if (iterSym) this.popScope();
         break;
       }
 
@@ -1023,5 +1053,16 @@
       default:
         p(`/* unhandled stmt: ${node.kind} */`);
     }
+  },
+
+  _SIMPLE_C_TYPES: new Set([
+    'int8_t', 'int16_t', 'int32_t', 'int64_t',
+    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+    'float', 'double', 'bool', 'size_t', 'ptrdiff_t',
+    'char', 'String', 'tsc_unknown',
+  ]),
+
+  _isSimpleCType(ct) {
+    return this._SIMPLE_C_TYPES.has(ct);
   },
 };

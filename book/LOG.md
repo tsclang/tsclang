@@ -66,3 +66,23 @@
 - Результат: 42 → 4 активных расхождения; 109 → 45 верифицированных находок (11 RESOLVED, 6 STILL PRESENT, 27 NEEDS INVESTIGATION)
 - Добавлено: секция «Закрытые нашей работой» (R-1..R-8), маппинг находок на блоки книги
 - Вердикт: готово
+
+### spec/05c-for-of-iteration.md — полный дизайн for-of — 2026-06-02
+- Создан: `spec/05c-for-of-iteration.md` (722 строки)
+- Содержимое: все решения по for-of — Iterable/Iterator built-in, opt_T тернарное правило, const/let семантика, Fast Path + Protocol Path, borrow check (Rust model), embedded fixes
+- Приоритет: доминирует над другими spec-файлами при конфликте
+
+### for-of: реализация Steps 1–4 — 2026-06-02
+- Step 1 (Fast Path): `_isSimpleCType()` — complex types → `T *item = &arr.data[i]`; `match.js:346` range exclusive upper bound
+- Step 2 (Borrow check): `_trackRefBorrow` во всех 7 for-of путях; тесты `borrow-push-error`, `borrow-after-loop-ok`
+- Step 3 (Protocol Path P2): `iter_opt_${elemIdent}` для complex types с `T *value`
+- Step 4 (Embedded + [Symbol.iterator]): `TscCodePointIter._progmem`, `_tsc_iter_getc()`, parser `isIterator: true`
+- Тесты: +3 новых, всего 1361 C-compare / 919 GCC — все зелёные
+
+### spec: консистентность с 05c — 2026-06-02
+- Проверены все 21 spec-файл на консистентность с `spec/05c-for-of-iteration.md`
+- Исправлено в `03-types.md`: строка 491 (графемные кластеры → байты), строка 870 (бинарное → тернарное правило), строки 883-889 (добавлен String в таблицу nullable)
+- Исправлено в `05-memory.md`: добавлен десугаринг `let x`, добавлен RAII cleanup
+- Исправлено в `05c`: убран `char` из списков примитивов TSC (char — C-концепт, в TSC = u8)
+- Обновлено в `02-syntax.md`, `09-build.md`, `12-migration.md`: добавлены ссылки на 05c
+- Итог: **0 неконсистентностей**

@@ -343,7 +343,7 @@
         if (pattern.litType === 'string') return `tsc_string_eq(${discC}, STR_LIT("${pattern.value}"))`;
         return `${discC} == ${pattern.value}`;
       }
-      case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} <= ${pattern.hi}`;
+      case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} < ${pattern.hi}`;
       case 'MatchEnum': return `${discC} == ${pattern.enumName}_${pattern.caseName}`;
       case 'MatchIdent': {
         // Bare identifier: check if it's a known enum value or treat as wildcard

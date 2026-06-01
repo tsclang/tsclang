@@ -1,0 +1,19 @@
+class Counter implements Iterable<i32> {
+    count: i32;
+    constructor(count: i32) {
+        this.count = count;
+    }
+    [Symbol.iterator]() {
+        let i: i32 = 0;
+        const n = this.count;
+        return () => {
+            if (i >= n) return null;
+            return i++;
+        }
+    }
+}
+
+const c = new Counter(3);
+for (const x of c) {
+    console.log(x);
+}
