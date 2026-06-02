@@ -47,12 +47,13 @@ function bar(): void     // ✅ допустимо (линтер может пр
 
 **Отступы** — не значимы (не Python). Рекомендуется 4 пробела или 2 пробела; табы допустимы.
 
-**Кавычки** — двойные и одинарные для строк (как в TS), обратные для template literals:
+**Кавычки** — одинарные и двойные взаимозаменяемы для строк (как в TS), обратные для template literals:
 ```typescript
 const a = "hello"        // string
-const b = 'A'            // string (TS compat) — одинарная кавычка = строка из одного символа
-const c = `Hello, ${name}!`   // template literal — обратные кавычки
-const ch: u8 = 'A'       // u8 — char code (только с явной аннотацией типа)
+const b = 'hello'        // string — одинарные кавычки = то же что двойные (TS compat)
+const c = 'A'            // string — один символ, но всё равно string
+const d = `Hello, ${name}!`   // template literal — обратные кавычки
+const ch: u8 = 'A'       // u8 — char code 65 (только с явной аннотацией типа)
 ```
 
 **Trailing comma** — разрешена везде:

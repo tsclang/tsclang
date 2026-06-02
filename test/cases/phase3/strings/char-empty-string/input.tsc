@@ -1,0 +1,2 @@
+const s = '';
+console.log(s.length);

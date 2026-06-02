@@ -1417,3 +1417,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Spec updated: 02-syntax.md (quotes), 03-types.md (char type, char literals section)
 > - New tests: char-as-string, char-string-concat, char-string-array (3 tests)
 > - Result: **1364 tests, 0 failures**
+
+> 2026-06-02: **Single quotes fully interchangeable with double quotes (TS compat)**:
+> - `'hello'` = `"hello"` — multi-char single-quoted strings now valid
+> - `''` = `""` — empty single-quoted string now valid
+> - `const ch: u8 = 'hello'` → compile error (multi-char cannot be u8)
+> - Updated error messages in `_charCode()` — clearer diagnostics
+> - Updated `spec/02-syntax.md` — «одинарные и двойные взаимозаменяемы»
+> - New tests: char-multi-string, char-empty-string, char-concat-multi, err-char-multi-u8 (4 tests)
+> - Result: **1368 tests, 0 failures**

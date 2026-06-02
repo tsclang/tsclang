@@ -13,10 +13,10 @@ export default {
     if (raw.startsWith('\\u')) return parseInt(raw.slice(2), 16);
     if (raw.length === 1) {
       const code = raw.charCodeAt(0);
-      if (code > 127) throw this.error('character literal must be a single ASCII byte');
+      if (code > 127) throw this.error(`non-ASCII character cannot be used as u8 — use double quotes for multi-byte strings`);
       return code;
     }
-    throw this.error('character literal must be a single ASCII byte');
+    throw this.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
   },
 
   _charLiteralToSTR_LIT(value) {
