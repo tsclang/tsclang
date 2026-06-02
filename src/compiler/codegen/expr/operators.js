@@ -252,7 +252,7 @@ export default {
   },
 
   isStringExpr(node) {
-    if (node.kind === 'Literal' && node.litType === 'string') return true;
+    if (node.kind === 'Literal' && (node.litType === 'string' || node.litType === 'char')) return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype === 'String' || sym?.ctype === 'String *') return true;

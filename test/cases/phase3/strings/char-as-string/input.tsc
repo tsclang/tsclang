@@ -1,0 +1,6 @@
+const s = 'A';
+const nl = '\n';
+const tab = '\t';
+console.log(s);
+console.log(nl);
+console.log(tab);

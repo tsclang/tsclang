@@ -91,7 +91,7 @@ export function mangleParams(params, defaultNumber = 'f64') {
 // Infer C type from a literal node
 export function inferLiteralCType(node) {
   if (node.litType === 'string')  return 'String';
-  if (node.litType === 'char')    return 'uint8_t';
+  if (node.litType === 'char')    return 'String';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
   const v = node.value;

@@ -19,15 +19,18 @@ export default {
     throw this.error('character literal must be a single ASCII byte');
   },
 
+  _charLiteralToSTR_LIT(value) {
+    const escaped = value.replace(/\\(?![ntr0'"\\abfvxuU0-7])/g, '\\\\').replace(/"/g, '\\"');
+    return `STR_LIT("${escaped}")`;
+  },
+
   literalToC(node) {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
-    if (node.litType === 'char')   return String(this._charCode(node.value)) + 'U';
+    if (node.litType === 'char')   return this._charLiteralToSTR_LIT(node.value);
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';
     const v = node.value;
-    // Convert 0o (octal) → C octal 0NNN format
     if (v.startsWith('0o') || v.startsWith('0O')) return '0' + v.slice(2);
-    // Binary and hex pass through (gcc supports 0b prefix)
     return v;
   },
 
@@ -35,6 +38,7 @@ export default {
   literalToCTyped(node, ctype) {
     // Char literals: convert to numeric value
     if (node.litType === 'char') {
+      if (ctype === 'String') return this._charLiteralToSTR_LIT(node.value);
       const code = this._charCode(node.value);
       if (ctype === 'uint8_t' || ctype === 'char') return code + 'U';
       return String(code);

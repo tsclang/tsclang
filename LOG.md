@@ -1407,3 +1407,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 >   - Деструктуризация: borrow/move → всегда copy + retain (aligned with 05d)
 >   - opt_T: добавлен String-кейс, правило стало тернарным (primitive → T value, String → T value, class → T *value)
 > - All 1361 tests pass, 0 regressions
+
+> 2026-06-02: **Char literal `'A'` = string (TS compat), `const ch: u8 = 'A'` = char code**:
+> - **`inferLiteralCType('char')`** → `'String'` instead of `'uint8_t'` (types.js)
+> - **`literalToC`** for char → `STR_LIT("A")` instead of `65U` (literals.js)
+> - **`literalToCTyped`** for char → `String` type = `STR_LIT`, integer type = char code (literals.js)
+> - **`isStringExpr`** → includes `litType === 'char'` for string concat/eq (operators.js)
+> - New helper `_charLiteralToSTR_LIT()` — C-escape-aware STR_LIT emission for char values
+> - Spec updated: 02-syntax.md (quotes), 03-types.md (char type, char literals section)
+> - New tests: char-as-string, char-string-concat, char-string-array (3 tests)
+> - Result: **1364 tests, 0 failures**
