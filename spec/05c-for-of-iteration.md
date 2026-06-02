@@ -1,6 +1,8 @@
 # TSClang — Итерация: for..of, Iterable\<T\>, семантика item
 
 > **ПРИОРИТЕТ:** при конфликте с другими разделами spec (02-syntax.md, 03-types.md, 04-classes.md, 05b-ownership.md) — доминирует этот файл. Решения здесь зафиксированы после аудита impl/spec/tests и являются окончательными.
+>
+> **Связь с 05d:** for-of использует **borrow** (pointer) для complex-типов — zero-cost итерация без создания новых данных. Spread/destructuring (см. `spec/05d-spread-destructuring-merge.md`) использует **copy** (struct copy + retain) — создание нового контейнера. Разные операции = разная семантика. Это осознанный дизайн, не противоречие.
 
 ---
 

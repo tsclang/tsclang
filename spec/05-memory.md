@@ -906,6 +906,32 @@ static opt_User LinkedList_User_iter_next(LinkedList_User_iter_t* self) {
 }
 ```
 
+```c
+// для LinkedList<string> (String — struct-by-value, не pointer)
+typedef struct {
+    Node_string* current;
+} LinkedList_string_iter_t;
+
+// opt_string: String → T value (struct copy + retain)
+typedef struct { bool has_value; String value; } opt_string;
+
+static opt_string LinkedList_string_iter_next(LinkedList_string_iter_t* self) {
+    if (self->current == NULL) return (opt_string){false};
+    String val = self->current->value;                 // Copy — struct
+    tsc_string_retain(val);                            // retain — новый владелец
+    self->current = self->current->next;
+    return (opt_string){true, val};
+}
+```
+
+**Три варианта opt_T** (см. `spec/05c-for-of-iteration.md`):
+
+| Тип элемента | opt_T | Значение |
+|-------------|-------|----------|
+| Primitive (`i32`, `bool`, ...) | `T value` | Copy |
+| String | `T value` | Struct copy + retain |
+| Class / Array | `T *value` | Borrow pointer |
+
 Работает на embedded — нет heap, нет ARC.
 
 **Встроенные типы** (`Array<T>`, `Map<K,V>`, `Set<T>`, `string`) реализуют `Iterable<T>` через тот же механизм — компилятор генерирует `iter()` автоматически.
@@ -971,15 +997,22 @@ console.log(user.age);           // ok — остальные поля живы
 console.log(user);               // ошибка: нельзя использовать user целиком после move поля
 ```
 
-### Деструктуризация — сахар для borrow-доступа к полям
+### Деструктуризация — сахар для copy-доступа к полям
 
-Деструктуризация без аннотации типа — **всегда borrow** для сложных типов и copy для примитивов:
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
+
+Деструктуризация **всегда copy** — source жив, нет move, нет E002. Для сложных типов — copy + retain (новый владелец). Для примитивов — copy. `let`/`const` на result = только мутабельность.
 
 ```typescript
+const user = new User("Alice", [1, 2, 3]);
+
 const { name, age } = user;
-// эквивалентно:
-// const name = user.name;  → Ref<string>  (borrow, не move)
-// const age = user.age;    → i32 (copy)
+// name: string — copy + retain (независимый владелец)
+// age: i32 — copy (примитив)
+
+console.log(user);         // ok — user жив
+console.log(user.name);    // ok — ничего не перемещено
+console.log(name);         // ok — независимая копия
 ```
 
 `user` остаётся жив после деструктуризации:
@@ -987,27 +1020,25 @@ const { name, age } = user;
 ```typescript
 const user = new User("Alice", 30, [1, 2, 3]);
 const { name, age, scores } = user;
-// name: Ref<string>, age: i32, scores: Ref<i32[]>
+// name: string (copy + retain), age: i32 (copy), scores: i32[] (copy + retain)
 
 console.log(user);   // ok — ничего не перемещено
-console.log(name);   // ok
-console.log(scores); // ok
+console.log(name);   // ok — независимая копия
+console.log(scores); // ok — независимая копия
 ```
 
-### Деструктуризация с аннотацией типа — move
+### Type annotation на деструктуризации — только тип
 
-Аннотация типа на весь паттерн делает move всех сложных полей (синтаксис совместим с TS):
+Аннотация типа на весь паттерн указывает тип source, но **не меняет** copy-семантику (05d, D4):
 
 ```typescript
 const { name, age, scores }: { name: string; age: i32; scores: i32[] } = user;
-// name: string (move), age: i32 (copy), scores: i32[] (move)
+// name: string (copy + retain), age: i32 (copy), scores: i32[] (copy + retain)
 
-console.log(user);        // ошибка: user частично consumed
-console.log(user.name);   // ошибка: поле перемещено
-console.log(user.age);    // ok — примитив скопирован, не перемещён
+console.log(user);        // ok — user жив
+console.log(user.name);   // ok
+console.log(user.age);    // ok
 ```
-
-> **Линтер:** предупреждает о move через деструктуризацию — `lint: destructure-move`.
 
 ### Переименование в деструктуризации
 

@@ -444,36 +444,37 @@ typedef struct { User u; } _closure_0_env;  // struct copy — value
 
 ### Spread объектов
 
-Spread **потребляет** источник — move. Работает для объектов (struct / class).
+> **Приоритет:** при конфликте с другими разделами по spread/destructuring — доминирует `spec/05d-spread-destructuring-merge.md`.
 
-**Object spread из `let` — move:**
+Spread **копирует** поля — source жив. Move semantics для spread не применяется. `let`/`const` на source не влияет — всегда copy.
+
+**Object spread — всегда copy:**
 
 ```typescript
 let base = { x: 1, name: "Alice" };
-const extended = { ...base, extra: 42 };  // ok — move из let
-console.log(base);  // ❌ E002: use after move
+const extended = { ...base, extra: 42 };
+console.log(base);    // ok — base жив
+console.log(base.x);  // 1
 ```
 
 ```c
-// C-output (упрощённо):
-tsc_string_retain(base.name);   // retain string-полей перед копированием
+tsc_string_retain(base.name);
 BaseType extended = {.x = base.x, .name = base.name};
 extended.extra = 42;
-memset(&base, 0, sizeof(BaseType));  // zero source
+// base untouched
 ```
 
-Все поля копируются в новый объект, оригинал обнуляется.
+Все поля копируются в новый объект, оригинал не тронут. String-поля — retain (новый владелец).
 
-**Object spread из `const` — ошибка:**
+**Object spread из `const` — тоже copy:**
 
 ```typescript
 const base = { x: 1, name: "Alice" };
 const extended = { ...base, extra: 42 };
-// ❌ error: cannot spread const object
-// hint: use let, Shared<T>, or { ...base.clone(), extra: 42 } if type implements Clone
+console.log(base);  // ok — base жив
 ```
 
-Поля объекта могут быть сложными типами (string, классы) — нельзя move из const.
+`let`/`const` на source не влияет на copy/move — spread всегда copy (см. `spec/05d-spread-destructuring-merge.md`, D1).
 
 **Object spread из `Shared<T>` — retain:**
 
@@ -483,54 +484,66 @@ const a = { ...obj, y: 2 };  // ok — retain, obj жив
 const b = { ...obj, z: 3 };  // ok — retain, obj жив
 ```
 
-**String-поля при spread** — retain при копировании, release в cleanup:
+**String-поля при spread** — retain при копировании (новый владелец), release в cleanup:
 
 ```typescript
 let base = { name: "Alice", age: 30 };
 const copy = { ...base };  // name: retain("Alice"), age: copy
+console.log(base.name);    // "Alice" — base жив
 ```
 
 ```c
-// name — ARC Copy (retain + cleanup release)
-// age — побитовое копирование (i32)
+tsc_string_retain(base.name);
+BaseType copy = {.name = base.name, .age = base.age};
+// base untouched, cleanup: tsc_string_release(copy.name)
 ```
 
 ### Деструктуризация объектов
 
-Семантика зависит от наличия аннотации типа (см. `spec/05-memory.md` — «Доступ к полям и деструктуризация»):
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
 
-- **Без аннотации типа** — borrow: `const { name, age } = user;` → `const String *name = &user.name;`. Источник жив.
-- **С аннотацией типа** — move: `const { name, age }: User = user;` → copy + zero-out. Источник мёртв (E002).
+Деструктуризация **всегда copy** — source жив, нет move, нет E002. `let`/`const` на result = только мутабельность. Type annotation = только тип, не меняет copy-семантику.
 
-**Полная деструктуризация с аннотацией — move всех полей:**
+**Без typeAnn — copy + retain:**
 
 ```typescript
 let user = { name: "Alice", age: 30 };
-const { name, age }: User = user;  // move обоих полей
-console.log(user.name);      // ❌ E002: use after move
-```
-
-**Частичная деструктуризация с rest — move указанных полей + rest:**
-
-```typescript
-let user = { name: "Alice", age: 30, email: "a@b.c" };
-const { name, ...rest } = user;  // move name + move rest
+const { name, age } = user;  // copy: name retain, age copy
+console.log(user.name);      // "Alice" — user жив
 ```
 
 ```c
-String name = user.name;                // move string — retain
-int32_t age = user.age;                 // move primitive — copy
-String email = user.email;              // move string — retain
-memset(&user, 0, sizeof(UserType));     // zero-out
+String name = user.name;
+tsc_string_retain(name);
+int32_t age = user.age;
+// user untouched
 ```
 
-**Деструктуризация с Ref — borrow (без move):**
+**С typeAnn — тоже copy + retain:**
 
 ```typescript
-const { name }: Ref<User> = user;  // borrow — user жив
+let user = { name: "Alice", age: 30 };
+const { name, age }: User = user;  // copy: name retain, age copy
+console.log(user.name);            // "Alice" — user жив
 ```
 
-**String-поля при деструктуризации** — retain при извлечении, release в cleanup:
+Type annotation указывает тип source, но **не меняет** copy-семантику (05d, D4).
+
+**Частичная деструктуризация с rest — copy указанных полей + deep copy rest:**
+
+```typescript
+let user = { name: "Alice", age: 30, email: "a@b.c" };
+const { name, ...rest } = user;  // copy name + copy rest
+console.log(user.name);          // "Alice" — user жив
+```
+
+**Деструктуризация с Ref — copy + retain string-полей:**
+
+```typescript
+const { name }: Ref<User> = user;  // copy: name retain, user жив
+```
+
+**String-поля при деструктуризации** — retain при извлечении (новый владелец), release в cleanup:
 
 ```typescript
 const { name, email } = user;
@@ -547,8 +560,8 @@ const { name, email } = user;
 | Ref/Mut borrow | Pointer (`const T*` / `T*`) | Pointer (идентично) |
 | `ClassName_free()` | Release string-полей только (без `free(self)`) | No-op (string-поля — no-op retain/release) |
 | Замыкания с class capture | Struct copy в env (move) | Struct copy (идентично) |
-| Spread объекта | Move полей + retain string-полей | Move полей (string — no-op retain) |
-| Деструктуризация объекта | Move полей + retain string-полей + cleanup release | Move полей (string — no-op) |
+| Spread объекта | Copy полей + retain string-полей, source жив | Copy полей (string — no-op retain), source жив |
+| Деструктуризация объекта | Copy полей + retain string-полей + cleanup release, source жив | Copy полей (string — no-op), source жив |
 | Деструктор при exit | `User_free(&u)` — release string-полей | No-op |
 
 **Ключевое отличие:** классы — **value types**, размещаются на стеке как struct. Конструктор возвращает struct by value (`User User_new(args) { User self = {0}; ... return self; }`), call site: `User u = User_new(args)`. Нет `malloc`/`free` для самого объекта. `ClassName_free(&u)` освобождает только string-поля, не вызывает `free(self)`. На embedded нет heap → нет `malloc`/`free` вообще. String-поля на embedded — no-op retain/release (ring buffer).
@@ -677,35 +690,35 @@ typedef struct { Array_i32 data; } _closure_0_env;  // struct copy — value
 
 ### Spread массивов
 
-Spread **потребляет** источник — move. Работает для массивов.
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
 
-**Массивы примитивов из `const` — copy (разрешено):**
+Spread **копирует** элементы — source жив. Move semantics для spread не применяется. `let`/`const` на source не влияет — всегда copy.
+
+**Массивы примитивов — copy (source жив):**
 
 ```typescript
 const nums: i32[] = [1, 2, 3];
-const copy = [...nums, 4, 5];  // ok — примитивы копируются
-console.log(nums);             // ok — nums жив
+const copy = [...nums, 4, 5];  // copy — примитивы копируются
+console.log(nums.length);      // 3 — nums жив
 ```
 
-Примитивы — copy by value. Spread не потребляет источник. Каждый элемент побитово копируется.
+Примитивы — copy by value. Spread не потребляет источник.
 
-**Массивы сложных типов из `const` — ошибка (move невозможен):** *[NOT YET IMPLEMENTED]*
-
-Текущая реализация: spread из `const` массива со сложными типами молча генерирует shallow copy без retain. Рекомендуется использовать `let` для источника spread.
+**Массивы сложных типов — copy + retain (source жив):**
 
 ```typescript
 const admins: Admin[] = [admin1, admin2];
-const users = [...admins, ...guests];
-// ❌ error: cannot spread const array of non-primitive type
-// hint: use let, Shared<T>, or [...admins.clone()] if Admin implements Clone
+const users = [...admins, ...guests];  // copy + retain, admins жив
+console.log(admins[0].name);           // ok
 ```
 
-**Массивы сложных типов из `let` — move:**
-
-```typescript
-let admins: Admin[] = [admin1, admin2];
-const users = [...admins, ...guests];  // ok — move из let
-sendEmail(admins);  // ❌ E002: admins перемещён
+```c
+// struct copy каждого элемента + retain string-полей
+Admin _d0[] = {admins.data[0], admins.data[1], guests.data[0], ...};
+tsc_string_retain(admins.data[0].name);
+tsc_string_retain(admins.data[1].name);
+Array_Admin users = {.data = _d0, .length = 4, .capacity = 4};
+// admins untouched
 ```
 
 **Массивы из `Shared<T[]>` — retain:**
@@ -722,19 +735,22 @@ const listB = [...base, itemB];  // ok — retain, base жив
 let names: string[] = ["Alice", "Bob"];
 const copy = [...names, "Charlie"];
 // Каждый элемент: tsc_string_retain → копия struct
-// names: zero-out (move), но строки живы (refcount++)
+// names жив, строки живы (refcount++)
+console.log(names[0]);  // "Alice" — жив
 ```
 
 ### Деструктуризация массивов
 
-Деструктуризация **потребляет** источник — move элементов. Исключение: rest-паттерн (см. ниже) — deep copy, source остаётся живым.
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
 
-**Полная деструктуризация — move всех элементов:**
+Деструктуризация **копирует** элементы — source жив. Move semantics для деструктуризации не применяется.
+
+**Полная деструктуризация — copy всех элементов:**
 
 ```typescript
 let arr = [1, 2, 3];
-const [a, b, c] = arr;  // move трёх элементов
-console.log(arr[0]);     // ❌ E002: use after move
+const [a, b, c] = arr;  // copy трёх элементов
+console.log(arr[0]);     // 1 — arr жив
 ```
 
 **Rest в деструктуризации — copy первого + deep copy rest:**
@@ -742,20 +758,23 @@ console.log(arr[0]);     // ❌ E002: use after move
 ```typescript
 let arr = [10, 20, 30];
 const [first, ...rest] = arr;  // copy first + deep copy rest
+console.log(arr[0]);           // 10 — arr жив
 ```
 
 ```c
 int32_t first = arr.data[0];       // copy (примитив)
 Array_i32 rest = tsc_array_slice_i32(arr, 1, (int32_t)arr.length);  // deep copy
+// arr untouched
 ```
 
 Rest-часть — **независимая копия** через `tsc_array_slice_*`: malloc + memcpy. Source остаётся живым, cleanup source и rest независимы. Для `Array<string>` — `tsc_array_slice_string` делает `tsc_string_retain` каждого элемента.
 
-**Деструктуризация массива объектов — move:**
+**Деструктуризация массива объектов — copy + retain:**
 
 ```typescript
 let users = [user1, user2];
-const [first, ...rest] = users;  // move user1 + move rest
+const [first, ...rest] = users;  // copy: struct copy + retain string-полей
+console.log(users[0].name);      // ok — users жив
 ```
 
 **Деструктуризация массива строк — ARC Copy:**
@@ -765,7 +784,8 @@ let names = ["Alice", "Bob"];
 const [first, ...rest] = names;
 // first: tsc_string_retain → ARC Copy
 // rest: каждый элемент retain → ARC Copy
-// names: zero-out (move), но строки живы
+// names жив, строки живы (refcount++)
+console.log(names[0]);  // "Alice" — жив
 ```
 
 ### Array `capacity` — owning vs non-owning
@@ -806,8 +826,8 @@ const [first, ...rest] = names;
 | Ref/Mut borrow | Pointer (`const Array_i32*` / `Array_i32*`) | Pointer (идентично) |
 | `arr.push(val)` | `realloc` при росте | Только если `length < capacity`, иначе ошибка |
 | `tsc_array_free_string` | release каждого элемента | release = no-op (строки rodata) |
-| Spread массива | Move (retain для string-элементов) | Move (no-op retain для string-элементов) |
-| Деструктуризация массива | Move элементов (retain для string) | Move элементов (no-op retain для string) |
+| Spread массива | Copy (retain для string-элементов), source жив | Copy (no-op retain для string-элементов), source жив |
+| Деструктуризация массива | Copy элементов (retain для string), source жив | Copy элементов (no-op retain для string), source жив |
 | Деструктор | `free(arr.data)` + string cleanup | No-op или static reset |
 
 **Ключевое отличие:** на embedded массивы — фиксированной ёмкости (`capacity` задана при создании, не растёт). `push` работает только если `length < capacity`. Нет `realloc`, нет heap. Деструктор — no-op (нечего освобождать).
@@ -954,23 +974,28 @@ let t: [i32, string, string] = [1, ...runtimeArray];
 
 ### Деструктуризация
 
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
+
+Деструктуризация кортежа **всегда copy** — source жив, нет move, нет E002. `let`/`const` на source не влияет.
+
 | Паттерн | Семантика |
 |---------|-----------|
-| `const [a, b] = pair` (source `const`) | Copy элементов, tuple жив |
-| `let [a, b] = pair` (source `let`) | Move: string-поля zeroed + `_moved` flag (E002) |
-| `const [x, , z] = triple` | Copy/Move в зависимости от source |
-| `const [user, name] = t` (owned) | Move: `user: User`, `name: string` |
-| `const [user, name] = t` (Ref\<tuple\>) | Borrow: `user: Ref<User>`, `name: Ref<string>` |
+| `const [a, b] = pair` | Copy элементов + retain string-полей, tuple жив |
+| `let [a, b] = pair` | Copy элементов + retain string-полей, tuple жив |
+| `const [x, , z] = triple` | Copy указанных + retain string-полей |
+| `const [user, name] = t` (owned) | Struct copy + retain string-полей, t жив |
+| `const [user, name] = t` (Ref\<tuple\>) | Copy + retain string-полей, t жив |
 
 ```typescript
 let t: [User, string] = [new User(), "test"];
 
-// Move — tuple потреблён
-const [user, name] = t;  // user: User, name: string; t невалиден
+// Copy — tuple жив
+const [user, name] = t;  // user: User (struct copy), name: string (retain); t жив
+console.log(t._0.name);  // ok
 
 // Borrow — через Ref
 function process(t: Ref<[User, string]>): void {
-    const [user, name] = t;  // user: Ref<User>, name: Ref<string>
+    const [user, name] = t;  // copy + retain, t жив
 }
 ```
 
@@ -998,24 +1023,27 @@ function swap(t: [i32, string]): [string, i32] {
 | Rest tuple `_tail` | `malloc` для tail-массива | Статический буфер или фиксированный массив |
 | String-элементы | ARC retain/release | No-op (rodata) |
 | Optional элементы | `opt_T` struct (bool + value) | Аналогично |
-| Spread fixed tuple | Copy/move элементов на стеке | Аналогично |
-| Деструктуризация | Move/borrow элементов | Аналогично |
+| Spread fixed tuple | Copy элементов + retain string-полей, source жив | Copy элементов (string — no-op retain), source жив |
+| Деструктуризация | Copy элементов + retain string-полей, source жив | Copy элементов (string — no-op), source жив |
 
 **Ключевое отличие:** rest tuple (`...T[]`) требует heap на desktop. На embedded — статический буфер с фиксированной ёмкостью, как `Array`.
 
 ### Почему так
 
-Кортеж — value type: копируется если все элементы примитивы, перемещается если есть сложные. Spread — только compile-time размер (fixed tuple) или rest-tuple с heap. Деструктуризация из `Ref<tuple>` — borrow элементов, из owned `let` — move (string-поля: retain + memset source field). Из `const` — ARC Copy (retain без zeroing, источник жив). String-элементы — ARC Copy, как поля объекта.
+Кортеж — value type: spread и деструктуризация **всегда copy** (см. `spec/05d-spread-destructuring-merge.md`, D1). Source жив, нет move, нет E002. String-элементы — retain при copy (новый владелец), release в cleanup.
 
 ```typescript
-// let → move + retain + zero source
+// всегда copy + retain
 let pair: [i32, string] = [1, "hello"];
-const [a, b] = pair;  // b: retain("hello"), pair._1 = NULL
+const [a, b] = pair;  // b: retain("hello"), pair жив
+console.log(pair._1);  // ok
 
-// const → retain (source alive)
+// const source — тоже copy
 const pair2: [i32, string] = [2, "world"];
 const [c, d] = pair2;  // d: retain("world"), pair2 жив
 ```
+
+Move для кортежей — **только при прямом присваивании** (`let b = a`), не при spread/деструктуризации.
 
 ---
 

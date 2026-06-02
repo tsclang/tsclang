@@ -1389,3 +1389,21 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Signal `.get()` type inference** (`infer.js`): `inferType` now returns correct C type for `signal.get()` based on `_signalElemType`. Fixes `console.log` using `%d` instead of `%g` for f64 signals.
 > - **Full gcc audit passed**: 1314 gcc tests across 17 phases — 0 failures. 1351 no-gcc — 0 failures.
 > - Updated `test/cases/phase12/reactive/computed/expected.c`.
+
+> 2026-06-02: **Spec consistency: 05b-ownership.md + 05-memory.md aligned with 05d-spread-destructuring-merge.md**:
+> - **05b-ownership.md** — 13 inconsistencies fixed with 05d decisions (spread/destructuring = always copy, source alive):
+>   - Spread объектов: move → copy, source жив (заголовок + примеры)
+>   - Object spread из const: ошибка → copy
+>   - Деструктуризация объектов: borrow/move → всегда copy + retain
+>   - Spread массивов: move → copy, source жив
+>   - Array spread из const complex: ошибка → copy
+>   - Array spread из let complex: move → copy
+>   - Деструктуризация массивов: move → copy
+>   - Деструктуризация массива объектов: move → copy + retain
+>   - 6 записей в Desktop vs Embedded таблицах: Move → Copy
+>   - Tuple деструктуризация: 3-way split → всегда copy
+>   - Tuple «Почему так»: переписано
+> - **05-memory.md** — 2 inconsistencies fixed:
+>   - Деструктуризация: borrow/move → всегда copy + retain (aligned with 05d)
+>   - opt_T: добавлен String-кейс, правило стало тернарным (primitive → T value, String → T value, class → T *value)
+> - All 1361 tests pass, 0 regressions
