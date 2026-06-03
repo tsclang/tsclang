@@ -1473,7 +1473,7 @@ class EmbeddedSignal {
     set(): void         // ISR-safe: устанавливает флаг (volatile store)
     wait(): Promise<void>  // async: опрашивает флаг; auto-reset при срабатывании
     clear(): void       // ручной сброс (если нужен без await)
-    readonly isSet: bool   // ISR-safe: проверка без ожидания
+    readonly isSet: boolean   // ISR-safe: проверка без ожидания
 }
 ```
 

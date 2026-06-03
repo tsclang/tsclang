@@ -1534,3 +1534,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - `string` (non-nullable) truthy: `s->length > 0` → `s.length > 0` (value type, not pointer)
 > - **All 22 spec files: 0 contradictions with 03-types.md**
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Re-audit round 2 — remaining `bool`→`boolean` in TSC code blocks**:
+> - 19-stdlib-hal.md: GPIO.write/read `bool`→`boolean`
+> - 07-concurrency.md: EmbeddedSignal.isSet `bool`→`boolean`
+> - 10-stdlib.md: GPIO.digitalWrite/Read, serialAvailable, digitalWrite/digitalRead impl `bool`→`boolean` (6 places)
+> - 09-build.md: GPIO.write/read `bool`→`boolean`
+> - Verified: 0 `bool` remaining in TSC code blocks across all spec files
+> - Result: **1371 tests, 0 failures**

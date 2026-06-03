@@ -1298,8 +1298,8 @@ declare platform {
 // 2. Типы std/hal для этой платформы (слой типов ↔ слой реализации include/std/hal.h)
 declare module "std/hal" {
     namespace GPIO {
-        function write(pin: u8, val: bool): void   // → tsc_gpio_write → NES mapper register
-        function read(pin: u8): bool
+        function write(pin: u8, val: boolean): void   // → tsc_gpio_write → NES mapper register
+        function read(pin: u8): boolean
     }
 }
 

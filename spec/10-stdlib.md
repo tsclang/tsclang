@@ -1508,8 +1508,8 @@ export enum PinMode { Input, Output, InputPullup }
 
 export interface GPIO {
     pinMode(pin: u8, mode: PinMode): void
-    digitalWrite(pin: u8, value: bool): void
-    digitalRead(pin: u8): bool
+    digitalWrite(pin: u8, value: boolean): void
+    digitalRead(pin: u8): boolean
 }
 
 export interface UART {
@@ -1792,8 +1792,8 @@ import {
 enum PinMode { Input, Output, InputPullup }
 
 pinMode(pin: u8, mode: PinMode): void      // настроить пин
-digitalWrite(pin: u8, value: bool): void   // записать в пин
-digitalRead(pin: u8): bool                 // прочитать из пина
+digitalWrite(pin: u8, value: boolean): void   // записать в пин
+digitalRead(pin: u8): boolean                 // прочитать из пина
 ```
 
 ### Timing
@@ -1809,7 +1809,7 @@ delayMicroseconds(us: u16): void           // задержка в микросе
 serialBegin(baud: u32): void               // инициализировать UART
 serialWrite(data: Ref<u8[]>): void         // отправить данные
 serialRead(): u8                           // прочитать байт
-serialAvailable(): bool                    // есть ли данные
+serialAvailable(): boolean                    // есть ли данные
 ```
 
 ### ADC и PWM
@@ -2135,7 +2135,7 @@ declare module "std/hal" {
         }
     }
     
-    function digitalWrite(pin: u8, value: bool): void {
+    function digitalWrite(pin: u8, value: boolean): void {
         if (pin < 8) {
             if (value) PORTD |= (1 << pin)
             else PORTD &= ~(1 << pin)
@@ -2146,7 +2146,7 @@ declare module "std/hal" {
         }
     }
     
-    function digitalRead(pin: u8): bool {
+    function digitalRead(pin: u8): boolean {
         if (pin < 8) return (PIND & (1 << pin)) != 0
         if (pin < 14) return (PINB & (1 << (pin - 8))) != 0
         return false

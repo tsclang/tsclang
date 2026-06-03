@@ -56,8 +56,8 @@ declare module "std/hal" {
 
     namespace GPIO {
         function mode(pin: u8, mode: PinMode): void   // DDRx |= (1 << pin)
-        function write(pin: u8, val: bool): void       // PORTx
-        function read(pin: u8): bool                   // PINx
+        function write(pin: u8, val: boolean): void       // PORTx
+        function read(pin: u8): boolean                   // PINx
     }
     namespace I2C {
         function begin(): void                         // TWBR + TWSR init
