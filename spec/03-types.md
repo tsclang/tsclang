@@ -28,7 +28,7 @@
   `type` — всегда структурный alias, как в TS. `type UserId = i32` — compile-time alias, `UserId` и `i32` взаимозаменяемы. `type Point = { x: f64 }` — структурно совместим с любым `{ x: f64 }`.
 
 - **Type inference** — тип выводится если не указан явно
-  - `const p = { x: 1, y: 0 }` → `{ x: f64, y: f64 }` → анонимная struct в C
+  - `const p = { x: 1, y: 0 }` → `{ x: number, y: number }` → анонимная struct в C
 - **Автокаст числовых типов:**
 
   Три механизма, применяются последовательно. Первый применимый выигрывает.
@@ -254,18 +254,18 @@ const n64: i64 = n      // неявно — без потерь
 
 - Синоним: `number` = `f64` по умолчанию (совместимость с TypeScript-стилем)
   - Переопределяется через `"defaultNumber"` в `tsc.package.json`
-  - На 8-bit таргетах (`"target": "avr"` и др.) — **`number` автоматически = `f32`** без явного `defaultNumber`
+  - На embedded-таргетах — **`number` автоматически = `f32`** без явного `defaultNumber`
   ```typescript
   // Десктоп (defaultNumber = f64)
-  const a = 1;           // number (f64, double) — целочисленный литрал без аннотации
+  const a = 1;           // number (f64, double) — целочисленный литерал без аннотации
   const b: number = 1;   // f64 (number = f64) — то же самое, явно
   const c: f32 = 1;      // f32 (явно)
 
-  // AVR (defaultNumber автоматически = f32)
-  const a = 1;           // number (f32, float) — целочисленный литрал без аннотации
+  // Embedded (defaultNumber автоматически = f32)
+  const a = 1;           // number (f32, float) — целочисленный литерал без аннотации
   const b: number = 1;   // f32 (number = f32)
   const c: f32 = 1;      // f32 (явно)
-  const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
+  const d: f64 = 1;      // f64 + warning: f64 on embedded target is inefficient
   ```
   Переопределить явно — можно: `{ "defaultNumber": "f64" }` в `tsc.package.json` *[NOT YET IMPLEMENTED]* (нестандартно, потребует подтверждения).
 
@@ -293,7 +293,7 @@ const n64: i64 = n      // неявно — без потерь
 
   `i16`/`u16` и меньше — нет warning (нативные для AVR). `i32`/`u32` — нет warning (обычны, avr-gcc оптимизирует).
 - Type inference выводит конкретный тип для всех значений:
-  - целые числа → `number` (= `f64` по умолчанию, переопределяется через `defaultNumber`), числа с точкой → `f64` (double)
+  - целые числа → `number` (= defaultNumber, переопределяется через `defaultNumber`), числа с точкой → `number` (тот же defaultNumber)
   - строки → `string`, булевые → `boolean`
   - однородный массив → `T[]` (где `T` выводится по элементам)
   - смешанный массив (разные типы элементов) → **compile error** — требуется explicit type annotation (tuple или typed array)
@@ -306,7 +306,7 @@ const n64: i64 = n      // неявно — без потерь
 **Ok — неявный вывод (однозначный):**
 
 ```typescript
-let a = 10;              // → number (defaultNumber → f64 на desktop, i32 на embedded)
+let a = 10;              // → number (defaultNumber → f64 на desktop, f32 на embedded)
 let b = 10.0;            // → number (defaultNumber)
 let c = "hello";         // → string
 let d = 'a';             // → string (одинарные = двойные)
@@ -765,6 +765,7 @@ if (typeof x === "string") {
 | `"i64"` | 2 | |
 | `"f32"` | 3 | |
 | `"f64"` | 4 | |
+| `"number"` | defaultNumber | Платформозависимый: f64 на desktop, f32 на embedded. П2-совместимо (TS: `typeof x === "number"`) |
 | `"bool"` | 5 | |
 | `"string"` | 6 | desktop: heap pointer + retain; embedded: inline |
 | `"array"` | 7 | heap pointer; narrow → `__array__` marker, access via `as Array<T>` |
@@ -784,7 +785,7 @@ function wrap(val: i32): unknown {
 }
 
 function accept(val: unknown): void { ... }
-accept(42)       // auto-wrap → tsc_unknown_from_f64(42)  (42 — это number = f64)
+accept(42)       // auto-wrap → tsc_unknown_from_f64(42)  (42 — это number, defaultNumber → f64 на desktop)
 accept(3.14)     // auto-wrap → tsc_unknown_from_f64(3.14)
 
 // Для конкретного типа — используйте явную аннотацию:
@@ -1259,7 +1260,6 @@ Callback получает `Ref<T>` — borrow элемента, не ownership. 
 - `arr.toReversed(): T[]` — новый перевёрнутый массив; оригинал не меняется; **требует `T: Clone`**
 - `arr.toSpliced(start: i32, deleteCount?: i32, ...items: T[]): T[]` — новый массив с применённым splice; оригинал не меняется; **требует `T: Clone`**
 - `arr.with(index: i32, value: T): T[]` — новый массив с заменённым элементом по индексу; оригинал не меняется; **требует `T: Clone`**
-- `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
 - `arr.reduceRight<U>(f: (U, Ref<T>) => U, init: U): U` — то же, но справа налево
 
 ```typescript
@@ -1431,7 +1431,7 @@ const groups = Map.groupBy(nums, x => x % 2 === 0 ? "even" : "odd")
 // groups.get("odd")  → [1, 3, 5]
 // groups.get("even") → [2, 4]
 
-const byFirstLetter = Object.groupBy(["apple", "banana", "apricot", "cherry"], s => s[0])
+const byFirstLetter = Object.groupBy(["apple", "banana", "apricot", "cherry"], s => s.charAt(0))
 // byFirstLetter: Map<string, string[]>
 // byFirstLetter.get("a") → ["apple", "apricot"]
 // byFirstLetter.get("b") → ["banana"]

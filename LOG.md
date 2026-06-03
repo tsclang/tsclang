@@ -1458,3 +1458,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Смешанный массив `[1, 'a']` → **compile error** — требуется explicit type annotation
 > - Обоснование: П2 (TS тоже неверно выводит union), П3 (explicit > implicit), П1 (tuple = value type)
 > - Добавлены примеры: ok (implicit), error (mixed), ok (explicit type)
+
+> 2026-06-03: **spec/03-types.md internal consistency audit — 9 fixes**:
+> - **defaultNumber simplified**: desktop=f64, **all embedded=f32** (not just AVR), configurable via defaultNumber
+> - **Inference unified**: all numeric literals (int + float) → `number` → defaultNumber (no separate "float→f64" rule)
+> - **typeof "number"**: added to typeof table (platform-dependent, П2-compatible with TS)
+> - groupBy example: `s[0]` → `s.charAt(0)` (s[0] returns u8, not string)
+> - Removed duplicate `reduce` entry
+> - Fixed typos: литрал→литерал, f64→number in examples, embedded i32→f32
