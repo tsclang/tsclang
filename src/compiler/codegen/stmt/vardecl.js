@@ -1087,13 +1087,6 @@ export default {
                   this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
                 }
               }
-              const closureLine = (node.line ?? 1) - 1;
-              for (const [nm] of closure.capturedVars) {
-                const mode = closure.captureModes?.get(nm);
-                if (mode === 'mut' || mode === 'ref') continue;
-                const capSym = this.lookup(nm);
-                if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
-              }
               return;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
@@ -1158,13 +1151,6 @@ export default {
                 for (const nm of closure.capturedStringFields ?? []) {
                   this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
                 }
-              }
-              const closureLine = (node.line ?? 1) - 1;
-              for (const [nm] of closure.capturedVars) {
-                const mode = closure.captureModes?.get(nm);
-                if (mode === 'mut' || mode === 'ref') continue;
-                const capSym = this.lookup(nm);
-                if (capSym && capSym.ctype !== 'String') capSym._movedIntoClosureLine = closureLine;
               }
               return;
             }

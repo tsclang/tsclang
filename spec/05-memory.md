@@ -1,5 +1,7 @@
 # TSClang — Модель памяти
 
+> **Приоритет:** при конфликте с `spec/05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `spec/05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `spec/05e-closures.md` по closures/capture — доминирует 05e.
+
 **Гибридная модель:** статический ownership/borrow checker + опциональный ARC. Нет GC, нет ручного `free`.
 
 ## Типы владения
@@ -416,7 +418,7 @@ async function cacheActor(rx: Rx<CacheRequest>): Promise<void> {
 }
 ```
 
-**Реактивность** решается через `std/reactive` с explicit-deps — без interior mutability, как чистая библиотека (см. std/reactive в [spec/09-stdlib.md](spec/09-stdlib.md)).
+**Реактивность** решается через `std/reactive` с explicit-deps — без interior mutability, как чистая библиотека (см. std/reactive в [spec/10-stdlib.md](spec/10-stdlib.md)).
 
 ## Scope Constraint (без lifetime аннотаций)
 
@@ -572,29 +574,11 @@ async function ok2(arr: i32[]): Promise<void> {
 
 Авто-reborrow отклонён — запрет полный и явный.
 
-**Правило 5: Замыкания и borrow**
+**Правило 5: Замыкания и capture**
 
-Замыкание (arrow function) захватывает все переменные **по значению** (copy) — env struct содержит копии, не ссылки. Замыкание стековое и не может пережить источник:
+> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
 
-```typescript
-let prefix = "Hello";
-const greet = (name: string): string => {
-    return prefix + ", " + name;   // prefix скопирован в env struct
-};
-```
-
-> **Ограничение:** в текущей реализации компилятор не отслеживает lifetime захваченных переменных при выходе замыкания за пределы scope (например, возврат из функции или сохранение в глобальную переменную). По дизайну замыкание — стековое.
-
-**Захват переменных в замыкание:**
-
-| Тип переменной | Как захватывается | C-representation в env struct |
-|---------------|-------------------|------------------------------|
-| Примитив (`i32`, `bool`) | Copy-by-value | `int32_t x;` |
-| `string` | Shallow copy (`String` struct) | `String s;` |
-| `Ref<T>` / `Mut<T>` | Copy pointer | `const User *u;` / `User *m;` |
-| Array / Object | Copy struct (data ptr + len + cap) | `Array_i32 arr;` |
-
-**Правило:** env struct — stack-allocated. Она копирует значения/указатели на момент создания closure. Если оригинал умрёт раньше, чем closure будет вызван — dangling pointer.
+Замыкание (arrow function) захватывает переменные по-разному: примитивы — copy (snapshot), строки — retain (ARC copy), class/array — reference (pointer). Source всегда жив. Env struct — stack-allocated, escaping scope = UB. Cleanup: source владеет, env нет (кроме String retain/release).
 
 ---
 
@@ -607,7 +591,7 @@ const greet = (name: string): string => {
 | Конец arrow function | ✅ Да | Env struct умирает на стеке |
 | Callback после `await` | ❌ Запрещён | `err-ref-across-await` |
 | Отложенный callback | ❌ Запрещён по дизайну | Closure — стековое |
-| Захват в closure | Copy struct/pointer | Lifetime не отслеживается (ограничение) |
+| Захват в closure | Copy/retain (примитив/String), Reference (class/array) | Same-scope безопасно, escaping = UB |
 
 ## Автоматический Drop
 
@@ -1172,97 +1156,13 @@ function renderView(data: Ref<User[]>) { ... }
 
 ## Замыкания
 
-### Правила захвата
+> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
 
-**Примитивы** (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) — всегда **копируются**:
+Замыкание (arrow function) захватывает переменные по-разному: примитивы — copy (snapshot), строки — retain (ARC copy), class/array — **reference** (pointer). Source **всегда жив**. Нет move capture `[x: T]`, нет E002 для implicit capture. Explicit capture: только `[x: Ref<T>]` и `[x: Mut<T>]`. Env struct — stack-allocated, escaping = UB.
 
-```typescript
-let x: i32 = 42;
-const fn = (): i32 => x + 1;  // x скопирован, не захвачен по ссылке
-x = 99;
-fn();  // вернёт 43, не 100 — x скопирован в момент создания замыкания
-```
+Capture model, примеры, C-representation, cleanup — см. `spec/05e-closures.md`.
 
-**Сложные типы** (массивы, объекты, строки, классы) — по умолчанию **копируются** (shallow copy struct/pointer в env struct):
-
-```typescript
-const items = [1, 2, 3];
-const fn = (): i32 => items.length;  // fn держит копию items (struct copy)
-fn();  // ok — items жив
-```
-
-```typescript
-let fn: () => i32;
-{
-    const items = [1, 2, 3];
-    fn = (): i32 => items.length;  // копия items — shallow, data ptr тот же
-}
-fn();  // undefined behaviour: items data может быть уже освобождена
-```
-
-> **Примечание:** для явного borrow-захвата (Ref/Mut) используйте explicit capture list — `[items: Ref<i32[]>]()` или `[items: Mut<i32[]>()`. Implicit capture всегда copy-by-value.
-
-### Явный список захвата
-
-`[var: Type]` перед параметрами — те же типы что везде:
-
-```typescript
-[data: Data]()          // T — move, замыкание становится владельцем
-[data: Ref<Data>]()     // Ref — immutable borrow (явный, не по умолчанию)
-[data: Mut<Data>]()     // Mut — mutable borrow
-```
-
-Move-захват решает проблему когда замыкание переживает источник:
-
-```typescript
-// ошибка без явного захвата — Ref не может пережить функцию
-function makeGreeter(): () => void {
-    const name = "Alice";
-    return (): void => console.log(name);  // ошибка: name умрёт
-}
-
-// ok — name перемещён в замыкание, живёт пока живёт замыкание
-function makeGreeter(): () => void {
-    const name = "Alice";
-    return [name: string](): void => console.log(name);  // ok
-}
-```
-
-C-output — замыкание с move-захватом возвращается **по значению** (как любой C struct), heap не нужен. Монорфизация устраняет type erasure — каждый уникальный тип замыкания известен на этапе компиляции:
-
-```c
-typedef struct {
-    String name;                     // owned String, moved in
-    void (*fn)(struct Closure_0*);   // указатель на функцию
-} Closure_0;
-
-static void Closure_0_fn(Closure_0* self) {
-    printf("%s\n", self->name.data);
-}
-
-Closure_0 makeGreeter(void) {
-    String name = { .data = "Alice", .length = 5, .capacity = 0 };
-    return (Closure_0){ .name = name, .fn = Closure_0_fn };
-    // name скопирован в struct по значению — stack frame makeGreeter умирает, struct жив
-}
-
-// caller:
-Closure_0 greet = makeGreeter();  // struct на стеке caller-а
-greet.fn(&greet);                  // вызов
-String_drop(&greet.name);         // drop owned поля когда greet умирает
-```
-
-Функция, принимающая замыкание, монорфизируется под конкретный тип:
-
-```c
-// callTwice специализирован под Closure_0
-static void callTwice_Closure_0(Closure_0* f) {
-    f->fn(f);
-    f->fn(f);
-}
-```
-
-### Trampoline adapter для capturing callbacks
+**Trampoline adapter для capturing callbacks:**
 
 Runtime-макросы (например, `Array.map`, `Array.filter`, `Array.forEach`) ожидают callback вида `void (*fn)(elem)` — без env-параметра. Когда callback является capturing closure (env struct ≠ пустой), компилятор генерирует **trampoline adapter**:
 
@@ -1270,16 +1170,17 @@ Runtime-макросы (например, `Array.map`, `Array.filter`, `Array.fo
 // capturing closure: env содержит captured variable
 typedef struct {
     String prefix;
-} Closure_0;
+} _closure_0_env;
 
-static Closure_0* _tramp_env_0;  // file-scope static env pointer
+static _closure_0_env* _tramp_env_0;  // file-scope static env pointer
 
 static String _tramp_adapter_0(int32_t elem) {
-    return Closure_0_fn(_tramp_env_0, elem);  // делегирует к реальной closure fn
+    return _closure_0_fn(_tramp_env_0, elem);  // делегирует к реальной closure fn
 }
 
 // использование в макросе:
-Closure_0 _env = { .prefix = prefix };
+tsc_string_retain(prefix);
+_closure_0_env _env = { .prefix = prefix };
 _tramp_env_0 = &_env;
 Array_String result = Array_String_map(arr, _tramp_adapter_0);
 ```
@@ -1314,12 +1215,12 @@ arr.forEach(item => counter.inc())   // () => void — тот же тип, пр�
 
 ### Mut-closure через await — запрещено
 
-Closure с `[x: Mut<T>]` захватом **перемещает** borrow в closure struct. Если closure жива через `await` — ошибка компилятора:
+Closure с `[x: Mut<T>]` захватом удерживает mutable pointer на source. Если closure жива через `await` — ошибка компилятора:
 
 ```typescript
 async function bad() {
-    let arr = [1, 2, 3]
-    const fn = [arr: Mut<i32[]>]() => arr.push(1)  // arr moved в fn
+    let arr: number[] = [1, 2, 3]
+    const fn = [arr: Mut<i32[]>]() => arr.push(1)  // arr captured by pointer
     await something()  // ← fn жива через await — ошибка
     fn()
 }
@@ -1329,31 +1230,23 @@ async function bad() {
 //  4 |     await something()
 //    |     ^^^^^ closure 'fn' with Mut<i32[]> capture still alive
 //    |
-//    = hint: use owned capture [arr: i32[]] or complete closure before await
+//    = hint: complete closure before await or create after await
 ```
 
-Три паттерна решения:
+Два паттерна решения:
 
 ```typescript
-// ✅ Вариант 1: owned capture — closure владеет данными
+// ✅ Вариант 1: вызвать closure до await
 async function ok1() {
-    let arr = [1, 2, 3]
-    const fn = [arr: i32[]]() => arr.push(1)  // owned — ok через await
-    await something()
-    fn()
-}
-
-// ✅ Вариант 2: вызвать closure до await
-async function ok2() {
-    let arr = [1, 2, 3]
+    let arr: number[] = [1, 2, 3]
     const fn = [arr: Mut<i32[]>]() => arr.push(1)
-    fn()               // вызвали — fn дропнулась, borrow освобождён
+    fn()               // вызвали — borrow освобождён
     await something()
 }
 
-// ✅ Вариант 3: создать closure после await
-async function ok3() {
-    let arr = [1, 2, 3]
+// ✅ Вариант 2: создать closure после await
+async function ok2() {
+    let arr: number[] = [1, 2, 3]
     await something()
     const fn = [arr: Mut<i32[]>]() => arr.push(1)  // свежий borrow после await
     fn()

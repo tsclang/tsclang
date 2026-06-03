@@ -100,10 +100,10 @@ console.log(users[0].name);  // "Alice" — не изменилось!
 ```
 
 ```c
-User _d1[] = {users.data[0], users.data[1], User_new("Charlie", 35)};
 // retain string fields of copied Users (new owner)
 tsc_string_retain(users.data[0].name);
 tsc_string_retain(users.data[1].name);
+User _d1[] = {users.data[0], users.data[1], User_new("Charlie", 35)};
 Array_User result = {.data = _d1, .length = 3, .capacity = 3};
 // users untouched
 ```
@@ -138,7 +138,7 @@ console.log(rest[0]); // 20
 ```c
 Array_i32 arr = ...;
 int32_t first = arr.data[0];                                        // copy
-Array_i32 rest = tsc_array_slice_i32(arr, 1, (int32_t)arr.length); // deep copy
+Array_i32 rest = tsc_array_slice_i32(arr, 1, arr.length); // deep copy
 // arr untouched
 ```
 
@@ -158,8 +158,8 @@ console.log(rest[0]);   // "Bob"
 ```
 
 ```c
+tsc_string_retain(names.data[0]);
 String first = names.data[0]; // copy
-tsc_string_retain(first);
 Array_string rest = tsc_array_slice_string(names, 1, names.length); // retain each
 // names untouched
 ```
@@ -175,8 +175,8 @@ console.log(first.name);     // "Alice" — независимая копия
 ```
 
 ```c
+tsc_string_retain(users.data[0].name);
 User first = users.data[0];  // struct copy
-tsc_string_retain(first.name);
 Array_User rest = tsc_array_slice_User(users, 1, users.length); // deep copy + retain strings
 // users untouched
 ```
@@ -251,8 +251,8 @@ console.log(obj.name); // "Alice" — жив
 ```
 
 ```c
+tsc_string_retain(obj.name);
 String name = obj.name;
-tsc_string_retain(name);
 int32_t age = obj.age;
 // cleanup: tsc_string_release(name);
 ```
@@ -298,9 +298,9 @@ function getName(): string {
 
 ```c
 String getName() {
-    BaseType obj = {.name = STR_LIT("Alice"), .age = 0};
+    BaseType obj = {.name = STR_LIT("Alice")};
+    tsc_string_retain(obj.name);
     String name = obj.name;
-    tsc_string_retain(name);
     // obj dies — name still valid
     return name;
 }
@@ -339,8 +339,8 @@ console.log(t._0); // 1 — жив
 
 ```c
 int32_t a = t._0;
+tsc_string_retain(t._1);
 String b = t._1;
-tsc_string_retain(b);
 // t untouched
 ```
 
@@ -358,8 +358,8 @@ console.log(t._0.name); // "Alice" — жив
 ```
 
 ```c
+tsc_string_retain(t._0.name);
 User user = t._0;
-tsc_string_retain(user.name);
 int32_t score = t._1;
 // t untouched
 ```
@@ -423,6 +423,8 @@ Array_i32 merged = {.data = _d, .length = 4, .capacity = 4};
 ## 7. Сводка: Матрица Resource × Action × ElementType
 
 ### Единое правило: всегда copy
+
+Для `Shared<T>` «copy» = retain (refcount++), для остальных — struct copy.
 
 | Resource | Action | Element | TSC | TS/JS |
 |----------|--------|---------|-----|-------|
@@ -502,11 +504,11 @@ Source всегда жив. Нет move, нет E002. `let`/`const` на source 
 | Spread массива примитивов | ✅ | — |
 | Spread массива String | ⚠️ Нет retain | Добавить retain |
 | Spread массива Class | ⚠️ Shallow copy, нет retain | Добавить retain string-полей |
-| Spread объекта | ✅ (retain + move) | Убрать move, оставить copy + retain |
+| Spread объекта | ⚠️ (retain + move) | Убрать move, оставить copy + retain |
 | Spread кортежа | ✅ | — |
 | Деструктуризация массива | ✅ (copy + rest slice) | Убрать move для let source |
-| Деструктуризация объекта | ⚠️ Borrow без typeAnn | Switching на copy + retain |
-| Деструктуризация объекта (typeAnn) | ⚠️ Move | Switching на copy + retain |
+| Деструктуризация объекта | ⚠️ Borrow без typeAnn | Переключение на copy + retain |
+| Деструктуризация объекта (typeAnn) | ⚠️ Move | Переключение на copy + retain |
 | Деструктуризация кортежа | ✅ | Убрать move для let source |
 | Rest tuple деструктуризация | ❌ Заглушка | Реализовать |
 | Merge (несколько spread) | ⚠️ Частично | Убрать move |
@@ -522,5 +524,3 @@ Source всегда жив. Нет move, нет E002. `let`/`const` на source 
 - `let b = a` (array) → move + E002
 - `foo(a)` (param: T) → move + E002
 - Return value → ownership transfer
-
-05b нужно обновить: убрать move для spread/destructuring, оставить copy. Добавить ссылку на 05d.

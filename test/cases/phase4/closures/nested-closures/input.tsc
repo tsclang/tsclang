@@ -1,0 +1,14 @@
+class Counter {
+    count: i32;
+}
+let c = new Counter();
+c.count = 0;
+const outer = (): void => {
+    c.count += 1;
+    const inner = (): void => {
+        c.count += 10;
+    };
+    inner();
+};
+outer();
+console.log(c.count);

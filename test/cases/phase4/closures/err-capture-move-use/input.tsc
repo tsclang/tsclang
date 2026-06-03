@@ -3,5 +3,5 @@ class Box {
 }
 let b = new Box();
 b.x = 1;
-const fn = [b: Box](): i32 => b.x;
+const fn = [b](): i32 => b.x;
 console.log(b.x);

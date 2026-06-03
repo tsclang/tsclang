@@ -3,6 +3,8 @@
 > **ПРИОРИТЕТ:** при конфликте с другими разделами spec (02-syntax.md, 03-types.md, 04-classes.md, 05b-ownership.md) — доминирует этот файл. Решения здесь зафиксированы после аудита impl/spec/tests и являются окончательными.
 >
 > **Связь с 05d:** for-of использует **borrow** (pointer) для complex-типов — zero-cost итерация без создания новых данных. Spread/destructuring (см. `spec/05d-spread-destructuring-merge.md`) использует **copy** (struct copy + retain) — создание нового контейнера. Разные операции = разная семантика. Это осознанный дизайн, не противоречие.
+>
+> **Связь с 05e:** итераторы (`iter()`) возвращают closure — capture model определена в `spec/05e-closures.md`. Complex types (Node, LinkedList) захватываются по reference (pointer).
 
 ---
 
@@ -86,6 +88,8 @@ typedef struct { bool has_value; String value; } opt_String;
 2. В AST метод регистрируется со специальным флагом `isIterator: true` или с фиксированным внутренним именем `__ts_iterator`
 3. При проверке `implements Iterable<T>` компилятор ищет этот метод
 4. Для пользователя — 100% честный TypeScript; для компилятора — быстрый dispatch без усложнения грамматики
+
+> Пользователь может написать метод итератора двумя способами: `[Symbol.iterator]()` (TS-стандарт) или `iter()` (короткая форма). Парсер распознаёт оба и маппит в `iter` + `isIterator: true`. В примерах ниже используется `iter()`.
 
 ---
 
@@ -415,17 +419,20 @@ for (size_t i = 0; i < groups.length; i++) {
 
 ### 5.1 opt_T — раздельная мономорфизация
 
-Компилятор генерирует `opt_T` по-разному в зависимости от типа элемента:
+Компилятор генерирует `opt_T` по-разному в зависимости от типа элемента (три варианта):
 
 ```c
 // Примитив (int, bool, char, f64):
 typedef struct { bool has_value; int32_t value; } opt_i32;        // T value — Copy
 
+// String (ARC copy):
+typedef struct { bool has_value; String value; } opt_String;      // String value — ARC Copy
+
 // Complex (class, nested array):
 typedef struct { bool has_value; User *value; } opt_User;          // T *value — Borrow
 ```
 
-Одна логика генерации — ветка по `isPrimitive(type)`.
+Три категории: primitive (copy), String (ARC copy), complex (borrow pointer). Согласовано с таблицей в §5.4.
 
 ### 5.2 Пример: LinkedList\<User\>
 
@@ -589,7 +596,7 @@ function process_event(event_name: string) {
 
 ### Решение: Compile-time escape-анализ + static buffer
 
-Компилятор отслеживает, какие выражения порождают ring buffer строки (`concat`, `format`, `toString`), и.detects когда результат «убегает» из текущего scope:
+Компилятор отслеживает, какие выражения порождают ring buffer строки (`concat`, `format`, `toString`), и обнаруживает когда результат «убегает» из текущего scope:
 
 **Escape = присваивание в:**
 - Глобальную переменную
@@ -712,7 +719,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 4. Тесты: mutate-source-push-error, mutate-source-index-assign-error
 
 **Step 3: Protocol Path P2**
-1. `emit-helpers.js`: генерация `opt_T` — primitive → `T value`, complex → `T *value`
+1. `emit-helpers.js`: генерация `opt_T` — primitive → `T value` (copy), String → `String value` (ARC copy + retain), complex → `T *value` (borrow pointer)
 2. `emit-helpers.js`: `next()` body — для complex types pointer на value
 3. `control-flow.js`: Protocol Path desugaring — complex types `T *item = elem.value`
 4. Тесты: iterable/linked-list-class (complex type, P2 pointer)

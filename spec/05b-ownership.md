@@ -1,5 +1,7 @@
 # TSClang — Присваивание и владение
 
+> **Приоритет:** при конфликте с `spec/05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `spec/05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `spec/05e-closures.md` по closures/capture — доминирует 05e.
+
 Семантика присваивания (`let b = a`, `const b = a`, `b = a`) зависит от типа `a` и от типа-аннотации `b`. Ниже — полная таблица по всем комбинациям.
 
 ## Обозначения
@@ -147,7 +149,7 @@ Copy-типам не нужен ownership management — значение коп
 |---------|-----------|---------|
 | `let b = a` | ARC Copy (retain + cleanup release) | `tsc_string_retain(a); String b = a;` + cleanup: `tsc_string_release(b);` |
 | `const b = a` | ARC Copy (retain + cleanup release) | `tsc_string_retain(a); const String b = a;` + cleanup: `tsc_string_release(b);` |
-| `b = a` (reassign) | ARC Copy | `b = a;` (cleanup release уже зарегистрирован) |
+| `b = a` (reassign) | ARC Copy | `tsc_string_retain(a); tsc_string_release(b); b = a;` (cleanup release уже зарегистрирован) |
 
 ### В полях объекта / элементах массива (Member / Index)
 
@@ -173,7 +175,6 @@ Safe temp pattern предотвращает use-after-free при `obj.name = o
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-
 | `const b: Shared<string> = a` | Не поддерживается | Строки используют свой ARC, `Shared<string>` не нужен
 | `const b: Weak<string> = a` | Не поддерживается | Weak нужен для разрыва циклов в Shared, строки не участвуют в Shared-циклах
 
@@ -341,9 +342,7 @@ typedef struct { const char *data; size_t length; size_t capacity; uint32_t *_re
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
 | `let b = a` | Move + zero-out | `User b = a; a = (User){0};` |
-
 | `const b = a` | Move + zero-out | `const User b = a; a = (User){0};` |
-
 | `b = a` (reassign) | Move + zero-out | `b = a; a = (User){0};` |
 
 После move `a` обнуляется, доступ к `a` — ошибка компиляции (`E002: use after move`).
@@ -429,18 +428,13 @@ void view(const User *u) { /* borrow pointer */ }
 void modify(User *u) { /* mutable borrow pointer */ }
 ```
 
-**Замыкания с class capture** — implicit **copy-by-value** (struct copy в env struct):
+**Замыкания с class/array capture** — implicit **reference** (pointer на source).
 
-```typescript
-let u = new User();
-const fn = (): i32 => u.value;
-```
+> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
 
-```c
-typedef struct { User u; } _closure_0_env;  // struct copy — value
-```
+Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы/String — copy (snapshot). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
 
-Класс захватывается как struct copy. Оригинал помечается как moved (E002 при использовании после захвата). Для borrow-захвата используйте explicit capture list: `[u: Ref<User>]`.
+Подробнее: capture model, примеры, C-representation, ограничения — см. `spec/05e-closures.md`.
 
 ### Spread объектов
 
@@ -559,7 +553,7 @@ const { name, email } = user;
 | Move (zero-out) | `memset(&src, 0, sizeof(T))` | Аналогично |
 | Ref/Mut borrow | Pointer (`const T*` / `T*`) | Pointer (идентично) |
 | `ClassName_free()` | Release string-полей только (без `free(self)`) | No-op (string-поля — no-op retain/release) |
-| Замыкания с class capture | Struct copy в env (move) | Struct copy (идентично) |
+| Замыкания с class capture | Reference (pointer в env), source жив | Reference (pointer, идентично) |
 | Spread объекта | Copy полей + retain string-полей, source жив | Copy полей (string — no-op retain), source жив |
 | Деструктуризация объекта | Copy полей + retain string-полей + cleanup release, source жив | Copy полей (string — no-op), source жив |
 | Деструктор при exit | `User_free(&u)` — release string-полей | No-op |
@@ -581,9 +575,7 @@ Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
 | `let b = a` | Move + zero-out | `Array_i32 b = a; a = (Array_i32){0};` |
-
 | `const b = a` | Move + zero-out | `const Array_i32 b = a; a = (Array_i32){0};` |
-
 | `b = a` (reassign) | Move + zero-out | `b = a; a = (Array_i32){0};` |
 
 После move `a` обнуляется, доступ к `a` — ошибка компиляции (`E002: use after move`).
@@ -675,18 +667,18 @@ void process_Array_i32(Array_i32 arr) { /* arr перемещён, caller обн
 void view_Array_i32(const Array_i32 *arr) { /* borrow pointer */ }
 ```
 
-**Замыкания с array capture** — implicit **copy-by-value** (struct copy в env struct), как с классами:
+**Замыкания с array capture** — implicit **reference** (pointer на source):
 
 ```typescript
-let data = [1, 2, 3];
+let data: number[] = [1, 2, 3];
 const fn = (): i32 => data.length;
 ```
 
 ```c
-typedef struct { Array_i32 data; } _closure_0_env;  // struct copy — value
+typedef struct { Array_i32 *data; } _closure_0_env;  // pointer — reference
 ```
 
-Массив захватывается как struct copy (data ptr + length + capacity). Оригинал помечается как moved. Для borrow-захвата используйте explicit capture list: `[data: Ref<i32[]>]`.
+Массив захватывается **по ссылке** (pointer). Source жив, mutations visible. См. `spec/05e-closures.md`.
 
 ### Spread массивов
 
@@ -748,7 +740,7 @@ console.log(names[0]);  // "Alice" — жив
 **Полная деструктуризация — copy всех элементов:**
 
 ```typescript
-let arr = [1, 2, 3];
+let arr: number[] = [1, 2, 3];
 const [a, b, c] = arr;  // copy трёх элементов
 console.log(arr[0]);     // 1 — arr жив
 ```
@@ -828,6 +820,7 @@ console.log(names[0]);  // "Alice" — жив
 | `tsc_array_free_string` | release каждого элемента | release = no-op (строки rodata) |
 | Spread массива | Copy (retain для string-элементов), source жив | Copy (no-op retain для string-элементов), source жив |
 | Деструктуризация массива | Copy элементов (retain для string), source жив | Copy элементов (no-op retain для string), source жив |
+| Замыкания с array capture | Reference (pointer в env), source жив | Reference (pointer, идентично) |
 | Деструктор | `free(arr.data)` + string cleanup | No-op или static reset |
 
 **Ключевое отличие:** на embedded массивы — фиксированной ёмкости (`capacity` задана при создании, не растёт). `push` работает только если `length < capacity`. Нет `realloc`, нет heap. Деструктор — no-op (нечего освобождать).
@@ -861,7 +854,6 @@ typedef struct {
 | `let b = a` | Есть string/класс | Move + zero-out | `tuple_i32_string b = a; a = (tuple_i32_string){0};` |
 | `const b = a` | Все примитивы | Copy struct (const) | `const tuple_i32_f64 b = a;` |
 | `const b = a` | Есть string/класс | Move + zero-out | `const tuple_i32_string b = a; a = (tuple_i32_string){0};` |
-
 | `b = a` (reassign) | Есть string/класс | Move + zero-out | `b = a; a = (tuple_i32_string){0};` |
 
 Кортеж со сложными элементами ведёт себя как класс: move + zero-out. Кортеж со всеми примитивами — как примитив: copy.
@@ -949,12 +941,14 @@ Rest-часть требует heap. На embedded — те же правила 
 
 ### Spread в tuple-литералах
 
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
+
 Spread фиксированного tuple — размер известен статически:
 
 ```typescript
-const pair: [f64, f64] = [1.0, 2.0];
-const triple: [f64, f64, f64] = [...pair, 3.0];  // ok — compile-time размер
-const copy: [f64, f64, f64] = [...p];              // copy
+const pair: [number, number] = [1.0, 2.0];
+const triple: [number, number, number] = [...pair, 3.0];  // ok — compile-time размер
+const copy: [number, number, number] = [...pair];              // copy
 ```
 
 Spread runtime-массива в rest-tuple — разрешён:
@@ -1013,7 +1007,7 @@ function swap(t: [i32, string]): [string, i32] {
 
 **Ref\<tuple\>** — borrow, деструктуризация даёт `Ref<T>` для каждого элемента.
 
-**Замыкания с tuple capture** — как класс: struct copy в env (value type, move). Для borrow используйте explicit `[t: Ref<tuple>]`.
+**Замыкания с tuple capture** — как класс: reference (pointer в env), source жив. См. `spec/05e-closures.md`.
 
 ### Desktop vs Embedded
 

@@ -428,12 +428,6 @@ class Context {
         code: 'E002',
       });
     }
-    if (sym?._movedIntoClosureLine !== undefined) {
-      throw this.error(`use of moved value: '${name}' was moved into closure on line ${sym._movedIntoClosureLine}`, node, {
-        label: 'use of moved value',
-        code: 'E002',
-      });
-    }
   }
 
   _checkFieldMoved(sym, prop, node, objName) {

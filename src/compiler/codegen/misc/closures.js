@@ -1,4 +1,20 @@
 // closures.js
+
+const SIMPLE_CTYPES = new Set([
+  'int8_t', 'int16_t', 'int32_t', 'int64_t',
+  'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+  'float', 'double', 'bool', 'char', 'size_t', 'ptrdiff_t',
+  'String', 'void *', 'tsc_unknown',
+]);
+
+function _isComplexCtype(ct) {
+  if (!ct) return false;
+  if (SIMPLE_CTYPES.has(ct)) return false;
+  if (ct.endsWith(' *')) return false;
+  if (ct.startsWith('opt_')) return false;
+  return true;
+}
+
 export default {
   _templateToC(node, lines, depth) {
     const parts = node.parts; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
@@ -128,16 +144,13 @@ export default {
         const sym = this.lookup(cap.name);
         if (!sym) throw this.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
         captured.set(cap.name, sym);
-        let mode = 'move';
+        let mode = null;
         if (cap.typeAnn?.kind === 'TypeRef') {
           if (cap.typeAnn.name === 'Ref') mode = 'ref';
           else if (cap.typeAnn.name === 'Mut') mode = 'mut';
         }
+        if (!mode) throw this.error(`Explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>`, arrowNode);
         explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn });
-        if (mode === 'move') {
-          sym._moved = true;
-          sym._movedLine = arrowNode.line ?? 0;
-        }
         if (mode === 'mut') {
           this._trackMutQuarantine(sym, varName);
         }
@@ -175,6 +188,7 @@ export default {
         }
       } else {
         if (ct.endsWith(' *')) envFields.push(`${ct.slice(0,-2)} *${nm};`);
+        else if (_isComplexCtype(ct)) envFields.push(`${ct} *${nm};`);
         else envFields.push(`${ct} ${nm};`);
         if (ct === 'String') capturedStringFields.push(nm);
       }
@@ -211,7 +225,12 @@ export default {
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
         this.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
       } else {
-        this.define(nm, { ...sym, _closureEnvVar: nm });
+        const ct = sym.ctype ?? 'void *';
+        if (_isComplexCtype(ct) && !ct.endsWith(' *')) {
+          this.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm });
+        } else {
+          this.define(nm, { ...sym, _closureEnvVar: nm });
+        }
       }
     }
     for (let i = 0; i < (arrowNode.params ?? []).length; i++) {
@@ -252,6 +271,10 @@ export default {
       const capInfo = explicitCaptures?.find(c => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         if (sym.ctype?.endsWith(' *')) return `.${nm} = ${nm}`;
+        return `.${nm} = &${nm}`;
+      }
+      const ct = sym.ctype ?? 'void *';
+      if (_isComplexCtype(ct) && !sym._closureEnvVar && !ct.endsWith(' *')) {
         return `.${nm} = &${nm}`;
       }
       return `.${nm} = ${src}`;

@@ -1,0 +1,12 @@
+class Counter {
+    count: i32;
+}
+let c = new Counter();
+c.count = 0;
+const inc = (): void => {
+    c.count += 1;
+};
+inc();
+inc();
+inc();
+console.log(c.count);

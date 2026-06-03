@@ -1426,3 +1426,29 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Updated `spec/02-syntax.md` — «одинарные и двойные взаимозаменяемы»
 > - New tests: char-multi-string, char-empty-string, char-concat-multi, err-char-multi-u8 (4 tests)
 > - Result: **1368 tests, 0 failures**
+
+> 2026-06-03: **Closure capture = reference for class/array (TS compat)**:
+> - **`_isComplexCtype()`** helper in closures.js — identifies class/Array_T types for pointer capture
+> - **envFields**: implicit class/array → pointer field (`User *u` instead of `User u`)
+> - **define in closure scope**: class/array → `{ctype: 'User *', isPointer: true, derefType: 'User'}`
+> - **envInit**: class/array from main scope → `&nm` (address-of), from closure scope → pointer copy
+> - **Removed `_movedIntoClosureLine`** from vardecl.js (2 places) — source no longer moved
+> - **Removed E002 `_movedIntoClosureLine` check** from codegen.js
+> - **Removed `[x: T]` move capture** — explicit capture now only Ref/Mut, error without type annotation
+> - Updated tests: capture-move, capture-ref (value→pointer), capture-move-explicit (move→Mut)
+> - Renamed: err-use-after-move-capture → capture-class-reference (error→runnable)
+> - New tests: closure-capture-array-reference, closure-capture-class-mutation, nested-closures (3)
+> - **`spec/05e-closures.md`** created (~500 lines) — PRIORITY spec for closure semantics
+>   - 7 decisions (D1–D7), 8 examples (3.1–3.8), explicit capture syntax, C-representation
+>   - Limitations (escaping scope), TS differences, П1–П3 justification
+> - Updated 05b-ownership.md, 05-memory.md — redirect closure sections to 05e
+> - Updated 05c §5.1 — binary → ternary (primitive/String/complex)
+> - Added priority declarations to 05b-ownership.md, 05-memory.md
+> - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Spec 05* full consistency audit (3 rounds)**:
+> - Round 1: 6 minor fixes (type annotations, Ref\<arr\>→Ref\<T\>, Closure_0 naming, tsc_string_retain, stale TODO)
+> - Round 2: 7 minor fixes (error message, number[] annotations, priority blocks, typo и.detects, Shared\<T\> clarification, .age=0 copy-paste, retain-before-init unification)
+> - Round 3: 5 minor fixes (string reassign C-output, f64→number in tuples, array capture DvE row, blank lines in tables, stdlib 09→10 link)
+> - All 05* files now fully consistent: capture model, priority declarations, retain ordering, type annotations
+> - No critical discrepancies, no stale content, no cross-reference conflicts
