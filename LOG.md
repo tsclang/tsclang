@@ -1527,3 +1527,10 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 19-stdlib-hal.md: `opt_u8`→`u8 | null`, `bool`→`boolean` in .d.tsc declarations
 > - **Final status: 0 contradictions between 03-types.md and all spec files**
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Re-audit 03 ↔ all specs — 2 fixes in 02-syntax.md**:
+> - Nullable classification: binary (complex=pointer, primitives=struct) → ternary (primitives=struct, string=inline struct, complex=pointer) per 03-types.md
+> - `string | null` truthy check: `s != NULL && s->length > 0` → `s.has_value && s.value.length > 0` (opt_string struct, not pointer)
+> - `string` (non-nullable) truthy: `s->length > 0` → `s.length > 0` (value type, not pointer)
+> - **All 22 spec files: 0 contradictions with 03-types.md**
+> - Result: **1371 tests, 0 failures**

@@ -679,19 +679,20 @@ if (s) {
 
 C-output для truthy check:
 ```c
-// string | null
-if (s != NULL && s->length > 0) { ... }
+// string | null (opt_string struct)
+if (s.has_value && s.value.length > 0) { ... }
 
 // i32 | null (struct)
 if (x.has_value && x.value != 0) { ... }
 
 // string (non-nullable)
-if (s->length > 0) { ... }
+if (s.length > 0) { ... }
 ```
 
 - Синтаксис nullable типа: `T | null` — для любых типов, компилятор выбирает реализацию:
-  - Сложные типы (строки, массивы, объекты, Map, Set) → `T* = NULL` в C (бесплатно)
   - Примитивы (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) → `struct { bool has_value; T value; }` в C
+  - `string` → `struct { bool has_value; String value; }` в C (inline struct, ARC copy)
+  - Сложные типы (массивы, объекты, Map, Set) → `T* = NULL` в C (бесплатно)
 
   > **Overhead:** `i32 | null` занимает 8 байт вместо 4 из-за alignment в C (`bool` добавляет padding). Массив из 1 000 000 элементов `i32 | null` займёт 8 МБ вместо 4 МБ. Для горячих путей с большими nullable-массивами примитивов — используй sentinel-значения вручную (`-1`, `INT32_MIN`) и обычный `i32`.
 - Компилятор сужает тип после проверки (type narrowing):
