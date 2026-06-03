@@ -294,10 +294,49 @@ const n64: i64 = n      // неявно — без потерь
   `i16`/`u16` и меньше — нет warning (нативные для AVR). `i32`/`u32` — нет warning (обычны, avr-gcc оптимизирует).
 - Type inference выводит конкретный тип для всех значений:
   - целые числа → `number` (= `f64` по умолчанию, переопределяется через `defaultNumber`), числа с точкой → `f64` (double)
-  - строки → `string`, булевые → `boolean`, массивы → `T[]` (где `T` выводится по элементам)
+  - строки → `string`, булевые → `boolean`
+  - однородный массив → `T[]` (где `T` выводится по элементам)
+  - смешанный массив (разные типы элементов) → **compile error** — требуется explicit type annotation (tuple или typed array)
   - явная аннотация переопределяет: `const i: i32 = 1` → `i32`
 - Сообщения об ошибках используют конкретный тип: `expected f64, got i32`
 - Все числа — примитивы, передаются по значению
+
+### Type inference: правила и примеры
+
+**Ok — неявный вывод (однозначный):**
+
+```typescript
+let a = 10;              // → number (defaultNumber → f64 на desktop, i32 на embedded)
+let b = 10.0;            // → number (defaultNumber)
+let c = "hello";         // → string
+let d = 'a';             // → string (одинарные = двойные)
+let e = true;            // → bool
+let f = null;            // → null
+let g = [1, 2, 3];       // → number[] (однородный — все элементы number)
+let h = ["a", "b"];      // → string[] (однородный — все элементы string)
+let p = { x: 1, y: 2 }; // → anonymous struct { x: number, y: number }
+```
+
+**Error — смешанный массив требует explicit type:**
+
+```typescript
+let g = [1, 'a'];        // Error: mixed array literal — specify type: [number, string] (tuple) or T[]
+let t = [1, "a", true];  // Error: mixed array literal — specify type: [number, string, bool] or T[]
+let u = [obj, 42];       // Error: mixed array literal — specify type: [MyClass, number] or T[]
+```
+
+**Ok с explicit type:**
+
+```typescript
+let g: [number, string] = [1, 'a'];           // → tuple (value type, фиксированный layout)
+let t: [i32, string, bool] = [1, "a", true];  // → tuple
+let nums: i32[] = [1, 2, 3];                  // → Array_i32 (override defaultNumber)
+```
+
+**Обоснование:**
+- **П2**: TS выводит `(string | number)[]` для `[1, 'a']` — почти всегда не то что нужно
+- **П3**: explicit лучше implicit для нетривиальных типов
+- **П1**: tuple = value type с фиксированным layout, компилятор не должен угадывать
 
 ### Literal overflow *[NOT YET IMPLEMENTED]*
 

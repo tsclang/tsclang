@@ -1452,3 +1452,9 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Round 3: 5 minor fixes (string reassign C-output, f64→number in tuples, array capture DvE row, blank lines in tables, stdlib 09→10 link)
 > - All 05* files now fully consistent: capture model, priority declarations, retain ordering, type annotations
 > - No critical discrepancies, no stale content, no cross-reference conflicts
+
+> 2026-06-03: **Type inference rules for mixed arrays** (spec/03-types.md):
+> - Однородный массив → неявный вывод `T[]` (как раньше)
+> - Смешанный массив `[1, 'a']` → **compile error** — требуется explicit type annotation
+> - Обоснование: П2 (TS тоже неверно выводит union), П3 (explicit > implicit), П1 (tuple = value type)
+> - Добавлены примеры: ok (implicit), error (mixed), ok (explicit type)
