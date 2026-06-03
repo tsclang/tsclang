@@ -63,7 +63,7 @@ console.log(myData);   // ошибка: myData перемещён
 Только чтение, без изменения и удаления.
 
 ```typescript
-function sum(arr: Ref<i32[]>): i32 { ... }
+function sum(arr: Ref<number[]>): number { ... }
 
 const data = [1, 2, 3];
 sum(data);
@@ -174,7 +174,7 @@ class Parser {
 Чтение и запись, только один `Mut` за раз.
 
 ```typescript
-function push(arr: Mut<i32[]>, val: i32) {
+function push(arr: Mut<number[]>, val: number) {
     arr.push(val);
 }
 
@@ -253,22 +253,22 @@ node2->prev = node1; // weak — tsc_weak_create, node1._weakcount = 1
 1. **Нельзя два Mut одновременно**
    ```typescript
    let a = [1, 2, 3];
-   let r1: Mut<i32[]> = a;
-   let r2: Mut<i32[]> = a;   // ошибка: уже есть активный Mut
+   let r1: Mut<number[]> = a;
+   let r2: Mut<number[]> = a;   // ошибка: уже есть активный Mut
    ```
 
 2. **Нельзя Mut + Ref одновременно**
    ```typescript
    let a = [1, 2, 3];
-   let r1: Ref<i32[]> = a;
-   let r2: Mut<i32[]> = a;   // ошибка: a уже заимствован как Ref
+   let r1: Ref<number[]> = a;
+   let r2: Mut<number[]> = a;   // ошибка: a уже заимствован как Ref
    ```
 
 3. **Можно несколько Ref одновременно**
    ```typescript
    let a = [1, 2, 3];
-   let r1: Ref<i32[]> = a;
-   let r2: Ref<i32[]> = a;   // ok
+   let r1: Ref<number[]> = a;
+   let r2: Ref<number[]> = a;   // ok
    ```
 
 ## Правила передачи аргументов в функцию
@@ -277,7 +277,7 @@ node2->prev = node1; // weak — tsc_weak_create, node1._weakcount = 1
 
 **Примитивы — всегда copy**, независимо от типа параметра:
 ```typescript
-function foo(x: i32): void { ... }
+function foo(x: number): void { ... }
 let n = 42;
 foo(n);  // copy — n жив после вызова
 ```
@@ -358,7 +358,7 @@ function qux(u: Shared<User>): void {
 
 ```typescript
 @static let tasks = new Tasks<8>()
-@static let counter: i32 = 0
+@static let counter: number = 0
 ```
 
 **Правила borrow checker для `@static let`:**
@@ -386,7 +386,7 @@ tasks.add(inputTask)   // ok — второй Mut<Tasks<8>> к тому же о�
 При использовании `std/threads` компилятор обнаруживает `@static let` с не-атомарным типом и требует явной синхронизации:
 
 ```typescript
-@static let counter: i32 = 0
+@static let counter: number = 0
 Thread.spawn(() => { counter++ })  // ошибка: @static variable captured in spawn — use Atomic<T>
 ```
 
@@ -444,7 +444,7 @@ function bad2(arr: Ref<User[]>): Ref<User> {
     return arr[0];   // ❌ ошибка: borrow на элемент не может пережить массив
 }
 
-function bad3(arr: Mut<i32[]>): Mut<i32> {
+function bad3(arr: Mut<number[]>): Mut<number> {
     return arr[0];   // ❌ ошибка: mutable borrow на элемент не может пережить массив
 }
 ```
@@ -540,22 +540,15 @@ function getLongerOwned(a: Ref<string>, b: Ref<string>): string {
 Borrow не может оставаться живым через `await` — borrow checker отвергает такой код. Причина: async state machine сохраняет состояние между suspension points, и источник borrow может быть invalidated или moved другой coroutine пока ожидает:
 
 ```typescript
-// ❌ Ошибка компилятора: borrow пережил await
-async function bad(arr: i32[]): Promise<void> {
-    const r: Ref<i32> = arr[0]   // borrow из arr
-    await something()            // ← r жив через await — ошибка
-    console.log(r)
-}
-
-// ✅ Clone перед await
-async function ok(arr: i32[]): Promise<void> {
-    const val: i32 = arr[0]      // копия значения (i32 — Copy-тип)
+// ✅ Copy перед await
+async function ok(arr: number[]): Promise<void> {
+    const val: number = arr[0]      // копия значения (number — Copy-тип)
     await something()
     console.log(val)
 }
 
 // ✅ Использовать borrow до await, новый borrow после
-async function ok2(arr: i32[]): Promise<void> {
+async function ok2(arr: number[]): Promise<void> {
     console.log(arr[0])          // borrow использован и отпущен до await
     await something()
     console.log(arr[0])          // новый borrow после await
@@ -648,8 +641,8 @@ void _free_Result_SharedUser_Error(Result_SharedUser_Error* r) {
 // doOther()?
 
 // C-output:
-Array_i32 items = {0};                // ← value type, zero-init
-items = tsc_array_create_i32(4);
+Array_f64 items = {0};                // ← value type, zero-init
+items = tsc_array_create_f64(4);
 
 _r = doSomething();
 if (!_r.ok) goto cleanup;            // один goto — не дублируем free
@@ -660,7 +653,7 @@ if (!_r2.ok) goto cleanup;
 use(&items);
 
 cleanup:
-    tsc_array_free_i32(&items);      // direct free, no NULL-check
+    tsc_array_free_f64(&items);      // direct free, no NULL-check
     return ...;
 ```
 
@@ -698,16 +691,16 @@ if (!r.ok) goto cleanup;  // goto не перепрыгивает объявле
 // }
 
 for (int32_t i = 0; i < count; i++) {
-    Array_i32 tmp = tsc_array_create_i32(2);   // immediate init
+    Array_f64 tmp = tsc_array_create_f64(2);   // immediate init
 
     Result_i32_Err _res_0 = process(i);
     if (!_res_0.ok) {
-        tsc_array_free_i32(&tmp);              // ← inline free: loop-local
+        tsc_array_free_f64(&tmp);              // ← inline free: loop-local
         _result = ...error...;
         goto cleanup;                          // ← затем outer cleanup
     }
 
-    tsc_array_free_i32(&tmp);                  // нормальный путь — конец итерации
+    tsc_array_free_f64(&tmp);                  // нормальный путь — конец итерации
 }
 ```
 
@@ -726,23 +719,23 @@ for (int32_t i = 0; i < count; i++) {
 // }                          // inner умирает здесь
 // if (fail2) throw ...       // нужны: только items (inner уже мёртв)
 
-Array_i32 items = {0};
-items = tsc_array_create_i32(4);
+Array_f64 items = {0};
+items = tsc_array_create_f64(4);
 
 {
-    Array_i32 inner = tsc_array_create_i32(2);   // immediate init
+    Array_f64 inner = tsc_array_create_f64(2);   // immediate init
     if (x < 0) {
-        tsc_array_free_i32(&inner);              // inline: inner scope-local
+        tsc_array_free_f64(&inner);              // inline: inner scope-local
         _result = ...error...;
         goto cleanup;                            // outer cleanup знает про items (не inner)
     }
-    tsc_array_free_i32(&inner);                  // нормальный выход из вложенного scope
+    tsc_array_free_f64(&inner);                  // нормальный выход из вложенного scope
 }
 
 if (!r2.ok) goto cleanup;                        // cleanup: только items
 
 cleanup:
-    tsc_array_free_i32(&items);
+    tsc_array_free_f64(&items);
     return _result;
 ```
 
@@ -966,7 +959,7 @@ let i2 = list.iter()
 const user = new User("Alice", [1, 2, 3]);
 
 const name = user.name;    // Ref<string> — borrow, user жив
-const age = user.age;      // i32 — copy (примитив)
+const age = user.age;      // number — copy (примитив)
 
 console.log(user);         // ok — user не тронут
 console.log(user.name);    // ok
@@ -992,7 +985,7 @@ const user = new User("Alice", [1, 2, 3]);
 
 const { name, age } = user;
 // name: string — copy + retain (независимый владелец)
-// age: i32 — copy (примитив)
+// age: number — copy (примитив)
 
 console.log(user);         // ok — user жив
 console.log(user.name);    // ok — ничего не перемещено
@@ -1004,7 +997,7 @@ console.log(name);         // ok — независимая копия
 ```typescript
 const user = new User("Alice", 30, [1, 2, 3]);
 const { name, age, scores } = user;
-// name: string (copy + retain), age: i32 (copy), scores: i32[] (copy + retain)
+// name: string (copy + retain), age: number (copy), scores: number[] (copy + retain)
 
 console.log(user);   // ok — ничего не перемещено
 console.log(name);   // ok — независимая копия
@@ -1016,8 +1009,8 @@ console.log(scores); // ok — независимая копия
 Аннотация типа на весь паттерн указывает тип source, но **не меняет** copy-семантику (05d, D4):
 
 ```typescript
-const { name, age, scores }: { name: string; age: i32; scores: i32[] } = user;
-// name: string (copy + retain), age: i32 (copy), scores: i32[] (copy + retain)
+const { name, age, scores }: { name: string; age: number; scores: number[] } = user;
+// name: string (copy + retain), age: number (copy), scores: number[] (copy + retain)
 
 console.log(user);        // ok — user жив
 console.log(user.name);   // ok
@@ -1030,11 +1023,11 @@ console.log(user.age);    // ok
 
 ```typescript
 const { name: userName, age: userAge } = user;
-// userName: Ref<string>, userAge: i32
+// userName: string, userAge: number
 
 // ❌ ошибка компилятора: переименование в зарезервированное имя типа
 const { name: string } = user;   // "string" — зарезервированный тип
-const { age: i32 }     = user;   // "i32" — зарезервированный тип
+const { age: number }     = user;   // "number" — зарезервированный тип
 const { data: Buffer } = packet; // "Buffer" — зарезервированный тип
 ```
 
@@ -1045,8 +1038,8 @@ const { data: Buffer } = packet; // "Buffer" — зарезервированн�
 ```typescript
 const arr = [1, 2, 3, 4, 5];
 
-const s = arr[1..3];          // Ref<i32[]> — borrow, arr жив
-const s: i32[] = arr[1..3];   // i32[] — owned копия [2, 3]
+const s = arr[1..3];          // Ref<number[]> — borrow, arr жив
+const s: number[] = arr[1..3];   // number[] — owned копия [2, 3]
 ```
 
 Borrow-срез блокирует мутацию источника пока жив:
@@ -1061,9 +1054,9 @@ arr.push(6);           // ошибка: arr заимствован
 
 ```typescript
 const last = arr[-1];      // последний элемент (copy — примитив)
-const tail = arr[1..];     // Ref<i32[]> — с 1 до конца
-const init = arr[..-1];    // Ref<i32[]> — всё кроме последнего
-const last2 = arr[-2..];   // Ref<i32[]> — последние два
+const tail = arr[1..];     // Ref<number[]> — с 1 до конца
+const init = arr[..-1];    // Ref<number[]> — всё кроме последнего
+const last2 = arr[-2..];   // Ref<number[]> — последние два
 ```
 
 ## Move из массива по индексу
@@ -1174,7 +1167,7 @@ typedef struct {
 
 static _closure_0_env* _tramp_env_0;  // file-scope static env pointer
 
-static String _tramp_adapter_0(int32_t elem) {
+static String _tramp_adapter_0(String elem) {
     return _closure_0_fn(_tramp_env_0, elem);  // делегирует к реальной closure fn
 }
 
@@ -1220,7 +1213,7 @@ Closure с `[x: Mut<T>]` захватом удерживает mutable pointer �
 ```typescript
 async function bad() {
     let arr: number[] = [1, 2, 3]
-    const fn = [arr: Mut<i32[]>]() => arr.push(1)  // arr captured by pointer
+    const fn = [arr: Mut<number[]>]() => arr.push(1)  // arr captured by pointer
     await something()  // ← fn жива через await — ошибка
     fn()
 }
@@ -1228,7 +1221,7 @@ async function bad() {
 //   --> main.tsc:4:5
 //    |
 //  4 |     await something()
-//    |     ^^^^^ closure 'fn' with Mut<i32[]> capture still alive
+//    |     ^^^^^ closure 'fn' with Mut<number[]> capture still alive
 //    |
 //    = hint: complete closure before await or create after await
 ```
@@ -1239,7 +1232,7 @@ async function bad() {
 // ✅ Вариант 1: вызвать closure до await
 async function ok1() {
     let arr: number[] = [1, 2, 3]
-    const fn = [arr: Mut<i32[]>]() => arr.push(1)
+    const fn = [arr: Mut<number[]>]() => arr.push(1)
     fn()               // вызвали — borrow освобождён
     await something()
 }
@@ -1248,7 +1241,7 @@ async function ok1() {
 async function ok2() {
     let arr: number[] = [1, 2, 3]
     await something()
-    const fn = [arr: Mut<i32[]>]() => arr.push(1)  // свежий borrow после await
+    const fn = [arr: Mut<number[]>]() => arr.push(1)  // свежий borrow после await
     fn()
 }
 ```

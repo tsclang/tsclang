@@ -1508,3 +1508,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Destructuring/spread = always copy (05d priority): updated 03-types.md tuple ownership example + Clone section
 > - Closure return types: `(): i32` → `(): number` where expression is `number` (5e: 3 places, 05b: 1 place)
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Cross-spec audit 03 ↔ 05* rounds 2–5 — comprehensive cleanup (~120 edits across 5 files)**:
+> - **Round 2 (11 issues)**: f64 row in 05b table, C-output int32_t→double for inferred number, Array_i32→Array_f64, tuple rest field names (_tail→tail), String→string in TSC, closure C-output return types, makeAdder i32→number, (): i32→(): number for arr.length, Mut<i32[]>→Mut<number[]>, Ref<string>→string in destructuring, deleted Ref<i32> bad example
+> - **Round 2 expanded (~60+ additional)**: mass i32→number/number[] replacement in TSC code blocks across all 05* files where concrete type not justified — 05b (14), 05c (3), 05d (7+5 C-output), 05e (8+4 C-output), 05-memory (20+). Corresponding C-output updated: int32_t→double, Array_i32→Array_f64, tsc_array_slice_i32→tsc_array_slice_f64
+> - **Round 3 (7 CRITICAL + 3 MINOR)**: C-output for number[]→Array_f64 in 05b sum/process/view functions, 05c temperatures/scores/groups, 05d age/score fields. String capture description: "copy (snapshot)"→"retain (ARC copy)". Tuple table _tail→tail. Closure base example: i32→number + C-output double
+> - **Round 4 (3 issues)**: Counter/Box class fields C-output int32_t→double (05e), readonly tuple struct name i32→f64 (05b), optional tuple struct name opt_i32→opt_f64 (05b), trampoline adapter int32_t elem→String elem (05-memory)
+> - **Round 5 (2 issues)**: _ts_log_int→_ts_log_double for age:number fields (05c), embedded String struct sizes hardcoded→"6/12/24 байт (AVR/32-bit/64-bit)" (05b+05c), opt_String→opt_string (05c)
+> - **Final status: 0 contradictions between 03-types.md and all 05* files**
+> - Result: **1371 tests, 0 failures**

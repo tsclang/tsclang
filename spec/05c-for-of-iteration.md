@@ -40,7 +40,7 @@ typedef struct { bool has_value; int32_t value; } opt_i32;
 typedef struct { bool has_value; User *value; } opt_User;
 
 // Iterable<String> (ARC Copy — value):
-typedef struct { bool has_value; String value; } opt_String;
+typedef struct { bool has_value; String value; } opt_string;
 ```
 
 Генерацией занимается компилятор в процессе мономорфизации дженериков (emit-helpers.js).
@@ -200,24 +200,24 @@ for (const [k, v] of Object.entries(obj)) { ... } // ✅
 
 **`const item` — только чтение:**
 ```typescript
-const temperatures: i32[] = [21, 23, 25, 20];
+const temperatures: number[] = [21, 23, 25, 20];
 for (const temp of temperatures) {
     const fahrenheit = (temp * 9) / 5 + 32;
     // temp = 30; // ОШИБКА: Cannot assign to 'temp' because it is a constant
 }
 ```
 ```c
-int32_t temperatures[] = {21, 23, 25, 20};
+double temperatures[] = {21, 23, 25, 20};
 uint32_t len = 4;
 for (uint32_t i = 0; i < len; i++) {
-    const int32_t temp = temperatures[i];
-    int32_t fahrenheit = (temp * 9) / 5 + 32;
+    const double temp = temperatures[i];
+    double fahrenheit = (temp * 9) / 5 + 32;
 }
 ```
 
 **`let item` — локальная мутация:**
 ```typescript
-const scores: i32[] = [10, 20, 30];
+const scores: number[] = [10, 20, 30];
 for (let score of scores) {
     score = score * 2;     // Разрешено — let
     console.log(score);    // 20, 40, 60
@@ -225,12 +225,12 @@ for (let score of scores) {
 console.log(scores[0]);    // 10 — исходный массив НЕ изменился
 ```
 ```c
-int32_t scores[] = {10, 20, 30};
+double scores[] = {10, 20, 30};
 uint32_t len = 3;
 for (uint32_t i = 0; i < len; i++) {
-    int32_t score = scores[i];    // локальная копия
+    double score = scores[i];    // локальная копия
     score = score * 2;            // меняется только копия
-    _ts_log_int(score);
+    _ts_log_double(score);
 }
 // scores[0] гарантированно остался равен 10
 ```
@@ -278,7 +278,7 @@ for (size_t i = 0; i < names.length; i++) {
     // ... тело ...
     tsc_string_release(name);  // cleanup
 }
-// Embedded: retain/release = no-ops, просто struct copy (16 байт)
+// Embedded: retain/release = no-ops, просто struct copy (6/12/24 байт — AVR/32-bit/64-bit)
 ```
 
 **`let name` — локальная мутация:**
@@ -345,7 +345,7 @@ console.log(users[1].age);       // 99 — этот тоже
 for (size_t i = 0; i < users.length; i++) {
     User *item = &users.data[i];          // mutable pointer
     item->age = 99;                        // мутирует элемент массива!
-    _ts_log_int(item->age);
+    _ts_log_double(item->age);
 }
 // users.data[0].age == 99, users.data[1].age == 99
 ```
@@ -368,7 +368,7 @@ for (let i = 0; i < users.length; i++) {
 
 **`const group` — immutable borrow:**
 ```typescript
-let groups: i32[][] = [[1, 2], [3, 4, 5]];
+let groups: number[][] = [[1, 2], [3, 4, 5]];
 
 for (const group of groups) {
     console.log(group.length);    // ✅ чтение — ок
@@ -377,8 +377,8 @@ for (const group of groups) {
 ```
 ```c
 for (size_t i = 0; i < groups.length; i++) {
-    const Array_i32 *group = &groups.data[i];   // const pointer
-    _ts_log_int(group->length);
+    const Array_f64 *group = &groups.data[i];   // const pointer
+    _ts_log_double(group->length);
 }
 ```
 
@@ -391,15 +391,15 @@ console.log(groups[0]);           // [1, 2, 99] — массив ИЗМЕНИЛ�
 ```
 ```c
 for (size_t i = 0; i < groups.length; i++) {
-    Array_i32 *group = &groups.data[i];          // mutable pointer
-    tsc_array_push_i32(group, 99);                // мутирует подмассив в groups
+    Array_f64 *group = &groups.data[i];          // mutable pointer
+    tsc_array_push_f64(group, 99);                // мутирует подмассив в groups
 }
 ```
 
 | Binding | Семантика | C-вывод | Мутация (push/pop) |
 |---------|-----------|---------|-------------------|
-| `const group` | Borrow → `const T*` | `const Array_i32 *group = &arr.data[i]` | Запрещена (compile error) |
-| `let group` | Borrow → `T*` | `Array_i32 *group = &arr.data[i]` | Разрешена, **меняет подмассив** |
+| `const group` | Borrow → `const T*` | `const Array_f64 *group = &arr.data[i]` | Запрещена (compile error) |
+| `let group` | Borrow → `T*` | `Array_f64 *group = &arr.data[i]` | Разрешена, **меняет подмассив** |
 
 ### 4.6 Set\<T\> (index loop over `_vals[i]`)
 
@@ -426,7 +426,7 @@ for (size_t i = 0; i < groups.length; i++) {
 typedef struct { bool has_value; int32_t value; } opt_i32;        // T value — Copy
 
 // String (ARC copy):
-typedef struct { bool has_value; String value; } opt_String;      // String value — ARC Copy
+typedef struct { bool has_value; String value; } opt_string;      // String value — ARC Copy
 
 // Complex (class, nested array):
 typedef struct { bool has_value; User *value; } opt_User;          // T *value — Borrow
@@ -479,7 +479,7 @@ static opt_User LinkedList_iter_next(LinkedList_iter_t *_self) {
     while ((elem = LinkedList_iter_next(&iter)).has_value) {
         User *item = elem.value;    // pointer на узел списка
         item->age = 99;             // мутирует узел!
-        _ts_log_int(item->age);
+        _ts_log_double(item->age);
     }
     _ts_drop_LinkedListIterator(&iter);
 }
@@ -581,12 +581,12 @@ for (const item of arr) {
 
 ## 7. Embedded: Escape-анализ для динамических строк
 
-На embedded (target `avr` и др.) String struct = 16 байт (`data`, `length`, `capacity`), без `_refcount`. Динамические строки (конкатенация, format) аллоцируются в ring buffer (`_tsc_str_pool`, 256 байт по умолчанию). Ring buffer — «создал → сразу использовал → забыл». Но если указатель на ring buffer переживает scope — данные перезапишутся.
+На embedded (target `avr` и др.) String struct = `data` + `length` + `capacity` (6/12/24 байта — AVR/32-bit/64-bit), без `_refcount`. Динамические строки (конкатенация, format) аллоцируются в ring buffer (`_tsc_str_pool`, 256 байт по умолчанию). Ring buffer — «создал → сразу использовал → забыл». Но если указатель на ring buffer переживает scope — данные перезапишутся.
 
 ### Проблема
 
 ```typescript
-String global_device_status;
+let global_device_status: string;
 
 function process_event(event_name: string) {
     // Ring buffer allocation — данные могут быть перезаписаны

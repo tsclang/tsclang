@@ -39,17 +39,17 @@ Spread, destructuring, merge — **всегда создают независи�
 
 ```typescript
 // TSC
-let nums: i32[] = [1, 2, 3];
+let nums: number[] = [1, 2, 3];
 const result = [...nums, 4, 5];
 console.log(nums.length);   // 3 — жив
 console.log(result.length); // 5
 ```
 
 ```c
-int32_t _d0[] = {1, 2, 3};
-Array_i32 nums = {.data = _d0, .length = 3, .capacity = 3};
-int32_t _d1[] = {nums.data[0], nums.data[1], nums.data[2], 4, 5};
-Array_i32 result = {.data = _d1, .length = 5, .capacity = 5};
+double _d0[] = {1, 2, 3};
+Array_f64 nums = {.data = _d0, .length = 3, .capacity = 3};
+double _d1[] = {nums.data[0], nums.data[1], nums.data[2], 4, 5};
+Array_f64 result = {.data = _d1, .length = 5, .capacity = 5};
 // nums untouched
 ```
 
@@ -90,7 +90,7 @@ Array_string result = {.data = _d1, .length = 3, .capacity = 3};
 
 ```typescript
 // TSC
-class User { name: string; age: i32; }
+class User { name: string; age: number; }
 let users: User[] = [new User("Alice", 30), new User("Bob", 25)];
 let result = [...users, new User("Charlie", 35)];
 console.log(users[0].name);  // "Alice" — жив
@@ -128,7 +128,7 @@ console.log(users[0].name);  // "NewName" — изменилось! (aliased)
 
 ```typescript
 // TSC
-let arr: i32[] = [10, 20, 30];
+let arr: number[] = [10, 20, 30];
 const [first, ...rest] = arr;
 console.log(arr[0]);  // 10 — жив
 console.log(first);   // 10
@@ -136,9 +136,9 @@ console.log(rest[0]); // 20
 ```
 
 ```c
-Array_i32 arr = ...;
-int32_t first = arr.data[0];                                        // copy
-Array_i32 rest = tsc_array_slice_i32(arr, 1, arr.length); // deep copy
+Array_f64 arr = ...;
+double first = arr.data[0];                                        // copy
+Array_f64 rest = tsc_array_slice_f64(arr, 1, arr.length); // deep copy
 // arr untouched
 ```
 
@@ -247,13 +247,13 @@ const obj = { name: "Alice", age: 30 };
 const { name, age } = obj;
 console.log(obj.name); // "Alice" — жив
 // name: String — независимая копия (retain)
-// age: i32 — копия
+// age: number — копия
 ```
 
 ```c
 tsc_string_retain(obj.name);
 String name = obj.name;
-int32_t age = obj.age;
+double age = obj.age;
 // cleanup: tsc_string_release(name);
 ```
 
@@ -279,7 +279,7 @@ console.log(user.name); // "Alice" — жив
 ```c
 tsc_string_retain(user.name);
 String name = user.name;
-int32_t age = user.age;
+double age = user.age;
 // user untouched
 ```
 
@@ -332,13 +332,13 @@ tuple_f64_f64_f64 triple = {._0 = pair._0, ._1 = pair._1, ._2 = 3.0};
 
 ```typescript
 // TSC
-let t: [i32, string] = [1, "hello"];
+let t: [number, string] = [1, "hello"];
 const [a, b] = t;
 console.log(t._0); // 1 — жив
 ```
 
 ```c
-int32_t a = t._0;
+double a = t._0;
 tsc_string_retain(t._1);
 String b = t._1;
 // t untouched
@@ -352,7 +352,7 @@ String b = t._1;
 
 ```typescript
 // TSC
-let t: [User, i32] = [new User("Alice", 30), 42];
+let t: [User, number] = [new User("Alice", 30), 42];
 const [user, score] = t;
 console.log(t._0.name); // "Alice" — жив
 ```
@@ -360,7 +360,7 @@ console.log(t._0.name); // "Alice" — жив
 ```c
 tsc_string_retain(t._0.name);
 User user = t._0;
-int32_t score = t._1;
+double score = t._1;
 // t untouched
 ```
 
@@ -404,8 +404,8 @@ console.log(a);      // { name: "Alice", age: 30 } — жив
 
 ```typescript
 // TSC
-let a: i32[] = [1, 2];
-let b: i32[] = [3, 4];
+let a: number[] = [1, 2];
+let b: number[] = [3, 4];
 const merged = [...a, ...b];
 console.log(a.length); // 2 — жив
 console.log(b.length); // 2 — жив
@@ -413,8 +413,8 @@ console.log(merged.length); // 4
 ```
 
 ```c
-int32_t _d[] = {a.data[0], a.data[1], b.data[0], b.data[1]};
-Array_i32 merged = {.data = _d, .length = 4, .capacity = 4};
+double _d[] = {a.data[0], a.data[1], b.data[0], b.data[1]};
+Array_f64 merged = {.data = _d, .length = 4, .capacity = 4};
 // a, b untouched
 ```
 

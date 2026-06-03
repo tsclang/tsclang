@@ -141,7 +141,7 @@ console.log(x);      // 99 — source жив, изменение видно
 ```c
 typedef struct { double x; } _closure_0_env;
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
+static double _closure_0_fn(_closure_0_env *env) {
     return env->x + 1;
 }
 
@@ -150,7 +150,7 @@ double x = 42.0;
 _closure_0_env fn_env = {.x = x};           // copy
 tsc_closure fn = {.env = &fn_env, .fn = ...};
 x = 99.0;
-printf("%d\n", ((int32_t (*)(void *))fn.fn)(fn.env));  // 43
+printf("%g\n", ((double (*)(void *))fn.fn)(fn.env));  // 43
 printf("%g\n", (double)(x));                             // 99
 ```
 
@@ -224,7 +224,7 @@ printf("%g\n", (double)(arr.data[0]));                // 9 — mutation видн
 
 ```typescript
 class Counter {
-    count: i32;
+    count: number;
 }
 let c = new Counter();
 c.count = 0;
@@ -238,7 +238,7 @@ console.log(c.count);   // 3 — все mutations видны
 ```
 
 ```c
-typedef struct { int32_t count; } Counter;
+typedef struct { double count; } Counter;
 
 typedef struct { Counter *c; } _closure_0_env;       // pointer!
 
@@ -254,7 +254,7 @@ tsc_closure inc = {.env = &inc_env, .fn = ...};
 ((void (*)(void *))inc.fn)(inc.env);   // c.count = 1
 ((void (*)(void *))inc.fn)(inc.env);   // c.count = 2
 ((void (*)(void *))inc.fn)(inc.env);   // c.count = 3
-printf("%d\n", c.count);                              // 3
+printf("%g\n", (double)c.count);                       // 3
 ```
 
 **Пояснение:** Класс захватывается как pointer (`Counter *c`). Каждый вызов `inc()` мутирует `c.count` через pointer. Source `c` жив, значение `c.count = 3` видно после всех вызовов.
@@ -282,7 +282,7 @@ console.log(a);         // 10
 
 ```typescript
 class Counter {
-    count: i32;
+    count: number;
 }
 let c = new Counter();
 c.count = 0;
@@ -322,8 +322,8 @@ _closure_0_env outer_env = {.c = &c};                // → main's c
 ### 3.7 Transitive capture (closure из функции)
 
 ```typescript
-function makeAdder(n: i32): () => i32 {
-    return (): i32 => n + 1;
+function makeAdder(n: number): () => number {
+    return (): number => n + 1;
 }
 
 const add5 = makeAdder(5);
@@ -333,19 +333,19 @@ console.log(add10());   // 11
 ```
 
 ```c
-typedef struct { int32_t n; } _closure_0_env;
+typedef struct { double n; } _closure_0_env;
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
+static double _closure_0_fn(_closure_0_env *env) {
     return env->n + 1;
 }
 
-tsc_closure makeAdder_i32(int32_t n) {
+tsc_closure makeAdder_f64(double n) {
     _closure_0_env _lambda_env_0 = {.n = n};          // copy (примитив)
     return (tsc_closure){.env = &_lambda_env_0, .fn = ...};
 }
 ```
 
-**Пояснение:** Closure возвращается из функции. Параметр `n` — примитив, захватывается как copy. Примечание: env struct `_lambda_env_0` — локальная переменная в `makeAdder_i32`, возвращается `tsc_closure` с dangling `.env`. Это работает на практике (caller обычно использует closure немедленно), но формально — escaping scope (см. D7).
+**Пояснение:** Closure возвращается из функции. Параметр `n` — примитив, захватывается как copy. Примечание: env struct `_lambda_env_0` — локальная переменная в `makeAdder_f64`, возвращается `tsc_closure` с dangling `.env`. Это работает на практике (caller обычно использует closure немедленно), но формально — escaping scope (см. D7).
 
 ### 3.8 Multi-capture (несколько переменных)
 
@@ -373,18 +373,18 @@ _closure_0_env fn_env = {.x = x, .arr = &arr};       // x = copy, arr = pointer
 
 ```typescript
 class Box {
-    value: i32;
+    value: number;
 }
 let b = new Box();
 b.value = 42;
-const fn = [b: Ref<Box>]: () => i32 => b.value;
+const fn = [b: Ref<Box>]: () => number => b.value;
 console.log(fn());   // 42
 ```
 
 ```c
 typedef struct { const Box *b; } _closure_0_env;     // const pointer
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
+static double _closure_0_fn(_closure_0_env *env) {
     return env->b->value;                              // read-only access
 }
 
@@ -398,11 +398,11 @@ _closure_0_env fn_env = {.b = &b};                    // address-of
 
 ```typescript
 class Counter {
-    count: i32;
+    count: number;
 }
 let c = new Counter();
 c.count = 0;
-const inc = [c: Mut<Counter>]: () => i32 => {
+const inc = [c: Mut<Counter>]: () => number => {
     c.count += 1;
     return c.count;
 };
@@ -413,7 +413,7 @@ console.log(inc());   // 2
 ```c
 typedef struct { Counter *c; } _closure_0_env;       // mutable pointer
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
+static double _closure_0_fn(_closure_0_env *env) {
     env->c->count += 1;                               // mutation OK
     return env->c->count;
 }
@@ -547,10 +547,10 @@ static void _closure_0_destroy(void *_env) {
 **Проблема:** env struct выделяется на стеке. Если closure переживает scope — env pointer dangling.
 
 ```typescript
-let fn: () => i32;
+let fn: () => number;
 {
     let arr: number[] = [1, 2, 3];
-    fn = (): i32 => arr.length;    // env = {.arr = &arr} на стеке
+    fn = (): number => arr.length;    // env = {.arr = &arr} на стеке
 }                                   // arr и fn_env мёртвы
 fn();                               // UB: fn.env → мёртвый стек
 ```

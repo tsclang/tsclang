@@ -99,20 +99,20 @@ int32_t _lambda_0_i32(int32_t x, int32_t y) { return x + y; }
 
 ```typescript
 let base = 10;
-const add = (x: i32): i32 => base + x;
+const add = (x: number): number => base + x;
 console.log(add(5));
 ```
 
 ```c
-typedef struct { int32_t base; } _closure_0_env;
-typedef struct { _closure_0_env env; int32_t (*fn)(_closure_0_env *, int32_t); } _closure_0;
+typedef struct { double base; } _closure_0_env;
+typedef struct { _closure_0_env env; double (*fn)(_closure_0_env *, double); } _closure_0;
 
-static int32_t _closure_0_fn(_closure_0_env *env, int32_t x) { return env->base + x; }
+static double _closure_0_fn(_closure_0_env *env, double x) { return env->base + x; }
 
 int main(void) {
-    int32_t base = 10;
+    double base = 10;
     _closure_0 add = {.env = {.base = base}, .fn = _closure_0_fn};
-    printf("%d\n", add.fn(&add.env, 5));  // 15
+    printf("%g\n", add.fn(&add.env, 5));  // 15
 }
 ```
 
@@ -123,7 +123,7 @@ int main(void) {
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
 | `i32` | `int32_t` (4 байта) | `int32_t` (4 байта, avr-gcc — цепочка инструкций) |
-| `f64` | `double` (8 байт) | `float` при `number` (avr), иначе `double` |
+| `f64` | `double` (8 байт) | `double` (8 байт). `float` — только при `number` (= f32 на embedded) |
 | `usize` | `size_t` (4/8 байт) | `uint16_t` на 16-bit (nes, spectrum) |
 | Retain/release | Нет (примитивы — copy) | Нет (примитивы — copy) |
 | Замыкания | Stack-allocated struct | Stack-allocated struct (идентично) |
@@ -304,7 +304,7 @@ _closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
 
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
-| String struct | 32 байта (`data`, `length`, `capacity`, `_refcount`) | 24 байта (нет `_refcount`) |
+| String struct | 32 байта (`data`, `length`, `capacity`, `_refcount`) | 6 байт (AVR 16-bit), 12 байт (32-bit), 24 байт (64-bit) — без `_refcount` |
 | Литералы (`"hello"`) | rodata, `capacity=0`, `_refcount=NULL` | rodata, `capacity=0` (без `_refcount`) |
 | `tsc_string_retain` | `if (_refcount) (*_refcount)++` | No-op (пустая inline функция) |
 | `tsc_string_release` | `if (_refcount && --*_refcount == 0) { free(_refcount); free(data); }` | No-op `(void)s` |
@@ -319,7 +319,7 @@ _closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
 **C-определение String struct:**
 
 ```c
-// Desktop: 32 байта (64-bit: 8+8+8+8), Embedded: 24 байта (без _refcount)
+// Desktop: 32 байта (64-bit: 8+8+8+8), Embedded: 6/12/24 байта (AVR/32-bit/64-bit, без _refcount)
 #ifdef TSC_EMBEDDED
 typedef struct { const char *data; size_t length; size_t capacity; } String;
 #else
@@ -432,7 +432,7 @@ void modify(User *u) { /* mutable borrow pointer */ }
 
 > **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
 
-Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы/string — copy (snapshot). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
+Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы — copy (snapshot). Строки — retain (ARC copy). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
 
 Подробнее: capture model, примеры, C-representation, ограничения — см. `spec/05e-closures.md`.
 
@@ -509,7 +509,7 @@ console.log(user.name);      // "Alice" — user жив
 ```c
 String name = user.name;
 tsc_string_retain(name);
-int32_t age = user.age;
+double age = user.age;
 // user untouched
 ```
 
@@ -587,25 +587,25 @@ Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead
 | `foo(a)` (param: `T[]`) | Move + zero-out после вызова | `foo(a); a = (Array_i32){0};` (через `_postStmtCleanups`) |
 
 ```typescript
-function sum(arr: i32[]): i32 { ... }
+function sum(arr: number[]): number { ... }
 let data = [1, 2, 3];
 sum(data);
 console.log(data.length);  // ❌ E002: use after move
 ```
 
 ```c
-int32_t sum_Array_i32(Array_i32 arr) { ... }
-Array_i32 data = ...;
-sum_Array_i32(data);
-memset(&data, 0, sizeof(Array_i32));  // zero-out после вызова
+double sum_Array_f64(Array_f64 arr) { ... }
+Array_f64 data = ...;
+sum_Array_f64(data);
+memset(&data, 0, sizeof(Array_f64));  // zero-out после вызова
 ```
 
 ### Ref\<T\> / Mut\<T\>
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `const b: Ref<i32[]> = a` | Immutable borrow всей коллекции | `const Array_i32 *b = &a;` + borrow tracking |
-| `const b: Mut<i32[]> = a` | Mutable borrow всей коллекции | `Array_i32 *b = &a;` + borrow tracking |
+| `const b: Ref<number[]> = a` | Immutable borrow всей коллекции | `const Array_f64 *b = &a;` + borrow tracking |
+| `const b: Mut<number[]> = a` | Mutable borrow всей коллекции | `Array_f64 *b = &a;` + borrow tracking |
 
 Borrow на коллекцию **блокирует мутацию** (`push`, `pop`, `remove`) пока borrow жив. Borrow отпускается при выходе из scope.
 
@@ -658,13 +658,13 @@ const s = arr[0];  // ✅ ARC Copy (String struct)
 **Обычные функции** — передача массива по значению = move всего массива:
 
 ```typescript
-function process(arr: i32[]): void { /* владеет arr */ }
-function view(arr: Ref<i32[]>): void { /* borrow */ }
+function process(arr: number[]): void { /* владеет arr */ }
+function view(arr: Ref<number[]>): void { /* borrow */ }
 ```
 
 ```c
-void process_Array_i32(Array_i32 arr) { /* arr перемещён, caller обнулён */ }
-void view_Array_i32(const Array_i32 *arr) { /* borrow pointer */ }
+void process_Array_f64(Array_f64 arr) { /* arr перемещён, caller обнулён */ }
+void view_Array_f64(const Array_f64 *arr) { /* borrow pointer */ }
 ```
 
 **Замыкания с array capture** — implicit **reference** (pointer на source):
@@ -689,7 +689,7 @@ Spread **копирует** элементы — source жив. Move semantics �
 **Массивы примитивов — copy (source жив):**
 
 ```typescript
-const nums: i32[] = [1, 2, 3];
+const nums: number[] = [1, 2, 3];
 const copy = [...nums, 4, 5];  // copy — примитивы копируются
 console.log(nums.length);      // 3 — nums жив
 ```
@@ -754,8 +754,8 @@ console.log(arr[0]);           // 10 — arr жив
 ```
 
 ```c
-int32_t first = arr.data[0];       // copy (примитив)
-Array_i32 rest = tsc_array_slice_i32(arr, 1, (int32_t)arr.length);  // deep copy
+double first = arr.data[0];       // copy (примитив)
+Array_f64 rest = tsc_array_slice_f64(arr, 1, (int32_t)arr.length);  // deep copy
 // arr untouched
 ```
 
@@ -872,8 +872,8 @@ typedef struct {
 ### Доступ к элементам
 
 ```typescript
-let pair: [i32, string] = [1, "hello"];
-pair[0]    // 1 — i32 (copy, примитив)
+let pair: [number, string] = [1, "hello"];
+pair[0]    // 1 — number (copy, примитив)
 pair[1]    // "hello" — string (ARC Copy, retain)
 pair._0    // сахар над pair[0]
 ```
@@ -890,15 +890,15 @@ p.y   // сахар над p._1
 ### Readonly кортежи
 
 ```typescript
-let t: readonly [i32, string] = [1, "hello"];
+let t: readonly [number, string] = [1, "hello"];
 t[0] = 5  // ❌ cannot assign to readonly tuple element
 ```
 
 ```c
 typedef struct {
-    const int32_t _0;
+    const double _0;
     const String  _1;
-} readonly_tuple_i32_string;
+} readonly_tuple_f64_string;
 ```
 
 ### Optional элементы
@@ -906,17 +906,17 @@ typedef struct {
 Optional (`?`) разрешены только в конце:
 
 ```typescript
-type Config = [string, i32?];
-let a: Config = ["localhost"];         // ok — i32 отсутствует
+type Config = [string, number?];
+let a: Config = ["localhost"];         // ok — number отсутствует
 let b: Config = ["localhost", 8080];   // ok
-a[1]  // i32 | null
+a[1]  // number | null
 ```
 
 ```c
 typedef struct {
     String  _0;
-    opt_i32 _1;  // bool has_value + int32_t value
-} tuple_string_opt_i32;
+    opt_f64 _1;  // bool has_value + double value
+} tuple_string_opt_f64;
 ```
 
 ### Rest-элементы
@@ -932,8 +932,8 @@ let b: Strings = ["first", "second", "third"];
 ```c
 typedef struct {
     String  _0;
-    String* _tail;
-    usize   _tail_len;
+    String* tail;
+    usize   tail_len;
 } tuple_string_rest_string;
 ```
 
@@ -954,15 +954,15 @@ const copy: [number, number, number] = [...pair];              // copy
 Spread runtime-массива в rest-tuple — разрешён:
 
 ```typescript
-function wrap(items: string[]): [i32, ...string[]] {
-    return [0, ...items];  // ok — items.length становится _tail_len
+function wrap(items: string[]): [number, ...string[]] {
+    return [0, ...items];  // ok — items.length становится tail_len
 }
 ```
 
 Spread runtime-массива в фиксированный tuple — **ошибка**:
 
 ```typescript
-let t: [i32, string, string] = [1, ...runtimeArray];
+let t: [number, string, string] = [1, ...runtimeArray];
 // ❌ error: cannot spread runtime-length array into fixed tuple
 ```
 
@@ -1000,7 +1000,7 @@ function process(t: Ref<[User, string]>): void {
 **Передача по значению** — copy (примитивы) или move (сложные элементы):
 
 ```typescript
-function swap(t: [i32, string]): [string, i32] {
+function swap(t: [number, string]): [string, number] {
     return [t[1], t[0]];
 }
 ```
@@ -1014,7 +1014,7 @@ function swap(t: [i32, string]): [string, i32] {
 | Аспект | Desktop | Embedded |
 |--------|---------|----------|
 | Fixed tuple struct | На стеке, как любой struct | Аналогично |
-| Rest tuple `_tail` | `malloc` для tail-массива | Статический буфер или фиксированный массив |
+| Rest tuple `tail` | `malloc` для tail-массива | Статический буфер или фиксированный массив |
 | String-элементы | ARC retain/release | No-op (rodata) |
 | Optional элементы | `opt_T` struct (bool + value) | Аналогично |
 | Spread fixed tuple | Copy элементов + retain string-полей, source жив | Copy элементов (string — no-op retain), source жив |
@@ -1028,12 +1028,12 @@ function swap(t: [i32, string]): [string, i32] {
 
 ```typescript
 // всегда copy + retain
-let pair: [i32, string] = [1, "hello"];
+let pair: [number, string] = [1, "hello"];
 const [a, b] = pair;  // b: retain("hello"), pair жив
 console.log(pair._1);  // ok
 
 // const source — тоже copy
-const pair2: [i32, string] = [2, "world"];
+const pair2: [number, string] = [2, "world"];
 const [c, d] = pair2;  // d: retain("world"), pair2 жив
 ```
 
@@ -1290,7 +1290,7 @@ _cleanup:
 Уже реализовано: если async-функция с `await` имеет параметр `Ref<T>`, компилятор выдаёт ошибку:
 
 ```typescript
-async function bad(arr: Ref<i32[]>): void {
+async function bad(arr: Ref<number[]>): void {
     await sleep(10);  // ❌ Ref<T> cannot live across "await"
 }
 ```
