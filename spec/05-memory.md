@@ -912,8 +912,8 @@ static opt_string LinkedList_string_iter_next(LinkedList_string_iter_t* self) {
 
 | Тип элемента | opt_T | Значение |
 |-------------|-------|----------|
-| Primitive (`i32`, `bool`, ...) | `T value` | Copy |
-| String | `T value` | Struct copy + retain |
+| Primitive (`i32`, `boolean`, ...) | `T value` | Copy |
+| string | `String value` | Struct copy + retain |
 | Class / Array | `T *value` | Borrow pointer |
 
 Работает на embedded — нет heap, нет ARC.

@@ -1498,3 +1498,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - `parseFloat` / `Number` return type: `f64 | null` → `number | null` (aligns with `parseInt`)
 > - `s.length`, `arr.length`, `arr.capacity`, `Slice.length` — explicitly typed as `number`
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Cross-spec audit 03 ↔ 05* — 7 categories, 47 edits across 5 files**:
+> - `bool` → `boolean` in TSC context: 05b (2), 05c (2), 05e (2), 05-memory (1) = 7 places
+> - `int` → `i32` in 05c (3 places — `int` is not a valid TSC type)
+> - `String` → `string` in TSC context: 05b (1), 05-memory (1) = 2 places
+> - sizeof(String) fixed: 24 → 32 bytes on desktop (includes `_refcount` pointer), `string | null` → 40 bytes
+> - String mutability clarified: content is immutable (ARC), `let`/`const` controls reassignment only
+> - Destructuring/spread = always copy (05d priority): updated 03-types.md tuple ownership example + Clone section
+> - Closure return types: `(): i32` → `(): number` where expression is `number` (5e: 3 places, 05b: 1 place)
+> - Result: **1371 tests, 0 failures**

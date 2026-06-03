@@ -35,7 +35,7 @@
 
 ### D2: Примитивы — copy (snapshot), не reference
 
-**Решение:** `i32`, `bool`, `f64` и т.д. захватываются как copy. Изменение source после создания closure не влияет на captured value.
+**Решение:** `i32`, `boolean`, `f64` и т.д. захватываются как copy. Изменение source после создания closure не влияет на captured value.
 
 Отличие от TS (где `let x = 1; const fn = () => x; x = 2; fn()` → `2`). В TSClang → `1` (snapshot).
 
@@ -110,7 +110,7 @@ const fn = [arr](): void => { ... };                             // Error: requi
 
 | Тип переменной | Capture | C-representation в env | Source жив? | TS compat | Cleanup |
 |---------------|---------|----------------------|-------------|-----------|---------|
-| `i32`, `bool`, `f64` и т.д. | Copy (snapshot) | `int32_t x;` | ✅ Да | ⚠️ Snapshot | Нет |
+| `i32`, `boolean`, `f64` и т.д. | Copy (snapshot) | `int32_t x;` | ✅ Да | ⚠️ Snapshot | Нет |
 | `string` | Retain (ARC copy) | `String s;` | ✅ Да | ⚠️ Snapshot | `tsc_string_release` |
 | Class (`User`) | Reference (pointer) | `User *u;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
 | Array (`Array<T>`) | Reference (pointer) | `Array_i32 *arr;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
@@ -132,7 +132,7 @@ const fn = [arr](): void => { ... };                             // Error: requi
 
 ```typescript
 let x: number = 42;
-const fn = (): i32 => x + 1;
+const fn = (): number => x + 1;
 x = 99;
 console.log(fn());   // 43 — x скопирован при создании closure
 console.log(x);      // 99 — source жив, изменение видно
@@ -352,7 +352,7 @@ tsc_closure makeAdder_i32(int32_t n) {
 ```typescript
 let x: number = 10;
 let arr: number[] = [1, 2, 3];
-const fn = (): i32 => x + arr.length;
+const fn = (): number => x + arr.length;
 console.log(fn());   // 13
 ```
 
@@ -588,7 +588,7 @@ console.log(fn());   // 2 (reference)
 
 // TSClang:
 let x: number = 1;
-const fn = (): i32 => x;
+const fn = (): number => x;
 x = 2;
 console.log(fn());   // 1 (snapshot)
 ```

@@ -18,7 +18,7 @@
 
 ## 1. a — примитив
 
-**Типы:** `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`, `bool`, `usize`, `isize`
+**Типы:** `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`, `boolean`, `usize`, `isize`
 
 Примитивы — всегда **copy by value**. Никакого ownership management, никаких retain/release.
 
@@ -44,7 +44,7 @@
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
 | `const b: Shared<i32> = a` | **Ошибка компиляции** | `TypeError: Shared<T> requires a non-primitive type, got i32` |
-| `const b: Weak<bool> = a` | **Ошибка компиляции** | `TypeError: Weak<T> requires a non-primitive type, got bool` |
+| `const b: Weak<boolean> = a` | **Ошибка компиляции** | `TypeError: Weak<T> requires a non-primitive type, got boolean` |
 
 Shared ownership и weak references для copy-типов бессмысленны — нет смысла делать refcount для значения, которое и так копируется.
 
@@ -432,7 +432,7 @@ void modify(User *u) { /* mutable borrow pointer */ }
 
 > **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
 
-Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы/String — copy (snapshot). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
+Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы/string — copy (snapshot). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
 
 Подробнее: capture model, примеры, C-representation, ограничения — см. `spec/05e-closures.md`.
 
@@ -671,11 +671,11 @@ void view_Array_i32(const Array_i32 *arr) { /* borrow pointer */ }
 
 ```typescript
 let data: number[] = [1, 2, 3];
-const fn = (): i32 => data.length;
+const fn = (): number => data.length;
 ```
 
 ```c
-typedef struct { Array_i32 *data; } _closure_0_env;  // pointer — reference
+typedef struct { Array_f64 *data; } _closure_0_env;  // pointer — reference
 ```
 
 Массив захватывается **по ссылке** (pointer). Source жив, mutations visible. См. `spec/05e-closures.md`.

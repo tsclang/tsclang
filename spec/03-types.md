@@ -474,7 +474,7 @@ Number("0o77")       // 63.0
 ## Строки
 
 - Один тип `string` — UTF-8 байтовая последовательность
-- Мутабельность через `let`/`const`
+- Содержимое **immutable** (ARC Copy); `let` позволяет переприсвоить переменную, `const` — нет
 
 ### C-layout
 
@@ -926,11 +926,11 @@ Complex types:
 
 | Тип | C struct | Размер (desktop) |
 |-----|----------|------------------|
-| `string \| null` | `bool + pad(7) + String (24 байта)` | 32 байта |
+| `string \| null` | `bool + pad(7) + String (32 байта)` | 40 байт |
 | `User \| null` | `bool + pad(7) + User*` | 16 байт |
 | `i32[] \| null` | `bool + pad(7) + Array_i32*` | 16 байт |
 
-String — ARC Copy, `String value` inline (не pointer). `sizeof(String)` = 24 байта на desktop (`char*` + `size_t` length + `size_t` capacity).
+String — ARC Copy, `String value` inline (не pointer). `sizeof(String)` = 32 байта на desktop (`char*` + `size_t` length + `size_t` capacity + `uint32_t* _refcount`).
 
 На desktop это некритично. На embedded (AVR: 2KB RAM) overhead padding может быть значимым.
 
@@ -1741,8 +1741,9 @@ const triple: [f64, f64, f64] = [...pair, 3.0]  // ok
 ```typescript
 let t: [User, string] = [new User(), "test"]
 
-// Move — tuple потреблён
-const [user, name] = t  // user: User, name: string; t невалиден
+// Destructuring = copy (см. spec/05d — spread/destructuring всегда copy)
+const [user, name] = t  // user: User, name: string; t жив (copy)
+console.log(t[0].name)  // ok — t жив
 
 // Borrow — передай как Ref параметром
 function process(t: Ref<[User, string]>): void {
@@ -1786,7 +1787,7 @@ console.log(u1);               // ok — u1 жив
 - Примитивы и `string` — auto-implement Clone
 - Массивы — `clone()` / `structuredClone` работают если элементы реализуют `Clone`
 - `Shared<T>` — `structuredClone` создаёт новый независимый объект (deep copy, не retain)
-- Spread для pure-primitive структур = неявный clone; для сложных полей = move
+- Spread = всегда copy для всех типов (см. spec/05d — spread/destructuring/merge всегда copy)
 
 ```typescript
 // массивы

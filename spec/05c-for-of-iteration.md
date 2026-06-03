@@ -17,7 +17,7 @@
 Интерфейсы `Iterable<T>`, `Iterator<T>`, `IteratorResult<T>` встроены в компилятор — аналог `Array<T>`, `Record<K,V>` в TypeScript.
 
 - Пользователю **не нужно ничего импортировать**
-- Как только компилятор видит `class MyClass implements Iterable<int>`, он автоматически сопоставляет это со своей внутренней декларацией
+- Как только компилятор видит `class MyClass implements Iterable<i32>`, он автоматически сопоставляет это со своей внутренней декларацией
 - Текст интерфейсов неявно вшит в глобальную область видимости (pre-defined)
 
 ### Q5: IteratorResult\<T\> — struct или type alias
@@ -181,7 +181,7 @@ for (const [k, v] of Object.entries(obj)) { ... } // ✅
 
 | Категория | Типы | arr[i] семантика |
 |-----------|------|-------------------|
-| **Primitive** | `i8..i64, u8..u64, f32, f64, bool, usize, isize` | Copy (побитовая) |
+| **Primitive** | `i8..i64, u8..u64, f32, f64, boolean, usize, isize` | Copy (побитовая) |
 | **String** | `string` | ARC Copy (retain + release) |
 | **Class** | `User`, любой `class` | **Только Borrow** (`Ref<T>`) — move по индексу запрещён (E009) |
 | **Array\<U\>** | `i32[]`, `User[]` | **Только Borrow** (`Ref<T[]>`) — move по индексу запрещён |
@@ -194,13 +194,13 @@ for (const [k, v] of Object.entries(obj)) { ... } // ✅
 
 ### 4.1 Примитивы в Array\<T\> — Copy (РЕШЕНО)
 
-Примитивы: `i8..i64, u8..u64, f32, f64, bool, usize, isize`, `enum`.
+Примитивы: `i8..i64, u8..u64, f32, f64, boolean, usize, isize`, `enum`.
 
 Семантика: **Copy** — копирование значения. Поведение копии строго зависит от `const` / `let`.
 
 **`const item` — только чтение:**
 ```typescript
-const temperatures: int[] = [21, 23, 25, 20];
+const temperatures: i32[] = [21, 23, 25, 20];
 for (const temp of temperatures) {
     const fahrenheit = (temp * 9) / 5 + 32;
     // temp = 30; // ОШИБКА: Cannot assign to 'temp' because it is a constant
@@ -217,7 +217,7 @@ for (uint32_t i = 0; i < len; i++) {
 
 **`let item` — локальная мутация:**
 ```typescript
-const scores: int[] = [10, 20, 30];
+const scores: i32[] = [10, 20, 30];
 for (let score of scores) {
     score = score * 2;     // Разрешено — let
     console.log(score);    // 20, 40, 60
