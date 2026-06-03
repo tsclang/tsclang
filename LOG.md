@@ -1535,7 +1535,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **All 22 spec files: 0 contradictions with 03-types.md**
 > - Result: **1371 tests, 0 failures**
 
-> 2026-06-03: **Re-audit round 2 — remaining `bool`→`boolean` in TSC code blocks**:
+> 2026-06-03: **Cross-audit 05* ↔ all other specs — 2 HIGH + 2 MEDIUM + 1 LOW**:
+> - **CRITICAL #3+#4**: 07-concurrency async traverse examples used `Ref<T>` across await — contradicts 05-memory/05b rule. Rewritten to use owned copies (TreeNode/Node params, copy before await)
+> - **MEDIUM #1**: 02-syntax match destructuring described as **move** (source dead), but compiler does **copy** (source alive). Rewritten to copy semantics, removed Ref<T> opt-out. Added match to 05d scope
+> - **MEDIUM #5**: Shared<Atomic<T>> vs Thread.spawn Shared<T> error — internal 07-concurrency contradiction (deferred)
+> - **LOW #2**: Slice<T> vs Ref<T[]> from range expressions — documentation gap (deferred)
+> - 05d-spread-destructuring-merge.md: added scope clarification covering match destructuring
+> - Result: **1371 tests, 0 failures**
 > - 19-stdlib-hal.md: GPIO.write/read `bool`→`boolean`
 > - 07-concurrency.md: EmbeddedSignal.isSet `bool`→`boolean`
 > - 10-stdlib.md: GPIO.digitalWrite/Read, serialAvailable, digitalWrite/digitalRead impl `bool`→`boolean` (6 places)

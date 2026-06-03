@@ -6,6 +6,8 @@
 >
 > **Ключевое решение:** spread/destructuring/merge = **всегда copy**, source **всегда жив**. Move — только для прямого присваивания `let b = a`. `let`/`const` на source не влияет на copy/move. `let`/`const` на result — только про мутабельность результата.
 >
+> **Scope:** настоящее правило покрывает spread-оператор (`[...arr]`), деструктуризацию при присваивании (`const [a, b] = arr`, `const { x } = obj`), merge (`{...a, ...b}`) и деструктуризацию в паттерне `match`. Во всех случаях source жив, поля копируются.
+>
 > **Связь с 05c:** spread/destructuring использует **copy** для всех типов. For-of (см. `spec/05c-for-of-iteration.md`) использует **borrow** (pointer) для complex-типов. Разные операции = разная семантика: for-of = walk по существующим данным (zero-cost), spread = создание новых данных (safe copy). Это осознанный дизайн, не противоречие.
 >
 > **Обоснование:** П1 (кроссплатформенность) — copy безопасна на всех платформах, retain = no-op на embedded. П2 (TS compat) — идентичное поведение, source всегда жив. П3 (better than TS/C/Rust) — нет алиасинга (value types), нет скрытого move, предсказуемость.

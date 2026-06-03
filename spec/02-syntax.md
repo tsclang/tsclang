@@ -1059,20 +1059,13 @@ const sign = match (n) {
 - Для **enum** и **`T | null`** компилятор проверяет полноту → `_` только если реально не покрыто
 - `|` — несколько паттернов для одной ветки
 - Диапазон `a..b` — от `a` включительно до `b` не включительно (как везде в TSC)
-- Деструктуризация в паттерне `match` — **move**, не borrow: match потребляет значение целиком, все ветки exhaustive, после match объект мёртв
+- Деструктуризация в паттерне `match` — **copy**, source жив: поля копируются (примитивы — copy by value, string — copy + retain, class — struct copy). После match source доступен
   ```typescript
   match (result) {
-      Ok  { value } => process(value),  // value: T — moved из result
-      Err { error } => log(error),      // error: E — moved из result
+      Ok  { value } => process(value),  // value: T — copy из result
+      Err { error } => log(error),      // error: E — copy из result
   }
-  // result мёртв — использовать нельзя
-  ```
-- Если нужен borrow в match — явно указать `Ref`:
-  ```typescript
-  match (result) {
-      Ok  { value: Ref<T> } => inspect(value),  // borrow, result жив после
-      Err { error: Ref<E> } => log(error),
-  }
+  // result жив — можно использовать дальше
   ```
 
 **match vs switch:**

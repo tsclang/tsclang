@@ -404,10 +404,12 @@ async function main(): void {
 
 ```typescript
 // прямая рекурсия — компилятор обнаруживает, выдаёт предупреждение
-async function traverse(node: Ref<TreeNode>): void {
+async function traverse(node: TreeNode): void {
+    const left = node.left       // owned copy до await
+    const right = node.right     // owned copy до await
     await process(node)
-    if (node.left)  await traverse(node.left)   // ← рекурсия
-    if (node.right) await traverse(node.right)
+    if (left)  await traverse(left)    // ← рекурсия
+    if (right) await traverse(right)
 }
 // warning: async function `traverse` is recursive — state machine heap-allocated
 ```
@@ -434,9 +436,10 @@ async function pong(): void { await ping() }
 
 ```typescript
 @embedded.stack("nodes", 64)
-async function traverse(root: Ref<Node>): Promise<void> {
+async function traverse(root: Node): Promise<void> {
+    @embedded.stack_push("nodes", root)
     while (!@embedded.stack_empty("nodes")) {
-        const n = @embedded.stack_pop<Ref<Node>>("nodes")
+        const n: Node = @embedded.stack_pop<Node>("nodes")
         await process(n)
         if (n.left)  @embedded.stack_push("nodes", n.left)
         if (n.right) @embedded.stack_push("nodes", n.right)
@@ -446,7 +449,7 @@ async function traverse(root: Ref<Node>): Promise<void> {
 
 ```c
 // C-output — стек в статической памяти
-static Node* nodes_stack[64];
+static Node nodes_stack[64];
 static uint8_t nodes_stack_top = 0;
 
 void traverse_poll(Traverse_SM* sm) {
