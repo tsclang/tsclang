@@ -51,11 +51,11 @@
 
 ```typescript
 // std/string.tsc — объявление extension
-export extension function charCount(this: string): i32 {
+export extension function charCount(this: string): number {
     // ... подсчёт codepoints
 }
 
-export extension function chars(this: string): Iterator<u32> {
+export extension function chars(this: string): Iterator<number> {
     // ... итератор по codepoints
 }
 ```

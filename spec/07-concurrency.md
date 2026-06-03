@@ -801,7 +801,7 @@ arr.compareExchange(0, expected, desired,
     RmwOrdering.AcqRel,
     LoadOrdering.Acquire
 )                                              // { success: boolean, value: i32 }
-arr.length                                     // i32 — bounds checking при каждом обращении
+arr.length                                     // number — bounds checking при каждом обращении
 ```
 
 C-output (calloc для данных):
@@ -856,8 +856,8 @@ const msg = ch.receive()         // thread-контекст: блокирует 
 ch.tryReceive()                  // Message | null — не блокирует (async, thread, ISR ✅)
 
 // состояние канала — snapshot (ISR-safe ✅, только для мониторинга и адаптивной логики)
-ch.length      // size_t — текущее кол-во элементов
-ch.capacity    // size_t — максимальная ёмкость
+ch.length      // number — текущее кол-во элементов
+ch.capacity    // number — максимальная ёмкость
 ch.isEmpty()   // boolean — length == 0
 ch.isFull()    // boolean — length >= capacity
 ```

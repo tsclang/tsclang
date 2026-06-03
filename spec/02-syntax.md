@@ -230,7 +230,7 @@ class User { }     // ✅
 | `i8` `i16` `i32` `i64` | `i8` `i16` `i32` `i64` |
 | `u8` `u16` `u32` `u64` | `u8` `u16` `u32` `u64` |
 | `f32` `f64` | `f32` `f64` |
-| `bool` `string` `usize` `void` | `bool` `string` `usize` `void` |
+| `boolean` `string` `usize` `void` | `bool` `string` `usize` `void` |
 | `UserType` (non-generic) | `UserType` |
 | `Ref<T>` | `ref_` + enc(T) |
 | `Mut<T>` | `mut_` + enc(T) |
@@ -1085,42 +1085,34 @@ const sign = match (n) {
 
 ## Spread оператор
 
-Spread **потребляет** источник — move. Работает для массивов и объектов.
+> **Приоритет:** при конфликте — доминирует `spec/05d-spread-destructuring-merge.md`.
 
-**Правило:** spread на `const` разрешён если элементы — примитивы (copy). Если элементы — сложные типы, spread на `const` — ошибка компилятора (нельзя move из const).
+Spread **копирует** элементы — source жив. Работает для массивов и объектов.
 
-**Массивы примитивов — const разрешён** (copy):
+**Правило:** spread/destructuring/merge = **всегда copy**. `let`/`const` на source не влияет — source остаётся живым, нет E002. Для string-полей — copy + retain (новый владелец). Для примитивов — copy by value. Для классов — struct copy (независимая копия).
+
+**Массивы примитивов — copy (source жив):**
 ```typescript
-const nums: i32[] = [1, 2, 3];
-const copy = [...nums, 4, 5];  // ok — примитивы копируются
-console.log(nums);             // ok — nums жив
+const nums: number[] = [1, 2, 3];
+const copy = [...nums, 4, 5];  // copy — примитивы копируются
+console.log(nums.length);      // 3 — nums жив
 ```
 
-**Массивы сложных типов — const запрещён** (move невозможен):
+**Массивы сложных типов — copy + retain (source жив):**
 ```typescript
 const admins: Admin[] = [admin1, admin2];
-const users = [...admins, ...guests];
-// ошибка: cannot spread const array of non-primitive type
-// hint: use let, Shared<T>, or [...admins.clone()] if Admin implements Clone
-
-let admins: Admin[] = [admin1, admin2];
-const users = [...admins, ...guests];  // ok — move из let
-sendEmail(admins);  // ошибка: admins перемещён
+const users = [...admins, ...guests];  // copy + retain
+console.log(admins[0].name);           // ok — admins жив
 ```
 
-**Объекты — const запрещён** (поля могут быть сложными типами):
+**Объекты — copy + retain string-полей (source жив):**
 ```typescript
 const base = { x: 1, name: "Alice" };
-const extended = { ...base, extra: 42 };
-// ошибка: cannot spread const object
-// hint: use let, Shared<T>, or { ...base.clone(), extra: 42 } if type implements Clone
-
-let base = { x: 1, name: "Alice" };
-const extended = { ...base, extra: 42 };  // ok — move из let
-console.log(base);  // ошибка: base перемещён
+const extended = { ...base, extra: 42 };  // copy + retain
+console.log(base.name);                   // "Alice" — base жив
 ```
 
-**`Shared<T>` — const разрешён** (retain, не move):
+**`Shared<T>` — retain (refcount++):**
 ```typescript
 const base: Shared<Item[]> = [item1, item2];
 const listA = [...base, itemA];  // ok — retain
@@ -1130,3 +1122,5 @@ const obj: Shared<Config> = { x: 1 };
 const a = { ...obj, y: 2 };  // ok — retain
 const b = { ...obj, z: 3 };  // ok — retain
 ```
+
+Подробнее: семантика, C-output, матрица по типам — см. `spec/05d-spread-destructuring-merge.md`.

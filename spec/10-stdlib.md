@@ -975,10 +975,10 @@ import { chars, charCount, graphemes, codePointAt, graphemeAt, sliceChars } from
 
 const s = "привет❤️"
 
-s.chars()                  // Iterator<u32> — codepoints (1087, 1088...), O(1) per step
+s.chars()                  // Iterator<number> — codepoints (1087, 1088...), O(1) per step
 s.charCount()              // number — количество codepoints, O(n)
 s.graphemes()              // Iterator<string> — графемные кластеры ("п", "р", "❤️")
-s.codePointAt(byteIdx)     // u32 — codepoint по байтовому смещению
+s.codePointAt(byteIdx)     // number — codepoint по байтовому смещению
 s.graphemeAt(byteIdx)      // string — графемный кластер по байтовому смещению
 s.sliceChars(start, end)   // string — безопасный срез по codepoint-индексам, O(n)
 ```
@@ -1080,7 +1080,7 @@ JSON.stringify(val: T, indent: number): string  // pretty-print с отступ�
 ```
 
 **`JSON.parse<T>`** десериализует строку в тип `T`. Тип `T` должен быть:
-- примитивом (`string`, `bool`, `i32`, `f64`, ...)
+- примитивом (`string`, `boolean`, `number`, `i32`, `f64`, ...)
 - классом с публичными полями (компилятор генерирует десериализатор)
 - массивом или `Map<string, V>` из поддерживаемых типов
 

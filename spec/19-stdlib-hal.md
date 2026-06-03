@@ -71,8 +71,8 @@ declare module "std/hal" {
     namespace UART {
         function init(opts: { baud: u32 }): void       // UBRR0H/L + UCSR0B
         function write(byte: u8): void                  // UDR0
-        function read(): opt_u8                         // UDR0 (если RXC0)
-        function available(): bool                      // UCSR0A & RXC0
+        function read(): u8 | null                      // UDR0 (если RXC0)
+        function available(): boolean                   // UCSR0A & RXC0
     }
 }
 ```

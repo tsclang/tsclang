@@ -1517,3 +1517,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Round 5 (2 issues)**: _ts_log_int→_ts_log_double for age:number fields (05c), embedded String struct sizes hardcoded→"6/12/24 байт (AVR/32-bit/64-bit)" (05b+05c), opt_String→opt_string (05c)
 > - **Final status: 0 contradictions between 03-types.md and all 05* files**
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **Cross-spec audit 03 ↔ ALL other specs — 1 CRITICAL + 8 MINOR**:
+> - **CRITICAL**: 02-syntax.md spread section rewritten: move→always copy (aligned with 05d priority). Removed const+complex=error, E002 after spread. Added reference to 05d.
+> - 02-syntax.md: mangling table `bool`→`boolean` as TSClang type
+> - 04-classes.md: `charCount(): i32`→`number`, `chars(): Iterator<u32>`→`Iterator<number>`
+> - 07-concurrency.md: `AtomicArray.length` i32→number, Channel `.length`/`.capacity` size_t→number
+> - 10-stdlib.md: `chars()` Iterator<u32>→Iterator<number>, `codePointAt()` u32→number, `bool`→`boolean` in primitives list
+> - 19-stdlib-hal.md: `opt_u8`→`u8 | null`, `bool`→`boolean` in .d.tsc declarations
+> - **Final status: 0 contradictions between 03-types.md and all spec files**
+> - Result: **1371 tests, 0 failures**
