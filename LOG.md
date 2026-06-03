@@ -1466,3 +1466,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - groupBy example: `s[0]` → `s.charAt(0)` (s[0] returns u8, not string)
 > - Removed duplicate `reduce` entry
 > - Fixed typos: литрал→литерал, f64→number in examples, embedded i32→f32
+
+> 2026-06-03: **TSC type naming: `boolean` (not `bool`), `string` (not `String`) in TSC context**:
+> - П2 (TS compatibility): TSC uses `boolean` and `string`, C-output uses `bool` and `String`
+> - 31 fixes in spec/03-types.md: bool→boolean in TSC code blocks, prose, method signatures, typeof table
+> - String→string in TSC comments/prose (L745, L810)
+> - `typeof x === "number"` → type_id по defaultNumber (не всегда 4)
+> - `typeof x === "boolean"` replaces `"bool"` in typeof table
+> - Warning text: «embedded target» → «8-bit target» (warnings only for AVR)
+> - Implementation (compiler accepts `boolean`) — separate stage

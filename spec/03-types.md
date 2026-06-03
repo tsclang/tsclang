@@ -265,7 +265,7 @@ const n64: i64 = n      // неявно — без потерь
   const a = 1;           // number (f32, float) — целочисленный литерал без аннотации
   const b: number = 1;   // f32 (number = f32)
   const c: f32 = 1;      // f32 (явно)
-  const d: f64 = 1;      // f64 + warning: f64 on embedded target is inefficient
+  const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
   ```
   Переопределить явно — можно: `{ "defaultNumber": "f64" }` в `tsc.package.json` *[NOT YET IMPLEMENTED]* (нестандартно, потребует подтверждения).
 
@@ -310,7 +310,7 @@ let a = 10;              // → number (defaultNumber → f64 на desktop, f32 
 let b = 10.0;            // → number (defaultNumber)
 let c = "hello";         // → string
 let d = 'a';             // → string (одинарные = двойные)
-let e = true;            // → bool
+let e = true;            // → boolean
 let f = null;            // → null
 let g = [1, 2, 3];       // → number[] (однородный — все элементы number)
 let h = ["a", "b"];      // → string[] (однородный — все элементы string)
@@ -321,7 +321,7 @@ let p = { x: 1, y: 2 }; // → anonymous struct { x: number, y: number }
 
 ```typescript
 let g = [1, 'a'];        // Error: mixed array literal — specify type: [number, string] (tuple) or T[]
-let t = [1, "a", true];  // Error: mixed array literal — specify type: [number, string, bool] or T[]
+let t = [1, "a", true];  // Error: mixed array literal — specify type: [number, string, boolean] or T[]
 let u = [obj, 42];       // Error: mixed array literal — specify type: [MyClass, number] or T[]
 ```
 
@@ -329,7 +329,7 @@ let u = [obj, 42];       // Error: mixed array literal — specify type: [MyClas
 
 ```typescript
 let g: [number, string] = [1, 'a'];           // → tuple (value type, фиксированный layout)
-let t: [i32, string, bool] = [1, "a", true];  // → tuple
+let t: [i32, string, boolean] = [1, "a", true];  // → tuple
 let nums: i32[] = [1, 2, 3];                  // → Array_i32 (override defaultNumber)
 ```
 
@@ -710,7 +710,7 @@ typedef struct {
 } tsc_unknown;
 ```
 
-- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64/number, 5=bool, 6=string, 7=array, 8=object, 10=i8, 11=i16, 12=u8, 13=u16, 14=u32, 15=u64)
+- `type_id` — runtime идентификатор типа (1=i32, 2=i64, 3=f32, 4=f64/number, 5=boolean, 6=string, 7=array, 8=object, 10=i8, 11=i16, 12=u8, 13=u16, 14=u32, 15=u64)
 - `vtable` — указатель на drop/clone виртуальные функции
 - `buffer` — inline хранилище на 3 машинных слова (достаточно для примитивов и String)
 
@@ -742,7 +742,7 @@ if (typeof x === "i32") {
 }
 
 if (typeof x === "string") {
-    // x narrowed to String — доступны методы строк
+    // x narrowed to string — доступны методы строк
     const len = x.length        // ok
     const upper = x.toUpperCase()  // ok
     console.log(x)
@@ -766,7 +766,7 @@ if (typeof x === "string") {
 | `"f32"` | 3 | |
 | `"f64"` | 4 | |
 | `"number"` | defaultNumber | Платформозависимый: f64 на desktop, f32 на embedded. П2-совместимо (TS: `typeof x === "number"`) |
-| `"bool"` | 5 | |
+| `"boolean"` | 5 | |
 | `"string"` | 6 | desktop: heap pointer + retain; embedded: inline |
 | `"array"` | 7 | heap pointer; narrow → `__array__` marker, access via `as Array<T>` |
 | `"object"` | 8 | heap pointer; narrow → `__object__` marker, access via `as ClassName` |
@@ -805,9 +805,9 @@ Safe для rodata строк (литералы): `tsc_string_retain` на rodat
 #### Ограничения (текущая реализация)
 
 - else-if chains не поддерживают unknown narrowing — используйте отдельные `if`
-- `typeof x === "number"` → type_id 4 (f64); i32/f32/i64 не матчятся — используйте конкретный тип
+- `typeof x === "number"` → type_id по defaultNumber (4=f64 на desktop, 3=f32 на embedded); i32/i64 не матчятся — используйте конкретный тип
 - `any` вне `declare`/`unsafe` → compile-time error (Phase 3 lock-down)
-- Embedded: unknown поддерживает только `{i32,i64,f32,f64,bool,String}` — Array/Class → error
+- Embedded: unknown поддерживает только `{i32,i64,f32,f64,boolean,string}` — Array/Class → error
 - `unknown[]` элементы: auto-pack при push/literal, per-element drop при free
 
 ### `never` — bottom type
@@ -982,9 +982,9 @@ interface SensorData {
     pressure: i16    // 2 байта
     humidity: u8     // 1 байт
     // --- флаги в конце, нет padding между ними ---
-    tempValid:     bool  // 1 байт
-    pressureValid: bool  // 1 байт
-    humidityValid: bool  // 1 байт
+    tempValid:     boolean  // 1 байт
+    pressureValid: boolean  // 1 байт
+    humidityValid: boolean  // 1 байт
 }
 // итого: 8 байт вместо 10
 ```
@@ -1241,15 +1241,15 @@ const result = arr
 Callback получает `Ref<T>` — borrow элемента, не ownership. Элемент остаётся в массиве.
 
 - `arr.map<U>(f: (Ref<T>) => U): U[]` — новый массив `U[]` (owned); callback не владеет элементом
-- `arr.filter(f: (Ref<T>) => bool): T[]` — новый массив из **клонов** совпавших элементов; **требует `T: Clone`**
+- `arr.filter(f: (Ref<T>) => boolean): T[]` — новый массив из **клонов** совпавших элементов; **требует `T: Clone`**
 - `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
-- `arr.find(f: (Ref<T>) => bool): Ref<T> | null` — borrow первого совпадения; время жизни привязано к источнику
-- `arr.findIndex(f: (Ref<T>) => bool): i32` — индекс первого совпадения, `-1` если не найден
-- `arr.findLast(f: (Ref<T>) => bool): Ref<T> | null` — borrow последнего совпадения; симметрично `find`
-- `arr.findLastIndex(f: (Ref<T>) => bool): i32` — индекс последнего совпадения, `-1` если не найден
-- `arr.some(f: (Ref<T>) => bool): bool` — `true` если хотя бы один элемент проходит фильтр
-- `arr.every(f: (Ref<T>) => bool): bool` — `true` если все элементы проходят фильтр
-- `arr.includes(item: Ref<T>): bool` — поиск по значению через `==`
+- `arr.find(f: (Ref<T>) => boolean): Ref<T> | null` — borrow первого совпадения; время жизни привязано к источнику
+- `arr.findIndex(f: (Ref<T>) => boolean): i32` — индекс первого совпадения, `-1` если не найден
+- `arr.findLast(f: (Ref<T>) => boolean): Ref<T> | null` — borrow последнего совпадения; симметрично `find`
+- `arr.findLastIndex(f: (Ref<T>) => boolean): i32` — индекс последнего совпадения, `-1` если не найден
+- `arr.some(f: (Ref<T>) => boolean): boolean` — `true` если хотя бы один элемент проходит фильтр
+- `arr.every(f: (Ref<T>) => boolean): boolean` — `true` если все элементы проходят фильтр
+- `arr.includes(item: Ref<T>): boolean` — поиск по значению через `==`
 - `arr.indexOf(item: Ref<T>): i32` — индекс первого вхождения, `-1` если не найден
 - `arr.lastIndexOf(item: Ref<T>): i32` — индекс последнего вхождения, `-1` если не найден
 - `arr.slice(start?: i32, end?: i32): T[]` — новый массив из **клонов** элементов `start..end-1`; **требует `T: Clone`**; отрицательные индексы от конца; без аргументов — клон всего массива
@@ -1270,15 +1270,15 @@ const evens   = nums.filter(x => x % 2 == 0)       // i32[] — [2, 4]
 const sum     = nums.reduce((acc, x) => acc + x, 0) // i32 — 15
 const found   = nums.find(x => x > 3)              // Ref<i32> | null
 const idx     = nums.findIndex(x => x > 3)         // i32 — 3
-const hasBig  = nums.some(x => x > 4)              // bool — true
-const allPos  = nums.every(x => x > 0)             // bool — true
-const has3    = nums.includes(3)                    // bool — true
+const hasBig  = nums.some(x => x > 4)              // boolean — true
+const allPos  = nums.every(x => x > 0)             // boolean — true
+const has3    = nums.includes(3)                    // boolean — true
 const pos     = nums.indexOf(3)                     // i32 — 2
 const part    = nums.slice(1, 3)                   // i32[] — [2, 3] (clone)
 const joined  = nums.concat([6, 7])                // i32[] — [1, 2, 3, 4, 5, 6, 7]
 ```
 
-**Clone-требование:** примитивы (`i32`, `f64`, `bool`, `u8` и т.д.) клонируются автоматически. Строки — Clone. Классы — через явный метод `clone()`. Если `T: Clone` не выполнено — ошибка компилятора при вызове `filter` / `slice` / `concat`.
+**Clone-требование:** примитивы (`i32`, `f64`, `boolean`, `u8` и т.д.) клонируются автоматически. Строки — Clone. Классы — через явный метод `clone()`. Если `T: Clone` не выполнено — ошибка компилятора при вызове `filter` / `slice` / `concat`.
 
 **`find` возвращает borrow** — результат нельзя использовать дольше источника и нельзя мутировать:
 
