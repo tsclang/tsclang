@@ -159,7 +159,7 @@
   obj.set("a", 1);
 
   // правильно — фиксированная struct:
-  let obj = { a: 1, b: 2 };  // { a: i32, b: i32 } известна компилятору
+  let obj = { a: 1, b: 2 };  // { a: number, b: number } известна компилятору
   obj.a = 5;                  // ok
   ```
 
@@ -228,7 +228,7 @@ let mask: i32 = flags as i32  // ✅
 
 ```typescript
 const buf = new Buffer(1024)
-const len: usize = buf.length    // usize, не i32
+const len: number = buf.length    // number, не конкретный тип
 ```
 
 Автокаст `usize` → `i64` без потерь на всех платформах. `usize` → `i32` — требует явный `as` (может усечь на 64-bit).
@@ -429,7 +429,7 @@ const bad = "30" as i32;  // ошибка компилятора: использ
 parseFloat("3.14")   // 3.14
 parseFloat("abc")    // null
 
-// parseInt(a) — парсит как f64, затем обрезает дробную часть → i32 | null
+// parseInt(a) — парсит как f64, затем обрезает дробную часть → number | null
 parseInt("3.14")     // 3
 parseInt("42")       // 42
 parseInt("abc")      // null
@@ -577,10 +577,10 @@ TSC-специфичные методы которых нет в JS/TS. Подк
 ```typescript
 import { chars, charCount, graphemes, codePointAt, graphemeAt, sliceChars } from "std/string"
 
-s.chars()                  // Iterator<u32> — codepoints (1087, 1088...)
-s.charCount()              // i32 — кол-во codepoints, O(n)
+s.chars()                  // Iterator<number> — codepoints (1087, 1088...)
+s.charCount()              // number — кол-во codepoints, O(n)
 s.graphemes()              // Iterator<string> — графемные кластеры ("п", "❤️"...)
-s.codePointAt(byteIdx)     // u32 — codepoint по байтовому смещению, O(1 символа)
+s.codePointAt(byteIdx)     // number — codepoint по байтовому смещению, O(1 символа)
 s.graphemeAt(byteIdx)      // string — графемный кластер по байтовому смещению
 s.sliceChars(start, end)   // string — срез по codepoint-индексам, O(n)
 ```
@@ -594,7 +594,7 @@ s.sliceChars(start, end)   // string — срез по codepoint-индекса�
 Импорт не нужен — доступны всегда:
 
 ```typescript
-s.indexOf(sub)               // i32 — байтовое смещение, -1 если не найдено
+s.indexOf(sub)               // number — байтовое смещение, -1 если не найдено
 s.includes(sub)              // boolean
 s.startsWith(sub)            // boolean
 s.endsWith(sub)              // boolean
@@ -612,15 +612,15 @@ s.padStart(len, fill?)       // string
 s.padEnd(len, fill?)         // string
 s.repeat(n)                  // string
 s.charAt(i)                  // string — s[i..i+1] по байтовому смещению
-s.charCodeAt(i)              // u32 — код байта по смещению (синоним s[i], расширен до uint32_t)
-s.lastIndexOf(sub)           // i32 — байтовое смещение последнего вхождения, -1 если не найдено
+s.charCodeAt(i)              // number — код байта по смещению (синоним s[i], расширен до uint32_t)
+s.lastIndexOf(sub)           // number — байтовое смещение последнего вхождения, -1 если не найдено
 s.at(i)                      // u8 | null — байт по смещению, отрицательные индексы считаются с конца
 ```
 
 Методы, требующие `import { ... } from "std/string"`:
 
 ```typescript
-s.search(regex)              // i32 — байтовое смещение первого совпадения, -1 если не найдено
+s.search(regex)              // number — байтовое смещение первого совпадения, -1 если не найдено
 s.match(regex)               // string[] | null — все группы первого совпадения
 s.matchAll(regex)            // string[][] — все совпадения (не ленивый итератор, возвращает массив сразу)
 s.replaceAll(regex, replace) // string — замена всех совпадений по regex (string-вариант доступен без импорта)
@@ -1026,7 +1026,7 @@ new Date(2024, 2, 20, 14, 30, 0, 0)    // + часы, минуты, секунд
 ### Статические методы
 
 ```typescript
-Date.now()   // i64 — текущее время в мс с epoch
+Date.now()   // number — текущее время в мс с epoch
 ```
 
 ### Геттеры
@@ -1034,16 +1034,16 @@ Date.now()   // i64 — текущее время в мс с epoch
 ```typescript
 const d = new Date("2024-03-20T14:30:00.000Z");
 
-d.getFullYear()        // i32 — 2024
-d.getMonth()           // i32 — 2 (0-11, март = 2)
-d.getDate()            // i32 — 20 (день месяца, 1-31)
-d.getDay()             // i32 — 3 (день недели, 0=воскресенье)
-d.getHours()           // i32 — 14
-d.getMinutes()         // i32 — 30
-d.getSeconds()         // i32 — 0
-d.getMilliseconds()    // i32 — 0
-d.getTime()            // i64 — мс с epoch
-d.getTimezoneOffset()  // i32 — смещение timezone в минутах
+d.getFullYear()        // number — 2024
+d.getMonth()           // number — 2 (0-11, март = 2)
+d.getDate()            // number — 20 (день месяца, 1-31)
+d.getDay()             // number — 3 (день недели, 0=воскресенье)
+d.getHours()           // number — 14
+d.getMinutes()         // number — 30
+d.getSeconds()         // number — 0
+d.getMilliseconds()    // number — 0
+d.getTime()            // number — мс с epoch
+d.getTimezoneOffset()  // number — смещение timezone в минутах
 ```
 
 ### Сеттеры
@@ -1069,7 +1069,7 @@ d.toTimeString()         // "14:30:00 GMT+0000"
 d.toLocaleDateString()   // локализованная дата
 d.toLocaleTimeString()   // локализованное время
 d.toLocaleString()       // локализованные дата и время
-d.valueOf()              // i64 — то же что getTime()
+d.valueOf()              // number — то же что getTime()
 ```
 
 ### C-output
@@ -1211,11 +1211,11 @@ const result = arr
   ```
 - `arr.capacity` — заранее выделенная память, readonly;
   присвоение `arr.capacity = n` — ошибка компилятора с подсказкой: `use arr.reallocate(n) instead`
-- `arr.sort(cmp?: (Ref<T>, Ref<T>) => i32)` — сортировка на месте; без аргумента — по умолчанию (`<`); возвращает `Self`
+- `arr.sort(cmp?: (Ref<T>, Ref<T>) => number)` — сортировка на месте; без аргумента — по умолчанию (`<`); возвращает `Self`
 - `arr.reverse()` — разворот на месте; возвращает `Self`
 - `arr.shift()` — удалить и вернуть первый элемент как owned `T | null`; O(n) — сдвигает остальные элементы
 - `arr.unshift(item)` — добавить элемент в начало; move semantics; O(n); возвращает `Self`
-- `arr.splice(start: i32, deleteCount?: i32, ...items: T[])` — удалить `deleteCount` элементов начиная с `start`, вставить `items`; возвращает удалённые элементы как owned `T[]`; отрицательный `start` — от конца
+- `arr.splice(start: number, deleteCount?: number, ...items: T[])` — удалить `deleteCount` элементов начиная с `start`, вставить `items`; возвращает удалённые элементы как owned `T[]`; отрицательный `start` — от конца
   ```typescript
   let arr: i32[] = [1, 2, 3, 4, 5]
   const removed = arr.splice(1, 2, 10, 20)  // removed = [2, 3], arr = [1, 10, 20, 4, 5]
@@ -1226,11 +1226,11 @@ const result = arr
   [1, 2, 3].join(", ")   // "1, 2, 3"
   [1, 2, 3].join()       // "1,2,3" — дефолтный разделитель ","
   ```
-- `arr.set(src: Ref<T[]>, offset?: usize)` — скопировать элементы из `src` в `arr` начиная с `offset`; C-output: `memcpy`; bounds check в runtime
+- `arr.set(src: Ref<T[]>, offset?: number)` — скопировать элементы из `src` в `arr` начиная с `offset`; C-output: `memcpy`; bounds check в runtime
 - `arr.forEach(f: (Ref<T>) => void)` — итерация без результата; callback получает `Ref<T>`
-- `arr.keys(): Iterator<usize>` — итератор индексов
+- `arr.keys(): Iterator<number>` — итератор индексов
 - `arr.values(): Iterator<Ref<T>>` — итератор значений (borrow)
-- `arr.entries(): Iterator<[usize, Ref<T>]>` — итератор пар [index, value]
+- `arr.entries(): Iterator<[number, Ref<T>]>` — итератор пар [index, value]
 
 **Статические:**
 - `Array.from<T>(src: Iterable<T>): T[]` — создать из iterable; клонирует элементы если `T: Clone`
@@ -1244,22 +1244,22 @@ Callback получает `Ref<T>` — borrow элемента, не ownership. 
 - `arr.filter(f: (Ref<T>) => boolean): T[]` — новый массив из **клонов** совпавших элементов; **требует `T: Clone`**
 - `arr.reduce<U>(f: (U, Ref<T>) => U, init: U): U` — аккумулятор `U` owned; callback получает `Ref<T>`
 - `arr.find(f: (Ref<T>) => boolean): Ref<T> | null` — borrow первого совпадения; время жизни привязано к источнику
-- `arr.findIndex(f: (Ref<T>) => boolean): i32` — индекс первого совпадения, `-1` если не найден
+- `arr.findIndex(f: (Ref<T>) => boolean): number` — индекс первого совпадения, `-1` если не найден
 - `arr.findLast(f: (Ref<T>) => boolean): Ref<T> | null` — borrow последнего совпадения; симметрично `find`
-- `arr.findLastIndex(f: (Ref<T>) => boolean): i32` — индекс последнего совпадения, `-1` если не найден
+- `arr.findLastIndex(f: (Ref<T>) => boolean): number` — индекс последнего совпадения, `-1` если не найден
 - `arr.some(f: (Ref<T>) => boolean): boolean` — `true` если хотя бы один элемент проходит фильтр
 - `arr.every(f: (Ref<T>) => boolean): boolean` — `true` если все элементы проходят фильтр
 - `arr.includes(item: Ref<T>): boolean` — поиск по значению через `==`
-- `arr.indexOf(item: Ref<T>): i32` — индекс первого вхождения, `-1` если не найден
-- `arr.lastIndexOf(item: Ref<T>): i32` — индекс последнего вхождения, `-1` если не найден
-- `arr.slice(start?: i32, end?: i32): T[]` — новый массив из **клонов** элементов `start..end-1`; **требует `T: Clone`**; отрицательные индексы от конца; без аргументов — клон всего массива
+- `arr.indexOf(item: Ref<T>): number` — индекс первого вхождения, `-1` если не найден
+- `arr.lastIndexOf(item: Ref<T>): number` — индекс последнего вхождения, `-1` если не найден
+- `arr.slice(start?: number, end?: number): T[]` — новый массив из **клонов** элементов `start..end-1`; **требует `T: Clone`**; отрицательные индексы от конца; без аргументов — клон всего массива
 - `arr.concat(other: Ref<T[]>): T[]` — новый массив = клон `arr` + клон `other`; **требует `T: Clone`**
 - `arr.flat(): U[]` — разгладить вложенность на 1 уровень: `T[][]` → `T[]`; **требует `T: Clone`**; на embedded запрещён (heap)
 - `arr.flatMap<U>(f: (Ref<T>) => U[]): U[]` — map + flat(1); эквивалент `arr.map(f).flat()`; на embedded запрещён
-- `arr.toSorted(cmp?: (Ref<T>, Ref<T>) => i32): T[]` — новый отсортированный массив; оригинал не меняется; **требует `T: Clone`**
+- `arr.toSorted(cmp?: (Ref<T>, Ref<T>) => number): T[]` — новый отсортированный массив; оригинал не меняется; **требует `T: Clone`**
 - `arr.toReversed(): T[]` — новый перевёрнутый массив; оригинал не меняется; **требует `T: Clone`**
-- `arr.toSpliced(start: i32, deleteCount?: i32, ...items: T[]): T[]` — новый массив с применённым splice; оригинал не меняется; **требует `T: Clone`**
-- `arr.with(index: i32, value: T): T[]` — новый массив с заменённым элементом по индексу; оригинал не меняется; **требует `T: Clone`**
+- `arr.toSpliced(start: number, deleteCount?: number, ...items: T[]): T[]` — новый массив с применённым splice; оригинал не меняется; **требует `T: Clone`**
+- `arr.with(index: number, value: T): T[]` — новый массив с заменённым элементом по индексу; оригинал не меняется; **требует `T: Clone`**
 - `arr.reduceRight<U>(f: (U, Ref<T>) => U, init: U): U` — то же, но справа налево
 
 ```typescript
@@ -1269,11 +1269,11 @@ const doubled = nums.map(x => x * 2)               // i32[] — [2, 4, 6, 8, 10]
 const evens   = nums.filter(x => x % 2 == 0)       // i32[] — [2, 4]
 const sum     = nums.reduce((acc, x) => acc + x, 0) // i32 — 15
 const found   = nums.find(x => x > 3)              // Ref<i32> | null
-const idx     = nums.findIndex(x => x > 3)         // i32 — 3
+const idx     = nums.findIndex(x => x > 3)         // number — 3
 const hasBig  = nums.some(x => x > 4)              // boolean — true
 const allPos  = nums.every(x => x > 0)             // boolean — true
 const has3    = nums.includes(3)                    // boolean — true
-const pos     = nums.indexOf(3)                     // i32 — 2
+const pos     = nums.indexOf(3)                     // number — 2
 const part    = nums.slice(1, 3)                   // i32[] — [2, 3] (clone)
 const joined  = nums.concat([6, 7])                // i32[] — [1, 2, 3, 4, 5, 6, 7]
 ```
@@ -1366,7 +1366,7 @@ m.clear()           // void
 m.size              // number, readonly
 
 // ?. и ?? с Map
-const len = m.get("key")?.length ?? 0;   // Ref<string> | null → i32
+const len = m.get("key")?.length ?? 0;   // Ref<string> | null → number
 const val = m.delete("key") ?? fallback;  // V | null → V
 ```
 
@@ -1559,8 +1559,8 @@ Object.entries(obj) // [string, Ref<User>][] — ключи copy, значени
 
 const obj = { x: 1, y: 2 };
 Object.keys(obj)    // string[]          — копии ключей
-Object.values(obj)  // i32[]             — copy (примитивы)
-Object.entries(obj) // [string, i32][]   — всё copy
+Object.values(obj)  // number[]           — copy (примитивы)
+Object.entries(obj) // [string, number][] — всё copy
 ```
 
 Итерация:
@@ -1831,7 +1831,7 @@ function process(x: Shape): void { ... }
 
 // 4. Тип функции — для колбэков
 type Callback = (x: i32) => void;
-type Comparator<T> = (a: Ref<T>, b: Ref<T>) => i32;
+type Comparator<T> = (a: Ref<T>, b: Ref<T>) => number;
 
 function sort(arr: Mut<i32[]>, cmp: Comparator<i32>): void { ... }
 ```

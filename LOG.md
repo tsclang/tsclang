@@ -1475,3 +1475,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - `typeof x === "boolean"` replaces `"bool"` in typeof table
 > - Warning text: «embedded target» → «8-bit target» (warnings only for AVR)
 > - Implementation (compiler accepts `boolean`) — separate stage
+
+> 2026-06-03: **Stdlib API returns `number`, not `i32`/`usize`/`u32`/`i64`** (spec/03-types.md):
+> - Principle: TSC-type = `number` in API, C-type = concrete (`int32_t`, `size_t`, etc.) in codegen
+> - Array methods: findIndex, indexOf, lastIndexOf, findLastIndex → `number`; sort/slice/splice/toSorted/toSpliced/toSpliced/with params → `number`; keys/entries → `Iterator<number>`
+> - String methods: indexOf, lastIndexOf, search, charCodeAt, codePointAt, charCount → `number`; chars() → `Iterator<number>`
+> - Date: all getters → `number`; getTime/Date.now/valueOf → `number` (C-output: i64)
+> - parseInt → `number | null`; buf.length → `number`; Comparator type alias → `number`
+> - Fixed wrong inference comments: `{ a: i32 }` → `{ a: number }`, Object.values/entries
+> - `10-stdlib.md` — separate stage (has same issues + contradictions with 03-types.md)
