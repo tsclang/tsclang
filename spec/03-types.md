@@ -425,7 +425,7 @@ const bad = "30" as i32;  // ошибка компилятора: использ
 Синонимы для привычного JS-синтаксиса:
 
 ```typescript
-// parseFloat(a) — синоним f64.tryParse(a) → f64 | null
+// parseFloat(a) — синоним f64.tryParse(a) → number | null
 parseFloat("3.14")   // 3.14
 parseFloat("abc")    // null
 
@@ -435,7 +435,7 @@ parseInt("42")       // 42
 parseInt("abc")      // null
 parseInt("-7.9")     // -7  (truncate, не floor: к нулю)
 
-// Number(a) — синоним parseFloat(a) → f64 | null
+// Number(a) — синоним parseFloat(a) → number | null
 Number("3.14")       // 3.14
 Number("abc")        // null
 
@@ -515,7 +515,7 @@ String s = tsc_string_concat(a, b);  // capacity > 0, data → malloc
 ```typescript
 const s = "привет"   // 6 букв, 12 байт в UTF-8
 
-s.length    // 12 — количество байт, O(1)
+s.length    // number — количество байт, O(1)
 s[0]        // 208 — первый байт буквы 'п', тип u8, O(1)
 s[0..2]     // string — срез по байтовым смещениям, O(1), Ref<string>
 ```
@@ -1193,7 +1193,7 @@ const result = arr
   arr.reallocate(50);               // capacity=50,  length=50 (обрезано)
   ```
   присвоение `arr.capacity = n` — ошибка компилятора с подсказкой: `use arr.reallocate(n) instead`
-- `arr.length` — количество элементов (доступны индексы `0..length-1`), readonly;
+- `arr.length` — number, readonly, количество элементов (доступны индексы `0..length-1`);
   присвоение `arr.length = n` — ошибка компилятора с подсказкой: `use arr.resize(n) instead`
   ```typescript
   let arr: i32[] = new Array(100); // capacity=100, length=0
@@ -1209,7 +1209,7 @@ const result = arr
 
   arr.length = 10; // ошибка компилятора: use arr.resize(10) instead
   ```
-- `arr.capacity` — заранее выделенная память, readonly;
+- `arr.capacity` — number, readonly, заранее выделенная память;
   присвоение `arr.capacity = n` — ошибка компилятора с подсказкой: `use arr.reallocate(n) instead`
 - `arr.sort(cmp?: (Ref<T>, Ref<T>) => number)` — сортировка на месте; без аргумента — по умолчанию (`<`); возвращает `Self`
 - `arr.reverse()` — разворот на месте; возвращает `Self`
@@ -1304,7 +1304,7 @@ let arr: i32[] = [1, 2, 3, 4, 5, 6, 7, 8]
 const s: Slice<i32> = arr.view(2, 6)   // элементы 2..5, zero-copy
 s[0]       // 3
 s[1]       // 4
-s.length   // 4
+s.length   // number — 4
 
 s.view(1, 3)   // под-слайс: элементы 3..4
 ```

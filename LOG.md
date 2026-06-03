@@ -1493,3 +1493,8 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Unchanged (9 categories, M–U): FileStat.size (i64), Temporal (i32/i64), NetworkError.code (i32),
 >   Math bit ops (i32), std/libc (C bindings), std/avr + std/embedded + HAL (hardware), std/random (parameterized)
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-03: **spec/03-types.md internal consistency audit — 6 fixes**:
+> - `parseFloat` / `Number` return type: `f64 | null` → `number | null` (aligns with `parseInt`)
+> - `s.length`, `arr.length`, `arr.capacity`, `Slice.length` — explicitly typed as `number`
+> - Result: **1371 tests, 0 failures**
