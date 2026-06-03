@@ -116,23 +116,23 @@ console.warn("warning")
 console.debug("debug")
 
 // таймеры — все платформы
-const id = setTimeout(() => console.log("hello"), 1000)  // i32 — id таймера
+const id = setTimeout(() => console.log("hello"), 1000)  // number — id таймера
 clearTimeout(id)
-const tick = setInterval(() => update(), 100)             // i32 — id интервала
+const tick = setInterval(() => update(), 100)             // number — id интервала
 clearInterval(tick)
 
 // sleep — все платформы (только внутри async)
 await sleep(500)   // пауза 500мс
 
 // высокоточный таймер — все платформы
-performance.now()  // f64 — миллисекунды с момента старта программы
+performance.now()  // number — миллисекунды с момента старта программы
 
 // performance.mark / measure — только desktop (требует OS-clock)
 performance.mark("start")
 // ... работа ...
 performance.mark("end")
 const entry = performance.measure("my-work", "start", "end")
-// entry: { name: string, duration: f64, startTime: f64 }
+// entry: { name: string, duration: number, startTime: number }
 
 // console.time / timeEnd — удобный сахар над performance.mark/measure
 console.time("parse")
@@ -184,7 +184,7 @@ m.has("alice")    // boolean
 m.delete("alice") // V | null — удалённое значение или null если ключа не было
 
 // размер
-m.size   // usize, readonly
+m.size   // number, readonly
 
 // итерация
 for (const [key, value] of m) { ... }   // по парам
@@ -419,7 +419,7 @@ const buf = new Buffer(1024)                            // нули, size=1024
 // Buffer.concat([buf1, buf2, buf3])                    // [NOT YET IMPLEMENTED]
 
 // размер
-buf.length   // usize, readonly
+buf.length   // number, readonly
 
 // доступ к байтам
 buf[0]        // u8 — чтение
@@ -467,8 +467,8 @@ const buf = Buffer.alloc(64)
 const dv = new DataView(buf)          // весь буфер
 const dv = new DataView(buf, 4, 16)   // byteOffset=4, byteLength=16
 
-dv.byteLength   // i32
-dv.byteOffset   // i32
+dv.byteLength   // number
+dv.byteOffset   // number
 
 // чтение (littleEndian по умолчанию = false — big-endian)
 dv.getU8(offset)
@@ -638,7 +638,7 @@ import { sqlite3_open } from "@tsc/sqlite3"
 import { Reader, Writer, Stream } from "std/io"
 
 interface Reader {
-    read(buf: Mut<u8[]>): i32 | null throws IOError   // прочитать в буфер, null = EOF
+    read(buf: Mut<u8[]>): number | null throws IOError   // прочитать в буфер, null = EOF
     readLine(): string | null throws IOError
     readAll(): string throws IOError
 }
@@ -729,7 +729,7 @@ const res = await fetch("https://api.example.com/users", {
 })
 
 // Response
-res.status    // i32 — 200, 404, 500...
+res.status    // number — 200, 404, 500...
 res.ok        // boolean — status 200-299
 res.headers   // Map<string, string>
 await res.text()        // string throws NetworkError
@@ -766,7 +766,7 @@ interface HttpRequest {
 }
 
 interface HttpResponse {
-    status:  i32
+    status:  number
     headers: Map<string, string>
     send(body: string): void throws IOError
     send(body: u8[]): void throws IOError
@@ -976,7 +976,7 @@ import { chars, charCount, graphemes, codePointAt, graphemeAt, sliceChars } from
 const s = "привет❤️"
 
 s.chars()                  // Iterator<u32> — codepoints (1087, 1088...), O(1) per step
-s.charCount()              // i32 — количество codepoints, O(n)
+s.charCount()              // number — количество codepoints, O(n)
 s.graphemes()              // Iterator<string> — графемные кластеры ("п", "р", "❤️")
 s.codePointAt(byteIdx)     // u32 — codepoint по байтовому смещению
 s.graphemeAt(byteIdx)      // string — графемный кластер по байтовому смещению
@@ -1076,7 +1076,7 @@ import { JSON } from "std/json"
 ```typescript
 JSON.parse<T>(s: string): T throws ParseError
 JSON.stringify(val: T): string
-JSON.stringify(val: T, indent: i32): string  // pretty-print с отступом indent пробелов
+JSON.stringify(val: T, indent: number): string  // pretty-print с отступом indent пробелов
 ```
 
 **`JSON.parse<T>`** десериализует строку в тип `T`. Тип `T` должен быть:
@@ -1165,7 +1165,7 @@ import { Blob, File } from "std/blob"
 const b = new Blob([buf], { type: "image/png" })
 b.data            // Buffer — байты
 b.type            // string — MIME-тип
-b.size            // i32 — размер в байтах
+b.size            // number — размер в байтах
 b.arrayBuffer()   // Buffer — те же байты (zero-copy alias)
 b.text()          // string — интерпретирует байты как UTF-8
 b.toString()      // string — синоним text(); работает в template literals и конкатенации
@@ -1177,7 +1177,7 @@ const f = new File([buf], "photo.png", { type: "image/png" })
 f.name      // "photo.png"
 f.data      // Buffer
 f.type      // "image/png"
-f.size      // i32
+f.size      // number
 ```
 
 C-layout:
@@ -1250,8 +1250,8 @@ const m: Match | null = re.match("тел: 123-4567")
 
 if (m != null) {
     m.value       // "123-4567" — всё совпадение
-    m.start       // i32 — байтовая позиция начала
-    m.end         // i32 — байтовая позиция конца
+    m.start       // number — байтовая позиция начала
+    m.end         // number — байтовая позиция конца
     m.group(1)    // string | null — capture group
 }
 
@@ -1342,18 +1342,18 @@ const rng = new Random(seed)        // использовать как seed дл
 Для совместимости с TypeScript. Рекомендуется использовать `std/temporal` для новых проектов.
 
 ```typescript
-const now = Date.now()           // f64 — milliseconds since epoch
+const now = Date.now()           // number — milliseconds since epoch
 const d = new Date()             // current date/time
 const d2 = new Date(1700000000000) // from timestamp
 
-d.getFullYear()    // i32
-d.getMonth()       // i32 (0-11)
-d.getDate()        // i32 (1-31)
-d.getHours()       // i32 (0-23)
-d.getMinutes()     // i32
-d.getSeconds()     // i32
-d.getMilliseconds() // i32
-d.getTime()        // f64 — timestamp
+d.getFullYear()    // number
+d.getMonth()       // number (0-11)
+d.getDate()        // number (1-31)
+d.getHours()       // number (0-23)
+d.getMinutes()     // number
+d.getSeconds()     // number
+d.getMilliseconds() // number
+d.getTime()        // number — timestamp
 d.toISOString()    // string — "2024-01-15T12:30:00.000Z"
 d.toLocaleDateString() // string
 d.toLocaleTimeString() // string

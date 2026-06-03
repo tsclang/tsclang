@@ -1484,3 +1484,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - parseInt → `number | null`; buf.length → `number`; Comparator type alias → `number`
 > - Fixed wrong inference comments: `{ a: i32 }` → `{ a: number }`, Object.values/entries
 > - `10-stdlib.md` — separate stage (has same issues + contradictions with 03-types.md)
+
+> 2026-06-03: **Stdlib API returns `number` in spec/10-stdlib.md** (26 edits, commit ab1f88f):
+> - Aligned 10-stdlib.md with 03-types.md: high-level JS-compatible API → `number` instead of concrete types
+> - Changed (12 categories, A–L): m.size, buf.length, Date.* getters (8), Date.now(), performance.now(),
+>   duration/startTime, setTimeout/setInterval return, DataView.byteLength/byteOffset, Reader.read(),
+>   res.status, HttpResponse.status, Match.start/end, Blob.size/File.size, JSON.stringify indent, charCount()
+> - Unchanged (9 categories, M–U): FileStat.size (i64), Temporal (i32/i64), NetworkError.code (i32),
+>   Math bit ops (i32), std/libc (C bindings), std/avr + std/embedded + HAL (hardware), std/random (parameterized)
+> - Result: **1371 tests, 0 failures**
