@@ -1,1 +1,1 @@
-TypeError: Weak<T> requires a non-primitive type, got bool
+TypeError: Weak<T> requires a non-primitive type, got boolean

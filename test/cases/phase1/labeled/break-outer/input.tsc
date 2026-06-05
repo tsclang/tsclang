@@ -1,4 +1,4 @@
-let found: bool = false;
+let found: boolean = false;
 let i: i32 = 0;
 outer: while (i < 3) {
     let j: i32 = 0;

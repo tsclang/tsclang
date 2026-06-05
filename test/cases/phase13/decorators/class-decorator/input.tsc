@@ -4,7 +4,7 @@ function sealed(target: any): any {
 }
 @sealed
 class Config {
-    debug: bool;
+    debug: boolean;
 }
 const c = new Config();
 c.debug = false;

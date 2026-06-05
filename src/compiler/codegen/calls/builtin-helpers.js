@@ -124,7 +124,7 @@ export default {
       const typeName = typeArgs[0]?.name ?? 'i32';
       const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       if (typeName === 'f64' || typeName === 'f32') return `atof(${a0}.data)`;
-      if (typeName === 'bool') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
+      if (typeName === 'boolean') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
       return `atoi(${a0}.data)`;
     }
     return `/* JSON.${prop} */0`;

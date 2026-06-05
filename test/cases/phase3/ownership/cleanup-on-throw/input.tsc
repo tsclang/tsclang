@@ -1,6 +1,6 @@
 class MyError extends Error {}
 
-function process(flag: bool): i32 throws MyError {
+function process(flag: boolean): i32 throws MyError {
     let items: Array<i32> = new Array<i32>(4);
     items.push(1);
     if (flag) {

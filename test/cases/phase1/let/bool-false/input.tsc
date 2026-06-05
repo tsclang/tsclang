@@ -1,2 +1,2 @@
-let x: bool = false;
+let x: boolean = false;
 console.log(x);

@@ -5,5 +5,5 @@ export declare function createId(): Id;
 export declare class Registry {
   size: i32;
   add(id: Id): void;
-  remove(id: Id): bool;
+  remove(id: Id): boolean;
 }

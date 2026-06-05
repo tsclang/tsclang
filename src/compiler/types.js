@@ -12,7 +12,7 @@ export const PRIMITIVE_MAP = {
   u64:   'uint64_t',
   f32:   'float',
   f64:   'double',
-  bool:  'bool',
+  boolean: 'bool',
   usize: 'size_t',
   isize: 'ptrdiff_t',
   char:  'char',
@@ -54,6 +54,7 @@ export function mangleType(typeNode, defaultNumber = 'f64') {
     if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0], defaultNumber);
     if (typeArgs.length === 0) {
       if (name === 'number') return defaultNumber;
+      if (name === 'boolean') return 'bool';
       return PRIMITIVE_MAP[name] ? name : name;
     }
     return name + '_' + typeArgs.map(t => mangleType(t, defaultNumber)).join('_');
@@ -89,11 +90,10 @@ export function mangleParams(params, defaultNumber = 'f64') {
 }
 
 // Infer C type from a literal node
-export function inferLiteralCType(node) {
+export function inferLiteralCType(node, defaultNumber = 'f64') {
   if (node.litType === 'string')  return 'String';
   if (node.litType === 'char')    return 'String';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
-  const v = node.value;
-  return 'double';
+  return PRIMITIVE_MAP[defaultNumber] || 'double';
 }

@@ -1,4 +1,4 @@
-const t: [i32, bool, string] = [5, true, "ok"];
+const t: [i32, boolean, string] = [5, true, "ok"];
 console.log(t[0]);
 console.log(t[1]);
 console.log(t[2]);

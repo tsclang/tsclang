@@ -10,7 +10,7 @@ export class Registry {
     size: i32;
 
     add(id: Id): void {}
-    remove(id: Id): bool { return false; }
+    remove(id: Id): boolean { return false; }
 }
 
 function helper(): void {}

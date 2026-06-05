@@ -1,4 +1,4 @@
-﻿const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','bool','usize']);
+﻿const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export default {
@@ -803,7 +803,7 @@ export default {
         // Reading a volatile variable into a local gives a plain (non-volatile) type
         if (!typeAnn && ctype.startsWith('volatile ')) ctype = ctype.slice('volatile '.length);
         if (!typeAnn && init && init.kind === 'Literal' && init.litType === 'number') {
-          ctype = 'double';
+          ctype = this._tsNameToCType(this._defaultNumber);
         }
         // ObjLit with named fields and no type annotation тЖТ defer as individual consts (expanded at destructuring)
         if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {

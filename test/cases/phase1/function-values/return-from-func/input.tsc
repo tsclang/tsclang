@@ -4,7 +4,7 @@ function increment(x: i32): i32 {
 function decrement(x: i32): i32 {
     return x - 1;
 }
-function getOp(inc: bool): (i32) => i32 {
+function getOp(inc: boolean): (i32) => i32 {
     if (inc) {
         return increment;
     }

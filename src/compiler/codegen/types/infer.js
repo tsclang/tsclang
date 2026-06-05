@@ -4,7 +4,7 @@ export default {
   inferType(node) {
     if (!node) return 'double';
     switch (node.kind) {
-      case 'Literal':  return inferLiteralCType(node);
+      case 'Literal':  return inferLiteralCType(node, this._defaultNumber);
       case 'TemplateLit': return 'String';
       case 'Ident': {
         if (node.name === 'true' || node.name === 'false') return 'bool';
@@ -409,7 +409,7 @@ export default {
       if (prop === 'parse') {
         const tname = node.typeArgs?.[0]?.name ?? 'i32';
         if (tname === 'f64' || tname === 'f32') return 'double';
-        if (tname === 'bool') return 'bool';
+        if (tname === 'boolean') return 'bool';
         return 'int32_t';
       }
     }

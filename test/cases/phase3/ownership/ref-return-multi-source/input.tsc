@@ -1,6 +1,6 @@
 // [R] Ref return with multiple Ref params — conservative union
 class Box { x: i32; }
-function pick(a: Ref<Box>, b: Ref<Box>, flag: bool): Ref<Box> {
+function pick(a: Ref<Box>, b: Ref<Box>, flag: boolean): Ref<Box> {
   return a;
 }
 let b1 = new Box();

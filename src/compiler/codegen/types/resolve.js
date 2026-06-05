@@ -13,6 +13,14 @@ export default {
       // usize = u16 on 16-bit targets
       if (name === 'usize' && (this._targetName === 'nes' || this._targetName === 'spectrum')) return 'uint16_t';
       if (name === 'number') return PRIMITIVE_MAP[this._defaultNumber] || 'double';
+      if (!typeNode?._internal) {
+        if (name === 'bool') {
+          throw this.error('"bool" is not a valid TSC type; use "boolean"', typeNode);
+        }
+        if (name === 'String') {
+          throw this.error('"String" is not a valid TSC type; use "string"', typeNode);
+        }
+      }
       if (name in PRIMITIVE_MAP) {
         if (name === 'unknown') this._ensureUnknownStruct();
         if (name === 'any' && !this._inUnsafe && !this._inDeclare) {
@@ -23,7 +31,7 @@ export default {
 
       if (name === 'Shared' || name === 'Weak') {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
-        const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','bool','usize','isize','char']);
+        const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize','isize','char']);
         if (innerName && COPY_ONLY.has(innerName)) {
           throw this.error(`TypeError: ${name}<T> requires a non-primitive type, got ${innerName}`, typeNode);
         }

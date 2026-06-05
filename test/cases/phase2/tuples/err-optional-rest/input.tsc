@@ -1,1 +1,1 @@
-type T = [i32, string?, ...bool[]];
+type T = [i32, string?, ...boolean[]];

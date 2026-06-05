@@ -1,6 +1,6 @@
 class FileError { message: string; }
 class NetworkError { message: string; }
-function risky(flag: bool): void throws FileError | NetworkError {
+function risky(flag: boolean): void throws FileError | NetworkError {
     if (flag) throw new FileError("file");
     else throw new NetworkError("net");
 }

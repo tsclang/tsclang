@@ -387,6 +387,17 @@ export default {
         if (!elemType) elemType = elems.length ? this.inferType(elems[0].expr) : null;
         if (elemType === 'String *') elemType = 'String';
         if (!elemType) elemType = 'int32_t';
+        if (!this._expectedType?.startsWith('Array_') && elems.length > 1) {
+          const elemTypes = elems.map(e => {
+            const t = this.inferType(e.expr);
+            return t === 'String *' ? 'String' : t;
+          });
+          if (elemTypes.some(t => t !== elemTypes[0])) {
+            const tsName = (ct) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct);
+            const unique = [...new Set(elemTypes.map(tsName))];
+            throw this.error(`mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]`, node);
+          }
+        }
         const arrType = `Array_${this.cTypeToIdent(elemType)}`;
         this._ensureArrayStruct(arrType, elemType);
         const dataVar = `_arr_data_${this.tempCount++}`;

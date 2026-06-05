@@ -86,7 +86,7 @@ export default {
     const anonName = `_anon_${this._anonStructCount++}`;
     const structFields = fields.map(f => ({
       name: f.name,
-      typeAnn: { kind: 'TypeRef', name: f.ctype, typeArgs: [] },
+      typeAnn: { kind: 'TypeRef', name: f.ctype, typeArgs: [], _internal: true },
     }));
     // Register in classes for field lookup but do NOT emit typedef (only used internally)
     this.classes.set(anonName, { isStruct: true, fields: structFields, _virtual: true });
@@ -101,7 +101,7 @@ export default {
       if (subst.has(typeNode.name)) {
         const ct = subst.get(typeNode.name);
         // Convert C type back to TypeRef for resolveType
-        return { kind: 'TypeRef', name: ct, typeArgs: [] };
+        return { kind: 'TypeRef', name: ct, typeArgs: [], _internal: true };
       }
       return { ...typeNode, typeArgs: typeNode.typeArgs.map(t => this.substType(t, subst)) };
     }

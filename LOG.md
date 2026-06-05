@@ -1547,4 +1547,17 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 10-stdlib.md: GPIO.digitalWrite/Read, serialAvailable, digitalWrite/digitalRead impl `bool`→`boolean` (6 places)
 > - 09-build.md: GPIO.write/read `bool`→`boolean`
 > - Verified: 0 `bool` remaining in TSC code blocks across all spec files
+
+> 2026-06-05: Compiler implementation — `boolean`/`number`/`String`/mixed arrays
+> - `boolean` is now the only TSC type for booleans; `bool` produces compile error
+> - `bool` and `String` rejected in `resolveType` with `_internal` flag for generics substitution
+> - `inferLiteralCType(node, defaultNumber)` — respects `_defaultNumber` on embedded (f32→float)
+> - `vardecl.js` numeric literal override uses `_tsNameToCType(_defaultNumber)` instead of hardcoded `'double'`
+> - Mixed array literals without type annotation → compile error: `mixed array literal — specify type: [number, string] (tuple) or T[]`
+> - `String` (capitalized) rejected as TSC type; use `string`
+> - `ctypeToTsName('bool')` → `'boolean'` (error messages, d.ts output)
+> - `mangleType('boolean')` → `'bool'` (encoding)
+> - 16 tests migrated: `: bool` → `: boolean` in input.tsc
+> - 4 new tests: embedded-literal, err-mixed-literal, err-mixed-bool, err-string-capitalized
+> - All 1375 tests passing (was 1371)
 > - Result: **1371 tests, 0 failures**
