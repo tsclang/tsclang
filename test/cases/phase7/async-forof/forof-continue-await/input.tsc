@@ -1,0 +1,12 @@
+async function filterItem(x: i32): i32 {
+    return x;
+}
+async function skipNegative(arr: i32[]): i32 {
+    let total: i32 = 0;
+    for (const x of arr) {
+        const v = await filterItem(x);
+        if (v < 0) continue;
+        total = total + v;
+    }
+    return total;
+}

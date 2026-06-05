@@ -1,0 +1,7 @@
+async function sumArr(arr: i32[]): i32 {
+    let total: i32 = 0;
+    for (const x of arr) {
+        total = total + x;
+    }
+    return total;
+}

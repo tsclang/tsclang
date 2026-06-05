@@ -25,8 +25,8 @@ case_2:
             self->_state = 2;
             goto case_2;
 while_2_end:
-            self->_done = true;
-            return;
+            self->_state = 1;
+            goto case_1;
 while_1_end:
             self->_result = count;
             self->_done = true;

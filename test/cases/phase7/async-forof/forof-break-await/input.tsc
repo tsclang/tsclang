@@ -1,0 +1,10 @@
+async function checkItem(x: i32): i32 {
+    return x;
+}
+async function findAsync(arr: i32[], target: i32): i32 {
+    for (const x of arr) {
+        const v = await checkItem(x);
+        if (v == target) break;
+    }
+    return 0;
+}

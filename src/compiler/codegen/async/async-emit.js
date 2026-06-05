@@ -238,6 +238,10 @@ export default {
         this._emitAsyncFor(s, stmts.slice(i + 1), lines, ctx, I);
         return;
       }
+      if (s?.kind === 'ForOf' && !s.await) {
+        this._emitAsyncForOf(s, stmts.slice(i + 1), lines, ctx, I);
+        return;
+      }
       this._emitAsyncStmt(s, lines, ctx, I);
     }
   },
@@ -264,6 +268,7 @@ export default {
     this._emitAsyncStmtList(whileBody, lines, ctx, I);
     this._asyncBreakStack.pop();
     this._asyncContinueStack.pop();
+    const isNested = this._asyncBreakStack?.length > 0;
 
     if (!ctx.terminated) {
       lines.push(`${I}self->_state = ${loopCase};`);
@@ -273,7 +278,7 @@ export default {
     lines.push(`${endLabel}:`);
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated) {
+    if (!ctx.terminated && !isNested) {
       if (this._selfCtx.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
@@ -281,7 +286,7 @@ export default {
         lines.push(`${I}return;`);
       }
     }
-    ctx.terminated = true;
+    if (!isNested) ctx.terminated = true;
   },
 
   _emitAsyncDoWhile(s, remainingStmts, lines, ctx, I) {
@@ -305,6 +310,7 @@ export default {
     this._emitAsyncStmtList(doBody, lines, ctx, I);
     this._asyncBreakStack.pop();
     this._asyncContinueStack.pop();
+    const isNested = this._asyncBreakStack?.length > 0;
 
     if (!ctx.terminated) {
       lines.push(`${contLabel}:`);
@@ -317,7 +323,7 @@ export default {
     lines.push(`${endLabel}:`);
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated) {
+    if (!ctx.terminated && !isNested) {
       if (this._selfCtx.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
@@ -325,7 +331,7 @@ export default {
         lines.push(`${I}return;`);
       }
     }
-    ctx.terminated = true;
+    if (!isNested) ctx.terminated = true;
   },
 
   _emitAsyncFor(s, remainingStmts, lines, ctx, I) {
@@ -369,6 +375,7 @@ export default {
     this._emitAsyncStmtList(forBody, lines, ctx, I);
     this._asyncBreakStack.pop();
     this._asyncContinueStack.pop();
+    const isNested = this._asyncBreakStack?.length > 0;
 
     // Continue target: update + condition + loop-back
     if (!ctx.terminated) {
@@ -387,7 +394,7 @@ export default {
     lines.push(`${endLabel}:`);
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated) {
+    if (!ctx.terminated && !isNested) {
       if (this._selfCtx.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
@@ -395,7 +402,106 @@ export default {
         lines.push(`${I}return;`);
       }
     }
-    ctx.terminated = true;
+    if (!isNested) ctx.terminated = true;
+  },
+
+  _emitAsyncForOf(s, remainingStmts, lines, ctx, I) {
+    const loopCase = ctx.nextCase++;
+    const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+    const endLabel = `forof_${loopCase}_end`;
+    const contLabel = `forof_${loopCase}_cont`;
+
+    const forOfIdx = this._forOfEmitCount ?? 0;
+    this._forOfEmitCount = forOfIdx + 1;
+    const idxName = `_forof_idx_${forOfIdx}`;
+
+    const iterC = this._selfE(s.iterable);
+    const iterSym = s.iterable?.kind === 'Ident' ? this.lookup(s.iterable.name) : null;
+    const arrType = iterSym?.ctype;
+    let elemType = 'int32_t';
+    if (iterSym?.arrElemCType) {
+      elemType = iterSym.arrElemCType;
+    } else if (arrType?.startsWith('Array_')) {
+      elemType = this._arrIdentToCType(arrType.slice(6));
+    }
+
+    const isPromoted = this._selfCtx.promoted.has(idxName);
+    const idxAccess = isPromoted ? `self->${idxName}` : idxName;
+
+    // Init index
+    if (isPromoted) {
+      lines.push(`${I}self->${idxName} = 0;`);
+    } else {
+      lines.push(`${I}size_t ${idxName} = 0;`);
+    }
+
+    // Transition to loop state
+    lines.push(`${I}self->_state = ${loopCase};`);
+    lines.push(`${I}/* fall through */`);
+    lines.push(`case_${loopCase}:`);
+    lines.push(`        case ${loopCase}:`);
+
+    // Condition check
+    lines.push(`${I}if (!(${idxAccess} < ${iterC}.length)) { goto ${endLabel}; }`);
+
+    // Binding
+    const qual = s.varKind === 'const' ? 'const ' : '';
+    const bindName = s.binding?.kind === 'Ident' ? s.binding.name : null;
+    if (bindName) {
+      const isComplex = !this._isSimpleCType(elemType);
+      if (isComplex) {
+        const ptrQual = s.varKind === 'const' ? 'const ' : '';
+        lines.push(`${I}${ptrQual}${elemType} *${bindName} = &${iterC}.data[${idxAccess}];`);
+        this.define(bindName, { ctype: `${elemType} *`, varKind: s.varKind });
+      } else {
+        const bindPromoted = this._selfCtx.promoted.has(bindName);
+        if (bindPromoted) {
+          lines.push(`${I}self->${bindName} = ${iterC}.data[${idxAccess}];`);
+        } else {
+          lines.push(`${I}${qual}${elemType} ${bindName} = ${iterC}.data[${idxAccess}];`);
+        }
+        this.define(bindName, { ctype: elemType, varKind: s.varKind });
+      }
+    }
+
+    // Push async loop context
+    this._asyncBreakStack = this._asyncBreakStack || [];
+    this._asyncContinueStack = this._asyncContinueStack || [];
+    this._asyncBreakStack.push(endLabel);
+    this._asyncContinueStack.push(contLabel);
+    const savedTerminated = ctx.terminated;
+    ctx.terminated = false;
+    this._emitAsyncStmtList(forBody, lines, ctx, I);
+    this._asyncBreakStack.pop();
+    this._asyncContinueStack.pop();
+    const isNested = this._asyncBreakStack?.length > 0;
+
+    // Continue target: increment + condition + loop-back
+    if (!ctx.terminated) {
+      lines.push(`${contLabel}:`);
+      if (isPromoted) {
+        lines.push(`${I}self->${idxName}++;`);
+      } else {
+        lines.push(`${I}${idxName}++;`);
+      }
+      lines.push(`${I}if (!(${idxAccess} < ${iterC}.length)) { goto ${endLabel}; }`);
+      lines.push(`${I}self->_state = ${loopCase};`);
+      lines.push(`${I}goto case_${loopCase};`);
+    }
+
+    // End label + remaining stmts
+    lines.push(`${endLabel}:`);
+    ctx.terminated = false;
+    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
+    if (!ctx.terminated && !isNested) {
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
+    }
+    if (!isNested) ctx.terminated = true;
   },
 
   // Emit: self->_state = N; /* fall through */ case N:

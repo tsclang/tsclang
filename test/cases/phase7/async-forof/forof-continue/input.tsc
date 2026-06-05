@@ -1,0 +1,8 @@
+async function sumPositive(arr: i32[]): i32 {
+    let total: i32 = 0;
+    for (const x of arr) {
+        if (x < 0) continue;
+        total = total + x;
+    }
+    return total;
+}

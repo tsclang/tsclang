@@ -1,0 +1,10 @@
+async function search(arr: i32[], target: i32): i32 {
+    let attempts: i32 = 0;
+    while (attempts < 3) {
+        for (const x of arr) {
+            if (x == target) break;
+        }
+        attempts = attempts + 1;
+    }
+    return attempts;
+}

@@ -1564,3 +1564,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 4 new tests: embedded-literal, err-mixed-literal, err-mixed-bool, err-string-capitalized
 > - All 1375 tests passing (was 1371)
 > - Result: **1371 tests, 0 failures**
+
+> 2026-06-05: Async loop bugfixes — for-of index promotion + nested loop terminal
+> - **For-of index promotion**: `_forof_idx_N` variables force-promoted to state struct regardless of safeLocal/liveness (filter `startsWith('_forof_idx_')` in scan.js)
+> - **Nested async loop terminal bug**: inner loop emitter emitted `goto _cleanup` after remaining stmts, preventing outer loop back-edge. Fix: after popping break/continue stack, check `this._asyncBreakStack?.length > 0` (nested) → skip terminal + don't set `ctx.terminated = true`
+> - All 4 async loop emitters fixed: `_emitAsyncWhile`, `_emitAsyncDoWhile`, `_emitAsyncFor`, `_emitAsyncForOf`
+> - 3 expected.c regenerated: `forof-in-while`, `while-nested-break`, `while-nested-continue`
+> - 7 new for-of tests (basic, break, continue, break-await, continue-await, await-basic, in-while)
+> - All **1402 tests passing** (was 1375)

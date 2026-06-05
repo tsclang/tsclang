@@ -363,6 +363,10 @@
       }
 
       case 'For': {
+        const _savedAsyncBreak3 = this._asyncBreakStack;
+        const _savedAsyncCont3 = this._asyncContinueStack;
+        this._asyncBreakStack = null;
+        this._asyncContinueStack = null;
         let initC = '';
         if (node.init) {
           if (node.init.kind === 'VarDecl') {
@@ -385,10 +389,16 @@
         this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
         this._popLoopCleanups();
         p('}');
+        this._asyncBreakStack = _savedAsyncBreak3;
+        this._asyncContinueStack = _savedAsyncCont3;
         break;
       }
 
       case 'ForOf': {
+        const _savedAsyncBreak4 = this._asyncBreakStack;
+        const _savedAsyncCont4 = this._asyncContinueStack;
+        this._asyncBreakStack = null;
+        this._asyncContinueStack = null;
         const qual = node.varKind === 'const' ? 'const ' : '';
         const II = ' '.repeat(this.indent * (depth + 1));
 
@@ -728,6 +738,8 @@
         this._popLoopCleanups();
         p('}');
         if (iterSym) this.popScope();
+        this._asyncBreakStack = _savedAsyncBreak4;
+        this._asyncContinueStack = _savedAsyncCont4;
         break;
       }
 
@@ -737,6 +749,10 @@
       }
 
       case 'While': {
+        const _savedAsyncBreak = this._asyncBreakStack;
+        const _savedAsyncCont = this._asyncContinueStack;
+        this._asyncBreakStack = null;
+        this._asyncContinueStack = null;
         const testC = this.exprToC(node.test, lines, depth);
         p(`while (${testC}) {`);
         this._pushLoopCleanups();
@@ -746,10 +762,16 @@
         this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
         this._popLoopCleanups();
         p('}');
+        this._asyncBreakStack = _savedAsyncBreak;
+        this._asyncContinueStack = _savedAsyncCont;
         break;
       }
 
       case 'DoWhile': {
+        const _savedAsyncBreak2 = this._asyncBreakStack;
+        const _savedAsyncCont2 = this._asyncContinueStack;
+        this._asyncBreakStack = null;
+        this._asyncContinueStack = null;
         const testC = this.exprToC(node.test, lines, depth);
         p('do {');
         this._pushLoopCleanups();
@@ -759,6 +781,8 @@
         this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
         this._popLoopCleanups();
         p(`} while (${testC});`);
+        this._asyncBreakStack = _savedAsyncBreak2;
+        this._asyncContinueStack = _savedAsyncCont2;
         break;
       }
 

@@ -1,0 +1,6 @@
+async function findInArr(arr: i32[], target: i32): i32 {
+    for (const x of arr) {
+        if (x == target) break;
+    }
+    return 0;
+}

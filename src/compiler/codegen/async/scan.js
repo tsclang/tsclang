@@ -89,6 +89,24 @@ export default {
             }
           }
         }
+        if (s.kind === 'ForOf' && !s.await) {
+          const idxName = `_forof_idx_${this._forOfCount ?? 0}`;
+          this._forOfCount = (this._forOfCount ?? 0) + 1;
+          if (!seen.has(idxName)) {
+            seen.add(idxName);
+            bodyFields.push({ name: idxName, ctype: 'size_t' });
+            preScanTypes.set(idxName, 'size_t');
+          }
+          if (s.binding?.kind === 'Ident' && !seen.has(s.binding.name)) {
+            seen.add(s.binding.name);
+            const iterSym = s.iterable?.kind === 'Ident' ? this.lookup(s.iterable.name) : null;
+            const arrType = iterSym?.arrElemCType
+              || (iterSym?.ctype?.startsWith('Array_') ? this._arrIdentToCType(iterSym.ctype.slice(6)) : null)
+              || 'int32_t';
+            bodyFields.push({ name: s.binding.name, ctype: arrType });
+            preScanTypes.set(s.binding.name, arrType);
+          }
+        }
         if (s.kind === 'Block') walk(s.body);
         if (s.kind === 'If') {
           const c = s.consequent;
@@ -98,6 +116,11 @@ export default {
         }
         if (s.kind === 'While') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'For')   walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'ForOf') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'DoWhile') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'Switch') {
+          for (const c of s.cases || []) walk(c.body);
+        }
         if (s.kind === 'TryCatch') {
           walk(s.body?.body || []);
           if (s.catches) for (const c of s.catches) walk(c.body?.body || []);
@@ -117,7 +140,7 @@ export default {
         'float', 'double', 'size_t', 'bool', 'int', 'void',
       ]);
       const filtered = bodyFields.filter(f =>
-        needsPromotion.has(f.name) || !safeLocal.has(f.ctype)
+        needsPromotion.has(f.name) || !safeLocal.has(f.ctype) || f.name.startsWith('_forof_idx_')
       );
       if (filtered.length < bodyFields.length) {
         for (const f of bodyFields) {
@@ -234,6 +257,11 @@ export default {
           if (s.update) scanExpr(s.update);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
+        if (s.kind === 'ForOf' && !s.await) {
+          scanExpr(s.iterable);
+          if (s.binding?.kind === 'Ident') touch(s.binding.name);
+          walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        }
         if (s.kind === 'TryCatch') {
           walk(s.body?.body || []);
           if (s.catches) for (const c of s.catches) {
@@ -323,6 +351,11 @@ export default {
           else if (s.init) scanExpr(s.init);
           if (s.test) scanExpr(s.test);
           if (s.update) scanExpr(s.update);
+          walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        }
+        if (s.kind === 'ForOf' && !s.await) {
+          scanExpr(s.iterable);
+          if (s.binding?.kind === 'Ident') touch(s.binding.name);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
         if (s.kind === 'TryCatch') {
