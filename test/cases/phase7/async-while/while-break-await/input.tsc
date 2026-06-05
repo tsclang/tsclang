@@ -1,0 +1,12 @@
+async function getValue(): i32 {
+    return 42;
+}
+async function findFirst(): i32 {
+    let i: i32 = 0;
+    while (i < 10) {
+        const v = await getValue();
+        if (v == 42) break;
+        i = i + 1;
+    }
+    return i;
+}

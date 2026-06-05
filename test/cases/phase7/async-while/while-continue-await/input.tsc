@@ -1,0 +1,14 @@
+async function poll(): i32 {
+    return 1;
+}
+async function skipZeros(): i32 {
+    let count: i32 = 0;
+    let i: i32 = 0;
+    while (i < 5) {
+        i = i + 1;
+        const v = await poll();
+        if (v == 0) continue;
+        count = count + 1;
+    }
+    return count;
+}

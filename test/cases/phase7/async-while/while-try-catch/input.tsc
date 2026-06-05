@@ -1,0 +1,16 @@
+async function mayFail(): i32 throws Error {
+    return 10;
+}
+async function tryBreak(): i32 {
+    let i: i32 = 0;
+    while (i < 10) {
+        i = i + 1;
+        try {
+            const v = await mayFail();
+            if (v == 10) break;
+        } catch (e: Error) {
+            break;
+        }
+    }
+    return i;
+}

@@ -228,7 +228,11 @@ export default {
       const s = stmts[i];
       if (s?.kind === 'While') {
         this._emitAsyncWhile(s, stmts.slice(i + 1), lines, ctx, I);
-        return; // remaining stmts handled inside while emitter
+        return;
+      }
+      if (s?.kind === 'DoWhile') {
+        this._emitAsyncDoWhile(s, stmts.slice(i + 1), lines, ctx, I);
+        return;
       }
       this._emitAsyncStmt(s, lines, ctx, I);
     }
@@ -238,44 +242,84 @@ export default {
     const loopCase = ctx.nextCase++;
     const condC = this._selfE(s.cond ?? s.test);
     const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+    const endLabel = `while_${loopCase}_end`;
 
-    // Transition to loop condition state
     lines.push(`${I}self->_state = ${loopCase};`);
     lines.push(`${I}/* fall through */`);
     lines.push(`case_${loopCase}:`);
     lines.push(`        case ${loopCase}:`);
 
-    // Condition check: on failure, inline remaining stmts (common: return x after while)
-    if (remainingStmts.length === 0) {
-      if (this._selfCtx.hasCleanup) {
-        lines.push(`${I}if (!(${condC})) { goto _cleanup; }`);
-      } else {
-        lines.push(`${I}if (!(${condC})) { self->_done = true; return; }`);
-      }
-    } else {
-      lines.push(`${I}if (!(${condC})) {`);
-      const savedTerminated = ctx.terminated;
-      ctx.terminated = false;
-      for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I + '    ');
-      if (!ctx.terminated) {
-        if (this._selfCtx.hasCleanup) {
-          lines.push(`${I}    goto _cleanup;`);
-        } else {
-          lines.push(`${I}    self->_done = true;`);
-          lines.push(`${I}    return;`);
-        }
-      }
-      ctx.terminated = savedTerminated;
-      lines.push(`${I}}`);
-    }
+    lines.push(`${I}if (!(${condC})) { goto ${endLabel}; }`);
 
-    // Loop body
+    this._asyncBreakStack = this._asyncBreakStack || [];
+    this._asyncContinueStack = this._asyncContinueStack || [];
+    this._asyncBreakStack.push(endLabel);
+    this._asyncContinueStack.push(`case_${loopCase}`);
+    const savedTerminated = ctx.terminated;
+    ctx.terminated = false;
     this._emitAsyncStmtList(whileBody, lines, ctx, I);
+    this._asyncBreakStack.pop();
+    this._asyncContinueStack.pop();
 
-    // Loop back
     if (!ctx.terminated) {
       lines.push(`${I}self->_state = ${loopCase};`);
       lines.push(`${I}goto case_${loopCase};`);
+    }
+
+    lines.push(`${endLabel}:`);
+    ctx.terminated = false;
+    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
+    if (!ctx.terminated) {
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
+    }
+    ctx.terminated = true;
+  },
+
+  _emitAsyncDoWhile(s, remainingStmts, lines, ctx, I) {
+    const loopCase = ctx.nextCase++;
+    const condC = this._selfE(s.cond ?? s.test);
+    const doBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+    const endLabel = `dowhile_${loopCase}_end`;
+    const contLabel = `dowhile_${loopCase}_cont`;
+
+    lines.push(`${I}self->_state = ${loopCase};`);
+    lines.push(`${I}/* fall through */`);
+    lines.push(`case_${loopCase}:`);
+    lines.push(`        case ${loopCase}:`);
+
+    this._asyncBreakStack = this._asyncBreakStack || [];
+    this._asyncContinueStack = this._asyncContinueStack || [];
+    this._asyncBreakStack.push(endLabel);
+    this._asyncContinueStack.push(contLabel);
+    const savedTerminated = ctx.terminated;
+    ctx.terminated = false;
+    this._emitAsyncStmtList(doBody, lines, ctx, I);
+    this._asyncBreakStack.pop();
+    this._asyncContinueStack.pop();
+
+    if (!ctx.terminated) {
+      lines.push(`${contLabel}:`);
+      lines.push(`${I}if (${condC}) {`);
+      lines.push(`${I}    self->_state = ${loopCase};`);
+      lines.push(`${I}    goto case_${loopCase};`);
+      lines.push(`${I}}`);
+    }
+
+    lines.push(`${endLabel}:`);
+    ctx.terminated = false;
+    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
+    if (!ctx.terminated) {
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
     }
     ctx.terminated = true;
   },

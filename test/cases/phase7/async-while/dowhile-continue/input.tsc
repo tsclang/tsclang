@@ -1,0 +1,10 @@
+async function doContinue(): i32 {
+    let total: i32 = 0;
+    let i: i32 = 0;
+    do {
+        i = i + 1;
+        if (i % 2 == 0) continue;
+        total = total + i;
+    } while (i < 5);
+    return total;
+}

@@ -1,0 +1,10 @@
+async function sumUntil(n: i32): i32 {
+    let total: i32 = 0;
+    let i: i32 = 0;
+    while (i < 100) {
+        total = total + i;
+        if (i >= n) break;
+        i = i + 1;
+    }
+    return total;
+}

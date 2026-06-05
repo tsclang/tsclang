@@ -1,0 +1,8 @@
+async function doBreak(n: i32): i32 {
+    let i: i32 = 0;
+    do {
+        i = i + 1;
+        if (i >= n) break;
+    } while (i < 100);
+    return i;
+}

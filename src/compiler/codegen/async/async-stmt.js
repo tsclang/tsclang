@@ -388,6 +388,16 @@ export default {
       return;
     }
 
+    // ── break/continue in async while/do-while → goto ──
+    if (s.kind === 'Break' && !s.label && this._asyncBreakStack?.length) {
+      lines.push(`${I}goto ${this._asyncBreakStack[this._asyncBreakStack.length - 1]};`);
+      return;
+    }
+    if (s.kind === 'Continue' && !s.label && this._asyncContinueStack?.length) {
+      lines.push(`${I}goto ${this._asyncContinueStack[this._asyncContinueStack.length - 1]};`);
+      return;
+    }
+
     // ── regular statement ──
     this._emitAsyncRegStmt(s, lines, I);
   },

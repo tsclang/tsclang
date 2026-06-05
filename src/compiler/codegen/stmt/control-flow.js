@@ -260,25 +260,31 @@
           p(`if (${testC}) ${exprC};`);
         } else if (!alt && node.consequent.kind === 'Continue') {
           const _cLabel = node.consequent.label;
-          if (this._loopBodyCleanups?.length || _cLabel) {
+          const _asyncContTarget = this._asyncContinueStack?.length ? this._asyncContinueStack[this._asyncContinueStack.length - 1] : null;
+          if (_cLabel || this._loopBodyCleanups?.length) {
             const innerI = ' '.repeat(this.indent * (depth + 1));
             p(`if (${testC}) {`);
             if (_cLabel) this._emitAllLoopCleanups(lines, innerI);
             else this._emitLoopBodyCleanups(lines, innerI);
-            lines.push(`${innerI}${_cLabel ? `goto ${_cLabel}_continue;` : 'continue;'}`);
+            lines.push(`${innerI}${_cLabel ? `goto ${_cLabel}_continue;` : _asyncContTarget ? `goto ${_asyncContTarget};` : 'continue;'}`);
             p(`}`);
+          } else if (_asyncContTarget) {
+            p(`if (${testC}) goto ${_asyncContTarget};`);
           } else {
             p(`if (${testC}) continue;`);
           }
         } else if (!alt && node.consequent.kind === 'Break') {
           const _bLabel = node.consequent.label;
-          if (this._loopBodyCleanups?.length || _bLabel) {
+          const _asyncBreakTarget = this._asyncBreakStack?.length ? this._asyncBreakStack[this._asyncBreakStack.length - 1] : null;
+          if (_bLabel || this._loopBodyCleanups?.length) {
             const innerI = ' '.repeat(this.indent * (depth + 1));
             p(`if (${testC}) {`);
             if (_bLabel) this._emitAllLoopCleanups(lines, innerI);
             else this._emitLoopBodyCleanups(lines, innerI);
-            lines.push(`${innerI}${_bLabel ? `goto ${_bLabel}_break;` : 'break;'}`);
+            lines.push(`${innerI}${_bLabel ? `goto ${_bLabel}_break;` : _asyncBreakTarget ? `goto ${_asyncBreakTarget};` : 'break;'}`);
             p(`}`);
+          } else if (_asyncBreakTarget) {
+            p(`if (${testC}) goto ${_asyncBreakTarget};`);
           } else {
             p(`if (${testC}) ${_bLabel ? `goto ${_bLabel}_break` : 'break'};`);
           }
@@ -760,6 +766,8 @@
         if (node.label) {
           this._emitAllLoopCleanups(lines, I);
           p(`goto ${node.label}_break;`);
+        } else if (this._asyncBreakStack?.length) {
+          p(`goto ${this._asyncBreakStack[this._asyncBreakStack.length - 1]};`);
         } else {
           this._emitLoopBodyCleanups(lines, I);
           p('break;');
@@ -769,6 +777,8 @@
         if (node.label) {
           this._emitAllLoopCleanups(lines, I);
           p(`goto ${node.label}_continue;`);
+        } else if (this._asyncContinueStack?.length) {
+          p(`goto ${this._asyncContinueStack[this._asyncContinueStack.length - 1]};`);
         } else {
           this._emitLoopBodyCleanups(lines, I);
           p('continue;');

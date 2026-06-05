@@ -1,0 +1,8 @@
+async function countTo(n: i32): i32 {
+    let i: i32 = 0;
+    while (true) {
+        i = i + 1;
+        if (i >= n) break;
+    }
+    return i;
+}

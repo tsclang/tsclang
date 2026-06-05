@@ -30,7 +30,7 @@ static void poll_poll(poll_state *self) {
             /* fall through */
 case_1:
         case 1:
-            if (!(true)) { self->_done = true; return; }
+            if (!(true)) { goto while_1_end; }
             self->_await_0 = (sensor_state){0};
             self->_state = 2;
             /* fall through */
@@ -46,6 +46,9 @@ case_1:
             if (!self->_await_1._done) return;
             self->_state = 1;
             goto case_1;
+while_1_end:
+            self->_done = true;
+            return;
     }
 }
 

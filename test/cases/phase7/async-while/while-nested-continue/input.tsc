@@ -1,0 +1,14 @@
+async function nestedContinue(): i32 {
+    let count: i32 = 0;
+    let i: i32 = 0;
+    while (i < 3) {
+        i = i + 1;
+        let j: i32 = 0;
+        while (j < 3) {
+            j = j + 1;
+            if (j == 2) continue;
+            count = count + 1;
+        }
+    }
+    return count;
+}

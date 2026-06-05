@@ -1,11 +1,11 @@
 #include "runtime.h"
 
-typedef struct { int32_t _state; int32_t _result; bool _done; } tick_state;
+typedef struct { int32_t _state; int32_t _result; bool _done; } getValue_state;
 
-static void tick_poll(tick_state *self) {
+static void getValue_poll(getValue_state *self) {
     switch (self->_state) {
         case 0:
-            self->_result = 1;
+            self->_result = 42;
             self->_done = true;
             return;
     }
@@ -13,32 +13,32 @@ static void tick_poll(tick_state *self) {
 
 typedef struct {
     int32_t _state; int32_t _result; bool _done;
-    int32_t n;
-    int32_t count;
-    tick_state _await_0;
-} run_state;
+    int32_t i;
+    getValue_state _await_0;
+} findFirst_state;
 
-static void run_poll(run_state *self) {
+static void findFirst_poll(findFirst_state *self) {
     switch (self->_state) {
         case 0:
-            self->count = 0;
+            self->i = 0;
             self->_state = 1;
             /* fall through */
 case_1:
         case 1:
-            if (!(self->count < self->n)) { goto while_1_end; }
-            self->_await_0 = (tick_state){0};
+            if (!(self->i < 10)) { goto while_1_end; }
+            self->_await_0 = (getValue_state){0};
             self->_state = 2;
             /* fall through */
         case 2:
-            tick_poll(&self->_await_0);
+            getValue_poll(&self->_await_0);
             if (!self->_await_0._done) return;
             int32_t v = self->_await_0._result;
-            self->count = self->count + v;
+            if (v == 42) goto while_1_end;
+            self->i = self->i + 1;
             self->_state = 1;
             goto case_1;
 while_1_end:
-            self->_result = self->count;
+            self->_result = self->i;
             self->_done = true;
             return;
     }
