@@ -23,7 +23,7 @@ Spread, destructuring, merge — **всегда создают независи�
 | Тип элемента | Copy-семантика | На embedded |
 |-------------|---------------|-------------|
 | Primitive | Copy (memcpy) | Copy (идентично) |
-| String | Copy + `tsc_string_retain` | Copy + no-op retain |
+| string | Copy + `tsc_string_retain` | Copy + no-op retain |
 | Class/struct | Struct copy + retain string-полей | Struct copy + no-op retain |
 | Array\<U\> | Struct copy + retain string-полей | Struct copy + no-op retain |
 
@@ -431,16 +431,16 @@ Array_f64 merged = {.data = _d, .length = 4, .capacity = 4};
 | Resource | Action | Element | TSC | TS/JS |
 |----------|--------|---------|-----|-------|
 | Array | Spread | Primitive | Copy, source жив | Идентично |
-| Array | Spread | String | Copy + retain, source жив | Идентично |
+| Array | Spread | string | Copy + retain, source жив | Идентично |
 | Array | Spread | Class | Struct copy + retain, source жив | Shallow copy refs (aliased) |
 | Array | Destructure | Primitive | Copy, source жив | Идентично |
-| Array | Destructure | String | Copy + retain, source жив | Идентично |
+| Array | Destructure | string | Copy + retain, source жив | Идентично |
 | Array | Destructure | Class | Struct copy + retain, source жив | Copy ref (aliased) |
 | Object | Spread | Primitive | Copy, source жив | Идентично |
-| Object | Spread | String | Copy + retain, source жив | Идентично |
+| Object | Spread | string | Copy + retain, source жив | Идентично |
 | Object | Spread | Class | Struct copy + retain, source жив | Copy ref (aliased) |
 | Object | Destructure | Primitive | Copy, source жив | Идентично |
-| Object | Destructure | String | Copy + retain, source жив | Идентично |
+| Object | Destructure | string | Copy + retain, source жив | Идентично |
 | Object | Destructure | Class | Struct copy + retain, source жив | Copy ref (aliased) |
 | Tuple | Spread | Any | Copy + retain, source жив | Идентично |
 | Tuple | Destructure | Any | Copy + retain, source жив | Идентично |
@@ -504,7 +504,7 @@ Source всегда жив. Нет move, нет E002. `let`/`const` на source 
 | Фича | Статус | Что нужно |
 |------|--------|-----------|
 | Spread массива примитивов | ✅ | — |
-| Spread массива String | ⚠️ Нет retain | Добавить retain |
+| Spread массива string | ⚠️ Нет retain | Добавить retain |
 | Spread массива Class | ⚠️ Shallow copy, нет retain | Добавить retain string-полей |
 | Spread объекта | ⚠️ (retain + move) | Убрать move, оставить copy + retain |
 | Spread кортежа | ✅ | — |

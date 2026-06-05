@@ -458,7 +458,7 @@ extended.extra = 42;
 // base untouched
 ```
 
-Все поля копируются в новый объект, оригинал не тронут. String-поля — retain (новый владелец).
+Все поля копируются в новый объект, оригинал не тронут. string-поля — retain (новый владелец).
 
 **Object spread из `const` — тоже copy:**
 
@@ -478,7 +478,7 @@ const a = { ...obj, y: 2 };  // ok — retain, obj жив
 const b = { ...obj, z: 3 };  // ok — retain, obj жив
 ```
 
-**String-поля при spread** — retain при копировании (новый владелец), release в cleanup:
+**string-поля при spread** — retain при копировании (новый владелец), release в cleanup:
 
 ```typescript
 let base = { name: "Alice", age: 30 };
@@ -537,7 +537,7 @@ console.log(user.name);          // "Alice" — user жив
 const { name }: Ref<User> = user;  // copy: name retain, user жив
 ```
 
-**String-поля при деструктуризации** — retain при извлечении (новый владелец), release в cleanup:
+**string-поля при деструктуризации** — retain при извлечении (новый владелец), release в cleanup:
 
 ```typescript
 const { name, email } = user;
@@ -993,7 +993,7 @@ function process(t: Ref<[User, string]>): void {
 }
 ```
 
-**String-элементы при деструктуризации** — retain при извлечении, release в cleanup (как при деструктуризации объекта).
+**string-элементы при деструктуризации** — retain при извлечении, release в cleanup (как при деструктуризации объекта).
 
 ### Поведение внутри функций
 
@@ -1015,7 +1015,7 @@ function swap(t: [number, string]): [string, number] {
 |--------|---------|----------|
 | Fixed tuple struct | На стеке, как любой struct | Аналогично |
 | Rest tuple `tail` | `malloc` для tail-массива | Статический буфер или фиксированный массив |
-| String-элементы | ARC retain/release | No-op (rodata) |
+| string-элементы | ARC retain/release | No-op (rodata) |
 | Optional элементы | `opt_T` struct (bool + value) | Аналогично |
 | Spread fixed tuple | Copy элементов + retain string-полей, source жив | Copy элементов (string — no-op retain), source жив |
 | Деструктуризация | Copy элементов + retain string-полей, source жив | Copy элементов (string — no-op), source жив |
@@ -1024,7 +1024,7 @@ function swap(t: [number, string]): [string, number] {
 
 ### Почему так
 
-Кортеж — value type: spread и деструктуризация **всегда copy** (см. `spec/05d-spread-destructuring-merge.md`, D1). Source жив, нет move, нет E002. String-элементы — retain при copy (новый владелец), release в cleanup.
+Кортеж — value type: spread и деструктуризация **всегда copy** (см. `spec/05d-spread-destructuring-merge.md`, D1). Source жив, нет move, нет E002. string-элементы — retain при copy (новый владелец), release в cleanup.
 
 ```typescript
 // всегда copy + retain

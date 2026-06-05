@@ -23,7 +23,7 @@
 | Тип | Capture | Обоснование |
 |-----|---------|-------------|
 | Примитив | Copy (snapshot) | Дёшево, безопасно, без алиасинга |
-| String | Retain (ARC copy) | ARC refcount, source жив |
+| string | Retain (ARC copy) | ARC refcount, source жив |
 | Class/Array | Reference (pointer) | TS compat, mutations visible |
 
 **Альтернативы отклонены:**
@@ -121,7 +121,7 @@ const fn = [arr](): void => { ... };                             // Error: requi
 
 1. **Source всегда жив.** Нет E002 для implicit capture. Переменная доступна после создания closure.
 2. **Env не владеет class/array.** Env содержит pointer, не copy. Source владеет данными → source cleanup освобождает ресурсы.
-3. **Env владеет String copies.** Env содержит retained copy → env cleanup делает release.
+3. **Env владеет string copies.** Env содержит retained copy → env cleanup делает release.
 4. **Stack-allocated env.** Env struct живёт на стеке, в том же scope что closure.
 
 ---
@@ -188,7 +188,7 @@ tsc_closure greet = {.env = &greet_env, .fn = ...};
 // cleanup: tsc_string_release(prefix);
 ```
 
-**Пояснение:** String захватывается как ARC copy (`tsc_string_retain`). Source жив. Env cleanup делает `tsc_string_release` для captured string. Destroy function генерируется только при наличии string captures.
+**Пояснение:** string захватывается как ARC copy (`tsc_string_retain`). Source жив. Env cleanup делает `tsc_string_release` для captured string. Destroy function генерируется только при наличии string captures.
 
 ### 3.3 Массив — reference, mutations visible
 
@@ -521,11 +521,11 @@ return env->arr->length;
 | Захваченный тип | Env cleanup | Source cleanup |
 |----------------|-------------|----------------|
 | Примитив | Нет | Нет |
-| String | `tsc_string_release(env->s)` | `tsc_string_release(s)` |
+| string | `tsc_string_release(env->s)` | `tsc_string_release(s)` |
 | Class (pointer) | **Нет** (env не владеет) | `User_free(&u)` (string fields) |
 | Array (pointer) | **Нет** (env не владеет) | `tsc_array_free_i32(&arr)` |
 
-**Ключевое правило:** source владеет данными. Env содержит pointer — cleanup не нужен. Env cleanup делается только для String (retained copy).
+**Ключевое правило:** source владеет данными. Env содержит pointer — cleanup не нужен. Env cleanup делается только для string (retained copy).
 
 Destroy function генерируется только при `hasStringCapture`:
 ```c
@@ -641,14 +641,14 @@ TSClang: closures стековые. Escaping = UB.
 - Stack-allocated env — работает на AVR (нет heap)
 - Pointer capture — C-compatible, zero-cost
 - No `malloc`/`free` для env
-- String retain — no-op на embedded (single-ownership)
+- string retain — no-op на embedded (single-ownership)
 
 ### П2: Максимальная совместимость с TS
 
 - Class/Array = reference capture (идентично TS)
 - Mutations visible (идентично TS)
 - Source жив после capture (идентично TS)
-- Примитивы/String = snapshot (отклонение, документировано)
+- Примитивы/string = snapshot (отклонение, документировано)
 - Нет `move ||` (нет аналога в TS)
 
 ### П3: Лучше чем TS/C/C++/Rust
@@ -665,7 +665,7 @@ TSClang: closures стековые. Escaping = UB.
 | Тест | Что проверяет |
 |------|--------------|
 | `capture-primitive` | Примитив = copy, source жив |
-| `capture-string-ref` | String = retain, destroy function, cleanup |
+| `capture-string-ref` | string = retain, destroy function, cleanup |
 | `capture-ref` | Implicit class capture = reference (pointer) |
 | `capture-move` | Implicit class capture = reference (pointer) |
 | `capture-ref-explicit` | `[x: Ref<T>]` = const pointer |
@@ -694,4 +694,4 @@ TSClang: closures стековые. Escaping = UB.
 | `05c-for-of-iteration.md` | For-of = borrow (pointer) для complex. Closure = reference (pointer). Разные операции, похожий механизм. |
 | `05d-spread-destructuring-merge.md` | Spread/destructuring = copy для всех. Closure = reference для class/array. Разные операции = разная семантика. |
 | `02-syntax.md` | Синтаксис arrow functions и capture lists. |
-| `03-types.md` | Типы: String, Array\<T\>, class types. |
+| `03-types.md` | Типы: string, Array\<T\>, class types. |

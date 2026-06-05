@@ -1171,7 +1171,7 @@ class Server {
 - Примитив → copy
 - `Atomic<T>` / `AtomicArray<T>` / `Readonly<T>` → retain/release автоматически
 
-> **Реализовано:** Все правила выше проверяются в `_emitSpawnBlock()` (emit-helpers.js). Рекурсивная Send-проверка обходит поля класса; Array/Set/Map/opt-типы отвергаются как не-Send. Разрешённые типы: примитивы, String, Atomic, Readonly.
+> **Реализовано:** Все правила выше проверяются в `_emitSpawnBlock()` (emit-helpers.js). Рекурсивная Send-проверка обходит поля класса; Array/Set/Map/opt-типы отвергаются как не-Send. Разрешённые типы: примитивы, string, Atomic, Readonly.
 
 **Рекурсивная Send-проверка owned типов:**
 
@@ -1353,7 +1353,7 @@ native `}`
 | `new` (heap allocation) | ❌ ошибка компилятора |
 | `tx.send()` / `rx.receive()` (блокирующие) | ❌ ошибка компилятора |
 | `Shared<T>` / `Weak<T>` | ❌ ошибка компилятора |
-| String concatenation | ❌ ошибка компилятора (heap) |
+| string concatenation | ❌ ошибка компилятора (heap) |
 | `Map`, `Set` операции | ❌ ошибка компилятора (heap) |
 | `throw` / `throws` | ❌ ошибка компилятора |
 | `interrupts.disable()` внутри ISR | ❌ ошибка компилятора (прерывания уже отключены) |

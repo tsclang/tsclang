@@ -390,7 +390,7 @@ tasks.add(inputTask)   // ok — второй Mut<Tasks<8>> к тому же о�
 Thread.spawn(() => { counter++ })  // ошибка: @static variable captured in spawn — use Atomic<T>
 ```
 
-> **Реализовано:** Компилятор проверяет захват `@static let` переменных (с `_isStaticArray` / `_isStaticMap` маркерами) в spawn-блоках и выбрасывает ошибку. Также реализована рекурсивная Send-проверка: Array, Set, Map, opt-типы и классы с непримитивными полями отвергаются. Разрешены: примитивы, String, Atomic, Readonly.
+> **Реализовано:** Компилятор проверяет захват `@static let` переменных (с `_isStaticArray` / `_isStaticMap` маркерами) в spawn-блоках и выбрасывает ошибку. Также реализована рекурсивная Send-проверка: Array, Set, Map, opt-типы и классы с непримитивными полями отвергаются. Разрешены: примитивы, string, Atomic, Readonly.
 
 **На desktop** event loop однопоточный. `Shared<T>` с мутацией нужен только при `Thread.spawn`. Реальные кейсы и их решения:
 

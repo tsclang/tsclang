@@ -133,7 +133,7 @@ for (const item of users) {
 
 Не специальное правило for-of — следствие общей модели владения:
 
-**Copy-типы (примитивы, String):** ✅ разрешено. `let item` = локальная копия, источник не затронут.
+**Copy-типы (примитивы, string):** ✅ разрешено. `let item` = локальная копия, источник не затронут.
 ```typescript
 const scores = [10, 20, 30];
 for (let item of scores) {
@@ -154,7 +154,7 @@ for (let item of users) {    // ❌ error: cannot obtain Mut<T> from const sourc
 | Тип элемента | `const arr` + `let item` | Причина |
 |-------------|------------------------|---------|
 | Primitive | ✅ Разрешено | Copy, источник не затронут |
-| String | ✅ Разрешено | ARC Copy, источник не затронут |
+| string | ✅ Разрешено | ARC Copy, источник не затронут |
 | Class | ❌ Ошибка | Mut\<T\> из const запрещён |
 | Array\<U\> | ❌ Ошибка | Mut\<T\> из const запрещён |
 
@@ -251,7 +251,7 @@ for (let i = 0; i < arr.length; i++) {
 
 ### 4.2 String (итерация по байтам) — Copy (РЕШЕНО, следует из 4.1)
 
-Байт строки = `char` (примитив). `for (const ch of str)` автовыводит `ch: char`. Можно явно указать `for (const ch: char of str)` или `for (const ch: u8 of str)`. String immutable. Copy — единственный правильный вариант.
+Байт строки = `char` (примитив). `for (const ch of str)` автовыводит `ch: char`. Можно явно указать `for (const ch: char of str)` или `for (const ch: u8 of str)`. string immutable. Copy — единственный правильный вариант.
 
 | `const ch` | `let ch` |
 |-----------|---------|
@@ -259,7 +259,7 @@ for (let i = 0; i < arr.length; i++) {
 
 ### 4.3 String как элемент массива (Array\<string\>) — ARC Copy (РЕШЕНО)
 
-String — immutable + ARC. `arr[i]` для строк = ARC Copy (spec/05b-ownership.md:630-634).
+string — immutable + ARC. `arr[i]` для строк = ARC Copy (spec/05b-ownership.md:630-634).
 
 **`const name` — только чтение:**
 ```typescript
@@ -407,7 +407,7 @@ for (size_t i = 0; i < groups.length; i++) {
 
 ### 4.7 Map\<K,V\> (index loop over `_keys[i]` / `_vals[i]`)
 
-Ключ и значение независимо — Copy для примитивов/String, Borrow для классов.
+Ключ и значение независимо — Copy для примитивов/string, Borrow для классов.
 
 ---
 
@@ -432,7 +432,7 @@ typedef struct { bool has_value; String value; } opt_string;      // String valu
 typedef struct { bool has_value; User *value; } opt_User;          // T *value — Borrow
 ```
 
-Три категории: primitive (copy), String (ARC copy), complex (borrow pointer). Согласовано с таблицей в §5.4.
+Три категории: primitive (copy), string (ARC copy), complex (borrow pointer). Согласовано с таблицей в §5.4.
 
 ### 5.2 Пример: LinkedList\<User\>
 
@@ -573,7 +573,7 @@ for (const item of arr) {
 - `const item` → immutable borrow источника → нельзя менять ничего
 - `let item` → mutable borrow источника → можно мутировать через `item`, но нельзя взять другой borrow на источник
 - П3 (безопасность): мутация источника в for-of = баг в 99% случаев
-- Применимо к Fast Path (Array, Set, Map, String). Для Protocol Path (user-defined Iterable) — на совести автора итератора
+- Применимо к Fast Path (Array, Set, Map, string). Для Protocol Path (user-defined Iterable) — на совести автора итератора
 
 **Статус: ✅ Решено.**
 
