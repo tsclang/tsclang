@@ -1,0 +1,11 @@
+async function check(n: i32): i32 {
+    switch (n) {
+        case 1:
+        case 2:
+            return 10;
+        case 3:
+            return 30;
+        default:
+            return 0;
+    }
+}

@@ -382,6 +382,12 @@ export default {
       return;
     }
 
+    // ── switch → if/else if in async context ──
+    if (s.kind === 'Switch') {
+      this._emitAsyncSwitch(s, lines, ctx, I);
+      return;
+    }
+
     // ── regular statement ──
     this._emitAsyncRegStmt(s, lines, I);
   },
@@ -452,6 +458,91 @@ export default {
       const tmp = [];
       this.visitStmt(stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
+    }
+  },
+
+  _emitAsyncSwitch(node, lines, ctx, I) {
+    this._validateSwitchFallthrough(node);
+    const discC = this._selfE(node.discriminant);
+    const discType = this.inferType(node.discriminant);
+    const discEnumDef = this.classes.get(discType);
+
+    // Build grouped cases: consecutive empty cases + final non-empty case
+    const groups = [];
+    for (const c of node.cases) {
+      if (c.body.length === 0) {
+        // Empty case — starts a new group or extends current one
+        if (groups.length === 0 || groups[groups.length - 1].hasBody) {
+          groups.push({ tests: [], hasBody: false });
+        }
+        if (c.test) groups[groups.length - 1].tests.push(c.test);
+      } else {
+        // Non-empty case
+        if (groups.length === 0 || groups[groups.length - 1].hasBody) {
+          groups.push({ tests: [], hasBody: true, body: c.body });
+        } else {
+          groups[groups.length - 1].hasBody = true;
+          groups[groups.length - 1].body = c.body;
+        }
+        if (c.test) groups[groups.length - 1].tests.push(c.test);
+      }
+    }
+
+    // Emit if/else if/else chain
+    let first = true;
+    for (const g of groups) {
+      const isDefault = g.tests.length === 0;
+      const condParts = [];
+      for (const t of g.tests) {
+        if (discEnumDef?.isStringLiteralUnion && t.kind === 'Literal' && t.litType === 'string') {
+          condParts.push(`${discC} == ${discType}_${t.value}`);
+        } else {
+          condParts.push(`${discC} == ${this._selfE(t)}`);
+        }
+      }
+      const cond = condParts.length > 1 ? `(${condParts.join(' || ')})` : condParts[0];
+
+      if (isDefault) {
+        lines.push(`${I}} else {`);
+      } else if (first) {
+        lines.push(`${I}if (${cond}) {`);
+        first = false;
+      } else {
+        lines.push(`${I}} else if (${cond}) {`);
+      }
+
+      // Emit body statements through async path
+      if (g.body) {
+        for (const bs of g.body) {
+          if (bs.kind === 'Break' && !bs.label) {
+            // break inside switch = end of case branch, skip
+            continue;
+          }
+          if (bs.kind === 'Continue' && !bs.label) {
+            // continue to outer while loop — use goto
+            const loopLabel = ctx.loopLabels?.length > 0 ? ctx.loopLabels[ctx.loopLabels.length - 1] : null;
+            if (loopLabel) {
+              lines.push(`${I}    goto case_${loopLabel};`);
+            } else {
+              // No outer while — bare continue is an error in switch
+              lines.push(`${I}    /* continue without outer loop */`);
+            }
+            continue;
+          }
+          if (bs.kind === 'Break' && bs.label) {
+            lines.push(`${I}    goto ${bs.label}_break;`);
+            continue;
+          }
+          if (bs.kind === 'Continue' && bs.label) {
+            lines.push(`${I}    goto ${bs.label}_continue;`);
+            continue;
+          }
+          this._emitAsyncStmt(bs, lines, ctx, I + '    ');
+        }
+      }
+    }
+    if (!first) {
+      lines.push(`${I}}`);
     }
   },
 

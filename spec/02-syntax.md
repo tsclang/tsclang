@@ -988,6 +988,7 @@ switch (status) {
 - Группировка пустых `case` (`case 500: case 503:`) разрешена
 - `default` необязателен, но компилятор выдаёт warning если не покрыты все значения enum
 - Switch работает на: числовых типах, `string`, `boolean`, enum
+- Внутри `async`-функции `switch` транслируется в `if/else if` (см. [07-concurrency: switch внутри async](07-concurrency.md))
 
 ## match
 

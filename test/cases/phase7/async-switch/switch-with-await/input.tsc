@@ -1,0 +1,15 @@
+async function getValue(): i32 {
+    return 10;
+}
+
+async function handle(code: i32): i32 {
+    const x = await getValue();
+    switch (x) {
+        case 10:
+            return 100;
+        case 20:
+            return 200;
+        default:
+            return 0;
+    }
+}

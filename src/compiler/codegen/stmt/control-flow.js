@@ -953,24 +953,8 @@
       }
 
       case 'Switch': {
+        this._validateSwitchFallthrough(node);
         const discType = this.inferType(node.discriminant);
-        if (discType === 'double' || discType === 'float') {
-          throw this.error(`cannot switch on type 'f64'`, node);
-        }
-        for (let ci = 0; ci < node.cases.length; ci++) {
-          const c = node.cases[ci];
-          if (c.body.length === 0) continue;
-          const last = c.body[c.body.length - 1];
-          const isTerminator = last.kind === 'Break' || last.kind === 'Return' ||
-                               last.kind === 'Throw' || last.kind === 'Continue';
-          if (!isTerminator && ci < node.cases.length - 1) {
-            throw this.error(`implicit fallthrough`, last, {
-              label: 'add `break;` or `return` to end this case',
-              help: ['each case must end with `break`, `return`, or `continue`'],
-              code: 'E005',
-            });
-          }
-        }
         const discC = this.exprToC(node.discriminant, lines, depth);
         const IS = ' '.repeat(this.indent * (depth + 1));
         p(`switch (${discC}) {`);
@@ -1061,6 +1045,26 @@
     'float', 'double', 'bool', 'size_t', 'ptrdiff_t',
     'char', 'String', 'tsc_unknown',
   ]),
+
+  _validateSwitchFallthrough(node) {
+    if (this.inferType(node.discriminant) === 'double' || this.inferType(node.discriminant) === 'float') {
+      throw this.error(`cannot switch on type 'f64'`, node);
+    }
+    for (let ci = 0; ci < node.cases.length; ci++) {
+      const c = node.cases[ci];
+      if (c.body.length === 0) continue;
+      const last = c.body[c.body.length - 1];
+      const isTerminator = last.kind === 'Break' || last.kind === 'Return' ||
+                           last.kind === 'Throw' || last.kind === 'Continue';
+      if (!isTerminator && ci < node.cases.length - 1) {
+        throw this.error(`implicit fallthrough`, last, {
+          label: 'add `break;` or `return` to end this case',
+          help: ['each case must end with `break`, `return`, or `continue`'],
+          code: 'E005',
+        });
+      }
+    }
+  },
 
   _isSimpleCType(ct) {
     return this._SIMPLE_C_TYPES.has(ct);

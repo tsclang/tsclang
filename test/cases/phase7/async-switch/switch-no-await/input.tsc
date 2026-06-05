@@ -1,0 +1,10 @@
+async function classify(n: i32): i32 {
+    switch (n) {
+        case 1:
+            return 10;
+        case 2:
+            return 20;
+        default:
+            return 0;
+    }
+}

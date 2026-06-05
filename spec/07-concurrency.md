@@ -384,6 +384,52 @@ async function bad2(): void {
 }
 ```
 
+### switch внутри async
+
+`switch` внутри `async`-функции компилируется в `if / else if / else` — **не** в C `switch`. Причина: внешний `switch(self->_state)` уже используется для state machine, и вложенный C `switch` конфликтует с `break`/`continue` внешних циклов.
+
+```typescript
+async function handle(code: i32): i32 {
+    const x = await fetchValue();
+    switch (x) {
+        case 1:
+            return 10;
+        case 2:
+            return 20;
+        default:
+            return 0;
+    }
+}
+```
+
+Генерируемый C-код:
+
+```c
+// внутри poll-функции:
+// ... await fetchValue() ...
+if (x == 1) {
+    self->_result = 10;
+    self->_done = true;
+    return;
+} else if (x == 2) {
+    self->_result = 20;
+    self->_done = true;
+    return;
+} else {
+    self->_result = 0;
+    self->_done = true;
+    return;
+}
+```
+
+Правила:
+
+- `break` внутри `switch` в async — просто конец ветки (не генерирует C `break`)
+- `break label` / `continue` из `switch` внутри async `while` — `goto` к метке внешнего цикла
+- Implicit fallthrough запрещён — проверяется общим хелпером `_validateSwitchFallthrough`
+- `case`-тело обрабатывается через async-path (`_emitAsyncStmt`) — `await` внутри `case` корректно генерирует state transitions
+- Пустые case (группировка `case 1: case 2:`) поддерживаются — условие `==` комбинируется через `||`
+
 ### async main
 
 Entry point может быть `async` — компилятор запускает event loop автоматически:
