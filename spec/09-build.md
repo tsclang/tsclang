@@ -1323,17 +1323,17 @@ declare module "std/libc" {
 | `toolchain` | `string` | Имя компилятора (`"cc65"`, `"avr-gcc"`) |
 | `toolchainFile` | `string` | Путь к CMake toolchain file (внутри пакета — без `./`) |
 | `include` | `string` | Путь к директории с C-реализацией stdlib (без `./` → внутри пакета). TSClang добавляет `include_directories(BEFORE ...)` в CMakeLists.txt. Дефолт: `"include"` если директория существует. |
-| `heap` | `bool` | Доступен ли `malloc`/`free` |
+| `heap` | `boolean` | Доступен ли `malloc`/`free` |
 | `allocator` | `"heap" \| "static" \| "pool" \| "none"` | Стратегия аллокации (см. ниже) |
 | `scheduler` | `"libuv" \| "cooperative" \| "none"` | Планировщик для async/await |
-| `fpu` | `bool` | Есть ли FPU (иначе software float) |
+| `fpu` | `boolean` | Есть ли FPU (иначе software float) |
 | `bits` | `u8` | Разрядность CPU (8, 16, 32, 64) |
 | `address_bits` | `u8` | Ширина адреса (влияет на `usize`) |
 | `stack_size` | `u32` | Размер стека в байтах |
 | `ram_size` | `u32` | Общий размер RAM — компилятор проверяет суммарный BSS |
 | `flash_size` | `u32` | Размер Flash/ROM — компилятор проверяет размер кода |
-| `no_recursion` | `bool` | Запретить рекурсию (статический анализ call graph) |
-| `unaligned_access` | `bool` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур. x86-64: `true`; ARM Cortex-M0, AVR: `false` |
+| `no_recursion` | `boolean` | Запретить рекурсию (статический анализ call graph) |
+| `unaligned_access` | `boolean` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур. x86-64: `true`; ARM Cortex-M0, AVR: `false` |
 
 #### Стратегии аллокации (`allocator`)
 

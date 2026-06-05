@@ -248,7 +248,7 @@ ContainerType copy = {.p = container.p, .label = container.label};
 const obj = { name: "Alice", age: 30 };
 const { name, age } = obj;
 console.log(obj.name); // "Alice" — жив
-// name: String — независимая копия (retain)
+// name: string — независимая копия (retain → String in C)
 // age: number — копия
 ```
 

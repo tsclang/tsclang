@@ -389,7 +389,7 @@ interface ClassDesc {
   implements(name: string): boolean;        // [NOT YET IMPLEMENTED]
   method(key: string): MethodDesc;          // [NOT YET IMPLEMENTED]
   addField(name: string, type: string, options?: FieldOptions): void;
-  // Частично реализовано: только target._field = <bool|int literal>
+  // Частично реализовано: только target._field = <boolean|int literal>
   // Полная версия с произвольными типами и FieldOptions — [NOT YET IMPLEMENTED]
   // Коллизия имён → ошибка компилятора
   addMethod(name: string, impl: (...args: any[]) => any): void;  // [NOT YET IMPLEMENTED]

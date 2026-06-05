@@ -635,7 +635,7 @@ const val = arr[0];  // ✅ copy (i32 — примитив)
 `arr[i]` для строк — copy (возвращает String struct, implicit ARC):
 
 ```typescript
-const s = arr[0];  // ✅ ARC Copy (String struct)
+const s = arr[0];  // ✅ ARC Copy (string → String struct in C)
 ```
 
 ### Массивы строк

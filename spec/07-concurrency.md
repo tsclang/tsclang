@@ -650,7 +650,7 @@ async function readSocket(fd: i32, signal?: AbortSignal): Buffer {
 
 ```typescript
 async function process(name: string, signal?: AbortSignal): void {
-    const line = await readLine()            // line: owned String
+    const line = await readLine()            // line: owned string (→ String in C)
     // ← если signal.aborted здесь → unwind: tsc_string_release(line)
     await sleep(100)
     // ← если signal.aborted здесь → unwind: tsc_string_release(line)
@@ -1465,7 +1465,7 @@ const adcReady = new EmbeddedSignal()
 @embedded.isr("ADC_vect")
 function adc_isr(): void {
     ADCSRA  // сброс флага прерывания (читаем регистр)
-    adcReady.set()    // ✅ ISR-safe: просто volatile bool = true
+    adcReady.set()    // ✅ ISR-safe: просто volatile bool = true в C
 }
 
 async function readADC(): u16 {
