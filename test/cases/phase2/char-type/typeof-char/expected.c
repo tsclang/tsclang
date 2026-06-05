@@ -36,22 +36,12 @@ static inline String tsc_unknown_get_string(const tsc_unknown *self) { String *p
 #endif
 static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }
 
-tsc_unknown wrap_string(String s) {
-    return tsc_unknown_from_string(s);
-}
-
-String unwrap_unknown(tsc_unknown val) {
-    if (val.type_id == 6) {
-        tsc_string_retain(tsc_unknown_get_string(&val));
-        return tsc_unknown_get_string(&val);
-    }
-    return STR_LIT("default");
-}
-
 int main(void) {
     TSC_INIT();
-    tsc_unknown u = wrap_string(STR_LIT("test"));
-    printf("%s\n", unwrap_unknown(u).data);
-    tsc_unknown_drop(&u);
+    tsc_unknown x = tsc_unknown_from_char(65);
+    if (x.type_id == 16) {
+        printf("char\n");
+    }
+    tsc_unknown_drop(&x);
     return 0;
 }

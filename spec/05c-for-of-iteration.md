@@ -251,7 +251,7 @@ for (let i = 0; i < arr.length; i++) {
 
 ### 4.2 String (итерация по байтам) — Copy (РЕШЕНО, следует из 4.1)
 
-Байт строки = u8 (примитив). String immutable. Copy — единственный правильный вариант.
+Байт строки = `char` (примитив). `for (const ch of str)` автовыводит `ch: char`. Можно явно указать `for (const ch: char of str)` или `for (const ch: u8 of str)`. String immutable. Copy — единственный правильный вариант.
 
 | `const ch` | `let ch` |
 |-----------|---------|

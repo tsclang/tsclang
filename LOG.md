@@ -1580,3 +1580,16 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Updated stats: 14 RESOLVED, 5 STILL PRESENT, 24 NEEDS INVESTIGATION, 1 MITIGATED (was 11/6/27/0)
 
 > 2026-06-05: **spec/10-stdlib.md**: `bool` → `boolean` в UART/I2C интерфейсах (3 места). Последние нарушения правила «TSC = boolean, C = bool» в спеке.
+
+> 2026-06-05: **`char` type elevated to full recommended type**:
+> - Compiler: `_stringLiteralToByte()` in literals.js validates single-ASCII-char string → numeric code
+> - Compiler: `typeof "char"` → type_id=16 in helpers.js (`_tsNameToTypeId`)
+> - Compiler: `as char` cast fix in dispatch.js — char/string literal → numeric before C cast
+> - Compiler: `_SIMPLE_C_TYPES` in control-flow.js includes `'char'`
+> - Spec: `03-types.md` — char as recommended type, typeof table with char (type_id=16)
+> - Spec: `02-syntax.md` — mangling grammar includes `"char"`
+> - Spec: `05c-for-of-iteration.md` — for-of auto-infers `char` for string iteration
+> - 4 new tests: `char-from-string` (run), `err-char-multi` (error), `err-char-empty` (error), `typeof-char` (c-compare)
+> - 37 existing unknown tests regenerated (compiler now emits `_tsc_vt_char` vtable + `from_char`/`get_char`)
+> - 1 existing test regenerated (`char-from-string` — printf cast change)
+> - All **1406 tests passing** (was 1402)

@@ -24,6 +24,24 @@ export default {
     return `STR_LIT("${escaped}")`;
   },
 
+  _stringLiteralToByte(node) {
+    const raw = node.value;
+    if (raw.length === 0) {
+      throw this.error(`cannot convert empty string to char/u8`, node);
+    }
+    if (raw.startsWith('\\')) {
+      return this._charCode(raw);
+    }
+    if (raw.length !== 1) {
+      throw this.error(`cannot convert multi-character string to char/u8 — use single character or escape sequence`, node);
+    }
+    const code = raw.charCodeAt(0);
+    if (code > 127) {
+      throw this.error(`non-ASCII character cannot be used as char/u8 — multi-byte UTF-8 characters require string type`, node);
+    }
+    return code;
+  },
+
   literalToC(node) {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
     if (node.litType === 'char')   return this._charLiteralToSTR_LIT(node.value);

@@ -337,7 +337,7 @@ type_enc     ::= primitive
                | user_type digit+ ("_" type_enc)*   (* generic: arity digit(s) *)
                | user_type                           (* non-generic *)
 primitive    ::= "i8"|"i16"|"i32"|"i64"|"u8"|"u16"|"u32"|"u64"
-               | "f32"|"f64"|"bool"|"string"|"usize"|"void"
+                | "f32"|"f64"|"bool"|"string"|"char"|"usize"|"void"
 user_type    ::= [A-Z] [a-zA-Z0-9]*
 module_slug  ::= [a-z0-9] [a-z0-9_]*
 ident        ::= [a-zA-Z_] [a-zA-Z0-9_]*

@@ -1,0 +1,6 @@
+const a: char = "A";
+const b: char = 'B';
+const c: u8 = "C";
+console.log(a);
+console.log(b);
+console.log(c);

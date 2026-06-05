@@ -1261,6 +1261,10 @@ export default {
             let initC;
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);
+            } else if (init.kind === 'Literal' && init.litType === 'string'
+                       && (ctype === 'char' || ctype === 'uint8_t')) {
+              const code = this._stringLiteralToByte(init);
+              initC = ctype === 'uint8_t' ? code + 'U' : String(code);
             } else {
               // For binary expressions with mixed integer types in const context:
               // cast operands and result explicitly to preserve well-defined semantics

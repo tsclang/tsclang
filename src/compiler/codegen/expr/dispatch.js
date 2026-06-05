@@ -543,8 +543,19 @@ export default {
         if (node.castType.kind === 'TypePointer') {
           return this.exprToC(node.expr, lines, depth);
         }
-        const exprC = this.exprToC(node.expr, lines, depth);
         const ct = this.resolveType(node.castType);
+        // Char/string literal cast to char/u8: produce numeric value
+        if ((ct === 'char' || ct === 'uint8_t') && node.expr.kind === 'Literal') {
+          if (node.expr.litType === 'char') {
+            const code = this._charCode(node.expr.value);
+            return ct === 'uint8_t' ? code + 'U' : String(code);
+          }
+          if (node.expr.litType === 'string') {
+            const code = this._stringLiteralToByte(node.expr);
+            return ct === 'uint8_t' ? code + 'U' : String(code);
+          }
+        }
+        const exprC = this.exprToC(node.expr, lines, depth);
         const srcType = this.inferType(node.expr);
         if (ct === 'tsc_unknown' && srcType !== 'tsc_unknown') {
           this._ensureUnknownStruct();

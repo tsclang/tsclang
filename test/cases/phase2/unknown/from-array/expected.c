@@ -8,6 +8,7 @@ static const tsc_unknown_vtable _tsc_vt_i64 = {NULL, NULL};
 static const tsc_unknown_vtable _tsc_vt_f32 = {NULL, NULL};
 static const tsc_unknown_vtable _tsc_vt_f64 = {NULL, NULL};
 static const tsc_unknown_vtable _tsc_vt_bool = {NULL, NULL};
+static const tsc_unknown_vtable _tsc_vt_char = {NULL, NULL};
 
 static inline tsc_unknown tsc_unknown_from_i32(int32_t v) { tsc_unknown u = {.type_id = 1, .vtable = &_tsc_vt_i32}; memcpy(u.buffer, &v, sizeof(v)); return u; }
 static inline int32_t tsc_unknown_get_i32(const tsc_unknown *self) { int32_t v; memcpy(&v, self->buffer, sizeof(v)); return v; }
@@ -19,6 +20,8 @@ static inline tsc_unknown tsc_unknown_from_f64(double v) { tsc_unknown u = {.typ
 static inline double tsc_unknown_get_f64(const tsc_unknown *self) { double v; memcpy(&v, self->buffer, sizeof(v)); return v; }
 static inline tsc_unknown tsc_unknown_from_bool(bool v) { tsc_unknown u = {.type_id = 5, .vtable = &_tsc_vt_bool}; memcpy(u.buffer, &v, sizeof(v)); return u; }
 static inline bool tsc_unknown_get_bool(const tsc_unknown *self) { bool v; memcpy(&v, self->buffer, sizeof(v)); return v; }
+static inline tsc_unknown tsc_unknown_from_char(char v) { tsc_unknown u = {.type_id = 16, .vtable = &_tsc_vt_char}; memcpy(u.buffer, &v, sizeof(v)); return u; }
+static inline char tsc_unknown_get_char(const tsc_unknown *self) { char v; memcpy(&v, self->buffer, sizeof(v)); return v; }
 #ifdef TSC_EMBEDDED
 static void _tsc_unknown_drop_string(void *buf) { (void)buf; }
 static void _tsc_unknown_clone_string(const void *src, void *dst) { memcpy(dst, src, sizeof(String)); }
