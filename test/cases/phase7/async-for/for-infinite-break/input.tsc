@@ -1,0 +1,8 @@
+async function countFor(n: i32): i32 {
+    let i: i32 = 0;
+    for (;;) {
+        i = i + 1;
+        if (i >= n) break;
+    }
+    return i;
+}

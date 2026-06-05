@@ -1,0 +1,8 @@
+async function sumOddFor(max: i32): i32 {
+    let total: i32 = 0;
+    for (let i: i32 = 0; i < max; i = i + 1) {
+        if (i % 2 == 0) continue;
+        total = total + i;
+    }
+    return total;
+}

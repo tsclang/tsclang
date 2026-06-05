@@ -1,0 +1,8 @@
+async function forNoInit(limit: i32): i32 {
+    let i: i32 = 0;
+    for (; i < limit; ) {
+        i = i + 1;
+        if (i == 3) break;
+    }
+    return i;
+}

@@ -1,0 +1,12 @@
+async function poll(): i32 {
+    return 1;
+}
+async function skipFor(): i32 {
+    let count: i32 = 0;
+    for (let i: i32 = 0; i < 5; i = i + 1) {
+        const v = await poll();
+        if (v == 0) continue;
+        count = count + 1;
+    }
+    return count;
+}

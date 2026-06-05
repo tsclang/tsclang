@@ -1,0 +1,8 @@
+async function sumFor(n: i32): i32 {
+    let total: i32 = 0;
+    for (let i: i32 = 0; i < 100; i = i + 1) {
+        total = total + i;
+        if (i >= n) break;
+    }
+    return total;
+}

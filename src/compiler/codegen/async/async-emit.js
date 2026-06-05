@@ -234,6 +234,10 @@ export default {
         this._emitAsyncDoWhile(s, stmts.slice(i + 1), lines, ctx, I);
         return;
       }
+      if (s?.kind === 'For') {
+        this._emitAsyncFor(s, stmts.slice(i + 1), lines, ctx, I);
+        return;
+      }
       this._emitAsyncStmt(s, lines, ctx, I);
     }
   },
@@ -310,6 +314,76 @@ export default {
       lines.push(`${I}}`);
     }
 
+    lines.push(`${endLabel}:`);
+    ctx.terminated = false;
+    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
+    if (!ctx.terminated) {
+      if (this._selfCtx.hasCleanup) {
+        lines.push(`${I}goto _cleanup;`);
+      } else {
+        lines.push(`${I}self->_done = true;`);
+        lines.push(`${I}return;`);
+      }
+    }
+    ctx.terminated = true;
+  },
+
+  _emitAsyncFor(s, remainingStmts, lines, ctx, I) {
+    const loopCase = ctx.nextCase++;
+    const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
+    const endLabel = `for_${loopCase}_end`;
+    const contLabel = `for_${loopCase}_cont`;
+
+    // Emit init before state transition
+    if (s.init) {
+      if (s.init.kind === 'VarDecl') {
+        const { varKind, name, typeAnn, init } = s.init;
+        const ct = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
+        const initC = init ? this._selfE(init) : '0';
+        lines.push(`${I}${ct} ${name} = ${initC};`);
+        this.define(name, { ctype: ct, varKind });
+      } else if (s.init.kind === 'ExprStmt') {
+        lines.push(`${I}${this._selfE(s.init.expr)};`);
+      }
+    }
+
+    // Transition to loop state
+    lines.push(`${I}self->_state = ${loopCase};`);
+    lines.push(`${I}/* fall through */`);
+    lines.push(`case_${loopCase}:`);
+    lines.push(`        case ${loopCase}:`);
+
+    // Condition check
+    const testC = s.test ? this._selfE(s.test) : null;
+    if (testC) {
+      lines.push(`${I}if (!(${testC})) { goto ${endLabel}; }`);
+    }
+
+    // Push async loop context
+    this._asyncBreakStack = this._asyncBreakStack || [];
+    this._asyncContinueStack = this._asyncContinueStack || [];
+    this._asyncBreakStack.push(endLabel);
+    this._asyncContinueStack.push(contLabel);
+    const savedTerminated = ctx.terminated;
+    ctx.terminated = false;
+    this._emitAsyncStmtList(forBody, lines, ctx, I);
+    this._asyncBreakStack.pop();
+    this._asyncContinueStack.pop();
+
+    // Continue target: update + condition + loop-back
+    if (!ctx.terminated) {
+      lines.push(`${contLabel}:`);
+      if (s.update) {
+        lines.push(`${I}${this._selfE(s.update)};`);
+      }
+      if (testC) {
+        lines.push(`${I}if (!(${testC})) { goto ${endLabel}; }`);
+      }
+      lines.push(`${I}self->_state = ${loopCase};`);
+      lines.push(`${I}goto case_${loopCase};`);
+    }
+
+    // End label + remaining stmts
     lines.push(`${endLabel}:`);
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);

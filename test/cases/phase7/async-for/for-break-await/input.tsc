@@ -1,0 +1,10 @@
+async function getVal(): i32 {
+    return 42;
+}
+async function findFor(): i32 {
+    for (let i: i32 = 0; i < 10; i = i + 1) {
+        const v = await getVal();
+        if (v == 42) break;
+    }
+    return 0;
+}
