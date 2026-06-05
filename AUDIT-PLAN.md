@@ -102,7 +102,7 @@
 | 65 | Async function arguments silently zeroed | **RESOLVED** | `async-emit.js:82` — params включены в state struct. Присваиваются перед первым poll. |
 | 66 | Array of optional types stores values wrong | **NEEDS INVESTIGATION** | `helpers.js:114-138` — opt_T struct с `has_value` + `value`. Инициализация элементов для optional типов требует проверки. |
 | 67 | Tuple destructuring ignores type annotation | **NEEDS INVESTIGATION** | Обрабатывается через `VarDestructArr` path. Аннотация типа не проверяется. |
-| 89 | Map string keys use-after-free | **NEEDS INVESTIGATION** | `types-alias.js:176` — string-keyed maps поддержаны. Потенциальный UAF если String keys не retain при set / не release при delete. |
+| 89 | Map string keys use-after-free | **MITIGATED** | `vardecl.js:258` — компилятор ограничивает ключи compile-time string literals. Runtime UAF невозможна на практике. `runtime.h:575-579` — shallow copy без retain, но только для литералов. |
 
 ### Высокие (incorrect code generation / type safety)
 
@@ -123,7 +123,7 @@
 | H-3 | Nested closures dangling pointer | **NEEDS INVESTIGATION** | `vardecl.js:1081-1083` — env на стеке. Если closure escaping scope → dangling pointer. |
 | H-4 | Recursive closures undeclared | **NEEDS INVESTIGATION** | Нет forward-reference механизма для self-referencing closures. |
 | H-5 | String comparison struct UB | **RESOLVED** | `operators.js:227-232` — String equality использует `tsc_string_eq()`. |
-| H-6 | objPattern in for-of unhandled | **PARTIALLY RESOLVED** | Map entries с array destructuring работает. Object destructuring не обрабатывается явно. |
+| H-6 | objPattern in for-of unhandled | **RESOLVED** | `VarDestructObj` реализован — `destruct.js:5`, `stmt.js:42`. Map entries с array destructuring + object destructuring работают. |
 | H-7 | Closure type loss on assignment | **NEEDS INVESTIGATION** | Нужно проверить теряется ли тип при присвоении closure переменной. |
 | H-8 | Array method chaining defaults to i32 | **NEEDS INVESTIGATION** | Нужно проверить теряет ли `.map().filter()` тип элемента. |
 
@@ -141,7 +141,7 @@
 | 100 | i8=128 no range check | **NEEDS INVESTIGATION** | `vardecl.js` — `i8 = 128` не проверяется на диапазон. |
 | 101 | f64→i32 truncation | **NEEDS INVESTIGATION** | `vardecl.js` — `let x: i32 = 3.14` — нет проверки на потерю точности. |
 | 102 | Large array OOM no NULL check | **NEEDS INVESTIGATION** | `runtime.h` — `new Array(N)` с большим N — нет NULL check после malloc. |
-| 103 | `*_to_string` static buffers not reentrant | **NEEDS INVESTIGATION** | `runtime.h` — `tsc_i32_to_string` и др. используют static buffer. |
+| 103 | `*_to_string` static buffers not reentrant | **STILL PRESENT** | `runtime.h:1039,1049,1059,1111` — static `_tsc_i32_buf[32]`, `_tsc_i64_buf[32]`, `_tsc_f64_buf[64]`, `_fmt_buf[128]`. Не потокобезопасно, не реентерабельно. |
 | 104 | Decorator on constructor silently dropped | **NEEDS INVESTIGATION** | `decorators.js` — декоратор на конструкторе silently игнорируется. |
 | 105 | @platform on class methods ignored | **NEEDS INVESTIGATION** | `decorators.js` — `@platform` на методах класса игнорируется. |
 
@@ -158,30 +158,30 @@
 
 | # | SPEC утверждает | Реализация | Статус | Вердикт |
 |---|----------------|------------|--------|---------|
-| S-1 | — | `atob`/`btoa` реализованы | **STILL PRESENT** | SPEC нужно обновить |
-| S-2 | — | `Set<T>` реализован, не описан | **STILL PRESENT** | SPEC нужно обновить |
-| S-3 | — | `structuredClone` реализован, не описан | **STILL PRESENT** | SPEC нужно обновить |
+| S-1 | — | `atob`/`btoa` реализованы | **STILL PRESENT** | SPEC нужно обновить — добавить atob/btoa |
+| S-2 | — | `Set<T>` реализован, не описан | **RESOLVED** | Теперь описан: `03-types.md:1341`, `05-memory.md:914` |
+| S-3 | — | `structuredClone` реализован, не описан | **RESOLVED** | Теперь описан: `03-types.md:1782,1788,1789` |
 | S-4 | `instanceof`/`in` в precedence table | Оба на уровне 6 | **RESOLVED** | Реализовано корректно |
 | S-5 | Promise.race/.any/.allSettled | Все 4 combinator реализованы | **RESOLVED** | SPEC нужно обновить — описать |
 | S-6 | 5 Atomic methods | Только load/store/fetchAdd/compareExchange | **STILL PRESENT** | SPEC прав, код нужно исправить |
 
-### Статистика верифицированных находок
+### Статистика верифицированных находок (обновлено 2026-06-05)
 
-| Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION |
-|-----------|-------|----------|---------------|---------------------|
-| Критические | 4 | 1 | 0 | 3 |
-| Высокие | 18 | 7 | 3 | 8 |
-| Средние | 13 | 1 | 0 | 12 |
-| Низкие | 4 | 0 | 0 | 4 |
-| Spec↔impl | 6 | 2 | 3 | 0 |
-| **Итого** | **45** | **11** | **6** | **27** |
+| Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
+|-----------|-------|----------|---------------|---------------------|-----------|
+| Критические | 4 | 1 | 0 | 2 | 1 |
+| Высокие | 18 | 8 | 3 | 7 | 0 |
+| Средние | 13 | 1 | 1 | 11 | 0 |
+| Низкие | 4 | 0 | 0 | 4 | 0 |
+| Spec↔impl | 6 | 4 | 1 | 0 | 0 |
+| **Итого** | **45** | **14** | **5** | **24** | **1** |
 
-### Подтверждённые открытые проблемы (6 штук)
+### Подтверждённые открытые проблемы (обновлено 2026-06-05, 6 штук)
 
 1. **URL encode/decode missing** (#38) — `encodeURIComponent`/`decodeURIComponent`/`encodeURI`/`decodeURI` не реализованы
 2. **Import renaming not supported** (#93) — `import { X as Y }` не парсится
 3. **Division by zero no guard** (#94) — UB в C при integer division by zero
-4. **atob/btoa, Set, structuredClone не в spec** (S-1..S-3) — spec нужно обновить
+4. **atob/btoa не в spec** (S-1) — spec нужно обновить, добавить atob/btoa
 5. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
 6. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
 
@@ -344,13 +344,14 @@
 
 ### Общая статистика
 
-| Метрика | До | После |
+| Метрика | До | После (2026-06-05) |
 |---------|-----|-------|
 | "Активных" расхождений старого doc | ~42 | **4** (2 STILL PRESENT + 2 NEEDS INVESTIGATION) |
-| Предварительных находок | ~109 | **45** (6 STILL PRESENT + 27 NEEDS INVESTIGATION + 12 RESOLVED) |
+| Предварительных находок | ~109 | **45** (5 STILL PRESENT + 24 NEEDS INVESTIGATION + 14 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
 | Закрыто нашей работой | 0 | **8** (R-1..R-8) |
+| Закрылось само с момента аудита | 0 | **3** (H-6, S-2, S-3) |
 
-### Подтверждённые открытые проблемы (итого 8)
+### Подтверждённые открытые проблемы (итого 7)
 
 **Из старого doc-аудита (2):**
 1. `--emit hex` не функционален (01-5)
@@ -360,16 +361,16 @@
 3. URL encode/decode missing (#38)
 4. Import renaming not supported (#93)
 5. Division by zero no guard (#94)
-6. atob/btoa, Set, structuredClone не в spec (S-1..S-3)
+6. atob/btoa не в spec (S-1)
 7. 5 Atomic methods missing (S-6)
-8. `--emit hex` не функционален (дубль #1)
+8. `*_to_string` static buffers not reentrant (#103) — confirmed in runtime.h
 
-### Подлежат исследованию (29 штук)
+### Подлежат исследованию (24 штуки)
 
 При написании соответствующих блоков книги эти точки будут проверены:
-- Критические: #66 (optional array), #67 (tuple destruct), #89 (Map string keys)
+- Критические: #66 (optional array), #67 (tuple destruct)
 - Высокие: #91-92 (recursive type, type exports), H-3..H-4 (closures), H-7..H-8 (type loss)
-- Средние: #95-#105 (runtime issues, validation gaps)
+- Средние: #95-#102, #104-#105 (runtime issues, validation gaps)
 - Низкие: #106-#109 (cosmetic)
 - Doc-аудит: 02-5 (for-of reassignment), 02-6 (range inclusivity)
 

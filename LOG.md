@@ -1572,3 +1572,9 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 3 expected.c regenerated: `forof-in-while`, `while-nested-break`, `while-nested-continue`
 > - 7 new for-of tests (basic, break, continue, break-await, continue-await, await-basic, in-while)
 > - All **1402 tests passing** (was 1375)
+
+> 2026-06-05: **AUDIT-PLAN.md re-verified against current codebase**:
+> - 3 items closed since audit: H-6 (objPattern in for-of — now implemented), S-2 (Set now in spec), S-3 (structuredClone now in spec)
+> - 1 mitigated: #89 (Map string keys UAF — compiler restricts keys to compile-time literals)
+> - 1 promoted: #103 (`*_to_string` static buffers — confirmed STILL PRESENT in runtime.h)
+> - Updated stats: 14 RESOLVED, 5 STILL PRESENT, 24 NEEDS INVESTIGATION, 1 MITIGATED (was 11/6/27/0)
