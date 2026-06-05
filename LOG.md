@@ -1578,3 +1578,5 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 1 mitigated: #89 (Map string keys UAF — compiler restricts keys to compile-time literals)
 > - 1 promoted: #103 (`*_to_string` static buffers — confirmed STILL PRESENT in runtime.h)
 > - Updated stats: 14 RESOLVED, 5 STILL PRESENT, 24 NEEDS INVESTIGATION, 1 MITIGATED (was 11/6/27/0)
+
+> 2026-06-05: **spec/10-stdlib.md**: `bool` → `boolean` в UART/I2C интерфейсах (3 места). Последние нарушения правила «TSC = boolean, C = bool» в спеке.

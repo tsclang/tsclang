@@ -1516,7 +1516,7 @@ export interface UART {
     begin(baud: u32): void
     write(data: Ref<u8[]>): void
     read(): u8
-    available(): bool
+    available(): boolean
 }
 
 export interface SPI {
@@ -1526,8 +1526,8 @@ export interface SPI {
 
 export interface I2C {
     begin(): void
-    write(addr: u8, data: Ref<u8[]>): bool
-    read(addr: u8, buf: Mut<u8[]>, len: u8): bool
+    write(addr: u8, data: Ref<u8[]>): boolean
+    read(addr: u8, buf: Mut<u8[]>, len: u8): boolean
 }
 ```
 
