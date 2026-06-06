@@ -622,8 +622,8 @@ export default {
         }
 
         // Borrow check: Shared<T> requires a heap allocator
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
-          throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && (this._allocatorName === 'none' || this._allocatorName === 'static')) {
+          throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
 
         // let x: Shared<T> = new T() тЖТ arc alloc with explicit field init
@@ -744,8 +744,8 @@ export default {
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
           throw this.error(`"void" can only be used as a return type`);
         }
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'none') {
-          throw this.error(`"Shared<T>" requires a heap allocator; "none" allocator does not support ARC`);
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && (this._allocatorName === 'none' || this._allocatorName === 'static')) {
+          throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
         if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {

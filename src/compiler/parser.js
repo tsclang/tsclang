@@ -500,6 +500,23 @@ export function parse(tokens, filename = '<input>', src = null) {
       eat(TK.RBRACE);
       return { kind: 'DeclareModule', moduleName, body };
     }
+    if (cur().type === TK.IDENT && cur().value === 'platform') {
+      eat(TK.IDENT, 'platform');
+      eat(TK.LBRACE);
+      const fields = {};
+      while (!done() && cur().type !== TK.RBRACE) {
+        if (cur().type !== TK.IDENT) { pos++; continue; }
+        const key = eat(TK.IDENT).value;
+        if (!tryEat(TK.COLON)) continue;
+        let val = null;
+        if (cur().type === TK.STRING)      val = eat(TK.STRING).value;
+        else if (cur().type === TK.BOOL)   val = eat(TK.BOOL).value === 'true';
+        else if (cur().type === TK.NUMBER) val = Number(eat(TK.NUMBER).value);
+        if (val !== null) fields[key] = val;
+      }
+      eat(TK.RBRACE);
+      return { kind: 'DeclarePlatform', fields };
+    }
     // Skip unknown declare forms
     while (!done() && cur().type !== TK.SEMI && cur().type !== TK.RBRACE) pos++;
     tryEat(TK.SEMI);

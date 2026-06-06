@@ -1,4 +1,4 @@
-@embedded.inline class Vec2 { x: f32; y: f32; }
+@embedded.inline class Vec2 { x: i32; y: i32; }
 let v = new Vec2();
-v.x = 1.0;
-v.y = 2.0;
+v.x = 1;
+v.y = 2;

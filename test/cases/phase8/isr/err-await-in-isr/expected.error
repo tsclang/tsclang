@@ -1,1 +1,1 @@
-TypeError: Cannot use 'async' with @embedded.isr on 'onTimer'
+TypeError: async functions are not supported (async: "none")

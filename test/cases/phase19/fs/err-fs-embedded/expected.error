@@ -1,1 +1,1 @@
-TypeError: 'std/fs' is not available on avr targets
+TypeError: async functions are not supported (async: "none")

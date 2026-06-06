@@ -89,7 +89,7 @@ export default {
     // Pre-scan: detect target and allocator from opts or defaults
     // Priority: opts > default
     this._targetName = this._optsTarget || 'desktop';
-    this._allocatorName = this._optsAllocator || 'default';
+    this._allocatorName = this._optsAllocator || this._cap('allocator') || 'default';
     this._noRecursion = this._optsNoRecursion || false;
     this._schedulerName = this._optsScheduler || null;
     this._ramSize = this._optsRamSize || null;
@@ -103,22 +103,17 @@ export default {
     }
 
     // Pre-scan: capability-based restrictions
-    const hasCaps = !!this._capabilities;
-    const noFloat = hasCaps ? !this._cap('fpu') : ['nes','genesis','ps1','spectrum'].includes(this._targetName);
-    const noHeap = hasCaps ? this._cap('allocator') === 'static' : ['nes','genesis','ps1','spectrum'].includes(this._targetName);
-    const noAsync = hasCaps ? this._cap('async') === 'none' : ['nes','genesis','ps1','ps2','dos','spectrum'].includes(this._targetName);
-    if (noFloat || noHeap || noAsync) {
+    const noFloat = !this._cap('fpu');
+    const noAsync = this._cap('async') === 'none';
+    if (noFloat || noAsync) {
       const _walkForRestrictions = (n) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
         if (noFloat && n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
-          throw this.error(`TypeError: float types (${n.name}) are not supported${hasCaps ? ' (fpu: false)' : ` on ${this._targetName} target`}`);
-        }
-        if (noHeap && n.kind === 'New' && !['Shared','Weak','Box','Arc','Rc'].includes(n.name)) {
-          throw this.error(`TypeError: heap allocation ('new ${n.name}') is not supported${hasCaps ? ' when allocator is "static"' : ` on ${this._targetName} target`}`);
+          throw this.error(`TypeError: float types (${n.name}) are not supported (fpu: false)`);
         }
         if (noAsync && n.kind === 'FuncDecl' && n.async) {
-          throw this.error(`TypeError: async functions are not supported${hasCaps ? ' (async: "none")' : ` on ${this._targetName} target`}`);
+          throw this.error(`TypeError: async functions are not supported (async: "none")`);
         }
         for (const k of Object.keys(n)) {
           if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }

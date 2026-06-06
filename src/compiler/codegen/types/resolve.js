@@ -10,16 +10,13 @@ export default {
       if (name === 'null' || name === 'undefined') {
         throw this.error(`"${name}" cannot be used as a standalone type; use T | ${name}`, typeNode);
       }
-      // usize resolved from capabilities or target name
+      // usize resolved from capabilities
       if (name === 'usize') {
-        if (this._capabilities) {
-          const usizeType = this._cap('usize');
-          if (usizeType === 'u8') return 'uint8_t';
-          if (usizeType === 'u16') return 'uint16_t';
-          if (usizeType === 'u32') return 'uint32_t';
-          return 'uint64_t';
-        }
-        if (this._targetName === 'nes' || this._targetName === 'spectrum') return 'uint16_t';
+        const usizeType = this._cap('usize');
+        if (usizeType === 'u8') return 'uint8_t';
+        if (usizeType === 'u16') return 'uint16_t';
+        if (usizeType === 'u32') return 'uint32_t';
+        if (usizeType === 'u64') return 'size_t';
         return 'size_t';
       }
       if (name === 'number') return PRIMITIVE_MAP[this._defaultNumber] || 'double';

@@ -36,7 +36,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.noRecursion) ctx._optsNoRecursion = true;
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
-  if (opts.capabilities) ctx._capabilities = opts.capabilities;
+  ctx._capabilities = opts.capabilities || DESKTOP_CAPABILITIES;
 
   // Build namespace set from import nodes (before pre-populating scope)
   const namespaceImports = new Map(); // localName → resolvedPath
@@ -326,14 +326,12 @@ class Context {
     }
   }
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
-  _cap(key) { return this._capabilities?.[key] ?? DESKTOP_CAPABILITIES[key]; }
+  _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
   _isEmbedded() {
-    if (this._capabilities) return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
-    return ['avr','arm','stm32'].includes(this._targetName);
+    return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
   }
   _isEmbeddedOrRetro() {
-    if (this._capabilities) return this._cap('allocator') !== 'heap' || this._cap('bits') < 64 || !this._cap('os');
-    return ['avr','arm','stm32','nes','genesis','ps1','ps2','dos','spectrum'].includes(this._targetName);
+    return this._cap('allocator') !== 'heap' || this._cap('bits') < 64 || !this._cap('os');
   }
   _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
   lookup(name) {

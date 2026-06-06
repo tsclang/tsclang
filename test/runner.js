@@ -9,6 +9,7 @@ import { spawn } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
+import { parsePlatformDecl } from '../src/compiler/profile.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -253,9 +254,15 @@ async function executeTest(testDir, { kind, inputType }, tmpBase) {
 const PROFILES_DIR = join(ROOT, 'src', 'profiles');
 
 function loadProfile(name) {
-  const p = join(PROFILES_DIR, name + '.json');
-  if (!existsSync(p)) return null;
-  try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+  const dtsPath = join(PROFILES_DIR, name + '.d.tsc');
+  const jsonPath = join(PROFILES_DIR, name + '.json');
+  if (existsSync(dtsPath)) {
+    try { return parsePlatformDecl(readFileSync(dtsPath, 'utf8'), dtsPath); } catch { return null; }
+  }
+  if (existsSync(jsonPath)) {
+    try { return JSON.parse(readFileSync(jsonPath, 'utf8')); } catch { return null; }
+  }
+  return null;
 }
 
 function readMeta(testDir) {
@@ -265,17 +272,17 @@ function readMeta(testDir) {
     const meta = JSON.parse(readFileSync(p, 'utf8'));
     const flags = [];
 
-    // Profile-based: load capabilities from src/profiles/<name>.json
+    // Profile-based: pass --platform to CLI for capability resolution
     if (meta.profile) {
+      flags.push('--platform', meta.profile);
       const prof = loadProfile(meta.profile);
       if (prof) {
-        // Use profile name as target if no explicit target in profile
+        // Also pass legacy target name for backward compat
         const targetName = prof.target || meta.profile;
         flags.push('--target', targetName);
         if (prof.allocator)     flags.push('--allocator', prof.allocator);
         if (prof.async === 'libuv')       flags.push('--scheduler', 'libuv');
         else if (prof.async === 'state_machine') flags.push('--scheduler', 'cooperative');
-        // async: "none" → no scheduler flag (default)
         if (prof.defaultNumber) flags.push('--default-number', prof.defaultNumber);
       }
       // Meta overrides on top of profile

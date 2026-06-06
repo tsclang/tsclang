@@ -7,9 +7,20 @@ import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
+import { parsePlatformDecl } from '../src/compiler/profile.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
+
+const DESKTOP_CAPABILITIES = {
+  allocator: 'heap',
+  async: 'libuv',
+  fpu: true,
+  bits: 64,
+  usize: 'u64',
+  unaligned_access: true,
+  os: true,
+};
 
 // ---------------------------------------------------------------------------
 // Incremental compilation cache
@@ -1059,10 +1070,39 @@ if (command === 'build') {
 
   // Profile loading: --platform <name> or --build <name> (reads builds.*.profile from tsc.package.json)
   const PROFILES_DIR = join(ROOT, 'src', 'profiles');
+
   function loadProfile(name) {
-    const p = join(PROFILES_DIR, name + '.json');
-    if (!existsSync(p)) return null;
-    try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+    // 1. Built-in profiles from src/profiles/
+    const dtsPath = join(PROFILES_DIR, name + '.d.tsc');
+    const jsonPath = join(PROFILES_DIR, name + '.json');
+    if (existsSync(dtsPath)) {
+      try { return parsePlatformDecl(readFileSync(dtsPath, 'utf8'), dtsPath); } catch { return null; }
+    }
+    if (existsSync(jsonPath)) {
+      try { return JSON.parse(readFileSync(jsonPath, 'utf8')); } catch { return null; }
+    }
+
+    // 2. tsc_packages/<name>/index.d.tsc (e.g. @tsclang/avr-platform)
+    const pkgDir = name.startsWith('@') ? name : null;
+    if (pkgDir) {
+      const pkgDts = join(inputFile ? dirname(resolve(inputFile)) : process.cwd(), 'tsc_packages', pkgDir, 'index.d.tsc');
+      if (existsSync(pkgDts)) {
+        try { return parsePlatformDecl(readFileSync(pkgDts, 'utf8'), pkgDts); } catch { return null; }
+      }
+    }
+
+    // 3. Local .d.tsc path (e.g. ./profiles/my-platform.d.tsc)
+    if (name.endsWith('.d.tsc') || name.endsWith('.json')) {
+      const localPath = resolve(name);
+      if (existsSync(localPath)) {
+        try {
+          if (name.endsWith('.d.tsc')) return parsePlatformDecl(readFileSync(localPath, 'utf8'), localPath);
+          return JSON.parse(readFileSync(localPath, 'utf8'));
+        } catch { return null; }
+      }
+    }
+
+    return null;
   }
 
   let _capabilities = null;
@@ -1071,7 +1111,7 @@ if (command === 'build') {
   if (_platformFlag) {
     const prof = loadProfile(_platformFlag);
     if (!prof) {
-      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter(f => f.endsWith('.json')).map(f => f.replace('.json','')).join(', ')}\n`);
+      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter(f => f.endsWith('.d.tsc') || f.endsWith('.json')).map(f => f.replace(/\.(d\.tsc|json)$/, '')).filter((v, i, a) => a.indexOf(v) === i).join(', ')}\n`);
       process.exit(1);
     }
     _capabilities = prof;
@@ -1106,6 +1146,27 @@ if (command === 'build') {
     } catch (e) {
       process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
       process.exit(1);
+    }
+  }
+
+  // Legacy fallback: --target <name> without --platform → try loading built-in profile
+  if (!_capabilities && _targetFlag) {
+    const prof = loadProfile(_targetFlag);
+    if (prof) {
+      _capabilities = prof;
+      if (!_profileTarget) _profileTarget = prof.target || _targetFlag;
+    }
+  }
+
+  // Legacy fallback: --allocator / --scheduler flags → derive capabilities
+  if (!_capabilities && (_allocatorFlag || _schedulerFlag)) {
+    _capabilities = {
+      ...DESKTOP_CAPABILITIES,
+      allocator: _allocatorFlag === 'static' || _allocatorFlag === 'none' ? 'static' : 'heap',
+      async: _schedulerFlag === 'cooperative' ? 'state_machine' : (_schedulerFlag === 'libuv' ? 'libuv' : 'none'),
+    };
+    if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {
+      _capabilities.async = 'none';
     }
   }
 

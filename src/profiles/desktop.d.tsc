@@ -1,0 +1,9 @@
+declare platform {
+    allocator: "heap"
+    async: "libuv"
+    fpu: true
+    bits: 64
+    usize: "u64"
+    unaligned_access: true
+    os: true
+}

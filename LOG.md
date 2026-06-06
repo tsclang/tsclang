@@ -1611,8 +1611,28 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Migrated 72 meta.json test files from `target` to `profile` field
 > - Updated compiler:
 >   - `codegen.js` — added `_capabilities`, `_cap()`, `DESKTOP_CAPABILITIES`, fallback for `_isEmbedded`/`_isEmbeddedOrRetro`
->   - `program.js` — replaced hardcoded `_retroTargets`/`_noFloatTargets`/`_noHeapTargets` with capability-based checks + fallback
->   - `resolve.js` — usize from capabilities (`u8`/`u16`/`u32`/`u64`) + fallback for legacy targets
+>   - `program.js` — replaced hardcoded `_retroTargets`/`_noFloatTargets`/`_NoHeapTargets` with capability-based checks + fallback
+>   - `resolve.js` — usize from capabilities (`u8`/`u16`/`u32`/`size_t`) + fallback for legacy targets
 > - 3 new capability tests: err-float-no-fpu, err-shared-static, err-async-none
 > - All **1409 tests passing** (was 1406)
 > - `node_modules` → `tsc_packages` in test data (phase10 install tests, phase14 library tests)
+> 
+> > 2026-06-06 (v2): Profile packages — `declare platform` + `.d.tsc` profiles
+> > - Created `src/compiler/profile.js` — `parsePlatformDecl()` — parses `declare platform { ... }` from `.d.tsc` into capabilities object
+> > - Created 12 `.d.tsc` profile files alongside existing `.json` files in `src/profiles/`:
+> >   desktop, avr, avr-heap, avr-coop, arm, nes, spectrum, genesis, ps2, dos, wasm, wasm32
+> > - Updated parser (`parser.js`) — `declare platform { ... }` produces `DeclarePlatform` AST node (was `Noop`)
+> > - Removed ALL hardcoded fallback arrays from compiler:
+> >   - `codegen.js`: `_isEmbedded()` / `_isEmbeddedOrRetro()` now purely capability-based (no legacy target name arrays)
+> >   - `program.js`: `noFloat` / `noAsync` checks use `_cap()` directly (removed `_retroTargets`, `_noFloatTargets`, `_noHeapTargets`)
+> >   - `resolve.js`: `usize` resolution purely from `_cap('usize')` (removed `nes`/`spectrum` hardcoded fallback)
+> > - `_capabilities` always set: desktop default auto-injected when no profile specified
+> > - `Shared<T>` check now catches `allocator: "static"` (was only `"none"`)
+> > - CLI (`bin/index.js`):
+> >   - `loadProfile()` tries `.d.tsc` first, then `.json`, then `tsc_packages/`, then local path
+> >   - Legacy `--target <name>` auto-loads corresponding built-in profile
+> >   - Legacy `--allocator` / `--scheduler` flags derive partial capabilities
+> > - Test runner passes `--platform` flag alongside legacy flags for proper capability resolution
+> > - Updated 8 `expected.error` files for capability-based error messages
+> > - Updated 2 inline tests to use `i32` instead of `f32` (AVR has `fpu: false`)
+> > - All **1409 tests passing** (1403 C-compare + 6 pre-existing GCC failures)
