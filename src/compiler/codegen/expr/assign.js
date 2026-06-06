@@ -82,6 +82,24 @@ export default {
         return `${node.left.name} = tsc_weak_create(${argC})`;
       }
     }
+    // unknown reassignment: drop old, pack new
+    if (node.left.kind === 'Ident' && node.op === '=') {
+      const sym = this.lookup(node.left.name);
+      if (sym?.ctype === 'tsc_unknown') {
+        this._ensureUnknownStruct();
+        const rightCtype = this.inferType(node.right);
+        const r = this.exprToC(node.right, lines, depth);
+        const I = ' '.repeat(this.indent * depth);
+        lines.push(`${I}tsc_unknown_drop(&${node.left.name});`);
+        if (rightCtype === 'tsc_unknown') {
+          lines.push(`${I}${node.left.name} = ${r};`);
+        } else {
+          const packer = this._unknownPackerFor(rightCtype);
+          lines.push(`${I}${node.left.name} = ${packer}(${r});`);
+        }
+        return null;
+      }
+    }
     const l = this.exprToC(node.left, lines, depth);
     // Type-directed literal emit: float field = 1.0 → 1.0f
     let r;

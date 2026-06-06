@@ -1,0 +1,9 @@
+// [R] unknown reassign + narrow + output
+let x: unknown = 42;
+if (typeof x === "number") {
+    console.log(x as number);
+}
+x = "hello";
+if (typeof x === "string") {
+    console.log(x);
+}

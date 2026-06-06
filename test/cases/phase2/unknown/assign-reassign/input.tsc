@@ -1,0 +1,3 @@
+// [F] unknown reassign: drop old, pack new
+let x: unknown = 42;
+x = "hello";

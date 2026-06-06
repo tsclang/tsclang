@@ -105,6 +105,7 @@
 ### Лог
 
 > 2026-04-10: все тесты phase2 проходят через test/runner.js
+> 2026-06-07: fix: unknown reassignment — `x = value` where `x: unknown` now emits `tsc_unknown_drop(&x)` + packer instead of bare assign (assign.js:85-99). 2 new tests: assign-reassign, assign-reassign-run. 1411/1411 passing.
 
 ---
 
