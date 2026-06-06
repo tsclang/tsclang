@@ -227,9 +227,9 @@ export default {
       const throwsNames = (() => {
         const names = [];
         for (const t of throwsTypes) {
-          if (t.kind === 'TypeRef') names.push(t.name);
+          if (t.kind === 'TypeRef') names.push(t.name === 'Error' ? 'TscError' : t.name);
           else if (t.kind === 'TypeUnion') {
-            for (const inner of t.types) { if (inner.kind === 'TypeRef') names.push(inner.name); }
+            for (const inner of t.types) { if (inner.kind === 'TypeRef') names.push(inner.name === 'Error' ? 'TscError' : inner.name); }
           }
         }
         return names;

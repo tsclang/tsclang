@@ -111,10 +111,12 @@ export default {
       lines.push(`${I}${ai.pollFn}(&self->_await_${awaitIdx});`);
       lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
       if (ai.isResult) {
-        if (this._selfCtx.hasCleanup) {
-          lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { goto _cleanup; }`);
-        } else {
-          lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
+        if (!this._inAsyncTryCatch) {
+          if (this._selfCtx.hasCleanup) {
+            lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { goto _cleanup; }`);
+          } else {
+            lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
+          }
         }
         if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
           lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result.value;`);
@@ -264,7 +266,10 @@ export default {
 
     // ── try/catch/finally with await ──
     if (s.kind === 'TryCatch') {
+      const savedInTryCatch = this._inAsyncTryCatch;
+      this._inAsyncTryCatch = true;
       for (const ts of s.body?.body || []) this._emitAsyncStmt(ts, lines, ctx, I);
+      this._inAsyncTryCatch = savedInTryCatch;
       const lastAwaitIdx = ctx.awaitIdx - 1;
 
       const catchClause = s.catches?.[0];
@@ -285,8 +290,8 @@ export default {
           }
         }
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
-        const catchEndsReturn = (catchBody?.body || []).some(cs => cs.kind === 'Return');
-        if (!catchEndsReturn) {
+        const catchEndsControl = (catchBody?.body || []).some(cs => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
+        if (!catchEndsControl) {
           if (this._selfCtx.hasCleanup) {
             lines.push(`${I}    goto _cleanup;`);
           } else {

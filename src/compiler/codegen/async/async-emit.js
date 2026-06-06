@@ -18,7 +18,7 @@ export default {
     // throws handling: async fn that throws → _result is Result_T_Err
     const throwsTypes = node.throwsTypes || [];
     const hasThrows = throwsTypes.length > 0;
-    const throwsKey = hasThrows ? throwsTypes[0].name : null;
+    const throwsKey = hasThrows ? (throwsTypes[0].name === 'Error' ? 'TscError' : throwsTypes[0].name) : null;
 
     const innerResultCType = this._asyncRetType(returnType);
     // isVoidReturn: return type is void (no meaningful return value)
@@ -100,7 +100,7 @@ export default {
     }
 
     // Register
-    this._asyncFuncs.set(name, { stateType, pollFn, resultCType, params });
+    this._asyncFuncs.set(name, { stateType, pollFn, resultCType, innerResultCType, params });
     this.define(name, {
       ctype: resultCType ?? 'int', funcName: name,
       _isAsync: true, _stateType: stateType, _pollFn: pollFn, params,

@@ -1,13 +1,13 @@
 #include "runtime.h"
 
-typedef struct { bool ok; union { int32_t value; Error error; }; } Result_i32_Error;
+typedef struct { bool ok; union { int32_t value; TscError error; }; } Result_i32_TscError;
 
-typedef struct { int32_t _state; Result_i32_Error _result; bool _done; } mayFail_state;
+typedef struct { int32_t _state; Result_i32_TscError _result; bool _done; } mayFail_state;
 
 static void mayFail_poll(mayFail_state *self) {
     switch (self->_state) {
         case 0:
-            self->_result = (Result_i32_Error){.ok = true, .value = 10};
+            self->_result = (Result_i32_TscError){.ok = true, .value = 10};
             self->_done = true;
             return;
     }
@@ -16,7 +16,6 @@ static void mayFail_poll(mayFail_state *self) {
 typedef struct {
     int32_t _state; int32_t _result; bool _done;
     int32_t i;
-    Result_i32_Error v;
     mayFail_state _await_0;
 } tryBreak_state;
 
@@ -36,13 +35,11 @@ case_1:
         case 2:
             mayFail_poll(&self->_await_0);
             if (!self->_await_0._done) return;
-            self->v = self->_await_0._result;
-            if (self->v == 10) goto while_1_end;
+            int32_t v = self->_await_0._result.value;
+            if (v == 10) goto while_1_end;
             if (!self->_await_0._result.ok) {
                 (void)self->_await_0._result.error;
                 goto while_1_end;
-                self->_done = true;
-                return;
             }
             self->_state = 1;
             goto case_1;

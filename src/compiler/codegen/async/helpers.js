@@ -169,8 +169,10 @@ export default {
       }
       if (callee && this._asyncFuncs?.has(callee)) {
         const info = this._asyncFuncs.get(callee);
+        const isResult = info.resultCType?.startsWith('Result_');
+        const valueCType = isResult ? info.innerResultCType : info.resultCType;
         return { kind: 'async', name: callee, stateType: info.stateType,
-                 pollFn: info.pollFn, resultCType: info.resultCType, args: expr.args };
+                 pollFn: info.pollFn, resultCType: valueCType, isResult, args: expr.args };
       }
       if (callee) {
         return { kind: 'unknown', name: callee,
