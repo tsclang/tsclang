@@ -18,6 +18,7 @@ typedef struct {
     Array_i32 arr;
     int32_t total;
     size_t _forof_idx_0;
+    filterItem_state _await_0;
 } skipNegative_state;
 
 static void skipNegative_poll(skipNegative_state *self) {

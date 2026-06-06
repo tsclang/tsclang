@@ -14,6 +14,7 @@ static void poll_poll(poll_state *self) {
 typedef struct {
     int32_t _state; int32_t _result; bool _done;
     int32_t count;
+    poll_state _await_0;
 } skipFor_state;
 
 static void skipFor_poll(skipFor_state *self) {

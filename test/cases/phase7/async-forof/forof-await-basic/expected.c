@@ -18,6 +18,7 @@ typedef struct {
     Array_i32 arr;
     int32_t total;
     size_t _forof_idx_0;
+    processItem_state _await_0;
 } processAll_state;
 
 static void processAll_poll(processAll_state *self) {

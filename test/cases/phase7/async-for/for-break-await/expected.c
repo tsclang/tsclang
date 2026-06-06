@@ -11,7 +11,7 @@ static void getVal_poll(getVal_state *self) {
     }
 }
 
-typedef struct { int32_t _state; int32_t _result; bool _done; } findFor_state;
+typedef struct { int32_t _state; int32_t _result; bool _done; getVal_state _await_0; } findFor_state;
 
 static void findFor_poll(findFor_state *self) {
     switch (self->_state) {

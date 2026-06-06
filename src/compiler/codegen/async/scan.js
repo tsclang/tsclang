@@ -417,12 +417,21 @@ export default {
           if (gi) result.push({ fieldName: `_gen_${genIdx++}`, stateType: gi.stateType, isGen: true });
         }
         if (s.kind === 'While') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'DoWhile') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'For') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'ForOf') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
+        if (s.kind === 'Switch') {
+          for (const c of s.cases || []) walk(c.body);
+        }
         if (s.kind === 'If') {
           const c = s.consequent;
           walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
           if (s.alternate) walk(s.alternate?.kind === 'Block' ? s.alternate.body : [s.alternate]);
         }
-        if (s.kind === 'TryCatch') walk(s.body?.body || []);
+        if (s.kind === 'TryCatch') {
+          walk(s.body?.body || []);
+          if (s.catches) for (const c of s.catches) walk(c.body?.body || []);
+        }
       }
     };
 

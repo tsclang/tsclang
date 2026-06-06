@@ -18,6 +18,7 @@ typedef struct {
     Array_i32 arr;
     int32_t target;
     size_t _forof_idx_0;
+    checkItem_state _await_0;
 } findAsync_state;
 
 static void findAsync_poll(findAsync_state *self) {
