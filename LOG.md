@@ -1636,3 +1636,20 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > > - Updated 8 `expected.error` files for capability-based error messages
 > > - Updated 2 inline tests to use `i32` instead of `f32` (AVR has `fpu: false`)
 > > - All **1409 tests passing** (1403 C-compare + 6 pre-existing GCC failures)
+> 
+> > 2026-06-07: Fix async await bugs — all 6 pre-existing GCC failures resolved
+> > - **Bug: `_collectAwaitStates` missed For/ForOf/DoWhile/Switch** (`scan.js:383-431`)
+> >   - `walk()` only recursed into While, If, TryCatch — added For, ForOf, DoWhile, Switch
+> >   - Caused missing `_await_N` fields in state struct typedef while poll function referenced them
+> >   - Fixed 5 tests: for-break-await, for-continue-await, forof-await-basic, forof-break-await, forof-continue-await
+> > - **Bug: `Error` → `TscError` in Result typedef** (`async-emit.js:36`, `func.js:271`)
+> >   - `throws Error` produced `Result_i32_Error` with unknown C type `Error` instead of `TscError`
+> >   - Fixed in both async and sync throws code paths
+> > - **Bug: await of throws-async stored full Result struct** (`helpers.js:172-175`)
+> >   - Added `innerResultCType` to `_asyncFuncs` registration (inner value type, not Result wrapper)
+> >   - `_awaitInfoOf` now returns unwrapped value type + `isResult: true` for throws-async functions
+> >   - Generates `int32_t v = self->_await_0._result.value;` instead of `Result_i32_TscError v = ...;`
+> > - **Bug: dead code in async try/catch** (`async-stmt.js:113-118, 293-299`)
+> >   - Added `_inAsyncTryCatch` flag — await-emitter skips error early-return inside try body
+> >   - `catchEndsControl` now checks Break/Throw (not only Return) to avoid dead code after goto
+> > - All **1409 tests passing** (0 failures)
