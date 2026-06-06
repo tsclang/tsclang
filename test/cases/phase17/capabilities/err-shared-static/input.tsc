@@ -1,0 +1,1 @@
+let node: Shared<Node> = new Node();

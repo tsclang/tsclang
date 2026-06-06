@@ -1,3 +1,3 @@
 tsclang install --production
 # devDependencies not installed
-test ! -d node_modules/devtool && echo "dev-absent"
+test ! -d tsc_packages/devtool && echo "dev-absent"

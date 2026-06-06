@@ -1,1 +1,4 @@
-{"allocator":"static","ramSize":2048}
+{
+  "allocator": "static",
+  "ramSize": 2048
+}

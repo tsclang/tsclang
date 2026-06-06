@@ -1,1 +1,4 @@
-{"allocator":"static","scheduler":"cooperative"}
+{
+  "allocator": "static",
+  "scheduler": "cooperative"
+}

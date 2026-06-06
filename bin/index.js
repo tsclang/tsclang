@@ -112,6 +112,8 @@ OPTIONS:
   --emit <c|binary|wasm>   Output format (default: c)
   --outDir <dir>           Output directory (default: .)
   --target <name>          Target platform (desktop, avr, nes, wasm, ...)
+  --platform <profile>     Use built-in profile (avr, nes, wasm, desktop, ...)
+  --build <name>           Use named build from tsc.package.json
   --default-number <type>  Default number type (f64, f32, i32, ...)
   --allocator <type>       Allocator strategy (default, static, none)
   --scheduler <type>       Scheduler (default, cooperative, libuv)
@@ -486,11 +488,11 @@ function resolveLocalImport(baseDir, source) {
   return null;
 }
 
-// Resolve package import (non-relative) by walking up directory tree looking for node_modules/
+// Resolve package import (non-relative) by walking up directory tree looking for tsc_packages/
 function resolvePackageImport(pkgName, fromDir) {
   let dir = fromDir;
   while (true) {
-    const pkgDir = join(dir, 'node_modules', pkgName);
+    const pkgDir = join(dir, 'tsc_packages', pkgName);
     if (existsSync(pkgDir)) {
       // Try manifest first
       const manifestPath = join(pkgDir, 'tsc.package.json');
@@ -820,7 +822,7 @@ if (command === 'publish') {
   const files = {};
   const collectFiles = (dir, base = '') => {
     for (const entry of readdirSync(dir)) {
-      if (entry === 'node_modules' || entry.startsWith('.')) continue;
+      if (entry === 'tsc_packages' || entry.startsWith('.')) continue;
       const full = join(dir, entry);
       const rel  = base ? `${base}/${entry}` : entry;
       if (statSync(full).isDirectory()) {
@@ -874,7 +876,7 @@ if (command === 'install') {
       process.stderr.write('tsclang install: malformed .tspkg (missing name/version/files)\n');
       process.exit(1);
     }
-    const pkgDir = join('node_modules', pkgName);
+    const pkgDir = join('tsc_packages', pkgName);
     mkdirSync(pkgDir, { recursive: true });
     for (const [rel, content] of Object.entries(files)) {
       const dest = join(pkgDir, rel);
@@ -909,8 +911,8 @@ if (command === 'install') {
     }
   }
 
-  // Create node_modules/<pkg>/ stub
-  mkdirSync(join('node_modules', pkgName), { recursive: true });
+  // Create tsc_packages/<pkg>/ stub
+  mkdirSync(join('tsc_packages', pkgName), { recursive: true });
 
   // Write tsc.lock
   const lockEntry = `${pkgName}@${pkgVersion}\n`;
@@ -1048,9 +1050,63 @@ if (command === 'build') {
   const _noRecursionFlag  = args.includes('--no-recursion');
   const _ramSizeFlag      = _flagVal('--ram-size');
   const _stackSizeFlag    = _flagVal('--stack-size');
+  const _platformFlag     = _flagVal('--platform');
+  const _buildFlag        = _flagVal('--build');
   if (_defaultNumberFlag && !_validNumberTypes.has(_defaultNumberFlag)) {
     process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${[..._validNumberTypes].join(', ')}\n`);
     process.exit(1);
+  }
+
+  // Profile loading: --platform <name> or --build <name> (reads builds.*.profile from tsc.package.json)
+  const PROFILES_DIR = join(ROOT, 'src', 'profiles');
+  function loadProfile(name) {
+    const p = join(PROFILES_DIR, name + '.json');
+    if (!existsSync(p)) return null;
+    try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+  }
+
+  let _capabilities = null;
+  let _profileTarget = null;
+
+  if (_platformFlag) {
+    const prof = loadProfile(_platformFlag);
+    if (!prof) {
+      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter(f => f.endsWith('.json')).map(f => f.replace('.json','')).join(', ')}\n`);
+      process.exit(1);
+    }
+    _capabilities = prof;
+    _profileTarget = prof.target || _platformFlag;
+  } else if (_buildFlag) {
+    const pkgPath = findPackageJson(dirname(resolve(inputFile)));
+    if (!pkgPath) {
+      process.stderr.write(`tsclang build: --build requires a tsc.package.json\n`);
+      process.exit(1);
+    }
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      const buildCfg = pkg.builds?.[_buildFlag];
+      if (!buildCfg) {
+        process.stderr.write(`tsclang build: build '${_buildFlag}' not found in tsc.package.json\n`);
+        process.exit(1);
+      }
+      if (buildCfg.profile) {
+        const prof = loadProfile(buildCfg.profile);
+        if (!prof) {
+          process.stderr.write(`tsclang build: unknown profile '${buildCfg.profile}' in build '${_buildFlag}'\n`);
+          process.exit(1);
+        }
+        _capabilities = prof;
+        _profileTarget = prof.target || buildCfg.profile;
+      }
+      // Build-level overrides
+      if (buildCfg.optimize && !optimize) optimize = buildCfg.optimize;
+      if (buildCfg.outDir && outDir === '.') outDir = buildCfg.outDir;
+      if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
+      if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
+    } catch (e) {
+      process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
+      process.exit(1);
+    }
   }
 
   if (emit === 'hex') {
@@ -1063,11 +1119,12 @@ if (command === 'build') {
   const inputPath = resolve(inputFile);
   const buildOpts = {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
-    target: _targetFlag, defaultNumber: _defaultNumberFlag,
+    target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,
     allocator: _allocatorFlag, scheduler: _schedulerFlag,
     noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
     stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
     optimize: !!optimize,
+    capabilities: _capabilities,
   };
 
   function doBuild() {

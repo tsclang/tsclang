@@ -1,0 +1,10 @@
+{
+  "allocator": "static",
+  "async": "none",
+  "fpu": false,
+  "bits": 32,
+  "usize": "u32",
+  "unaligned_access": false,
+  "os": false,
+  "toolchain": "m68k-elf-gcc"
+}

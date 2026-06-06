@@ -6,9 +6,17 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 
-const EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32']);
-const ALL_EMBEDDED_TARGETS = new Set(['avr', 'arm', 'stm32', 'nes', 'genesis', 'ps1', 'spectrum']);
 const WASM_BARE_TARGET = 'wasm';
+
+const DESKTOP_CAPABILITIES = {
+  allocator: 'heap',
+  async: 'libuv',
+  fpu: true,
+  bits: 64,
+  usize: 'u64',
+  unaligned_access: true,
+  os: true,
+};
 
 // Returns { c: string, warnings: TscError[], exports: Object }
 // opts.maxErrors — max errors before stopping (default 10, Infinity for --all-errors)
@@ -28,6 +36,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.noRecursion) ctx._optsNoRecursion = true;
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
+  if (opts.capabilities) ctx._capabilities = opts.capabilities;
 
   // Build namespace set from import nodes (before pre-populating scope)
   const namespaceImports = new Map(); // localName → resolvedPath
@@ -317,9 +326,16 @@ class Context {
     }
   }
   define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
-  _isEmbedded()          { return EMBEDDED_TARGETS.has(this._targetName); }
-  _isEmbeddedOrRetro()   { return ALL_EMBEDDED_TARGETS.has(this._targetName); }
-  _isWasmBare()          { return this._targetName === WASM_BARE_TARGET; }
+  _cap(key) { return this._capabilities?.[key] ?? DESKTOP_CAPABILITIES[key]; }
+  _isEmbedded() {
+    if (this._capabilities) return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
+    return ['avr','arm','stm32'].includes(this._targetName);
+  }
+  _isEmbeddedOrRetro() {
+    if (this._capabilities) return this._cap('allocator') !== 'heap' || this._cap('bits') < 64 || !this._cap('os');
+    return ['avr','arm','stm32','nes','genesis','ps1','ps2','dos','spectrum'].includes(this._targetName);
+  }
+  _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
   lookup(name) {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
       if (this.scopes[i].has(name)) return this.scopes[i].get(name);

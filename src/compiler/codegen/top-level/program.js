@@ -95,36 +95,30 @@ export default {
     this._ramSize = this._optsRamSize || null;
     this._stackSize = this._optsStackSize || null;
 
-    // Default number type: opts > auto-detect by target
+    // Default number type: opts > auto-detect from capabilities
     const _autoDefaultNumber = this._isEmbedded() ? 'f32' : 'f64';
     this._defaultNumber = this._optsDefaultNumber || _autoDefaultNumber;
     if (this._defaultNumber === 'f64' && this._isEmbedded()) {
       this.warn(`Warning: 'f64' default-number on embedded target '${this._targetName}' may be slow; consider 'f32'`);
     }
 
-    // Pre-scan: platform-specific profile restrictions
-    const _retroTargets = ['nes', 'genesis', 'ps1', 'ps2', 'dos', 'spectrum'];
-    if (_retroTargets.includes(this._targetName)) {
+    // Pre-scan: capability-based restrictions
+    const hasCaps = !!this._capabilities;
+    const noFloat = hasCaps ? !this._cap('fpu') : ['nes','genesis','ps1','spectrum'].includes(this._targetName);
+    const noHeap = hasCaps ? this._cap('allocator') === 'static' : ['nes','genesis','ps1','spectrum'].includes(this._targetName);
+    const noAsync = hasCaps ? this._cap('async') === 'none' : ['nes','genesis','ps1','ps2','dos','spectrum'].includes(this._targetName);
+    if (noFloat || noHeap || noAsync) {
       const _walkForRestrictions = (n) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
-        // No float types on any retro target
-        const _noFloatTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
-        if (_noFloatTargets.includes(this._targetName)) {
-          if (n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
-            throw this.error(`TypeError: float types (${n.name}) are not supported on ${this._targetName} target`);
-          }
+        if (noFloat && n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
+          throw this.error(`TypeError: float types (${n.name}) are not supported${hasCaps ? ' (fpu: false)' : ` on ${this._targetName} target`}`);
         }
-        // No heap allocation on no-heap targets
-        const _noHeapTargets = ['nes', 'genesis', 'ps1', 'spectrum'];
-        if (_noHeapTargets.includes(this._targetName)) {
-          if (n.kind === 'New' && !['Shared','Weak','Box','Arc','Rc'].includes(n.name)) {
-            throw this.error(`TypeError: heap allocation ('new ${n.name}') is not supported on ${this._targetName} target`);
-          }
+        if (noHeap && n.kind === 'New' && !['Shared','Weak','Box','Arc','Rc'].includes(n.name)) {
+          throw this.error(`TypeError: heap allocation ('new ${n.name}') is not supported${hasCaps ? ' when allocator is "static"' : ` on ${this._targetName} target`}`);
         }
-        // No async on real-time targets without RTOS
-        if (n.kind === 'FuncDecl' && n.async) {
-          throw this.error(`TypeError: async functions are not supported on ${this._targetName} target`);
+        if (noAsync && n.kind === 'FuncDecl' && n.async) {
+          throw this.error(`TypeError: async functions are not supported${hasCaps ? ' (async: "none")' : ` on ${this._targetName} target`}`);
         }
         for (const k of Object.keys(n)) {
           if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }

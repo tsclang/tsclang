@@ -1593,3 +1593,26 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - 37 existing unknown tests regenerated (compiler now emits `_tsc_vt_char` vtable + `from_char`/`get_char`)
 > - 1 existing test regenerated (`char-from-string` — printf cast change)
 > - All **1406 tests passing** (was 1402)
+
+> 2026-06-06: **Platform capabilities design — full implementation**:
+> - Created `spec/09b-platform-capabilities.md` — complete specification with priority over other spec files
+>   - Full field reference table (mandatory, build, hardware, types, memory, runtime)
+>   - Configuration priority: CLI > profile > builds.* > desktop default
+>   - Build flow: `tsc_packages/` flat structure, profile resolution, pipeline
+>   - All 8 open questions resolved: allocator (heap|static), async (libuv|state_machine|none), Shared/Weak at static=error, runtime level from async, explicit usize field, self-contained profile, toolchain not overridable, mandatory fields
+> - Key renames: `scheduler` → `async`, `"cooperative"` → `"state_machine"`, `"pool"` removed, `"none"` merged with `"static"`, `address_bits` → `usize`, `no_recursion` deleted, `heap: boolean` deleted
+> - Created `src/profiles/` — 12 built-in profile JSON files (desktop, avr, avr-heap, avr-coop, arm, nes, spectrum, genesis, ps2, dos, wasm, wasm32)
+> - Updated `spec/09-build.md` — replaced hardcoded field table with reference to 09b, updated all examples
+> - Updated `bin/index.js`:
+>   - `--platform <name>` flag — loads profile from src/profiles/, passes capabilities to compiler
+>   - `--build <name>` flag — reads builds.*.profile from tsc.package.json
+>   - `node_modules` → `tsc_packages` (all 6 references)
+> - Updated `test/runner.js` — profile support in readMeta(), loads from src/profiles/
+> - Migrated 72 meta.json test files from `target` to `profile` field
+> - Updated compiler:
+>   - `codegen.js` — added `_capabilities`, `_cap()`, `DESKTOP_CAPABILITIES`, fallback for `_isEmbedded`/`_isEmbeddedOrRetro`
+>   - `program.js` — replaced hardcoded `_retroTargets`/`_noFloatTargets`/`_noHeapTargets` with capability-based checks + fallback
+>   - `resolve.js` — usize from capabilities (`u8`/`u16`/`u32`/`u64`) + fallback for legacy targets
+> - 3 new capability tests: err-float-no-fpu, err-shared-static, err-async-none
+> - All **1409 tests passing** (was 1406)
+> - `node_modules` → `tsc_packages` in test data (phase10 install tests, phase14 library tests)

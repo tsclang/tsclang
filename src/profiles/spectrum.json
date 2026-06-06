@@ -1,0 +1,10 @@
+{
+  "allocator": "static",
+  "async": "none",
+  "fpu": false,
+  "bits": 8,
+  "usize": "u16",
+  "unaligned_access": false,
+  "os": false,
+  "toolchain": "sjasmplus"
+}

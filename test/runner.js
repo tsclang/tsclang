@@ -250,12 +250,45 @@ async function executeTest(testDir, { kind, inputType }, tmpBase) {
 // ---------------------------------------------------------------------------
 // Test metadata (meta.json)
 // ---------------------------------------------------------------------------
+const PROFILES_DIR = join(ROOT, 'src', 'profiles');
+
+function loadProfile(name) {
+  const p = join(PROFILES_DIR, name + '.json');
+  if (!existsSync(p)) return null;
+  try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+}
+
 function readMeta(testDir) {
   const p = join(testDir, 'meta.json');
-  if (!existsSync(p)) return [];
+  if (!existsSync(p)) return { flags: [], profile: null };
   try {
     const meta = JSON.parse(readFileSync(p, 'utf8'));
     const flags = [];
+
+    // Profile-based: load capabilities from src/profiles/<name>.json
+    if (meta.profile) {
+      const prof = loadProfile(meta.profile);
+      if (prof) {
+        // Use profile name as target if no explicit target in profile
+        const targetName = prof.target || meta.profile;
+        flags.push('--target', targetName);
+        if (prof.allocator)     flags.push('--allocator', prof.allocator);
+        if (prof.async === 'libuv')       flags.push('--scheduler', 'libuv');
+        else if (prof.async === 'state_machine') flags.push('--scheduler', 'cooperative');
+        // async: "none" → no scheduler flag (default)
+        if (prof.defaultNumber) flags.push('--default-number', prof.defaultNumber);
+      }
+      // Meta overrides on top of profile
+      if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
+      if (meta.ramSize)        flags.push('--ram-size', String(meta.ramSize));
+      if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
+      if (meta.noRecursion)    flags.push('--no-recursion');
+      if (meta.optimize)       flags.push('--optimize', 'O2');
+      if (meta.debug)          flags.push('--debug');
+      return { flags, profile: meta.profile };
+    }
+
+    // Legacy: direct flags (backward compat)
     if (meta.target)         flags.push('--target', meta.target);
     if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
     if (meta.allocator)      flags.push('--allocator', meta.allocator);
@@ -265,8 +298,8 @@ function readMeta(testDir) {
     if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
     if (meta.optimize)       flags.push('--optimize', 'O2');
     if (meta.debug)          flags.push('--debug');
-    return flags;
-  } catch { return []; }
+    return { flags, profile: null };
+  } catch { return { flags: [], profile: null }; }
 }
 
 // ---------------------------------------------------------------------------
@@ -280,11 +313,12 @@ async function executeTscTest(testDir, kind, tmpBase) {
   const inputSrc = join(testDir, 'input.tsc');
 
   // Step 1: Run tsclang
+  const { flags: metaFlags, profile: metaProfile } = readMeta(testDir);
   const extraFlags = [
     ...(existsSync(join(testDir, 'flags.txt'))
       ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
       : []),
-    ...readMeta(testDir),
+    ...metaFlags,
   ];
   const tscResult = await run(
     process.execPath,

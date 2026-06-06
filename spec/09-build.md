@@ -968,10 +968,9 @@ tsclang build nes
   ├─ 2. Прочитать declare platform { heap, fpu, bits... }
   │
   ├─ 3. Проверить код проекта:
-  │      - allocator: "none"   → любой Map/Set/new без стека → ошибка
   │      - allocator: "static" → Map/Set/new без compile-time capacity → ошибка
   │      - allocator: "static" → Map/Set с compile-time N → BSS (✅)
-  │      - Shared<T> при allocator: "none"/"static" → ошибка (ARC требует malloc)
+  │      - Shared<T> / Weak<T> при allocator: "static" → ошибка (ARC требует heap)
   │      - fpu: false → f32/f64 операции → предупреждение (software float)
   │      - импорт недекларированного std/libc → ошибка
   │
@@ -1083,9 +1082,28 @@ import "./ppu.d.tsc";
 
 | Источник | Когда |
 |----------|-------|
-| Встроенный профиль | known targets: `x86-64`, `arm-cortex-m*`, `avr-atmega*`, `wasm32` |
-| Community пакет | `@nes/platform`, `@spectrum/platform`, `@sega/platform` |
+| Встроенный профиль (`src/profiles/*.json`) | `--platform avr`, `--platform nes`, и т.д. |
+| Community пакет (`tsc_packages/`) | `--platform @nes/platform` или `builds.*.profile` в `tsc.package.json` |
 | Локальный `.d.tsc` | любая экзотика, собственные SoC |
+
+Актуальная спецификация полей и значений — см. **`spec/09b-platform-capabilities.md`**.
+
+**Встроенные профили** (в `src/profiles/`):
+
+| Профиль | allocator | async | fpu | bits | usize |
+|---------|-----------|-------|-----|------|-------|
+| `desktop` | heap | libuv | true | 64 | u64 |
+| `avr` | static | none | false | 8 | u16 |
+| `avr-heap` | heap | state_machine | false | 8 | u16 |
+| `avr-coop` | static | state_machine | false | 8 | u16 |
+| `arm` | heap | state_machine | false | 32 | u32 |
+| `nes` | static | none | false | 8 | u16 |
+| `spectrum` | static | none | false | 8 | u16 |
+| `genesis` | static | none | false | 32 | u32 |
+| `ps2` | heap | none | true | 32 | u32 |
+| `dos` | heap | none | true | 32 | u32 |
+| `wasm` | heap | none | true | 32 | u32 |
+| `wasm32` | heap | libuv | true | 32 | u32 |
 
 **Поля конфигурации таргета:**
 
@@ -1108,15 +1126,9 @@ CMake + toolchain:     реально компилируют под платфо
 
 **Откуда TSClang знает что делать:**
 
-Для `known targets` — у компилятора внутренняя таблица:
+Профиль загружается из `src/profiles/<name>.json` (встроенные) или из `declare platform` в profile-пакете. См. **`spec/09b-platform-capabilities.md`**.
 
-```
-avr + atmega328p  → { usize: u16, stack: 2048, flash: 32768, heap: false, async_stack: 256, ... }
-avr + atmega2560  → { usize: u16, stack: 8192, flash: 262144, heap: false, async_stack: 512, ... }
-arm + cortex-m0   → { usize: u32, heap: optional, fpu: false, async_stack: 1024, ... }
-arm + cortex-m4   → { usize: u32, heap: optional, fpu: true, async_stack: 4096, ... }
-x86-64            → { usize: u64, heap: true, fpu: true, async_stack: unlimited, ... }
-```
+Для MCU-specific настроек (stack size, ram size) — профиль содержит базовые значения, которые можно переопределить в `tsc.package.json` через `builds.*`:
 
 **`async_stack`** — максимальный суммарный размер async state machine chain по глубочайшему пути вызовов. Компилятор ошибится если worst-case превышает лимит (см. `--report-stack` в spec/07-concurrency.md).
 
@@ -1132,8 +1144,7 @@ x86-64            → { usize: u64, heap: true, fpu: true, async_stack: unlimite
 
 Переопределить в platform profile: `declare platform { async_stack: 512 }`. `async_stack: 0` отключает проверку (не рекомендуется).
 
-Для `unknown targets` эту таблицу заменяет `profile`. Если `arch` не в таблице и `profile` не указан → ошибка компилятора:
-*"unknown target arch '6502': specify a platform profile"*
+Если профиль не указан и нет `--platform` → используется desktop default. CLI: `tsclang build input.tsc --platform nes`.
 
 **Что генерируется в CMakeLists.txt:**
 
@@ -1223,7 +1234,7 @@ declare platform {
     toolchainFile: "toolchain.cmake"  // без ./ → путь внутри пакета профиля
     include: "include"                // C-реализации: include/std/hal.h, include/nes/ppu.h, ...
     allocator: "static"               // Map/Set/Array с compile-time N → BSS
-    scheduler: "cooperative"
+    async: "state_machine"
     ...
 }
 ```
@@ -1286,13 +1297,12 @@ declare platform {
     allocator: "static"  // нет malloc/free → new без compile-time capacity → ошибка
                          // new X(N) с compile-time N → статический BSS
                          // Shared<T> → ошибка (ARC требует malloc)
-    scheduler: "cooperative"  // кооперативный poll loop, без heap
+    async: "state_machine"  // кооперативный poll loop, без heap
     fpu: false           // нет FPU → f32/f64 через software float → предупреждение
-    bits: 8              // usize = u16 (6502 адресует 64 KB)
-    address_bits: 16
-    stack_size: 256      // байт (6502 stack page) → компилятор считает worst-case stack
+    bits: 8
+    usize: "u16"         // 6502 адресует 64 KB
+    stack_size: 256      // байт (6502 stack page) → компилятор считает worst-case stack, рекурсия → error
     ram_size: 2048       // 2 KB WRAM (без банкинга)
-    no_recursion: true   // стек 256 байт — рекурсия почти всегда переполнит
 }
 
 // 2. Типы std/hal для этой платформы (слой типов ↔ слой реализации include/std/hal.h)
@@ -1318,57 +1328,24 @@ declare module "std/libc" {
 
 ### Поля declare platform
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `toolchain` | `string` | Имя компилятора (`"cc65"`, `"avr-gcc"`) |
-| `toolchainFile` | `string` | Путь к CMake toolchain file (внутри пакета — без `./`) |
-| `include` | `string` | Путь к директории с C-реализацией stdlib (без `./` → внутри пакета). TSClang добавляет `include_directories(BEFORE ...)` в CMakeLists.txt. Дефолт: `"include"` если директория существует. |
-| `heap` | `boolean` | Доступен ли `malloc`/`free` |
-| `allocator` | `"heap" \| "static" \| "pool" \| "none"` | Стратегия аллокации (см. ниже) |
-| `scheduler` | `"libuv" \| "cooperative" \| "none"` | Планировщик для async/await |
-| `fpu` | `boolean` | Есть ли FPU (иначе software float) |
-| `bits` | `u8` | Разрядность CPU (8, 16, 32, 64) |
-| `address_bits` | `u8` | Ширина адреса (влияет на `usize`) |
-| `stack_size` | `u32` | Размер стека в байтах |
-| `ram_size` | `u32` | Общий размер RAM — компилятор проверяет суммарный BSS |
-| `flash_size` | `u32` | Размер Flash/ROM — компилятор проверяет размер кода |
-| `no_recursion` | `boolean` | Запретить рекурсию (статический анализ call graph) |
-| `unaligned_access` | `boolean` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур. x86-64: `true`; ARM Cortex-M0, AVR: `false` |
+> **Актуальная спецификация полей `declare platform`** — в `spec/09b-platform-capabilities.md`. Ниже — исторический контекст и примеры.
 
-#### Стратегии аллокации (`allocator`)
+Поле `declare platform` описывает возможности целевой платформы. С профилем обязательны поля `allocator` и `async`. Полный список полей, типы, допустимые значения и описания — см. **`spec/09b-platform-capabilities.md` → "Референс полей"**.
 
-| Значение | Смысл | `new X()` без capacity | `new X(N)` с compile-time N |
-|----------|-------|------------------------|------------------------------|
-| `"heap"` | стандартный `malloc/free` | ✅ | ✅ |
-| `"static"` | все объекты в BSS, размеры должны быть compile-time | ❌ ошибка | ✅ → BSS |
-| `"pool"` | пользовательский `tsc_alloc`/`tsc_free` из platform profile | ✅ | ✅ |
-| `"none"` | только стек, никаких owned heap-объектов | ❌ ошибка | ❌ ошибка |
+#### Основные изменения (см. `spec/09b-platform-capabilities.md`):
 
-> `heap: false` — устаревший эквивалент `allocator: "none"`. Оба поддерживаются для обратной совместимости. Рекомендуется использовать `allocator`.
+| Было | Стало |
+|------|-------|
+| `async: "libuv" \| "cooperative" \| "none"` | `async: "libuv" \| "state_machine" \| "none"` |
+| `allocator: "heap" \| "static" \| "pool" \| "none"` | `allocator: "heap" \| "static"` |
+| `address_bits: u8` | `usize: "u8" \| "u16" \| "u32" \| "u64"` |
+| `no_recursion: boolean` | удалён (автоматическая проверка `stack_size`) |
+| `heap: boolean` | удалён (дублировал `allocator`) |
 
-#### Планировщики async (`scheduler`)
-
-| Значение | Где | Поведение |
-|----------|-----|-----------|
-| `"libuv"` | desktop/server | event loop через libuv / io_uring |
-| `"cooperative"` | embedded | простой round-robin poll loop без heap |
-| `"none"` | bare-metal | `async function` компилируется в state machine, но планировщика нет — пользователь вызывает `resume()` вручную |
-
-**Что компилятор делает с профилем:**
-
-| Флаг | Эффект |
-|------|--------|
-| `allocator: "none"` / `heap: false` | `Shared<T>`, dynamic `new` без compile-time capacity → ошибка |
-| `allocator: "static"` | `new X(N)` с compile-time N → BSS; `new X()` без N → ошибка |
-| `allocator: "pool"` | все аллокации → `tsc_alloc`/`tsc_free`, нет других ограничений |
-| `fpu: false` | `f32`/`f64` операции → предупреждение "будет software float" |
-| `bits: 8`, `address_bits: 16` | `usize` = `u16` |
-| `stack_size: N` | компилятор считает worst-case stack, предупреждает при превышении |
-| `ram_size: N` | компилятор проверяет суммарный BSS + stack ≤ N |
-| `no_recursion: true` | рекурсивный call → ошибка компилятора |
+#### Примеры
 
 ```typescript
-// target: @nes/platform (allocator: "static")
+// target: @nes/platform (allocator: "static", async: "none")
 
 const map = new Map<string, i32>()
 // ❌ ошибка: Map без compile-time capacity; платформа: allocator: "static"
@@ -1385,7 +1362,7 @@ import { sin } from "std/math"      // ✅ — std/math не требует heap
 
 ### Возможности на heap-free платформах
 
-> **`heap: false` / `allocator: "static"` — это не "нет классов и структур данных". Это "нет динамической аллокации во время выполнения". Все возможности языка доступны через статическую аллокацию с compile-time размерами.**
+> **`allocator: "static"` — это не "нет классов и структур данных". Это "нет динамической аллокации во время выполнения". Все возможности языка доступны через статическую аллокацию с compile-time размерами.**
 
 #### Классы и интерфейсы — всегда работают
 
@@ -1473,7 +1450,7 @@ static Set_u16 visited = { _visited_data, 256, 0 };
 State machine — это C struct. Struct может жить на стеке или в BSS. На embedded компилятор выбирает static allocation:
 
 ```typescript
-// scheduler: "cooperative" — Arduino / bare-metal
+// async: "state_machine" — Arduino / bare-metal
 
 @static async function blink(): Promise<void> {
     while (true) {
@@ -1691,7 +1668,7 @@ static void Spark_drop(opt_ref_Spark s) {
 // drop(s) → тот же Spark_drop(s), но явно в коде
 ```
 
-`new` на `allocator: "none"` без `@embedded.pool` → ошибка компилятора.
+`new` без compile-time capacity при `allocator: "static"` → ошибка компилятора.
 `@embedded.pool(N)` на desktop — работает, но обычно не нужен.
 
 | Декоратор | Где живёт объект | `new` |
@@ -1708,7 +1685,7 @@ static void Spark_drop(opt_ref_Spark s) {
 
 ```typescript
 // tsc.package.json: { "builds": { "spectrum": { "arch": "z80", "profile": "@spectrum/platform" } } }
-// declare platform { allocator: "static", scheduler: "none", ram_size: 49152, ... }
+// declare platform { allocator: "static", async: "none", ram_size: 49152, ... }
 
 import { screen, attr } from "@spectrum/ula"
 
@@ -1748,8 +1725,8 @@ function main(): void {
 **Микро-ОС для Arduino Uno (2 KB RAM):**
 
 ```typescript
-// declare platform { allocator: "static", scheduler: "cooperative",
-//                   ram_size: 2048, stack_size: 512, no_recursion: true }
+// declare platform { allocator: "static", async: "state_machine",
+//                   ram_size: 2048, stack_size: 512 }
 
 class Process {
     readonly name: string
@@ -1782,7 +1759,7 @@ class Process {
 **Эмулятор NES на ESP32:**
 
 ```typescript
-// ESP32: allocator: "heap", scheduler: "cooperative", ram_size: 524288
+// ESP32: allocator: "heap", async: "state_machine", ram_size: 524288
 // Heap есть, но структуры всё равно фиксированные — NES имеет фиксированные размеры
 
 class CPU6502 {
@@ -1997,13 +1974,12 @@ declare platform {
     toolchain: "cc65"
     toolchainFile: "toolchain.cmake"
     allocator: "static"  // Map/Set/Array с compile-time N → BSS; без N → ошибка
-    scheduler: "cooperative"
+    async: "state_machine"
     fpu: false
     bits: 8
-    address_bits: 16
+    usize: "u16"
     stack_size: 256
     ram_size: 2048
-    no_recursion: true
     unaligned_access: false  // 6502 не поддерживает невыровненный доступ
 }
 
@@ -2022,10 +1998,10 @@ declare platform {
     toolchain: "z88dk"
     toolchainFile: "toolchain.cmake"
     allocator: "static"
-    scheduler: "cooperative"
+    async: "state_machine"
     fpu: false
     bits: 8
-    address_bits: 16
+    usize: "u16"
     stack_size: 512
     ram_size: 49152  // 48 KB RAM (без ROM)
 }
@@ -2044,10 +2020,10 @@ declare module "std/libc" {
 declare platform {
     toolchain: "m68k-elf-gcc"
     allocator: "static"  // 64 KB Work RAM — heap возможен, но не стандартен
-    scheduler: "cooperative"
+    async: "state_machine"
     fpu: false
     bits: 32
-    address_bits: 24
+    usize: "u32"         // 24-bit addressing, u32 is safe upper bound
     stack_size: 4096
     ram_size: 65536  // 64 KB Work RAM
 }
@@ -2153,7 +2129,7 @@ declare library {
 При компиляции проекта компилятор сопоставляет `declare library` с `declare platform`:
 
 ```
-error: @myco/async requires "heap" but platform has heap: false
+error: @myco/async requires "heap" but platform has allocator: "static"
   library: @myco/async/index.d.tsc
   platform: @avr/platform
   hint: use @myco/async/static or choose different library
