@@ -1720,3 +1720,8 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **S-6 Atomic methods**: все 9 методов реализованы в `concurrency.js:44-94` — load/store/fetchAdd/fetchSub/fetchOr/fetchAnd/fetchXor/swap/compareExchange. Метод `exchange` называется `swap` (Rust convention).
 > - AUDIT-PLAN обновлён: все 3 → RESOLVED. STILL PRESENT = 0. Открытых проблем осталось 2: `--emit hex` (01-5) и atob/btoa spec (S-1).
 > - Files changed: `AUDIT-PLAN.md`
+
+> 2026-06-07: Верификация S-1 (atob/btoa spec) — уже описан в spec
+> - **S-1 atob/btoa**: spec уже описан в `14-stdlib.md:1028-1032` (`import { atob, btoa } from "std/string"`). Impl полный: dispatch (`conversion.js:160-171`), type inference (`infer.js:294`), runtime (`std/base64.h`), 2 теста.
+> - AUDIT-PLAN: S-1 → RESOLVED. Открытых проблем осталось 1: `--emit hex` (01-5). STILL PRESENT = 0.
+> - Files changed: `AUDIT-PLAN.md`

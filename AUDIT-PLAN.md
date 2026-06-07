@@ -162,7 +162,7 @@
 
 | # | SPEC утверждает | Реализация | Статус | Вердикт |
 |---|----------------|------------|--------|---------|
-| S-1 | — | `atob`/`btoa` реализованы | **STILL PRESENT** | SPEC нужно обновить — добавить atob/btoa |
+| S-1 | — | `atob`/`btoa` реализованы | **RESOLVED** | Spec уже описан: `14-stdlib.md:1028-1032`. Impl полный: dispatch, type inference, runtime (`std/base64.h`), 2 теста. |
 | S-2 | — | `Set<T>` реализован, не описан | **RESOLVED** | Теперь описан: `03-types.md:1341`, `05-memory.md:914` |
 | S-3 | — | `structuredClone` реализован, не описан | **RESOLVED** | Теперь описан: `03-types.md:1782,1788,1789` |
 | S-4 | `instanceof`/`in` в precedence table | Оба на уровне 6 | **RESOLVED** | Реализовано корректно |
@@ -177,13 +177,12 @@
 | Высокие | 18 | 11 | 0 | 7 | 0 |
 | Средние | 13 | 2 | 0 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
-| Spec↔impl | 6 | 5 | 0 | 0 | 0 |
-| **Итого** | **45** | **19** | **0** | **24** | **1** |
+| Spec↔impl | 6 | 6 | 0 | 0 | 0 |
+| **Итого** | **45** | **20** | **0** | **24** | **1** |
 
-### Подтверждённые открытые проблемы (обновлено 2026-06-07, 2 штуки)
+### Подтверждённые открытые проблемы (обновлено 2026-06-07, 1 штука)
 
 1. **`--emit hex` не функционален** (01-5) — bin/index.js:1056-1061, hex emit path не реализован
-2. **atob/btoa не в spec** (S-1) — реализованы в `conversion.js:160-171`, spec не описывает
 
 ---
 
@@ -339,37 +338,31 @@
 | Высокие | 18 | 10 | 0 | 8 |
 | Средние | 13 | 2 | 0 | 11 |
 | Низкие | 4 | 0 | 0 | 4 |
-| Spec↔impl | 6 | 5 | 0 | 0 |
-| **Итого** | **45** | **18** | **0** | **27** |
+| Spec↔impl | 6 | 6 | 0 | 0 |
+| **Итого** | **45** | **19** | **0** | **27** |
 
 ### Общая статистика
 
 | Метрика | До | После (2026-06-07) |
 |---------|-----|-------|
 | "Активных" расхождений старого doc | ~42 | **3** (1 STILL PRESENT + 2 NEEDS INVESTIGATION) |
-| Предварительных находок | ~109 | **45** (0 STILL PRESENT + 24 NEEDS INVESTIGATION + 19 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
+| Предварительных находок | ~109 | **45** (0 STILL PRESENT + 24 NEEDS INVESTIGATION + 20 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
 | Закрыто нашей работой | 0 | **8** (R-1..R-8) |
 | Закрыто аудитом Секции 1 | 0 | **5** (L-1..L-4 + 03-6) |
-| Закрылось само с момента аудита | 0 | **6** (H-6, S-2, S-3, #38, #94, S-6) |
+| Закрылось само с момента аудита | 0 | **7** (H-6, S-2, S-3, #38, #94, S-6, S-1) |
 
-### Подтверждённые открытые проблемы (итого 2)
+### Подтверждённые открытые проблемы (итого 1)
 
 **Из старого doc-аудита (1):**
 1. `--emit hex` не функционален (01-5)
 
-**Из предварительных находок (1):**
-1. atob/btoa не в spec (S-1)
-
-**Закрыто аудитом Секции 1 (2026-06-07):**
-- ~~Import renaming not supported (#93)~~ — RESOLVED, parser+codegen уже поддерживают
-- ~~Legacy octal не в spec (L-4)~~ — RESOLVED, добавлена заметка в spec
-- ~~`*_to_string` static buffers not reentrant (#103)~~ — RESOLVED, malloc+ARC (desktop), ring buffer pool (embedded), тест toString-reentrant
-- ~~Set/Map.delete returns opt_T instead of bool (03-6)~~ — RESOLVED, runtime+codegen+spec обновлены: Set.delete и Map.delete возвращают bool (П2: TS compat)
+**Из предварительных находок (0):**
 
 **Закрыто верификацией (2026-06-07):**
 - ~~URL encode/decode missing (#38)~~ — RESOLVED, реализовано через `import { url } from "std/string"`: `url.encode()`/`url.decode()`/`url.encodeComponent()`/`url.decodeComponent()`
 - ~~Division by zero no guard (#94)~~ — RESOLVED, integer `/` и `%` emit runtime guard (`operators.js:257-274`, `assign.js:206-216`)
 - ~~5 Atomic methods missing (S-6)~~ — RESOLVED, все 9 методов реализованы: `concurrency.js:44-94`, метод `exchange` называется `swap`
+- ~~atob/btoa не в spec (S-1)~~ — RESOLVED, spec уже описан: `14-stdlib.md:1028-1032`, impl полный
 
 ### Подлежат исследованию (24 штуки)
 
