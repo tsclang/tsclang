@@ -1702,3 +1702,14 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Removed: `static char _tsc_i32_buf[32]`, `_tsc_i64_buf[32]`, `_tsc_f64_buf[64]` from runtime.h; `static char _buf[12/24/32]` from runtime_nes.h
 > - New test: `phase3/strings/toString-reentrant` — verifies multiple `.toString()` calls produce independent strings
 > - Files changed: `src/runtime/runtime.h`, `src/runtime/runtime_nes.h`, `test/cases/phase3/strings/toString-reentrant/`, `AUDIT-PLAN.md`
+
+> 2026-06-07: Fix 03-6 — Set.delete и Map.delete теперь возвращают `bool` (П2: TS compat)
+> - Bug: Set.delete и Map.delete возвращали `opt_T` (value | null), а в TypeScript возвращают `boolean`
+> - Runtime `runtime.h`: все 10 `tsc_set_delete_*` макросов → return `bool`; `tsc_set_delete_string`, `tsc_map_delete_string_i32`, `tsc_map_delete_string_string` → `bool`
+> - Codegen `infer.js`: Set.delete → `'bool'` (was opt_T), Map.delete → `'bool'` (was opt_T)
+> - Codegen `stdlib.js`: Set.delete emit simplified (removed `_ensureOptStruct` call)
+> - Spec updated: `spec/08-collections/08-arrays.md` (Map.delete → bool), `spec/14-stdlib/14-stdlib.md` (Map.delete → bool)
+> - Tests updated: `phase3/sets/add-has-delete`, `phase3/sets/delete-owned`, `phase3/maps/delete` — expected.c updated to match new codegen
+> - HashMap.delete (void) и URLSearchParams.delete (void) не затронуты — это другие типы коллекций
+> - AUDIT-PLAN: 03-6 → RESOLVED, открытых проблем старого doc-аудита осталось 1 (01-5)
+> - Files changed: `src/runtime/runtime.h`, `src/compiler/codegen/types/infer.js`, `src/compiler/codegen/calls/stdlib.js`, `spec/08-collections/08-arrays.md`, `spec/14-stdlib/14-stdlib.md`, `test/cases/phase3/sets/add-has-delete/expected.c`, `test/cases/phase3/sets/delete-owned/expected.c`, `test/cases/phase3/maps/delete/expected.c`, `AUDIT-PLAN.md`

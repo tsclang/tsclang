@@ -2,7 +2,7 @@ let s = new Set<i32>();
 s.add(42);
 s.add(10);
 const removed = s.delete(42);
-if (removed != null) {
-    console.log(removed);
+if (removed) {
+    console.log("deleted");
 }
 console.log(s.size);

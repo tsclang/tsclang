@@ -180,12 +180,11 @@
 | Spec↔impl | 6 | 4 | 1 | 0 | 0 |
 | **Итого** | **45** | **16** | **3** | **24** | **1** |
 
-### Подтверждённые открытые проблемы (обновлено 2026-06-07, 4 штуки)
+### Подтверждённые открытые проблемы (обновлено 2026-06-07, 3 штуки)
 
 1. **URL encode/decode missing** (#38) — `encodeURIComponent`/`decodeURIComponent`/`encodeURI`/`decodeURI` не реализованы
 2. **Division by zero no guard** (#94) — UB в C при integer division by zero
 3. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
-4. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
 
 ---
 
@@ -239,12 +238,12 @@
 | 03-3 | `charCodeAt` возвращает `u8` | Тип `uint32_t`, значение 0-255 | **RESOLVED** |
 | 03-4 | Нет `undefined` | `undefined` = синоним `null`. resolve.js:10 | **RESOLVED** |
 | 03-5 | `.parse` только для 3 типов | Все 10 числовых типов имеют `.parse()` | **RESOLVED** |
-| 03-6 | `Set.delete` возвращает `bool` | Возвращает `opt_T`. stdlib.js:849-854 | **STILL PRESENT** |
+| 03-6 | `Set.delete` возвращает `bool` | Реализация исправлена: Set.delete и Map.delete теперь возвращают `bool` | **RESOLVED** |
 | 03-7 | `groupBy` — instance method | Static: `Map.groupBy`, `Object.groupBy` | **RESOLVED** |
 
 ~~Исключено: 03-8..03-9 (отсутствующие разделы), 03-10..03-14 (неверный C-output), 03-15..03-17 (doc без spec)~~
 
-**Из 7 "активных": 6 RESOLVED, 1 STILL PRESENT (`Set.delete` return type)**
+**Из 7 "активных": 7 RESOLVED**
 
 ### Секция 04-classes: верифицированные статусы
 
@@ -325,13 +324,13 @@
 |--------|-----------------|-----------------|---------------|---------------------|
 | 01-intro | 3 | 2 | 1 (`--emit hex`) | 0 |
 | 02-syntax | 8 | 6 | 0 | 2 (for-of, range) |
-| 03-types | 7 | 6 | 1 (`Set.delete`) | 0 |
+| 03-types | 7 | 7 | 0 | 0 |
 | 04-classes | 0 | — | — | — |
 | 05-memory | 7 | 7 | 0 | 0 |
 | 06-errors | 3 | 3 | 0 | 0 |
 | 07-concurrency | 11 | 11 | 0 | 0 |
 | 08-12 | 3 | 3 | 0 | 0 |
-| **Итого** | **42** | **38** | **2** | **2** |
+| **Итого** | **42** | **39** | **1** | **2** |
 
 ### Предварительные находки
 
@@ -348,7 +347,7 @@
 
 | Метрика | До | После (2026-06-07) |
 |---------|-----|-------|
-| "Активных" расхождений старого doc | ~42 | **4** (2 STILL PRESENT + 2 NEEDS INVESTIGATION) |
+| "Активных" расхождений старого doc | ~42 | **3** (1 STILL PRESENT + 2 NEEDS INVESTIGATION) |
 | Предварительных находок | ~109 | **45** (4 STILL PRESENT + 24 NEEDS INVESTIGATION + 15 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
 | Закрыто нашей работой | 0 | **8** (R-1..R-8) |
 | Закрыто аудитом Секции 1 | 0 | **4** (L-1..L-4: 2 code smell fix, 1 spec update, 1 already resolved) |
@@ -356,9 +355,8 @@
 
 ### Подтверждённые открытые проблемы (итого 5)
 
-**Из старого doc-аудита (2):**
+**Из старого doc-аудита (1):**
 1. `--emit hex` не функционален (01-5)
-2. `Set.delete` возвращает `opt_T` вместо `bool` — spec↔impl gap (03-6)
 
 **Из предварительных находок (3):**
 3. URL encode/decode missing (#38)
@@ -369,6 +367,7 @@
 - ~~Import renaming not supported (#93)~~ — RESOLVED, parser+codegen уже поддерживают
 - ~~Legacy octal не в spec (L-4)~~ — RESOLVED, добавлена заметка в spec
 - ~~`*_to_string` static buffers not reentrant (#103)~~ — RESOLVED, malloc+ARC (desktop), ring buffer pool (embedded), тест toString-reentrant
+- ~~Set/Map.delete returns opt_T instead of bool (03-6)~~ — RESOLVED, runtime+codegen+spec обновлены: Set.delete и Map.delete возвращают bool (П2: TS compat)
 
 ### Подлежат исследованию (24 штуки)
 
@@ -390,7 +389,7 @@
 - Блок 5 (Строки): #89, #95, #96
 - Блок 7 (Массивы): #66
 - Блок 8 (Кортежи): #67
-- Блок 9 (Map/Set): 03-6, S-2
+- Блок 9 (Map/Set): S-2
 - Блок 14 (Ошибки): #94, #99-#101
 - Блок 20 (Async): H-3, H-4
 - Блок 22 (Threads): S-6

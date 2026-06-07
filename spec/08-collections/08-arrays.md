@@ -264,13 +264,13 @@ let m = new Map<string, i32>();
 m.set(key, value)   // key: move (сложный тип) / copy (примитив); value: move — Map владеет обоими
 m.get(key)          // key: Ref<K>, возвращает Ref<V> | null (не V | undefined как в JS)
 m.has(key)          // key: Ref<K>, boolean
-m.delete(key)       // key: Ref<K>, возвращает V | null (owned) — элемент удалён из Map
+m.delete(key)       // key: Ref<K>, возвращает boolean — true если ключ был найден и удалён
 m.clear()           // void
 m.size              // number, readonly
 
 // ?. и ?? с Map
 const len = m.get("key")?.length ?? 0;   // Ref<string> | null → number
-const val = m.delete("key") ?? fallback;  // V | null → V
+const wasDeleted = m.delete("key");       // boolean
 ```
 
 Примеры ownership:

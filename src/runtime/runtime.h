@@ -613,18 +613,18 @@ static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
     (opt_ref_i32){ _vp_ != NULL, _vp_ }; \
 })
 
-/* delete returns opt_V (the removed value, or nothing if key absent) */
+/* delete returns bool (true if key was present and removed) */
 #define tsc_map_delete_string_i32(_m_, _key_) ({ \
     TscMap_string_i32 *_mm_ = (_m_); \
     String _kk_ = (_key_); \
-    int32_t _vv_ = 0; bool _ff_ = false; \
+    bool _ff_ = false; \
     for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
         if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) { \
-            _vv_ = _mm_->_vals[_ii_]; _ff_ = true; \
+            _ff_ = true; \
             memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(int32_t)); \
             _mm_->size--; break; } } \
-    (opt_i32){ _ff_, _vv_ }; \
+    _ff_; \
 })
 
 TSC_MAP_DECL(String, int32_t, string_i32)
@@ -659,14 +659,14 @@ TSC_MAP_DECL(String, String, string_string)
 #define tsc_map_delete_string_string(_m_, _key_) ({ \
     TscMap_string_string *_mm_ = (_m_); \
     String _kk_ = (_key_); \
-    String _vv_ = _tsc_str_make(NULL, 0, 0); bool _ff_ = false; \
+    bool _ff_ = false; \
     for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \
         if (_tsc_str_eq(_mm_->_keys[_ii_], _kk_)) { \
-            _vv_ = _mm_->_vals[_ii_]; _ff_ = true; \
+            _ff_ = true; \
             memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(String)); \
             _mm_->size--; break; } } \
-    (opt_string){ _ff_, _vv_ }; \
+    _ff_; \
 })
 
 #define tsc_map_free_string_string(m) ((void)(m))
@@ -744,85 +744,85 @@ static inline void tsc_set_clear_##SUFFIX(TscSet_##SUFFIX *_s) { _s->size = 0; }
 
 #define tsc_set_delete_i32(_s_, _val_) ({ \
     TscSet_i32 *__s__ = (_s_); int32_t __v__ = (_val_); \
-    int32_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(int32_t)); \
             __s__->size--; break; } } \
-    (opt_i32){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_i64(_s_, _val_) ({ \
     TscSet_i64 *__s__ = (_s_); int64_t __v__ = (_val_); \
-    int64_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(int64_t)); \
             __s__->size--; break; } } \
-    (opt_i64){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_u8(_s_, _val_) ({ \
     TscSet_u8 *__s__ = (_s_); uint8_t __v__ = (_val_); \
-    uint8_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint8_t)); \
             __s__->size--; break; } } \
-    (opt_u8){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_u16(_s_, _val_) ({ \
     TscSet_u16 *__s__ = (_s_); uint16_t __v__ = (_val_); \
-    uint16_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint16_t)); \
             __s__->size--; break; } } \
-    (opt_u16){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_u32(_s_, _val_) ({ \
     TscSet_u32 *__s__ = (_s_); uint32_t __v__ = (_val_); \
-    uint32_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint32_t)); \
             __s__->size--; break; } } \
-    (opt_u32){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_u64(_s_, _val_) ({ \
     TscSet_u64 *__s__ = (_s_); uint64_t __v__ = (_val_); \
-    uint64_t __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(uint64_t)); \
             __s__->size--; break; } } \
-    (opt_u64){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_f32(_s_, _val_) ({ \
     TscSet_f32 *__s__ = (_s_); float __v__ = (_val_); \
-    float __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(float)); \
             __s__->size--; break; } } \
-    (opt_f32){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_f64(_s_, _val_) ({ \
     TscSet_f64 *__s__ = (_s_); double __v__ = (_val_); \
-    double __fv__ = 0; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(double)); \
             __s__->size--; break; } } \
-    (opt_f64){ __ok__, __fv__ }; })
+    __ok__; })
 #define tsc_set_delete_bool(_s_, _val_) ({ \
     TscSet_bool *__s__ = (_s_); bool __v__ = (_val_); \
-    bool __fv__ = false; bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (__s__->_vals[__i__] == __v__) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(bool)); \
             __s__->size--; break; } } \
-    (opt_bool){ __ok__, __fv__ }; })
+    __ok__; })
 
 TSC_SET_DECL_PRIM(int8_t,   i8)
 TSC_SET_DECL_PRIM(int16_t,  i16)
@@ -850,13 +850,13 @@ static inline bool tsc_set_has_string(const TscSet_string *_s, String val) {
     return false; }
 #define tsc_set_delete_string(_s_, _val_) ({ \
     TscSet_string *__s__ = (_s_); String __v__ = (_val_); \
-    String __fv__ = _tsc_str_make(NULL, 0, 0); bool __ok__ = false; \
+    bool __ok__ = false; \
     for (size_t __i__ = 0; __i__ < __s__->size; __i__++) { \
         if (_tsc_str_eq(__s__->_vals[__i__], __v__)) { \
-            __fv__ = __s__->_vals[__i__]; __ok__ = true; \
+            __ok__ = true; \
             memmove(&__s__->_vals[__i__], &__s__->_vals[__i__+1], (__s__->size-__i__-1)*sizeof(String)); \
             __s__->size--; break; } } \
-    (opt_string){ __ok__, __fv__ }; })
+    __ok__; })
 static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
 #define tsc_set_for_each_i32(_s_, _fn_) do { \

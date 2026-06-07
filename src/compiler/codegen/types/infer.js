@@ -498,13 +498,7 @@ export default {
     const _setSym0 = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     if (_setSym0?._isSet) {
       if (prop === 'has') return 'bool';
-      if (prop === 'delete') {
-        const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
-        const _setId = this.cTypeToIdent(_setElemCType);
-        const optName = `opt_${_setId}`;
-        this._ensureOptStruct(optName, _setElemCType);
-        return optName;
-      }
+      if (prop === 'delete') return 'bool';
       if (prop === 'add' || prop === 'clear' || prop === 'forEach') return 'void';
       if (prop === 'values' || prop === 'keys') {
         const _setElemCType = _setSym0._setElemCType ?? 'int32_t';
@@ -535,11 +529,7 @@ export default {
         this._ensureOptRefStruct(optName, vCType);
         return optName;
       }
-      if (prop === 'delete') {
-        const optName = `opt_${vIdent}`;
-        this._ensureOptStruct(optName, vCType);
-        return optName;
-      }
+      if (prop === 'delete') return 'bool';
       if (prop === 'has') return 'bool';
       if (prop === 'set' || prop === 'clear' || prop === 'forEach') return 'void';
       if (prop === 'values') {

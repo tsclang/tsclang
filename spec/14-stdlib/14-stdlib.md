@@ -181,7 +181,7 @@ const v = m.get("alice") ?? 0  // дефолт через ??
 
 // проверка и удаление
 m.has("alice")    // boolean
-m.delete("alice") // V | null — удалённое значение или null если ключа не было
+m.delete("alice") // boolean — true если элемент был удалён, false если ключа не было
 
 // размер
 m.size   // number, readonly
@@ -198,11 +198,10 @@ m.clear()  // void — удаляет все элементы, деструкт�
 Ownership:
 - `m.set(key, value)` — move `value` в map. После вызова `value` недоступен (если не примитив).
 - `m.get(key)` — возвращает `Ref<V> | null` для сложных типов, `V | null` для примитивов.
-- `m.delete(key)` — возвращает `V | null`: owned value если ключ был (деструктор НЕ вызывается — ownership передаётся caller'у), `null` если ключа не было.
+- `m.delete(key)` — возвращает `boolean`: `true` если ключ был найден и удалён, `false` если ключа не было. Деструктор удалённого значения вызывается автоматически.
   ```typescript
-  if (cache.delete("key")) { }           // boolean-семантика через truthy check
-  const old = cache.delete("key")        // забрать значение
-  if (old != null) old.doSomething()     // использовать
+  if (cache.delete("key")) { }           // проверка удаления
+  const removed = cache.delete("key")    // removed: boolean
   ```
 
 ```typescript

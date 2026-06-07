@@ -845,9 +845,6 @@ export default {
         if (_sProp === 'add')    return `tsc_set_add_${_sSfx}(&${_sName}, ${_sArg0})`;
         if (_sProp === 'has')    return `tsc_set_has_${_sSfx}(&${_sName}, ${_sArg0})`;
         if (_sProp === 'delete') {
-          const _setElemCType = _setSym._setElemCType ?? 'int32_t';
-          const _setId = this.cTypeToIdent(_setElemCType);
-          this._ensureOptStruct(`opt_${_setId}`, _setElemCType);
           this._lastSuppressConst = true;
           return `tsc_set_delete_${_sSfx}(&${_sName}, ${_sArg0})`;
         }
