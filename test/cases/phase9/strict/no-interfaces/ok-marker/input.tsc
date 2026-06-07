@@ -1,0 +1,5 @@
+interface Serializable {}
+class Data implements Serializable {
+    x: i32;
+}
+console.log("ok");

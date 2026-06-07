@@ -992,8 +992,8 @@
         const discC = this.exprToC(node.discriminant, lines, depth);
         const IS = ' '.repeat(this.indent * (depth + 1));
         p(`switch (${discC}) {`);
-        // Check if discriminant is a string literal union type
         const discEnumDef = this.classes.get(discType);
+        let hasDefault = false;
         for (const c of node.cases) {
           if (c.test) {
             let caseC;
@@ -1004,9 +1004,13 @@
             }
             lines.push(`${IS}case ${caseC}:`);
           } else {
+            hasDefault = true;
             lines.push(`${IS}default:`);
           }
           for (const s of c.body) this.visitStmt(s, lines, depth + 2);
+        }
+        if (!hasDefault && this._strictRules?.has('switch-default')) {
+          lines.push(`${IS}default: break;`);
         }
         p('}');
         break;

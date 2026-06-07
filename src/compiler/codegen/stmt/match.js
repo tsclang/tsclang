@@ -41,14 +41,19 @@
     // Emit match as switch (enum, non-parens) or if/else chain
     if (isEnum && !hasParens) {
       // Switch/case form
+      let hasDefault = false;
       p(`switch (${discC}) {`);
       for (const c of cases) {
         const bodyC = this.exprToC(c.body, lines, depth);
         if (c.pattern.kind === 'MatchEnum') {
           p(`    case ${c.pattern.enumName}_${c.pattern.caseName}: ${name} = ${bodyC}; break;`);
         } else if (c.pattern.kind === 'MatchWild') {
+          hasDefault = true;
           p(`    default: ${name} = ${bodyC}; break;`);
         }
+      }
+      if (!hasDefault && this._strictRules?.has('switch-default')) {
+        p('    default: break;');
       }
       p('}');
     } else {

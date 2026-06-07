@@ -95,6 +95,9 @@
 
     // IIFE: (x => expr)(args) — hoist and call directly
     if (callee.kind === 'Arrow') {
+      if (this._strictRules?.has('no-closures')) {
+        throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+      }
       const closure = this.hoistClosure(callee, `_iife_${this.closureCount ?? 0}`);
       if (closure) {
         const argsC = this.argsToC(args, lines, depth);
@@ -447,6 +450,9 @@
           }
         }
         if (paramType === 'tsc_closure' && a.expr.kind === 'Arrow') {
+          if (this._strictRules?.has('no-closures')) {
+            throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+          }
           const closure = this.hoistClosure(a.expr, `_cb_${this.closureCount ?? 0}`);
           if (closure) {
             if (closure.retainLines?.length) {

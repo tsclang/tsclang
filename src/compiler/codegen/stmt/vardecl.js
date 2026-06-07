@@ -1073,6 +1073,9 @@ export default {
 
         // TypeFunc: single closure variable
         if (typeAnn?.kind === 'TypeFunc') {
+          if (this._strictRules?.has('no-closures')) {
+            throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+          }
           const _closureParamCtypes = (typeAnn.params ?? []).map(p => this.resolveType(p));
           let initC;
           if (init?.kind === 'Arrow') {
@@ -1140,6 +1143,9 @@ export default {
 
         if (init) {
           if (init.kind === 'Arrow') {
+            if (this._strictRules?.has('no-closures')) {
+              throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+            }
             const _arrowParamCtypes = (init.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *');
             const closure = this.hoistClosure(init, name);
             if (closure) {
@@ -1165,6 +1171,9 @@ export default {
           } else if (!typeAnn && init.kind === 'Ident') {
             const sym = this.lookup(init.name);
             if (sym?.funcName && sym?.params) {
+              if (this._strictRules?.has('no-closures')) {
+                throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+              }
               p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${sym.funcName}};`);
               this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName, closureRetType: sym.ctype,
                                   ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } :

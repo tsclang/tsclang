@@ -1,0 +1,4 @@
+let x: i32 = 10;
+let y: i32 = 2;
+let q = x / y;
+console.log(q);

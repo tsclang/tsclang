@@ -1754,3 +1754,18 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Регрессия**: phase0 ✓30, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase12 ✓112, phase13 ✓21, phase18 ✓21.
 > - **Spec**: `spec/13-build/13-strict-mode.md` (new), `SPEC.md` updated.
 > - Files changed: `spec/13-build/13-strict-mode.md` (new), `spec/13-build/index.md`, `SPEC.md`, `test/runner.js`, `bin/index.js`, `src/compiler/codegen.js`, `src/compiler/codegen/types/resolve.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/expr/operators.js`, `src/compiler/codegen/expr/assign.js`, `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/misc/new-expr.js`, `src/compiler/codegen/stmt/vardecl.js`, `test/cases/phase9/strict/` (12 new tests), `AUDIT-PLAN.md`
+
+> 2026-06-08: MISRA-C compliant strict rules (6 новых правил, П4, П5)
+> - **MISRA code quality rules**:
+>   - `switch-default`: auto `default: break;` во все генерируемые switch (match, user switch, async state machine, generator, hash lookup). ~5 точек в codegen.
+>   - `no-abort`: `abort()` → `_tsc_on_panic("msg")` — пользовательский обработчик panic, переопределяемый через `#define`. Runtime: `#ifndef _tsc_on_panic` macro.
+> - **Feature-blocking rules** (убирают `void*` из C-output):
+>   - `no-closures`: запрет arrow functions, function references, callbacks (vardecl + call-dispatch + method-dispatch).
+>   - `no-interfaces`: запрет interface с методами (marker interfaces без методов — OK).
+>   - `no-threads`: запрет `spawn {}` / `Thread.spawn` (через `_emitSpawnBlock`).
+>   - `no-sort`: запрет `Array.sort()` с comparator (builtin sort без аргументов — OK).
+> - **SIL 3 preset**: `{ "strict": ["no-any","no-unsafe","no-native","safe-div","no-lossy-cast","no-dynamic-alloc","no-closures","no-interfaces","no-threads","no-sort","switch-default","no-abort"] }`
+> - **Spec**: `spec/13-build/13-strict-mode.md` — 6 новых правил с примерами, quick reference обновлена (13→13+6 rules).
+> - **Тесты**: +10 new strict tests. Phase9 strict: 12→22 (total phase9: 37→47).
+> - **Регрессия**: все 20 фаз проходят (phase0 ✓30, phase1 ✓498, phase2 ✓285, phase3 ✓356, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase9 ✓47, phase10 ✓20, phase11 ✓38, phase12 ✓112, phase13 ✓21, phase14 ✓7, phase15 ✓10, phase17 ✓12, phase18 ✓21, phase19 ✓74).
+> - Files changed: `spec/13-build/13-strict-mode.md`, `src/compiler/codegen/stmt/match.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/async/async-emit.js`, `src/compiler/codegen/async/generator.js`, `src/compiler/codegen/calls/method-dispatch.js`, `src/compiler/codegen/expr/operators.js`, `src/compiler/codegen/expr/assign.js`, `src/compiler/codegen/stmt/vardecl.js`, `src/compiler/codegen/top-level/types-alias.js`, `src/compiler/codegen/misc/emit-helpers.js`, `src/runtime/runtime.h`, `test/cases/phase9/strict/` (10 new tests)

@@ -1,0 +1,9 @@
+interface Drawable {
+    draw(): void;
+}
+class Circle implements Drawable {
+    x: i32;
+    draw(): void {
+        console.log(this.x);
+    }
+}

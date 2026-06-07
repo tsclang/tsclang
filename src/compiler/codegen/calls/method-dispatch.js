@@ -195,6 +195,9 @@ export default {
         case 'length':   return `${objC}.length`;
         case 'capacity': return `${objC}.capacity`;
         case 'sort': {
+          if (args.length && this._strictRules?.has('no-sort')) {
+            throw this.error('Array.sort() with comparator is forbidden in strict mode (no-sort)', baseObject);
+          }
           const fnC = args.length ? (cbFnName ?? argsC) : 'NULL';
           return `tsc_array_sort_${et}(&${objC}, ${fnC})`;
         }
@@ -497,6 +500,9 @@ export default {
           line += ' break;';
           fnLines.push(line);
         }
+        if (this._strictRules?.has('switch-default')) {
+          fnLines.push('        default: break;');
+        }
         fnLines.push('    }');
         fnLines.push('    return (opt_i32){false, 0};');
         fnLines.push('}');
@@ -754,6 +760,9 @@ export default {
   _extractCallbackFn(arg, lines, depth) {
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
+      if (this._strictRules?.has('no-closures')) {
+        throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', expr);
+      }
       const closure = this.hoistClosure(expr, `_cb_${this.closureCount ?? 0}`);
       if (closure) {
         if (closure.retainLines?.length) {

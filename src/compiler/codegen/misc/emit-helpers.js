@@ -106,6 +106,9 @@ export default {
   // Emit a spawn block: generate env struct, fn, and call site code
   // Returns the C variable name of the thread handle
   _emitSpawnBlock(varName, body, throwsTypes, lines, depth) {
+    if (this._strictRules?.has('no-threads')) {
+      throw this.error('threads are forbidden in strict mode (no-threads)', body);
+    }
     // Collect free (captured) vars from body
     const syntheticLambda = { params: [], body: body.kind === 'Block' ? body : { kind: 'Block', body: [body] } };
     const freeVars = this._collectFreeVars(syntheticLambda);

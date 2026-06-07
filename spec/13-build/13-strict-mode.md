@@ -6,7 +6,7 @@
 
 ```json
 {
-  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc"]
+  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
 }
 ```
 
@@ -209,6 +209,156 @@ let s = "hello" + " world";       // compile-time concatenation possible
 
 **Обоснование:** `malloc`/`realloc` могут вернуть NULL → UB. В safety-critical системах потребление памяти должно быть детерминировано на этапе компиляции.
 
+#### `switch-default` — auto `default: break;` во все switch
+
+Добавляет `default: break;` во все генерируемые `switch`, если пользователь не указал `default` case.
+
+```typescript
+// Input:
+enum Color { Red, Green, Blue }
+let c: Color = Color.Red;
+let val = match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+};
+
+// Output (switch-default ON):
+// switch (c) {
+//     case Color_Red: val = 1; break;
+//     case Color_Green: val = 2; break;
+//     case Color_Blue: val = 3; break;
+//     default: break;    // <-- auto-added
+// }
+```
+
+**Затронутые конструкции:**
+- `match` по enum → switch
+- `switch` statement пользователя
+- Async state machine switch
+- Generator state machine switch
+- Hash lookup switch (Map/StaticMap)
+
+**Не добавляется если:** `default` case уже присутствует.
+
+**Обоснование:** MISRA C:2012 Rule 16.4 (Required) — каждый `switch` должен иметь `default`. Пропущенный `default` — источник необработанных случаев.
+
+#### `no-abort` — запрет `abort()` в C-output
+
+Заменяет `abort()` на `_tsc_on_panic()` — пользовательский обработчик паник, который можно переопределить.
+
+```c
+// Без no-abort:
+if (_tsc_div_0 == 0) { fprintf(stderr, "panic: division by zero\n"); abort(); }
+
+// С no-abort:
+if (_tsc_div_0 == 0) { _tsc_on_panic("division by zero"); }
+```
+
+`_tsc_on_panic` определён в runtime.h как макрос, по умолчанию раскрывается в `abort()`. Пользователь может переопределить:
+
+```c
+// В пользовательском коде (до #include runtime.h или через -D):
+#define _tsc_on_panic(msg) my_error_handler(__FILE__, __LINE__, msg)
+```
+
+**Затронутые конструкции:**
+- Integer division by zero guard (`operators.js`, `assign.js`)
+
+**Обоснование:** `abort()` — неконтролируемое завершение. В safety-critical системах все аварийные ситуации должны обрабатываться через определённый обработчик (MISRA C:2012 Rule 20.11).
+
+#### `no-closures` — запрет closures и function-typed values
+
+Запрещает arrow functions, function references, function-typed переменные/параметры, callbacks.
+
+```typescript
+// ❌ error: closures are forbidden in strict mode (no-closures);
+//          use named functions or inline the logic
+let add = (a: i32, b: i32): i32 => a + b;
+
+// ❌ error: closures are forbidden in strict mode (no-closures)
+arr.map(x => x * 2);
+
+// ❌ error: closures are forbidden in strict mode (no-closures)
+function apply(f: (x: i32) => i32, v: i32): i32 { return f(v); }
+
+// ✅ named function calls — ok
+function double(x: i32): i32 { return x * 2; }
+let result = double(42);
+```
+
+**Обоснование:** Closures генерируют `void*` в C-output (`tsc_closure` с `void* env` и `void (*fn)(void)`). Для MISRA C compliance (Rule 11.4) — `void*` запрещён. Убирая closures, убираем источник `void*`.
+
+#### `no-interfaces` — запрет interface с методами
+
+Запрещает `interface` declarations с методами и `implements` на классах.
+
+```typescript
+// ❌ error: interfaces with methods are forbidden in strict mode (no-interfaces)
+interface Drawable { draw(): void; }
+class Circle implements Drawable { draw(): void { } }
+
+// ✅ marker interface (no methods) — ok
+interface Serializable {}
+class Data implements Serializable {}
+```
+
+**Обоснование:** Interface vtable использует `void *self` для type-erased dispatch (MISRA Rule 11.4). Marker interfaces без методов не генерируют vtable — разрешены.
+
+#### `no-threads` — запрет Thread.spawn
+
+Запрещает `spawn {}` и `Thread.spawn`.
+
+```typescript
+// ❌ error: threads are forbidden in strict mode (no-threads)
+spawn {
+    console.log("hello from thread");
+}
+
+// ✅ synchronous code — ok
+console.log("hello");
+```
+
+**Обоснование:** Thread entry point требует `void* (*)(void*)` (pthreads/Win32 API). Для MISRA compliance — `void*` запрещён. В embedded системах threads часто недоступны.
+
+#### `no-sort` — запрет Array.sort() с comparator
+
+Запрещает `arr.sort((a, b) => ...)`. `arr.sort()` без аргументов (built-in порядок) — разрешён.
+
+```typescript
+// ❌ error: Array.sort() with comparator is forbidden in strict mode (no-sort)
+arr.sort((a, b) => a - b);
+
+// ✅ built-in sort (default ascending) — ok
+arr.sort();
+```
+
+**Обоснование:** `qsort(3)` требует `int (*)(const void*, const void*)` comparator — `void*` параметры. Built-in sort использует типизированные компараторы внутри runtime — `void*` инкапсулирован.
+
+### SIL Presets
+
+IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
+
+| SIL | Требования | Что обеспечивает TSClang |
+|-----|-----------|------------------------|
+| 1 | Базовая безопасность | Базовый TSClang (статическая типизация, ownership, нет UB) |
+| 2 | Повышенная безопасность | + `no-any`, `no-unsafe`, `no-native` |
+| 3 | Высокая безопасность | + `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `safe-div`, `no-lossy-cast`, `no-dynamic-alloc` |
+| 4 | Максимальная безопасность | + `const-params`, `no-gcc-extensions` (в разработке) + формальная верификация |
+
+Рекомендуемые пресеты:
+
+```json
+// SIL 2 — type safety
+{ "strict": ["no-any", "no-unsafe", "no-native"] }
+
+// SIL 3 — MISRA C compliance, no void*
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+
+// SIL 4 — maximum strictness (when const-params and no-gcc-extensions are available)
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort", "const-params", "no-gcc-extensions"] }
+```
+
 ### Взаимодействие правил
 
 Правила **независимы** — каждое проверяется отдельно. Комбинации не создают дополнительных ограничений.
@@ -217,8 +367,11 @@ let s = "hello" + " world";       // compile-time concatenation possible
 // Только type safety — без ограничений на аллокацию
 { "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c"] }
 
-// Всё — максимальная строгость
-{ "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc"] }
+// SIL 3 embedded — максимальная строгость, нет void*
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+
+// Desktop type safety — closures/interfaces/threads разрешены
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "switch-default", "no-abort"] }
 ```
 
 ### Error messages
@@ -234,6 +387,10 @@ file.tsc:8:4:  error: unsafe blocks are forbidden in strict mode (no-unsafe)
 file.tsc:12:8: error: integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function
 file.tsc:15:6: error: lossy cast from i64 to i32 is forbidden (no-lossy-cast); use Math.saturatingCast() or Math.checkedCast()
 file.tsc:20:14: error: dynamic allocation with runtime size is forbidden (no-dynamic-alloc); use fixed-size array or compile-time constant
+file.tsc:25:2: error: closures are forbidden in strict mode (no-closures); use named functions or inline the logic
+file.tsc:30:1: error: interfaces with methods are forbidden in strict mode (no-interfaces)
+file.tsc:35:1: error: threads are forbidden in strict mode (no-threads)
+file.tsc:40:8: error: Array.sort() with comparator is forbidden in strict mode (no-sort)
 ```
 
 ### CLI
@@ -262,3 +419,9 @@ Strict rules проверяются **после** platform capability checks. �
 | `safe-div` | Integer `/` и `%` без guard | `(safe-div)` |
 | `no-lossy-cast` | Lossy `as` cast | `(no-lossy-cast)` |
 | `no-dynamic-alloc` | `new Array(runtimeN)`, `new Map()`, `new Set()` | `(no-dynamic-alloc)` |
+| `switch-default` | Отсутствие `default:` в switch | `(switch-default)` — auto-add |
+| `no-abort` | `abort()` в C-output | `(no-abort)` — `_tsc_on_panic()` |
+| `no-closures` | Arrow functions, function references, callbacks | `(no-closures)` |
+| `no-interfaces` | Interface с методами, `implements` | `(no-interfaces)` |
+| `no-threads` | `spawn {}`, `Thread.spawn` | `(no-threads)` |
+| `no-sort` | `Array.sort()` с comparator | `(no-sort)` |

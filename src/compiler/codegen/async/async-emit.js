@@ -218,6 +218,10 @@ export default {
       lines.push('            return;');
     }
 
+    if (this._strictRules?.has('switch-default')) {
+      lines.push('        default: break;');
+    }
+
     lines.push('    }');
 
     return lines;

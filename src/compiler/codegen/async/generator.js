@@ -195,6 +195,10 @@ export default {
       lines.push(`            ${doneRet}`);
     }
 
+    if (this._strictRules?.has('switch-default')) {
+      lines.push('        default: break;');
+    }
+
     lines.push('    }');
     lines.push(`    ${doneRet}`);
 

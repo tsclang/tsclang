@@ -30,6 +30,10 @@ export default {
 
     if (methods.length === 0) return;
 
+    if (this._strictRules?.has('no-interfaces')) {
+      throw this.error('interfaces with methods are forbidden in strict mode (no-interfaces)', node);
+    }
+
     // vtable typedef (single-line)
     const vtableFields = methods.map(m => {
       const ret = m.returnType ? this.resolveType(m.returnType) : 'void';

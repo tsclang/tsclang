@@ -270,8 +270,11 @@ export default {
       if (isInt && lines) {
         const I = ' '.repeat(this.indent * depth);
         const tmp = `_tsc_div_${this.tempCount++}`;
+        const panicExpr = this._strictRules?.has('no-abort')
+          ? '_tsc_on_panic("division by zero")'
+          : 'abort()';
         lines.push(`${I}int32_t ${tmp} = ${r};`);
-        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); abort(); }`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
         return `${l} ${op} ${tmp}`;
       }
     }

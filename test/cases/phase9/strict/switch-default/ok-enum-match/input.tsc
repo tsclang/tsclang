@@ -1,0 +1,8 @@
+enum Color { Red, Green, Blue }
+let c: Color = Color.Red;
+let val = match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+};
+console.log(val);
