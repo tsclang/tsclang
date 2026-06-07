@@ -50,7 +50,7 @@
 15. Embedded-таргет
 
 ## Статус
-- [ ] Секция 1: Лексика и токены
+- [x] Секция 1: Лексика и токены
 - [ ] Секция 2: Типы
 - [ ] Секция 3: Выражения
 - [ ] Секция 4: Операторы
@@ -70,6 +70,10 @@
 
 | # | Секция | Утверждение SPEC | Статус | Вердикт | Комментарий |
 |---|--------|-----------------|--------|---------|-------------|
+| L-1 | Лексика | `'hello'` → TK.CHAR — вводит в заблуждение | **RESOLVED** | Code smell | Переименовано TK.CHAR → TK.SQUOTE. litType='char' в AST не тронут |
+| L-2 | Лексика | `**=` и `*=` делят TK.STAREQ | **RESOLVED** | Code smell | Добавлен TK.STARSTAREQ для `**=` |
+| L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест phase6/import/import-rename проходит |
+| L-4 | Лексика | Legacy octal не задокументирован | **RESOLVED** | Спец неполон | Добавлена заметка в spec/03-types/03-numbers.md |
 
 ---
 
@@ -116,7 +120,7 @@
 | 90 | Channel thread safety | **RESOLVED** | `runtime.h:3018-3079` — mutex + condvar, thread-safe MPMC. |
 | 91 | Recursive type alias infinite struct | **NEEDS INVESTIGATION** | `types-alias.js` — нет обнаружения циклов. `type A = { next: A }` может дать бесконечный struct. |
 | 92 | Type exports invisible across modules | **NEEDS INVESTIGATION** | Type-only imports парсятся (`parser.js:512-513`), но взаимодействие с type resolution через границы модулей не проверено. |
-| 93 | Import renaming misparse | **STILL PRESENT** | `parser.js:517-518` — `import { X as Y }` НЕ поддерживается. Парсер собирает только bare identifiers. |
+| 93 | Import renaming misparse | **RESOLVED** | parser.js:536-541 — `import { X as Y }` полностью поддерживается. Codegen (codegen.js:55-57) обрабатывает alias. Тест phase6/import/import-rename проходит. |
 | 94 | Division by zero no guard | **STILL PRESENT** | Нет защиты от деления на 0 нигде в codebase. C integer division by zero = UB. |
 | H-1 | async+for-of wrong C | **RESOLVED** | `async-stmt.js:306-348` — полная реализация async for-await-of. |
 | H-2 | async+closure env lost | **RESOLVED** | `async-emit.js:56-92` — free variables промотируются в state struct fields. |
@@ -170,20 +174,19 @@
 | Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
 |-----------|-------|----------|---------------|---------------------|-----------|
 | Критические | 4 | 1 | 0 | 2 | 1 |
-| Высокие | 18 | 8 | 3 | 7 | 0 |
+| Высокие | 18 | 9 | 2 | 7 | 0 |
 | Средние | 13 | 1 | 1 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
 | Spec↔impl | 6 | 4 | 1 | 0 | 0 |
-| **Итого** | **45** | **14** | **5** | **24** | **1** |
+| **Итого** | **45** | **15** | **4** | **24** | **1** |
 
-### Подтверждённые открытые проблемы (обновлено 2026-06-05, 6 штук)
+### Подтверждённые открытые проблемы (обновлено 2026-06-07, 5 штук)
 
 1. **URL encode/decode missing** (#38) — `encodeURIComponent`/`decodeURIComponent`/`encodeURI`/`decodeURI` не реализованы
-2. **Import renaming not supported** (#93) — `import { X as Y }` не парсится
-3. **Division by zero no guard** (#94) — UB в C при integer division by zero
-4. **atob/btoa не в spec** (S-1) — spec нужно обновить, добавить atob/btoa
-5. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
-6. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
+2. **Division by zero no guard** (#94) — UB в C при integer division by zero
+3. **atob/btoa не в spec** (S-1) — spec нужно обновить, добавить atob/btoa
+4. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
+5. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
 
 ---
 
@@ -336,34 +339,37 @@
 | Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION |
 |-----------|-------|----------|---------------|---------------------|
 | Критические | 4 | 1 | 0 | 3 |
-| Высокие | 18 | 7 | 3 | 8 |
+| Высокие | 18 | 8 | 2 | 8 |
 | Средние | 13 | 1 | 0 | 12 |
 | Низкие | 4 | 0 | 0 | 4 |
 | Spec↔impl | 6 | 2 | 3 | 0 |
-| **Итого** | **45** | **11** | **6** | **27** |
+| **Итого** | **45** | **12** | **5** | **27** |
 
 ### Общая статистика
 
-| Метрика | До | После (2026-06-05) |
+| Метрика | До | После (2026-06-07) |
 |---------|-----|-------|
 | "Активных" расхождений старого doc | ~42 | **4** (2 STILL PRESENT + 2 NEEDS INVESTIGATION) |
-| Предварительных находок | ~109 | **45** (5 STILL PRESENT + 24 NEEDS INVESTIGATION + 14 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
+| Предварительных находок | ~109 | **45** (4 STILL PRESENT + 24 NEEDS INVESTIGATION + 15 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
 | Закрыто нашей работой | 0 | **8** (R-1..R-8) |
+| Закрыто аудитом Секции 1 | 0 | **4** (L-1..L-4: 2 code smell fix, 1 spec update, 1 already resolved) |
 | Закрылось само с момента аудита | 0 | **3** (H-6, S-2, S-3) |
 
-### Подтверждённые открытые проблемы (итого 7)
+### Подтверждённые открытые проблемы (итого 6)
 
 **Из старого doc-аудита (2):**
 1. `--emit hex` не функционален (01-5)
 2. `Set.delete` возвращает `opt_T` вместо `bool` — spec↔impl gap (03-6)
 
-**Из предварительных находок (6):**
+**Из предварительных находок (4):**
 3. URL encode/decode missing (#38)
-4. Import renaming not supported (#93)
-5. Division by zero no guard (#94)
-6. atob/btoa не в spec (S-1)
-7. 5 Atomic methods missing (S-6)
-8. `*_to_string` static buffers not reentrant (#103) — confirmed in runtime.h
+4. Division by zero no guard (#94)
+5. atob/btoa не в spec (S-1)
+6. `*_to_string` static buffers not reentrant (#103) — confirmed in runtime.h
+
+**Закрыто аудитом Секции 1 (2026-06-07):**
+- ~~Import renaming not supported (#93)~~ — RESOLVED, parser+codegen уже поддерживают
+- ~~Legacy octal не в spec (L-4)~~ — RESOLVED, добавлена заметка в spec
 
 ### Подлежат исследованию (24 штуки)
 

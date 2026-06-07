@@ -1238,7 +1238,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     const left = parseTernary();
     const op = cur().value;
     const assignOps = [
-      TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.SLASHEQ,
+      TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.STARSTAREQ, TK.SLASHEQ,
       TK.AMPEQ, TK.PIPEEQ, TK.PERCENTEQ, TK.CARETEQ,
       TK.LSHIFTEQ, TK.RSHIFTEQ, TK.RSHIFTUEQ,
       TK.AMP2EQ, TK.PIPE2EQ, TK.QUEST2EQ,
@@ -1736,7 +1736,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     // Literals
     if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.STRING) { pos++; return { kind: 'Literal', litType: 'string', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
-    if (t.type === TK.CHAR)   { pos++; return { kind: 'Literal', litType: 'char',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.SQUOTE)  { pos++; return { kind: 'Literal', litType: 'char',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.NULL)   { pos++; return { kind: 'Literal', litType: 'null',   value: 'null',  line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.TEMPLATE) {

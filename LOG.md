@@ -1682,3 +1682,14 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - `spec/PHASES.md` — test phase → spec section mapping
 > - `spec/PROGRESS.md` — migration log
 > - Old empty `spec/` deleted, intermediate `spec_v2/` renamed back to `spec/`
+
+> 2026-06-07: Audit Section 1 (Лексика и токены) — spec↔impl verification
+> - Systematic audit of lexer tokens, keywords, operators, literals against spec
+> - L-1: Renamed `TK.CHAR` → `TK.SQUOTE` in lexer.js and parser.js (code smell: `'hello'` got CHAR token type despite being a string)
+> - L-2: Added `TK.STARSTAREQ` for `**=` operator — was sharing `TK.STAREQ` with `*=` (code smell, different semantics)
+> - L-3: `import { X as Y }` — was already implemented (parser.js:536-541, codegen.js:55-57), marked #93 as RESOLVED in AUDIT-PLAN
+> - L-4: Added legacy octal error note to `spec/03-types/03-numbers.md`
+> - Verified: all tokens, keywords, operators, number formats, comments, template literals match spec
+> - AUDIT-PLAN.md updated: Section 1 checked off, statistics recalculated, #93 → RESOLVED
+> - 490 tests passing (phase1+ with --no-gcc), 0 failures
+> - Files changed: `lexer.js`, `parser.js`, `spec/03-types/03-numbers.md`, `AUDIT-PLAN.md`

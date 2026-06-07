@@ -18,7 +18,7 @@ export const TK = {
   ARROW:  '=>',
   SPREAD: '...',
   DOTDOT: '..',
-  CHAR:   'CHAR',
+  SQUOTE: 'SQUOTE',
   TEMPLATE: 'TEMPLATE',
 
   // Operators
@@ -28,7 +28,7 @@ export const TK = {
   LT:    '<',  GT:     '>',  LTE:   '<=', GTE:   '>=',
   BANG:  '!',  AMP2:   '&&', PIPE2: '||', QUEST2: '??',
   PLUS2: '++', MINUS2: '--',
-  PLUSEQ: '+=', MINUSEQ: '-=', STAREQ: '*=', SLASHEQ: '/=',
+  PLUSEQ: '+=', MINUSEQ: '-=', STAREQ: '*=', STARSTAREQ: '**=', SLASHEQ: '/=',
   AMPEQ: '&=',  PIPEEQ: '|=',  PERCENTEQ: '%=', CARETEQ: '^=',
   LSHIFTEQ: '<<=', RSHIFTEQ: '>>=', RSHIFTUEQ: '>>>=',
   AMP2EQ: '&&=', PIPE2EQ: '||=', QUEST2EQ: '??=',
@@ -158,7 +158,7 @@ export function lex(src, filename = '<input>') {
       advance(); // closing quote
       // Single-quoted strings are char literals
       if (quote === "'") {
-        tokens.push(new Token(TK.CHAR, str, startLine, startCol));
+        tokens.push(new Token(TK.SQUOTE, str, startLine, startCol));
       } else {
         tokens.push(new Token(TK.STRING, str, startLine, startCol));
       }
@@ -240,7 +240,7 @@ export function lex(src, filename = '<input>') {
     if (rest.startsWith('--'))  { i += 1; col += 1; tokens.push(new Token(TK.MINUS2,   '--',   startLine, startCol)); continue; }
     if (rest.startsWith('+='))  { i += 1; col += 1; tokens.push(new Token(TK.PLUSEQ,   '+=',   startLine, startCol)); continue; }
     if (rest.startsWith('-='))  { i += 1; col += 1; tokens.push(new Token(TK.MINUSEQ,  '-=',   startLine, startCol)); continue; }
-    if (rest.startsWith('**=')) { i += 2; col += 2; tokens.push(new Token(TK.STAREQ,   '**=',  startLine, startCol)); continue; }
+    if (rest.startsWith('**=')) { i += 2; col += 2; tokens.push(new Token(TK.STARSTAREQ,'**=',  startLine, startCol)); continue; }
     if (rest.startsWith('**'))  { i += 1; col += 1; tokens.push(new Token(TK.STARSTAR,  '**',   startLine, startCol)); continue; }
     if (rest.startsWith('*='))  { i += 1; col += 1; tokens.push(new Token(TK.STAREQ,   '*=',   startLine, startCol)); continue; }
     if (rest.startsWith('/='))  { i += 1; col += 1; tokens.push(new Token(TK.SLASHEQ,  '/=',   startLine, startCol)); continue; }
