@@ -1,0 +1,4 @@
+// [R] url.encode and url.encodeComponent
+import { url } from "std/string";
+console.log(url.encode("hello world"));
+console.log(url.encodeComponent("a=b&c=d"));

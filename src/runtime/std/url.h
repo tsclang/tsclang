@@ -263,3 +263,95 @@ static inline void tsc_url_free(TscURL *u) {
     free(u->hash.data);
     tsc_search_params_free(&u->searchParams);
 }
+
+static inline int _tsc_is_unreserved(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+        || c == '-' || c == '_' || c == '.' || c == '~';
+}
+
+static inline int _tsc_is_uri_reserved(char c) {
+    return c == ':' || c == '/' || c == '?' || c == '#' || c == '[' || c == ']'
+        || c == '@' || c == '!' || c == '$' || c == '&' || c == '\'' || c == '('
+        || c == ')' || c == '*' || c == '+' || c == ',' || c == ';' || c == '=';
+}
+
+static inline String tsc_url_encode(String s) {
+    size_t len = 0;
+    for (size_t i = 0; i < s.length; i++) {
+        unsigned char c = (unsigned char)s.data[i];
+        if (_tsc_is_unreserved(c) || _tsc_is_uri_reserved(c)) len++;
+        else len += 3;
+    }
+    char *buf = (char *)malloc(len + 1);
+    size_t j = 0;
+    static const char hex[] = "0123456789ABCDEF";
+    for (size_t i = 0; i < s.length; i++) {
+        unsigned char c = (unsigned char)s.data[i];
+        if (_tsc_is_unreserved(c) || _tsc_is_uri_reserved(c)) {
+            buf[j++] = c;
+        } else {
+            buf[j++] = '%';
+            buf[j++] = hex[c >> 4];
+            buf[j++] = hex[c & 0xF];
+        }
+    }
+    buf[j] = '\0';
+    String r = {.data = buf, .length = j, .capacity = len};
+    return r;
+}
+
+static inline String tsc_url_encode_component(String s) {
+    size_t len = 0;
+    for (size_t i = 0; i < s.length; i++) {
+        unsigned char c = (unsigned char)s.data[i];
+        if (_tsc_is_unreserved(c)) len++;
+        else len += 3;
+    }
+    char *buf = (char *)malloc(len + 1);
+    size_t j = 0;
+    static const char hex[] = "0123456789ABCDEF";
+    for (size_t i = 0; i < s.length; i++) {
+        unsigned char c = (unsigned char)s.data[i];
+        if (_tsc_is_unreserved(c)) {
+            buf[j++] = c;
+        } else {
+            buf[j++] = '%';
+            buf[j++] = hex[c >> 4];
+            buf[j++] = hex[c & 0xF];
+        }
+    }
+    buf[j] = '\0';
+    String r = {.data = buf, .length = j, .capacity = len};
+    return r;
+}
+
+static inline int _tsc_hex_val(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
+
+static inline String tsc_url_decode(String s) {
+    char *buf = (char *)malloc(s.length + 1);
+    size_t j = 0;
+    for (size_t i = 0; i < s.length; ) {
+        if (s.data[i] == '%' && i + 2 < s.length) {
+            int hi = _tsc_hex_val(s.data[i + 1]);
+            int lo = _tsc_hex_val(s.data[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                buf[j++] = (char)((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        buf[j++] = s.data[i++];
+    }
+    buf[j] = '\0';
+    String r = {.data = buf, .length = j, .capacity = j};
+    return r;
+}
+
+static inline String tsc_url_decode_component(String s) {
+    return tsc_url_decode(s);
+}

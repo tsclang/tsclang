@@ -29,6 +29,10 @@ export const MAX: i32 = 100;
 
 // реэкспорт
 export { User, helper } from "./user";
+
+// реэкспорт с переименованием
+export { add as myAdd } from "./math";
+export { UserService as Svc };
 ```
 
 Запрещено:
@@ -45,6 +49,10 @@ export default function() { ... }       // ❌ — анонимная функц
 ```typescript
 // 1. Именованный — конкретные символы
 import { User, createUser } from "./user";
+
+// 1a. С переименованием (TS-совместимый)
+import { add as myAdd, mul } from "./math";
+import { UserService as Svc } from "./user";
 
 // 2. Namespace — весь модуль как объект (аналог import * as X)
 import User from "./user";   // все экспорты доступны через User.X

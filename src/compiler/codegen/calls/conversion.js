@@ -145,6 +145,17 @@
         }
       }
     };
+    // std/string: url.encode(), url.decode(), url.encodeComponent(), url.decodeComponent()
+    if (callee.kind === 'Member' && callee.object?.kind === 'Ident' && callee.object.name === 'url'
+        && this._stdStringUrl) {
+      this.includes.add('#include "std/url.h"');
+      this._lastSuppressConst = true;
+      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      if (callee.prop === 'encode') return `tsc_url_encode(${arg})`;
+      if (callee.prop === 'decode') return `tsc_url_decode(${arg})`;
+      if (callee.prop === 'encodeComponent') return `tsc_url_encode_component(${arg})`;
+      if (callee.prop === 'decodeComponent') return `tsc_url_decode_component(${arg})`;
+    }
     // std/string: atob, btoa, decodeUtf8, encodeUtf8
     if (callee.kind === 'Ident' && callee.name === 'atob') {
       this.includes.add('#include "std/base64.h"');

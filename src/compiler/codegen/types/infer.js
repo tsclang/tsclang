@@ -297,6 +297,11 @@ export default {
         return this.inferType(node.args[0].expr);
       }
     }
+    if (node.callee.kind === 'Member' && node.callee.object?.kind === 'Ident'
+        && node.callee.object.name === 'url' && this._stdStringUrl) {
+      const p = node.callee.prop;
+      if (p === 'encode' || p === 'decode' || p === 'encodeComponent' || p === 'decodeComponent') return 'String';
+    }
     if (node.callee.kind === 'Ident' && this._genericFuncs?.has(node.callee.name)) {
       const tmpl = this._genericFuncs.get(node.callee.name);
       const subst = new Map();
@@ -567,12 +572,12 @@ export default {
     }
     const objSymA = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     if (objSymA?._isAtomic) {
-      if (prop === 'load' || prop === 'fetchAdd') return objSymA._atomicInner ?? 'int32_t';
+      if (prop === 'load' || prop === 'fetchAdd' || prop === 'fetchSub' || prop === 'fetchOr' || prop === 'fetchAnd' || prop === 'fetchXor' || prop === 'swap') return objSymA._atomicInner ?? 'int32_t';
       if (prop === 'store') return 'void';
       if (prop === 'compareExchange') return 'bool';
     }
     if (objSymA?._isAtomicArray) {
-      if (prop === 'load' || prop === 'fetchAdd') return objSymA._atomicArrayInner ?? 'int32_t';
+      if (prop === 'load' || prop === 'fetchAdd' || prop === 'fetchSub' || prop === 'fetchOr' || prop === 'fetchAnd' || prop === 'fetchXor' || prop === 'swap') return objSymA._atomicArrayInner ?? 'int32_t';
       if (prop === 'store') return 'void';
       if (prop === 'compareExchange') return 'bool';
     }

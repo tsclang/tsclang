@@ -1,0 +1,2 @@
+import { myAdd } from "./module";
+console.log(myAdd(3, 4));

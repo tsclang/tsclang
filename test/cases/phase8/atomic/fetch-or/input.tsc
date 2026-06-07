@@ -1,0 +1,4 @@
+const flags = new Atomic<i32>(0);
+const old = flags.fetchOr(0xFF, RmwOrdering.AcqRel);
+console.log(old);
+console.log(flags.load(LoadOrdering.Acquire));

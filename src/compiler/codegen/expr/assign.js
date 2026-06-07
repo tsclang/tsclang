@@ -203,6 +203,18 @@ export default {
       return null;
     }
 
+    const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    if ((node.op === '/=' || node.op === '%=') && lines) {
+      const leftType = this.inferType(node.left);
+      if (intTypes.has(leftType)) {
+        const I = ' '.repeat(this.indent * depth);
+        const tmp = `_tsc_div_${this.tempCount++}`;
+        lines.push(`${I}int32_t ${tmp} = ${r};`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); abort(); }`);
+        return `${l} ${node.op} ${tmp}`;
+      }
+    }
+
     return `${l} ${node.op} ${r}`;
   }
 };

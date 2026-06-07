@@ -36,7 +36,8 @@ export default {
           const _avrReturnTypes = {
             digitalRead: 'bool', serialAvailable: 'bool', serialRead: 'uint8_t',
           };
-          for (const name of (node.names ?? [])) {
+          for (const n of (node.names ?? [])) {
+            const name = typeof n === 'object' ? n.name : n;
             if (name === 'SleepMode') { this._avrSleepModeImported = true; continue; }
             if (_avrFuncMap[name]) {
               const _rt = _avrReturnTypes[name];
@@ -49,11 +50,13 @@ export default {
         } else if (node.source === 'std/random') {
           this._stdRandomImported = true;
         } else if (node.source === 'std/string') {
-          for (const name of (node.names ?? [])) {
+          for (const n of (node.names ?? [])) {
+            const name = typeof n === 'object' ? n.name : n;
             if (name === 'atob' || name === 'btoa') this._stdStringBase64 = true;
             else if (name === 'decodeUtf8') this._stdStringDecodeUtf8 = true;
             else if (name === 'encodeUtf8') this._stdStringEncodeUtf8 = true;
             else if (name === 'Regex') this._stdStringRegex = true;
+            else if (name === 'url') this._stdStringUrl = true;
             // 'String' namespace — no extra registration needed
           }
         } else if (node.source === 'std/embedded') {
@@ -86,7 +89,8 @@ export default {
           this.includes.add('#include "std/io.h"');
           this._stdIoImported = true;
           // Register Reader/Writer as vtable interface types
-          for (const nm of (node.names ?? [])) {
+          for (const n of (node.names ?? [])) {
+            const nm = typeof n === 'object' ? n.name : n;
             if (nm === 'Reader') {
               if (!this._emittedReaderVtable) {
                 this._emittedReaderVtable = true;
@@ -143,7 +147,8 @@ export default {
         } else if (node.source === 'std/libc') {
           this.includes.add('#include <stdio.h>');
           const _libcVariadic = new Set(['printf', 'vprintf', 'fprintf', 'vfprintf', 'sprintf', 'vsprintf', 'snprintf', 'vsnprintf', 'scanf', 'sscanf', 'fscanf']);
-          for (const nm of (node.names ?? [])) {
+          for (const n of (node.names ?? [])) {
+            const nm = typeof n === 'object' ? n.name : n;
             const isVar = _libcVariadic.has(nm);
             this.define(nm, { ctype: 'int32_t', funcName: nm, params: null, _isLibcFunc: true, _isLibcVariadic: isVar });
           }
@@ -159,24 +164,26 @@ export default {
         }
         break; // stdlib handled via includes
       case 'ExportFrom': {
-        // export { X, Y } from "./module"  OR  export { X, Y }
+        // export { X, Y } from "./module"  OR  export { X, Y }  OR  export { X as Y }
         const { names, source } = node;
         if (source) {
-          // Re-export from external module: look up in _importedModules
           const resolvedPath = this._sourceToPath?.[source];
           const moduleExports = resolvedPath ? this._importedModules?.[resolvedPath] : null;
-          for (const name of (names ?? [])) {
-            const entry = moduleExports?.[name] ?? this.lookup(name);
+          for (const n of (names ?? [])) {
+            const origName = typeof n === 'object' ? n.name : n;
+            const localName = typeof n === 'object' && n.alias ? n.alias : origName;
+            const entry = moduleExports?.[origName] ?? this.lookup(origName);
             if (entry) {
-              this.define(name, entry);
-              this._exports.set(name, entry);
+              this.define(localName, entry);
+              this._exports.set(localName, entry);
             }
           }
         } else {
-          // export { X, Y } — re-export already-defined symbols
-          for (const name of (names ?? [])) {
-            const entry = this.lookup(name);
-            if (entry) this._exports.set(name, entry);
+          for (const n of (names ?? [])) {
+            const origName = typeof n === 'object' ? n.name : n;
+            const exportName = typeof n === 'object' && n.alias ? n.alias : origName;
+            const entry = this.lookup(origName);
+            if (entry) this._exports.set(exportName, entry);
           }
         }
         break;

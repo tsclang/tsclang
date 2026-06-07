@@ -57,11 +57,37 @@ export default {
           const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
           return `atomic_fetch_add_explicit(&${ref}, ${valC}, ${ord})`;
         }
+        if (callee.prop === 'fetchSub') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_sub_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchOr') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_or_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchAnd') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_and_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchXor') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_xor_explicit(&${ref}, ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'swap') {
+          const valC = this.exprToC(args[0].expr, lines, depth);
+          const ord = resolveOrdering(args[1], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_exchange_explicit(&${ref}, ${valC}, ${ord})`;
+        }
         if (callee.prop === 'compareExchange') {
           const expC = this.exprToC(args[0].expr, lines, depth);
           const desC = this.exprToC(args[1].expr, lines, depth);
           const successOrd = resolveOrdering(args[2], 'rmw') ?? 'memory_order_acq_rel';
-          const failureOrd = 'memory_order_acquire';
+          const failureOrd = 'memory_order_acquire';
+
           const tmpName = `_expected_${this._cmpxchgCount++}`;
           const I2 = ' '.repeat(this.indent * depth);
           lines.push(`${I2}${inner} ${tmpName} = ${expC};`);
@@ -70,7 +96,7 @@ export default {
       }
     }
 
-    // AtomicArray<T> methods: .load(i), .store(i, v), .fetchAdd(i, v), .compareExchange(i, exp, des)
+    // AtomicArray<T> methods: .load(i), .store(i, v), .fetchAdd(i, v), .fetchSub(i, v), etc.
     if (callee.kind === 'Member') {
       const objNameAA = callee.object?.kind === 'Ident' ? callee.object.name : null;
       const aaSym = objNameAA ? this.lookup(objNameAA) : null;
@@ -104,6 +130,36 @@ export default {
           const valC = this.exprToC(args[1].expr, lines, depth);
           const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
           return `atomic_fetch_add_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchSub') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_sub_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchOr') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_or_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchAnd') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_and_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'fetchXor') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_fetch_xor_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
+        }
+        if (callee.prop === 'swap') {
+          const idxC = this.exprToC(args[0].expr, lines, depth);
+          const valC = this.exprToC(args[1].expr, lines, depth);
+          const ord = resolveOrd(args[2], 'rmw') ?? 'memory_order_acq_rel';
+          return `atomic_exchange_explicit(&${ref}[${idxC}], ${valC}, ${ord})`;
         }
         if (callee.prop === 'compareExchange') {
           const idxC = this.exprToC(args[0].expr, lines, depth);

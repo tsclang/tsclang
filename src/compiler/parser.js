@@ -532,7 +532,14 @@ export function parse(tokens, filename = '<input>', src = null) {
     let namespace = false;
     if (tryEat(TK.LBRACE)) {
       while (cur().type !== TK.RBRACE) {
-        names.push(eat(TK.IDENT).value);
+        const name = eat(TK.IDENT).value;
+        if (cur().type === TK.IDENT && cur().value === 'as') {
+          eat(TK.IDENT, 'as');
+          const alias = eat(TK.IDENT).value;
+          names.push({ name, alias });
+        } else {
+          names.push(name);
+        }
         tryEat(TK.COMMA);
       }
       eat(TK.RBRACE);
@@ -559,7 +566,14 @@ export function parse(tokens, filename = '<input>', src = null) {
       eat(TK.LBRACE);
       const names = [];
       while (cur().type !== TK.RBRACE) {
-        names.push(eat(TK.IDENT).value);
+        const name = eat(TK.IDENT).value;
+        if (cur().type === TK.IDENT && cur().value === 'as') {
+          eat(TK.IDENT, 'as');
+          const alias = eat(TK.IDENT).value;
+          names.push({ name, alias });
+        } else {
+          names.push(name);
+        }
         tryEat(TK.COMMA);
       }
       eat(TK.RBRACE);

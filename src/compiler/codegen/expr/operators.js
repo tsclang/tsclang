@@ -248,6 +248,19 @@ export default {
       const rt = this.inferType(node.right);
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
+    const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    if (node.op === '/' || node.op === '%') {
+      const lt = this.inferType(node.left);
+      const rt = this.inferType(node.right);
+      const isInt = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
+      if (isInt && lines) {
+        const I = ' '.repeat(this.indent * depth);
+        const tmp = `_tsc_div_${this.tempCount++}`;
+        lines.push(`${I}int32_t ${tmp} = ${r};`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); abort(); }`);
+        return `${l} ${op} ${tmp}`;
+      }
+    }
     return `${l} ${op} ${r}`;
   },
 

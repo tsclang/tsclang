@@ -1026,13 +1026,17 @@ const rei = /hello/i         // = new Regex("hello", "i")
 ### Кодирование
 
 ```typescript
-import { base64, hex, url } from "std/string"
+import { base64, hex, url, atob, btoa } from "std/string"
 
-// base64
+// base64 (browser-style)
+btoa(s: string): string              // "hello" → "aGVsbG8="
+atob(s: string): string              // "aGVsbG8=" → "hello"
+
+// base64 (byte-level) [NOT YET IMPLEMENTED]
 base64.encode(bytes: u8[]): string
 base64.decode(s: string): u8[] throws ParseError
 
-// hex
+// hex [NOT YET IMPLEMENTED]
 hex.encode(bytes: u8[]): string     // "deadbeef"
 hex.decode(s: string): u8[] throws ParseError
 

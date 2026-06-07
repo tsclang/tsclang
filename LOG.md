@@ -106,6 +106,7 @@
 
 > 2026-04-10: все тесты phase2 проходят через test/runner.js
 > 2026-06-07: fix: unknown reassignment — `x = value` where `x: unknown` now emits `tsc_unknown_drop(&x)` + packer instead of bare assign (assign.js:85-99). 2 new tests: assign-reassign, assign-reassign-run. 1411/1411 passing.
+> 2026-06-07: 6 confirmed open issues resolved (1421/1421): S-1 atob/btoa added to spec; S-6 5 Atomic methods (fetchSub/fetchOr/fetchAnd/fetchXor/swap) for Atomic+AtomicArray; #94 integer div-by-zero runtime panic guard; #93 import/export `{ X as Y }` renaming; #38 url.encode/decode/encodeComponent/decodeComponent (runtime + codegen); 01-5 --emit hex for AVR (avr-gcc + avr-objcopy).
 
 ---
 

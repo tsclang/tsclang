@@ -38,13 +38,26 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
   ctx._capabilities = opts.capabilities || DESKTOP_CAPABILITIES;
 
-  // Build namespace set from import nodes (before pre-populating scope)
+  // Build namespace set and import renames from import nodes
   const namespaceImports = new Map(); // localName → resolvedPath
+  const importRenames = new Map();    // resolvedPath → Map(originalName → localAlias)
   if (opts.importedModules && opts.sourceToPath && ast?.body) {
     for (const node of ast.body) {
-      if (node.kind === 'Import' && node.namespace && node.names?.[0]) {
+      if (node.kind === 'Import' && node.names?.length) {
         const resolvedPath = opts.sourceToPath[node.source];
-        if (resolvedPath) namespaceImports.set(node.names[0], resolvedPath);
+        if (!resolvedPath) continue;
+        if (node.namespace && node.names?.[0]) {
+          const n = node.names[0];
+          namespaceImports.set(typeof n === 'object' ? n.name : n, resolvedPath);
+        } else {
+          if (!importRenames.has(resolvedPath)) importRenames.set(resolvedPath, new Map());
+          const renames = importRenames.get(resolvedPath);
+          for (const n of node.names) {
+            if (typeof n === 'object' && n.alias) {
+              renames.set(n.name, n.alias);
+            }
+          }
+        }
       }
     }
   }
@@ -62,9 +75,11 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
         // Namespace import: define X as a namespace object
         ctx.define(nsName, { ctype: '_namespace', _isNamespace: true, _namespaceExports: moduleExports });
       } else {
-        // Named import: put all exports flat in scope
+        // Named import: put exports in scope, applying renames if any
+        const renames = importRenames.get(resolvedPath);
         for (const [name, entry] of Object.entries(moduleExports)) {
-          ctx.define(name, entry);
+          const localName = renames?.get(name) ?? name;
+          ctx.define(localName, entry);
         }
       }
     }

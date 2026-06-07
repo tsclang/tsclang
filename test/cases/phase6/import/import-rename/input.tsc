@@ -1,0 +1,3 @@
+import { add as myAdd, mul } from "./module";
+console.log(myAdd(3, 4));
+console.log(mul(3, 4));

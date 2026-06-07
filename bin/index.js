@@ -1171,10 +1171,13 @@ if (command === 'build') {
   }
 
   if (emit === 'hex') {
-    process.stderr.write(
-      `ConfigError: --emit hex requires an embedded target (avr); desktop target does not support hex output\n`
-    );
-    process.exit(1);
+    const targetName = _profileTarget || _targetFlag;
+    if (targetName !== 'avr') {
+      process.stderr.write(
+        `ConfigError: --emit hex requires an embedded target (avr); current target is ${targetName || 'desktop'}\n`
+      );
+      process.exit(1);
+    }
   }
 
   const inputPath = resolve(inputFile);
@@ -1286,6 +1289,40 @@ if (command === 'build') {
         return false;
       }
       process.stdout.write(`Built ${stem}.wasm\n`);
+    }
+
+    if (emit === 'hex') {
+      const avrGcc = spawnSync('avr-gcc', ['--version'], { stdio: 'pipe' });
+      if (avrGcc.status !== 0 || avrGcc.error) {
+        process.stderr.write('ConfigError: --emit hex requires avr-gcc in PATH\n');
+        return false;
+      }
+      const mcu = buildOpts.mcu || 'atmega328p';
+      const elfPath = join(outDir, stem + '.elf');
+      const hexPath = join(outDir, stem + '.hex');
+      const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+      const gccOptimize = optimize ? [`-${optimize}`] : ['-Os'];
+      const gccResult = spawnSync('avr-gcc', [
+        cPath, '-o', elfPath,
+        '-I', dirname(runtimeH),
+        `-mmcu=${mcu}`,
+        '-std=c11',
+        '-DTSC_EMBEDDED',
+        ...gccOptimize,
+      ], { stdio: 'pipe' });
+      if (gccResult.status !== 0) {
+        process.stderr.write(`tsclang: avr-gcc failed:\n${gccResult.stderr?.toString() || ''}\n`);
+        return false;
+      }
+      const objcopyResult = spawnSync('avr-objcopy', [
+        '-O', 'ihex', elfPath, hexPath,
+      ], { stdio: 'pipe' });
+      if (objcopyResult.status !== 0) {
+        process.stderr.write(`tsclang: avr-objcopy failed:\n${objcopyResult.stderr?.toString() || ''}\n`);
+        return false;
+      }
+      try { unlinkSync(elfPath); } catch {}
+      process.stdout.write(`Built ${stem}.hex\n`);
     }
 
     return true;
