@@ -142,6 +142,10 @@
       } else {
         // funcPtr variables hold the name directly; functions use their mangled name
         calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
+        // Unknown identifier check: callee not in scope and not a language builtin
+        if (!sym && !this._languageBuiltins.has(callee.name)) {
+          throw this.error(`unknown identifier '${callee.name}'`);
+        }
         // avr/hal direct calls that return values: set _lastHalRead so stmt.js emits (void)name;
         if (sym?._suppressVoidWarning && sym.ctype !== 'void') this._lastHalRead = sym.ctype;
       }

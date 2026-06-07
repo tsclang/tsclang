@@ -38,7 +38,7 @@
           if (enumDef.isConst) throw this.error(`"fromValue()" is not available on const enum`);
           const n = enumDef.members.length;
           const helperName = `${enumName}_fromValue`;
-          // Emit helper if not already emitted
+          // Emit helper if not already emitted
           if (!this._emittedHelpers.has(helperName)) {
             this._emittedHelpers.add(helperName);
             this.addTop(`typedef struct { bool has_value; ${enumName} value; } opt_${enumName};`);
@@ -146,63 +146,46 @@
       }
     };
     // std/string: url.encode(), url.decode(), url.encodeComponent(), url.decodeComponent()
-    if (callee.kind === 'Member' && callee.object?.kind === 'Ident' && callee.object.name === 'url'
-        && this._stdStringUrl) {
-      this.includes.add('#include "std/url.h"');
-      this._lastSuppressConst = true;
-      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-      if (callee.prop === 'encode') return `tsc_url_encode(${arg})`;
-      if (callee.prop === 'decode') return `tsc_url_decode(${arg})`;
-      if (callee.prop === 'encodeComponent') return `tsc_url_encode_component(${arg})`;
-      if (callee.prop === 'decodeComponent') return `tsc_url_decode_component(${arg})`;
-    }
-    // std/string: atob, btoa, decodeUtf8, encodeUtf8
-    if (callee.kind === 'Ident' && callee.name === 'atob') {
-      this.includes.add('#include "std/base64.h"');
-      this._lastSuppressConst = true;
-      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-      return `tsc_atob(${arg})`;
-    }
-    if (callee.kind === 'Ident' && callee.name === 'btoa') {
-      this.includes.add('#include "std/base64.h"');
-      this._lastSuppressConst = true;
-      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-      return `tsc_btoa(${arg})`;
-    }
+    // std/string: decodeUtf8, encodeUtf8 (special: static validation for decodeUtf8)
     if (callee.kind === 'Ident' && callee.name === 'decodeUtf8') {
-      this._lastSuppressConst = true;
-      // Static UTF-8 validation for literal byte arrays
-      const argExpr = args[0]?.expr;
-      const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
-        : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
-      if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every(e => e?.expr?.kind === 'Literal')) {
-        const bytes = _decLitArr.elems.map(e => parseInt(e.expr.value));
-        let i = 0;
-        while (i < bytes.length) {
-          const b = bytes[i];
-          let seqLen;
-          if (b < 0x80) { seqLen = 1; }
-          else if (b < 0xC2) { seqLen = -1; }
-          else if (b < 0xE0) { seqLen = 2; }
-          else if (b < 0xF0) { seqLen = 3; }
-          else if (b < 0xF5) { seqLen = 4; }
-          else { seqLen = -1; }
-          if (seqLen < 0) throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
-          for (let j = 1; j < seqLen; j++) {
-            if (i + j >= bytes.length || (bytes[i + j] & 0xC0) !== 0x80)
-              throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
+      const sym = this.lookup('decodeUtf8');
+      if (sym?.funcName === 'tsc_decode_utf8') {
+        this._lastSuppressConst = true;
+        const argExpr = args[0]?.expr;
+        const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
+          : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
+        if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every(e => e?.expr?.kind === 'Literal')) {
+          const bytes = _decLitArr.elems.map(e => parseInt(e.expr.value));
+          let i = 0;
+          while (i < bytes.length) {
+            const b = bytes[i];
+            let seqLen;
+            if (b < 0x80) { seqLen = 1; }
+            else if (b < 0xC2) { seqLen = -1; }
+            else if (b < 0xE0) { seqLen = 2; }
+            else if (b < 0xF0) { seqLen = 3; }
+            else if (b < 0xF5) { seqLen = 4; }
+            else { seqLen = -1; }
+            if (seqLen < 0) throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
+            for (let j = 1; j < seqLen; j++) {
+              if (i + j >= bytes.length || (bytes[i + j] & 0xC0) !== 0x80)
+                throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
+            }
+            i += seqLen;
           }
-          i += seqLen;
         }
+        const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(Array_u8){0}';
+        return `tsc_decode_utf8(${arg})`;
       }
-      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(Array_u8){0}';
-      return `tsc_decode_utf8(${arg})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'encodeUtf8') {
-      this._ensureArrayStruct('Array_u8', 'uint8_t');
-      this._lastSuppressConst = true;
-      const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-      return `tsc_encode_utf8(${arg})`;
+      const sym = this.lookup('encodeUtf8');
+      if (sym?.funcName === 'tsc_encode_utf8') {
+        this._ensureArrayStruct('Array_u8', 'uint8_t');
+        this._lastSuppressConst = true;
+        const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        return `tsc_encode_utf8(${arg})`;
+      }
     }
 
     // drop(x) в†’ T_drop(x) for pool types

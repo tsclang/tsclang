@@ -1,0 +1,4 @@
+// [R] encodeURI / decodeURI
+import { encodeURI, decodeURI } from "std/string";
+console.log(encodeURI("hello world"));
+console.log(decodeURI("hello%20world"));

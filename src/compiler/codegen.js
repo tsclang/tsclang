@@ -115,6 +115,7 @@ class Context {
     this._scopeBorrowStack = [[]];
     this._scopeMutQuarantineStack = [[]];
     this._scopeMutBorrowStack = [[]];
+    this._languageBuiltins = LANGUAGE_BUILTINS;
     // Known classes: name → { fields, methods }
     this.classes = new Map();
     // Known interfaces
@@ -728,6 +729,7 @@ import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
 import types     from './codegen/types.js';
 import asyncMixin from './codegen/async.js';
+import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
 
 const _mixinSources = [
   ['topLevel',  topLevel],
@@ -754,4 +756,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, types, asyncMixin);
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, types, asyncMixin, STDLIB_HANDLERS);

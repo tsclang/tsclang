@@ -1725,3 +1725,15 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **S-1 atob/btoa**: spec уже описан в `14-stdlib.md:1028-1032` (`import { atob, btoa } from "std/string"`). Impl полный: dispatch (`conversion.js:160-171`), type inference (`infer.js:294`), runtime (`std/base64.h`), 2 теста.
 > - AUDIT-PLAN: S-1 → RESOLVED. Открытых проблем осталось 1: `--emit hex` (01-5). STILL PRESENT = 0.
 > - Files changed: `AUDIT-PLAN.md`
+
+> 2026-06-07: Stdlib registry + unknown identifier check + JS-compatible URI encoding (П4, П2)
+> - **Архитектура**: Создан `src/compiler/stdlib-registry.js` — декларативное описание всех stdlib-модулей (14 модулей). `dispatch.js` переписан на lookup из registry вместо 100+ строк if/else.
+> - **LANGUAGE_BUILTINS**: Централизованный Set из ~30 имён (console, Math, performance, parseInt, Date, Error, ...) — доступны глобально без импорта.
+> - **Unknown identifier check**: `call-dispatch.js:144` — если callee не в scope и не builtin → compile error. Пока только для function calls (callee-level), не для всех Ident.
+> - **JS-совместимые имена**: Добавлены `encodeURIComponent`, `decodeURIComponent`, `encodeURI`, `decodeURI` в `std/string` — требуют `import`, dispatch через `funcName` в scope (как `std/avr`).
+> - **Удалён `url.*` API**: `url.encode()`/`url.decode()`/`url.encodeComponent()`/`url.decodeComponent()` удалены. Один способ: `import { encodeURI } from "std/string"`.
+> - **`atob`/`btoa` строго с импортом**: Раньше работали без импорта (name-check dispatch). Теперь требуют `import { atob } from "std/string"`, регистрируются через `this.define({ funcName: 'tsc_atob' })`.
+> - **Тесты**: +6 negative tests (err-no-import для atob/btoa/4 URI функций), +2 positive tests (encode-component, encode-uri), 2 existing tests rewritten (url/encode, url/decode).
+> - **Регрессия**: phase0 ✓30, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase11 ✓38, phase12 ✓114.
+> - **Spec**: `14-stdlib.md` обновлён — убран `url.*` API, добавлены JS-совместимые имена.
+> - Files changed: `src/compiler/stdlib-registry.js` (new), `src/compiler/codegen.js`, `src/compiler/codegen/top-level/dispatch.js`, `src/compiler/codegen/calls/call-dispatch.js`, `src/compiler/codegen/calls/conversion.js`, `src/compiler/codegen/types/infer.js`, `spec/14-stdlib/14-stdlib.md`, `test/cases/phase12/string/` (8 tests), `test/cases/phase12/url/encode/`, `test/cases/phase12/url/decode/`

@@ -291,16 +291,9 @@ export default {
     }
     if (node.callee.kind === 'Ident') {
       const _sfn = node.callee.name;
-      if (_sfn === 'atob' || _sfn === 'btoa' || _sfn === 'decodeUtf8') return 'String';
-      if (_sfn === 'encodeUtf8') return 'Array_u8';
       if (_sfn === 'structuredClone' && node.args?.[0]) {
         return this.inferType(node.args[0].expr);
       }
-    }
-    if (node.callee.kind === 'Member' && node.callee.object?.kind === 'Ident'
-        && node.callee.object.name === 'url' && this._stdStringUrl) {
-      const p = node.callee.prop;
-      if (p === 'encode' || p === 'decode' || p === 'encodeComponent' || p === 'decodeComponent') return 'String';
     }
     if (node.callee.kind === 'Ident' && this._genericFuncs?.has(node.callee.name)) {
       const tmpl = this._genericFuncs.get(node.callee.name);

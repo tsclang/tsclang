@@ -1025,25 +1025,25 @@ const rei = /hello/i         // = new Regex("hello", "i")
 ### Кодирование
 
 ```typescript
-import { base64, hex, url, atob, btoa } from "std/string"
+import { atob, btoa, encodeURI, decodeURI, encodeURIComponent, decodeURIComponent } from "std/string"
 
 // base64 (browser-style)
 btoa(s: string): string              // "hello" → "aGVsbG8="
 atob(s: string): string              // "aGVsbG8=" → "hello"
 
+// URL encoding (JS-compatible names)
+encodeURI(s: string): string                    // "hello world" → "hello%20world"
+decodeURI(s: string): string throws ParseError  // "hello%20world" → "hello world"
+encodeURIComponent(s: string): string                    // "a=b&c=d" → "a%3Db%26c%3Dd"
+decodeURIComponent(s: string): string throws ParseError  // "a%3Db%26c%3Dd" → "a=b&c=d"
+
 // base64 (byte-level) [NOT YET IMPLEMENTED]
-base64.encode(bytes: u8[]): string
-base64.decode(s: string): u8[] throws ParseError
+// base64.encode(bytes: u8[]): string
+// base64.decode(s: string): u8[] throws ParseError
 
 // hex [NOT YET IMPLEMENTED]
-hex.encode(bytes: u8[]): string     // "deadbeef"
-hex.decode(s: string): u8[] throws ParseError
-
-// URL
-url.encode(s: string): string       // "hello%20world"
-url.decode(s: string): string throws ParseError
-url.encodeComponent(s: string): string
-url.decodeComponent(s: string): string throws ParseError
+// hex.encode(bytes: u8[]): string     // "deadbeef"
+// hex.decode(s: string): u8[] throws ParseError
 ```
 
 ### Форматирование

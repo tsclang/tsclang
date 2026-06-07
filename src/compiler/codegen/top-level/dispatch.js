@@ -1,4 +1,5 @@
 // dispatch.js
+import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
   visitTopLevel(node) {
     if (!node) return;
@@ -21,148 +22,10 @@ export default {
           }
           break;
         }
-        // Handle stdlib imports that require includes or special registration
-        if (node.source === 'std/avr') {
-          this.includes.add('#include "std/avr.h"');
-          // Direct-call avr functions: funcName maps TSClang name → C function
-          const _avrFuncMap = {
-            pinMode: 'tsc_avr_pin_mode', digitalWrite: 'tsc_avr_digital_write',
-            digitalRead: 'tsc_avr_digital_read', delay: 'tsc_avr_delay',
-            delayMicroseconds: 'tsc_avr_delay_us', serialBegin: 'tsc_avr_serial_begin',
-            serialWrite: 'tsc_avr_serial_write', serialRead: 'tsc_avr_serial_read',
-            serialAvailable: 'tsc_avr_serial_available', analogWrite: 'tsc_avr_analog_write',
-            interruptEnable: 'tsc_avr_interrupt_enable', interruptDisable: 'tsc_avr_interrupt_disable',
-          };
-          const _avrReturnTypes = {
-            digitalRead: 'bool', serialAvailable: 'bool', serialRead: 'uint8_t',
-          };
-          for (const n of (node.names ?? [])) {
-            const name = typeof n === 'object' ? n.name : n;
-            if (name === 'SleepMode') { this._avrSleepModeImported = true; continue; }
-            if (_avrFuncMap[name]) {
-              const _rt = _avrReturnTypes[name];
-              this.define(name, { ctype: _rt ?? 'void', funcName: _avrFuncMap[name], varKind: 'const',
-                _suppressVoidWarning: !!_rt });
-            } else {
-              this.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
-            }
-          }
-        } else if (node.source === 'std/random') {
-          this._stdRandomImported = true;
-        } else if (node.source === 'std/string') {
-          for (const n of (node.names ?? [])) {
-            const name = typeof n === 'object' ? n.name : n;
-            if (name === 'atob' || name === 'btoa') this._stdStringBase64 = true;
-            else if (name === 'decodeUtf8') this._stdStringDecodeUtf8 = true;
-            else if (name === 'encodeUtf8') this._stdStringEncodeUtf8 = true;
-            else if (name === 'Regex') this._stdStringRegex = true;
-            else if (name === 'url') this._stdStringUrl = true;
-            // 'String' namespace — no extra registration needed
-          }
-        } else if (node.source === 'std/embedded') {
-          this._stdEmbeddedImported = true;
-        } else if (node.source === 'std/temporal') {
-          this.includes.add('#include "std/temporal.h"');
-          this._stdTemporalImported = true;
-        } else if (node.source === 'std/fs') {
-          if (this._isEmbeddedOrRetro() || this._isWasmBare()) {
-            throw this.error(`TypeError: 'std/fs' is not available on ${this._targetName} targets`);
-          }
-          this.includes.add('#include "std/fs.h"');
-          this._stdFsImported = true;
-          if (node.namespace && node.names.length > 0) {
-            this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
-          }
-          this.classes.set('TscFileStat', { isStruct: true,
-            fields: [{ name: 'size', ctype: 'int64_t' }, { name: 'isFile', ctype: 'bool' },
-                     { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
-        } else if (node.source === 'std/url') {
-          this.includes.add('#include "std/url.h"');
-          this._stdUrlImported = true;
-        } else if (node.source === 'std/blob') {
-          // #include "std/blob.h" only added when TscBlob is actually used (isTscBlob path in stmt.js)
-          this._stdBlobImported = true;
-        } else if (node.source === 'std/io') {
-          if (this._isWasmBare()) {
-            throw this.error(`TypeError: 'std/io' is not available on wasm targets`);
-          }
-          this.includes.add('#include "std/io.h"');
-          this._stdIoImported = true;
-          // Register Reader/Writer as vtable interface types
-          for (const n of (node.names ?? [])) {
-            const nm = typeof n === 'object' ? n.name : n;
-            if (nm === 'Reader') {
-              if (!this._emittedReaderVtable) {
-                this._emittedReaderVtable = true;
-                // Array_u8 must appear before Reader vtable
-                this._ensureArrayStruct('Array_u8', 'uint8_t');
-                this.typedefs.push('');
-                this.addTop('typedef struct {');
-                this.addTop('    size_t (*read)(void *self, uint8_t *buf, size_t len);');
-                this.addTop('} Reader_vtable;');
-                this.addTop('typedef struct { void *self; const Reader_vtable *vtable; } Reader;');
-                this.addTop('');
-              }
-              this.classes.set('Reader', { isStruct: true, _isVtable: true, _vtableKind: 'Reader',
-                fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Reader_vtable *' }] });
-            }
-            if (nm === 'Writer') {
-              if (!this._emittedWriterVtable) {
-                this._emittedWriterVtable = true;
-                // Array_u8 must appear before Writer vtable
-                this._ensureArrayStruct('Array_u8', 'uint8_t');
-                this.typedefs.push('');
-                this.addTop('typedef struct {');
-                this.addTop('    size_t (*write)(void *self, const uint8_t *buf, size_t len);');
-                this.addTop('} Writer_vtable;');
-                this.addTop('typedef struct { void *self; const Writer_vtable *vtable; } Writer;');
-                this.addTop('');
-              }
-              this.classes.set('Writer', { isStruct: true, _isVtable: true, _vtableKind: 'Writer',
-                fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Writer_vtable *' }] });
-            }
-          }
-        } else if (node.source === 'std/reactive') {
-          this.includes.add('#include "std/reactive.h"');
-          this._stdReactiveImported = true;
-          this._reactiveClosureCount = 0;
-          this._capturedSignalMap = new Map(); // varName → pointer expr like "_closure_0_captured.x"
-        } else if (node.source === 'std/ws') {
-          if (this._isWasmBare()) {
-            throw this.error(`TypeError: 'std/ws' is not available on wasm targets`);
-          }
-          this.includes.add('#include "std/ws.h"');
-          this._stdWsImported = true;
-        } else if (node.source === 'std/net') {
-          if (this._isEmbeddedOrRetro() || this._isWasmBare()) {
-            throw this.error(`TypeError: 'std/net' is not available on ${this._targetName} targets`);
-          }
-          this.includes.add('#include "std/net.h"');
-          this._stdNetImported = true;
-          // Register TscResponse so inferType resolves .ok → bool, .status → int32_t
-          this.classes.set('TscResponse', {
-            isStruct: true,
-            fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
-          });
-        } else if (node.source === 'std/libc') {
-          this.includes.add('#include <stdio.h>');
-          const _libcVariadic = new Set(['printf', 'vprintf', 'fprintf', 'vfprintf', 'sprintf', 'vsprintf', 'snprintf', 'vsnprintf', 'scanf', 'sscanf', 'fscanf']);
-          for (const n of (node.names ?? [])) {
-            const nm = typeof n === 'object' ? n.name : n;
-            const isVar = _libcVariadic.has(nm);
-            this.define(nm, { ctype: 'int32_t', funcName: nm, params: null, _isLibcFunc: true, _isLibcVariadic: isVar });
-          }
-        } else if (node.source === 'std/hal') {
-          if (!this._isEmbeddedOrRetro()) {
-            throw this.error(`TypeError: 'std/hal' requires an embedded platform target`);
-          }
-          if (this._isWasmBare()) {
-            throw this.error(`TypeError: 'std/hal' is not available on wasm targets`);
-          }
-          this.includes.add('#include "std/hal.h"');
-          this._stdHalImported = true;
+        // Handle stdlib imports via registry
+        if (handleStdlibImport(this, node)) {
+          break;
         }
-        break; // stdlib handled via includes
       case 'ExportFrom': {
         // export { X, Y } from "./module"  OR  export { X, Y }  OR  export { X as Y }
         const { names, source } = node;

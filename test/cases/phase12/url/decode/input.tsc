@@ -1,4 +1,4 @@
-// [R] url.decode and url.decodeComponent
-import { url } from "std/string";
-console.log(url.decode("hello%20world"));
-console.log(url.decodeComponent("a%3Db%26c%3Dd"));
+// [R] decodeURI and decodeURIComponent
+import { decodeURI, decodeURIComponent } from "std/string";
+console.log(decodeURI("hello%20world"));
+console.log(decodeURIComponent("a%3Db%26c%3Dd"));
