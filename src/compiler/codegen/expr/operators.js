@@ -218,9 +218,16 @@ export default {
       return `(int32_t)((uint32_t)${l} >> ${r})`;
     }
 
-    // Bitwise ops on integers — if used where double is expected, emit with cast
     const bitwiseOps = ['&', '|', '^', '<<', '>>'];
     if (bitwiseOps.includes(node.op)) {
+      const lt = this.inferType(node.left);
+      const rt = this.inferType(node.right);
+      const lIsFloat = (lt === 'double' || lt === 'float') && node.left.kind === 'Ident';
+      const rIsFloat = (rt === 'double' || rt === 'float') && node.right.kind === 'Ident';
+      if (lIsFloat || rIsFloat) {
+        const targetType = lIsFloat ? lt : rt;
+        return `(${targetType})(((int32_t)(${l})) ${op} ((int32_t)(${r})))`;
+      }
       return `${l} ${op} ${r}`;
     }
 

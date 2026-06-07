@@ -1655,3 +1655,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > >   - Added `_inAsyncTryCatch` flag — await-emitter skips error early-return inside try body
 > >   - `catchEndsControl` now checks Break/Throw (not only Return) to avoid dead code after goto
 > > - All **1409 tests passing** (0 failures)
+> 
+> > 2026-06-07: Fix `number` type bitwise ops — auto-cast for float variables
+> > - **Bug**: `let x: number = 5; x & 3` generated `double a = x & 3;` — invalid C (bitwise on float)
+> > - **Fix**: `operators.js:221-231` — bitwise ops (`&`, `|`, `^`, `<<`, `>>`) auto-cast `Ident` nodes with `double`/`float` ctype to `int32_t` and back
+> > - Only applies when operand is a variable (Ident kind) — literals, unary, nested expressions are integer-compatible in C
+> > - Generates `(double)(((int32_t)(x)) & ((int32_t)(3)))` — matches TS semantics, gcc optimizes round-trip
+> > - New test: `phase2/number-type/bitwise-number` (runnable, 5 bitwise ops)
+> > - All **1422 tests passing** (0 failures)

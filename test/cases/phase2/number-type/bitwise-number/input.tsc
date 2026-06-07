@@ -1,0 +1,12 @@
+// [R] bitwise ops on number type — auto-cast to i32 and back
+let x: number = 5;
+let a = x & 3;
+let b = x | 8;
+let c = x ^ 1;
+let d = x << 1;
+let e = x >> 1;
+console.log(a);
+console.log(b);
+console.log(c);
+console.log(d);
+console.log(e);
