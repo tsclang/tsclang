@@ -1713,3 +1713,10 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - HashMap.delete (void) и URLSearchParams.delete (void) не затронуты — это другие типы коллекций
 > - AUDIT-PLAN: 03-6 → RESOLVED, открытых проблем старого doc-аудита осталось 1 (01-5)
 > - Files changed: `src/runtime/runtime.h`, `src/compiler/codegen/types/infer.js`, `src/compiler/codegen/calls/stdlib.js`, `spec/08-collections/08-arrays.md`, `spec/14-stdlib/14-stdlib.md`, `test/cases/phase3/sets/add-has-delete/expected.c`, `test/cases/phase3/sets/delete-owned/expected.c`, `test/cases/phase3/maps/delete/expected.c`, `AUDIT-PLAN.md`
+
+> 2026-06-07: Верификация 3 открытых проблем — все оказались уже решены
+> - **#38 URL encode/decode**: реализовано через `import { url } from "std/string"` — `url.encode()`/`url.decode()`/`url.encodeComponent()`/`url.decodeComponent()` в `std/url.h`. JS глобальные функции намеренно не поддерживаются (namespace API).
+> - **#94 Division by zero guard**: реализовано в `operators.js:257-274` и `assign.js:206-216` — integer `/` и `%` emit `fprintf(stderr, "panic: division by zero\n"); abort();`. Float → IEEE 754.
+> - **S-6 Atomic methods**: все 9 методов реализованы в `concurrency.js:44-94` — load/store/fetchAdd/fetchSub/fetchOr/fetchAnd/fetchXor/swap/compareExchange. Метод `exchange` называется `swap` (Rust convention).
+> - AUDIT-PLAN обновлён: все 3 → RESOLVED. STILL PRESENT = 0. Открытых проблем осталось 2: `--emit hex` (01-5) и atob/btoa spec (S-1).
+> - Files changed: `AUDIT-PLAN.md`
