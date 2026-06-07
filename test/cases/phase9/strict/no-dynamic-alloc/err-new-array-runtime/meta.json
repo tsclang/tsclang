@@ -1,0 +1,3 @@
+{
+  "strict": ["no-dynamic-alloc"]
+}

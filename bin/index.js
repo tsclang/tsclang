@@ -132,6 +132,7 @@ OPTIONS:
   --debug                  Compile with debug info
   --sourcemap              Generate source map
   --all-errors             Show all errors (no limit)
+  --strict <rules>         Comma-separated strict rules (no-any,no-unsafe,no-native,no-extern-c,safe-div,no-lossy-cast,no-dynamic-alloc)
   --watch, -w              Rebuild on file change
   --no-cache               Bypass compilation cache`,
   run: `tsclang run — Compile and run
@@ -1059,6 +1060,7 @@ if (command === 'build') {
   const _allocatorFlag    = _flagVal('--allocator');
   const _schedulerFlag    = _flagVal('--scheduler');
   const _noRecursionFlag  = args.includes('--no-recursion');
+  const _strictFlag       = _flagVal('--strict');
   const _ramSizeFlag      = _flagVal('--ram-size');
   const _stackSizeFlag    = _flagVal('--stack-size');
   const _platformFlag     = _flagVal('--platform');
@@ -1187,7 +1189,7 @@ if (command === 'build') {
     allocator: _allocatorFlag, scheduler: _schedulerFlag,
     noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
     stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
-    optimize: !!optimize,
+    optimize: !!optimize, strict: _strictFlag ? _strictFlag.split(',') : null,
     capabilities: _capabilities,
   };
 

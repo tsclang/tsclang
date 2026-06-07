@@ -224,6 +224,7 @@
 | **Структура lock-файла** | Формат `tsc.lock`; фиксация точных версий для воспроизводимых сборок. |
 | **Кеш** | Локальный кеш установленных пакетов; инвалидация. |
 | **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
+| **Strict Mode** | Granular compile-time правила: `no-any`, `no-unsafe`, `no-native`, `no-extern-c`, `safe-div`, `no-lossy-cast`, `no-dynamic-alloc`. Для safety-critical кода (IEC 61508). |
 
 ### 14 — Стандартная библиотека ([spec/14-stdlib/](spec/14-stdlib/))
 

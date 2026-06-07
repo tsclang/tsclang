@@ -204,9 +204,12 @@ export default {
     }
 
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
-    if ((node.op === '/=' || node.op === '%=') && lines) {
+    if (node.op === '/=' || node.op === '%=') {
       const leftType = this.inferType(node.left);
-      if (intTypes.has(leftType)) {
+      if (this._strictRules?.has('safe-div') && intTypes.has(leftType)) {
+        throw this.error(`integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function`, node);
+      }
+      if (intTypes.has(leftType) && lines) {
         const I = ' '.repeat(this.indent * depth);
         const tmp = `_tsc_div_${this.tempCount++}`;
         lines.push(`${I}int32_t ${tmp} = ${r};`);

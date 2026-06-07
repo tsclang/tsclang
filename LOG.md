@@ -1737,3 +1737,20 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Регрессия**: phase0 ✓30, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase11 ✓38, phase12 ✓114.
 > - **Spec**: `14-stdlib.md` обновлён — убран `url.*` API, добавлены JS-совместимые имена.
 > - Files changed: `src/compiler/stdlib-registry.js` (new), `src/compiler/codegen.js`, `src/compiler/codegen/top-level/dispatch.js`, `src/compiler/codegen/calls/call-dispatch.js`, `src/compiler/codegen/calls/conversion.js`, `src/compiler/codegen/types/infer.js`, `spec/14-stdlib/14-stdlib.md`, `test/cases/phase12/string/` (8 tests), `test/cases/phase12/url/encode/`, `test/cases/phase12/url/decode/`
+
+> 2026-06-08: Аудит Секции 2 (Типы) + Strict Mode (П4, П5)
+> - **Аудит §2**: Полный двунаправленный аудит spec/03-types/ vs implementation. 20 пунктов подтверждены, 6 расхождений найдены (T-1..T-6), записаны в AUDIT-PLAN.md.
+> - **Strict Mode**: Granular compile-time правила для safety-critical кода (IEC 61508 / SIL 3-4).
+>   - `"strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc"]` в `tsc.package.json` или `--strict` CLI flag.
+>   - `no-any`: запрет `any`/`unknown` везде (включая `declare`).
+>   - `no-unsafe`: запрет `unsafe {}` блоков.
+>   - `no-native`: запрет `native \`...\`` inline C.
+>   - `safe-div`: запрет integer `/` и `%` без guard (float OK).
+>   - `no-lossy-cast`: запрет lossy `as` cast (i64→i32, f64→i32, etc.).
+>   - `no-dynamic-alloc`: запрет `new Array(runtimeN)`, `new Map()`, `new Set()`.
+>   - `no-extern-c`: отложен (синтаксис `extern "C"` ещё не реализован в парсере).
+> - **Архитектура**: `_strictRules` Set в Context, проверка в точках: `resolve.js` (no-any), `control-flow.js` (no-unsafe, no-native), `operators.js`+`assign.js` (safe-div), `dispatch.js` (no-lossy-cast), `new-expr.js`+`vardecl.js` (no-dynamic-alloc).
+> - **Тесты**: +12 strict tests (phase9/strict/): 7 error tests + 4 positive tests + 1 clean-code test. Phase9: 25→37.
+> - **Регрессия**: phase0 ✓30, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase12 ✓112, phase13 ✓21, phase18 ✓21.
+> - **Spec**: `spec/13-build/13-strict-mode.md` (new), `SPEC.md` updated.
+> - Files changed: `spec/13-build/13-strict-mode.md` (new), `spec/13-build/index.md`, `SPEC.md`, `test/runner.js`, `bin/index.js`, `src/compiler/codegen.js`, `src/compiler/codegen/types/resolve.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/expr/operators.js`, `src/compiler/codegen/expr/assign.js`, `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/misc/new-expr.js`, `src/compiler/codegen/stmt/vardecl.js`, `test/cases/phase9/strict/` (12 new tests), `AUDIT-PLAN.md`

@@ -264,6 +264,9 @@ export default {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);
       const isInt = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
+      if (this._strictRules?.has('safe-div') && isInt) {
+        throw this.error(`integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function`, node);
+      }
       if (isInt && lines) {
         const I = ' '.repeat(this.indent * depth);
         const tmp = `_tsc_div_${this.tempCount++}`;

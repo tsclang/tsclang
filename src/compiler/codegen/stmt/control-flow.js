@@ -1013,6 +1013,9 @@
       }
 
       case 'Native': {
+        if (this._strictRules?.has('no-native')) {
+          throw this.error('native C blocks are forbidden in strict mode (no-native)', node);
+        }
         let nativeOut = '';
         if (node.templateParts) {
           // native(`... ${expr} ...`) тАФ interpolate expressions
@@ -1052,6 +1055,9 @@
       }
 
       case 'Unsafe': {
+        if (this._strictRules?.has('no-unsafe')) {
+          throw this.error('unsafe blocks are forbidden in strict mode (no-unsafe)', node);
+        }
         p('{');
         const prevUnsafe = this._inUnsafe;
         this._inUnsafe = true;

@@ -571,6 +571,24 @@ export default {
           return `${getter}(&${exprC})`;
         }
         if (srcType === ct) return exprC;
+        if (this._strictRules?.has('no-lossy-cast') && srcType && ct && srcType !== ct) {
+          const LOSSY = [
+            ['int64_t','int32_t'],['int64_t','float'],['uint64_t','double'],
+            ['int32_t','float'],['double','float'],['double','int32_t'],['double','int64_t'],
+            ['float','int32_t'],['float','int64_t'],
+            ['int64_t','int8_t'],['int64_t','int16_t'],['int64_t','uint8_t'],['int64_t','uint16_t'],['int64_t','uint32_t'],
+            ['int32_t','int8_t'],['int32_t','int16_t'],['int32_t','uint8_t'],['int32_t','uint16_t'],
+            ['int32_t','uint32_t'],['uint32_t','int32_t'],
+            ['uint64_t','int32_t'],['uint64_t','int64_t'],
+            ['uint32_t','int16_t'],['uint32_t','int8_t'],
+            ['uint16_t','int8_t'],['uint16_t','uint8_t'],
+            ['size_t','int32_t'],['size_t','int16_t'],['size_t','int8_t'],
+          ];
+          if (LOSSY.some(([s,t]) => srcType === s && ct === t)) {
+            const tsName = (c) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
+            throw this.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); use Math.saturatingCast() or Math.checkedCast()`, node);
+          }
+        }
         const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary' || node.expr.kind === 'Logical';
         return needsParens ? `(${ct})(${exprC})` : `(${ct})${exprC}`;
       }

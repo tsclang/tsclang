@@ -1,0 +1,4 @@
+let x: i32 = 42;
+unsafe {
+    x = x + 1;
+}

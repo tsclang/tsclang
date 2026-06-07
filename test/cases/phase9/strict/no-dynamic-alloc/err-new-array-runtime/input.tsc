@@ -1,0 +1,2 @@
+let n: i32 = 10;
+let arr = new Array(n);

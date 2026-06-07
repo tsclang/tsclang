@@ -292,6 +292,10 @@ function readMeta(testDir) {
       if (meta.noRecursion)    flags.push('--no-recursion');
       if (meta.optimize)       flags.push('--optimize', 'O2');
       if (meta.debug)          flags.push('--debug');
+      if (meta.strict) {
+        if (Array.isArray(meta.strict)) flags.push('--strict', meta.strict.join(','));
+        else flags.push('--strict', String(meta.strict));
+      }
       return { flags, profile: meta.profile };
     }
 
@@ -305,6 +309,10 @@ function readMeta(testDir) {
     if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
     if (meta.optimize)       flags.push('--optimize', 'O2');
     if (meta.debug)          flags.push('--debug');
+    if (meta.strict) {
+      if (Array.isArray(meta.strict)) flags.push('--strict', meta.strict.join(','));
+      else flags.push('--strict', String(meta.strict));
+    }
     return { flags, profile: null };
   } catch { return { flags: [], profile: null }; }
 }

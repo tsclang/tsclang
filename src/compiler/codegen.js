@@ -34,6 +34,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.allocator) ctx._optsAllocator = opts.allocator;
   if (opts.scheduler) ctx._optsScheduler = opts.scheduler;
   if (opts.noRecursion) ctx._optsNoRecursion = true;
+  if (opts.strict) ctx._strictRules = new Set(opts.strict);
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
   ctx._capabilities = opts.capabilities || DESKTOP_CAPABILITIES;

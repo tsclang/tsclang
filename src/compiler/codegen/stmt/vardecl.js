@@ -407,6 +407,9 @@ export default {
 
         // new Set<T>() / new Set<T>([...]) тЖТ TscSet_SUFFIX
         if (init?.kind === 'New' && init.name === 'Set') {
+          if (this._strictRules?.has('no-dynamic-alloc')) {
+            throw this.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Set requires heap allocation`, init);
+          }
           const tArg = init.typeArgs?.[0];
           const elemCType = tArg ? this.resolveType(tArg) : 'int32_t';
           const suffix = this.cTypeToIdent(elemCType);

@@ -30,6 +30,9 @@ export default {
       }
       if (name in PRIMITIVE_MAP) {
         if (name === 'unknown') this._ensureUnknownStruct();
+        if (this._strictRules?.has('no-any') && (name === 'any' || name === 'unknown')) {
+          throw this.error(`"${name}" is forbidden in strict mode (no-any); use a concrete type`, typeNode);
+        }
         if (name === 'any' && !this._inUnsafe && !this._inDeclare) {
           throw this.error(`"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values`, typeNode);
         }

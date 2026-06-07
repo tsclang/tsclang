@@ -12,6 +12,9 @@ export default {
 
     // new Map<K,V>() → tsc_map_create_K_V()
     if (name === 'Map') {
+      if (this._strictRules?.has('no-dynamic-alloc')) {
+        throw this.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Map requires heap allocation`, node);
+      }
       if (this._allocatorName === 'static' && !args[0]) {
         const [kt2, vt2] = (node.typeArgs ?? []).map(t => this.resolveType(t));
         const k2 = kt2 ? this.ctypeToTsName(kt2) : 'string';
@@ -31,6 +34,12 @@ export default {
 
     // new Array<T>(N) or new Array(N) — heap-allocated array
     if (name === 'Array') {
+      if (this._strictRules?.has('no-dynamic-alloc') && args[0]) {
+        const argLit = args[0].expr?.kind === 'Literal' && args[0].expr.litType === 'number';
+        if (!argLit) {
+          throw this.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); use fixed-size array or compile-time constant`, node);
+        }
+      }
       if (this._allocatorName === 'static' && !args[0]) {
         const et2 = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
         const tsName = this.ctypeToTsName(et2);

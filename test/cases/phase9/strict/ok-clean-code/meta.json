@@ -1,0 +1,3 @@
+{
+  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc"]
+}

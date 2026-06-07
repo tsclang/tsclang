@@ -51,7 +51,7 @@
 
 ## Статус
 - [x] Секция 1: Лексика и токены
-- [ ] Секция 2: Типы
+- [x] Секция 2: Типы
 - [ ] Секция 3: Выражения
 - [ ] Секция 4: Операторы
 - [ ] Секция 5: Функции
@@ -74,6 +74,12 @@
 | L-2 | Лексика | `**=` и `*=` делят TK.STAREQ | **RESOLVED** | Code smell | Добавлен TK.STARSTAREQ для `**=` |
 | L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест phase6/import/import-rename проходит |
 | L-4 | Лексика | Legacy octal не задокументирован | **RESOLVED** | Спец неполон | Добавлена заметка в spec/03-types/03-numbers.md |
+| T-1 | Типы | `?.` property access — no null-safety check | **NEEDS INVESTIGATION** | Impl неполон | `dispatch.js:651-654` — `OptChain` passthrough `obj.prop` без `has_value` check. Method calls `?.toString()` OK (`call-dispatch.js:37-56`). Property access `user?.name` — no guard. Только 2 теста (chain-value, chain-null), оба на `.toString()` |
+| T-2 | Типы | `as` non-null assertion: no runtime null-check | **NEEDS INVESTIGATION** | Impl неполон | `dispatch.js:573-575` — `x as i32` при `x: i32 | null` → `(int32_t)opt_i32_struct` — C compile error или UB. Spec говорит "runtime error if null". Narrowing через `if (x != null)` работает корректно (dispatch.js:23-34), но bare `as` без narrowing — нет |
+| T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **NEEDS INVESTIGATION** | Impl неполон | Spec определяет C-output `s.has_value && s.value.length > 0` для `string | null`. Код не имеет явного truthy/falsy handler — `if (optStringVar)` → `if (struct)` — C compile error. Работает только через narrowing: `if (x != null)` → `if (x.has_value)` |
+| T-4 | Типы | String literal union rodata: simple array vs designated initializers | **RESOLVED** | Cosmetic | `types-alias.js:61` — `{ "a", "b" }` вместо `{ [Dir_a] = "a" }`. Функционально эквивалентно. Designated initializers — C99, но и простой init работает |
+| T-5 | Типы | Null representation for class types: inline vs pointer | **NEEDS INVESTIGATION** | Spec vs impl | Spec: `class | null` → `T *value` (pointer). Impl: `_ensureOptStruct` → `T value` inline для non-pointer классов. `_ensureOptRefStruct` → `T *value` только для pool/iterator. Потенциальный overhead для больших классов |
+| T-6 | Типы | Truthy for class/array/Set/Map: always truthy | **NEEDS INVESTIGATION** | Spec warning missing | Spec: `if (arr)` → warning "условие всегда true". Не проверено, есть ли warning в impl. Если нет — П4 violation |
 
 ---
 
@@ -178,7 +184,8 @@
 | Средние | 13 | 2 | 0 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
 | Spec↔impl | 6 | 6 | 0 | 0 | 0 |
-| **Итого** | **45** | **20** | **0** | **24** | **1** |
+| Audit §2 | 6 | 1 | 0 | 5 | 0 |
+| **Итого** | **51** | **21** | **0** | **29** | **1** |
 
 ### Подтверждённые открытые проблемы (обновлено 2026-06-07, 1 штука)
 
@@ -349,6 +356,7 @@
 | Предварительных находок | ~109 | **45** (0 STILL PRESENT + 24 NEEDS INVESTIGATION + 20 RESOLVED + 1 MITIGATED + 1 PARTIALLY RESOLVED) |
 | Закрыто нашей работой | 0 | **8** (R-1..R-8) |
 | Закрыто аудитом Секции 1 | 0 | **5** (L-1..L-4 + 03-6) |
+| Закрыто аудитом Секции 2 | 0 | **6** (T-1..T-6: 1 RESOLVED, 5 NEEDS INVESTIGATION) |
 | Закрылось само с момента аудита | 0 | **7** (H-6, S-2, S-3, #38, #94, S-6, S-1) |
 
 ### Подтверждённые открытые проблемы (итого 1)
@@ -364,7 +372,7 @@
 - ~~5 Atomic methods missing (S-6)~~ — RESOLVED, все 9 методов реализованы: `concurrency.js:44-94`, метод `exchange` называется `swap`
 - ~~atob/btoa не в spec (S-1)~~ — RESOLVED, spec уже описан: `14-stdlib.md:1028-1032`, impl полный
 
-### Подлежат исследованию (24 штуки)
+### Подлежат исследованию (29 штук)
 
 При написании соответствующих блоков книги эти точки будут проверены:
 - Критические: #66 (optional array), #67 (tuple destruct)
@@ -372,6 +380,7 @@
 - Средние: #95-#102, #104-#105 (runtime issues, validation gaps)
 - Низкие: #106-#109 (cosmetic)
 - Doc-аудит: 02-5 (for-of reassignment), 02-6 (range inclusivity)
+- Audit §2: T-1 (?. property), T-2 (as non-null), T-3 (truthy), T-5 (class null rep), T-6 (always-truthy warning)
 
 ---
 
