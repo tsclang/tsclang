@@ -1,0 +1,6 @@
+let x: number = 7; let y: number = 3;
+let a = (x + 1) & (y + 1);
+let b = (x * 2) | y;
+let c = (x + 1) & (y - 1);
+let d = (x - 3) ^ (y + 2);
+console.log(a); console.log(b); console.log(c); console.log(d);

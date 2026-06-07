@@ -1,0 +1,4 @@
+let a: char = 'a'; let b: char = 'b';
+let r1 = a & b;
+let r2 = ~a;
+console.log(r1); console.log(r2);

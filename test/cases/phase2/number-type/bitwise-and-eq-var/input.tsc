@@ -1,0 +1,6 @@
+let x: number = 7; let y: number = 3;
+x &= y;
+console.log(x);
+let z: number = 15; let w: i32 = 6;
+z &= w;
+console.log(z);

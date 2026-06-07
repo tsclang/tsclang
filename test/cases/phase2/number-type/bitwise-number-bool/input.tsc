@@ -1,0 +1,5 @@
+let x: number = 5; let b = true;
+let a = x & b;
+let c = b & x;
+let d = x & true;
+console.log(a); console.log(c); console.log(d);

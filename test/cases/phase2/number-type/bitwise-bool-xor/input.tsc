@@ -1,0 +1,3 @@
+let a = true ^ false;
+let b = true ^ true;
+console.log(a); console.log(b);

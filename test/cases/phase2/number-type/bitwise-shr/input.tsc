@@ -1,0 +1,4 @@
+let x: number = 20; let y: number = 1;
+let a = x >> 1;
+let b = x >> y;
+console.log(a); console.log(b);

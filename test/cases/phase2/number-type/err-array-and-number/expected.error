@@ -1,0 +1,1 @@
+error: TypeError: bitwise op '&' not applicable to 'Array_f64' and 'double'

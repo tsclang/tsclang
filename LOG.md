@@ -1663,3 +1663,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > > - Generates `(double)(((int32_t)(x)) & ((int32_t)(3)))` — matches TS semantics, gcc optimizes round-trip
 > > - New test: `phase2/number-type/bitwise-number` (runnable, 5 bitwise ops)
 > > - All **1422 tests passing** (0 failures)
+> 
+> > 2026-06-07: Comprehensive bitwise ops fix — _hasFloatVar, ~, compound assigns, type validation, 48 tests
+> > - **Plan**: fix all bitwise operation bugs with `number` type and add comprehensive test coverage
+> > - Fixes in `operators.js`: `_hasFloatVar()` recursive helper, bitwise binary block, unary `~` float-cast, type validation (TypeError for non-numeric)
+> > - Fixes in `assign.js`: compound bitwise assigns (`&=`, `|=`, `^=`, `<<=`, `>>=`) float-cast + type validation
+> > - 48 new tests covering: all 5 bitwise ops, compound assigns, mixed types (number/i32/char/bool), edge values, different defaultNumber, error cases (string/array/null)
+> > - Files changed: `operators.js` (added `_hasFloatVar`, bitwise block rewrite, `~` float-cast, type validation), `assign.js` (compound bitwise float-cast + type validation)
+> > - All **1780 tests passing** (0 failures), +48 new tests in `phase2/number-type/`

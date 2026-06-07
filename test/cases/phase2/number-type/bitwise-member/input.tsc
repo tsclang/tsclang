@@ -1,0 +1,3 @@
+let obj = { val: 5 as number };
+let x = obj.val & 3;
+console.log(x);

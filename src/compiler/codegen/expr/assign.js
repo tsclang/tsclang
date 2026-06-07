@@ -215,6 +215,23 @@ export default {
       }
     }
 
+    const bitwiseAssignOps = ['&=', '|=', '^=', '<<=', '>>='];
+    if (bitwiseAssignOps.includes(node.op)) {
+      const leftType = this.inferType(node.left);
+      const rightType = this.inferType(node.right);
+      const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
+      if (!NUMERIC.has(leftType) || !NUMERIC.has(rightType)) {
+        const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+        throw this.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(leftType)}' and '${tsName(rightType)}'`, node);
+      }
+      const leftIsFloat = leftType === 'double' || leftType === 'float';
+      const rightIsFloat = (rightType === 'double' || rightType === 'float') && this._hasFloatVar(node.right);
+      if ((leftIsFloat || rightIsFloat) && lines) {
+        const rawOp = node.op[0];
+        return `${l} = (${leftType})(((int32_t)(${l})) ${rawOp} ((int32_t)(${r})))`;
+      }
+    }
+
     return `${l} ${node.op} ${r}`;
   }
 };

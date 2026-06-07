@@ -222,11 +222,15 @@ export default {
     if (bitwiseOps.includes(node.op)) {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);
-      const lIsFloat = (lt === 'double' || lt === 'float') && node.left.kind === 'Ident';
-      const rIsFloat = (rt === 'double' || rt === 'float') && node.right.kind === 'Ident';
-      if (lIsFloat || rIsFloat) {
-        const targetType = lIsFloat ? lt : rt;
-        return `(${targetType})(((int32_t)(${l})) ${op} ((int32_t)(${r})))`;
+      const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
+      if (!NUMERIC.has(lt) || !NUMERIC.has(rt)) {
+        const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+        throw this.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(lt)}' and '${tsName(rt)}'`, node);
+      }
+      const needsCast = this._hasFloatVar(node.left) || this._hasFloatVar(node.right);
+      if (needsCast) {
+        const lft = this._hasFloatVar(node.left) ? this.inferType(node.left) : this.inferType(node.right);
+        return `(${lft})(((int32_t)(${l})) ${op} ((int32_t)(${r})))`;
       }
       return `${l} ${op} ${r}`;
     }
@@ -269,6 +273,19 @@ export default {
       }
     }
     return `${l} ${op} ${r}`;
+  },
+
+  _hasFloatVar(node) {
+    if (!node) return false;
+    if (node.kind === 'Literal') return false;
+    if (node.kind === 'Ident') {
+      const sym = this.lookup(node.name);
+      return sym?.ctype === 'double' || sym?.ctype === 'float';
+    }
+    if (node.kind === 'Binary') return this._hasFloatVar(node.left) || this._hasFloatVar(node.right);
+    if (node.kind === 'Unary') return this._hasFloatVar(node.expr);
+    const t = this.inferType(node);
+    return t === 'double' || t === 'float';
   },
 
   isStringExpr(node) {
@@ -322,7 +339,16 @@ export default {
     switch (node.op) {
       case '!':     return `!${e}`;
       case '-':     return `-${e}`;
-      case '~':     return `~${e}`;
+      case '~': {
+        const et = this.inferType(node.expr);
+        const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
+        if (!NUMERIC.has(et)) {
+          const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+          throw this.error(`TypeError: bitwise op '~' not applicable to '${tsName(et)}'`, node);
+        }
+        if (this._hasFloatVar(node.expr)) return `(${et})(~((int32_t)(${e})))`;
+        return `~${e}`;
+      }
       case '++pre': return `++${e}`;
       case '--pre': return `--${e}`;
       case '++post': return `${e}++`;
