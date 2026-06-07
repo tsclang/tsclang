@@ -1,0 +1,6 @@
+const a = (1).toString();
+const b = (2).toString();
+const c = (3).toString();
+console.log(a);
+console.log(b);
+console.log(c);

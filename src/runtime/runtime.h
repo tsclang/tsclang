@@ -1036,33 +1036,36 @@ static inline String tsc_bool_to_string(bool v) {
     return v ? STR_LIT("true") : STR_LIT("false");
 }
 static inline String tsc_i32_to_string(int32_t v) {
-    static char _tsc_i32_buf[32];
-#ifndef TSC_NES
-    int n = snprintf(_tsc_i32_buf, sizeof(_tsc_i32_buf), "%d", v);
-    return _tsc_str_make(_tsc_i32_buf, (size_t)(n > 0 ? n : 0), 0);
+#ifdef TSC_EMBEDDED
+    char tmp[12];
+    int n = sprintf(tmp, "%d", v);
+    return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    sprintf(_tsc_i32_buf, "%ld", (long)v);
-    return STR_LIT_RUNTIME(_tsc_i32_buf);
+    char *buf = (char *)malloc(32);
+    int n = snprintf(buf, 32, "%d", v);
+    return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
 }
 static inline String tsc_i64_to_string(int64_t v) {
-    static char _tsc_i64_buf[32];
-#ifndef TSC_NES
-    int n = snprintf(_tsc_i64_buf, sizeof(_tsc_i64_buf), "%lld", (long long)v);
-    return _tsc_str_make(_tsc_i64_buf, (size_t)(n > 0 ? n : 0), 0);
+#ifdef TSC_EMBEDDED
+    char tmp[24];
+    int n = sprintf(tmp, "%lld", (long long)v);
+    return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    sprintf(_tsc_i64_buf, "%ld", (long)v);
-    return STR_LIT_RUNTIME(_tsc_i64_buf);
+    char *buf = (char *)malloc(32);
+    int n = snprintf(buf, 32, "%lld", (long long)v);
+    return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
 }
 static inline String tsc_f64_to_string(double v) {
-    static char _tsc_f64_buf[64];
-#ifndef TSC_NES
-    int n = snprintf(_tsc_f64_buf, sizeof(_tsc_f64_buf), "%g", v);
-    return _tsc_str_make(_tsc_f64_buf, (size_t)(n > 0 ? n : 0), 0);
+#ifdef TSC_EMBEDDED
+    char tmp[32];
+    int n = sprintf(tmp, "%g", v);
+    return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    sprintf(_tsc_f64_buf, "%g", v);
-    return STR_LIT_RUNTIME(_tsc_f64_buf);
+    char *buf = (char *)malloc(64);
+    int n = snprintf(buf, 64, "%g", v);
+    return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 64);
 #endif
 }
 

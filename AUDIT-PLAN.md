@@ -145,7 +145,7 @@
 | 100 | i8=128 no range check | **NEEDS INVESTIGATION** | `vardecl.js` — `i8 = 128` не проверяется на диапазон. |
 | 101 | f64→i32 truncation | **NEEDS INVESTIGATION** | `vardecl.js` — `let x: i32 = 3.14` — нет проверки на потерю точности. |
 | 102 | Large array OOM no NULL check | **NEEDS INVESTIGATION** | `runtime.h` — `new Array(N)` с большим N — нет NULL check после malloc. |
-| 103 | `*_to_string` static buffers not reentrant | **STILL PRESENT** | `runtime.h:1039,1049,1059,1111` — static `_tsc_i32_buf[32]`, `_tsc_i64_buf[32]`, `_tsc_f64_buf[64]`, `_fmt_buf[128]`. Не потокобезопасно, не реентерабельно. |
+| 103 | `*_to_string` static buffers not reentrant | **RESOLVED** | `runtime.h` — static buffers заменены на malloc+ARC (desktop) и `_tsc_str_make` с ring buffer pool (embedded). Тест `toString-reentrant` добавлен. |
 | 104 | Decorator on constructor silently dropped | **NEEDS INVESTIGATION** | `decorators.js` — декоратор на конструкторе silently игнорируется. |
 | 105 | @platform on class methods ignored | **NEEDS INVESTIGATION** | `decorators.js` — `@platform` на методах класса игнорируется. |
 
@@ -175,18 +175,17 @@
 |-----------|-------|----------|---------------|---------------------|-----------|
 | Критические | 4 | 1 | 0 | 2 | 1 |
 | Высокие | 18 | 9 | 2 | 7 | 0 |
-| Средние | 13 | 1 | 1 | 11 | 0 |
+| Средние | 13 | 2 | 0 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
 | Spec↔impl | 6 | 4 | 1 | 0 | 0 |
-| **Итого** | **45** | **15** | **4** | **24** | **1** |
+| **Итого** | **45** | **16** | **3** | **24** | **1** |
 
-### Подтверждённые открытые проблемы (обновлено 2026-06-07, 5 штук)
+### Подтверждённые открытые проблемы (обновлено 2026-06-07, 4 штуки)
 
 1. **URL encode/decode missing** (#38) — `encodeURIComponent`/`decodeURIComponent`/`encodeURI`/`decodeURI` не реализованы
 2. **Division by zero no guard** (#94) — UB в C при integer division by zero
-3. **atob/btoa не в spec** (S-1) — spec нужно обновить, добавить atob/btoa
-4. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
-5. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
+3. **5 Atomic methods missing** (S-6) — `fetchSub`, `fetchOr`, `fetchAnd`, `fetchXor`, `exchange`
+4. **`--emit hex` не функционален** — bin/index.js:1056-1061, hex emit path не реализован
 
 ---
 
@@ -340,10 +339,10 @@
 |-----------|-------|----------|---------------|---------------------|
 | Критические | 4 | 1 | 0 | 3 |
 | Высокие | 18 | 8 | 2 | 8 |
-| Средние | 13 | 1 | 0 | 12 |
+| Средние | 13 | 2 | 0 | 11 |
 | Низкие | 4 | 0 | 0 | 4 |
 | Spec↔impl | 6 | 2 | 3 | 0 |
-| **Итого** | **45** | **12** | **5** | **27** |
+| **Итого** | **45** | **13** | **4** | **27** |
 
 ### Общая статистика
 
@@ -355,21 +354,21 @@
 | Закрыто аудитом Секции 1 | 0 | **4** (L-1..L-4: 2 code smell fix, 1 spec update, 1 already resolved) |
 | Закрылось само с момента аудита | 0 | **3** (H-6, S-2, S-3) |
 
-### Подтверждённые открытые проблемы (итого 6)
+### Подтверждённые открытые проблемы (итого 5)
 
 **Из старого doc-аудита (2):**
 1. `--emit hex` не функционален (01-5)
 2. `Set.delete` возвращает `opt_T` вместо `bool` — spec↔impl gap (03-6)
 
-**Из предварительных находок (4):**
+**Из предварительных находок (3):**
 3. URL encode/decode missing (#38)
 4. Division by zero no guard (#94)
 5. atob/btoa не в spec (S-1)
-6. `*_to_string` static buffers not reentrant (#103) — confirmed in runtime.h
 
 **Закрыто аудитом Секции 1 (2026-06-07):**
 - ~~Import renaming not supported (#93)~~ — RESOLVED, parser+codegen уже поддерживают
 - ~~Legacy octal не в spec (L-4)~~ — RESOLVED, добавлена заметка в spec
+- ~~`*_to_string` static buffers not reentrant (#103)~~ — RESOLVED, malloc+ARC (desktop), ring buffer pool (embedded), тест toString-reentrant
 
 ### Подлежат исследованию (24 штуки)
 

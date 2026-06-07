@@ -162,19 +162,22 @@ static inline String tsc_capture_stack(void) {
  * ------------------------------------------------------------------------- */
 #include <stdio.h>
 static inline String tsc_i32_to_string(int32_t v) {
-    static char _buf[12];
-    sprintf(_buf, "%ld", (long)v);
-    return STR_LIT_RUNTIME(_buf);
+    char tmp[12];
+    sprintf(tmp, "%ld", (long)v);
+    size_t n = strlen(tmp);
+    return _tsc_str_make(tmp, n, n + 1);
 }
 static inline String tsc_i64_to_string(int64_t v) {
-    static char _buf[24];
-    sprintf(_buf, "%ld", (long)v);
-    return STR_LIT_RUNTIME(_buf);
+    char tmp[24];
+    sprintf(tmp, "%ld", (long)v);
+    size_t n = strlen(tmp);
+    return _tsc_str_make(tmp, n, n + 1);
 }
 static inline String tsc_f64_to_string(double v) {
-    static char _buf[32];
-    sprintf(_buf, "%g", v);
-    return STR_LIT_RUNTIME(_buf);
+    char tmp[32];
+    sprintf(tmp, "%g", v);
+    size_t n = strlen(tmp);
+    return _tsc_str_make(tmp, n, n + 1);
 }
 
 /* -------------------------------------------------------------------------

@@ -1693,3 +1693,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - AUDIT-PLAN.md updated: Section 1 checked off, statistics recalculated, #93 → RESOLVED
 > - 490 tests passing (phase1+ with --no-gcc), 0 failures
 > - Files changed: `lexer.js`, `parser.js`, `spec/03-types/03-numbers.md`, `AUDIT-PLAN.md`
+
+> 2026-06-07: Fix #103 — `*_to_string` static buffers replaced with malloc+ARC (desktop) and ring buffer pool (embedded)
+> - Bug: `tsc_i32_to_string()`, `tsc_i64_to_string()`, `tsc_f64_to_string()` used `static char` buffers — not reentrant, not thread-safe
+> - `const a = (1).toString(); const b = (2).toString()` → both `a` and `b` pointed to same static buffer containing "2"
+> - Fix: desktop → malloc + ARC via `_tsc_str_make` (same pattern as all other string operations); embedded → `_tsc_str_make` with `cap > 0` copies into existing ring buffer pool (`_tsc_str_pool`)
+> - `runtime_nes.h` — same fix: static buffers → `_tsc_str_make` with pool
+> - Removed: `static char _tsc_i32_buf[32]`, `_tsc_i64_buf[32]`, `_tsc_f64_buf[64]` from runtime.h; `static char _buf[12/24/32]` from runtime_nes.h
+> - New test: `phase3/strings/toString-reentrant` — verifies multiple `.toString()` calls produce independent strings
+> - Files changed: `src/runtime/runtime.h`, `src/runtime/runtime_nes.h`, `test/cases/phase3/strings/toString-reentrant/`, `AUDIT-PLAN.md`
