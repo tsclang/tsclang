@@ -240,7 +240,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - スプレッド演算子（配列、オブジェクト、所有権のルール）
 - インデックスとスライス（配列と文字列、負のインデックス）
 
-**ソース:** `spec/02-syntax/02-syntax.md`
+**ソース:** `spec/02-syntax/`
 
 ---
 
@@ -496,7 +496,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 | # | ファイル | 内容 | ソース | サイズ |
 |---|------|---------|--------|------|
 | 01 | intro | TSClangとは、クイックスタート、CLI | `spec/01-intro/01-intro.md` | ~30 KB |
-| 02 | syntax | 構文、演算子、ループ、match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 02 | syntax | 構文、演算子、ループ、match/switch | `spec/02-syntax/` | ~50 KB |
 | 03 | types | 型、数値、文字列、配列、Map/Set、タプル、ユーティリティ型 | `spec/03-types/03-types.md` | ~80 KB |
 | 04 | classes | クラス、インターフェース、列挙型、ジェネリック、拡張メソッド | `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md` | ~40 KB |
 | 05 | memory | 所有権、借用チェッカー、Ref/Mut/Shared、クロージャ | `spec/05-memory/05-memory.md` | ~50 KB |

@@ -240,7 +240,7 @@ nums.map(x => x * 2)  // return a new value
 - 展開運算子（陣列、物件、所有權規則）
 - 索引與切片（陣列與字串、負索引）
 
-**來源：** `spec/02-syntax/02-syntax.md`
+**來源：** `spec/02-syntax/`
 
 ---
 
@@ -496,7 +496,7 @@ nums.map(x => x * 2)  // return a new value
 | # | 檔案 | 內容 | 來源 | 大小 |
 |---|------|---------|--------|------|
 | 01 | intro | 什麼是 TSClang、快速開始、CLI | `spec/01-intro/01-intro.md` | ~30 KB |
-| 02 | syntax | 語法、運算子、迴圈、match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 02 | syntax | 語法、運算子、迴圈、match/switch | `spec/02-syntax/` | ~50 KB |
 | 03 | types | 型別、數字、字串、陣列、Map/Set、元組、工具型別 | `spec/03-types/03-types.md` | ~80 KB |
 | 04 | classes | 類別、介面、列舉、泛型、擴充方法 | `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md` | ~40 KB |
 | 05 | memory | 所有權、借用檢查、Ref/Mut/Shared、閉包 | `spec/05-memory/05-memory.md` | ~50 KB |

@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // return a new value
 - Opérateur spread (tableaux, objets, règles de propriété)
 - Indexation et tranches (tableaux et chaînes, index négatifs)
 
-**Source :** `spec/02-syntax/02-syntax.md`
+**Source :** `spec/02-syntax/`
 
 ---
 
@@ -497,7 +497,7 @@ nums.map(x => x * 2)  // return a new value
 | # | Fichier | Contenu | Source | Taille |
 |---|---------|---------|--------|--------|
 | 01 | intro | Qu'est-ce que TSClang, démarrage rapide, CLI | `spec/01-intro/01-intro.md` | ~30 Ko |
-| 02 | syntax | Syntaxe, opérateurs, boucles, match/switch | `spec/02-syntax/02-syntax.md` | ~50 Ko |
+| 02 | syntax | Syntaxe, opérateurs, boucles, match/switch | `spec/02-syntax/` | ~50 Ko |
 | 03 | types | Types, nombres, chaînes, tableaux, Map/Set, tuples, types utilitaires | `spec/03-types/03-types.md` | ~80 Ko |
 | 04 | classes | Classes, interfaces, énumération, génériques, méthodes d'extension | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 Ko |
 | 05 | memory | Propriété, vérificateur d'emprunt, Ref/Mut/Shared, closures | `spec/05-memory/05-memory.md` | ~50 Ko |

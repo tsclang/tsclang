@@ -1,30 +1,37 @@
-# TSClang — Спецификация и фазы реализации
+﻿# TSClang — Спецификация и фазы реализации
 
 ## Разделы
 
-Спецификация языка разбита на разделы. Читай нужный раздел напрямую.
+Спецификация языка организована по логическим слоям в `spec/`.
 
-| Файл | Содержимое |
-|------|-----------|
-| [spec/01-intro/](spec/01-intro/) | Зачем, дизайн-философия, overview, установка |
-| [spec/02-syntax/](spec/02-syntax/) | Синтаксис, операторы, управляющие конструкции |
-| [spec/03-types/](spec/03-types/) | Базовые типы: числа, строки, null, массивы, Date, конвертация, Clone, Type Aliases |
-| [spec/04-classes/](spec/04-classes/) | Классы и объектная система: generics, extension methods, enum, интерфейсы, instanceof, классы |
-| [spec/05-memory/](spec/05-memory/) | Ownership, borrow checker, замыкания, итераторы |
-| [spec/06-errors/](spec/06-errors/) | Обработка ошибок, throws, try/catch |
-| [spec/07-concurrency/](spec/07-concurrency/) | Async/await, threads, embedded concurrency |
-| [spec/08-modules/](spec/08-modules/) | Модульная система, C interop, .d.tsc, @platform |
-| [spec/09-build/](spec/09-build/) | Типы проектов, система сборки, CLI, package manager |
-| [spec/10-stdlib/](spec/10-stdlib/) | Стандартная библиотека |
-| [spec/11-compiler/](spec/11-compiler/) | Архитектура компилятора, IR, методология тестов |
-| [spec/12-migration/](spec/12-migration/) | Migration guide: TypeScript → TSClang |
-| [spec/13-decorators/](spec/13-decorators/) | Декораторы: синтаксис, Descriptor API, встроенные декораторы, codegen |
+| Раздел | Содержимое |
+|--------|-----------|
+| [01-intro](spec/01-intro/) | Зачем, дизайн-философия, overview, установка |
+| [02-syntax](spec/02-syntax/) | Синтаксис: форматирование, переменные, операторы, truthy/falsy |
+| [03-types](spec/03-types/) | Типы: числа, строки, null, enum, Date, Type Aliases, конвертация, special types |
+| [04-ownership](spec/04-ownership/) | Ownership, borrow checker, Clone, Shared/Weak, const vs let |
+| [05-control-flow](spec/05-control-flow/) | Управляющие конструкции: match, switch, for-of, while |
+| [06-functions](spec/06-functions/) | Функции: перегрузка, name mangling, closures, extension methods, extern "C", default params |
+| [07-classes](spec/07-classes/) | Классы: generics, интерфейсы, instanceof, this, packed/align |
+| [08-collections](spec/08-collections/) | Массивы, tuples, slices, spread/destructuring |
+| [09-errors](spec/09-errors/) | Обработка ошибок: throws, try/catch, cleanup |
+| [10-async](spec/10-async/) | Async/await: state machines, Promise, AbortSignal, AsyncMutex, async generators, @embedded.singleton/stack |
+| [11-concurrency](spec/11-concurrency/) | Threads, Atomic, channel, ISR, Volatile, std/sync, embedded annotations |
+| [12-modules](spec/12-modules/) | Модульная система, C interop, .d.tsc, @platform, import/export |
+| [13-build](spec/13-build/) | Система сборки, CLI, tsc.package.json, package manager, embedded inline/pool |
+| [14-stdlib](spec/14-stdlib/) | Стандартная библиотека (IO, FS, Net, WS, HAL, AVR, Reactive, Regex) |
+| [15-decorators](spec/15-decorators/) | Декораторы: синтаксис, Descriptor API, codegen |
+| [16-tooling](spec/16-tooling/) | Компилятор, IR, LSP, Linter, Оптимизатор |
+| [17-migration](spec/17-migration/) | Migration guide: TypeScript → TSClang |
+
+Маппинг тестовых фаз → разделы: [spec/PHASES.md](spec/PHASES.md).
+Лог миграции spec → spec: [spec/PROGRESS.md](spec/PROGRESS.md).
 
 ---
 
-## Оглавление с кратким описанием каждого раздела и порядок реализации.
+## Оглавление
 
-### Блок 1: Введение
+### 01 — Введение ([spec/01-intro/](spec/01-intro/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -34,32 +41,16 @@
 | **Overview** | Краткое техническое описание: расширение `.tsc`, CLI `tsclang`, выход `.c/.h + CMakeLists.txt`. |
 | **Установка** | Требования (Node, CMake, gcc/clang/avr-gcc) и команды npm-установки CLI. |
 
-### Блок 2: Синтаксис
+### 02 — Синтаксис ([spec/02-syntax/](spec/02-syntax/))
 
 | Раздел | О чём |
 |--------|-------|
 | **Форматирование** | Форматирование — никогда не ошибка компилятора; правила пробелов, кавычек, ASI, отступов; `tsclang lint`. |
 | **Переменные** | `let` — мутабельная, `const` — иммутабельная; влияет на передачу как `Mut<T>` и вызов `mut`-методов. |
-| **Функции** | Объявление, стрелочные функции, возвращаемые типы, вывод типа. |
-| **Перегрузка функций** | Перегрузка по типам и количеству параметров; C-output через name mangling (`foo_i32`, `foo_string`). |
-| **Ограничение: extern "C" запрещает перегрузку** | `extern "C"` функции не могут быть перегружены — манглинг невозможен. |
-| **Name mangling — формальная схема** | Полная EBNF-схема кодирования типов в C-имена: кодирование примитивов, пользовательских типов, методов, module slug, коллизии имён. |
-| **Дефолтные параметры** | Синтаксис и C-output для параметров по умолчанию. |
-| **Семантика передачи значений** | Примитивы копируются; сложные типы — move (при присваивании) или borrow через `Ref<T>`/`Mut<T>` (при передаче в функцию). Move из массива по индексу запрещён — только `Ref<T>`. Borrow полей объектов — не поддерживается. Матрица совместимости (12 ячеек) — все error-ячейки проверяются компилятором. |
 | **Операторы** | Арифметика, присваивание, сравнения, логика, битовые, прочие; таблица приоритетов. |
 | **Truthy / Falsy** | Правила неявного приведения к boolean (отличия от JS). |
-| **Индексация и срезы** | Синтаксис `arr[i]`, `arr[a..b]` для массивов и строк. |
-| **const vs let** | Подробная семантика иммутабельности и ограничения `const`. |
-| **for-of цикл** | Итерация по массивам и строкам; семантика `item` внутри цикла. |
-| **while / do-while** | Циклы с условием; `async/await` внутри циклов. |
-| **switch / case** | Ветвление по значению; fallthrough запрещён. |
-| **match** | Паттерн-матчинг с exhaustiveness check; fat-pointer matching и discriminated union. |
-| **Spread оператор** | `...arr` для массивов и объектов; правила ownership при spread. |
 
-### Блок 3: Система типов
-
-**[spec/03-types/](spec/03-types/) — базовые типы:**
-
+### 03 — Система типов ([spec/03-types/](spec/03-types/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -71,26 +62,12 @@
 | **Специальные типы** | `any`, `never`, `void`, `unknown` — семантика и ограничения. |
 | **Null** | Nullable типы (`T | null`); optional chaining `?.`; `??` оператор. |
 | **Date** | Legacy JS-совместимый API (0-indexed месяцы); для нового кода — `std/temporal`. |
-| **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
-| **Tuples** | Фиксированный кортеж `[A, B, C]`; labeled (dot-access); readonly; optional элементы; rest `...T[]`; C-output — struct. |
-| **Clone** | Явное клонирование owned значений; `clone()` метод. |
+| **Enum** | Числовой, строковый, `const enum`; утилиты; switch/match с enum. |
 | **Type Aliases** | `type UserId = i32` (opaque/номинальный) vs `type Point = { ... }` (структурный). |
 | **String Literal Union** | Compile-time only; компилируется в C enum + rodata таблицу строк; явная конверсия в string. |
 | **Utility Types** | Compile-time type operators: Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited; правило А+Б для generic functions. |
 
-**[spec/04-classes/](spec/04-classes/) — классы и объектная система:**
-
-| Раздел | О чём |
-|--------|-------|
-| **Generics** | Монорфизация; bounds через `implements`/`extends`; ownership с generic-параметрами. |
-| **Extension Methods** | Добавление методов к существующим типам через явный импорт; zero-overhead C-output. |
-| **Enum** | Числовой, строковый, `const enum`; утилиты; switch/match с enum. |
-| **Интерфейсы** | Структурная типизация; fat pointer (vtable) при наличии методов; `implements`. |
-| **instanceof** | Проверка типа через сравнение vtable-адресов O(1); только для interface-переменных. |
-| **Классы** | Номинальная типизация; `mut`-методы; `readonly`-поля; наследование только от `Error`. |
-| **Семантика `this` и доступ к полям** | Правила `self`/`this`; доступ к полям внутри методов; разрешение неоднозначности. |
-
-### Блок 4: Модель памяти
+### 04 — Ownership и модель памяти ([spec/04-ownership/](spec/04-ownership/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -105,18 +82,54 @@
 | **Interior Mutability** | Почему её нет: event loop однопоточен, actor-паттерн через `Channel`, `Atomic<T>` для счётчиков. |
 | **Scope Constraint** | Автоматические lifetime ограничения: borrow не может пережить владельца. |
 | **Автоматический Drop** | Детерминированное освобождение в обратном порядке объявления; нет GC. |
-| **Cleanup при throw** | `goto cleanup` паттерн в C-output: O(N+M) вместо дублирования, все указатели NULL-инициализированы. |
-| **Доступ к полям и деструктуризация** | Borrow по умолчанию; move при явной аннотации типа; match всегда move. |
-| **Срезы** | `Slice<T>` как zero-copy view на часть массива или строки; правила lifetime. |
+| **@static let** | Объект в BSS (static lifetime); несколько `Mut<T>` разрешены; при std/threads требует `Atomic<T>`. |
+| **Clone** | Явное клонирование owned значений; `clone()` метод. |
+| **const vs let** | Подробная семантика иммутабельности и ограничения `const`. |
+
+### 05 — Управляющие конструкции ([spec/05-control-flow/](spec/05-control-flow/))
+
+| Раздел | О чём |
+|--------|-------|
+| **switch / case** | Ветвление по значению; fallthrough запрещён. |
+| **match** | Паттерн-матчинг с exhaustiveness check; fat-pointer matching и discriminated union. |
+| **for-of цикл** | Итерация по массивам и строкам; семантика `item` внутри цикла. |
+| **while / do-while** | Циклы с условием; `async/await` внутри циклов. |
+
+### 06 — Функции ([spec/06-functions/](spec/06-functions/))
+
+| Раздел | О чём |
+|--------|-------|
+| **Функции** | Объявление, стрелочные функции, возвращаемые типы, вывод типа. |
+| **Перегрузка функций** | Перегрузка по типам и количеству параметров; C-output через name mangling (`foo_i32`, `foo_string`). |
+| **extern "C"** | `extern "C"` функции не могут быть перегружены — манглинг невозможен. |
+| **Name mangling** | Полная EBNF-схема кодирования типов в C-имена: кодирование примитивов, пользовательских типов, методов, module slug, коллизии имён. |
+| **Дефолтные параметры** | Синтаксис и C-output для параметров по умолчанию. |
+| **Extension Methods** | Добавление методов к существующим типам через явный импорт; zero-overhead C-output. |
+| **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
+
+### 07 — Классы и объектная система ([spec/07-classes/](spec/07-classes/))
+
+| Раздел | О чём |
+|--------|-------|
+| **Generics** | Монорфизация; bounds через `implements`/`extends`; ownership с generic-параметрами. |
+| **Интерфейсы** | Структурная типизация; fat pointer (vtable) при наличии методов; `implements`. |
+| **instanceof** | Проверка типа через сравнение vtable-адресов O(1); только для interface-переменных. |
+| **Классы** | Номинальная типизация; `mut`-методы; `readonly`-поля; наследование только от `Error`. |
+| **Семантика `this`** | Правила `self`/`this`; доступ к полям внутри методов; разрешение неоднозначности. |
+| **packed / align** | Управление layout: `@packed` (no padding) и `@align(N)` для embedded/FFI. |
+
+### 08 — Коллекции ([spec/08-collections/](spec/08-collections/))
+
+| Раздел | О чём |
+|--------|-------|
+| **Массивы и коллекции** | Динамические массивы (capacity/length); `Slice<T>` zero-copy view; `Map<K,V>`; `Set`; `Object`. |
+| **Tuples** | Фиксированный кортеж `[A, B, C]`; labeled (dot-access); readonly; optional элементы; rest `...T[]`; C-output — struct. |
+| **Индексация и срезы** | Синтаксис `arr[i]`, `arr[a..b]` для массивов и строк. |
+| **Spread оператор / Destructuring** | `...arr` для массивов и объектов; правила ownership при spread; деструктуризация с ownership. |
 | **Move из массива** | Семантика `arr[i]` как move; borrow через `arr[i]` как `Ref`. |
 | **Мутация коллекции при borrow** | Запрет: активный borrow блокирует мутацию коллекции. |
-| **Возврат borrow из метода** | Lifetime constraint: возвращаемый `Ref` не может пережить `self`. |
-| **Borrows в полях класса** | `Ref<T>` как поле класса запрещён; `Mut<T>` в полях — тоже. |
-| **@static let** | Объект в BSS (static lifetime); несколько `Mut<T>` разрешены; при std/threads требует `Atomic<T>`. |
-| **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
-| **Iterable\<T\>** | Протокол: `iter(): mut () => T | null`; `for...of` → while-цикл; работает на embedded. |
 
-### Блок 5: Обработка ошибок
+### 09 — Обработка ошибок ([spec/09-errors/](spec/09-errors/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -129,9 +142,10 @@
 | **Оператор `!`** | Unwrap с паникой при ошибке; для случаев "этого не должно произойти". |
 | **C-output** | Как Result-struct выглядит в C; tagged union с ok/err полями. |
 | **Ownership при ошибках** | Owned переменные освобождаются корректно при throw через `goto cleanup`. |
+| **Cleanup при throw** | `goto cleanup` паттерн в C-output: O(N+M) вместо дублирования, все указатели NULL-инициализированы. |
 | **Ограничения** | `throw` запрещён в `@interrupt` обработчиках; в `Thread.spawn` — особая семантика. |
 
-### Блок 6: Конкурентность
+### 10 — Async/Await ([spec/10-async/](spec/10-async/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -145,6 +159,15 @@
 | **Рекурсивные async** | Ограничения; риски стека на embedded. |
 | **AbortSignal** | Отмена задач; `atomic_bool` на desktop vs `bool` на embedded; callbacks через event loop. |
 | **AsyncMutex** | Честная FIFO-очередь для координации async-функций на event loop; отличие от `Mutex` (std/sync, только для thread-контекста). |
+| **@embedded.singleton** | Единственный экземпляр класса в BSS; `Cls.instance()` → `Mut<Cls>`; нет malloc. |
+| **@embedded.stack** | Статический стек для async-рекурсии на embedded: N frame slots в BSS. |
+| **Async generators** | `async function*` + `for await`: потоковая обработка данных; backpressure; C-output как state machine; недоступны на `heap: false`. |
+| **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
+
+### 11 — Конкурентность ([spec/11-concurrency/](spec/11-concurrency/))
+
+| Раздел | О чём |
+|--------|-------|
 | **Threads (std/threads)** | OS-потоки; блокирующая модель; изолированы от event loop. |
 | **Atomic\<T\>** | Атомарные операции; два layout: stack (без escape) и heap (с refcount). |
 | **AtomicArray\<T\>** | Массив с атомарным доступом к элементам. |
@@ -156,13 +179,9 @@
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
 | **Embedded-аннотации** | `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
-| **@embedded.singleton** | Единственный экземпляр класса в BSS; `Cls.instance()` → `Mut<Cls>`; нет malloc. |
-| **@embedded.stack** | Статический стек для async-рекурсии на embedded: N frame slots в BSS. |
-| **Async generators** | `async function*` + `for await`: потоковая обработка данных; backpressure; C-output как state machine; недоступны на `heap: false`. |
-| **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
-### Блок 7: Модульная система
+### 12 — Модульная система ([spec/12-modules/](spec/12-modules/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -181,7 +200,7 @@
 | **`unsafe {}`** | Отключение проверок TSClang (borrow checker, null checks); эскейп хетч. |
 | **@platform** | Декоратор условной компиляции: платформо-зависимые реализации одной функции/класса. |
 
-### Блок 8: Система сборки
+### 13 — Система сборки ([spec/13-build/](spec/13-build/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -206,7 +225,7 @@
 | **Кеш** | Локальный кеш установленных пакетов; инвалидация. |
 | **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
 
-### Блок 9: Стандартная библиотека
+### 14 — Стандартная библиотека ([spec/14-stdlib/](spec/14-stdlib/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -240,7 +259,7 @@
 | **std/embedded** | Общие embedded утилиты поверх `std/hal`: `HashMap<K,V,N>` (struct-of-arrays, djb2+linear probing), `StaticMap` (perfect hash switch), `Tasks<N>` (кооперативный планировщик), `pointer<T>` (raw-указатель), `Volatile<T>` (MMIO-регистры), `MMIO` через `declare const`. |
 | **HAL реализация в platform profile** | Как platform profile предоставляет конкретные реализации интерфейсов `std/hal`. |
 
-### Блок 11: Декораторы
+### 15 — Декораторы ([spec/15-decorators/](spec/15-decorators/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -262,7 +281,7 @@
 | **Модель кодогенерации** | Цепочка wrapper-функций в C; именование; компиляция `ctx.self.field<T>(name)`. |
 | **C-вывод** | Примеры итогового C-output: `@log` на методе, `@timing` на async, `@minLength` на свойстве. |
 
-### Блок 10: Компилятор
+### 16 — Инструментарий ([spec/16-tooling/](spec/16-tooling/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -276,31 +295,44 @@
 | **Incremental compilation** | *(roadmap)* Граф зависимостей + IR-кеш; инвалидация по хешу файла. |
 | **Optimization levels** | `-O0` / `-O1` / `-Os`; что делает TSClang на IR-уровне vs что передаётся C-компилятору. |
 | **Error messages** | Формат `file:line:col: error[EXXX]: message`; категории ошибок; правила оформления hint. |
+| **LSP** | Language Server Protocol: hover, completion, definition, diagnostics; JSON-RPC 2.0 на stdin/stdout. |
+| **Linter** | AST-правила: `no-unreachable`, `prefer-const`, `no-unused-var`; авто-исправление через `--fix`. |
+| **Оптимизатор** | AST-оптимизации: constant folding, dead branch elimination, unused const elimination, borrow elision. |
+
+### 17 — Migration Guide ([spec/17-migration/](spec/17-migration/))
+
+Руководство по миграции с TypeScript на TSClang: отличия, несовместимости, паттерны адаптации.
 
 ---
 
 ## Фазы реализации
 
-### Навигация фаза → блоки
+### Навигация фаза → разделы spec
 
-| Фаза | Что читать выше |
+Подробный маппинг: [spec/PHASES.md](spec/PHASES.md).
+
+| Фаза | Разделы spec |
 |------|----------------|
-| 0  | Блок 9: Error, Globals |
-| 1  | Блок 2 (кроме match, for-of) |
-| 2  | Блок 3: 03-types.md (кроме строк, массивов, коллекций, Clone) + 03-classes.md: Enum, Generics + String Literal Union + Utility Types |
-| 3  | Блок 4 + из Блока 3 (03-types.md): Строки, Массивы и коллекции, Clone + @static let |
-| 4  | Блок 2: match; Блок 3 (03-classes.md): Классы, Интерфейсы, Extension Methods, instanceof; Блок 4: Замыкания |
-| 5  | Блок 5 (целиком) |
-| 6  | Блок 7 (целиком) |
-| 7  | Блок 6: Уровни модели, Async runtime, State machine size, Promise, Правила await, async main, Рекурсивные async, AbortSignal, AsyncMutex + Async generators + @embedded.singleton + @embedded.stack + Кооперативная многозадачность |
-| 8  | Блок 6: Уровни модели, Threads, Atomic, AtomicArray, channel, select, Readonly, @embedded.isr, Volatile, std/sync, Embedded-аннотации + Блок 8: @embedded.inline + @embedded.pool |
-| 9  | Блок 8: tsc.package.json, CLI команды (init/build/run) |
-| 10 | Блок 8: Pipeline сборки, Источники зависимостей, Версионирование |
-| 11 | Блок 8: CLI команды (dev/lint/format), Platform Profile |
-| 12 | Блок 9 (целиком); `std/threads` читать как API поверх механизма из фазы 8 |
-| 13 | Блок 11 (Декораторы): синтаксис, Модель выполнения, Дескрипторный API (SelfRef, MetaStore), Comptime-типы, async-методы, паттерны, кодогенерация, C-вывод |
-| 14 | Блок 10: Фазы компиляции, IR, Name mangling, Debug Info, Optimization levels, Error messages, Методология тестов, Consumer-side monomorphization |
-| 15 | Блок 8: Реестр |
+| 0  | [01-intro](spec/01-intro/), [14-stdlib](spec/14-stdlib/) (Error, Globals) |
+| 1  | [02-syntax](spec/02-syntax/), [03-types](spec/03-types/) (примитивы) |
+| 2  | [03-types](spec/03-types/) (null, enum, type aliases, tuples, utility types) |
+| 3  | [04-ownership](spec/04-ownership/), [03-types](spec/03-types/) (строки), [08-collections](spec/08-collections/) |
+| 4  | [07-classes](spec/07-classes/), [05-control-flow](spec/05-control-flow/) (match), [06-functions](spec/06-functions/) (closures) |
+| 5  | [09-errors](spec/09-errors/) |
+| 6  | [12-modules](spec/12-modules/) |
+| 7  | [10-async](spec/10-async/) |
+| 8  | [11-concurrency](spec/11-concurrency/), [13-build](spec/13-build/) (@embedded.inline, @embedded.pool) |
+| 9  | [13-build](spec/13-build/) (CLI, tsc.package.json) |
+| 10 | [13-build](spec/13-build/) (pipeline, зависимости, версионирование) |
+| 11 | [13-build](spec/13-build/) (dev/lint/format, Platform Profile) |
+| 12 | [14-stdlib](spec/14-stdlib/) |
+| 13 | [15-decorators](spec/15-decorators/) |
+| 14 | [14-stdlib](spec/14-stdlib/) (std/reactive) |
+| 15 | [14-stdlib](spec/14-stdlib/) (std/regex) |
+| 16 | [16-tooling](spec/16-tooling/) (LSP) |
+| 17 | [16-tooling](spec/16-tooling/) (Linter) |
+| 18 | [16-tooling](spec/16-tooling/) (Оптимизатор) |
+| 19 | [14-stdlib](spec/14-stdlib/) (IO/Net/WS) |
 
 ### Фаза 0 — Core runtime
 
@@ -330,8 +362,8 @@
 
 - Type inference
 - `null` / `T | null`
-- Type aliases (`type`, `interface` без методов) — из `03-types.md`
-- Enum, Generics (монорфизация, без ownership-aware bounds) — из `03-classes.md`
+- Type aliases (`type`, `interface` без методов)
+- Enum, Generics (монорфизация, без ownership-aware bounds)
 - Числовые автокасты, оператор `as`
 - String Literal Union (compile-time → C enum + rodata)
 - Utility Types (Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited)
@@ -437,7 +469,7 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - Pinned toolchain (avr-gcc, кросс-компиляция)
 - Прочие продвинутые флаги
 
-> Полноценный rule-based линтер — в фазе 13.
+> Полноценный rule-based линтер — в фазе 17.
 
 ### Фаза 12 — Стандартная библиотека
 
@@ -459,13 +491,22 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - Декоратор и платформа: ограничения на `heap: false`
 - Кодогенерация: цепочка wrapper-функций, именование, C-output
 
-### Фаза 14 — IR и продвинутые возможности компилятора
+### Фаза 14 — Reactive
 
-- **Инкрементальная компиляция**: SHA-256 кэш в `.tsclang-cache/`; флаг `--no-cache`; сообщение `cache-hit-identical` при попадании
-- **Async while-await**: state machine с Duff's device; `goto case_N` loop-back; `_emitAsyncWhile` с инлайном хвостовых стейтментов
-- **Library format**: `resolvePackageImport` — обход дерева к `node_modules/<pkg>/index.tsc`; `tsc.package.json` с полем `main`; префикс символов = имя пакета
+- `Signal<T>`, `effect`, `computed` — реактивный граф зависимостей
 
-### Фаза 15 — Линтер и форматтер
+### Фаза 15 — Regex
+
+- NFA-движок для регулярных выражений
+- PCRE через опциональный `@tsc/pcre`
+
+### Фаза 16 — LSP
+
+- Language Server Protocol (JSON-RPC 2.0 на stdin/stdout)
+- Методы: `initialize`, `textDocument/hover`, `textDocument/completion`, `textDocument/definition`
+- `textDocument/publishDiagnostics` при ошибках парсинга
+
+### Фаза 17 — Линтер и форматтер
 
 - **Линтер** (`tsclang lint`): AST-обход через `walkAst(node, visitor)`, правила:
   - `no-unreachable` — код после `return`/`throw` в блоке → предупреждение
@@ -474,32 +515,9 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - **Авто-исправление** (`tsclang lint --fix`): патч исходника по номеру строки (`let` → `const`)
 - **Форматтер** (`tsclang format`): нормализация пробелов и отступов (identity для корректного кода)
 
-### Фаза 16 — Реестр пакетов
-
-- **`tsclang search <query>`**: поиск по MOCK_REGISTRY (имя + description)
-- **`tsclang publish`**: упаковка в `.tspkg` JSON-архив `{name, version, files: {rel: content}}`; счёт файлов
-- **`tsclang install <pkg>[@ver]`**: установка из реестра в `node_modules/`; вывод `Installed pkg@ver`
-- **`tsclang install <file.tspkg>`**: извлечение из локального архива в `node_modules/`
-- **Диапазоны версий**: `^`, `~`, `*` — `resolveRange` на массиве версий
-
-### Фаза 17 — Platform backends: Retro & Consoles
-
-- **Profile checker** в pre-scan `top-level.js`: платформа → набор ограничений:
-  - `_noFloatTargets = ['nes','genesis','ps1','spectrum']` — `f32`/`f64` TypeRef → ошибка
-  - `_noHeapTargets` — `new ClassName()` → ошибка
-  - `_noAsyncTargets` — `async function` → ошибка
-- **`usize = uint16_t`** для `nes` и `spectrum` в `resolveType`
-- **Embedded targets** расширены: `['avr','arm','stm32','nes','genesis','ps1','spectrum']`
-- **Runtime headers**: `runtime_nes.h`, `runtime_ps2.h`, `runtime_ps1.h`, `runtime_genesis.h`, `runtime_dos.h`, `runtime_spectrum.h`
-- **CMake toolchains**: `cmake/toolchain-{nes,ps2,ps1,genesis,dos,spectrum}.cmake`
-- Аннотация `// @target: nes` или `#[profile(target: nes)]`
-
-### Фаза 18 — Advanced tooling: Optimizer, WASM, DTS, Sourcemaps, LSP
-
-#### 18.1 — AST Optimizer
+### Фаза 18 — AST Optimizer
 
 Оптимизации на уровне AST до codegen. Активируется флагом `--opt` (или `#[profile(opt: true)]`).
-GCC делает машинные оптимизации — AST-оптимизатор убирает очевидную избыточность до трансляции в C.
 
 | Оптимизация | Пример | Результат |
 |-------------|--------|-----------|
@@ -515,79 +533,11 @@ GCC делает машинные оптимизации — AST-оптимиз�
 Реализация: `src/compiler/optimizer.js` — рекурсивный `foldExpr(node)` и `deadCode(stmts)`.
 Вызывается из `compileTsc()` после парсинга, до codegen, если `--opt` передан.
 
-#### 18.2 — WebAssembly backend
+### Фаза 19 — IO/Net/WS
 
-Таргет `wasm`: `--target wasm` или `#[profile(target: wasm)]`.
+Стандартная библиотека для I/O, сети и WebSocket.
 
-- `runtime_wasm.h` — без libuv; `console.log` → `wasm_log` (JS import); `tsc_throw` → `wasm_trap`
-- `cmake/toolchain-wasm.cmake` — Emscripten `emcc` или `clang --target=wasm32-unknown-unknown`
-- `--emit wasm` — вызов `emcc` для компиляции `.c` → `.wasm` + `.js` glue
-- Ограничения: нет file I/O, нет threads (без atomics), heap через `malloc` (линейная память)
-- `console.log` → `wasm_log(ptr, len)` через `__attribute__((import_module("env"), import_name("log")))`
-
-#### 18.3 — Declaration emitter (`emit-dts`)
-
-`tsclang emit-dts <file.tsc>` — генерирует `.d.tsc` файл с типами экспортируемых символов.
-
-Формат выходного файла:
-```
-export declare function name(param: Type, ...): ReturnType;
-export declare class Name {
-  field: Type;
-  method(param: Type): ReturnType;
-}
-export declare type Alias = Type;
-export declare const name: Type;
-```
-
-Правила:
-- Только `export`-декларации попадают в `.d.tsc`
-- Тела функций и классов опускаются (только сигнатуры)
-- Тип выводится из аннотации; без аннотации → `any`
-- Файл создаётся рядом с исходником: `input.tsc` → `input.d.tsc`
-- Команда выводит `Emitted input.d.tsc (N declarations)`
-
-#### 18.4 — Source maps
-
-`tsclang build --sourcemap` — дополнительно создаёт `<name>.tsc.map`:
-
-```json
-{
-  "version": 1,
-  "file": "input.tsc",
-  "sourceC": "input.c",
-  "mappings": [[tscLine, cLine], ...]
-}
-```
-
-Каждый элемент mappings: `[номер строки в .tsc (1-based), номер строки в .c (1-based)]`.
-Только строки с реальными стейтментами (не пустые, не `{`/`}`).
-
-CLI интеграция:
-- `tsclang debug <file.tsc>` — строит с `--sourcemap`, затем запускает `gdb` с `--source-directory`
-- `tsclang debug` требует `gdb` в PATH; если не найден → предупреждение, бинарь запускается без отладки
-
-#### 18.5 — Language Server Protocol (LSP)
-
-`tsclang lsp` — запускает LSP-сервер на stdin/stdout (JSON-RPC 2.0).
-
-Поддерживаемые методы:
-
-| Метод | Запрос | Ответ |
-|-------|--------|-------|
-| `initialize` | `{capabilities}` | `{capabilities: {hoverProvider, completionProvider, definitionProvider}}` |
-| `initialized` | — | ACK |
-| `shutdown` / `exit` | — | завершение процесса |
-| `textDocument/didOpen` | `{uri, text}` | сохранить в буфер |
-| `textDocument/didChange` | `{uri, changes}` | обновить буфер |
-| `textDocument/hover` | `{uri, position}` | `{contents: {kind:"markdown", value:"**type**: i32"}}` |
-| `textDocument/completion` | `{uri, position}` | список символов из текущего скоупа + методов |
-| `textDocument/definition` | `{uri, position}` | `{uri, range}` для объявления символа |
-
-Архитектура:
-- `src/lsp/server.js` — основной цикл: `process.stdin` → JSON-RPC dispatcher
-- `src/lsp/analyzer.js` — хранит буфер документа, вызывает парсер + type inference, возвращает символы
-- Ошибки парсинга → `textDocument/publishDiagnostics`
-- Content-Length framing по протоколу LSP (заголовок `Content-Length: N\r\n\r\n`)
-
-Тестирование LSP: shell-тест посылает один JSON-RPC запрос в stdin процесса и проверяет JSON-ответ.
+- **std/io** — базовые I/O абстракции: `Reader`, `Writer`
+- **std/fs** — файловая система: read, write, stat, watch
+- **std/net** — `fetch` (глобальный); HTTP сервер; TCP/UDP сокеты
+- **std/ws** — WebSocket клиент и сервер

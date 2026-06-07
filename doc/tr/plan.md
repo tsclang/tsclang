@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Yayılma operatörü (spread) (diziler, nesneler, sahiplik kuralları)
 - İndeksleme ve dilimler (slices) (diziler ve diziler, negatif indeksler)
 
-**Kaynak:** `spec/02-syntax/02-syntax.md`
+**Kaynak:** `spec/02-syntax/`
 
 ---
 
@@ -497,7 +497,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 | # | Dosya | İçerik | Kaynak | Boyut |
 |---|------|---------|--------|------|
 | 01 | intro | TSClang nedir, hızlı başlangıç, CLI | `spec/01-intro/01-intro.md` | ~30 KB |
-| 02 | syntax | Sözdizimi, operatörler, döngüler, match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 02 | syntax | Sözdizimi, operatörler, döngüler, match/switch | `spec/02-syntax/` | ~50 KB |
 | 03 | types | Tipler, sayılar, diziler, Map/Set, demetler, yardımcı tipler | `spec/03-types/03-types.md` | ~80 KB |
 | 04 | classes | Sınıflar, arayüzler, numaralandırma, jenerikler, genişletme metotları | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 KB |
 | 05 | memory | Sahiplik, ödünç alma denetleyicisi, Ref/Mut/Shared, kapanışlar | `spec/05-memory/05-memory.md` | ~50 KB |

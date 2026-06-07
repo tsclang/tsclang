@@ -1672,11 +1672,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > > - Files changed: `operators.js` (added `_hasFloatVar`, bitwise block rewrite, `~` float-cast, type validation), `assign.js` (compound bitwise float-cast + type validation)
 > > - All **1780 tests passing** (0 failures), +48 new tests in `phase2/number-type/`
 
-> 2026-06-07: Spec restructuring — flat files → phase directories
-> - All 24 spec files moved from flat `spec/*.md` into phase directories `spec/NN-name/`
-> - 19 directories created (01-intro through 18-optimizer), each with `index.md`
-> - `19-stdlib-extended/` merged into `10-stdlib/` (6 files: avr/fs/hal/io/net/ws)
-> - 5 empty directories for phases without spec files (14-reactive through 18-optimizer)
-> - All cross-references updated: internal spec links, SPEC.md, book/, doc/ (10 languages)
-> - 38 files modified, 24 files renamed, 19 index.md created
-> - Total: 19 spec directories, 24 spec files, 19 index.md
+> 2026-06-07: Spec restructured from phase-based to layer-based organization
+> - Old `spec/` (22 directories by implementation phase: 01-intro, 05-memory, 0a-control-flow, etc.) → new `spec/` (17 directories by language layer: 01-intro, 04-ownership, 05-control-flow, etc.)
+> - Key reorganizations: ownership → 04 (fundamental layer, not "phase 5"), closures → 06-functions, for-of → 05-control-flow, strings → 03-types, cleanup → 09-errors, reactive+regex → 14-stdlib, async/await → 10-async, threads/ISR → 11-concurrency, compiler+LSP+linter+optimizer → 16-tooling
+> - 76 markdown files across 17 directories
+> - All internal cross-references updated, priority notes removed, 8 index.md updated
+> - `SPEC.md` rewritten with new 17-section navigation and phase-to-section mapping
+> - `AGENTS.md` updated for new spec structure
+> - `spec/PHASES.md` — test phase → spec section mapping
+> - `spec/PROGRESS.md` — migration log
+> - Old empty `spec/` deleted, intermediate `spec_v2/` renamed back to `spec/`
