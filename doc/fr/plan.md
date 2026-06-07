@@ -221,7 +221,7 @@ nums.map(x => x * 2)  // return a new value
 - Prérequis (Node.js, CMake, gcc/clang)
 - Aperçu CLI : `tsclang build`, `tsclang lint`, `tsclang lsp`
 
-**Source :** `spec/01-intro.md`
+**Source :** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // return a new value
 - Opérateur spread (tableaux, objets, règles de propriété)
 - Indexation et tranches (tableaux et chaînes, index négatifs)
 
-**Source :** `spec/02-syntax.md`
+**Source :** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -275,7 +275,7 @@ nums.map(x => x * 2)  // return a new value
 - Types utilitaires : `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
 - `Buffer`, `DataView`
 
-**Source :** `spec/03-types.md`
+**Source :** `spec/03-types/03-types.md`
 
 ---
 
@@ -299,7 +299,7 @@ nums.map(x => x * 2)  // return a new value
 - Alignement : `@packed`, `@align(N)`, diagnostics de remplissage
 - Décorateurs : aperçu, référence vers la section complète
 
-**Source :** `spec/04-classes.md`, `spec/13-decorators.md`
+**Source :** `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -326,7 +326,7 @@ nums.map(x => x * 2)  // return a new value
 - Retour d'emprunt depuis une méthode
 - Closures : règles de capture, liste de capture explicite, closure Mut via await
 
-**Source :** `spec/05-memory.md`
+**Source :** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -345,7 +345,7 @@ nums.map(x => x * 2)  // return a new value
 - Propriété pendant les erreurs (cleanup via `goto`)
 - Limitations
 
-**Source :** `spec/06-errors.md`
+**Source :** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -382,7 +382,7 @@ nums.map(x => x * 2)  // return a new value
 - Générateurs async : `async function*`, `for await`, `close()`
 - Multitâche coopératif via générateurs
 
-**Source :** `spec/07-concurrency.md`
+**Source :** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -407,7 +407,7 @@ nums.map(x => x * 2)  // return a new value
 - Fusion de déclarations
 - Fonctions C variadiques : type `Scalar`
 
-**Source :** `spec/08-modules.md`
+**Source :** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -426,7 +426,7 @@ nums.map(x => x * 2)  // return a new value
 - CMakeLists.txt : génération, personnalisation
 - Profils : debug/release, optimisation
 
-**Source :** `spec/09-build.md`
+**Source :** `spec/09-build/09-build.md`
 
 ---
 
@@ -457,7 +457,7 @@ nums.map(x => x * 2)  // return a new value
 - `std/embedded` — Volatile, pointeur, HashMap, StaticMap
 - Compatibilité plateforme (tableau)
 
-**Source :** `spec/10-stdlib.md`, `spec/19-stdlib-*.md`
+**Source :** `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -474,7 +474,7 @@ nums.map(x => x * 2)  // return a new value
 - Niveaux d'optimisation (O0–O3, Os)
 - Messages d'erreur : format, catégories, codes d'erreur
 
-**Source :** `spec/11-compiler.md`
+**Source :** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -488,7 +488,7 @@ nums.map(x => x * 2)  // return a new value
 - Patterns incompatibles (tableau d'alternatives)
 - Ce que TSClang ajoute (ce qui n'est pas dans TS)
 
-**Source :** `spec/12-migration.md`
+**Source :** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -496,18 +496,18 @@ nums.map(x => x * 2)  // return a new value
 
 | # | Fichier | Contenu | Source | Taille |
 |---|---------|---------|--------|--------|
-| 01 | intro | Qu'est-ce que TSClang, démarrage rapide, CLI | `spec/01-intro.md` | ~30 Ko |
-| 02 | syntax | Syntaxe, opérateurs, boucles, match/switch | `spec/02-syntax.md` | ~50 Ko |
-| 03 | types | Types, nombres, chaînes, tableaux, Map/Set, tuples, types utilitaires | `spec/03-types.md` | ~80 Ko |
-| 04 | classes | Classes, interfaces, énumération, génériques, méthodes d'extension | `spec/04-classes.md`, `spec/13-decorators.md` | ~40 Ko |
-| 05 | memory | Propriété, vérificateur d'emprunt, Ref/Mut/Shared, closures | `spec/05-memory.md` | ~50 Ko |
-| 06 | errors | throw/try/catch, Result, opérateurs `?`/`!` | `spec/06-errors.md` | ~15 Ko |
-| 07 | concurrency | async/await, threads, ISR, atomique, canaux, générateurs | `spec/07-concurrency.md` | ~70 Ko |
-| 08 | modules | Import/export, .d.tsc, natif, unsafe, @platform | `spec/08-modules.md` | ~50 Ko |
-| 09 | build | Build, packages, C-wrapper, plateformes | `spec/09-build.md` | ~50 Ko |
-| 10 | stdlib | Référence pour tous les modules std | `spec/10-stdlib.md`, `spec/19-stdlib-*.md` | ~60 Ko |
-| 11 | compiler | Architecture du compilateur (pour les contributeurs) | `spec/11-compiler.md` | ~30 Ko |
-| 12 | migration | Guide de migration TypeScript → TSClang | `spec/12-migration.md` | ~15 Ko |
+| 01 | intro | Qu'est-ce que TSClang, démarrage rapide, CLI | `spec/01-intro/01-intro.md` | ~30 Ko |
+| 02 | syntax | Syntaxe, opérateurs, boucles, match/switch | `spec/02-syntax/02-syntax.md` | ~50 Ko |
+| 03 | types | Types, nombres, chaînes, tableaux, Map/Set, tuples, types utilitaires | `spec/03-types/03-types.md` | ~80 Ko |
+| 04 | classes | Classes, interfaces, énumération, génériques, méthodes d'extension | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 Ko |
+| 05 | memory | Propriété, vérificateur d'emprunt, Ref/Mut/Shared, closures | `spec/05-memory/05-memory.md` | ~50 Ko |
+| 06 | errors | throw/try/catch, Result, opérateurs `?`/`!` | `spec/06-errors/06-errors.md` | ~15 Ko |
+| 07 | concurrency | async/await, threads, ISR, atomique, canaux, générateurs | `spec/07-concurrency/07-concurrency.md` | ~70 Ko |
+| 08 | modules | Import/export, .d.tsc, natif, unsafe, @platform | `spec/08-modules/08-modules.md` | ~50 Ko |
+| 09 | build | Build, packages, C-wrapper, plateformes | `spec/09-build/09-build.md` | ~50 Ko |
+| 10 | stdlib | Référence pour tous les modules std | `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md` | ~60 Ko |
+| 11 | compiler | Architecture du compilateur (pour les contributeurs) | `spec/11-compiler/11-compiler.md` | ~30 Ko |
+| 12 | migration | Guide de migration TypeScript → TSClang | `spec/12-migration/12-migration.md` | ~15 Ko |
 | | | | **Total** | **~540 Ko** |
 
 ## Ordre de rédaction recommandé

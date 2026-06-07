@@ -1725,7 +1725,7 @@ let t: [i32, string, string] = [1, ...runtimeArray]
 
 ### Spread в tuple-литералах
 
-Spread tuple-специфичные случаи. Для spread в массивах — см. [spec/02-syntax.md](02-syntax.md).
+Spread tuple-специфичные случаи. Для spread в массивах — см. [02-syntax.md](../02-syntax/02-syntax.md).
 
 ```typescript
 // Копирование tuple

@@ -10,7 +10,7 @@
 >
 > **Обоснование:** П1 (кроссплатформенность) — stack-allocated env, pointer capture = C-compatible, работает на embedded без heap. П2 (TS compat) — class/array = reference как в TS. П3 (better than all) — проще Rust (нет Fn/FnMut/FnOnce), безопаснее C (нет dangling для same-scope), нет скрытого GC как TS.
 >
-> Опирается на: `spec/05b-ownership.md` (владение), `spec/05-memory.md` (модель памяти).
+> Опирается на: `05b-ownership.md` (владение), `05-memory.md` (модель памяти).
 
 ---
 

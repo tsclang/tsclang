@@ -4,7 +4,7 @@
 >
 > **Связь с 05d:** for-of использует **borrow** (pointer) для complex-типов — zero-cost итерация без создания новых данных. Spread/destructuring (см. `spec/05d-spread-destructuring-merge.md`) использует **copy** (struct copy + retain) — создание нового контейнера. Разные операции = разная семантика. Это осознанный дизайн, не противоречие.
 >
-> **Связь с 05e:** итераторы (`iter()`) возвращают closure — capture model определена в `spec/05e-closures.md`. Complex types (Node, LinkedList) захватываются по reference (pointer).
+> **Связь с 05e:** итераторы (`iter()`) возвращают closure — capture model определена в `05e-closures.md`. Complex types (Node, LinkedList) захватываются по reference (pointer).
 
 ---
 
@@ -177,7 +177,7 @@ for (const [k, v] of Object.entries(obj)) { ... } // ✅
 
 ## 3. Классификация типов для for-of
 
-Из `spec/05b-ownership.md`:
+Из `05b-ownership.md`:
 
 | Категория | Типы | arr[i] семантика |
 |-----------|------|-------------------|
@@ -259,7 +259,7 @@ for (let i = 0; i < arr.length; i++) {
 
 ### 4.3 String как элемент массива (Array\<string\>) — ARC Copy (РЕШЕНО)
 
-string — immutable + ARC. `arr[i]` для строк = ARC Copy (spec/05b-ownership.md:630-634).
+string — immutable + ARC. `arr[i]` для строк = ARC Copy (05b-ownership.md:630-634).
 
 **`const name` — только чтение:**
 ```typescript

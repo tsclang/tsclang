@@ -58,4 +58,4 @@ Uma extensão conflitando com um método existente — erro de compilação. Dua
 - [Modelo de Memória](../05-memory/index.md) — propriedade, `Ref<T>`, `Mut<T>`, semântica de move
 - [Sistema de Tipos](../03-types/index.md) — tipagem estrutural vs nominal
 - [Tratamento de Erros](../06-errors/index.md) — `extends Error`, `throws`, `try/catch`
-- [Especificação: Classes](../../spec/04-classes.md) — descrição completa do sistema de objetos
+- [Especificação: Classes](../../spec/04-classes/04-classes.md) — descrição completa do sistema de objetos

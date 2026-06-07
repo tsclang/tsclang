@@ -579,7 +579,7 @@ error: std/net is not available on target "avr"
   this module requires one of: desktop, arm
 ```
 
-Тот же механизм `@platform` используется в пользовательском коде (см. spec/06-concurrency.md).
+Тот же механизм `@platform` используется в пользовательском коде (см. 07-concurrency.md).
 
 ### Короткий импорт
 
@@ -595,7 +595,7 @@ import { Thread } from "threads"       // краткая форма
 2. `std/name` — stdlib
 3. ошибка компилятора
 
-Подробнее о форматах импорта — в spec/09-build.md.
+Подробнее о форматах импорта — в 09-build.md.
 
 ## Официальные пакеты в реестре (`@tsc/*`)
 

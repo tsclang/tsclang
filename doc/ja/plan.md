@@ -220,7 +220,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - 必要条件（Node.js、CMake、gcc/clang）
 - CLI概要: `tsclang build`、`tsclang lint`、`tsclang lsp`
 
-**ソース:** `spec/01-intro.md`
+**ソース:** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -240,7 +240,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - スプレッド演算子（配列、オブジェクト、所有権のルール）
 - インデックスとスライス（配列と文字列、負のインデックス）
 
-**ソース:** `spec/02-syntax.md`
+**ソース:** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -274,7 +274,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - ユーティリティ型: `Partial`、`Required`、`Readonly`、`NonNullable`、`Pick`、`Omit`、`Record`、`ReturnType`、`Parameters`、`Awaited`
 - `Buffer`、`DataView`
 
-**ソース:** `spec/03-types.md`
+**ソース:** `spec/03-types/03-types.md`
 
 ---
 
@@ -298,7 +298,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - アラインメント: `@packed`、`@align(N)`、パディング診断
 - デコレータ: 概要、完全なセクションへの参照
 
-**ソース:** `spec/04-classes.md`、`spec/13-decorators.md`
+**ソース:** `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -325,7 +325,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - メソッドからの借用の返却
 - クロージャ: キャプチャのルール、明示的なキャプチャリスト、awaitによるMutクロージャ
 
-**ソース:** `spec/05-memory.md`
+**ソース:** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -344,7 +344,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - エラー時の所有権（`goto` によるクリーンアップ）
 - 制限事項
 
-**ソース:** `spec/06-errors.md`
+**ソース:** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -381,7 +381,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - 非同期ジェネレータ: `async function*`、`for await`、`close()`
 - ジェネレータによる協調的マルチタスク
 
-**ソース:** `spec/07-concurrency.md`
+**ソース:** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -406,7 +406,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - 宣言のマージ
 - 可変長C関数: `Scalar` 型
 
-**ソース:** `spec/08-modules.md`
+**ソース:** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -425,7 +425,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - CMakeLists.txt: 生成、カスタマイズ
 - プロファイル: debug/release、最適化
 
-**ソース:** `spec/09-build.md`
+**ソース:** `spec/09-build/09-build.md`
 
 ---
 
@@ -456,7 +456,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - `std/embedded` — Volatile、pointer、HashMap、StaticMap
 - プラットフォーム互換性（表）
 
-**ソース:** `spec/10-stdlib.md`、`spec/19-stdlib-*.md`
+**ソース:** `spec/10-stdlib/10-stdlib.md`、`spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -473,7 +473,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - 最適化レベル（O0–O3、Os）
 - エラーメッセージ: 形式、カテゴリ、エラーコード
 
-**ソース:** `spec/11-compiler.md`
+**ソース:** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -487,7 +487,7 @@ nums.map(x => x * 2)  // 新しい値を返す
 - 互換性のないパターン（代替案の表）
 - TSClangが追加するもの（TSにないもの）
 
-**ソース:** `spec/12-migration.md`
+**ソース:** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -495,18 +495,18 @@ nums.map(x => x * 2)  // 新しい値を返す
 
 | # | ファイル | 内容 | ソース | サイズ |
 |---|------|---------|--------|------|
-| 01 | intro | TSClangとは、クイックスタート、CLI | `spec/01-intro.md` | ~30 KB |
-| 02 | syntax | 構文、演算子、ループ、match/switch | `spec/02-syntax.md` | ~50 KB |
-| 03 | types | 型、数値、文字列、配列、Map/Set、タプル、ユーティリティ型 | `spec/03-types.md` | ~80 KB |
-| 04 | classes | クラス、インターフェース、列挙型、ジェネリック、拡張メソッド | `spec/04-classes.md`、`spec/13-decorators.md` | ~40 KB |
-| 05 | memory | 所有権、借用チェッカー、Ref/Mut/Shared、クロージャ | `spec/05-memory.md` | ~50 KB |
-| 06 | errors | throw/try/catch、Result、`?`/`!` 演算子 | `spec/06-errors.md` | ~15 KB |
-| 07 | concurrency | 非同期/待機、スレッド、ISR、atomic、チャンネル、ジェネレータ | `spec/07-concurrency.md` | ~70 KB |
-| 08 | modules | インポート/エクスポート、.d.tsc、native、unsafe、@platform | `spec/08-modules.md` | ~50 KB |
-| 09 | build | ビルド、パッケージ、Cラッパー、プラットフォーム | `spec/09-build.md` | ~50 KB |
-| 10 | stdlib | すべてのstdモジュールのリファレンス | `spec/10-stdlib.md`、`spec/19-stdlib-*.md` | ~60 KB |
-| 11 | compiler | コンパイラアーキテクチャ（コントリビューター向け） | `spec/11-compiler.md` | ~30 KB |
-| 12 | migration | TypeScript → TSClang 移行ガイド | `spec/12-migration.md` | ~15 KB |
+| 01 | intro | TSClangとは、クイックスタート、CLI | `spec/01-intro/01-intro.md` | ~30 KB |
+| 02 | syntax | 構文、演算子、ループ、match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 03 | types | 型、数値、文字列、配列、Map/Set、タプル、ユーティリティ型 | `spec/03-types/03-types.md` | ~80 KB |
+| 04 | classes | クラス、インターフェース、列挙型、ジェネリック、拡張メソッド | `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md` | ~40 KB |
+| 05 | memory | 所有権、借用チェッカー、Ref/Mut/Shared、クロージャ | `spec/05-memory/05-memory.md` | ~50 KB |
+| 06 | errors | throw/try/catch、Result、`?`/`!` 演算子 | `spec/06-errors/06-errors.md` | ~15 KB |
+| 07 | concurrency | 非同期/待機、スレッド、ISR、atomic、チャンネル、ジェネレータ | `spec/07-concurrency/07-concurrency.md` | ~70 KB |
+| 08 | modules | インポート/エクスポート、.d.tsc、native、unsafe、@platform | `spec/08-modules/08-modules.md` | ~50 KB |
+| 09 | build | ビルド、パッケージ、Cラッパー、プラットフォーム | `spec/09-build/09-build.md` | ~50 KB |
+| 10 | stdlib | すべてのstdモジュールのリファレンス | `spec/10-stdlib/10-stdlib.md`、`spec/10-stdlib/19-stdlib-*.md` | ~60 KB |
+| 11 | compiler | コンパイラアーキテクチャ（コントリビューター向け） | `spec/11-compiler/11-compiler.md` | ~30 KB |
+| 12 | migration | TypeScript → TSClang 移行ガイド | `spec/12-migration/12-migration.md` | ~15 KB |
 | | | | **合計** | **~540 KB** |
 
 ## 推奨する執筆順序

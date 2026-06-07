@@ -343,4 +343,4 @@ Slice_i32 s = (Slice_i32){ .ptr = arr.data + (1), .length = (size_t)(4) - (1) };
 - [Map and Set](./map-set.md) — hash tables and sets
 - [Memory Model — Slice\<T\>](../05-memory/ownership-types.md) — zero-copy view
 - [Memory Model — Owner](../05-memory/owner.md) — move from array
-- [Clone](../../spec/03-types.md) — cloning interface
+- [Clone](../../spec/03-types/03-types.md) — cloning interface

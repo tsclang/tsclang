@@ -1,6 +1,6 @@
 # TSClang — Присваивание и владение
 
-> **Приоритет:** при конфликте с `spec/05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `spec/05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `spec/05e-closures.md` по closures/capture — доминирует 05e.
+> **Приоритет:** при конфликте с `05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `05e-closures.md` по closures/capture — доминирует 05e.
 
 Семантика присваивания (`let b = a`, `const b = a`, `b = a`) зависит от типа `a` и от типа-аннотации `b`. Ниже — полная таблица по всем комбинациям.
 
@@ -430,11 +430,11 @@ void modify(User *u) { /* mutable borrow pointer */ }
 
 **Замыкания с class/array capture** — implicit **reference** (pointer на source).
 
-> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
+> **Приоритет:** полная спецификация замыканий — в `05e-closures.md`. При конфликте доминирует 05e.
 
 Class/array захватывается **по ссылке** (pointer). Source жив, mutations видны. Примитивы — copy (snapshot). Строки — retain (ARC copy). Для explicit capture: `[x: Ref<T>]` (read-only), `[x: Mut<T>]` (mutable). Move capture `[x: T]` убран.
 
-Подробнее: capture model, примеры, C-representation, ограничения — см. `spec/05e-closures.md`.
+Подробнее: capture model, примеры, C-representation, ограничения — см. `05e-closures.md`.
 
 ### Spread объектов
 
@@ -678,7 +678,7 @@ const fn = (): number => data.length;
 typedef struct { Array_f64 *data; } _closure_0_env;  // pointer — reference
 ```
 
-Массив захватывается **по ссылке** (pointer). Source жив, mutations visible. См. `spec/05e-closures.md`.
+Массив захватывается **по ссылке** (pointer). Source жив, mutations visible. См. `05e-closures.md`.
 
 ### Spread массивов
 
@@ -1007,7 +1007,7 @@ function swap(t: [number, string]): [string, number] {
 
 **Ref\<tuple\>** — borrow, деструктуризация даёт `Ref<T>` для каждого элемента.
 
-**Замыкания с tuple capture** — как класс: reference (pointer в env), source жив. См. `spec/05e-closures.md`.
+**Замыкания с tuple capture** — как класс: reference (pointer в env), source жив. См. `05e-closures.md`.
 
 ### Desktop vs Embedded
 

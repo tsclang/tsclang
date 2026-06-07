@@ -1130,7 +1130,7 @@ CMake + toolchain:     реально компилируют под платфо
 
 Для MCU-specific настроек (stack size, ram size) — профиль содержит базовые значения, которые можно переопределить в `tsc.package.json` через `builds.*`:
 
-**`async_stack`** — максимальный суммарный размер async state machine chain по глубочайшему пути вызовов. Компилятор ошибится если worst-case превышает лимит (см. `--report-stack` в spec/07-concurrency.md).
+**`async_stack`** — максимальный суммарный размер async state machine chain по глубочайшему пути вызовов. Компилятор ошибится если worst-case превышает лимит (см. `--report-stack` в 07-concurrency.md).
 
 Обоснование дефолтов:
 

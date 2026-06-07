@@ -58,4 +58,4 @@ int32_t n = tsc_std_string_charCount(s);
 - [Memory Model](../05-memory/index.md) — 所有權、`Ref<T>`、`Mut<T>`、move 語義
 - [Type System](../03-types/index.md) — 結構性與名義性型別
 - [Error Handling](../06-errors/index.md) — `extends Error`、`throws`、`try/catch`
-- [Specification: Classes](../../spec/04-classes.md) — 物件系統的完整描述
+- [Specification: Classes](../../spec/04-classes/04-classes.md) — 物件系統的完整描述

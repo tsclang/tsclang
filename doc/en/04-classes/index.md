@@ -58,4 +58,4 @@ An extension conflicting with an existing method — compiler error. Two extensi
 - [Memory Model](../05-memory/index.md) — ownership, `Ref<T>`, `Mut<T>`, move semantics
 - [Type System](../03-types/index.md) — structural vs nominal typing
 - [Error Handling](../06-errors/index.md) — `extends Error`, `throws`, `try/catch`
-- [Specification: Classes](../../spec/04-classes.md) — full description of the object system
+- [Specification: Classes](../../spec/04-classes/04-classes.md) — full description of the object system

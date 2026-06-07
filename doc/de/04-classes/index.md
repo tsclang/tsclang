@@ -58,4 +58,4 @@ Eine Erweiterung, die mit einer bestehenden Methode kollidiert — Compilerfehle
 - [Speichermodell](../05-memory/index.md) — Eigentum, `Ref<T>`, `Mut<T>`, Move-Semantik
 - [Typsystem](../03-types/index.md) — Strukturelle vs nominale Typisierung
 - [Fehlerbehandlung](../06-errors/index.md) — `extends Error`, `throws`, `try/catch`
-- [Spezifikation: Klassen](../../spec/04-classes.md) — vollständige Beschreibung des Objektsystems
+- [Spezifikation: Klassen](../../spec/04-classes/04-classes.md) — vollständige Beschreibung des Objektsystems

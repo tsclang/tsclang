@@ -1,6 +1,6 @@
 # TSClang — Модель памяти
 
-> **Приоритет:** при конфликте с `spec/05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `spec/05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `spec/05e-closures.md` по closures/capture — доминирует 05e.
+> **Приоритет:** при конфликте с `05c-for-of-iteration.md` по for-of — доминирует 05c. При конфликте с `05d-spread-destructuring-merge.md` по spread/destructuring — доминирует 05d. При конфликте с `05e-closures.md` по closures/capture — доминирует 05e.
 
 **Гибридная модель:** статический ownership/borrow checker + опциональный ARC. Нет GC, нет ручного `free`.
 
@@ -418,7 +418,7 @@ async function cacheActor(rx: Rx<CacheRequest>): Promise<void> {
 }
 ```
 
-**Реактивность** решается через `std/reactive` с explicit-deps — без interior mutability, как чистая библиотека (см. std/reactive в [spec/10-stdlib.md](spec/10-stdlib.md)).
+**Реактивность** решается через `std/reactive` с explicit-deps — без interior mutability, как чистая библиотека (см. std/reactive в [10-stdlib.md](../10-stdlib/10-stdlib.md)).
 
 ## Scope Constraint (без lifetime аннотаций)
 
@@ -569,7 +569,7 @@ async function ok2(arr: number[]): Promise<void> {
 
 **Правило 5: Замыкания и capture**
 
-> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
+> **Приоритет:** полная спецификация замыканий — в `05e-closures.md`. При конфликте доминирует 05e.
 
 Замыкание (arrow function) захватывает переменные по-разному: примитивы — copy (snapshot), строки — retain (ARC copy), class/array — reference (pointer). Source всегда жив. Env struct — stack-allocated, escaping scope = UB. Cleanup: source владеет, env нет (кроме String retain/release).
 
@@ -1149,11 +1149,11 @@ function renderView(data: Ref<User[]>) { ... }
 
 ## Замыкания
 
-> **Приоритет:** полная спецификация замыканий — в `spec/05e-closures.md`. При конфликте доминирует 05e.
+> **Приоритет:** полная спецификация замыканий — в `05e-closures.md`. При конфликте доминирует 05e.
 
 Замыкание (arrow function) захватывает переменные по-разному: примитивы — copy (snapshot), строки — retain (ARC copy), class/array — **reference** (pointer). Source **всегда жив**. Нет move capture `[x: T]`, нет E002 для implicit capture. Explicit capture: только `[x: Ref<T>]` и `[x: Mut<T>]`. Env struct — stack-allocated, escaping = UB.
 
-Capture model, примеры, C-representation, cleanup — см. `spec/05e-closures.md`.
+Capture model, примеры, C-representation, cleanup — см. `05e-closures.md`.
 
 **Trampoline adapter для capturing callbacks:**
 

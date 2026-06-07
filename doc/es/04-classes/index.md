@@ -58,4 +58,4 @@ Una extensión en conflicto con un método existente — error de compilación. 
 - [Modelo de memoria](../05-memory/index.md) — propiedad, `Ref<T>`, `Mut<T>`, semántica de movimiento
 - [Sistema de tipos](../03-types/index.md) — tipado estructural vs nominal
 - [Manejo de errores](../06-errors/index.md) — `extends Error`, `throws`, `try/catch`
-- [Especificación: Clases](../../spec/04-classes.md) — descripción completa del sistema de objetos
+- [Especificación: Clases](../../spec/04-classes/04-classes.md) — descripción completa del sistema de objetos

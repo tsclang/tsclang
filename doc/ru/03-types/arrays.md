@@ -343,4 +343,4 @@ Slice_i32 s = (Slice_i32){ .ptr = arr.data + (1), .length = (size_t)(4) - (1) };
 - [Map и Set](./map-set.md) — хеш-таблицы и множества
 - [Модель памяти — Slice\<T\>](../05-memory/ownership-types.md) — zero-copy view
 - [Модель памяти — Owner](../05-memory/owner.md) — move из массива
-- [Clone](../../spec/03-types.md) — интерфейс клонирования
+- [Clone](../../spec/03-types/03-types.md) — интерфейс клонирования

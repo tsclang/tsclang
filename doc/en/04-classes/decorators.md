@@ -337,7 +337,7 @@ Embedded-specific decorators:
 
 ### @signal
 
-Reactive signal decorator. See [std/reactive](../../spec/10-stdlib.md).
+Reactive signal decorator. See [std/reactive](../../spec/10-stdlib/10-stdlib.md).
 
 ### @platform
 
@@ -512,4 +512,4 @@ In `embedded` mode with `allocator: "none"` — the warning becomes an error.
 - [Generics](./generics.md) — generic constraints in decorators
 - [Concurrency](../07-concurrency/index.md) — `@embedded.*`, `@signal`
 - [Modules](../08-modules/index.md) — `@platform`, conditional compilation
-- [Specification: Decorators](../../spec/13-decorators.md) — full description
+- [Specification: Decorators](../../spec/13-decorators/13-decorators.md) — full description

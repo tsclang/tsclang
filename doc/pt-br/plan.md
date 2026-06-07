@@ -221,7 +221,7 @@ nums.map(x => x * 2)  // return a new value
 - Requisitos (Node.js, CMake, gcc/clang)
 - Visão geral da CLI: `tsclang build`, `tsclang lint`, `tsclang lsp`
 
-**Fonte:** `spec/01-intro.md`
+**Fonte:** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // return a new value
 - Operador spread (arrays, objetos, regras de propriedade)
 - Indexação e slices (arrays e strings, índices negativos)
 
-**Fonte:** `spec/02-syntax.md`
+**Fonte:** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -275,7 +275,7 @@ nums.map(x => x * 2)  // return a new value
 - Tipos utilitários: `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
 - `Buffer`, `DataView`
 
-**Fonte:** `spec/03-types.md`
+**Fonte:** `spec/03-types/03-types.md`
 
 ---
 
@@ -299,7 +299,7 @@ nums.map(x => x * 2)  // return a new value
 - Alinhamento: `@packed`, `@align(N)`, diagnósticos de preenchimento
 - Decoradores: visão geral, referência à seção completa
 
-**Fonte:** `spec/04-classes.md`, `spec/13-decorators.md`
+**Fonte:** `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -326,7 +326,7 @@ nums.map(x => x * 2)  // return a new value
 - Retornar empréstimo de método
 - Closures: regras de captura, lista de captura explícita, closure Mut via await
 
-**Fonte:** `spec/05-memory.md`
+**Fonte:** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -345,7 +345,7 @@ nums.map(x => x * 2)  // return a new value
 - Propriedade durante erros (limpeza via `goto`)
 - Limitações
 
-**Fonte:** `spec/06-errors.md`
+**Fonte:** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -382,7 +382,7 @@ nums.map(x => x * 2)  // return a new value
 - Geradores async: `async function*`, `for await`, `close()`
 - Multitarefa cooperativa via geradores
 
-**Fonte:** `spec/07-concurrency.md`
+**Fonte:** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -407,7 +407,7 @@ nums.map(x => x * 2)  // return a new value
 - Merge de declarações
 - Funções C variádicas: tipo `Scalar`
 
-**Fonte:** `spec/08-modules.md`
+**Fonte:** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -426,7 +426,7 @@ nums.map(x => x * 2)  // return a new value
 - CMakeLists.txt: geração, personalização
 - Perfis: debug/release, otimização
 
-**Fonte:** `spec/09-build.md`
+**Fonte:** `spec/09-build/09-build.md`
 
 ---
 
@@ -457,7 +457,7 @@ nums.map(x => x * 2)  // return a new value
 - `std/embedded` — Volatile, ponteiro, HashMap, StaticMap
 - Compatibilidade de plataformas (tabela)
 
-**Fonte:** `spec/10-stdlib.md`, `spec/19-stdlib-*.md`
+**Fonte:** `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -474,7 +474,7 @@ nums.map(x => x * 2)  // return a new value
 - Níveis de otimização (O0–O3, Os)
 - Mensagens de erro: formato, categorias, códigos de erro
 
-**Fonte:** `spec/11-compiler.md`
+**Fonte:** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -488,7 +488,7 @@ nums.map(x => x * 2)  // return a new value
 - Padrões incompatíveis (tabela de alternativas)
 - O que TSClang adiciona (o que não está em TS)
 
-**Fonte:** `spec/12-migration.md`
+**Fonte:** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -496,18 +496,18 @@ nums.map(x => x * 2)  // return a new value
 
 | # | Arquivo | Conteúdo | Fonte | Tamanho |
 |---|---------|----------|-------|---------|
-| 01 | intro | O que é TSClang, início rápido, CLI | `spec/01-intro.md` | ~30 KB |
-| 02 | syntax | Sintaxe, operadores, laços, match/switch | `spec/02-syntax.md` | ~50 KB |
-| 03 | types | Tipos, números, strings, arrays, Map/Set, tuplas, tipos utilitários | `spec/03-types.md` | ~80 KB |
-| 04 | classes | Classes, interfaces, enumeração, genéricos, métodos de extensão | `spec/04-classes.md`, `spec/13-decorators.md` | ~40 KB |
-| 05 | memory | Propriedade, verificador de empréstimo, Ref/Mut/Shared, closures | `spec/05-memory.md` | ~50 KB |
-| 06 | errors | throw/try/catch, Result, operadores `?`/`!` | `spec/06-errors.md` | ~15 KB |
-| 07 | concurrency | async/await, threads, ISR, atômico, canais, geradores | `spec/07-concurrency.md` | ~70 KB |
-| 08 | modules | Import/export, .d.tsc, nativo, unsafe, @platform | `spec/08-modules.md` | ~50 KB |
-| 09 | build | Build, pacotes, wrapper de C, plataformas | `spec/09-build.md` | ~50 KB |
-| 10 | stdlib | Referência de todos os módulos std | `spec/10-stdlib.md`, `spec/19-stdlib-*.md` | ~60 KB |
-| 11 | compiler | Arquitetura do compilador (para contribuidores) | `spec/11-compiler.md` | ~30 KB |
-| 12 | migration | Guia de migração de TypeScript → TSClang | `spec/12-migration.md` | ~15 KB |
+| 01 | intro | O que é TSClang, início rápido, CLI | `spec/01-intro/01-intro.md` | ~30 KB |
+| 02 | syntax | Sintaxe, operadores, laços, match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 03 | types | Tipos, números, strings, arrays, Map/Set, tuplas, tipos utilitários | `spec/03-types/03-types.md` | ~80 KB |
+| 04 | classes | Classes, interfaces, enumeração, genéricos, métodos de extensão | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 KB |
+| 05 | memory | Propriedade, verificador de empréstimo, Ref/Mut/Shared, closures | `spec/05-memory/05-memory.md` | ~50 KB |
+| 06 | errors | throw/try/catch, Result, operadores `?`/`!` | `spec/06-errors/06-errors.md` | ~15 KB |
+| 07 | concurrency | async/await, threads, ISR, atômico, canais, geradores | `spec/07-concurrency/07-concurrency.md` | ~70 KB |
+| 08 | modules | Import/export, .d.tsc, nativo, unsafe, @platform | `spec/08-modules/08-modules.md` | ~50 KB |
+| 09 | build | Build, pacotes, wrapper de C, plataformas | `spec/09-build/09-build.md` | ~50 KB |
+| 10 | stdlib | Referência de todos os módulos std | `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md` | ~60 KB |
+| 11 | compiler | Arquitetura do compilador (para contribuidores) | `spec/11-compiler/11-compiler.md` | ~30 KB |
+| 12 | migration | Guia de migração de TypeScript → TSClang | `spec/12-migration/12-migration.md` | ~15 KB |
 | | | | **Total** | **~540 KB** |
 
 ## Ordem recomendada de redação

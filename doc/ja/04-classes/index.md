@@ -58,4 +58,4 @@ int32_t n = tsc_std_string_charCount(s);
 - [メモリモデル](../05-memory/index.md) — 所有権、`Ref<T>`、`Mut<T>`、ムーブセマンティクス
 - [型システム](../03-types/index.md) — 構造的型付けと公称的型付け
 - [エラー処理](../06-errors/index.md) — `extends Error`、`throws`、`try/catch`
-- [仕様：クラス](../../spec/04-classes.md) — オブジェクトシステムの完全な説明
+- [仕様：クラス](../../spec/04-classes/04-classes.md) — オブジェクトシステムの完全な説明

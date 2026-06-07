@@ -220,7 +220,7 @@ nums.map(x => x * 2)  // return a new value
 - 环境要求（Node.js、CMake、gcc/clang）
 - CLI 概览：`tsclang build`、`tsclang lint`、`tsclang lsp`
 
-**来源：** `spec/01-intro.md`
+**来源：** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -240,7 +240,7 @@ nums.map(x => x * 2)  // return a new value
 - 展开运算符（数组、对象、所有权规则）
 - 索引和切片（数组和字符串、负索引）
 
-**来源：** `spec/02-syntax.md`
+**来源：** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -274,7 +274,7 @@ nums.map(x => x * 2)  // return a new value
 - 实用类型：`Partial`、`Required`、`Readonly`、`NonNullable`、`Pick`、`Omit`、`Record`、`ReturnType`、`Parameters`、`Awaited`
 - `Buffer`、`DataView`
 
-**来源：** `spec/03-types.md`
+**来源：** `spec/03-types/03-types.md`
 
 ---
 
@@ -298,7 +298,7 @@ nums.map(x => x * 2)  // return a new value
 - 对齐：`@packed`、`@align(N)`、填充诊断
 - 装饰器：概览，引用完整章节
 
-**来源：** `spec/04-classes.md`、`spec/13-decorators.md`
+**来源：** `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -325,7 +325,7 @@ nums.map(x => x * 2)  // return a new value
 - 从方法返回借用
 - 闭包：捕获规则、显式捕获列表、通过 await 实现 Mut-闭包
 
-**来源：** `spec/05-memory.md`
+**来源：** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -344,7 +344,7 @@ nums.map(x => x * 2)  // return a new value
 - 错误期间的所有权（通过 `goto` 清理）
 - 局限性
 
-**来源：** `spec/06-errors.md`
+**来源：** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -381,7 +381,7 @@ nums.map(x => x * 2)  // return a new value
 - 异步生成器：`async function*`、`for await`、`close()`
 - 通过生成器实现协作式多任务
 
-**来源：** `spec/07-concurrency.md`
+**来源：** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -406,7 +406,7 @@ nums.map(x => x * 2)  // return a new value
 - 声明合并
 - 变长 C 函数：`Scalar` 类型
 
-**来源：** `spec/08-modules.md`
+**来源：** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -425,7 +425,7 @@ nums.map(x => x * 2)  // return a new value
 - CMakeLists.txt：生成、自定义
 - 配置文件：debug/release、优化
 
-**来源：** `spec/09-build.md`
+**来源：** `spec/09-build/09-build.md`
 
 ---
 
@@ -456,7 +456,7 @@ nums.map(x => x * 2)  // return a new value
 - `std/embedded` —— Volatile、指针、HashMap、StaticMap
 - 平台兼容性（表格）
 
-**来源：** `spec/10-stdlib.md`、`spec/19-stdlib-*.md`
+**来源：** `spec/10-stdlib/10-stdlib.md`、`spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -473,7 +473,7 @@ nums.map(x => x * 2)  // return a new value
 - 优化级别（O0–O3、Os）
 - 错误消息：格式、分类、错误代码
 
-**来源：** `spec/11-compiler.md`
+**来源：** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -487,7 +487,7 @@ nums.map(x => x * 2)  // return a new value
 - 不兼容模式（替代方案表格）
 - TSClang 新增的内容（TS 中没有的）
 
-**来源：** `spec/12-migration.md`
+**来源：** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -495,18 +495,18 @@ nums.map(x => x * 2)  // return a new value
 
 | # | 文件 | 内容 | 来源 | 大小 |
 |---|------|------|------|------|
-| 01 | intro | TSClang 是什么、快速开始、CLI | `spec/01-intro.md` | ~30 KB |
-| 02 | syntax | 语法、运算符、循环、match/switch | `spec/02-syntax.md` | ~50 KB |
-| 03 | types | 类型、数字、字符串、数组、Map/Set、元组、实用类型 | `spec/03-types.md` | ~80 KB |
-| 04 | classes | 类、接口、枚举、泛型、扩展方法 | `spec/04-classes.md`、`spec/13-decorators.md` | ~40 KB |
-| 05 | memory | 所有权、借用检查器、Ref/Mut/Shared、闭包 | `spec/05-memory.md` | ~50 KB |
-| 06 | errors | throw/try/catch、Result、`?`/`!` 运算符 | `spec/06-errors.md` | ~15 KB |
-| 07 | concurrency | 异步/等待、线程、ISR、原子、通道、生成器 | `spec/07-concurrency.md` | ~70 KB |
-| 08 | modules | 导入/导出、.d.tsc、原生、unsafe、@platform | `spec/08-modules.md` | ~50 KB |
-| 09 | build | 构建、包、C 包装器、平台 | `spec/09-build.md` | ~50 KB |
-| 10 | stdlib | 所有 std 模块的参考 | `spec/10-stdlib.md`、`spec/19-stdlib-*.md` | ~60 KB |
-| 11 | compiler | 编译器架构（面向贡献者） | `spec/11-compiler.md` | ~30 KB |
-| 12 | migration | TypeScript → TSClang 迁移指南 | `spec/12-migration.md` | ~15 KB |
+| 01 | intro | TSClang 是什么、快速开始、CLI | `spec/01-intro/01-intro.md` | ~30 KB |
+| 02 | syntax | 语法、运算符、循环、match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 03 | types | 类型、数字、字符串、数组、Map/Set、元组、实用类型 | `spec/03-types/03-types.md` | ~80 KB |
+| 04 | classes | 类、接口、枚举、泛型、扩展方法 | `spec/04-classes/04-classes.md`、`spec/13-decorators/13-decorators.md` | ~40 KB |
+| 05 | memory | 所有权、借用检查器、Ref/Mut/Shared、闭包 | `spec/05-memory/05-memory.md` | ~50 KB |
+| 06 | errors | throw/try/catch、Result、`?`/`!` 运算符 | `spec/06-errors/06-errors.md` | ~15 KB |
+| 07 | concurrency | 异步/等待、线程、ISR、原子、通道、生成器 | `spec/07-concurrency/07-concurrency.md` | ~70 KB |
+| 08 | modules | 导入/导出、.d.tsc、原生、unsafe、@platform | `spec/08-modules/08-modules.md` | ~50 KB |
+| 09 | build | 构建、包、C 包装器、平台 | `spec/09-build/09-build.md` | ~50 KB |
+| 10 | stdlib | 所有 std 模块的参考 | `spec/10-stdlib/10-stdlib.md`、`spec/10-stdlib/19-stdlib-*.md` | ~60 KB |
+| 11 | compiler | 编译器架构（面向贡献者） | `spec/11-compiler/11-compiler.md` | ~30 KB |
+| 12 | migration | TypeScript → TSClang 迁移指南 | `spec/12-migration/12-migration.md` | ~15 KB |
 | | | | **总计** | **~540 KB** |
 
 ## 推荐写作顺序

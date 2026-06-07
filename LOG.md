@@ -1671,3 +1671,12 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > > - 48 new tests covering: all 5 bitwise ops, compound assigns, mixed types (number/i32/char/bool), edge values, different defaultNumber, error cases (string/array/null)
 > > - Files changed: `operators.js` (added `_hasFloatVar`, bitwise block rewrite, `~` float-cast, type validation), `assign.js` (compound bitwise float-cast + type validation)
 > > - All **1780 tests passing** (0 failures), +48 new tests in `phase2/number-type/`
+
+> 2026-06-07: Spec restructuring — flat files → phase directories
+> - All 24 spec files moved from flat `spec/*.md` into phase directories `spec/NN-name/`
+> - 19 directories created (01-intro through 18-optimizer), each with `index.md`
+> - `19-stdlib-extended/` merged into `10-stdlib/` (6 files: avr/fs/hal/io/net/ws)
+> - 5 empty directories for phases without spec files (14-reactive through 18-optimizer)
+> - All cross-references updated: internal spec links, SPEC.md, book/, doc/ (10 languages)
+> - 38 files modified, 24 files renamed, 19 index.md created
+> - Total: 19 spec directories, 24 spec files, 19 index.md

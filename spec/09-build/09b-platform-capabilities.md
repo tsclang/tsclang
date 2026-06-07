@@ -483,7 +483,7 @@ resolve.js:14    usize → uint16_t для nes/spectrum (хардкод)
 
 ## Этапы реализации
 
-1. ~~Обновить `spec/09-build.md`~~ — DONE (устаревшие поля заменены, примеры обновлены)
+1. ~~Обновить `09-build.md`~~ — DONE (устаревшие поля заменены, примеры обновлены)
 2. ~~Обновить все ~90 `meta.json` тестов~~ — DONE (72 мигрировано на `profile`, 20 используют legacy)
 3. ~~Обновить компилятор~~ — DONE (capabilities + fallback в codegen.js, program.js, resolve.js)
 4. ~~Обновить CLI~~ — DONE (`--platform`, `--build`, `node_modules` → `tsc_packages`)

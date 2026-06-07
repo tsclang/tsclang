@@ -6,19 +6,19 @@
 
 | Файл | Содержимое |
 |------|-----------|
-| [spec/01-intro.md](spec/01-intro.md) | Зачем, дизайн-философия, overview, установка |
-| [spec/02-syntax.md](spec/02-syntax.md) | Синтаксис, операторы, управляющие конструкции |
-| [spec/03-types.md](spec/03-types.md) | Базовые типы: числа, строки, null, массивы, Date, конвертация, Clone, Type Aliases |
-| [spec/04-classes.md](spec/04-classes.md) | Классы и объектная система: generics, extension methods, enum, интерфейсы, instanceof, классы |
-| [spec/05-memory.md](spec/05-memory.md) | Ownership, borrow checker, замыкания, итераторы |
-| [spec/06-errors.md](spec/06-errors.md) | Обработка ошибок, throws, try/catch |
-| [spec/07-concurrency.md](spec/07-concurrency.md) | Async/await, threads, embedded concurrency |
-| [spec/08-modules.md](spec/08-modules.md) | Модульная система, C interop, .d.tsc, @platform |
-| [spec/09-build.md](spec/09-build.md) | Типы проектов, система сборки, CLI, package manager |
-| [spec/10-stdlib.md](spec/10-stdlib.md) | Стандартная библиотека |
-| [spec/11-compiler.md](spec/11-compiler.md) | Архитектура компилятора, IR, методология тестов |
-| [spec/12-migration.md](spec/12-migration.md) | Migration guide: TypeScript → TSClang |
-| [spec/13-decorators.md](spec/13-decorators.md) | Декораторы: синтаксис, Descriptor API, встроенные декораторы, codegen |
+| [spec/01-intro/](spec/01-intro/) | Зачем, дизайн-философия, overview, установка |
+| [spec/02-syntax/](spec/02-syntax/) | Синтаксис, операторы, управляющие конструкции |
+| [spec/03-types/](spec/03-types/) | Базовые типы: числа, строки, null, массивы, Date, конвертация, Clone, Type Aliases |
+| [spec/04-classes/](spec/04-classes/) | Классы и объектная система: generics, extension methods, enum, интерфейсы, instanceof, классы |
+| [spec/05-memory/](spec/05-memory/) | Ownership, borrow checker, замыкания, итераторы |
+| [spec/06-errors/](spec/06-errors/) | Обработка ошибок, throws, try/catch |
+| [spec/07-concurrency/](spec/07-concurrency/) | Async/await, threads, embedded concurrency |
+| [spec/08-modules/](spec/08-modules/) | Модульная система, C interop, .d.tsc, @platform |
+| [spec/09-build/](spec/09-build/) | Типы проектов, система сборки, CLI, package manager |
+| [spec/10-stdlib/](spec/10-stdlib/) | Стандартная библиотека |
+| [spec/11-compiler/](spec/11-compiler/) | Архитектура компилятора, IR, методология тестов |
+| [spec/12-migration/](spec/12-migration/) | Migration guide: TypeScript → TSClang |
+| [spec/13-decorators/](spec/13-decorators/) | Декораторы: синтаксис, Descriptor API, встроенные декораторы, codegen |
 
 ---
 
@@ -58,7 +58,7 @@
 
 ### Блок 3: Система типов
 
-**[spec/03-types.md](spec/03-types.md) — базовые типы:**
+**[spec/03-types/](spec/03-types/) — базовые типы:**
 
 
 | Раздел | О чём |
@@ -78,7 +78,7 @@
 | **String Literal Union** | Compile-time only; компилируется в C enum + rodata таблицу строк; явная конверсия в string. |
 | **Utility Types** | Compile-time type operators: Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited; правило А+Б для generic functions. |
 
-**[spec/04-classes.md](spec/04-classes.md) — классы и объектная система:**
+**[spec/04-classes/](spec/04-classes/) — классы и объектная система:**
 
 | Раздел | О чём |
 |--------|-------|

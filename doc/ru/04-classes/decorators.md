@@ -337,7 +337,7 @@ Embedded-специфичные декораторы:
 
 ### @signal
 
-Декоратор реактивного сигнала. См. [std/reactive](../../spec/10-stdlib.md).
+Декоратор реактивного сигнала. См. [std/reactive](../../spec/10-stdlib/10-stdlib.md).
 
 ### @platform
 
@@ -512,4 +512,4 @@ class Inefficient {
 - [Generics](./generics.md) — generic constraints в декораторах
 - [Конкурентность](../07-concurrency/index.md) — `@embedded.*`, `@signal`
 - [Модули](../08-modules/index.md) — `@platform`, условная компиляция
-- [Спецификация: Декораторы](../../spec/13-decorators.md) — полное описание
+- [Спецификация: Декораторы](../../spec/13-decorators/13-decorators.md) — полное описание

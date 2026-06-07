@@ -12,7 +12,7 @@
 >
 > **Обоснование:** П1 (кроссплатформенность) — copy безопасна на всех платформах, retain = no-op на embedded. П2 (TS compat) — идентичное поведение, source всегда жив. П3 (better than TS/C/Rust) — нет алиасинга (value types), нет скрытого move, предсказуемость.
 >
-> Опирается на: `spec/05b-ownership.md` (владение), `spec/05c-for-of-iteration.md` (итерация).
+> Опирается на: `05b-ownership.md` (владение), `05c-for-of-iteration.md` (итерация).
 
 ---
 

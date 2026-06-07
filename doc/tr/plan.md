@@ -221,7 +221,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Gereksinimler (Node.js, CMake, gcc/clang)
 - CLI genel bakış: `tsclang build`, `tsclang lint`, `tsclang lsp`
 
-**Kaynak:** `spec/01-intro.md`
+**Kaynak:** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Yayılma operatörü (spread) (diziler, nesneler, sahiplik kuralları)
 - İndeksleme ve dilimler (slices) (diziler ve diziler, negatif indeksler)
 
-**Kaynak:** `spec/02-syntax.md`
+**Kaynak:** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -275,7 +275,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Yardımcı tipler: `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
 - `Buffer`, `DataView`
 
-**Kaynak:** `spec/03-types.md`
+**Kaynak:** `spec/03-types/03-types.md`
 
 ---
 
@@ -299,7 +299,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Hizalama: `@packed`, `@align(N)`, dolgu teşhisi
 - Dekaratörler: genel bakış, tam bölüme referans
 
-**Kaynak:** `spec/04-classes.md`, `spec/13-decorators.md`
+**Kaynak:** `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -326,7 +326,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Metottan ödünç alma döndürme
 - Kapanışlar: yakalama kuralları, açık yakalama listesi, await ile Mut-kapanış
 
-**Kaynak:** `spec/05-memory.md`
+**Kaynak:** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -345,7 +345,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Hatalar sırasında sahiplik (cleanup via `goto`)
 - Sınırlamalar
 
-**Kaynak:** `spec/06-errors.md`
+**Kaynak:** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -382,7 +382,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Async jeneratörler: `async function*`, `for await`, `close()`
 - Jeneratörler aracılığıyla iş birlikçi çok görevlilik (cooperative multitasking)
 
-**Kaynak:** `spec/07-concurrency.md`
+**Kaynak:** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -407,7 +407,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Bildirim Birleştirme
 - Değişken C fonksiyonları: `Scalar` tipi
 
-**Kaynak:** `spec/08-modules.md`
+**Kaynak:** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -426,7 +426,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - CMakeLists.txt: oluşturma, özelleştirme
 - Profiller: debug/release, optimizasyon
 
-**Kaynak:** `spec/09-build.md`
+**Kaynak:** `spec/09-build/09-build.md`
 
 ---
 
@@ -457,7 +457,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - `std/embedded` — Volatile, gösterici (pointer), HashMap, StaticMap
 - Platform uyumluluğu (tablo)
 
-**Kaynak:** `spec/10-stdlib.md`, `spec/19-stdlib-*.md`
+**Kaynak:** `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -474,7 +474,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Optimizasyon seviyeleri (O0–O3, Os)
 - Hata mesajları: format, kategoriler, hata kodları
 
-**Kaynak:** `spec/11-compiler.md`
+**Kaynak:** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -488,7 +488,7 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 - Uyumsuz kalıplar (alternatifler tablosu)
 - TSClang'ın ekledikleri (TS'te olmayanlar)
 
-**Kaynak:** `spec/12-migration.md`
+**Kaynak:** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -496,18 +496,18 @@ nums.map(x => x * 2)  // yeni bir değer döndür
 
 | # | Dosya | İçerik | Kaynak | Boyut |
 |---|------|---------|--------|------|
-| 01 | intro | TSClang nedir, hızlı başlangıç, CLI | `spec/01-intro.md` | ~30 KB |
-| 02 | syntax | Sözdizimi, operatörler, döngüler, match/switch | `spec/02-syntax.md` | ~50 KB |
-| 03 | types | Tipler, sayılar, diziler, Map/Set, demetler, yardımcı tipler | `spec/03-types.md` | ~80 KB |
-| 04 | classes | Sınıflar, arayüzler, numaralandırma, jenerikler, genişletme metotları | `spec/04-classes.md`, `spec/13-decorators.md` | ~40 KB |
-| 05 | memory | Sahiplik, ödünç alma denetleyicisi, Ref/Mut/Shared, kapanışlar | `spec/05-memory.md` | ~50 KB |
-| 06 | errors | throw/try/catch, Result, `?`/`!` operatörleri | `spec/06-errors.md` | ~15 KB |
-| 07 | concurrency | async/await, iş parçacıkları, ISR, atomik, kanallar, jeneratörler | `spec/07-concurrency.md` | ~70 KB |
-| 08 | modules | İçe/dışa aktarma, .d.tsc, yerel (native), unsafe, @platform | `spec/08-modules.md` | ~50 KB |
-| 09 | build | Derleme, paketler, C-wrapper, platformlar | `spec/09-build.md` | ~50 KB |
-| 10 | stdlib | Tüm std modülleri için referans | `spec/10-stdlib.md`, `spec/19-stdlib-*.md` | ~60 KB |
-| 11 | compiler | Derleyici mimarisi (katkıda bulunanlar için) | `spec/11-compiler.md` | ~30 KB |
-| 12 | migration | TypeScript → TSClang geçiş rehberi | `spec/12-migration.md` | ~15 KB |
+| 01 | intro | TSClang nedir, hızlı başlangıç, CLI | `spec/01-intro/01-intro.md` | ~30 KB |
+| 02 | syntax | Sözdizimi, operatörler, döngüler, match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 03 | types | Tipler, sayılar, diziler, Map/Set, demetler, yardımcı tipler | `spec/03-types/03-types.md` | ~80 KB |
+| 04 | classes | Sınıflar, arayüzler, numaralandırma, jenerikler, genişletme metotları | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 KB |
+| 05 | memory | Sahiplik, ödünç alma denetleyicisi, Ref/Mut/Shared, kapanışlar | `spec/05-memory/05-memory.md` | ~50 KB |
+| 06 | errors | throw/try/catch, Result, `?`/`!` operatörleri | `spec/06-errors/06-errors.md` | ~15 KB |
+| 07 | concurrency | async/await, iş parçacıkları, ISR, atomik, kanallar, jeneratörler | `spec/07-concurrency/07-concurrency.md` | ~70 KB |
+| 08 | modules | İçe/dışa aktarma, .d.tsc, yerel (native), unsafe, @platform | `spec/08-modules/08-modules.md` | ~50 KB |
+| 09 | build | Derleme, paketler, C-wrapper, platformlar | `spec/09-build/09-build.md` | ~50 KB |
+| 10 | stdlib | Tüm std modülleri için referans | `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md` | ~60 KB |
+| 11 | compiler | Derleyici mimarisi (katkıda bulunanlar için) | `spec/11-compiler/11-compiler.md` | ~30 KB |
+| 12 | migration | TypeScript → TSClang geçiş rehberi | `spec/12-migration/12-migration.md` | ~15 KB |
 | | | | **Toplam** | **~540 KB** |
 
 ## Önerilen Yazım Sırası

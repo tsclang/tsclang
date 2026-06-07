@@ -58,4 +58,4 @@ Mevcut bir metodla çakışan genişletme — derleyici hatası. Farklı modüll
 - [Bellek Modeli](../05-memory/index.md) — sahiplik, `Ref<T>`, `Mut<T>`, taşıma semantiği
 - [Tip Sistemi](../03-types/index.md) — yapısal vs nominal tipleme
 - [Hata İşleme](../06-errors/index.md) — `extends Error`, `throws`, `try/catch`
-- [Spesifikasyon: Sınıflar](../../spec/04-classes.md) — nesne sisteminin tam açıklaması
+- [Spesifikasyon: Sınıflar](../../spec/04-classes/04-classes.md) — nesne sisteminin tam açıklaması

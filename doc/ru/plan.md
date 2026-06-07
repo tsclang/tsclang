@@ -221,7 +221,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Требования (Node.js, CMake, gcc/clang)
 - CLI обзор: `tsclang build`, `tsclang lint`, `tsclang lsp`
 
-**Источник:** `spec/01-intro.md`
+**Источник:** `spec/01-intro/01-intro.md`
 
 ---
 
@@ -241,7 +241,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Spread оператор (массивы, объекты, ownership-правила)
 - Индексация и срезы (массивы и строки, отрицательные индексы)
 
-**Источник:** `spec/02-syntax.md`
+**Источник:** `spec/02-syntax/02-syntax.md`
 
 ---
 
@@ -275,7 +275,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Utility types: `Partial`, `Required`, `Readonly`, `NonNullable`, `Pick`, `Omit`, `Record`, `ReturnType`, `Parameters`, `Awaited`
 - `Buffer`, `DataView`
 
-**Источник:** `spec/03-types.md`
+**Источник:** `spec/03-types/03-types.md`
 
 ---
 
@@ -299,7 +299,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Выравнивание: `@packed`, `@align(N)`, диагностика padding
 - Декораторы: обзор, ссылка на полный раздел
 
-**Источник:** `spec/04-classes.md`, `spec/13-decorators.md`
+**Источник:** `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md`
 
 ---
 
@@ -326,7 +326,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Возврат borrow из метода
 - Замыкания: правила захвата, явный список захвата, Mut-closure через await
 
-**Источник:** `spec/05-memory.md`
+**Источник:** `spec/05-memory/05-memory.md`
 
 ---
 
@@ -345,7 +345,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Ownership при ошибках (cleanup через `goto`)
 - Ограничения
 
-**Источник:** `spec/06-errors.md`
+**Источник:** `spec/06-errors/06-errors.md`
 
 ---
 
@@ -382,7 +382,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Async generators: `async function*`, `for await`, `close()`
 - Кооперативная многозадачность через генераторы
 
-**Источник:** `spec/07-concurrency.md`
+**Источник:** `spec/07-concurrency/07-concurrency.md`
 
 ---
 
@@ -407,7 +407,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Declaration Merging
 - Variadic C функции: тип `Scalar`
 
-**Источник:** `spec/08-modules.md`
+**Источник:** `spec/08-modules/08-modules.md`
 
 ---
 
@@ -426,7 +426,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - CMakeLists.txt: генерация, кастомизация
 - Profiles: debug/release, оптимизация
 
-**Источник:** `spec/09-build.md`
+**Источник:** `spec/09-build/09-build.md`
 
 ---
 
@@ -457,7 +457,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - `std/embedded` — Volatile, pointer, HashMap, StaticMap
 - Совместимость с платформами (таблица)
 
-**Источник:** `spec/10-stdlib.md`, `spec/19-stdlib-*.md`
+**Источник:** `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md`
 
 ---
 
@@ -474,7 +474,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Optimization levels (O0–O3, Os)
 - Error messages: формат, категории, коды ошибок
 
-**Источник:** `spec/11-compiler.md`
+**Источник:** `spec/11-compiler/11-compiler.md`
 
 ---
 
@@ -488,7 +488,7 @@ nums.map(x => x * 2)  // возвращаем новое значение
 - Несовместимые паттерны (таблица альтернатив)
 - Что добавляет TSClang (чего нет в TS)
 
-**Источник:** `spec/12-migration.md`
+**Источник:** `spec/12-migration/12-migration.md`
 
 ---
 
@@ -496,18 +496,18 @@ nums.map(x => x * 2)  // возвращаем новое значение
 
 | # | Файл | Содержание | Источник | Объём |
 |---|------|-----------|----------|-------|
-| 01 | intro | Что такое TSClang, быстрый старт, CLI | `spec/01-intro.md` | ~30 KB |
-| 02 | syntax | Синтаксис, операторы, циклы, match/switch | `spec/02-syntax.md` | ~50 KB |
-| 03 | types | Типы, числа, строки, массивы, Map/Set, tuples, utility types | `spec/03-types.md` | ~80 KB |
-| 04 | classes | Классы, интерфейсы, enum, generics, extension methods | `spec/04-classes.md`, `spec/13-decorators.md` | ~40 KB |
-| 05 | memory | Ownership, borrow checker, Ref/Mut/Shared, замыкания | `spec/05-memory.md` | ~50 KB |
-| 06 | errors | throw/try/catch, Result, `?`/`!` операторы | `spec/06-errors.md` | ~15 KB |
-| 07 | concurrency | async/await, threads, ISR, atomic, channels, generators | `spec/07-concurrency.md` | ~70 KB |
-| 08 | modules | Импорт/экспорт, .d.tsc, native, unsafe, @platform | `spec/08-modules.md` | ~50 KB |
-| 09 | build | Сборка, пакеты, C-wrapper, платформы | `spec/09-build.md` | ~50 KB |
-| 10 | stdlib | Справочник всех std-модулей | `spec/10-stdlib.md`, `spec/19-stdlib-*.md` | ~60 KB |
-| 11 | compiler | Архитектура компилятора (для контрибьюторов) | `spec/11-compiler.md` | ~30 KB |
-| 12 | migration | Гайд миграции TypeScript → TSClang | `spec/12-migration.md` | ~15 KB |
+| 01 | intro | Что такое TSClang, быстрый старт, CLI | `spec/01-intro/01-intro.md` | ~30 KB |
+| 02 | syntax | Синтаксис, операторы, циклы, match/switch | `spec/02-syntax/02-syntax.md` | ~50 KB |
+| 03 | types | Типы, числа, строки, массивы, Map/Set, tuples, utility types | `spec/03-types/03-types.md` | ~80 KB |
+| 04 | classes | Классы, интерфейсы, enum, generics, extension methods | `spec/04-classes/04-classes.md`, `spec/13-decorators/13-decorators.md` | ~40 KB |
+| 05 | memory | Ownership, borrow checker, Ref/Mut/Shared, замыкания | `spec/05-memory/05-memory.md` | ~50 KB |
+| 06 | errors | throw/try/catch, Result, `?`/`!` операторы | `spec/06-errors/06-errors.md` | ~15 KB |
+| 07 | concurrency | async/await, threads, ISR, atomic, channels, generators | `spec/07-concurrency/07-concurrency.md` | ~70 KB |
+| 08 | modules | Импорт/экспорт, .d.tsc, native, unsafe, @platform | `spec/08-modules/08-modules.md` | ~50 KB |
+| 09 | build | Сборка, пакеты, C-wrapper, платформы | `spec/09-build/09-build.md` | ~50 KB |
+| 10 | stdlib | Справочник всех std-модулей | `spec/10-stdlib/10-stdlib.md`, `spec/10-stdlib/19-stdlib-*.md` | ~60 KB |
+| 11 | compiler | Архитектура компилятора (для контрибьюторов) | `spec/11-compiler/11-compiler.md` | ~30 KB |
+| 12 | migration | Гайд миграции TypeScript → TSClang | `spec/12-migration/12-migration.md` | ~15 KB |
 | | | | **Итого** | **~540 KB** |
 
 ## Порядок написания
