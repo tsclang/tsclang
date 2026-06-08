@@ -1801,3 +1801,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Проверено**: simavr — `printf("RT test OK")` и `puts("puts works")` оба выводят через UART0.
 > - **Регрессия**: phase0 ✓30, phase5 ✓27, phase6 ✓48, phase8 ✓44, phase9 ✓47, phase12 ✓112 (308 тестов).
 > - Files changed: `src/runtime/runtime.h`
+
+> 2026-06-08: AVR console.log e2e + printf fixes + no-i64-print strict rule (П1, П4, П5)
+> - **AVR e2e test infrastructure** (runner.js): Добавлена поддержка AVR таргета — `checkAvrGcc()`, `checkSimavr()`, `avrGccCompile()`, `avrObjcopy()`, `runSimavr()`. Target-aware dispatch в `executeTscTest()` — при `profTarget === 'avr'` используется avr-gcc → objcopy → simavr пайплайн. WSL: файлы копируются в `/tmp/` перед компиляцией/симуляцией. `normalizeAvrOut()` фильтрует simavr info messages и ANSI-коды. Auto-skip если avr-gcc/simavr не установлены.
+> - **AVR printf fixes**: `-lprintf_flt` в linker flags для `%g` поддержки. `tsc_print_str(String s)` runtime helper — PROGMEM-aware печать строк (использует `pgm_read_byte` для static строк, direct access для dynamic). Codegen: `_isEmbedded()` → String args через `tsc_print_str()` вместо `printf("%s", s.data)`.
+> - **Strict rule `no-i64-print`**: Запрещает `console.log(i64)` / `console.log(u64)` — compile error. Автоматически на embedded (avr-libc не поддерживает `%lld`), опционально на desktop через strict config. Проверка в console.js: 3 точки (int64_t, uint64_t, deref int64_t*).
+> - **Тесты**: +5 AVR e2e (phase12/console-avr: log-string, log-i32, log-bool, log-multi, log-string-ref). +3 strict (phase9/strict/no-i64-print: err-console-i64, err-console-u64, ok-i32).
+> - **Регрессия**: все 20 фаз, 1828 тестов, 0 ошибок.
+> - Files changed: `test/runner.js`, `src/runtime/runtime.h`, `src/compiler/codegen/calls/console.js`, `test/cases/phase12/console-avr/` (5 new tests), `test/cases/phase9/strict/no-i64-print/` (3 new tests)

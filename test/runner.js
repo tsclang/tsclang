@@ -5,7 +5,7 @@
 
 import { readdir, readFile, mkdir, rm, copyFile } from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
@@ -117,6 +117,17 @@ function normalizeOut(s) {
   return s.replace(/\r\n/g, '\n').trimEnd();
 }
 
+function normalizeAvrOut(s) {
+  const lines = s.replace(/\r\n/g, '\n').split('\n');
+  const filtered = lines.filter(l => {
+    const clean = l.replace(/\x1b\[[0-9;]*m/g, '').trim();
+    if (clean.startsWith('Loaded ') || clean.startsWith('Load HEX ') || clean.startsWith('signal caught')) return false;
+    return true;
+  });
+  const uart = filtered.map(l => l.replace(/\x1b\[[0-9;]*m/g, '').replace(/\.\.+$/, '').trimEnd()).filter(l => l.length > 0);
+  return uart.join('\n').trimEnd();
+}
+
 // ---------------------------------------------------------------------------
 // Test discovery
 // ---------------------------------------------------------------------------
@@ -213,6 +224,114 @@ async function gccCompile(cFile, outBin) {
 }
 
 // ---------------------------------------------------------------------------
+// AVR toolchain helpers (via WSL on Windows)
+// ---------------------------------------------------------------------------
+const HAS_WSL = process.platform === 'win32'
+  ? (() => { try { const r = spawnSync('wsl', ['--list'], { timeout: 5000 }); return r.status === 0; } catch { return false; } })()
+  : false;
+
+function toWslPath(p) {
+  return p.replace(/^([A-Za-z]):\\/, (_, d) => `/mnt/${d.toLowerCase()}/`).replace(/\\/g, '/');
+}
+
+let avrGccAvailable = null;
+async function checkAvrGcc() {
+  if (avrGccAvailable !== null) return avrGccAvailable;
+  if (HAS_WSL) {
+    const r = await runWsl('avr-gcc --version');
+    avrGccAvailable = r.code === 0;
+  } else {
+    const r = await run('avr-gcc', ['--version']);
+    avrGccAvailable = r.code === 0;
+  }
+  return avrGccAvailable;
+}
+
+let simavrAvailable = null;
+async function checkSimavr() {
+  if (simavrAvailable !== null) return simavrAvailable;
+  if (HAS_WSL) {
+    const r = await runWsl('which simavr 2>/dev/null');
+    simavrAvailable = r.code === 0;
+  } else {
+    const r = await run('simavr', ['--help']);
+    simavrAvailable = r.code === 0;
+  }
+  return simavrAvailable;
+}
+
+function runWsl(cmd, opts = {}) {
+  return new Promise(resolve => {
+    const proc = spawn('wsl', ['bash', '-c', cmd], { ...opts, shell: false });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', d => { stdout += d; });
+    proc.stderr?.on('data', d => { stderr += d; });
+    proc.on('error', err => resolve({ code: 1, stdout, stderr: err.message }));
+    proc.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
+  });
+}
+
+async function avrGccCompile(cFile, elfFile, defines = []) {
+  const incDir = RUNTIME_INC;
+  const args = [
+    cFile, '-o', elfFile,
+    '-I', incDir,
+    '-mmcu=atmega328p', '-std=c11', '-Os',
+    '-DTSC_EMBEDDED',
+    ...defines,
+    '-Wl,-u,vfprintf', '-lprintf_flt',
+  ];
+  if (HAS_WSL) {
+    const wSrc = toWslPath(cFile);
+    const wOut = toWslPath(elfFile);
+    const wInc = toWslPath(incDir);
+    const tmpSrc = `/tmp/tsclang_${Date.now()}.c`;
+    const tmpOut = `/tmp/tsclang_${Date.now()}.elf`;
+    const cpResult = await runWsl(`cp ${wSrc} ${tmpSrc}`);
+    if (cpResult.code !== 0) return cpResult;
+    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=atmega328p -std=c11 -Os -DTSC_EMBEDDED ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
+    if (result.code === 0) {
+      await runWsl(`cp ${tmpOut} ${wOut}`);
+    }
+    await runWsl(`rm -f ${tmpSrc} ${tmpOut}`);
+    return result;
+  }
+  return run('avr-gcc', args);
+}
+
+async function avrObjcopy(elfFile, hexFile) {
+  if (HAS_WSL) {
+    const wElf = toWslPath(elfFile);
+    const wHex = toWslPath(hexFile);
+    const tmpElf = `/tmp/tsclang_${Date.now()}.elf`;
+    const tmpHex = `/tmp/tsclang_${Date.now()}.hex`;
+    const cpResult = await runWsl(`cp ${wElf} ${tmpElf}`);
+    if (cpResult.code !== 0) return cpResult;
+    const result = await runWsl(`avr-objcopy -O ihex ${tmpElf} ${tmpHex}`);
+    if (result.code === 0) {
+      await runWsl(`cp ${tmpHex} ${wHex}`);
+    }
+    await runWsl(`rm -f ${tmpElf} ${tmpHex}`);
+    return result;
+  }
+  return run('avr-objcopy', ['-O', 'ihex', elfFile, hexFile]);
+}
+
+async function runSimavr(hexFile, mcu = 'atmega328p', freq = 16000000, timeoutMs = 5000) {
+  if (HAS_WSL) {
+    const wHex = toWslPath(hexFile);
+    const tmpHex = `/tmp/tsclang_${Date.now()}.hex`;
+    const cpResult = await runWsl(`cp ${wHex} ${tmpHex}`);
+    if (cpResult.code !== 0) return cpResult;
+    const result = await runWsl(`timeout ${Math.ceil(timeoutMs / 1000)} simavr -m ${mcu} -f ${freq} -uart0:stdio ${tmpHex} 2>&1 || true`);
+    await runWsl(`rm -f ${tmpHex}`);
+    return result;
+  }
+  return run('simavr', ['-m', mcu, '-f', String(freq), '-uart0:stdio', hexFile]);
+}
+
+// ---------------------------------------------------------------------------
 // Check tsclang binary exists
 // ---------------------------------------------------------------------------
 let tsclangAvailable = null;
@@ -276,8 +395,8 @@ function readMeta(testDir) {
     if (meta.profile) {
       flags.push('--platform', meta.profile);
       const prof = loadProfile(meta.profile);
+      const profTarget = prof?.target || null;
       if (prof) {
-        // Also pass legacy target name for backward compat
         const targetName = prof.target || meta.profile;
         flags.push('--target', targetName);
         if (prof.allocator)     flags.push('--allocator', prof.allocator);
@@ -296,7 +415,7 @@ function readMeta(testDir) {
         if (Array.isArray(meta.strict)) flags.push('--strict', meta.strict.join(','));
         else flags.push('--strict', String(meta.strict));
       }
-      return { flags, profile: meta.profile };
+      return { flags, profile: meta.profile, profTarget };
     }
 
     // Legacy: direct flags (backward compat)
@@ -328,7 +447,7 @@ async function executeTscTest(testDir, kind, tmpBase) {
   const inputSrc = join(testDir, 'input.tsc');
 
   // Step 1: Run tsclang
-  const { flags: metaFlags, profile: metaProfile } = readMeta(testDir);
+  const { flags: metaFlags, profile: metaProfile, profTarget } = readMeta(testDir);
   const extraFlags = [
     ...(existsSync(join(testDir, 'flags.txt'))
       ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
@@ -374,6 +493,29 @@ async function executeTscTest(testDir, kind, tmpBase) {
   }
 
   // Step 3+4: Compile and run [R]
+  if (profTarget === 'avr') {
+    if (!await checkAvrGcc()) return { status: 'skip', testDir, reason: 'avr-gcc not found (install avr-libc)' };
+    const elfFile = join(tmpBase, 'test_avr.elf');
+    const hexFile = join(tmpBase, 'test_avr.hex');
+    const defines = metaFlags.filter((_, i) => metaFlags[i - 1]?.startsWith('-D')).length > 0
+      ? metaFlags.filter((f, i) => f.startsWith('-D'))
+      : ['-DTSC_NO_POSIX', '-DTSC_NO_STRTOLL', '-DTSC_CONSOLE_UART', '-DTSC_CONSOLE_BAUD=9600'];
+    const avrResult = await avrGccCompile(generatedC, elfFile, defines);
+    if (avrResult.code !== 0) return fail(testDir, 'avr-gcc', 'C does not compile with avr-gcc', avrResult.stderr);
+    const objcopyResult = await avrObjcopy(elfFile, hexFile);
+    if (objcopyResult.code !== 0) return fail(testDir, 'avr-objcopy', 'objcopy failed', objcopyResult.stderr);
+    if (!await checkSimavr()) return { status: 'skip', testDir, reason: 'simavr not found' };
+    const simResult = await runSimavr(hexFile);
+    if (simResult.code !== 0 && !simResult.stdout) return fail(testDir, 'simavr', `simavr exited ${simResult.code}`, simResult.stderr);
+    const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
+    const actual   = normalizeAvrOut(simResult.stdout);
+    const expected = normalizeOut(expectedOut);
+    if (actual !== expected) {
+      return fail(testDir, 'run', 'stdout mismatch (AVR/simavr)', diffSummary(expected, actual));
+    }
+    return pass(testDir);
+  }
+
   if (!await checkGcc()) return { status: 'skip', testDir, reason: 'gcc not found' };
   const binary = join(tmpBase, 'test_bin');
   const gccResult = await gccCompile(generatedC, binary);
@@ -584,6 +726,8 @@ async function main() {
   console.log(dim(`doc:      ${DOC_DIR}`));
   console.log(dim(`tsclang:  ${checkTsclang() ? green('found') : yellow('not built')}`));
   console.log(dim(`gcc:      ${await checkGcc() ? green('found') : yellow('not found')}`));
+  console.log(dim(`avr-gcc:  ${await checkAvrGcc() ? green('found') : yellow('not found')}`));
+  console.log(dim(`simavr:   ${await checkSimavr() ? green('found') : yellow('not found')}`));
   if (flagNoGcc) console.log(dim('mode:     ' + yellow('--no-gcc (skip compile/run)')));
   console.log('');
 

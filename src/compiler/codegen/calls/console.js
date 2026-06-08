@@ -115,6 +115,9 @@ export default {
           fmtParts.push('%g');
           fmtArgs.push(`*${cexpr}`);
         } else if (derefType === 'int64_t') {
+          if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+            throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+          }
           fmtParts.push('%lld');
           fmtArgs.push(`(long long)*${cexpr}`);
         } else if (derefType === 'bool') {
@@ -128,6 +131,20 @@ export default {
       }
 
       if (ctype === 'String') {
+        if (this._isEmbedded()) {
+          if (fmtParts.length > 0) {
+            fmtParts.push('');
+            const flushFmt = '"' + fmtParts.join(' ') + '"';
+            const flushArgs = fmtArgs.length > 0 ? [flushFmt, ...fmtArgs].join(', ') : flushFmt;
+            const I = ' '.repeat(this.indent * depth);
+            lines.push(`${I}${isErr ? 'fprintf(stderr, ' : 'printf('}${flushArgs});`);
+            fmtParts.length = 0;
+            fmtArgs.length = 0;
+          }
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}tsc_print_str(${cexpr});`);
+          continue;
+        }
         const strSym = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
         if (strSym?.isStringRef) {
           fmtParts.push('%.*s');
@@ -159,9 +176,15 @@ export default {
         fmtParts.push('%g');
         fmtArgs.push(`(double)${cexpr}`);
       } else if (ctype === 'int64_t') {
+        if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+          throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+        }
         fmtParts.push('%lld');
         fmtArgs.push(`(long long)${cexpr}`);
       } else if (ctype === 'uint64_t') {
+        if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+          throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+        }
         fmtParts.push('%llu');
         fmtArgs.push(`(unsigned long long)${cexpr}`);
       } else if (ctype === 'uint8_t' || ctype === 'uint16_t') {
@@ -232,6 +255,9 @@ export default {
               fmtParts.push('%g');
               fmtArgs.push(`${valExpr}.value`);
             } else if (innerCType === 'int64_t') {
+              if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+                throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+              }
               fmtParts.push('%lld');
               fmtArgs.push(`(long long)${valExpr}.value`);
             } else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') {

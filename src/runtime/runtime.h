@@ -328,6 +328,13 @@ static inline void _tsc_console_init(void) {
     UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
     stdout = &_tsc_uartout;
 }
+static inline void tsc_print_str(String s) {
+    if (s.capacity == 0) {
+        for (size_t i = 0; i < s.length; i++) putchar(pgm_read_byte(s.data + i));
+    } else {
+        for (size_t i = 0; i < s.length; i++) putchar(s.data[i]);
+    }
+}
 #else
 static inline void _tsc_console_init(void) {}
 #endif
