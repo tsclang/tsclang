@@ -185,6 +185,15 @@
 > - Изменённые файлы: `runtime.h`, `vardecl.js`, `call-dispatch.js`, `method-dispatch.js`, `func.js`, `assign.js`, `control-flow.js`, `closures.js`, `destruct.js`, `class.js`
 > - Все 1046 тестов проходят
 
+> 2026-06-09: **П2-fix: console.log(arr[i]) для Array_opt_T печатает "null" вместо 0.**
+> - `_isOptType()` / `_wrapOptValue()` / `_ensureOptArrayMacros()` — wrapping элементов в `((opt_T){true/false, val})` с double-parens для macro comma protection
+> - Array literal, push, pop — элементы обёрнуты через `_wrapOptValue()`; pop не double-wrap
+> - console.log opt-array index: отдельный `_v.has_value ? printf(fmt, val) : printf("null")` без `\n`
+> - `needSpace` флаг — пробел-разделитель между opt-элементами и другими аргументами
+> - `printf("\n")` всегда в конце (opt-printf без `\n`)
+> - Flush предыдущих fmtParts с trailing space перед opt-printf
+> - +4 теста: `opt-elem-literal` [R], `opt-elem-push` [R], `opt-elem-pop` [R], `opt-elem-mixed` [R]
+
 ---
 
 ## Фаза 4 — Объектная модель

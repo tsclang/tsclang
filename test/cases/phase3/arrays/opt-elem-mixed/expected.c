@@ -1,4 +1,4 @@
-﻿#include "runtime.h"
+#include "runtime.h"
 
 typedef struct { bool has_value; int32_t value; } opt_i32;
 typedef struct { opt_i32 *data; size_t length; size_t capacity; } Array_opt_i32;
@@ -11,15 +11,21 @@ int main(void) {
     TSC_INIT();
     opt_i32 _lit_0[] = {((opt_i32){true, 1}), ((opt_i32){false, 0}), ((opt_i32){true, 3})};
     Array_opt_i32 arr = {.data = _lit_0, .length = 3, .capacity = 3};
-    printf("%zu\n", arr.length);
     opt_i32 _v_1 = arr.data[0];
     _v_1.has_value ? printf("%d", _v_1.value) : printf("null");
-    printf("\n");
+    printf(" ok\n");
     opt_i32 _v_2 = arr.data[1];
+    printf("v= ");
     _v_2.has_value ? printf("%d", _v_2.value) : printf("null");
     printf("\n");
-    opt_i32 _v_3 = arr.data[2];
+    opt_i32 _v_3 = arr.data[0];
     _v_3.has_value ? printf("%d", _v_3.value) : printf("null");
+    printf(" ");
+    opt_i32 _v_4 = arr.data[1];
+    _v_4.has_value ? printf("%d", _v_4.value) : printf("null");
+    printf(" ");
+    opt_i32 _v_5 = arr.data[2];
+    _v_5.has_value ? printf("%d", _v_5.value) : printf("null");
     printf("\n");
     return 0;
 }

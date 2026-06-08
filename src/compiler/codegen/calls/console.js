@@ -24,6 +24,7 @@ export default {
 
     const fmtParts = [];
     const fmtArgs  = [];
+    let needSpace = false;
 
     for (const arg of args) {
       const expr  = arg.expr;
@@ -249,32 +250,53 @@ export default {
               const objType = expr.object ? this.inferType(expr.object) : null;
               return objType?.startsWith('Array_opt_');
             })();
+            if (isOptArrayIndex) {
+              if (needSpace) { lines.push('printf(" ");'); needSpace = false; }
+              const tmp = `_v_${this.tempCount++}`;
+              lines.push(`${ctype} ${tmp} = ${cexpr};`);
+              let valFmt;
+              if (innerCType === 'double' || innerCType === 'float') valFmt = '%g';
+              else if (innerCType === 'int64_t') valFmt = '%lld';
+              else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') valFmt = '%u';
+              else if (this._isEmbedded()) valFmt = '%ld';
+              else valFmt = '%d';
+              const valCast = innerCType === 'int64_t' ? `(long long)${tmp}.value`
+                : (innerCType === 'uint8_t' || innerCType === 'uint16_t') ? `(unsigned)${tmp}.value`
+                : this._isEmbedded() ? `(long)${tmp}.value`
+                : `${tmp}.value`;
+              if (fmtParts.length > 0) {
+                const prevFmt = '"' + fmtParts.join(' ') + ' "';
+                if (fmtArgs.length === 0) lines.push(isErr ? `fprintf(stderr, ${prevFmt});` : `printf(${prevFmt});`);
+                else lines.push(isErr ? `fprintf(stderr, ${prevFmt}, ${fmtArgs.join(', ')});` : `printf(${prevFmt}, ${fmtArgs.join(', ')});`);
+                fmtParts.length = 0;
+                fmtArgs.length = 0;
+              }
+              lines.push(`${tmp}.has_value ? printf("${valFmt}", ${valCast}) : printf("null");`);
+              needSpace = true;
+              continue;
+            }
             if (expr.kind === 'Call') {
               const _calleeProp = expr.callee?.kind === 'Member' ? expr.callee.prop : null;
               const _tmpPfx = _calleeProp === 'at' ? '_at_' : '_v_';
               const tmp = `${_tmpPfx}${this.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               valExpr = tmp;
-            } else if (isOptArrayIndex) {
-              const tmp = `_v_${this.tempCount++}`;
-              lines.push(`${ctype} ${tmp} = ${cexpr};`);
-              valExpr = tmp;
             }
             if (innerCType === 'double' || innerCType === 'float') {
               fmtParts.push('%g');
-              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? ${valExpr}.value : -1.0` : `${valExpr}.value`);
+              fmtArgs.push(`${valExpr}.value`);
             } else if (innerCType === 'int64_t') {
               if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
                 throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
               }
               fmtParts.push('%lld');
-              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (long long)${valExpr}.value : 0LL` : `(long long)${valExpr}.value`);
+              fmtArgs.push(`(long long)${valExpr}.value`);
             } else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') {
               fmtParts.push('%u');
-              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (unsigned)${valExpr}.value : 0` : `(unsigned)${valExpr}.value`);
+              fmtArgs.push(`(unsigned)${valExpr}.value`);
             } else {
-              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (long)${valExpr}.value : 0` : `(long)${valExpr}.value`); }
-              else { fmtParts.push('%d'); fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? ${valExpr}.value : 0` : `${valExpr}.value`); }
+              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
+              else { fmtParts.push('%d'); fmtArgs.push(`${valExpr}.value`); }
             }
           }
           continue;
@@ -294,6 +316,10 @@ export default {
       }
     }
 
+    if (fmtParts.length === 0) {
+      return isErr ? 'fprintf(stderr, "\\n")' : 'printf("\\n")';
+    }
+    if (needSpace) fmtParts[0] = ' ' + fmtParts[0];
     const fmt = '"' + fmtParts.join(' ') + '\\n"';
     if (fmtArgs.length === 0) {
       return isErr ? `fprintf(stderr, ${fmt})` : `printf(${fmt})`;

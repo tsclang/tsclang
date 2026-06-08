@@ -15,11 +15,14 @@ int main(void) {
     tsc_array_push_opt_i32(&arr, ((opt_i32){true, 3}));
     printf("%zu\n", arr.length);
     opt_i32 _v_0 = arr.data[0];
-    printf("%d\n", _v_0.has_value ? _v_0.value : 0);
+    _v_0.has_value ? printf("%d", _v_0.value) : printf("null");
+    printf("\n");
     opt_i32 _v_1 = arr.data[1];
-    printf("%d\n", _v_1.has_value ? _v_1.value : 0);
+    _v_1.has_value ? printf("%d", _v_1.value) : printf("null");
+    printf("\n");
     opt_i32 _v_2 = arr.data[2];
-    printf("%d\n", _v_2.has_value ? _v_2.value : 0);
+    _v_2.has_value ? printf("%d", _v_2.value) : printf("null");
+    printf("\n");
     tsc_array_free_opt_i32(&arr);
     return 0;
 }
