@@ -125,6 +125,7 @@ OPTIONS:
   --target <name>          Target platform (desktop, avr, nes, wasm, ...)
   --platform <profile>     Use built-in profile (avr, nes, wasm, desktop, ...)
   --build <name>           Use named build from tsc.package.json
+  --mcu <chip>             Target MCU (e.g. atmega328p, atmega2560)
   --default-number <type>  Default number type (f64, f32, i32, ...)
   --allocator <type>       Allocator strategy (default, static, none)
   --scheduler <type>       Scheduler (default, cooperative, libuv)
@@ -1065,6 +1066,7 @@ if (command === 'build') {
   const _stackSizeFlag    = _flagVal('--stack-size');
   const _platformFlag     = _flagVal('--platform');
   const _buildFlag        = _flagVal('--build');
+  const _mcuFlag          = _flagVal('--mcu');
   if (_defaultNumberFlag && !_validNumberTypes.has(_defaultNumberFlag)) {
     process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${[..._validNumberTypes].join(', ')}\n`);
     process.exit(1);
@@ -1109,6 +1111,7 @@ if (command === 'build') {
 
   let _capabilities = null;
   let _profileTarget = null;
+  let _mcu = null;
 
   if (_platformFlag) {
     const prof = loadProfile(_platformFlag);
@@ -1145,11 +1148,14 @@ if (command === 'build') {
       if (buildCfg.outDir && outDir === '.') outDir = buildCfg.outDir;
       if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
       if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
+      if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
     } catch (e) {
       process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
       process.exit(1);
     }
   }
+
+  if (_mcuFlag) _mcu = _mcuFlag;
 
   // Legacy fallback: --target <name> without --platform → try loading built-in profile
   if (!_capabilities && _targetFlag) {
@@ -1198,6 +1204,7 @@ if (command === 'build') {
     noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
     stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
     optimize: !!optimize, strict: _strictFlag ? _strictFlag.split(',') : null,
+    mcu: _mcu,
     capabilities: _capabilities,
   };
 
