@@ -1840,3 +1840,5 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Тесты**: +2 error tests (phase9/build/err-emit-flash-{desktop,no-config}). Phase9: 50→52.
 > - **Регрессия**: phase0 ✓30, phase5 ✓27, phase9 ✓52, phase11 ✓38, phase12 ✓112 (259 тестов).
 > - Files changed: `bin/index.js`, `spec/13-build/13-build.md`, `test/cases/phase9/build/err-emit-flash-desktop/` (new), `test/cases/phase9/build/err-emit-flash-no-config/` (new)
+
+> 2026-06-08: Spec fix — `emit` default: `"binary"/"hex"` → `"c"`. Реализация всегда использовала `'c'` как default, spec отставал.
