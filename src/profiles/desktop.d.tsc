@@ -6,4 +6,6 @@ declare platform {
     usize: "u64"
     unaligned_access: true
     os: true
+    posix: true
+    strtoll: true
 }

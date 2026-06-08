@@ -9,6 +9,8 @@ const VALID_FIELDS = {
   usize:             'string',
   unaligned_access:  'boolean',
   os:                'boolean',
+  posix:             'boolean',
+  strtoll:           'boolean',
   toolchain:         'string',
   toolchainFile:     'string',
   include:           'string',

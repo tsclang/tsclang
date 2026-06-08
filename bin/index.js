@@ -120,7 +120,7 @@ USAGE:
   tsclang build <input.tsc> [options]
 
 OPTIONS:
-  --emit <c|binary|wasm>   Output format (default: c)
+  --emit <c|binary|hex|wasm>   Output format (default: c)
   --outDir <dir>           Output directory (default: .)
   --target <name>          Target platform (desktop, avr, nes, wasm, ...)
   --platform <profile>     Use built-in profile (avr, nes, wasm, desktop, ...)
@@ -1182,6 +1182,14 @@ if (command === 'build') {
     }
   }
 
+  function capabilityDefines(caps) {
+    if (!caps) return [];
+    const defs = [];
+    if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
+    if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
+    return defs;
+  }
+
   const inputPath = resolve(inputFile);
   const buildOpts = {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
@@ -1261,6 +1269,7 @@ if (command === 'build') {
         '-lpthread', '-std=c11',
         ...gccOptimize,
         ...(useLibuv ? ['-luv'] : []),
+        ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
       if (gcc.status !== 0) {
         process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
@@ -1285,6 +1294,7 @@ if (command === 'build') {
         '-sSTANDALONE_WASM=1',
         '-DTSC_WASM',
         ...emccOpts,
+        ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
       if (emccResult.status !== 0) {
         process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
@@ -1311,6 +1321,7 @@ if (command === 'build') {
         '-std=c11',
         '-DTSC_EMBEDDED',
         ...gccOptimize,
+        ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
       if (gccResult.status !== 0) {
         process.stderr.write(`tsclang: avr-gcc failed:\n${gccResult.stderr?.toString() || ''}\n`);

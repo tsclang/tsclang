@@ -340,6 +340,7 @@ export default {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
     const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    if (ifaceMethods.length === 0) return;
     // Verify all interface methods are implemented
     const classDef = this.classes.get(className);
     for (const im of ifaceMethods) {

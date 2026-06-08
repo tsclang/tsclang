@@ -257,7 +257,7 @@ typedef struct TscError {
 static double _tsc_t0 = 0.0;
 
 static inline void _tsc_init(void) {
-#ifndef TSC_NES
+#ifndef TSC_NO_POSIX
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     _tsc_t0 = (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
@@ -265,7 +265,7 @@ static inline void _tsc_init(void) {
 }
 
 static inline double tsc_performance_now(void) {
-#ifndef TSC_NES
+#ifndef TSC_NO_POSIX
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6 - _tsc_t0;
@@ -511,7 +511,7 @@ static inline int32_t tsc_random_range_i32(TscRandom *r, int32_t lo, int32_t hi)
     return lo + (int32_t)(_tsc_xorshift64(&r->state) % (uint32_t)(hi - lo));
 }
 static inline TscRandom tsc_random_default(void) {
-#ifndef TSC_NES
+#ifndef TSC_NO_POSIX
     struct timespec _ts;
     clock_gettime(CLOCK_MONOTONIC, &_ts);
     uint64_t seed = (uint64_t)_ts.tv_nsec ^ ((uint64_t)_ts.tv_sec << 32);
@@ -1383,22 +1383,32 @@ static inline String tsc_json_stringify_string(String s) {
  * ------------------------------------------------------------------------- */
 
 /* Helper: parse integer from null-terminated string with 0x/0b/0o prefix support.
- * Returns 1 on success, 0 on failure. Result written to *out. */
+ * Returns 1 on success, 0 on failure. Result written to *out.
+ * Uses strtol on targets without strtoll (TSC_NO_STRTOLL),
+ * strtoll everywhere else. */
+#ifdef TSC_NO_STRTOLL
+typedef long _tsc_strtol_t;
+#define _tsc_strtol strtol
+#else
+typedef long long _tsc_strtol_t;
+#define _tsc_strtol strtoll
+#endif
+
 static inline int _tsc_parse_prefixed_i64(const char *b, int64_t *out) {
     if (b[0] == '0' && (b[1] == 'x' || b[1] == 'X')) {
-        char *e; long long v = strtoll(b, &e, 16);
+        char *e; _tsc_strtol_t v = _tsc_strtol(b, &e, 16);
         if (e == b || *e != '\0') return 0;
         *out = (int64_t)v; return 1;
     }
     if (b[0] == '0' && (b[1] == 'b' || b[1] == 'B')) {
         if (b[2] == '\0') return 0;
-        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 2);
+        const char *s = b + 2; char *e; _tsc_strtol_t v = _tsc_strtol(s, &e, 2);
         if (e == s || *e != '\0') return 0;
         *out = (int64_t)v; return 1;
     }
     if (b[0] == '0' && (b[1] == 'o' || b[1] == 'O')) {
         if (b[2] == '\0') return 0;
-        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 8);
+        const char *s = b + 2; char *e; _tsc_strtol_t v = _tsc_strtol(s, &e, 8);
         if (e == s || *e != '\0') return 0;
         *out = (int64_t)v; return 1;
     }
@@ -1412,19 +1422,19 @@ static inline int _tsc_parse_prefixed_i64(const char *b, int64_t *out) {
  * Returns 1 on success, 0 on failure. Result written to *out. */
 static inline int _tsc_parse_prefixed_f64(const char *b, double *out) {
     if (b[0] == '0' && (b[1] == 'x' || b[1] == 'X')) {
-        char *e; long long v = strtoll(b, &e, 16);
+        char *e; _tsc_strtol_t v = _tsc_strtol(b, &e, 16);
         if (e == b || *e != '\0') return 0;
         *out = (double)v; return 1;
     }
     if (b[0] == '0' && (b[1] == 'b' || b[1] == 'B')) {
         if (b[2] == '\0') return 0;
-        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 2);
+        const char *s = b + 2; char *e; _tsc_strtol_t v = _tsc_strtol(s, &e, 2);
         if (e == s || *e != '\0') return 0;
         *out = (double)v; return 1;
     }
     if (b[0] == '0' && (b[1] == 'o' || b[1] == 'O')) {
         if (b[2] == '\0') return 0;
-        const char *s = b + 2; char *e; long long v = strtoll(s, &e, 8);
+        const char *s = b + 2; char *e; _tsc_strtol_t v = _tsc_strtol(s, &e, 8);
         if (e == s || *e != '\0') return 0;
         *out = (double)v; return 1;
     }

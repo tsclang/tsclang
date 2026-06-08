@@ -6,5 +6,7 @@ declare platform {
     usize: "u16"
     unaligned_access: false
     os: false
+    posix: false
+    strtoll: false
     toolchain: "sjasmplus"
 }

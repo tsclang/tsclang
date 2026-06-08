@@ -1,6 +1,6 @@
 # TSClang — Platform Capabilities Design
 
-> Дата: 2026-06-05 (создание), 2026-06-06 (обновление v3)
+> Дата: 2026-06-05 (создание), 2026-06-06 (обновление v3), 2026-06-08 (обновление v4 — posix/strtoll)
 > Статус: APPROVED (все открытые вопросы закрыты)
 
 ## Приоритет
@@ -11,7 +11,7 @@
 
 Компилятор **не хардкодит** свойства таргетов. Все решения принимаются на основе **capabilities**, которые читаются из `declare platform` в profile-пакете.
 
-## Модель capabilities — финал v3
+## Модель capabilities — финал v4
 
 ```
 declare platform {
@@ -40,6 +40,10 @@ declare platform {
 
     // Runtime
     os: false                     // false → std/fs, std/net, std/ws запрещены
+
+    // C library capabilities (обязательные)
+    posix: false                  // true → POSIX API (clock_gettime, etc.) доступна
+    strtoll: false                // true → strtoll() доступна; false → strtol only
 }
 ```
 
@@ -47,7 +51,7 @@ declare platform {
 
 ```
 allocator: "heap", async: "libuv", fpu: true, bits: 64,
-usize: "u64", unaligned_access: true, os: true
+usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 ```
 
 ### Профиль-пакет — self-contained
@@ -108,6 +112,8 @@ usize: "u64", unaligned_access: true, os: true
 | Поле | Тип | Desktop default | Описание |
 |------|-----|----------------|----------|
 | `os` | `boolean` | `true` | Доступна ли ОС. `false` → `import "std/fs"`, `"std/net"`, `"std/ws"` → compile error. |
+| `posix` | `boolean` | `true` | Доступна ли POSIX API. `false` → `clock_gettime`, `CLOCK_MONOTONIC` недоступны; performance.now() → 0. |
+| `strtoll` | `boolean` | `true` | Доступна ли `strtoll()`. `false` → используется `strtol()` (32-bit only). |
 
 ### Runtime level (выводится из `async`, не отдельное поле)
 
@@ -145,6 +151,8 @@ usize: "u64", unaligned_access: true, os: true
 | `async: "state_machine"` | Async через C switch-based state machine |
 | `async: "libuv"` | Async через libuv event loop |
 | `os: false` | Запрещает `import "std/fs"`, `"std/net"`, `"std/ws"` |
+| `posix: false` | `clock_gettime` / `CLOCK_MONOTONIC` недоступны; CLI передаёт `-DTSC_NO_POSIX`; `performance.now()` → 0 |
+| `strtoll: false` | `strtoll()` недоступна; CLI передаёт `-DTSC_NO_STRTOLL`; runtime использует `strtol()` |
 | `usize: "u16"` | `usize` → `uint16_t` |
 | `stack_size` задан | Проверяет call graph, рекурсия → ошибка с подсказкой про `@stack` |
 | `stack_size` не задан | Рекурсия разрешена, warning для async (heap) |
@@ -171,7 +179,7 @@ usize: "u64", unaligned_access: true, os: true
 
 ### Четыре источника
 
-1. **Desktop default** — встроенный дефолт компилятора (`allocator: "heap"`, `async: "libuv"`, `fpu: true`, `bits: 64`, `usize: "u64"`, `os: true`)
+1. **Desktop default** — встроенный дефолт компилятора (`allocator: "heap"`, `async: "libuv"`, `fpu: true`, `bits: 64`, `usize: "u64"`, `os: true`, `posix: true`, `strtoll: true`)
 2. **Profile-пакет** — `declare platform` в `index.d.tsc` профиля
 3. **`builds.*` в `tsc.package.json`** — проектные настройки
 4. **CLI флаги** — `--platform`, `--build`, `--optimize`, и т.д.
@@ -226,6 +234,8 @@ CLI может задать только **проектные настройки
 | `usize` | ✅ | ❌ | ❌ | Нет |
 | `unaligned_access` | ✅ | ❌ | ❌ | Нет |
 | `os` | ✅ | ❌ | ❌ | Нет |
+| `posix` | ✅ (обязательное) | ❌ | ❌ | Нет |
+| `strtoll` | ✅ (обязательное) | ❌ | ❌ | Нет |
 | `heap_size` | ✅ | ❌ | ❌ | Нет |
 | `stack_size` | ✅ | ❌ | ❌ | Нет |
 | `ram_size` | ✅ | ❌ | ❌ | Нет |

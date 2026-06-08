@@ -6,5 +6,7 @@ declare platform {
     usize: "u32"
     unaligned_access: true
     os: true
+    posix: true
+    strtoll: true
     toolchain: "emcc"
 }

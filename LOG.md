@@ -1769,3 +1769,19 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Тесты**: +10 new strict tests. Phase9 strict: 12→22 (total phase9: 37→47).
 > - **Регрессия**: все 20 фаз проходят (phase0 ✓30, phase1 ✓498, phase2 ✓285, phase3 ✓356, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase9 ✓47, phase10 ✓20, phase11 ✓38, phase12 ✓112, phase13 ✓21, phase14 ✓7, phase15 ✓10, phase17 ✓12, phase18 ✓21, phase19 ✓74).
 > - Files changed: `spec/13-build/13-strict-mode.md`, `src/compiler/codegen/stmt/match.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/async/async-emit.js`, `src/compiler/codegen/async/generator.js`, `src/compiler/codegen/calls/method-dispatch.js`, `src/compiler/codegen/expr/operators.js`, `src/compiler/codegen/expr/assign.js`, `src/compiler/codegen/stmt/vardecl.js`, `src/compiler/codegen/top-level/types-alias.js`, `src/compiler/codegen/misc/emit-helpers.js`, `src/runtime/runtime.h`, `test/cases/phase9/strict/` (10 new tests)
+
+> 2026-06-08: Platform capabilities — posix/strtoll capability fields (П1, П4)
+> - **Capabilities `posix` и `strtoll`**: Обязательные boolean-поля в `declare platform`. Явно указывают наличие POSIX API и `strtoll()` на целевой платформе. Никаких угадываний по `__AVR__`/`__CC65__`.
+> - **CLI**: `capabilityDefines()` в `bin/index.js` — маппинг полей профиля → `-DTSC_NO_POSIX` / `-DTSC_NO_STRTOLL` флаги. Используется во всех emit paths (gcc, avr-gcc, emcc).
+> - **runtime.h**: Заменены все guards `__AVR__`/`__CC65__`/`TSC_NES` для POSIX-кода на `TSC_NO_POSIX` (3 места: `_tsc_init`, `tsc_performance_now`, `tsc_random_default`). Заменён guard strtoll на `TSC_NO_STRTOLL` (1 место). Удалён `#include <limits.h>` (не использовался).
+> - **Профили**: Все 12 `.d.tsc` обновлены — `posix`/`strtoll` поля. AVR/NES/Spectrum: `posix: false, strtoll: false`. Остальные: `posix: true, strtoll: true`.
+> - **Bug fix**: Marker interface vtable — `emitVtableConstant` в `class.js` теперь пропускает пустые vtable (0 методов). Раньше генерировал `Serializable_vtable` без typedef.
+> - **Spec**: `spec/13-build/13-platform-capabilities.md` — v4: добавлены `posix`/`strtoll` в модель, таблицы, desktop default.
+> - **Регрессия**: phase0 ✓30, phase9 ✓47, phase12 ✓112, phase17 ✓12, phase5 ✓27, phase6 ✓48, phase8 ✓44.
+> - Files changed: `spec/13-build/13-platform-capabilities.md`, `src/compiler/profile.js`, `src/compiler/codegen/top-level/class.js`, `src/runtime/runtime.h`, `bin/index.js`, `src/profiles/*.d.tsc` (12 files), `test/cases/phase9/strict/no-interfaces/ok-marker/expected.c`
+
+> 2026-06-08: Закрытие 01-5 — `--emit hex` (Аудит)
+> - **01-5 RESOLVED**: `--emit hex` полностью реализован (bin/index.js:1306-1338: avr-gcc → .elf → avr-objcopy → .hex).
+> - **Help text**: `--emit <c|binary|wasm>` → `--emit <c|binary|hex|wasm>` (bin/index.js:123).
+> - **AUDIT-PLAN**: 01-5 → RESOLVED. Открытых проблем со статусом STILL PRESENT: **0**.
+> - Files changed: `bin/index.js`, `AUDIT-PLAN.md`
