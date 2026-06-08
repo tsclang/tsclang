@@ -1793,3 +1793,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Spec**: `spec/13-build/13-platform-capabilities.md` — `console_uart`/`console_baud` в таблицах.
 > - **Регрессия**: phase0 ✓30, phase9 ✓47, phase12 ✓112, phase17 ✓12.
 > - Files changed: `src/compiler/profile.js`, `src/runtime/runtime.h`, `bin/index.js`, `src/profiles/avr.d.tsc`, `src/profiles/avr-coop.d.tsc`, `src/profiles/avr-heap.d.tsc`, `src/profiles/arm.d.tsc`, `spec/13-build/13-platform-capabilities.md`
+
+> 2026-06-08: Fix AVR printf→UART — `__iob` is `FILE*[]`, not `FILE[]` (П1, П4)
+> - **Root cause**: avr-libc `__iob` — массив указателей (`FILE*[]`), не массив структур. `fdev_setup_stream((&__iob[1]), ...)` передавал `FILE**` вместо `FILE*`, записывая function pointer в неправильную память. `printf`/`puts` вызывали `icall` через нулевой указатель → zero output.
+> - **Fix**: static `FILE _tsc_uartout = FDEV_SETUP_STREAM(...)` + `stdout = &_tsc_uartout` — рекомендуемый avr-libc подход. Статическая инициализация FILE (в compile-time), runtime — только UART registers + assignment.
+> - **Дополнительно**: добавлен `#ifndef F_CPU` / `#define F_CPU 16000000UL` — avr-gcc не определяет `F_CPU` автоматически. Символы `'\n'`/`'\r'` → `10`/`13` (numeric) для совместимости.
+> - **Проверено**: simavr — `printf("RT test OK")` и `puts("puts works")` оба выводят через UART0.
+> - **Регрессия**: phase0 ✓30, phase5 ✓27, phase6 ✓48, phase8 ✓44, phase9 ✓47, phase12 ✓112 (308 тестов).
+> - Files changed: `src/runtime/runtime.h`
