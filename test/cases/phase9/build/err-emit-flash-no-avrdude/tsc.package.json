@@ -1,0 +1,16 @@
+{
+  "name": "flash-test",
+  "main": "main.tsc",
+  "builds": {
+    "avr": {
+      "target": "avr",
+      "profile": "avr",
+      "mcu": "atmega328p",
+      "emit": "flash",
+      "flash": {
+        "programmer": "arduino",
+        "port": "COM999"
+      }
+    }
+  }
+}

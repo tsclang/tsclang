@@ -96,8 +96,8 @@ export default {
           return false;
         };
         if (hasTypedVar(expr)) {
-          fmtParts.push('%d');
-          fmtArgs.push(cexpr);
+          if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+          else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
         } else {
           fmtParts.push('%g');
           fmtArgs.push(`(double)(${cexpr})`);
@@ -124,8 +124,8 @@ export default {
           fmtParts.push('%s');
           fmtArgs.push(`*${cexpr} ? "true" : "false"`);
         } else {
-          fmtParts.push('%d');
-          fmtArgs.push(`*${cexpr}`);
+          if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)*${cexpr}`); }
+          else { fmtParts.push('%d'); fmtArgs.push(`*${cexpr}`); }
         }
         continue;
       }
@@ -191,8 +191,8 @@ export default {
         fmtParts.push('%u');
         fmtArgs.push(`(unsigned)${cexpr}`);
       } else if (ctype === 'uint32_t') {
-        fmtParts.push('%u');
-        fmtArgs.push(cexpr);
+        if (this._isEmbedded()) { fmtParts.push('%lu'); fmtArgs.push(`(unsigned long)${cexpr}`); }
+        else { fmtParts.push('%u'); fmtArgs.push(cexpr); }
       } else if (ctype === 'int8_t' || ctype === 'int16_t') {
         fmtParts.push('%d');
         fmtArgs.push(`(int)${cexpr}`);
@@ -200,8 +200,8 @@ export default {
         fmtParts.push('%c');
         fmtArgs.push(cexpr);
       } else if (ctype === 'size_t') {
-        fmtParts.push('%zu');
-        fmtArgs.push(cexpr);
+        if (this._isEmbedded()) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
+        else { fmtParts.push('%zu'); fmtArgs.push(cexpr); }
       } else {
         if (ctype.startsWith('opt_ref_')) {
           const innerIdent = ctype.slice(8);
@@ -217,8 +217,8 @@ export default {
             fmtParts.push('%g');
             fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1.0`);
           } else {
-            fmtParts.push('%d');
-            fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`);
+            if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
+            else { fmtParts.push('%d'); fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`); }
           }
           continue;
         }
@@ -264,8 +264,8 @@ export default {
               fmtParts.push('%u');
               fmtArgs.push(`(unsigned)${valExpr}.value`);
             } else {
-              fmtParts.push('%d');
-              fmtArgs.push(`${valExpr}.value`);
+              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
+              else { fmtParts.push('%d'); fmtArgs.push(`${valExpr}.value`); }
             }
           }
           continue;
@@ -278,8 +278,8 @@ export default {
             fmtParts.push('%d');
             fmtArgs.push(`(int)${cexpr}`);
           } else {
-            fmtParts.push('%d');
-            fmtArgs.push(cexpr);
+            if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+            else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
           }
         }
       }

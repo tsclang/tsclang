@@ -376,6 +376,8 @@
 
 > 2026-04-18: реализованы команды `init`, `validate-config`, `build` (--emit c/binary/hex, --outDir, --debug), `run` (с forwarding аргументов); `#line` директивы через `--debug`; механизм `flags.txt` для тестов; исправлен inferType для Index на Array_T; phase9: **22/22 ✓**
 
+> 2026-06-08: `--emit flash` — новый emit-режим для прошивки AVR-устройств (tsc→c→avr-gcc→elf→hex→avrdude→device); flash-конфиг в `tsc.package.json` (programmer/port/baud/extraFlags); ранняя валидация (target + flash config); `_buildCfg` поднят до function scope, `emit` → `let`; cleanup `.elf` при ошибках avr-gcc/objcopy; 3 новых теста: `err-emit-flash-desktop`, `err-emit-flash-no-config`, `err-emit-flash-no-avrdude`; spec `13-build.md` обновлён; phase9: **25→53 ✓**
+
 ---
 
 ## Фаза 10 — Package manager + pipeline сборки
@@ -1809,3 +1811,32 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Тесты**: +5 AVR e2e (phase12/console-avr: log-string, log-i32, log-bool, log-multi, log-string-ref). +3 strict (phase9/strict/no-i64-print: err-console-i64, err-console-u64, ok-i32).
 > - **Регрессия**: все 20 фаз, 1828 тестов, 0 ошибок.
 > - Files changed: `test/runner.js`, `src/runtime/runtime.h`, `src/compiler/codegen/calls/console.js`, `test/cases/phase12/console-avr/` (5 new tests), `test/cases/phase9/strict/no-i64-print/` (3 new tests)
+
+> 2026-06-08: AVR format specifier fixes — runtime.h + codegen + test expected.c (П1, П4)
+> - **runtime.h `%zu` fix**: 3 spots (array bounds checks) — `%zu` → `%u` with `(unsigned)` cast on embedded.
+> - **runtime.h `%.*s` fix**: 5 spots (tsc_throw, tsc_panic, tsc_console_time_end, tsc_console_time_log, tsc_console_trace) — AVR branches use `_tsc_fprint_str(stderr, msg)` + fputs/fputc instead of `%.*s`.
+> - **runtime.h `%lld` fix**: `tsc_i64_to_string` AVR branch — manual digit-by-digit conversion instead of `sprintf(tmp, "%lld", ...)`.
+> - **runtime.h `tsc_u64_to_string`**: New function with AVR manual conversion, TSC_EMBEDDED `sprintf("%llu")`, desktop `snprintf`.
+> - **runtime.h `_tsc_format_impl` + AVR `tsc_string_format`**: Custom format parser for AVR handling `%d`, `%u`, `%ld`, `%lu`, `%g`, `%s`, `%c`, `%lld`, `%llu`, `%zu`, `%.*s`, `%%`. Two-pass (count length → allocate → write).
+> - **runtime.h `_tsc_str_to_ram(String s)`**: AVR-only helper; copies PROGMEM data to RAM via `pgm_read_byte` if `capacity==0`.
+> - **AVR `int`≠`int32_t` fix**: On AVR `int`=16-bit, `int32_t`=`long`=32-bit. Codegen uses `%ld`+`(long)` for `int32_t`, `%lu`+`(unsigned long)` for `uint32_t` on embedded.
+>   - **closures.js**: `int32_t` → `%ld`+`(long)`, `uint32_t` → `%lu`+`(unsigned long)` on embedded; i64/u64 → `tsc_i64_to_string`/`tsc_u64_to_string`; String → `_tsc_str_to_ram(s).data`.
+>   - **console.js**: `%d`→`%ld`+`(long)` for `int32_t` on embedded; `%u`→`%lu`+`(unsigned long)` for `uint32_t`; `%zu`→`%u`+`(unsigned)` for `size_t`.
+> - **Test fixes**: 2 phase11 test expected.c files updated for embedded format specifiers:
+>   - `phase11/allocator-none/fixed-array-ok/expected.c`: `%zu` → `%u` + `(unsigned)`.
+>   - `phase11/allocator-none/value-type-stack/expected.c`: `%d` → `%ld` + `(long)`.
+> - **New AVR e2e tests**: `phase12/template-avr/{str-and-i32,multi-mixed}` — template literals with mixed types via simavr.
+> - **Updated tests**: `phase12/console-avr/{log-i32,log-multi}`, `phase12/embedded/hashmap-set-get` — for `%ld` change.
+> - **Регрессия**: все 20 фаз, 1560 тестов, 0 ошибок (phase0 ✓30, phase1 ✓180, phase2 ✓285, phase3 ✓356, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓81, phase8 ✓44, phase9 ✓47, phase10 ✓20, phase11 ✓38, phase12 ✓112, phase13 ✓21, phase14 ✓7, phase15 ✓10, phase16 ✓3, phase17 ✓12, phase18 ✓21, phase19 ✓74).
+> - Files changed: `src/runtime/runtime.h`, `src/compiler/codegen/misc/closures.js`, `src/compiler/codegen/calls/console.js`, `test/cases/phase11/allocator-none/fixed-array-ok/expected.c`, `test/cases/phase11/allocator-none/value-type-stack/expected.c`, `test/cases/phase12/template-avr/` (2 new tests), `test/cases/phase12/console-avr/{log-i32,log-multi}/expected.c`, `test/cases/phase12/embedded/hashmap-set-get/expected.c`
+
+> 2026-06-08: `--emit flash` — компиляция + прошивка через avrdude (П1, П4)
+> - **Pipeline**: `.tsc` → `.c` → avr-gcc → `.elf` → avr-objcopy → `.hex` → avrdude → device. По аналогии с `--emit binary` (desktop) и `--emit hex` (avr).
+> - **`--emit flash`**: Новый emit mode. Требует avr target + avr-gcc + avrdude в PATH. Проверка target и flash config — ранняя (до компиляции).
+> - **Flash конфиг в `tsc.package.json`**: Секция `builds.*.flash` с полями `programmer` (→ `-c`), `port` (→ `-P`), `baud` (→ `-b`, опционально), `extraFlags` (опционально). mcu берётся из `buildCfg.mcu`. Flash — build/deploy concern, НЕ capability (не входит в `declare platform`).
+> - **Рефакторинг**: `hex` и `flash` делят общий блок avr-gcc → objcopy в `doBuild()`. `emit` изменён с `const` на `let` (поддержка `buildCfg.emit` override). `_buildCfg` поднят на уровень функции для ранней валидации.
+> - **Help text**: `--emit <c|binary|hex|flash|wasm>`.
+> - **Spec**: `spec/13-build/13-build.md` — поле `flash` в таблице builds, описание полей, пример конфига, CLI reference обновлён.
+> - **Тесты**: +2 error tests (phase9/build/err-emit-flash-{desktop,no-config}). Phase9: 50→52.
+> - **Регрессия**: phase0 ✓30, phase5 ✓27, phase9 ✓52, phase11 ✓38, phase12 ✓112 (259 тестов).
+> - Files changed: `bin/index.js`, `spec/13-build/13-build.md`, `test/cases/phase9/build/err-emit-flash-desktop/` (new), `test/cases/phase9/build/err-emit-flash-no-config/` (new)

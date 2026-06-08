@@ -63,21 +63,32 @@ export default {
     // Mixed types → use tsc_string_format
     let fmt = '';
     const fmtArgs = [];
+    const isEmb = this._isEmbedded();
     for (const p of compiled) {
       if (p.kind === 'str') {
         fmt += p.value.replace(/%/g, '%%');
       } else {
         const t = p.t, c = p.c;
-        if (t === 'int32_t' || t === 'int16_t' || t === 'int8_t') { fmt += '%d'; fmtArgs.push(c); }
-        else if (t === 'uint32_t' || t === 'uint16_t' || t === 'uint8_t') { fmt += '%u'; fmtArgs.push(c); }
-        else if (t === 'int64_t')  { fmt += '%lld'; fmtArgs.push(`(long long)${c}`); }
-        else if (t === 'uint64_t') { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
-        else if (t === 'double')   { fmt += '%g'; fmtArgs.push(c); }
+        if (t === 'int32_t') { if (isEmb) { fmt += '%ld'; fmtArgs.push(`(long)${c}`); } else { fmt += '%d'; fmtArgs.push(c); } }
+        else if (t === 'int16_t' || t === 'int8_t') { fmt += '%d'; fmtArgs.push(c); }
+        else if (t === 'uint32_t') { if (isEmb) { fmt += '%lu'; fmtArgs.push(`(unsigned long)${c}`); } else { fmt += '%u'; fmtArgs.push(c); } }
+        else if (t === 'uint16_t' || t === 'uint8_t') { fmt += '%u'; fmtArgs.push(c); }
+        else if (t === 'int64_t') {
+          if (isEmb) { const s = `_tsf_${this.tempCount++}`; lines.push(`${' '.repeat(this.indent * depth)}String ${s} = tsc_i64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
+          else { fmt += '%lld'; fmtArgs.push(`(long long)${c}`); }
+        } else if (t === 'uint64_t') {
+          if (isEmb) { const s = `_tsf_${this.tempCount++}`; lines.push(`${' '.repeat(this.indent * depth)}String ${s} = tsc_u64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
+          else { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
+        } else if (t === 'double')   { fmt += '%g'; fmtArgs.push(c); }
         else if (t === 'float')    { fmt += '%g'; fmtArgs.push(`(double)${c}`); }
         else if (t === 'bool')     { fmt += '%s'; fmtArgs.push(`(${c}) ? "true" : "false"`); }
-        else if (t === 'String')   { fmt += '%.*s'; fmtArgs.push(`(int)${c}.length, ${c}.data`); }
-        else if (t === 'String *') { fmt += '%.*s'; fmtArgs.push(`(int)(*${c}).length, (*${c}).data`); }
-        else                       { fmt += '%d'; fmtArgs.push(c); }
+        else if (t === 'String') {
+          if (isEmb) { fmt += '%s'; fmtArgs.push(`_tsc_str_to_ram(${c}).data`); }
+          else { fmt += '%.*s'; fmtArgs.push(`(int)${c}.length, ${c}.data`); }
+        } else if (t === 'String *') {
+          if (isEmb) { fmt += '%s'; fmtArgs.push(`_tsc_str_to_ram(*${c}).data`); }
+          else { fmt += '%.*s'; fmtArgs.push(`(int)(*${c}).length, (*${c}).data`); }
+        } else                       { fmt += '%d'; fmtArgs.push(c); }
       }
     }
     return `tsc_string_format("${fmt}", ${fmtArgs.join(', ')})`;

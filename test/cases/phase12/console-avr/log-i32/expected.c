@@ -3,6 +3,6 @@
 int main(void) {
     TSC_INIT();
     int32_t x = 42;
-    printf("%d\n", x);
+    printf("%ld\n", (long)x);
     return 0;
 }

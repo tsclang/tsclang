@@ -1,0 +1,1 @@
+ConfigError: --emit flash requires "flash" config with "programmer" and "port" in tsc.package.json

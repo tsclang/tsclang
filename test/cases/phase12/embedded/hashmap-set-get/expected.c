@@ -12,6 +12,6 @@ int main(void) {
     HashMap_string_i32 m = {.capacity = 16};
     tsc_hashmap_set_string_i32(&m, STR_LIT("a"), 42);
     opt_i32 v = tsc_hashmap_get_string_i32(&m, STR_LIT("a"));
-    if (v.has_value) printf("%d\n", v.value);
+    if (v.has_value) printf("%ld\n", (long)v.value);
     return 0;
 }

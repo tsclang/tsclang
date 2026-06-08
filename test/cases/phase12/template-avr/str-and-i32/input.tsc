@@ -1,0 +1,4 @@
+let name: string = "world";
+let age: i32 = 25;
+let s = `${name} is ${age}`;
+console.log(s);

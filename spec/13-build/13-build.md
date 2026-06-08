@@ -837,11 +837,43 @@ platform/
 | `optimize` | Уровень оптимизации (`"O0"`, `"O1"`, `"O2"`, `"O3"`, `"Os"`) | `O0` |
 | `defaultNumber` | Тип для `number` (`"f64"`, `"f32"`, `"i32"`) | `f64` |
 | `binaryMode` | `"normal"` / `"small"` (type erasure) | `"normal"` |
-| `emit` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"lib"`, `"wasm"` | `"binary"` для desktop, `"hex"` для embedded |
+| `emit` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"flash"`, `"lib"`, `"wasm"` | `"binary"` для desktop, `"hex"` для embedded |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
 | `stringBufferSize` | размер static buffer (байт) для string escape analysis на embedded | `64` |
+| `flash` | конфигурация прошивки (объект, см. ниже) | — |
+
+**`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avrdude` в PATH.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|-------------|----------|
+| `programmer` | `string` | да | Тип программатора (`"arduino"`, `"stk500v1"`, `"usbasp"`, и т.д.) → флаг `-c` |
+| `port` | `string` | да | Порт подключения (`"COM3"`, `"/dev/ttyUSB0"`, и т.д.) → флаг `-P` |
+| `baud` | `number` | нет | Скорость передачи → флаг `-b` |
+| `extraFlags` | `string[]` | нет | Дополнительные флаги avrdude |
+
+Пример:
+
+```jsonc
+{
+  "builds": {
+    "uno": {
+      "target": "avr",
+      "profile": "avr",
+      "mcu": "atmega328p",
+      "emit": "flash",
+      "flash": {
+        "programmer": "arduino",
+        "port": "/dev/ttyUSB0",
+        "baud": 115200
+      }
+    }
+  }
+}
+```
+
+`flash` — build/deploy concern, не capability. Не входит в `declare platform`.
 
 **`stringBufferSize`** — максимальный размер статического буфера, выделяемого компилятором на embedded, когда ring-buffer строка может покинуть scope (escape analysis). Компилятор оценивает верхнюю границу где возможно (литерал + литерал = точный размер); если оценить нельзя — использует `stringBufferSize`. Только для embedded (desktop использует ARC, проблем нет). См. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md).
 
@@ -2308,6 +2340,7 @@ tsclang build hello.tsc       # одиночный файл → binary
 tsclang build --emit c        # только генерация C
 tsclang build --emit binary   # C + компиляция в бинарь
 tsclang build --emit hex      # C + avr-gcc → .hex
+tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошивка
 tsclang build --outDir ./dist # переопределить outDir
 ```
 

@@ -1,0 +1,1 @@
+ConfigError: --emit flash requires an embedded target (avr); current target is desktop

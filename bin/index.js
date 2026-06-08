@@ -120,7 +120,7 @@ USAGE:
   tsclang build <input.tsc> [options]
 
 OPTIONS:
-  --emit <c|binary|hex|wasm>   Output format (default: c)
+  --emit <c|binary|hex|flash|wasm>   Output format (default: c)
   --outDir <dir>           Output directory (default: .)
   --target <name>          Target platform (desktop, avr, nes, wasm, ...)
   --platform <profile>     Use built-in profile (avr, nes, wasm, desktop, ...)
@@ -1039,7 +1039,7 @@ if (command === 'build') {
   }
 
   const emitIdx   = args.indexOf('--emit');
-  const emit      = emitIdx !== -1 ? args[emitIdx + 1] : 'c';
+  let emit       = emitIdx !== -1 ? args[emitIdx + 1] : 'c';
   const outIdx    = args.indexOf('--outDir');
   const outDir    = outIdx !== -1 ? args[outIdx + 1] : '.';
   const allErrors  = args.includes('--all-errors');
@@ -1113,6 +1113,8 @@ if (command === 'build') {
   let _profileTarget = null;
   let _mcu = null;
 
+  let _buildCfg = null;
+
   if (_platformFlag) {
     const prof = loadProfile(_platformFlag);
     if (!prof) {
@@ -1134,6 +1136,7 @@ if (command === 'build') {
         process.stderr.write(`tsclang build: build '${_buildFlag}' not found in tsc.package.json\n`);
         process.exit(1);
       }
+      _buildCfg = buildCfg;
       if (buildCfg.profile) {
         const prof = loadProfile(buildCfg.profile);
         if (!prof) {
@@ -1178,11 +1181,21 @@ if (command === 'build') {
     }
   }
 
-  if (emit === 'hex') {
+  if (emit === 'hex' || emit === 'flash') {
     const targetName = _profileTarget || _targetFlag;
     if (targetName !== 'avr') {
       process.stderr.write(
-        `ConfigError: --emit hex requires an embedded target (avr); current target is ${targetName || 'desktop'}\n`
+        `ConfigError: --emit ${emit} requires an embedded target (avr); current target is ${targetName || 'desktop'}\n`
+      );
+      process.exit(1);
+    }
+  }
+
+  if (emit === 'flash') {
+    const flashCfg = _buildCfg?.flash;
+    if (!flashCfg || !flashCfg.programmer || !flashCfg.port) {
+      process.stderr.write(
+        'ConfigError: --emit flash requires "flash" config with "programmer" and "port" in tsc.package.json\n'
       );
       process.exit(1);
     }
@@ -1314,10 +1327,10 @@ if (command === 'build') {
       process.stdout.write(`Built ${stem}.wasm\n`);
     }
 
-    if (emit === 'hex') {
+    if (emit === 'hex' || emit === 'flash') {
       const avrGcc = spawnSync('avr-gcc', ['--version'], { stdio: 'pipe' });
       if (avrGcc.status !== 0 || avrGcc.error) {
-        process.stderr.write('ConfigError: --emit hex requires avr-gcc in PATH\n');
+        process.stderr.write('ConfigError: --emit hex/flash requires avr-gcc in PATH\n');
         return false;
       }
       const mcu = buildOpts.mcu || 'atmega328p';
@@ -1336,6 +1349,7 @@ if (command === 'build') {
       ], { stdio: 'pipe' });
       if (gccResult.status !== 0) {
         process.stderr.write(`tsclang: avr-gcc failed:\n${gccResult.stderr?.toString() || ''}\n`);
+        try { unlinkSync(elfPath); } catch {}
         return false;
       }
       const objcopyResult = spawnSync('avr-objcopy', [
@@ -1343,10 +1357,35 @@ if (command === 'build') {
       ], { stdio: 'pipe' });
       if (objcopyResult.status !== 0) {
         process.stderr.write(`tsclang: avr-objcopy failed:\n${objcopyResult.stderr?.toString() || ''}\n`);
+        try { unlinkSync(elfPath); } catch {}
         return false;
       }
       try { unlinkSync(elfPath); } catch {}
-      process.stdout.write(`Built ${stem}.hex\n`);
+
+      if (emit === 'flash') {
+        const avrdudeCheck = spawnSync('avrdude', ['--version'], { stdio: 'pipe' });
+        if (avrdudeCheck.error) {
+          process.stderr.write('ConfigError: --emit flash requires avrdude in PATH\n');
+          return false;
+        }
+        const flashCfg = _buildCfg?.flash;
+        const avrdudeArgs = [
+          '-c', flashCfg.programmer,
+          '-p', mcu,
+          '-P', flashCfg.port,
+          ...(flashCfg.baud ? ['-b', String(flashCfg.baud)] : []),
+          ...(flashCfg.extraFlags || []),
+          '-U', `flash:w:${hexPath}:i`,
+        ];
+        const avrdudeResult = spawnSync('avrdude', avrdudeArgs, { stdio: 'pipe' });
+        if (avrdudeResult.status !== 0) {
+          process.stderr.write(`tsclang: avrdude failed:\n${avrdudeResult.stderr?.toString() || ''}\n`);
+          return false;
+        }
+        process.stdout.write(`Flashed ${stem}.hex to ${mcu} via ${flashCfg.programmer}\n`);
+      } else {
+        process.stdout.write(`Built ${stem}.hex\n`);
+      }
     }
 
     return true;

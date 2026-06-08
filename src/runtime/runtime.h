@@ -20,7 +20,7 @@
  *   f32             → printf("%g\n", (double)v)
  *   bool            → printf("%s\n", v ? "true" : "false")
  *   char            → printf("%c\n", v)
- *   size_t          → printf("%zu\n", v)
+ *   size_t          → printf("%u\n", (unsigned)v)
  *   String          → printf("%s\n", v.data)  (%.*s for string refs)
  *   String* (deref) → printf("%s\n", v->data)
  *   multi-arg       → single printf with merged format string
@@ -111,7 +111,6 @@ static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
         char *buf = _tsc_str_alloc(len + 1);
         if (len > 0 && data) {
 #ifdef __AVR__
-            /* data might be PROGMEM — use byte-by-byte read */
             for (size_t i = 0; i < len; i++) buf[i] = data[i];
 #else
             memcpy(buf, data, len);
@@ -122,6 +121,15 @@ static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
     }
     return (String){ .data = data, .length = len, .capacity = 0 };
 }
+#ifdef __AVR__
+static inline String _tsc_str_to_ram(String s) {
+    if (s.capacity > 0) return s;
+    char *buf = _tsc_str_alloc(s.length + 1);
+    for (size_t i = 0; i < s.length; i++) buf[i] = (char)pgm_read_byte(&s.data[i]);
+    buf[s.length] = '\0';
+    return (String){ .data = buf, .length = s.length, .capacity = s.length + 1 };
+}
+#endif
 static inline void tsc_string_retain(String s) { (void)s; }
 static inline void tsc_string_release(String s) { (void)s; }
 #else
@@ -327,12 +335,20 @@ static inline void _tsc_console_init(void) {
     UCSR0B = (1<<RXEN0) | (1<<TXEN0);
     UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
     stdout = &_tsc_uartout;
+    stderr = &_tsc_uartout;
 }
 static inline void tsc_print_str(String s) {
     if (s.capacity == 0) {
         for (size_t i = 0; i < s.length; i++) putchar(pgm_read_byte(s.data + i));
     } else {
         for (size_t i = 0; i < s.length; i++) putchar(s.data[i]);
+    }
+}
+static inline void _tsc_fprint_str(FILE *f, String s) {
+    if (s.capacity == 0) {
+        for (size_t i = 0; i < s.length; i++) fputc(pgm_read_byte(s.data + i), f);
+    } else {
+        for (size_t i = 0; i < s.length; i++) fputc(s.data[i], f);
     }
 }
 #else
@@ -504,21 +520,33 @@ static inline void tsc_console_time_end(String label) {
     for (int _i = 0; _i < _tsc_timer_count; _i++) {
         if (_tsc_str_eq(_tsc_timers[_i]._label, label)) {
             double _ms = _end - _tsc_timers[_i]._start;
+#ifdef __AVR__
+            _tsc_fprint_str(stderr, label); fprintf(stderr, ": %.3fms\n", _ms);
+#else
             fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
+#endif
             _tsc_timers[_i] = _tsc_timers[--_tsc_timer_count];
             return;
         }
     }
 }
 static inline void tsc_console_trace(String msg) {
+#ifdef __AVR__
+    fputs("Trace: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
+#else
     fprintf(stderr, "Trace: %.*s\n", (int)msg.length, msg.data);
+#endif
 }
 static inline void tsc_console_time_log(String label) {
     double _now = tsc_performance_now();
     for (int _i = 0; _i < _tsc_timer_count; _i++) {
         if (_tsc_str_eq(_tsc_timers[_i]._label, label)) {
             double _ms = _now - _tsc_timers[_i]._start;
+#ifdef __AVR__
+            _tsc_fprint_str(stderr, label); fprintf(stderr, ": %.3fms\n", _ms);
+#else
             fprintf(stderr, "%.*s: %.3fms\n", (int)label.length, label.data, _ms);
+#endif
             return;
         }
     }
@@ -1055,7 +1083,11 @@ static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 /* tsc_throw — used for 'throw new Error(msg)' in _Noreturn functions */
 #include <stdlib.h>
 _Noreturn static inline void tsc_throw(String msg) {
+#ifdef __AVR__
+    fputs("Error: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
+#else
     fprintf(stderr, "Error: %.*s\n", (int)msg.length, msg.data);
+#endif
     exit(1);
 }
 
@@ -1065,7 +1097,11 @@ _Noreturn static inline void tsc_throw(String msg) {
 
 /* tsc_panic — used for '!' non-null assertion failure in non-throws context */
 _Noreturn static inline void tsc_panic(String msg) {
+#ifdef __AVR__
+    fputs("panic: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
+#else
     fprintf(stderr, "panic: %.*s\n", (int)msg.length, msg.data);
+#endif
     exit(1);
 }
 
@@ -1091,13 +1127,44 @@ static inline String tsc_i32_to_string(int32_t v) {
 #endif
 }
 static inline String tsc_i64_to_string(int64_t v) {
-#ifdef TSC_EMBEDDED
+#ifdef __AVR__
+    char tmp[24];
+    uint64_t uv;
+    int neg = 0;
+    if (v < 0) { neg = 1; uv = (uint64_t)(-(v + 1)) + 1; } else { uv = (uint64_t)v; }
+    char *p = tmp + 23;
+    *p = '\0';
+    int len = 0;
+    if (uv == 0) { *--p = '0'; len = 1; }
+    else { while (uv > 0) { *--p = '0' + (char)(uv % 10); uv /= 10; len++; } }
+    if (neg) { *--p = '-'; len++; }
+    return _tsc_str_make(p, (size_t)len, (size_t)len + 1);
+#elif defined(TSC_EMBEDDED)
     char tmp[24];
     int n = sprintf(tmp, "%lld", (long long)v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
     char *buf = (char *)malloc(32);
     int n = snprintf(buf, 32, "%lld", (long long)v);
+    return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
+#endif
+}
+static inline String tsc_u64_to_string(uint64_t v) {
+#ifdef __AVR__
+    char tmp[24];
+    char *p = tmp + 23;
+    *p = '\0';
+    int len = 0;
+    if (v == 0) { *--p = '0'; len = 1; }
+    else { while (v > 0) { *--p = '0' + (char)(v % 10); v /= 10; len++; } }
+    return _tsc_str_make(p, (size_t)len, (size_t)len + 1);
+#elif defined(TSC_EMBEDDED)
+    char tmp[24];
+    int n = sprintf(tmp, "%llu", (unsigned long long)v);
+    return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
+#else
+    char *buf = (char *)malloc(32);
+    int n = snprintf(buf, 32, "%llu", (unsigned long long)v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
 }
@@ -1143,28 +1210,111 @@ static inline String tsc_string_concat(String a, String b) {
 }
 
 /* Format string → new heap String (like sprintf) */
+#ifdef __AVR__
+static size_t _tsc_format_impl(char *buf, const char *fmt, va_list ap) {
+    size_t len = 0;
+    char tmp[32];
+    const char *p = fmt;
+    while (*p) {
+        if (*p != '%') { if (buf) *buf++ = *p; len++; p++; continue; }
+        p++;
+        if (*p == '%') { if (buf) *buf++ = '%'; len++; p++; continue; }
+        if (*p == 'l' && *(p+1) == 'l' && *(p+2) == 'd') {
+            long long v = va_arg(ap, long long);
+            uint64_t uv; int neg = 0;
+            if (v < 0) { neg = 1; uv = (uint64_t)(-(v + 1)) + 1; } else { uv = (uint64_t)v; }
+            char *q = tmp + 31; *q = '\0'; int dlen = 0;
+            if (uv == 0) { *--q = '0'; dlen = 1; }
+            else { while (uv > 0) { *--q = '0' + (char)(uv % 10); uv /= 10; dlen++; } }
+            if (neg) { *--q = '-'; dlen++; }
+            if (buf) { memcpy(buf, q, (size_t)dlen); buf += dlen; }
+            len += (size_t)dlen; p += 3;
+        } else if (*p == 'l' && *(p+1) == 'l' && *(p+2) == 'u') {
+            unsigned long long v = va_arg(ap, unsigned long long);
+            char *q = tmp + 31; *q = '\0'; int dlen = 0;
+            if (v == 0) { *--q = '0'; dlen = 1; }
+            else { while (v > 0) { *--q = '0' + (char)(v % 10); v /= 10; dlen++; } }
+            if (buf) { memcpy(buf, q, (size_t)dlen); buf += dlen; }
+            len += (size_t)dlen; p += 3;
+        } else if (*p == 'z' && *(p+1) == 'u') {
+            int n = sprintf(tmp, "%u", (unsigned)va_arg(ap, size_t));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p += 2;
+        } else if (*p == 'l' && *(p+1) == 'd') {
+            int n = sprintf(tmp, "%ld", va_arg(ap, long));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p += 2;
+        } else if (*p == 'l' && *(p+1) == 'u') {
+            int n = sprintf(tmp, "%lu", va_arg(ap, unsigned long));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p += 2;
+        } else if (*p == 'd') {
+            int n = sprintf(tmp, "%d", va_arg(ap, int));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p++;
+        } else if (*p == 'u') {
+            int n = sprintf(tmp, "%u", va_arg(ap, unsigned));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p++;
+        } else if (*p == 'g') {
+            int n = sprintf(tmp, "%g", va_arg(ap, double));
+            if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
+            len += (size_t)n; p++;
+        } else if (*p == 's') {
+            const char *s = va_arg(ap, const char *);
+            size_t slen = strlen(s);
+            if (buf) { memcpy(buf, s, slen); buf += slen; }
+            len += slen; p++;
+        } else if (*p == 'c') {
+            if (buf) *buf++ = (char)va_arg(ap, int); else va_arg(ap, int);
+            len++; p++;
+        } else if (*p == '.' && *(p+1) == '*' && *(p+2) == 's') {
+            int slen = va_arg(ap, int);
+            const char *s = va_arg(ap, const char *);
+            if (buf) { memcpy(buf, s, (size_t)slen); buf += slen; }
+            len += (size_t)slen; p += 3;
+        } else {
+            if (buf) *buf++ = '%'; len++;
+        }
+    }
+    if (buf) *buf = '\0';
+    return len;
+}
 static inline String tsc_string_format(const char *fmt, ...) {
-#ifndef TSC_NES
-    va_list a, b;
-    va_start(a, fmt);
-    va_copy(b, a);                      /* va_copy: C99, not available on cc65 */
-    int n = vsnprintf(NULL, 0, fmt, a); /* vsnprintf: not available on cc65    */
-    va_end(a);
-    size_t sz = (n > 0) ? (size_t)n : 0;
-    char *buf = _tsc_str_malloc(sz + 1);
-    vsnprintf(buf, sz + 1, fmt, b);
-    va_end(b);
-#else
+    va_list ap;
+    va_start(ap, fmt);
+    size_t len = _tsc_format_impl(NULL, fmt, ap);
+    va_end(ap);
+    char *buf = _tsc_str_alloc(len + 1);
+    va_start(ap, fmt);
+    _tsc_format_impl(buf, fmt, ap);
+    va_end(ap);
+    return _tsc_str_make(buf, len, len + 1);
+}
+#elif defined(TSC_NES)
+static inline String tsc_string_format(const char *fmt, ...) {
     static char _fmt_buf[128];
     va_list a;
     va_start(a, fmt);
     vsprintf(_fmt_buf, fmt, a);
     va_end(a);
     size_t sz = strlen(_fmt_buf);
-    char *buf = _fmt_buf;
-#endif
+    return _tsc_str_make(_fmt_buf, sz, sz + 1);
+}
+#else
+static inline String tsc_string_format(const char *fmt, ...) {
+    va_list a, b;
+    va_start(a, fmt);
+    va_copy(b, a);
+    int n = vsnprintf(NULL, 0, fmt, a);
+    va_end(a);
+    size_t sz = (n > 0) ? (size_t)n : 0;
+    char *buf = _tsc_str_malloc(sz + 1);
+    vsnprintf(buf, sz + 1, fmt, b);
+    va_end(b);
     return _tsc_str_make(buf, sz, sz + 1);
 }
+#endif
 
 /* -------------------------------------------------------------------------
  * String query methods (return primitive types — no heap issue)
@@ -1610,14 +1760,14 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_get_checked_i32(arr, idx) ({ \
     Array_i32 _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %zu)\n", _i_, _a_.length); exit(1); } \
+        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 
 #define tsc_array_get_checked_string(arr, idx) ({ \
     Array_string _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %zu)\n", _i_, _a_.length); exit(1); } \
+        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 
@@ -2468,7 +2618,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 #define tsc_array_get_checked_f64(arr, idx) ({ \
     Array_f64 _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %zu)\n", _i_, _a_.length); exit(1); } \
+        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 
