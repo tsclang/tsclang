@@ -112,7 +112,7 @@
         }
 
     } else if (node.kind === 'VarDestructArr') {
-        const { varKind, pattern, init } = node;
+        const { varKind, pattern, typeAnn, init } = node;
         let initType = this.inferType(init);
         const initSym = init.kind === 'Ident' ? this.lookup(init.name) : null;
         let isRefArray = false;
@@ -120,7 +120,15 @@
           isRefArray = true;
           initType = initSym.derefType;
         }
-        const tupleDef0 = this.classes.get(initType);
+        let tupleDef0 = this.classes.get(initType);
+        if (!tupleDef0?.isTuple && !initType?.startsWith('Array_') && typeAnn) {
+          const resolved = this.resolveType(typeAnn);
+          const resolvedDef = this.classes.get(resolved);
+          if (resolvedDef?.isTuple || resolved?.startsWith('Array_')) {
+            initType = resolved;
+            tupleDef0 = resolvedDef;
+          }
+        }
         const qual = varKind === 'const' ? 'const ' : '';
         if (tupleDef0?.isTuple) {
           const initC = this.exprToC(init, lines, depth);

@@ -1,0 +1,7 @@
+function getPair(): [i32, string] {
+    const result: [i32, string] = [42, "hello"];
+    return result;
+}
+const [a, b]: [i32, string] = getPair();
+console.log(a);
+console.log(b);

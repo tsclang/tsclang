@@ -111,7 +111,7 @@
 |---|----------|--------|----------------|
 | 65 | Async function arguments silently zeroed | **RESOLVED** | `async-emit.js:82` — params включены в state struct. Присваиваются перед первым poll. |
 | 66 | Array of optional types stores values wrong | **RESOLVED** | `helpers.js` — `_wrapOptValue()` + `_isOptType()` + `_ensureOptArrayMacros()`. Array literal: `(opt_T){true, val}`. Push: extra parens for macro comma. Pop: skip double-wrap. Free: dynamic macro. Console.log: `isOptArrayIndex` check. 3 new tests. |
-| 67 | Tuple destructuring ignores type annotation | **NEEDS INVESTIGATION** | Обрабатывается через `VarDestructArr` path. Аннотация типа не проверяется. |
+| 67 | Tuple destructuring ignores type annotation | **RESOLVED** | `destruct.js:115` — извлечён `typeAnn`, при fallback используется `resolveType(typeAnn)` для определения tuple struct. +2 теста: destruct-typeann, destruct-typeann-f64 |
 | 89 | Map string keys use-after-free | **MITIGATED** | `vardecl.js:258` — компилятор ограничивает ключи compile-time string literals. Runtime UAF невозможна на практике. `runtime.h:575-579` — shallow copy без retain, но только для литералов. |
 
 ### Высокие (incorrect code generation / type safety)
@@ -179,14 +179,14 @@
 
 | Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
 |-----------|-------|----------|---------------|---------------------|-----------|
-| Критические | 4 | 2 | 0 | 1 | 1 |
+| Критические | 4 | 3 | 0 | 0 | 1 |
 | Высокие | 18 | 11 | 0 | 7 | 0 |
 | Средние | 13 | 2 | 0 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
 | Spec↔impl | 6 | 6 | 0 | 0 | 0 |
 | Audit §2 | 6 | 1 | 0 | 5 | 0 |
 | Doc-аудит | 42 | 40 | 0 | 2 | 0 |
-| **Итого** | **93** | **61** | **0** | **31** | **1** |
+| **Итого** | **93** | **62** | **0** | **30** | **1** |
 
 ### Подтверждённые открытые проблемы (обновлено 2026-06-08)
 
@@ -373,7 +373,7 @@
 ### Подлежат исследованию (29 штук)
 
 При написании соответствующих блоков книги эти точки будут проверены:
-- Критические: #66 (optional array), #67 (tuple destruct)
+- Критические: #66 (optional array), ~~#67 (tuple destruct)~~ RESOLVED
 - Высокие: #91-92 (recursive type, type exports), H-3..H-4 (closures), H-7..H-8 (type loss)
 - Средние: #95-#102, #104-#105 (runtime issues, validation gaps)
 - Низкие: #106-#109 (cosmetic)
@@ -390,7 +390,7 @@
 - Блок 1 (Лексика): 02-5, 02-6
 - Блок 5 (Строки): #89, #95, #96
 - Блок 7 (Массивы): #66
-- Блок 8 (Кортежи): #67
+- Блок 8 (Кортежи): ~~#67~~ RESOLVED
 - Блок 9 (Map/Set): S-2
 - Блок 14 (Ошибки): #94, #99-#101
 - Блок 20 (Async): H-3, H-4

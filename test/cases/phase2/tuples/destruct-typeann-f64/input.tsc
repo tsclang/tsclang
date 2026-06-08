@@ -1,0 +1,7 @@
+function getPair(): [f64, boolean] {
+    const result: [f64, boolean] = [3.14, true];
+    return result;
+}
+const [x, y]: [f64, boolean] = getPair();
+console.log(x);
+console.log(y);

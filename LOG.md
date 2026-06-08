@@ -194,6 +194,11 @@
 > - Flush предыдущих fmtParts с trailing space перед opt-printf
 > - +4 теста: `opt-elem-literal` [R], `opt-elem-push` [R], `opt-elem-pop` [R], `opt-elem-mixed` [R]
 
+> 2026-06-09: **#67 RESOLVED — Tuple destructuring теперь использует typeAnn.**
+> - `destruct.js:115` — извлечён `typeAnn` из `VarDestructArr` AST node
+> - При fallback (inference не дал tuple struct) — `resolveType(typeAnn)` создаёт struct и регистрирует его
+> - +2 теста: `destruct-typeann` [R], `destruct-typeann-f64` [R]
+
 ---
 
 ## Фаза 4 — Объектная модель
