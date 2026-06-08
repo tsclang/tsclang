@@ -9,5 +9,7 @@ declare platform {
     os: false
     posix: false
     strtoll: false
+    console_uart: true
+    console_baud: 9600
     toolchain: "avr-gcc"
 }

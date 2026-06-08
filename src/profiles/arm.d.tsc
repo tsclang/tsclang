@@ -8,5 +8,7 @@ declare platform {
     os: false
     posix: true
     strtoll: true
+    console_uart: true
+    console_baud: 115200
     toolchain: "arm-none-eabi-gcc"
 }

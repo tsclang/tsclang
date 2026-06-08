@@ -302,8 +302,39 @@ static inline TscPerfEntry tsc_performance_measure(String name, String startMark
     return (TscPerfEntry){name, _en - _st, _st};
 }
 
+/* Console UART init — connects stdout to hardware UART on embedded targets */
+#ifdef TSC_CONSOLE_UART
+#ifndef TSC_CONSOLE_BAUD
+#define TSC_CONSOLE_BAUD 9600
+#endif
+
+#ifdef __AVR__
+static int _tsc_uart_putchar(char c, FILE *stream) {
+    (void)stream;
+    if (c == '\n') _tsc_uart_putchar('\r', stream);
+    while (!(UCSR0A & (1 << UDRE0)));
+    UDR0 = c;
+    return 0;
+}
+static FILE _tsc_uart_stdout;
+static inline void _tsc_console_init(void) {
+    uint16_t ubrr = (uint16_t)(F_CPU / 16 / TSC_CONSOLE_BAUD - 1);
+    UBRR0H = (uint8_t)(ubrr >> 8);
+    UBRR0L = (uint8_t)(ubrr);
+    UCSR0B = (1<<RXEN0) | (1<<TXEN0);
+    UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);
+    fdev_setup_stream(&_tsc_uart_stdout, _tsc_uart_putchar, NULL, _FDEV_SETUP_WRITE);
+    stdout = &_tsc_uart_stdout;
+}
+#else
+static inline void _tsc_console_init(void) {}
+#endif
+#else
+static inline void _tsc_console_init(void) {}
+#endif
+
 /* Compiler inserts this at the top of main() */
-#define TSC_INIT() _tsc_init()
+#define TSC_INIT() do { _tsc_init(); _tsc_console_init(); } while(0)
 
 /* -------------------------------------------------------------------------
  * Date — legacy JS-compatible date/time type (ms since Unix epoch)

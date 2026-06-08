@@ -114,6 +114,8 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `os` | `boolean` | `true` | Доступна ли ОС. `false` → `import "std/fs"`, `"std/net"`, `"std/ws"` → compile error. |
 | `posix` | `boolean` | `true` | Доступна ли POSIX API. `false` → `clock_gettime`, `CLOCK_MONOTONIC` недоступны; performance.now() → 0. |
 | `strtoll` | `boolean` | `true` | Доступна ли `strtoll()`. `false` → используется `strtol()` (32-bit only). |
+| `console_uart` | `boolean` | — | Есть ли UART для console output. `true` → `stdout` подключён к UART через `fdev_setup_stream`. |
+| `console_baud` | `number` | `9600` | Скорость UART в бодах. Только при `console_uart: true`. |
 
 ### Runtime level (выводится из `async`, не отдельное поле)
 
@@ -153,6 +155,8 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `os: false` | Запрещает `import "std/fs"`, `"std/net"`, `"std/ws"` |
 | `posix: false` | `clock_gettime` / `CLOCK_MONOTONIC` недоступны; CLI передаёт `-DTSC_NO_POSIX`; `performance.now()` → 0 |
 | `strtoll: false` | `strtoll()` недоступна; CLI передаёт `-DTSC_NO_STRTOLL`; runtime использует `strtol()` |
+| `console_uart: true` | CLI передаёт `-DTSC_CONSOLE_UART` + `-DTSC_CONSOLE_BAUD=N`; `TSC_INIT()` подключает `stdout` к UART |
+| `console_uart: false` / не задано | `printf` компилируется, но вывод никуда не идёт (stdout не подключён) |
 | `usize: "u16"` | `usize` → `uint16_t` |
 | `stack_size` задан | Проверяет call graph, рекурсия → ошибка с подсказкой про `@stack` |
 | `stack_size` не задан | Рекурсия разрешена, warning для async (heap) |
@@ -236,6 +240,8 @@ CLI может задать только **проектные настройки
 | `os` | ✅ | ❌ | ❌ | Нет |
 | `posix` | ✅ (обязательное) | ❌ | ❌ | Нет |
 | `strtoll` | ✅ (обязательное) | ❌ | ❌ | Нет |
+| `console_uart` | ✅ | ❌ | ❌ | Нет |
+| `console_baud` | ✅ | ❌ | ❌ | Нет |
 | `heap_size` | ✅ | ❌ | ❌ | Нет |
 | `stack_size` | ✅ | ❌ | ❌ | Нет |
 | `ram_size` | ✅ | ❌ | ❌ | Нет |

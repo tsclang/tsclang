@@ -1193,6 +1193,10 @@ if (command === 'build') {
     const defs = [];
     if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
     if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
+    if (caps.console_uart) {
+      defs.push('-DTSC_CONSOLE_UART');
+      if (caps.console_baud) defs.push(`-DTSC_CONSOLE_BAUD=${caps.console_baud}`);
+    }
     return defs;
   }
 

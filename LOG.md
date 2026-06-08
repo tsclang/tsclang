@@ -1785,3 +1785,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Help text**: `--emit <c|binary|wasm>` → `--emit <c|binary|hex|wasm>` (bin/index.js:123).
 > - **AUDIT-PLAN**: 01-5 → RESOLVED. Открытых проблем со статусом STILL PRESENT: **0**.
 > - Files changed: `bin/index.js`, `AUDIT-PLAN.md`
+
+> 2026-06-08: console_uart / console_baud — UART stdout для embedded (П1, П4)
+> - **Capability поля `console_uart` / `console_baud`**: В профиле. AVR: `console_uart: true, console_baud: 9600`. ARM: `console_uart: true, console_baud: 115200`. Остальные: без поля (нет UART).
+> - **CLI**: `capabilityDefines()` → `-DTSC_CONSOLE_UART` + `-DTSC_CONSOLE_BAUD=N`. Передаётся в gcc/avr-gcc/emcc.
+> - **runtime.h**: `_tsc_console_init()` под `#ifdef TSC_CONSOLE_UART`. На AVR: UART init (`UBRR0`, `UCSR0B`, `UCSR0C`) + `fdev_setup_stream(stdout → _tsc_uart_putchar)`. `\n` → `\r\n`. `TSC_INIT()` → `do { _tsc_init(); _tsc_console_init(); } while(0)`.
+> - **Spec**: `spec/13-build/13-platform-capabilities.md` — `console_uart`/`console_baud` в таблицах.
+> - **Регрессия**: phase0 ✓30, phase9 ✓47, phase12 ✓112, phase17 ✓12.
+> - Files changed: `src/compiler/profile.js`, `src/runtime/runtime.h`, `bin/index.js`, `src/profiles/avr.d.tsc`, `src/profiles/avr-coop.d.tsc`, `src/profiles/avr-heap.d.tsc`, `src/profiles/arm.d.tsc`, `spec/13-build/13-platform-capabilities.md`

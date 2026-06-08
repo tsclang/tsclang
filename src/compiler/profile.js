@@ -11,6 +11,8 @@ const VALID_FIELDS = {
   os:                'boolean',
   posix:             'boolean',
   strtoll:           'boolean',
+  console_uart:      'boolean',
+  console_baud:      'number',
   toolchain:         'string',
   toolchainFile:     'string',
   include:           'string',
