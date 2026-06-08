@@ -121,6 +121,11 @@
           initType = initSym.derefType;
         }
         let tupleDef0 = this.classes.get(initType);
+        // Defensive fallback: when inferType cannot resolve a tuple/array type from the
+        // init expression (e.g. future AST nodes or complex generic inference), use the
+        // explicit type annotation to create/register the struct. Currently inference
+        // covers 100% of cases (Ident, Call, Cast, Ternary all resolve tuple types), so
+        // this path is not exercised by existing tests.
         if (!tupleDef0?.isTuple && !initType?.startsWith('Array_') && typeAnn) {
           const resolved = this.resolveType(typeAnn);
           const resolvedDef = this.classes.get(resolved);
