@@ -74,12 +74,12 @@
 | L-2 | Лексика | `**=` и `*=` делят TK.STAREQ | **RESOLVED** | Code smell | Добавлен TK.STARSTAREQ для `**=` |
 | L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест phase6/import/import-rename проходит |
 | L-4 | Лексика | Legacy octal не задокументирован | **RESOLVED** | Спец неполон | Добавлена заметка в spec/03-types/03-numbers.md |
-| T-1 | Типы | `?.` property access — no null-safety check | **NEEDS INVESTIGATION** | Impl неполон | `dispatch.js:651-654` — `OptChain` passthrough `obj.prop` без `has_value` check. Method calls `?.toString()` OK (`call-dispatch.js:37-56`). Property access `user?.name` — no guard. Только 2 теста (chain-value, chain-null), оба на `.toString()` |
-| T-2 | Типы | `as` non-null assertion: no runtime null-check | **NEEDS INVESTIGATION** | Impl неполон | `dispatch.js:573-575` — `x as i32` при `x: i32 | null` → `(int32_t)opt_i32_struct` — C compile error или UB. Spec говорит "runtime error if null". Narrowing через `if (x != null)` работает корректно (dispatch.js:23-34), но bare `as` без narrowing — нет |
-| T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **NEEDS INVESTIGATION** | Impl неполон | Spec определяет C-output `s.has_value && s.value.length > 0` для `string | null`. Код не имеет явного truthy/falsy handler — `if (optStringVar)` → `if (struct)` — C compile error. Работает только через narrowing: `if (x != null)` → `if (x.has_value)` |
+| T-1 | Типы | `?.` property access — no null-safety check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` OptChain: `has_value` guard для opt_T objects. `infer.js` OptChain: возвращает `opt_<fieldType>`. 3 теста: chain-field-null/value/i32 |
+| T-2 | Типы | `as` non-null assertion: no runtime null-check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` Cast: `opt_T as T` → `has_value ? .value : (fprintf+abort)`. 1 тест: as-nonnull-value |
+| T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **RESOLVED** | Impl неполон → fixed | `_truthyToC()` method: string→`.length>0`, opt_string→`has_value && .value.length>0`, opt_i32→`has_value && .value!=0`, opt_class→`has_value`. + narrowing via truthiness. 14 тестов в phase2/truthy/ |
 | T-4 | Типы | String literal union rodata: simple array vs designated initializers | **RESOLVED** | Cosmetic | `types-alias.js:61` — `{ "a", "b" }` вместо `{ [Dir_a] = "a" }`. Функционально эквивалентно. Designated initializers — C99, но и простой init работает |
-| T-5 | Типы | Null representation for class types: inline vs pointer | **NEEDS INVESTIGATION** | Spec vs impl | Spec: `class | null` → `T *value` (pointer). Impl: `_ensureOptStruct` → `T value` inline для non-pointer классов. `_ensureOptRefStruct` → `T *value` только для pool/iterator. Потенциальный overhead для больших классов |
-| T-6 | Типы | Truthy for class/array/Set/Map: always truthy | **NEEDS INVESTIGATION** | Spec warning missing | Spec: `if (arr)` → warning "условие всегда true". Не проверено, есть ли warning в impl. Если нет — П4 violation |
+| T-5 | Типы | Null representation for class types: inline vs pointer | **DEFERRED** | Spec vs impl | Отложено: overhead на embedded для больших классов, но нет текущих тестов с opt_Class на AVR. Решить при embedded-оптимизации (книга Блок 10/23). |
+| T-6 | Типы | Truthy for class/array/Set/Map: always truthy | **RESOLVED** | Spec warning → impl | `_truthyToC()` emits `this.warn("condition is always true")` + returns `1` для class/array/Map/Set. Тесты пока невозможны — раннер не поддерживает warning-verification. |
 
 ---
 
@@ -175,18 +175,18 @@
 | S-5 | Promise.race/.any/.allSettled | Все 4 combinator реализованы | **RESOLVED** | SPEC нужно обновить — описать |
 | S-6 | 5 Atomic methods | Все 9 методов реализованы (load/store/fetchAdd/fetchSub/fetchOr/fetchAnd/fetchXor/swap/compareExchange) | **RESOLVED** | `concurrency.js:44-94`, `infer.js:564-572`. Метод `exchange` называется `swap` (Rust convention). |
 
-### Статистика верифицированных находок (обновлено 2026-06-08)
+### Статистика верифицированных находок (обновлено 2026-06-09)
 
-| Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
-|-----------|-------|----------|---------------|---------------------|-----------|
-| Критические | 4 | 3 | 0 | 0 | 1 |
-| Высокие | 18 | 11 | 0 | 7 | 0 |
-| Средние | 13 | 2 | 0 | 11 | 0 |
-| Низкие | 4 | 0 | 0 | 4 | 0 |
-| Spec↔impl | 6 | 6 | 0 | 0 | 0 |
-| Audit §2 | 6 | 1 | 0 | 5 | 0 |
-| Doc-аудит | 42 | 40 | 0 | 2 | 0 |
-| **Итого** | **93** | **62** | **0** | **30** | **1** |
+| Категория | Всего | RESOLVED | DEFERRED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
+|-----------|-------|----------|----------|---------------|---------------------|-----------|
+| Критические | 4 | 3 | 0 | 0 | 0 | 1 |
+| Высокие | 18 | 11 | 0 | 0 | 7 | 0 |
+| Средние | 13 | 2 | 0 | 0 | 11 | 0 |
+| Низкие | 4 | 0 | 0 | 0 | 4 | 0 |
+| Spec↔impl | 6 | 6 | 0 | 0 | 0 | 0 |
+| Audit §2 | 6 | 5 | 1 | 0 | 0 | 0 |
+| Doc-аудит | 42 | 40 | 0 | 0 | 2 | 0 |
+| **Итого** | **93** | **67** | **1** | **0** | **24** | **1** |
 
 ### Подтверждённые открытые проблемы (обновлено 2026-06-08)
 

@@ -1,0 +1,10 @@
+let x: i32 | null = 3
+let sum: i32 = 0
+let i: i32 = 0
+while (i < 3) {
+    if (x) {
+        sum = sum + x
+    }
+    i = i + 1
+}
+console.log(sum)

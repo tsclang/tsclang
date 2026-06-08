@@ -1,0 +1,6 @@
+let s: string = "hello"
+if (s) {
+    console.log("yes")
+} else {
+    console.log("no")
+}

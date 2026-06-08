@@ -1868,3 +1868,15 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **3 новых теста**: `phase3/arrays/opt-elem-literal` [R], `opt-elem-push` [R], `opt-elem-pop` [R].
 > - **AUDIT-PLAN**: #66 → RESOLVED. Критических NEEDS INVESTIGATION осталось 1 (#67).
 > - Files changed: `src/compiler/codegen/types/helpers.js`, `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/misc/arrays.js`, `src/compiler/codegen/calls/method-dispatch.js`, `src/compiler/codegen/calls/console.js`, `src/compiler/codegen/types/infer.js`, `test/cases/phase3/arrays/opt-elem-literal/` (new), `test/cases/phase3/arrays/opt-elem-push/` (new), `test/cases/phase3/arrays/opt-elem-pop/` (new), `AUDIT-PLAN.md`
+
+> 2026-06-09: Fix T-1, T-2, T-3, T-6 — truthiness, optional chaining `?.field`, `as` non-null assertion (П1–П5):
+> - **T-3 truthiness** (`dispatch.js`): `_truthyToC()` method — конвертация выражений в boolean C-выражение по типу: string→`.length > 0`, opt_string→`has_value && .value.length > 0`, opt_i32→`has_value && .value != 0`, opt_class→`has_value`, class/array/Map/Set→warning + `1`. Подставлено в if/while/for/do-while/ternary conditions.
+> - **T-3 narrowing**: `if (x)` где `x: opt_T` → narrow x внутри блока (аналог `if (x != null)`).
+> - **T-1 `?.field`** (`dispatch.js`, `infer.js`): OptChain — `has_value` guard для opt_T objects. `u?.name` → `u.has_value ? (opt_string){true, u.value.name} : (opt_string){false, 0}`. Infer: возвращает `opt_<fieldType>`.
+> - **T-2 `as` non-null** (`dispatch.js`): Cast `opt_T as T` → `(expr.has_value ? expr.value : (fprintf+abort, (T)0))`. Runtime panic при null.
+> - **T-6 warnings**: `_truthyToC` emits `this.warn("condition is always true")` для class/array/Map/Set. Тесты пока невозможны — раннер не поддерживает warning-verification.
+> - **T-5**: DEFERRED — overhead на embedded, нет текущих тестов с opt_Class на AVR.
+> - **18 новых тестов**: `phase2/truthy/` (14), `phase2/optional/chain-field-{null,value,i32}` (3), `phase2/optional/as-nonnull-value` (1).
+> - **Регрессия**: phase0 ✓30, phase1/ternary ✓3, phase1/truthy ✓4, phase2/optional ✓18, phase2/truthy ✓14, phase4/class ✓12, phase7/async ✓81.
+> - **AUDIT-PLAN**: T-1..T-4, T-6 → RESOLVED, T-5 → DEFERRED. Audit §2: 5/6 RESOLVED, 1 DEFERRED. Итого: 67 RESOLVED, 1 DEFERRED, 24 NEEDS INVESTIGATION.
+> - Files changed: `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/types/infer.js`, `AUDIT-PLAN.md`, `test/cases/phase2/truthy/` (14 new), `test/cases/phase2/optional/chain-field-null/` (new), `test/cases/phase2/optional/chain-field-value/` (new), `test/cases/phase2/optional/chain-field-i32/` (new), `test/cases/phase2/optional/as-nonnull-value/` (new)

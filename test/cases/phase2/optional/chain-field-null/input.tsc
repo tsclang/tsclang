@@ -1,0 +1,6 @@
+class User {
+    name: string
+}
+let u: User | null = null
+const n = u?.name
+console.log(n)

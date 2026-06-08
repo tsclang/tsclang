@@ -70,7 +70,7 @@ export default {
       case 'Unary':  return this.unaryToC(node, lines, depth);
       case 'Assign': return this.assignToC(node, lines, depth);
       case 'Ternary': {
-        const c = this.exprToC(node.cond, lines, depth);
+        const c = this._truthyToC(node.cond, lines, depth);
         const yRaw = this.exprToC(node.yes, lines, depth);
         const n = this.exprToC(node.no, lines, depth);
         // Wrap nested ternary in yes-branch to avoid ambiguity
@@ -573,6 +573,15 @@ export default {
           }
           return `${getter}(&${exprC})`;
         }
+        // Non-null assertion: opt_T as T → unwrap with runtime panic if null
+        if (srcType?.startsWith('opt_') && !ct.startsWith('opt_')) {
+          const innerIdent = srcType.slice(4);
+          const innerCType = this._arrIdentToCType(innerIdent);
+          if (innerCType === ct) {
+            return `(${exprC}.has_value ? ${exprC}.value : (fprintf(stderr, "panic: null cast to non-null\\n"), abort(), (${ct})0))`;
+          }
+          return `(${exprC}.has_value ? (${ct})${exprC}.value : (fprintf(stderr, "panic: null cast to non-null\\n"), abort(), (${ct})0))`;
+        }
         if (srcType === ct) return exprC;
         if (this._strictRules?.has('no-lossy-cast') && srcType && ct && srcType !== ct) {
           const LOSSY = [
@@ -670,6 +679,24 @@ export default {
       case 'NonNull':  return this.exprToC(node.expr, lines, depth);
       case 'Propagate': return this.exprToC(node.expr, lines, depth);
       case 'OptChain': {
+        const objType = this.inferType(node.object);
+        if (objType?.startsWith('opt_')) {
+          const innerIdent = objType.slice(4);
+          const innerCType = this._arrIdentToCType(innerIdent);
+          const classDef = this.classes.get(innerCType);
+          const field = classDef?.fields?.find(f => f.name === node.prop);
+          const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
+          const fieldIdent = this.cTypeToIdent(fieldCType);
+          const optFieldType = `opt_${fieldIdent}`;
+          this._ensureOptStruct(optFieldType, fieldCType);
+          let objC = this.exprToC(node.object, lines, depth);
+          if (!['Ident', 'Literal'].includes(node.object.kind)) {
+            const tmp = `_tsc_oc_${this.tempCount++}`;
+            lines.push(`${' '.repeat(this.indent * depth)}${objType} ${tmp} = ${objC};`);
+            objC = tmp;
+          }
+          return `${objC}.has_value ? (${optFieldType}){true, ${objC}.value.${node.prop}} : (${optFieldType}){false, 0}`;
+        }
         const obj = this.exprToC(node.object, lines, depth);
         return `${obj}.${node.prop}`;
       }
@@ -677,5 +704,41 @@ export default {
       default:
         return `/* expr:${node.kind} */`;
     }
+  },
+
+  _truthyToC(node, lines = [], depth = 0) {
+    const type = this.inferType(node);
+    if (!type || type === 'bool' || type === 'void *') {
+      return this.exprToC(node, lines, depth);
+    }
+    const numericTypes = new Set([
+      'int8_t','int16_t','int32_t','int64_t',
+      'uint8_t','uint16_t','uint32_t','uint64_t',
+      'float','double','size_t','char',
+    ]);
+    if (numericTypes.has(type)) {
+      return this.exprToC(node, lines, depth);
+    }
+    if (type === 'String') {
+      const c = this.exprToC(node, lines, depth);
+      return `${c}.length > 0`;
+    }
+    if (type.startsWith('opt_')) {
+      const innerIdent = type.slice(4);
+      const innerCType = this._arrIdentToCType(innerIdent);
+      const c = this.exprToC(node, lines, depth);
+      if (innerCType === 'String') {
+        return `${c}.has_value && ${c}.value.length > 0`;
+      }
+      if (numericTypes.has(innerCType)) {
+        return `${c}.has_value && ${c}.value != 0`;
+      }
+      return `${c}.has_value`;
+    }
+    if (this.classes.has(type) || type.startsWith('Array_') || type.startsWith('TscMap_') || type.startsWith('Map_') || type.startsWith('TscSet_') || type.startsWith('Set_')) {
+      this.warn(`condition is always true`, node);
+      return '1';
+    }
+    return this.exprToC(node, lines, depth);
   },
 };

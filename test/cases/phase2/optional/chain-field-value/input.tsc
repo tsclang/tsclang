@@ -1,0 +1,9 @@
+class User {
+    name: string
+    constructor(n: string) {
+        this.name = n
+    }
+}
+let u: User | null = new User("Alice")
+const n = u?.name
+console.log(n)

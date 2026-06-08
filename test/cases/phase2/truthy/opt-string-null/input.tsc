@@ -1,0 +1,6 @@
+let s: string | null = null
+if (s) {
+    console.log("yes")
+} else {
+    console.log("no")
+}

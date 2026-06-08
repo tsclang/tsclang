@@ -1,0 +1,6 @@
+let x: i32 | null = 42
+if (x) {
+    console.log("yes")
+} else {
+    console.log("no")
+}

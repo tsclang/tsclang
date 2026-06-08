@@ -203,6 +203,14 @@
             }
           }
         }
+        // Detect truthiness narrowing: if (x) where x is opt_T → narrow x inside block
+        if (!narrowVar && node.test.kind === 'Ident') {
+          const sym = this.lookup(node.test.name);
+          if (sym?.ctype?.startsWith('opt_')) {
+            const isPool = sym.ctype.startsWith('opt_ref_') && this.classes.get(sym.ctype.slice(8))?._isPool;
+            if (!isPool) narrowVar = node.test.name;
+          }
+        }
         // Detect unknown narrowing: typeof x === "typename" → narrow x inside if-block
         let unknownNarrowVar = null;
         let unknownNarrowCtype = null;
@@ -228,7 +236,7 @@
           _checkUnknownNarrow(node.test.left, node.test.right);
           _checkUnknownNarrow(node.test.right, node.test.left);
         }
-        const testC = this.exprToC(node.test, lines, depth);
+        const testC = this._truthyToC(node.test, lines, depth);
         const alt = node.alternate;
         // Single statement consequent (no braces)?
         let hasBraces = node.consequent.kind === 'Block';
@@ -322,13 +330,13 @@
           }
           // else if: collapse into single line
           if (alt.kind === 'If') {
-            p('} else if (' + this.exprToC(alt.test, lines, depth) + ') {');
+            p('} else if (' + this._truthyToC(alt.test, lines, depth) + ') {');
             { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(alt.consequent, lines, depth + 1); this._restoreCleanups(_snap); }
             // recurse for chained else-if
             let cur = alt.alternate;
             while (cur) {
               if (cur.kind === 'If') {
-                p('} else if (' + this.exprToC(cur.test, lines, depth) + ') {');
+                p('} else if (' + this._truthyToC(cur.test, lines, depth) + ') {');
                 { const _snap = this._snapshotCleanups(); this.visitStmtOrBlock(cur.consequent, lines, depth + 1); this._restoreCleanups(_snap); }
                 cur = cur.alternate;
               } else {
@@ -379,7 +387,7 @@
             initC = this.exprToC(node.init.expr, lines, depth);
           }
         }
-        const testC = node.test ? this.exprToC(node.test, lines, depth) : '';
+        const testC = node.test ? this._truthyToC(node.test, lines, depth) : '';
         const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
         p(`for (${initC}; ${testC}; ${updC}) {`);
         this._pushLoopCleanups();
@@ -753,7 +761,7 @@
         const _savedAsyncCont = this._asyncContinueStack;
         this._asyncBreakStack = null;
         this._asyncContinueStack = null;
-        const testC = this.exprToC(node.test, lines, depth);
+        const testC = this._truthyToC(node.test, lines, depth);
         p(`while (${testC}) {`);
         this._pushLoopCleanups();
         this._loopDepth++;
@@ -772,7 +780,7 @@
         const _savedAsyncCont2 = this._asyncContinueStack;
         this._asyncBreakStack = null;
         this._asyncContinueStack = null;
-        const testC = this.exprToC(node.test, lines, depth);
+        const testC = this._truthyToC(node.test, lines, depth);
         p('do {');
         this._pushLoopCleanups();
         this._loopDepth++;

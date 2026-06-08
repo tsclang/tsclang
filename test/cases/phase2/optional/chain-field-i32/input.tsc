@@ -1,0 +1,11 @@
+class Point {
+    x: i32
+    y: i32
+    constructor(px: i32, py: i32) {
+        this.x = px
+        this.y = py
+    }
+}
+let p: Point | null = new Point(10, 20)
+const x = p?.x
+console.log(x)

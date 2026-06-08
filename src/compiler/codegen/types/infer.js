@@ -36,6 +36,18 @@ export default {
         if (node.op === '>>>') return 'int32_t';
         return 'bool';
       }
+      case 'OptChain': {
+        const objType = this.inferType(node.object);
+        if (objType?.startsWith('opt_')) {
+          const innerIdent = objType.slice(4);
+          const innerCType = this._arrIdentToCType(innerIdent);
+          const classDef = this.classes.get(innerCType);
+          const field = classDef?.fields?.find(f => f.name === node.prop);
+          const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
+          return `opt_${this.cTypeToIdent(fieldCType)}`;
+        }
+        return 'int32_t';
+      }
       case 'Member': {
         // process.stdin/stdout/stderr (std/io)
         if (this._stdIoImported && node.object.kind === 'Ident' && node.object.name === 'process') {
