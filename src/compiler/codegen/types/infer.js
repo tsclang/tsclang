@@ -666,8 +666,8 @@ export default {
     if (objType?.startsWith('Array_')) {
       const et = objSym?.elemType ?? objType.slice(6);
       const etCType = objSym?.arrElemCType ?? 'int32_t';
-      if (prop === 'pop') return et ? `opt_${et}` : 'opt_i32';
-      if (prop === 'shift') return et ? `opt_${et}` : 'opt_i32';
+      if (prop === 'pop') return et ? (this._isOptType(etCType) ? etCType : `opt_${et}`) : 'opt_i32';
+      if (prop === 'shift') return et ? (this._isOptType(etCType) ? etCType : `opt_${et}`) : 'opt_i32';
       if (prop === 'remove') return etCType;
       if (prop === 'find' || prop === 'findLast') return et ? `opt_ref_${et}` : 'opt_ref_i32';
       if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;

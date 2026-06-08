@@ -23,6 +23,9 @@ export default {
             c = `${_packer}(${c})`;
           }
         }
+        if (this._isOptType(_elemType)) {
+          c = this._wrapOptValue(c, e.expr, _elemType);
+        }
         result.push(c);
       }
     }

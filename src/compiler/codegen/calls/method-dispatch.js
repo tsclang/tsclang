@@ -127,6 +127,9 @@ export default {
               elemC = `${_packer}(${elemC})`;
             }
           }
+          if (this._isOptType(etC) && args[0]) {
+            elemC = this._wrapOptValue(elemC, args[0].expr, etC);
+          }
           if (args[0] && args[0].expr.kind === 'Ident') {
             const _pushCls = this.classes.get(et);
             const _pushIsArr = et.startsWith('Array_');
@@ -155,7 +158,9 @@ export default {
         case 'pop': {
           if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
-          this._ensureOptStruct(`opt_${et}`, etC);
+          if (!this._isOptType(etC)) {
+            this._ensureOptStruct(`opt_${et}`, etC);
+          }
           if (sym?.arraySize === 0) this._lastPopEmpty = true;
           return `tsc_array_pop_${et}(&${objC})`;
         }

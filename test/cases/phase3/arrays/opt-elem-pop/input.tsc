@@ -1,0 +1,5 @@
+let arr: (i32 | null)[] = [42, null];
+const a = arr.pop();
+const b = arr.pop();
+console.log(a);
+console.log(b);

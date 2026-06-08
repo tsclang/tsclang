@@ -1842,3 +1842,15 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - Files changed: `bin/index.js`, `spec/13-build/13-build.md`, `test/cases/phase9/build/err-emit-flash-desktop/` (new), `test/cases/phase9/build/err-emit-flash-no-config/` (new)
 
 > 2026-06-08: Spec fix — `emit` default: `"binary"/"hex"` → `"c"`. Реализация всегда использовала `'c'` как default, spec отставал.
+
+> 2026-06-08: Fix #66 — Array of optional types `(T | null)[]` (П4, П5):
+> - **Root cause**: type resolver создавал `Array_opt_T` struct, но codegen не оборачивал элементы в opt struct initializer'ы, runtime macros не существовали, pop делал double-wrap `opt_opt_T`.
+> - **`_isOptType()` / `_wrapOptValue()`** (`helpers.js`): helpers для определения и оборачивания opt-значений. Null literal → `(opt_T){false, 0}`, value → `((opt_T){true, val})` (extra parens для macro comma protection).
+> - **`_ensureOptArrayMacros()`** (`helpers.js`): автоматическая генерация `tsc_array_free/push/pop_opt_T` macros при `_ensureArrayStruct` для opt-элементов.
+> - **Array literal** (`dispatch.js`, `arrays.js`): элементы оборачиваются в `_wrapOptValue()`.
+> - **Push** (`method-dispatch.js`): аргумент оборачивается в `_wrapOptValue()`.
+> - **Pop** (`method-dispatch.js`): skip `_ensureOptStruct` для opt-элементов (нет double-wrap). `infer.js` — `pop/shift` возвращают `etC` напрямую для opt-массивов.
+> - **Console.log** (`console.js`): `isOptArrayIndex` — has_value check только для `arr[i]` на `Array_opt_T` (не для Ident/Member/Call).
+> - **3 новых теста**: `phase3/arrays/opt-elem-literal` [R], `opt-elem-push` [R], `opt-elem-pop` [R].
+> - **AUDIT-PLAN**: #66 → RESOLVED. Критических NEEDS INVESTIGATION осталось 1 (#67).
+> - Files changed: `src/compiler/codegen/types/helpers.js`, `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/misc/arrays.js`, `src/compiler/codegen/calls/method-dispatch.js`, `src/compiler/codegen/calls/console.js`, `src/compiler/codegen/types/infer.js`, `test/cases/phase3/arrays/opt-elem-literal/` (new), `test/cases/phase3/arrays/opt-elem-push/` (new), `test/cases/phase3/arrays/opt-elem-pop/` (new), `AUDIT-PLAN.md`

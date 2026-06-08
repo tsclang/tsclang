@@ -226,10 +226,11 @@ export default {
           const innerIdent = ctype.slice(4);
           const ed = this.classes.get(innerIdent);
           const sym2 = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+          const isNullLiteral = expr.kind === 'Literal' && expr.litType === 'null';
           if (ed?.isEnum) {
             fmtParts.push('%d');
             fmtArgs.push(`${cexpr}.has_value ? (int)${cexpr}.value : -1`);
-          } else if (sym2?.optIsNull || (() => {
+          } else if (sym2?.optIsNull || isNullLiteral || (() => {
               if (expr.kind === 'Index' && expr.object.kind === 'Ident' && expr.index.kind === 'Literal') {
                 const tSym = this.lookup(expr.object.name);
                 return tSym?.nullOptFields?.has(`_${expr.index.value}`);
@@ -244,28 +245,36 @@ export default {
           } else {
             const innerCType = this._arrIdentToCType(innerIdent);
             let valExpr = cexpr;
+            const isOptArrayIndex = expr.kind === 'Index' && (() => {
+              const objType = expr.object ? this.inferType(expr.object) : null;
+              return objType?.startsWith('Array_opt_');
+            })();
             if (expr.kind === 'Call') {
               const _calleeProp = expr.callee?.kind === 'Member' ? expr.callee.prop : null;
               const _tmpPfx = _calleeProp === 'at' ? '_at_' : '_v_';
               const tmp = `${_tmpPfx}${this.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               valExpr = tmp;
+            } else if (isOptArrayIndex) {
+              const tmp = `_v_${this.tempCount++}`;
+              lines.push(`${ctype} ${tmp} = ${cexpr};`);
+              valExpr = tmp;
             }
             if (innerCType === 'double' || innerCType === 'float') {
               fmtParts.push('%g');
-              fmtArgs.push(`${valExpr}.value`);
+              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? ${valExpr}.value : -1.0` : `${valExpr}.value`);
             } else if (innerCType === 'int64_t') {
               if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
                 throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
               }
               fmtParts.push('%lld');
-              fmtArgs.push(`(long long)${valExpr}.value`);
+              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (long long)${valExpr}.value : 0LL` : `(long long)${valExpr}.value`);
             } else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') {
               fmtParts.push('%u');
-              fmtArgs.push(`(unsigned)${valExpr}.value`);
+              fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (unsigned)${valExpr}.value : 0` : `(unsigned)${valExpr}.value`);
             } else {
-              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
-              else { fmtParts.push('%d'); fmtArgs.push(`${valExpr}.value`); }
+              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? (long)${valExpr}.value : 0` : `(long)${valExpr}.value`); }
+              else { fmtParts.push('%d'); fmtArgs.push(isOptArrayIndex ? `${valExpr}.has_value ? ${valExpr}.value : 0` : `${valExpr}.value`); }
             }
           }
           continue;

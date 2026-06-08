@@ -419,6 +419,9 @@ export default {
               c = `${_packer}(${c})`;
             }
           }
+          if (this._isOptType(elemType)) {
+            c = this._wrapOptValue(c, e.expr, elemType);
+          }
           return c;
         }).join(', ');
         this._expectedType = prevExpected;

@@ -83,6 +83,10 @@ export default {
         this._ensureArrayFreeMacro('tsc_unknown', arrName, et);
         this._ensureArrayPushMacro('tsc_unknown', arrName, et);
       }
+      if (this._isOptType(et)) {
+        const ident = this.cTypeToIdent(et);
+        this._ensureOptArrayMacros(ident, arrName, et);
+      }
     }
   },
 
@@ -103,6 +107,33 @@ export default {
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
       this.addTop(`#define tsc_array_push_${elemIdent}(arr, val) do { ${arrName} *_a_ = (arr); ${et} _v_ = (val); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (${et}*)realloc(_a_->data, _nc_ * sizeof(${et})); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)`);
+    }
+  },
+
+  _isOptType(elemType) {
+    return elemType?.startsWith('opt_');
+  },
+
+  _wrapOptValue(cExpr, exprNode, elemType) {
+    if (!this._isOptType(elemType)) return cExpr;
+    const innerCType = this._arrIdentToCType(elemType.slice(4));
+    if (exprNode.kind === 'Literal' && exprNode.litType === 'null') {
+      return `((${elemType}){false, 0})`;
+    }
+    return `((${elemType}){true, ${cExpr}})`;
+  },
+
+  _ensureOptArrayMacros(elemIdent, arrName, et) {
+    this._ensureArrayFreeMacro(elemIdent, arrName, et);
+    this._ensureArrayPushMacro(elemIdent, arrName, et);
+    this._ensureArrayPopMacro(elemIdent, arrName, et);
+  },
+
+  _ensureArrayPopMacro(elemIdent, arrName, et) {
+    const key = `pop_${elemIdent}`;
+    if (!this._emittedHelpers.has(key)) {
+      this._emittedHelpers.add(key);
+      this.addTop(`#define tsc_array_pop_${elemIdent}(arr) ({ ${arrName} *_a_ = (arr); ${et} _r_ = {false, 0}; if (_a_->length > 0) { _r_ = _a_->data[--_a_->length]; } _r_; })`);
     }
   },
 

@@ -110,7 +110,7 @@
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
 | 65 | Async function arguments silently zeroed | **RESOLVED** | `async-emit.js:82` — params включены в state struct. Присваиваются перед первым poll. |
-| 66 | Array of optional types stores values wrong | **NEEDS INVESTIGATION** | `helpers.js:114-138` — opt_T struct с `has_value` + `value`. Инициализация элементов для optional типов требует проверки. |
+| 66 | Array of optional types stores values wrong | **RESOLVED** | `helpers.js` — `_wrapOptValue()` + `_isOptType()` + `_ensureOptArrayMacros()`. Array literal: `(opt_T){true, val}`. Push: extra parens for macro comma. Pop: skip double-wrap. Free: dynamic macro. Console.log: `isOptArrayIndex` check. 3 new tests. |
 | 67 | Tuple destructuring ignores type annotation | **NEEDS INVESTIGATION** | Обрабатывается через `VarDestructArr` path. Аннотация типа не проверяется. |
 | 89 | Map string keys use-after-free | **MITIGATED** | `vardecl.js:258` — компилятор ограничивает ключи compile-time string literals. Runtime UAF невозможна на практике. `runtime.h:575-579` — shallow copy без retain, но только для литералов. |
 
@@ -179,7 +179,7 @@
 
 | Категория | Всего | RESOLVED | STILL PRESENT | NEEDS INVESTIGATION | MITIGATED |
 |-----------|-------|----------|---------------|---------------------|-----------|
-| Критические | 4 | 1 | 0 | 2 | 1 |
+| Критические | 4 | 2 | 0 | 1 | 1 |
 | Высокие | 18 | 11 | 0 | 7 | 0 |
 | Средние | 13 | 2 | 0 | 11 | 0 |
 | Низкие | 4 | 0 | 0 | 4 | 0 |
