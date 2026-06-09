@@ -1924,3 +1924,15 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **3 новых теста**: `phase2/enum/hex-tostring` (non-sequential hex + toString), `phase2/enum/binary-tostring` (non-sequential binary + toString), `phase2/enum/binary-sequential` (sequential binary — verifies `_names[]` O(1)).
 > - **Регрессия**: phase2 ✓322.
 > - Files changed: `src/compiler/codegen/top-level/func.js`, `test/cases/phase2/enum/hex-tostring/` (new), `test/cases/phase2/enum/binary-tostring/` (new), `test/cases/phase2/enum/binary-sequential/` (new)
+
+> 2026-06-09: `strict` rules from `tsc.package.json` — production config support (П2, П3, П4):
+> - **Фича**: `tsc.package.json` → `"strict": ["no-any", "safe-div", ...]` на верхнем уровне — продакшн-способ задания strict-правил без CLI-флагов. Аналог `tsconfig.json` → `compilerOptions.strict`.
+> - **Приоритет**: `--strict` CLI > `tsc.package.json` > ничего. CLI полностью переопределяет конфиг.
+> - **Валидация**: `validate-config` проверяет что `strict` — массив строк с известными правилами. Runtime-валидация при build — через `_validateStrictRules()`.
+> - **П4 фиксы**:
+>   - `VALID_STRICT_RULES` вынесен на уровень модуля (не дублируется).
+>   - `_validateStrictRules()` — валидация типа (массив) и значений (известные правила) при build.
+>   - Убран двойной парсинг `tsc.package.json` — конфиг читается один раз, aliases пробрасываются через `buildOpts._aliases`.
+> - **4 новых теста**: `strict-from-pkg` (config → error), `strict-cli-override` (CLI overrides config), `strict-unknown-rule` (validate-config), `strict-not-array` (validate-config type check).
+> - **Регрессия**: phase9 ✓57, phase6 ✓48.
+> - Files changed: `bin/index.js`, `test/cases/phase9/strict/strict-from-pkg/` (new), `test/cases/phase9/strict/strict-cli-override/` (new), `test/cases/phase9/package-json/strict-unknown-rule/` (new), `test/cases/phase9/package-json/strict-not-array/` (new)
