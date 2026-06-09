@@ -1028,7 +1028,7 @@ const rxBuf: u8[64] = [0, 0, 0, 0, 0, 0, 0, 0,
 const rxHead = new Volatile<u8>(0)   // пишет ISR
 const rxTail = new Volatile<u8>(0)   // читает main loop
 
-@embedded.isr("USART_RX")
+@isr("USART_RX")
 function onUartRx(): void {
     const next = (rxHead.read() + 1) as u8
     if (next != rxTail.read()) {   // не переполнен

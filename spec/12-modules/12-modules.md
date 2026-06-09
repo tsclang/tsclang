@@ -615,7 +615,7 @@ function _startTimer(cb: () => void, ms: u64): void {
 - Borrow checker не отслеживает boxed closure — ответственность на авторе `native {}` блока
 - На платформах с `heap: false` — `TSC_CLOSURE_BOX` вызывает compile error
 
-**Embedded:** на `heap: false` платформах `FnPtr<T>` без captures — единственный способ передать callback в C. Для ISR используется `@embedded.isr`, не `FnPtr<T>`.
+**Embedded:** на `heap: false` платформах `FnPtr<T>` без captures — единственный способ передать callback в C. Для ISR используется `@isr`, не `FnPtr<T>`.
 
 ## `unsafe {}` — отключение проверок TSClang
 

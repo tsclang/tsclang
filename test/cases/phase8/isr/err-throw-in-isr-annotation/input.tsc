@@ -1,7 +1,7 @@
 
 class MyError extends Error {}
 
-@embedded.isr("TIMER1_COMPA")
+@isr("TIMER1_COMPA")
 function onTimer(): void {
     throw new MyError("bad");
 }

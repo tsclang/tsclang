@@ -114,14 +114,14 @@ export default {
       return;
     }
 
-    // @embedded.isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
-    const isrDecorator = (decorators ?? []).find(d => d.name === 'embedded.isr');
+    // @isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
+    const isrDecorator = (decorators ?? []).find(d => d.name === 'isr');
     if (isrDecorator) {
-      if (node.async) throw this.error(`TypeError: Cannot use 'async' with @embedded.isr on '${name}'`);
+      if (node.async) throw this.error(`TypeError: Cannot use 'async' with @isr on '${name}'`);
       const vectorArg = isrDecorator.args?.[0];
       const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
       const bodyHasThrow = (stmts) => (stmts ?? []).some(s => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
-      if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @embedded.isr handlers`);
+      if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @isr handlers`);
       const funcLines = [];
       this.pushScope();
       for (const p2 of (params ?? [])) this.define(p2.name, { ctype: p2.typeAnn ? this.resolveType(p2.typeAnn) : 'int32_t', varKind: 'let' });

@@ -10,7 +10,7 @@ TSC разделяет конкурентность на три независи
 |----------|-----------|---------|
 | `async/await` | все | стандартный |
 | `std/threads` | OS (desktop/server) | продвинутый |
-| `@embedded.isr` | embedded (AVR/Cortex) | системный |
+| `@isr` | embedded (AVR/Cortex) | системный |
 
 ---
 
@@ -157,14 +157,14 @@ ch.isFull()    // boolean — length >= capacity
 
 ```typescript
 // isFull — бинарная адаптация: два режима качества
-@embedded.isr("LIDAR_SCAN")
+@isr("LIDAR_SCAN")
 function onScan(): void {
     const resolution = tx.isFull ? Resolution.Low : Resolution.High
     tx.trySend(captureScan(resolution))   // drop если всё ещё полный
 }
 
 // length — градуальная адаптация: три ступени качества
-@embedded.isr("CAMERA_FRAME")
+@isr("CAMERA_FRAME")
 function onFrame(): void {
     const quality = ch.length < ch.capacity / 3  ? Quality.High
                   : ch.length < ch.capacity * 2/3 ? Quality.Medium
@@ -448,7 +448,7 @@ Thread.spawn(() => { process(msg) })  // ✅ — все поля thread-safe
 
 ---
 
-## 3. @embedded.isr — только Embedded
+## 3. @isr — только Embedded
 
 ISR — аппаратное прерывание. Не поток, не closure. Никакого захвата контекста.
 
@@ -480,30 +480,30 @@ const status = UART0.fr.read()   // C: *(volatile uint32_t*)0x101f1018 — не 
 1. **No cache** — каждое чтение/запись физически идёт на шину, не кэшируется в регистр процессора
 2. **No reordering** — компилятор не переставляет инструкции чтения/записи `Volatile<T>` относительно друг друга (критично для последовательности инициализации периферии)
 
-### @embedded.isr
+### @isr
 
 Функция-прерывание. Только embedded платформы.
 
 **Сигнатура:** всегда `(): void` — без параметров, без возвращаемого значения, без `throws`. Любое отклонение — ошибка компилятора:
 ```typescript
-@embedded.isr(14)
+@isr(14)
 function handler(): void { ... }          // ✅
 
-@embedded.isr(14)
+@isr(14)
 function handler(x: i32): void { ... }   // ❌ параметры запрещены
 
-@embedded.isr(14)
+@isr(14)
 function handler(): i32 { ... }          // ❌ return type должен быть void
 
-@embedded.isr(14)
+@isr(14)
 function handler(): void throws IOError { ... }  // ❌ throws запрещён
 ```
 
 Два варианта аргумента:
 
 ```typescript
-@embedded.isr("TIMER1_OVF")   // по имени вектора — AVR (avr-libc naming)
-@embedded.isr(14)              // по номеру вектора — ARM Cortex-M (IRQn)
+@isr("TIMER1_OVF")   // по имени вектора — AVR (avr-libc naming)
+@isr(14)              // по номеру вектора — ARM Cortex-M (IRQn)
 ```
 
 Пример:
@@ -517,7 +517,7 @@ type TimerEvent = { irq: u32; tick: u32 }
 static readonly irqCount = new Atomic<u32>(0)
 static readonly irqCh = new Channel<TimerEvent>(32)
 
-@embedded.isr(14)   // ARM Cortex-M: IRQ14
+@isr(14)   // ARM Cortex-M: IRQ14
 function onTimerInterrupt(): void {
     // Atomic<T> — ok
     irqCount.fetchAdd(1, RmwOrdering.Relaxed)
@@ -530,7 +530,7 @@ function onTimerInterrupt(): void {
     TIMER_REG.sr.write(0x0)   // сброс флага прерывания
 }
 
-@embedded.isr("TIMER1_OVF")   // AVR: именованный вектор
+@isr("TIMER1_OVF")   // AVR: именованный вектор
 function onTimerOverflow(): void {
     irqCount.fetchAdd(1, RmwOrdering.Relaxed)
 }
@@ -553,7 +553,7 @@ Context saving — полностью на стороне C компилятор
 **Ошибка на desktop:**
 
 ```typescript
-@embedded.isr("TIMER1_OVF")  // ❌ error: ISR not supported on "desktop"
+@isr("TIMER1_OVF")  // ❌ error: ISR not supported on "desktop"
 function onTimer(): void {
     counter++;
 }
@@ -566,8 +566,8 @@ function onTimer(): void {
 **Сравнение с native:**
 
 ```typescript
-// ✅ Через @embedded.isr — удобно
-@embedded.isr("TIMER1_OVF")
+// ✅ Через @isr — удобно
+@isr("TIMER1_OVF")
 function onTimer(): void {
     counter++;
 }
@@ -578,7 +578,7 @@ counter++;
 native `}`
 ```
 
-### Правила @embedded.isr
+### Правила @isr
 
 | Операция | Разрешено |
 |----------|-----------|
@@ -597,7 +597,7 @@ native `}`
 | `Map`, `Set` операции | ❌ ошибка компилятора (heap) |
 | `throw` / `throws` | ❌ ошибка компилятора |
 | `interrupts.disable()` внутри ISR | ❌ ошибка компилятора (прерывания уже отключены) |
-| Два `@embedded.isr` с одним вектором | ❌ ошибка компилятора (duplicate vector) |
+| Два `@isr` с одним вектором | ❌ ошибка компилятора (duplicate vector) |
 
 **Почему heap запрещён в ISR:**
 1. **Safety** — аллокация может завершиться OOM → crash системы
@@ -623,7 +623,7 @@ error[TSC-E081]: heap allocation in ISR context
 // ✅ Примитив на стеке + канал
 const _sensorChannel = new Channel<u16>(32)
 
-@embedded.isr(14)
+@isr(14)
 function handler(): void {
     const reading: u16 = ADC.read()       // примитив — стек, не heap
     _sensorChannel.trySend(reading)       // non-blocking
@@ -633,7 +633,7 @@ function handler(): void {
 const _buffer: u8[64] = [0, ...]
 let _bufferLen: i32 = 0
 
-@embedded.isr("UART_RX")
+@isr("UART_RX")
 function uartRx(): void {
     if (_bufferLen < 64) {
         _buffer[_bufferLen++] = UART.read()
@@ -643,7 +643,7 @@ function uartRx(): void {
 // ✅ Atomic счётчик
 const _counter = new Atomic<u32>(0)
 
-@embedded.isr("TIMER1_OVF")
+@isr("TIMER1_OVF")
 function timerOverflow(): void {
     _counter.fetchAdd(1, RmwOrdering.Relaxed)
 }
@@ -688,7 +688,7 @@ uint8_t sreg = SREG; cli();
 SREG = sreg;  // восстанавливаем флаги (не просто sei())
 ```
 
-> Внутри `interrupts.disable()` те же ограничения что и в `@embedded.isr`: нет `await`, нет `new`.
+> Внутри `interrupts.disable()` те же ограничения что и в `@isr`: нет `await`, нет `new`.
 
 ### EmbeddedSignal — мост ISR → async
 
@@ -702,7 +702,7 @@ import { EmbeddedSignal } from "std/embedded"
 // статически выделяется в BSS — не heap
 const adcReady = new EmbeddedSignal()
 
-@embedded.isr("ADC_vect")
+@isr("ADC_vect")
 function adc_isr(): void {
     ADCSRA  // сброс флага прерывания (читаем регистр)
     adcReady.set()    // ✅ ISR-safe: просто volatile bool = true в C
@@ -843,7 +843,7 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 | Задача | TSC синтаксис | Гарантия |
 |--------|---------------|----------|
 | MMIO регистры | `Volatile<T>` | Прямое обращение к шине, no reorder |
-| Обработчик прерывания | `@embedded.isr(N)` / `@embedded.isr("NAME")` | `__attribute__((interrupt))`, context saved |
+| Обработчик прерывания | `@isr(N)` / `@isr("NAME")` | `__attribute__((interrupt))`, context saved |
 | Общее состояние с IRQ | `static Atomic<T>` | Атомарный доступ без гонок |
 | Составные данные с IRQ | `interrupts.disable()` | Критическая секция |
 | Сигнал ISR → async (нет данных) | `EmbeddedSignal` | бит в `uint32_t`, auto-reset, быстрый idle |
@@ -926,7 +926,7 @@ declare platform {
 
 ### `@signal` — POSIX-сигналы (desktop)
 
-Аналог `@embedded.isr` для desktop — обработка POSIX-сигналов.
+Аналог `@isr` для desktop — обработка POSIX-сигналов.
 
 ```typescript
 @signal("SIGINT")
@@ -986,7 +986,7 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 |-----------|---------|----------|----------|
 | `@embedded.inline` | ✅ | ✅ | — |
 | `@embedded.noHeap` | ✅ | ✅ | Compile-time |
-| `@embedded.isr` | ❌ | ✅ | Compile-time |
+| `@isr` | ❌ | ✅ | Compile-time |
 | `@signal` | ✅ | ❌ | Compile-time |
 
 
@@ -1075,7 +1075,7 @@ void main(void) {
 │       ├── Readonly<T>: zero-copy immutable sharing   │
 │       └── компилятор проверяет на Thread.spawn       │
 │                                                      │
-│  @embedded.isr ─── ISR ─────────── embedded only     │
+│  @isr ─── ISR ─────────── embedded only     │
 │       │                                              │
 │       └── только Volatile<T> + Atomic<T>             │
 │       └── нет захвата контекста                      │
