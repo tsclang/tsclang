@@ -31,7 +31,7 @@ export default {
     const _classDecoratorFields = [];   // extra fields to add to struct
     const _classDecoratorInits  = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
-      if (['embedded.inline', 'embedded.pool', 'packed', 'align'].includes(d.name)) continue;
+      if (['embedded.inline', 'pool', 'packed', 'align'].includes(d.name)) continue;
       const decFn = this._decoratorFns?.get(d.name);
       if (decFn) {
         const { fields: df, inits: di } = this._analyzeClassDecorator(decFn);
@@ -42,19 +42,19 @@ export default {
 
     // Process @embedded.* decorators
     const inlineDec = decorators?.find(d => d.name === 'embedded.inline');
-    const poolDec   = decorators?.find(d => d.name === 'embedded.pool');
+    const poolDec   = decorators?.find(d => d.name === 'pool');
     const isEmbedded = this._isEmbeddedOrRetro();
 
     if (inlineDec && !isEmbedded) {
       throw this.error(`Warning: @embedded.inline on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
     if (poolDec && !isEmbedded) {
-      throw this.error(`Warning: @embedded.pool on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+      throw this.error(`Warning: @pool on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
     if (poolDec && isEmbedded) {
       const poolSizeArg = poolDec.args?.[0];
       if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
-        throw this.error(`TypeError: @embedded.pool requires a numeric capacity argument; use @embedded.pool(N)`, node);
+        throw this.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
       }
     }
     if (inlineDec && isEmbedded) {

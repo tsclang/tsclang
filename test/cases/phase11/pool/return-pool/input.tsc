@@ -1,4 +1,4 @@
-@embedded.pool(4) class Spark { active: boolean; }
+@pool(4) class Spark { active: boolean; }
 function create(): Spark throws Error {
     let s = new Spark();
     s.active = true;

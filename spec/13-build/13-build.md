@@ -1628,7 +1628,7 @@ while (counter_next(&gen)) {
 
 **Размер:** `sizeof(counter_gen)` = 16 байт. На стеке или `@static`.
 
-#### Классы без heap: `@embedded.inline` и `@embedded.pool(N)`
+#### Классы без heap: `@embedded.inline` и `@pool(N)`
 
 Обычный `new` требует heap. На embedded — два встроенных декоратора:
 
@@ -1648,10 +1648,10 @@ Point p = {10, 20};
 p.x = 15;
 ```
 
-**`@embedded.pool(N)`** — статический пул на N экземпляров. `new` берёт слот из пула:
+**`@pool(N)`** — статический пул на N экземпляров. `new` берёт слот из пула:
 
 ```typescript
-@embedded.pool(16)
+`@pool(N)`
 class Sprite {
     x: i16; y: i16; bitmap: u8[8]
     constructor(x: i16, y: i16) { ... }
@@ -1722,12 +1722,12 @@ Result_opt_ref_Spark_TscError create(void) {
 ```
 
 `new` без compile-time capacity при `allocator: "static"` → ошибка компилятора.
-`@embedded.pool(N)` на desktop — работает, но обычно не нужен.
+`@pool(N)` на desktop — работает, но обычно не нужен.
 
 | Декоратор | Где живёт объект | `new` |
 |-----------|-----------------|-------|
 | `@embedded.inline` | стек (value-тип) | не используется |
-| `@embedded.pool(N)` | BSS (статический пул) | берёт слот из пула |
+| `@pool(N)` | BSS (статический пул) | берёт слот из пула |
 | *(нет декоратора)* | heap | требует `allocator: "heap"` |
 
 ---

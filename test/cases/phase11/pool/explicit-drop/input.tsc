@@ -1,4 +1,4 @@
-@embedded.pool(4) class Gem { value: i32; }
+@pool(4) class Gem { value: i32; }
 function test(): void throws Error {
     let g = new Gem();
     g.value = 99;

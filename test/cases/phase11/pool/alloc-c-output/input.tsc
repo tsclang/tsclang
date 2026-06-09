@@ -1,4 +1,4 @@
-@embedded.pool(2) class Token { id: u8; }
+@pool(2) class Token { id: u8; }
 function make(): Token throws Error {
     const t = new Token();
     return t;

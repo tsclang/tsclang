@@ -1,1 +1,1 @@
-@embedded.pool class Bad { x: i32; }
+@pool class Bad { x: i32; }

@@ -1,4 +1,4 @@
-@embedded.pool(4) class Sensor {
+@pool(4) class Sensor {
     id: i32;
     temp: i32;
 

@@ -1,4 +1,4 @@
-@embedded.pool(2) class Gem { value: i32; }
+@pool(2) class Gem { value: i32; }
 
 try {
     const g = new Gem();

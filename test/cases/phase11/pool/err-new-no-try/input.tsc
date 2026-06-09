@@ -1,2 +1,2 @@
-@embedded.pool(4) class Gem { value: i32; }
+@pool(4) class Gem { value: i32; }
 let g = new Gem();

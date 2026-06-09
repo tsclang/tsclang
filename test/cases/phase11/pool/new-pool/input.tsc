@@ -1,4 +1,4 @@
-@embedded.pool(4) class Particle { x: i32; }
+@pool(4) class Particle { x: i32; }
 function make(): Particle throws Error {
     const p = new Particle();
     p.x = 10;
