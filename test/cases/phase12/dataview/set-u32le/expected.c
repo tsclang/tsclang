@@ -11,7 +11,7 @@ int main(void) {
     uint32_t _dv_1 = (uint32_t)0xDEADBEEF;
     memcpy((void*)(dv.data + dv.byte_offset + 0), &_dv_1, 4);
     (void)0;
-    uint32_t _dv_2; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 4);
+    uint32_t _dv_2 = {0}; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 4);
     printf("%u\n", (uint32_t)_dv_2);
     return 0;
 }

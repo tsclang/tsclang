@@ -27,7 +27,7 @@ int main(void) {
     Circle c = {0};
     c.r = 5.0;
     Shape shape = {.self = &c, .vtable = &Circle_Shape_vtable};
-    double a;
+    double a = {0};
     if (shape.vtable == &Circle_Shape_vtable) {
         double r = ((Circle*)shape.self)->r;
         a = 3.14 * r * r;

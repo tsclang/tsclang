@@ -11,7 +11,7 @@ int main(void) {
     float _dv_1 = (float)(float)3.14;
     memcpy((void*)(dv.data + dv.byte_offset + 0), &_dv_1, 4);
     (void)0;
-    float _dv_2; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 4);
+    float _dv_2 = {0}; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 4);
     printf("%g\n", (double)(float)_dv_2);
     return 0;
 }

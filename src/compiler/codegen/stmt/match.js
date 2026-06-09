@@ -14,7 +14,7 @@
       ? this.resolveType(typeAnn)
       : (cases.length > 0 ? this.inferType(cases[0].body) : 'int32_t');
     const qualifier = (varKind === 'const') ? '' : '';  // match result var is never const
-    p(`${resultType} ${name};`);
+    p(`${resultType} ${name} = {0};`);
     this.define(name, { ctype: resultType, varKind: 'let' });
 
     // Check if discriminant is an enum type

@@ -12,7 +12,7 @@ int main(void) {
     (dv.data + dv.byte_offset + 1)[0] = (uint8_t)0x02;
     (dv.data + dv.byte_offset + 2)[0] = (uint8_t)0x03;
     (dv.data + dv.byte_offset + 3)[0] = (uint8_t)0x04;
-    uint32_t _dv_1;
+    uint32_t _dv_1 = {0};
     uint8_t *_p = (uint8_t*)&_dv_1;
     uint8_t *_s = (dv.data + dv.byte_offset + 0);
     _p[3] = _s[0]; _p[2] = _s[1]; _p[1] = _s[2]; _p[0] = _s[3];

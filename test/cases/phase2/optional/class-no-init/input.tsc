@@ -1,0 +1,6 @@
+class Point {
+    x: f64;
+    y: f64;
+}
+let p: Point;
+console.log(p.x);

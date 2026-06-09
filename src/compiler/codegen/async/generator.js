@@ -341,7 +341,7 @@ export default {
         const ct = typeAnn ? this.resolveType(typeAnn)
                  : init ? (this.inferType(init) || 'int32_t') : 'int32_t';
         const initC = init ? this._selfE(init) : null;
-        lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name};`);
+        lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name} = {0};`);
       }
     } else {
       const tmp = [];

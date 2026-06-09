@@ -1,0 +1,3 @@
+enum Color { Red, Green, Blue }
+let x: Color;
+console.log(x);

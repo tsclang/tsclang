@@ -3,7 +3,7 @@
 int main(void) {
     TSC_INIT();
     const int32_t x = 5;
-    String result;
+    String result = {0};
     if (x == 0) { result = STR_LIT("zero"); }
     else if (x >= 1 && x < 4) { result = STR_LIT("small"); }
     else { result = STR_LIT("other"); }

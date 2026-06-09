@@ -100,7 +100,31 @@ export default {
         return null;
       }
     }
-    const l = this.exprToC(node.left, lines, depth);
+    // null assignment: compile error for non-nullable, compound literal for opt_T
+    if (node.op === '=' && node.right?.kind === 'Literal' && node.right.litType === 'null') {
+      const leftSym = node.left.kind === 'Ident' ? this.lookup(node.left.name) : null;
+      const leftCtype = leftSym?.ctype;
+      if (leftCtype && !leftCtype.startsWith('opt_') && leftCtype !== 'void *' && leftCtype !== 'tsc_unknown' && !leftCtype.endsWith(' *')) {
+        throw this.error(`cannot assign null to non-nullable type`, node);
+      }
+      if (leftCtype?.startsWith('opt_')) {
+        if (leftSym) leftSym.optIsNull = true;
+        let l;
+        if (node.left.kind === 'Ident' && this._narrowedVars?.has(node.left.name)) {
+          l = node.left.name;
+        } else {
+          l = this.exprToC(node.left, lines, depth);
+        }
+        return `${l} = (${leftCtype}){false, 0}`;
+      }
+    }
+    // Narrowing LHS fix: use variable name directly for narrowed opt_ Ident
+    let l;
+    if (node.left.kind === 'Ident' && this._narrowedVars?.has(node.left.name)) {
+      l = node.left.name;
+    } else {
+      l = this.exprToC(node.left, lines, depth);
+    }
     // Type-directed literal emit: float field = 1.0 → 1.0f
     let r;
     if (node.right?.kind === 'Literal' && node.right.litType === 'number' && node.op === '=') {
@@ -110,6 +134,19 @@ export default {
       }
     }
     if (r === undefined) r = this.exprToC(node.right, lines, depth);
+
+    // opt_T value/null assignment: wrap in compound literal
+    if (node.op === '=' && node.left.kind === 'Ident') {
+      const leftSym = this.lookup(node.left.name);
+      const leftCtype = leftSym?.ctype;
+      if (leftCtype?.startsWith('opt_') && !(node.right?.kind === 'Literal' && node.right.litType === 'null')) {
+        const rightType = this.inferType(node.right);
+        if (rightType !== leftCtype) {
+          leftSym.optIsNull = false;
+          r = `(${leftCtype}){true, ${r}}`;
+        }
+      }
+    }
 
     // Member assign of struct {0} → need (Type){0} compound literal for valid C
     if (node.left.kind === 'Member' && r === '{0}' && node.op === '=') {
@@ -175,7 +212,13 @@ export default {
       return null;
     }
 
-    const leftType = this.inferType(node.left);
+    let leftType;
+    if (node.left.kind === 'Ident' && this._narrowedVars?.has(node.left.name)) {
+      const leftSym = this.lookup(node.left.name);
+      leftType = leftSym?.ctype ?? 'int32_t';
+    } else {
+      leftType = this.inferType(node.left);
+    }
 
     // += for string: s += "x" → eval concat first, release old, assign (ownership transfer)
     if (node.op === '+=' && leftType === 'String') {

@@ -10,7 +10,7 @@ int main(void) {
     DataView dv = {.data = buf.data, .byte_offset = (size_t)(0), .byte_length = (size_t)(buf.length)};
     (dv.data + dv.byte_offset + 0)[0] = (uint8_t)0x01;
     (dv.data + dv.byte_offset + 1)[0] = (uint8_t)0x00;
-    uint16_t _dv_1; memcpy(&_dv_1, (dv.data + dv.byte_offset + 0), 2);
+    uint16_t _dv_1 = {0}; memcpy(&_dv_1, (dv.data + dv.byte_offset + 0), 2);
     printf("%u\n", (unsigned)(uint16_t)_dv_1);
     return 0;
 }

@@ -99,3 +99,19 @@ const label = match (dir) {
 | ╨а╨░╨╖╨╝╨╡╤А ╨▒╨╕╨╜╨░╤А╤П | ╨▒╨╛╨╗╤М╤И╨╡ | ╨╝╨╕╨╜╨╕╨╝╨░╨╗╤М╨╜╤Л╨╣ |
 | ╨Я╤А╨╕╨╝╨╡╨╜╨╡╨╜╨╕╨╡ | ╨╛╨▒╤Й╨╕╨╣ ╤Б╨╗╤Г╤З╨░╨╣ | embedded, ╤Д╨╗╨░╨│╨╕, ╨║╨╛╨╜╤Б╤В╨░╨╜╤В╤Л |
 
+### Инициализация переменных enum
+
+Enum — единственный тип в TSClang, требующий явной инициализации. В отличие от TypeScript (где неинициализированная enum-переменная = `undefined`), TSClang требует явного значения или nullable-аннотации.
+
+```typescript
+let c: Color;              // compile error: variable of enum type must be initialized
+let c: Color = Color.Red;  // OK
+let c?: Color;             // OK — sugar for Color | null, default null
+let c: Color | null;       // OK — opt_Color, default null
+```
+
+Обоснование:
+- Авто-init первым членом был бы неожиданным для TS-разработчика (в TS = `undefined`).
+- Explicit-value enum с дырками (`enum E { A=5, B=10 }`) делает `= 0` невалидным значением.
+- Честнее требовать явное присвоение или `?`, чем молча подставлять значение.
+- Nullable enum (`Color | null`) компилируется в `opt_Color` с `has_value` флагом.

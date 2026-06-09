@@ -117,3 +117,24 @@ interface SensorData {
 | Desktop / достаточно памяти | `T \| null` — безопаснее, читаемее |
 | `i32 \| null` одиночная переменная | sentinel если подходит, иначе `T \| null` |
 
+### Присваивание null
+
+- `x = null` для **non-nullable** типа → compile error
+- `x = null` для `opt_T` → `x = (opt_T){false, 0}`
+- `x = null` для указателя (`Shared<T>`, `Weak<T>`) → допустимо (pointer = NULL)
+
+```typescript
+let x: i32 = 5;
+x = null;            // compile error: cannot assign null to non-nullable type
+
+let y: i32 | null = 5;
+y = null;            // OK — opt_i32: y = (opt_i32){false, 0}
+
+let s: string = "hi";
+s = null;            // compile error: string is non-nullable
+
+let w: Weak<Foo>;
+w = null;            // OK — pointer type, w = NULL
+```
+
+Примитивы, строки и struct-типы не могут принимать `null`. Для nullable-переменных используйте `T | null` или `T?`.

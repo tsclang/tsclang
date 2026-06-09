@@ -758,9 +758,9 @@ export default {
 
     if (dir === 'get') {
       if (le) {
-        lines.push(`${I}${cType} ${tmp}; memcpy(&${tmp}, ${ptr}, ${sz});`);
+        lines.push(`${I}${cType} ${tmp} = {0}; memcpy(&${tmp}, ${ptr}, ${sz});`);
       } else {
-        lines.push(`${I}${cType} ${tmp};`);
+        lines.push(`${I}${cType} ${tmp} = {0};`);
         lines.push(`${I}uint8_t *_p = (uint8_t*)&${tmp};`);
         lines.push(`${I}uint8_t *_s = ${ptr};`);
         if (sz === 2) {

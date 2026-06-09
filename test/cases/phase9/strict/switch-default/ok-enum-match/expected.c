@@ -7,7 +7,7 @@ static const char *Color_names[] = { "Red", "Green", "Blue" };
 int main(void) {
     TSC_INIT();
     Color c = Color_Red;
-    double val;
+    double val = {0};
     switch (c) {
         case Color_Red: val = 1; break;
         case Color_Green: val = 2; break;

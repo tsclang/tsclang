@@ -27,7 +27,7 @@ int main(void) {
     TSC_INIT();
     Counter c = Counter_new(3);
     Counter_iter_t _iter_0 = Counter_iter(&c);
-    opt_i32 _elem_0;
+    opt_i32 _elem_0 = {0};
     while ((_elem_0 = Counter_iter_next(&_iter_0)).has_value) {
         const int32_t x = _elem_0.value;
         printf("%d\n", x);

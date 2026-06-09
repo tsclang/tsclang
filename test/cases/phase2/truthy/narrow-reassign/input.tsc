@@ -1,0 +1,6 @@
+let s: string | null = "hello";
+if (s != null) {
+    console.log(s);
+    s = null;
+}
+console.log(s);

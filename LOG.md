@@ -1,4 +1,4 @@
-# TSClang — Лог разработки
+﻿# TSClang — Лог разработки
 
 ## Статусы
 
@@ -1880,3 +1880,23 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Регрессия**: phase0 ✓30, phase1/ternary ✓3, phase1/truthy ✓4, phase2/optional ✓18, phase2/truthy ✓14, phase4/class ✓12, phase7/async ✓81.
 > - **AUDIT-PLAN**: T-1..T-4, T-6 → RESOLVED, T-5 → DEFERRED. Audit §2: 5/6 RESOLVED, 1 DEFERRED. Итого: 67 RESOLVED, 1 DEFERRED, 24 NEEDS INVESTIGATION.
 > - Files changed: `src/compiler/codegen/expr/dispatch.js`, `src/compiler/codegen/stmt/control-flow.js`, `src/compiler/codegen/types/infer.js`, `AUDIT-PLAN.md`, `test/cases/phase2/truthy/` (14 new), `test/cases/phase2/optional/chain-field-null/` (new), `test/cases/phase2/optional/chain-field-value/` (new), `test/cases/phase2/optional/chain-field-i32/` (new), `test/cases/phase2/optional/as-nonnull-value/` (new)
+
+> 2026-06-09: Spec update — zero-init и null-assign semantics (П4, П5):
+> - **`spec/02-syntax/02-variables.md`**: добавлена секция «Инициализация по умолчанию» — таблица zero-value для всех типов + правило присваивания null.
+> - **`spec/03-types/03-enum.md`**: добавлена секция «Инициализация переменных enum» — enum без init = compile error, нужен явное значение или `?`.
+> - **`spec/03-types/03-null.md`**: добавлена секция «Присваивание null» — `x = null` для non-nullable = compile error, для `opt_T` = `(opt_T){false, 0}`, для указателей = OK.
+> - **`spec/09-errors/09-cleanup.md`**: уточнена строка 66 — расширенное описание zero-init для всех типов (не только классы/массивы).
+> - **План реализации** (3 коммита, после одобрения):
+>   - Коммит A: Zero-init в `vardecl.js` (примитивы → `0`/`0.0`/`false`, string → `STR_LIT("")`, struct → `{0}`), compile error для enum без init.
+>   - Коммит B: Compile error для `x = null` на non-nullable в `assign.js`.
+>   - Коммит C: Починить `x = null` для `opt_T` + fix narrowing+lhs bug в `dispatch.js`.
+> - Files changed: `spec/02-syntax/02-variables.md`, `spec/03-types/03-enum.md`, `spec/03-types/03-null.md`, `spec/09-errors/09-cleanup.md`
+
+> 2026-06-09: Commit C — opt_T null-assign + narrowing fix (П4, П5, П6):
+> - **Bug fix**: `assign.js:112` — null-assign path used raw `exprToC` for LHS, producing `s.value = (opt_string){false, 0}` for narrowed vars instead of `s = (opt_string){false, 0}`. Fixed by applying same narrowing LHS bypass (check `_narrowedVars`) as the general path (lines 118-121).
+> - **opt_T null-assign**: `x = null` where `x: opt_T` → `x = (opt_T){false, 0}`. Sets `leftSym.optIsNull = true`.
+> - **opt_T value wrapping**: `x = val` where `x: opt_T` and `val` is not null → `x = (opt_T){true, val}`. Sets `leftSym.optIsNull = false`.
+> - **Console.log opt_T**: prints `x.value` when `optIsNull=false`, prints `has_value ? "some" : "null"` when `optIsNull=true`.
+> - **3 new tests**: `phase2/optional/opt-null-reassign`, `phase2/optional/opt-null-roundtrip`, `phase2/truthy/narrow-reassign`.
+> - **Full regression**: all 1268 tests pass (phase0 ✓30, phase1 ✓28, phase2 ✓317, phase3 ✓360, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓41, phase8 ✓44, phase9 ✓53, phase10 ✓20, phase11 ✓38, phase12 ✓119, phase13 ✓21, phase14 ✓7, phase15 ✓10, phase16 ✓3, phase17 ✓12, phase18 ✓21, phase19 ✓74).
+> - Files changed: `src/compiler/codegen/expr/assign.js`, `test/cases/phase2/optional/opt-null-reassign/` (new), `test/cases/phase2/optional/opt-null-roundtrip/` (new), `test/cases/phase2/truthy/narrow-reassign/` (new)

@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    int32_t x;
+    int32_t x = 0;
     x = 99;
     printf("%d\n", x);
     return 0;

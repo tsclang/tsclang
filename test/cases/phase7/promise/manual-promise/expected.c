@@ -2,7 +2,7 @@
 
 typedef struct { bool _done; int32_t _result; bool _ok; int32_t _error; } Promise_i32;
 
-static int32_t _lambda_0_i32_result;
+static int32_t _lambda_0_i32_result = 0;
 static bool _lambda_0_done = false;
 
 static void _lambda_0_resolve(int32_t v) { _lambda_0_i32_result = v; _lambda_0_done = true; }

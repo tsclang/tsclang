@@ -7,7 +7,7 @@ static const char *Dir_names[] = { "North", "South", "East", "West" };
 int main(void) {
     TSC_INIT();
     Dir d = Dir_East;
-    String s;
+    String s = {0};
     switch (d) {
         case Dir_North: s = STR_LIT("N"); break;
         case Dir_South: s = STR_LIT("S"); break;

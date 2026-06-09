@@ -146,8 +146,8 @@ export default {
             const objC = this.exprToC(init.callee.object, lines, depth);
             const sepC = init.args[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
             const lenName = `${name}_len`;
-            p(`String *${name};`);
-            p(`int32_t ${lenName};`);
+            p(`String *${name} = NULL;`);
+            p(`int32_t ${lenName} = 0;`);
             p(`tsc_string_split(${objC}, ${sepC}, &${name}, &${lenName});`);
             this.define(name, { ctype: 'String *', varKind, isArray: false, isSplitResult: true, lenName });
             this._registerCleanup(`tsc_string_array_free(${name}, ${lenName})`);
@@ -726,7 +726,7 @@ export default {
           const resolveName = lambda?.params?.[0]?.name ?? 'resolve';
           const rejectName = lambda?.params?.[1]?.name ?? 'reject';
           this._topBlank();
-          this.topLevel.push(`static ${innerType} ${prefix}_${typeIdent}_result;`);
+          this.topLevel.push(`static ${innerType} ${prefix}_${typeIdent}_result = 0;`);
           this.topLevel.push(`static bool ${prefix}_done = false;`);
           this._topBlank();
           this.topLevel.push(`static void ${prefix}_resolve(${innerType} v) { ${prefix}_${typeIdent}_result = v; ${prefix}_done = true; }`);
@@ -1512,13 +1512,25 @@ export default {
             }
           }
         } else {
-          // No initializer: zero-init owned types for safe cleanup
+          // No initializer: zero-init for safe defaults, compile error for enum
+          const enumDef = this.classes.get(ctype);
+          if (enumDef?.isEnum && !enumDef?.isStringLiteralUnion && !enumDef?.isKeyOf) {
+            throw this.error(`variable of enum type "${ctype}" must be explicitly initialized or declared nullable`);
+          }
+          const PRIMITIVE_ZERO = {
+            'int8_t': '0', 'int16_t': '0', 'int32_t': '0', 'int64_t': '0',
+            'uint8_t': '0', 'uint16_t': '0', 'uint32_t': '0', 'uint64_t': '0',
+            'float': '0.0f', 'double': '0.0',
+            'bool': 'false',
+            'char': '0',
+            'size_t': '0', 'ptrdiff_t': '0',
+          };
           if (ctype === 'String') {
-            p(`${this.varDecl(qualifier, ctype, name)} = NULL;`);
-          } else if (ctype?.startsWith('Array_')) {
-            p(`${this.varDecl(qualifier, ctype, name)} = {0};`);
+            p(`${this.varDecl(qualifier, ctype, name)} = STR_LIT("");`);
+          } else if (PRIMITIVE_ZERO[ctype] !== undefined) {
+            p(`${this.varDecl(qualifier, ctype, name)} = ${PRIMITIVE_ZERO[ctype]};`);
           } else {
-            p(`${this.varDecl(qualifier, ctype, name)};`);
+            p(`${this.varDecl(qualifier, ctype, name)} = {0};`);
           }
         }
         // Store compile-time value for const variables with literal init (used for const-cast overflow checking)

@@ -461,7 +461,7 @@
           const tmpVar = `_cp_${n}`;
           const bindName2 = node.binding.kind === 'Ident' ? node.binding.name : null;
           p(`TscCodePointIter ${iterVar} = tsc_codepoints(${strC});`);
-          p(`uint32_t ${tmpVar};`);
+          p(`uint32_t ${tmpVar} = 0;`);
           p(`while (tsc_codepoints_next(&${iterVar}, &${tmpVar})) {`);
           if (bindName2) {
             lines.push(`${II}${qual}uint32_t ${bindName2} = ${tmpVar};`);
@@ -483,7 +483,7 @@
           const tmpVar = `_g_${n}`;
           const bindName2 = node.binding.kind === 'Ident' ? node.binding.name : null;
           p(`TscGraphemeIter ${iterVar} = tsc_graphemes(${strC});`);
-          p(`String ${tmpVar};`);
+          p(`String ${tmpVar} = {0};`);
           p(`while (tsc_graphemes_next(&${iterVar}, &${tmpVar})) {`);
           if (bindName2) {
             lines.push(`${II}${qual}String ${bindName2} = ${tmpVar};`);
@@ -506,7 +506,7 @@
             const iterVar = `_iter_${n}`;
             const paramVar = `_p_${n}`;
             p(`TscURLParamIter ${iterVar} = tsc_url_params_iter(&${urlName});`);
-            p(`TscURLParam ${paramVar};`);
+            p(`TscURLParam ${paramVar} = {0};`);
             p(`while (tsc_url_params_next(&${iterVar}, &${paramVar})) {`);
             const [kElem, vElem] = node.binding.elems;
             if (kElem) {
@@ -678,7 +678,7 @@
             const _objC = this.exprToC(node.iterable, lines, depth);
             if (_forOfSym) { this.pushScope(); this._trackRefBorrow(_forOfSym); }
             p(`${_forOfClass._iterStructName} ${_iterVar} = ${_clsName}_iter(&${_objC});`);
-            p(`${_optType} ${_elemVar};`);
+            p(`${_optType} ${_elemVar} = {0};`);
             p(`while ((${_elemVar} = ${_clsName}_iter_next(&${_iterVar})).has_value) {`);
             const _bindName = node.binding.kind === 'Ident' ? node.binding.name : null;
             if (_bindName) {

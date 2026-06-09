@@ -10,7 +10,7 @@ Color getColor(void) {
 
 int main(void) {
     TSC_INIT();
-    String name;
+    String name = {0};
     Color _tsc_disc_0 = getColor();
     if (_tsc_disc_0 == Color_Red) { name = STR_LIT("red"); }
     else if (_tsc_disc_0 == Color_Green) { name = STR_LIT("green"); }
