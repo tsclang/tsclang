@@ -19,6 +19,7 @@
           if (enumDef.isConst) throw this.error(`"toString()" is not available on const enum`);
           const memberC = `${enumName}_${callee.object.prop}`;
           if (enumDef.isStringEnum) return `${enumName}_strings[(int)${memberC}]`;
+          if (enumDef.needsToString) return `${enumName}_toString(${memberC})`;
           return `${enumName}_names[(int)${memberC}]`;
         }
       }

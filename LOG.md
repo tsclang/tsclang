@@ -1906,3 +1906,13 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **Исследование narrowed багов завершено**: оба бага (narrowing LHS + opt_T null-assign) подтверждены починенными. Все сценарии из отчёта покрыты тестами: opt-null-reassign (null assign), opt-null-roundtrip (null→val→null), narrow-reassign (if+narrowing+null), while-null-loop (while+narrowing+null).
 > - **phase2/truthy**: 16 tests pass.
 > - Files changed: `test/cases/phase2/truthy/while-null-loop/` (new), `LOG.md`
+
+> 2026-06-09: Fix enum .toString() OOB for non-sequential explicit values (T-4 spinoff, П1, П4, П5):
+> - **Баг**: `Color_names[(int)Color_Green]` = OOB при `enum Color { Red=1, Green=5, Blue=10 }` — массив из 3 элементов, индекс 5.
+> - **Решение**: для numeric enum с непоследовательными значениями генерировать `_toString()` switch-функцию вместо `_names[]` массива. Sequential enum (0,1,2,...) — остаётся массив (O(1), компактно). П1: switch — код во flash (embedded-safe), массив — RAM.
+> - **func.js:26-44**: детектирование `isSequential` (значения 0,1,2,...), генерация `_toString()` при дырках, флаг `needsToString` в `this.classes`.
+> - **conversion.js:21-23**: вызов `_toString(member)` когда `needsToString`, иначе `_names[(int)member]`.
+> - **1 новый тест**: `phase2/enum/explicit-tostring` — enum с explicit values + .toString().
+> - **1 обновлённый expected**: `phase2/enum/numeric-explicit` — теперь генерирует `_toString()` вместо `_names[]`.
+> - **Регрессия**: phase2 ✓319, phase3 ✓360, phase4/match ✓11, phase9/switch-default ✓2.
+> - Files changed: `src/compiler/codegen/top-level/func.js`, `src/compiler/codegen/calls/conversion.js`, `test/cases/phase2/enum/explicit-tostring/` (new), `test/cases/phase2/enum/numeric-explicit/expected.c` (updated)

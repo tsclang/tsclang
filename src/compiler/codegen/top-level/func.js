@@ -23,16 +23,25 @@ export default {
       return { name: m.name, val };
     });
     this.addTop(`typedef enum { ${entries.map(e => `${name}_${e.name} = ${e.val}`).join(', ')} } ${name};`);
+    let needsToString = false;
     if (!isConst) {
       if (isStringEnum) {
         this.addTop(`static const char *${name}_strings[] = { ${entries.map(e => `"${e.strVal}"`).join(', ')} };`);
       } else {
         this.addTop(`static const ${name} ${name}_values[] = { ${entries.map(e => `${name}_${e.name}`).join(', ')} };`);
-        this.addTop(`static const char *${name}_names[] = { ${entries.map(e => `"${e.name}"`).join(', ')} };`);
+        const intVals = entries.map(e => parseInt(e.val));
+        const isSequential = intVals.every((v, i) => v === i);
+        if (isSequential) {
+          this.addTop(`static const char *${name}_names[] = { ${entries.map(e => `"${e.name}"`).join(', ')} };`);
+        } else {
+          needsToString = true;
+          const cases = entries.map(e => `        case ${name}_${e.name}: return "${e.name}";`).join('\n');
+          this.addTop(`static const char *${name}_toString(${name} v) {\n    switch (v) {\n${cases}\n        default: return "unknown";\n    }\n}`);
+        }
       }
     }
     this.addTop('');
-    this.classes.set(name, { isEnum: true, isStringEnum, isConst, members: entries });
+    this.classes.set(name, { isEnum: true, isStringEnum, isConst, needsToString, members: entries });
   },
 
   // ----------------------------------------------------------------

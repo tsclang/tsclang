@@ -13,6 +13,8 @@ static const char *Color_toString(Color v) {
 
 int main(void) {
     TSC_INIT();
-    printf("%d\n", (int)Color_Green);
+    printf("%s\n", Color_toString(Color_Green));
+    printf("%s\n", Color_toString(Color_Red));
+    printf("%s\n", Color_toString(Color_Blue));
     return 0;
 }
