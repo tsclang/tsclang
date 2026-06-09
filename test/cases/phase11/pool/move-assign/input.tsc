@@ -1,0 +1,9 @@
+@embedded.pool(4) class Spark { active: boolean; }
+let a = Spark.alloc();
+if (a != null) {
+    a.active = true;
+    let b = a;
+    if (b != null) {
+        console.log(b.active);
+    }
+}

@@ -860,6 +860,18 @@ export default {
               this._currentBlockPoolVars.push({ name, className: _pcls2 });
             }
           }
+          // Move semantics for pool refs: mark source moved and zero out
+          if (ctype?.startsWith('opt_ref_') && init?.kind === 'Ident') {
+            const initSym2 = this.lookup(init.name);
+            if (initSym2) {
+              initSym2._moved = true;
+              initSym2._movedLine = node.line;
+              initSym2._movedSourceNode = init;
+            }
+            if (initSym2?.varKind === 'let') {
+              p(`${init.name} = (${ctype}){0};`);
+            }
+          }
           if (this._lastHalRead) { p(`(void)${name};`); this._lastHalRead = null; }
           return;
         }
@@ -1209,14 +1221,14 @@ export default {
               const structDef2 = this.classes.get(ctype);
               const PRIMITIVE_CTYPES = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','float','double','bool','char','size_t']);
               const isPrimitiveTuple = structDef2?.isTuple && (structDef2.fields ?? []).every(f => PRIMITIVE_CTYPES.has(f.ctype?.replace(' *', '') ?? ''));
-              if ((structDef2?.fields && !isPrimitiveTuple) || ctype.startsWith('Array_')) {
+              if ((structDef2?.fields && !isPrimitiveTuple) || ctype.startsWith('Array_') || ctype.startsWith('opt_ref_')) {
                 if (initSym2) {
                   initSym2._moved = true;
                   initSym2._movedLine = node.line;
                   initSym2._movedSourceNode = init;
                 }
               }
-              if (initSym2?.varKind === 'let' && structDef2?.fields && !isPrimitiveTuple) {
+              if (initSym2?.varKind === 'let' && ((structDef2?.fields && !isPrimitiveTuple) || ctype.startsWith('opt_ref_'))) {
                 p(`${init.name} = (${ctype}){0};`);
               }
             }
@@ -1478,13 +1490,13 @@ export default {
               if (init.kind === 'Ident') {
                 const initSym2 = this.lookup(init.name);
                 const structDef2 = this.classes.get(ctype);
-                if (structDef2?.fields || ctype.startsWith('Array_')) {
+                if (structDef2?.fields || ctype.startsWith('Array_') || ctype.startsWith('opt_ref_')) {
                   if (initSym2) {
                     initSym2._moved = true;
                     initSym2._movedLine = node.line;
                     initSym2._movedSourceNode = init; // for secondary span
                   }
-                  if (initSym2?.varKind === 'let' && structDef2?.fields) {
+                  if (initSym2?.varKind === 'let' && (structDef2?.fields || ctype.startsWith('opt_ref_'))) {
                     p(`${init.name} = (${ctype}){0};`);
                   }
                 }

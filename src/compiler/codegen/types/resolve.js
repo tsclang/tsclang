@@ -215,6 +215,12 @@ export default {
         if (inner === 'void *') throw this.error(`any is already nullable, "any | null" is redundant`);
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
+        // Pool class: T | null → opt_ref_T (pool reference with index)
+        const innerCls = this.classes.get(inner);
+        if (innerCls?._isPool) {
+          this._ensurePoolAlloc(inner);
+          return innerCls._poolOptType;
+        }
         const optName = `opt_${this.cTypeToIdent(inner)}`;
         // Store for deferred emission
 

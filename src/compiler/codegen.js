@@ -449,6 +449,17 @@ class Context {
     return { gi, callExpr: `${gi.nextFn}(${callArgs})` };
   }
 
+  _markPoolVarMoved(node) {
+    if (node?.kind === 'Ident') {
+      const sym = this.lookup(node.name);
+      if (sym?.ctype?.startsWith('opt_ref_')) {
+        sym._moved = true;
+        sym._movedLine = node.line;
+        sym._movedSourceNode = node;
+      }
+    }
+  }
+
   _checkMoved(sym, node, name) {
     if (sym?._closureEnvVar) return;
     if (sym?._moved) {
@@ -550,6 +561,24 @@ class Context {
     if (!this._loopBodyCleanups?.length) return;
     for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
       lines.push(`${indent}${this._loopBodyCleanups[i]};`);
+    }
+  }
+
+  _emitPoolDrops(lines, I) {
+    if (!this._poolVarStack?.length) return;
+    for (let p = this._poolVarStack.length - 1; p >= 0; p--) {
+      const poolVars = this._poolVarStack[p];
+      for (let i = poolVars.length - 1; i >= 0; i--) {
+        const { name, className } = poolVars[i];
+        const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+        if (sym?._moved) continue;
+        const cls = this.classes.get(className);
+        if (cls?._isPool) {
+          this._ensurePoolDrop(className);
+          lines.push(`${I}${cls._poolDropFn}(${name});`);
+          if (sym) sym._moved = true;
+        }
+      }
     }
   }
 

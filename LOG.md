@@ -428,6 +428,7 @@
 ### Лог
 
 > 2026-04-18: реализованы embedded compiler features: `@embedded.inline` (pass-by-value struct, нет heap), `@embedded.pool(N)` (static pool + bitfield mask, alloc/drop), `#[profile(allocator)]` (none / static — проверки на new/Shared/capacity), `#[no_recursion]` (DFS по call graph, mutual recursion), stack/ram limits (worst-case stack analysis, BSS byte counting), `@static async function*` + `#[profile(scheduler: cooperative)]` (static poll struct, two-tasks cooperative loop). **Статус: 38/38 ✓**
+> 2026-06-09: pool auto-drop + move semantics — исправлены 4 бага: (1) `let b = a` для pool ref — move tracking + zero-out в opt_ блоке vardecl.js, (2) return pool var — `_markPoolVarMoved` на всех путях возврата, (3) throw + pool — `_emitPoolDrops` перед throw в control-flow.js, (4) `visitBlock` auto-drop проверяет `_moved`. Также: `Spark | null` для pool классов резолвится в `opt_ref_Spark` вместо `opt_Spark` (resolve.js). Новые тесты: `move-assign`, `return-pool`. **Статус: 40/40 ✓**
 
 ---
 

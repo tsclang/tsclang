@@ -1,0 +1,12 @@
+@embedded.pool(4) class Spark { active: boolean; }
+function create(): Spark | null {
+    let s = Spark.alloc();
+    if (s != null) {
+        s.active = true;
+    }
+    return s;
+}
+let x = create();
+if (x != null) {
+    console.log(x.active);
+}

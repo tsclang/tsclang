@@ -116,6 +116,7 @@
             const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
             if (!_isUnknownReturn && !retIsOwnedIdent) this._emitRetainIfNeeded(retC, node.value, p);
             if (retIsOwnedIdent) this._suppressCleanupFor(node.value.name);
+            this._markPoolVarMoved(node.value);
             p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
           } else {
             p(`_result = (${ctx.resultType}){.ok = true};`);
@@ -133,6 +134,7 @@
           const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
           if (retIsOwnedIdent) {
             this._suppressCleanupFor(node.value.name);
+            this._markPoolVarMoved(node.value);
             if (this._throwsCtx) {
               p(`return (${this._throwsCtx.resultType}){.ok = true, .value = ${retC}};`);
             } else {
@@ -141,6 +143,7 @@
             this._emitFuncCleanup(lines, I);
           } else {
             this._emitRetainIfNeeded(retC, node.value, p);
+            this._markPoolVarMoved(node.value);
             const tmpName = `_ret_${this.tempCount++}`;
             p(`${retType} ${tmpName} = ${retC};`);
             this._emitFuncCleanup(lines, I);
@@ -159,6 +162,7 @@
               const c = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
               this._inReturnContext = false;
               if (!_isUnknownReturn) this._emitRetainIfNeeded(c, node.value, p);
+              this._markPoolVarMoved(node.value);
               p(`return (${ctx.resultType}){.ok = true, .value = ${c}};`);
             } else {
               p(`return (${ctx.resultType}){.ok = true};`);
@@ -176,6 +180,7 @@
               }
               if (!_isUnknownReturn) this._emitRetainIfNeeded(c, node.value, p);
               const retSym = node.value.kind === 'Ident' ? this.lookup(node.value.name) : null;
+              this._markPoolVarMoved(node.value);
               p(`return ${this._derefStrPtr(retSym, c)};`);
             } else {
               p('return;');
@@ -881,6 +886,7 @@
         }
 
         if (this._throwsCtx) {
+          this._emitPoolDrops(lines, I);
           const ctx = this._throwsCtx;
           if (val?.kind === 'New') {
             const errClass = val.name;
@@ -920,7 +926,8 @@
             }
           }
         } else {
-          // Not in throws function тАФ fall back to tsc_throw
+          this._emitPoolDrops(lines, I);
+          // Not in throws function — fall back to tsc_throw
           if (val?.kind === 'New' && val.name === 'Error' && val.args?.length === 1) {
             const msgC = this.exprToC(val.args[0].expr ?? val.args[0], lines, depth);
             p(`tsc_throw(${msgC});`);
