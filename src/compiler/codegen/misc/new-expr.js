@@ -186,7 +186,11 @@ export default {
           lines.push(`    abort();`);
         }
         lines.push(`}`);
-        // TODO: constructor support — call init on tmpName.value-> if ctor exists
+        const hasCtor = cls.methods?.some(m => m.name === 'constructor');
+        if (hasCtor && node.args?.length > 0) {
+          const argsC = node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
+          lines.push(`*${tmpName}.value = ${name}_new(${argsC});`);
+        }
         return tmpName;
       }
       // allocator-none: no heap allocation via new (except @embedded.inline which is stack-allocated)

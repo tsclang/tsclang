@@ -1,0 +1,21 @@
+@embedded.pool(4) class Sensor {
+    id: i32;
+    temp: i32;
+
+    constructor(id: i32, temp: i32) {
+        this.id = id;
+        this.temp = temp;
+    }
+}
+
+function makeSensor(id: i32, t: i32): Sensor throws Error {
+    const s = new Sensor(id, t);
+    return s;
+}
+
+try {
+    let x = makeSensor(1, 36);
+    console.log(x.id);
+    console.log(x.temp);
+} catch (e: Error) {
+}
