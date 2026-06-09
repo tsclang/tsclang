@@ -1670,6 +1670,25 @@ if (s.isOutOfBounds()) {
 }
 ```
 
+**Pool-full обработка:** если пул полон, `new` генерирует ошибку. Два способа обработки:
+
+```typescript
+// 1. throws-функция — pool-full → Result error
+function create(): Sprite throws Error {
+    const s = new Sprite(10, 20)
+    return s
+}
+
+// 2. try/catch — pool-full → catch
+try {
+    const s = new Sprite(10, 20)
+} catch (e: Error) {
+    // pool exhausted
+}
+
+// new без throws/try/catch → compile error
+```
+
 ```c
 typedef struct { bool active; } Spark;
 typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
@@ -1691,13 +1710,15 @@ static void Spark_drop(opt_ref_Spark s) {
     if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
 }
 
-// Автоматический вызов при выходе из scope:
-{
-    opt_ref_Spark s = Spark_alloc();
-    Spark_drop(s);   // вставлено компилятором
+// В throws-функции:
+Result_opt_ref_Spark_TscError create(void) {
+    opt_ref_Spark _pool_0 = Spark_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_opt_ref_Spark_TscError){.ok = false, .error = ...};
+    }
+    *_pool_0.value = Spark_new(args);  // если есть конструктор
+    Spark_drop(_pool_0);   // auto-drop при выходе из scope
 }
-
-// drop(s) → тот же Spark_drop(s), но явно в коде
 ```
 
 `new` без compile-time capacity при `allocator: "static"` → ошибка компилятора.
