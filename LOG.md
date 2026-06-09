@@ -1900,3 +1900,9 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **3 new tests**: `phase2/optional/opt-null-reassign`, `phase2/optional/opt-null-roundtrip`, `phase2/truthy/narrow-reassign`.
 > - **Full regression**: all 1268 tests pass (phase0 ✓30, phase1 ✓28, phase2 ✓317, phase3 ✓360, phase4 ✓81, phase5 ✓27, phase6 ✓48, phase7 ✓41, phase8 ✓44, phase9 ✓53, phase10 ✓20, phase11 ✓38, phase12 ✓119, phase13 ✓21, phase14 ✓7, phase15 ✓10, phase16 ✓3, phase17 ✓12, phase18 ✓21, phase19 ✓74).
 > - Files changed: `src/compiler/codegen/expr/assign.js`, `test/cases/phase2/optional/opt-null-reassign/` (new), `test/cases/phase2/optional/opt-null-roundtrip/` (new), `test/cases/phase2/truthy/narrow-reassign/` (new)
+
+> 2026-06-09: while-null-loop test — full coverage of narrowing+null-assign scenario (П5, П6):
+> - **Тест**: `phase2/truthy/while-null-loop` — `while (s) { console.log(s); s = null; }` покрывает truthiness narrowing + чтение narrowed var + null-assign внутри narrowed scope + завершение цикла.
+> - **Исследование narrowed багов завершено**: оба бага (narrowing LHS + opt_T null-assign) подтверждены починенными. Все сценарии из отчёта покрыты тестами: opt-null-reassign (null assign), opt-null-roundtrip (null→val→null), narrow-reassign (if+narrowing+null), while-null-loop (while+narrowing+null).
+> - **phase2/truthy**: 16 tests pass.
+> - Files changed: `test/cases/phase2/truthy/while-null-loop/` (new), `LOG.md`

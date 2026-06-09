@@ -1,0 +1,6 @@
+let s: string | null = "hi"
+while (s) {
+    console.log(s)
+    s = null
+}
+console.log("done")
