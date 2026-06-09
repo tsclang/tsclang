@@ -1,0 +1,8 @@
+enum Bits {
+    A = 0b001,
+    B = 0b010,
+    C = 0b100,
+}
+console.log(Bits.A.toString())
+console.log(Bits.B.toString())
+console.log(Bits.C.toString())

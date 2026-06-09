@@ -1,0 +1,8 @@
+enum Flags {
+    Read = 0x01,
+    Write = 0x02,
+    Exec = 0x04,
+}
+console.log(Flags.Read.toString())
+console.log(Flags.Write.toString())
+console.log(Flags.Exec.toString())

@@ -1916,3 +1916,11 @@ umber, / = float division (JS semantics), explicit i32 for integer ops
 > - **1 обновлённый expected**: `phase2/enum/numeric-explicit` — теперь генерирует `_toString()` вместо `_names[]`.
 > - **Регрессия**: phase2 ✓319, phase3 ✓360, phase4/match ✓11, phase9/switch-default ✓2.
 > - Files changed: `src/compiler/codegen/top-level/func.js`, `src/compiler/codegen/calls/conversion.js`, `test/cases/phase2/enum/explicit-tostring/` (new), `test/cases/phase2/enum/numeric-explicit/expected.c` (updated)
+
+> 2026-06-09: Fix П4 violation — enum value tracking used parseInt on C strings (П4, П5):
+> - **Баг**: `func.js:22` — `try { counter = parseInt(val) + 1; } catch {}` — silent error swallowing. `parseInt("0b1010")` = 0, `parseInt("0o77")` = 0 — incorrect counter for binary/octal literals.
+> - **Баг**: `func.js:32` — `parseInt(e.val)` on C string for `isSequential` check — same binary/octal issue. Sequential binary enum (`0b00, 0b01, 0b10`) incorrectly detected as non-sequential → generated `_toString()` switch instead of `_names[]` array.
+> - **Фикс**: extract `numVal` from AST node (`m.value.value`) directly instead of parsing C string. Use `numVal` for both counter tracking and `isSequential` check.
+> - **3 новых теста**: `phase2/enum/hex-tostring` (non-sequential hex + toString), `phase2/enum/binary-tostring` (non-sequential binary + toString), `phase2/enum/binary-sequential` (sequential binary — verifies `_names[]` O(1)).
+> - **Регрессия**: phase2 ✓322.
+> - Files changed: `src/compiler/codegen/top-level/func.js`, `test/cases/phase2/enum/hex-tostring/` (new), `test/cases/phase2/enum/binary-tostring/` (new), `test/cases/phase2/enum/binary-sequential/` (new)

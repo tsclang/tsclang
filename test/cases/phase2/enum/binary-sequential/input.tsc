@@ -1,0 +1,7 @@
+enum Seq {
+    X = 0b00,
+    Y = 0b01,
+    Z = 0b10,
+}
+console.log(Seq.Y.toString())
+console.log(Seq.Z.toString())

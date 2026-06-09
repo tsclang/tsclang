@@ -16,11 +16,27 @@ export default {
       if (isStringEnum) {
         const strVal = m.value ? m.value.value : m.name;
         const idx = counter++;
-        return { name: m.name, val: String(idx), strVal };
+        return { name: m.name, val: String(idx), strVal, numVal: idx };
       }
-      const val = m.value ? this.exprToC(m.value) : String(counter++);
-      if (m.value) { try { counter = parseInt(val) + 1; } catch {} }
-      return { name: m.name, val };
+      const val = m.value ? this.exprToC(m.value) : String(counter);
+      let numVal = counter;
+      if (m.value) {
+        if (typeof m.value.value === 'number') {
+          numVal = m.value.value;
+          counter = numVal + 1;
+        } else {
+          const parsed = Number(val);
+          if (Number.isFinite(parsed)) {
+            numVal = parsed;
+            counter = numVal + 1;
+          } else {
+            counter++;
+          }
+        }
+      } else {
+        counter++;
+      }
+      return { name: m.name, val, numVal };
     });
     this.addTop(`typedef enum { ${entries.map(e => `${name}_${e.name} = ${e.val}`).join(', ')} } ${name};`);
     let needsToString = false;
@@ -29,8 +45,8 @@ export default {
         this.addTop(`static const char *${name}_strings[] = { ${entries.map(e => `"${e.strVal}"`).join(', ')} };`);
       } else {
         this.addTop(`static const ${name} ${name}_values[] = { ${entries.map(e => `${name}_${e.name}`).join(', ')} };`);
-        const intVals = entries.map(e => parseInt(e.val));
-        const isSequential = intVals.every((v, i) => v === i);
+        const numVals = entries.map(e => e.numVal);
+        const isSequential = numVals.length > 0 && numVals.every((v, i) => v === i);
         if (isSequential) {
           this.addTop(`static const char *${name}_names[] = { ${entries.map(e => `"${e.name}"`).join(', ')} };`);
         } else {
