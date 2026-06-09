@@ -199,6 +199,8 @@ export default {
           const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
           return `${node.name}_${suffix}`;
         }
+        const poolCls = this.classes.get(node.name);
+        if (poolCls?._isPool) return `opt_ref_${node.name}`;
         return node.name;
       }
       case 'ObjLit': return 'int32_t';
@@ -389,7 +391,7 @@ export default {
       return 'Array_i32';
     }
     if (obj.kind === 'Ident' && prop === 'alloc' && this.classes.get(obj.name)?._isPool) {
-      return `opt_ref_${obj.name}`;
+      throw this.error(`PoolClass.alloc() is removed; use "new ${obj.name}()" instead`, node);
     }
     if (obj.kind === 'Ident' && obj.name === 'performance') {
       if (prop === 'measure') return 'TscPerfEntry';

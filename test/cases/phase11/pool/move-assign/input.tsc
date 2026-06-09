@@ -1,6 +1,6 @@
 @embedded.pool(4) class Spark { active: boolean; }
-let a = Spark.alloc();
-if (a != null) {
+function test(): void throws Error {
+    let a = new Spark();
     a.active = true;
     let b = a;
     if (b != null) {

@@ -28,5 +28,13 @@ Result_opt_ref_Particle_TscError make(void) {
 
 int main(void) {
     TSC_INIT();
+    Result_opt_ref_Particle_TscError _res_1 = make();
+    if (_res_1.ok) {
+        opt_ref_Particle r = _res_1.value;
+        printf("%ld\n", (long)r.value->x);
+    } else {
+        (void)_res_1.error;
+        printf("full\n");
+    }
     return 0;
 }

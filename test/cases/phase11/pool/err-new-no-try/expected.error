@@ -1,0 +1,1 @@
+pool allocation via "new Gem()" may fail; wrap in try/catch or declare function as "throws Error"

@@ -4,3 +4,9 @@ function make(): Particle throws Error {
     p.x = 10;
     return p;
 }
+try {
+    let r = make();
+    console.log(r.x);
+} catch (e: Error) {
+    console.log("full");
+}

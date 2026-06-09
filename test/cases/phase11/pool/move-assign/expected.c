@@ -20,17 +20,23 @@ static void Spark_drop(opt_ref_Spark s) {
     if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
 }
 
+Result_void_TscError test(void) {
+    opt_ref_Spark _pool_0 = Spark_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Spark"))};
+    }
+    opt_ref_Spark a = _pool_0;
+    a.value->active = true;
+    opt_ref_Spark b = a;
+    a = (opt_ref_Spark){0};
+    if (b.has_value) {
+        printf("%ld\n", (long)b.value->active);
+    }
+    Spark_drop(b);
+    return (Result_void_TscError){.ok = true};
+}
+
 int main(void) {
     TSC_INIT();
-    opt_ref_Spark a = Spark_alloc();
-    if (a.has_value) {
-        a.value->active = true;
-        opt_ref_Spark b = a;
-        a = (opt_ref_Spark){0};
-        if (b.has_value) {
-            printf("%ld\n", (long)b.value->active);
-        }
-        Spark_drop(b);
-    }
     return 0;
 }

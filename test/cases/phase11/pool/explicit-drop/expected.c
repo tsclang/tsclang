@@ -20,12 +20,19 @@ static void Gem_drop(opt_ref_Gem g) {
     if (g.has_value) _gem_pool_mask &= ~(1 << g._pool_idx);
 }
 
+Result_void_TscError test(void) {
+    opt_ref_Gem _pool_0 = Gem_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Gem"))};
+    }
+    opt_ref_Gem g = _pool_0;
+    g.value->value = 99;
+    Gem_drop(g);
+    Gem_drop(g);
+    return (Result_void_TscError){.ok = true};
+}
+
 int main(void) {
     TSC_INIT();
-    opt_ref_Gem g = Gem_alloc();
-    if (g.has_value) {
-        g.value->value = 99;
-        Gem_drop(g);
-    }
     return 0;
 }

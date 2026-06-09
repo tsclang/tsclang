@@ -971,31 +971,103 @@
           // New Result-based pattern
           this._emitTryCatchResult(node, tryStmts, throwsFuncCallStmt, lines, depth);
         } else {
-          // Old embedded pattern (for throw new X() directly inside try)
-          for (const s of tryStmts) {
-            const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
-            if (isThrowNew) {
-              const val = s.value;
-              const errClass = val.name;
-              const errVarName = `_err_${this.tempCount++}`;
-              const errC = this.exprToC(val, lines, depth);
-              p(`${errClass} ${errVarName} = ${errC};`);
-              for (const c of node.catches) {
-                if (!c.typeAnn || c.typeAnn.name === errClass) {
-                  this.pushScope();
-                  this.define(c.param, { ctype: errClass, _alias: errVarName });
-                  this.visitBlock(c.body, lines, depth);
-                  this.popScope();
-                }
+          const _hasPoolNew = (stmts) => {
+            for (const s of stmts) {
+              if (s.kind === 'VarDecl' && s.init?.kind === 'New') {
+                const cls = this.classes.get(s.init.name);
+                if (cls?._isPool) return true;
               }
-            } else {
-              this.visitStmt(s, lines, depth);
+              if (s.kind === 'ExprStmt' && s.expr?.kind === 'New') {
+                const cls = this.classes.get(s.expr.name);
+                if (cls?._isPool) return true;
+              }
             }
-          }
-          if (node.finally) {
-            this._inFinallyBlock = true;
-            this.visitBlock(node.finally, lines, depth);
-            this._inFinallyBlock = false;
+            return false;
+          };
+
+          if (_hasPoolNew(tryStmts)) {
+            const catchIdx = this.tempCount++;
+            const catchLabel = `_catch_${catchIdx}`;
+            const catchEndLabel = `_catch_end_${catchIdx}`;
+            const errVar = `_catch_err_${catchIdx}`;
+            const catches = node.catches ?? [];
+
+            p(`Error ${errVar} = {0};`);
+
+            const prevInTryBlock = this._inTryBlock;
+            const prevTryCatchInfo = this._tryCatchInfo;
+            this._inTryBlock = true;
+            this._tryCatchInfo = { catchLabel, errVar, catches };
+
+            for (const s of tryStmts) {
+              const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
+              if (isThrowNew) {
+                const val = s.value;
+                const errClass = val.name;
+                const errVarName = `_err_${this.tempCount++}`;
+                const errC = this.exprToC(val, lines, depth);
+                p(`${errClass} ${errVarName} = ${errC};`);
+                for (const c of catches) {
+                  if (!c.typeAnn || c.typeAnn.name === errClass) {
+                    this.pushScope();
+                    this.define(c.param, { ctype: errClass, _alias: errVarName });
+                    this.visitBlock(c.body, lines, depth);
+                    this.popScope();
+                  }
+                }
+              } else {
+                this.visitStmt(s, lines, depth);
+              }
+            }
+
+            this._inTryBlock = prevInTryBlock;
+            this._tryCatchInfo = prevTryCatchInfo;
+
+            p(`goto ${catchEndLabel};`);
+            p(`${catchLabel}:`);
+            for (const c of catches) {
+              this.pushScope();
+              if (c.param) {
+                const catchType = c.typeAnn?.name ?? 'Error';
+                this.define(c.param, { ctype: catchType, _alias: errVar });
+              }
+              this.visitBlock(c.body, lines, depth);
+              this.popScope();
+              break;
+            }
+            p(`${catchEndLabel}:;`);
+
+            if (node.finally) {
+              this._inFinallyBlock = true;
+              this.visitBlock(node.finally, lines, depth);
+              this._inFinallyBlock = false;
+            }
+          } else {
+            for (const s of tryStmts) {
+              const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
+              if (isThrowNew) {
+                const val = s.value;
+                const errClass = val.name;
+                const errVarName = `_err_${this.tempCount++}`;
+                const errC = this.exprToC(val, lines, depth);
+                p(`${errClass} ${errVarName} = ${errC};`);
+                for (const c of node.catches) {
+                  if (!c.typeAnn || c.typeAnn.name === errClass) {
+                    this.pushScope();
+                    this.define(c.param, { ctype: errClass, _alias: errVarName });
+                    this.visitBlock(c.body, lines, depth);
+                    this.popScope();
+                  }
+                }
+              } else {
+                this.visitStmt(s, lines, depth);
+              }
+            }
+            if (node.finally) {
+              this._inFinallyBlock = true;
+              this.visitBlock(node.finally, lines, depth);
+              this._inFinallyBlock = false;
+            }
           }
         }
         break;

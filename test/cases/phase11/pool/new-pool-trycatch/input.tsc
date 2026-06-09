@@ -1,0 +1,9 @@
+@embedded.pool(2) class Gem { value: i32; }
+
+try {
+    const g = new Gem();
+    g.value = 42;
+    console.log(g.value);
+} catch (e: Error) {
+    console.log("pool full");
+}

@@ -1,4 +1,4 @@
 @embedded.pool(4) class Spark { active: boolean; }
-{
-    const s = Spark.alloc();
+function test(): void throws Error {
+    const s = new Spark();
 }

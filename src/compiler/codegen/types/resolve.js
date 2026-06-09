@@ -170,6 +170,10 @@ export default {
 
       // User-defined type — use C name if registered with a module prefix
       const _cls = this.classes.get(name);
+      if (_cls?._isPool) {
+        this._ensurePoolAlloc(name);
+        return _cls._poolOptType;
+      }
       return _cls?._cname ?? name;
     }
 
@@ -215,12 +219,8 @@ export default {
         if (inner === 'void *') throw this.error(`any is already nullable, "any | null" is redundant`);
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
-        // Pool class: T | null → opt_ref_T (pool reference with index)
-        const innerCls = this.classes.get(inner);
-        if (innerCls?._isPool) {
-          this._ensurePoolAlloc(inner);
-          return innerCls._poolOptType;
-        }
+        // Pool ref types are already nullable (has_value) — no double-wrap
+        if (inner.startsWith('opt_ref_')) return inner;
         const optName = `opt_${this.cTypeToIdent(inner)}`;
         // Store for deferred emission
 

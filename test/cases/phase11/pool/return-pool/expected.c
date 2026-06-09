@@ -16,19 +16,24 @@ static opt_ref_Spark Spark_alloc(void) {
     return (opt_ref_Spark){false, NULL, -1};
 }
 
-opt_ref_Spark create(void) {
-    opt_ref_Spark s = Spark_alloc();
-    if (s.has_value) {
-        s.value->active = true;
+Result_opt_ref_Spark_TscError create(void) {
+    opt_ref_Spark _pool_0 = Spark_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_opt_ref_Spark_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Spark"))};
     }
-    return s;
+    opt_ref_Spark s = _pool_0;
+    s.value->active = true;
+    return (Result_opt_ref_Spark_TscError){.ok = true, .value = s};
 }
 
 int main(void) {
     TSC_INIT();
-    opt_ref_Spark x = create();
-    if (x.has_value) {
+    Result_opt_ref_Spark_TscError _res_1 = create();
+    if (_res_1.ok) {
+        opt_ref_Spark x = _res_1.value;
         printf("%ld\n", (long)x.value->active);
+    } else {
+        (void)_res_1.error;
     }
     return 0;
 }

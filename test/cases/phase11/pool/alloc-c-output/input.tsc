@@ -1,2 +1,5 @@
 @embedded.pool(2) class Token { id: u8; }
-const t = Token.alloc();
+function make(): Token throws Error {
+    const t = new Token();
+    return t;
+}

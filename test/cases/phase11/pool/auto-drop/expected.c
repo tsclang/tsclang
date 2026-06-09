@@ -20,11 +20,17 @@ static void Spark_drop(opt_ref_Spark s) {
     if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
 }
 
+Result_void_TscError test(void) {
+    opt_ref_Spark _pool_0 = Spark_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Spark"))};
+    }
+    opt_ref_Spark s = _pool_0;
+    Spark_drop(s);
+    return (Result_void_TscError){.ok = true};
+}
+
 int main(void) {
     TSC_INIT();
-    {
-        opt_ref_Spark s = Spark_alloc();
-        Spark_drop(s);
-    }
     return 0;
 }

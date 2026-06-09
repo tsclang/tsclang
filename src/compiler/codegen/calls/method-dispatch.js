@@ -631,8 +631,7 @@ export default {
     if (baseObject.kind === 'Ident' && this.classes.has(baseObject.name)) {
       const poolDef = this.classes.get(baseObject.name);
       if (poolDef?._isPool && prop === 'alloc') {
-        this._ensurePoolAlloc(baseObject.name);
-        return `${poolDef._poolAllocFn}()`;
+        throw this.error(`PoolClass.alloc() is removed; use "new ${baseObject.name}()" instead`, node);
       }
       if (poolDef?._isPool && prop === 'drop') {
         this._ensurePoolDrop(baseObject.name);

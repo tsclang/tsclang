@@ -161,6 +161,34 @@ export default {
     // Known class with constructor
     const cls = this.classes.get(name);
     if (cls) {
+      // Pool class: new PoolClass() → alloc from pool + null check
+      if (cls._isPool) {
+        this._ensurePoolAlloc(name);
+        this._lastSuppressConst = true;
+        const allocResult = `${name}_alloc()`;
+        const tmpName = `_pool_${this.tempCount++}`;
+        lines.push(`${cls._poolOptType} ${tmpName} = ${allocResult};`);
+        if (!this._throwsCtx && !this._inTryBlock) {
+          throw this.error(`pool allocation via "new ${name}()" may fail; wrap in try/catch or declare function as "throws Error"`, node);
+        }
+        lines.push(`if (!${tmpName}.has_value) {`);
+        const errC = `Error_new(STR_LIT("pool exhausted: ${name}"))`;
+        if (this._usesGotoCleanup) {
+          lines.push(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${errC}};`);
+          lines.push(`    goto cleanup;`);
+        } else if (this._throwsCtx) {
+          lines.push(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${errC}};`);
+        } else if (this._inTryBlock) {
+          lines.push(`    ${this._tryCatchInfo.errVar} = ${errC};`);
+          lines.push(`    goto ${this._tryCatchInfo.catchLabel};`);
+        } else {
+          lines.push(`    ${errC};`);
+          lines.push(`    abort();`);
+        }
+        lines.push(`}`);
+        // TODO: constructor support — call init on tmpName.value-> if ctor exists
+        return tmpName;
+      }
       // allocator-none: no heap allocation via new (except @embedded.inline which is stack-allocated)
       if (this._allocatorName === 'none' && !cls._isInline) {
         throw this.error(`TypeError: Heap allocation ('new ${name}()') is not allowed when allocator is "none"`);

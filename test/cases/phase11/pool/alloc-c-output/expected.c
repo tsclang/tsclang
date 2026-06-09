@@ -16,8 +16,16 @@ static opt_ref_Token Token_alloc(void) {
     return (opt_ref_Token){false, NULL, -1};
 }
 
+Result_opt_ref_Token_TscError make(void) {
+    opt_ref_Token _pool_0 = Token_alloc();
+    if (!_pool_0.has_value) {
+        return (Result_opt_ref_Token_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Token"))};
+    }
+    opt_ref_Token t = _pool_0;
+    return (Result_opt_ref_Token_TscError){.ok = true, .value = t};
+}
+
 int main(void) {
     TSC_INIT();
-    opt_ref_Token t = Token_alloc();
     return 0;
 }

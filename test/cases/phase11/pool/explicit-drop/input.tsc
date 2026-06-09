@@ -1,6 +1,6 @@
 @embedded.pool(4) class Gem { value: i32; }
-let g = Gem.alloc();
-if (g != null) {
+function test(): void throws Error {
+    let g = new Gem();
     g.value = 99;
     drop(g);
 }
