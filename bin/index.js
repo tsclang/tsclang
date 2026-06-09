@@ -134,7 +134,7 @@ OPTIONS:
   --mcu <chip>             Target MCU (e.g. atmega328p, atmega2560)
   --default-number <type>  Default number type (f64, f32, i32, ...)
   --allocator <type>       Allocator strategy (default, static, none)
-  --scheduler <type>       Scheduler (default, cooperative, libuv)
+  --async <type>           Async model (libuv, state_machine, none)
   --optimize <O0-O3|Os|Oz> Optimization level
   --debug                  Compile with debug info
   --sourcemap              Generate source map
@@ -1079,7 +1079,7 @@ if (command === 'build') {
   const _targetFlag       = _flagVal('--target');
   const _defaultNumberFlag = _flagVal('--default-number');
   const _allocatorFlag    = _flagVal('--allocator');
-  const _schedulerFlag    = _flagVal('--scheduler');
+  const _asyncFlag        = _flagVal('--async');
   const _noRecursionFlag  = args.includes('--no-recursion');
   const _strictFlag       = _flagVal('--strict');
   const _ramSizeFlag      = _flagVal('--ram-size');
@@ -1219,12 +1219,12 @@ if (command === 'build') {
     }
   }
 
-  // Legacy fallback: --allocator / --scheduler flags → derive capabilities
-  if (!_capabilities && (_allocatorFlag || _schedulerFlag)) {
+  // --allocator / --async flags → derive capabilities
+  if (!_capabilities && (_allocatorFlag || _asyncFlag)) {
     _capabilities = {
       ...DESKTOP_CAPABILITIES,
       allocator: _allocatorFlag === 'static' || _allocatorFlag === 'none' ? 'static' : 'heap',
-      async: _schedulerFlag === 'cooperative' ? 'state_machine' : (_schedulerFlag === 'libuv' ? 'libuv' : 'none'),
+      async: _asyncFlag === 'state_machine' ? 'state_machine' : (_asyncFlag === 'libuv' ? 'libuv' : (_asyncFlag === 'none' ? 'none' : 'libuv')),
     };
     if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {
       _capabilities.async = 'none';
@@ -1267,7 +1267,7 @@ if (command === 'build') {
   const buildOpts = {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
     target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,
-    allocator: _allocatorFlag, scheduler: _schedulerFlag,
+    allocator: _allocatorFlag, scheduler: _asyncFlag,
     noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
     stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
     optimize: !!optimize, strict: _strictFlag ? _strictFlag.split(',') : _pkgStrict,

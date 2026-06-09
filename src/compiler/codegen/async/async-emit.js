@@ -163,7 +163,7 @@ export default {
 
     // @static cooperative task: emit static instance, register for main scheduler
     const hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
-    if (hasStaticDec && this._schedulerName === 'cooperative') {
+    if (hasStaticDec && this._asyncName === 'state_machine') {
       this.topLevel.push('');
       this.topLevel.push(`static ${stateType} _${name}_instance;`);
       this._staticTasks.push({ name, stateType, pollFn });

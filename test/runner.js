@@ -400,8 +400,9 @@ function readMeta(testDir) {
         const targetName = prof.target || meta.profile;
         flags.push('--target', targetName);
         if (prof.allocator)     flags.push('--allocator', prof.allocator);
-        if (prof.async === 'libuv')       flags.push('--scheduler', 'libuv');
-        else if (prof.async === 'state_machine') flags.push('--scheduler', 'cooperative');
+        if (prof.async === 'libuv')       flags.push('--async', 'libuv');
+        else if (prof.async === 'state_machine') flags.push('--async', 'state_machine');
+        else if (prof.async === 'none')   flags.push('--async', 'none');
         if (prof.defaultNumber) flags.push('--default-number', prof.defaultNumber);
       }
       // Meta overrides on top of profile
@@ -422,7 +423,7 @@ function readMeta(testDir) {
     if (meta.target)         flags.push('--target', meta.target);
     if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
     if (meta.allocator)      flags.push('--allocator', meta.allocator);
-    if (meta.scheduler)      flags.push('--scheduler', meta.scheduler);
+    if (meta.scheduler)      flags.push('--async', meta.scheduler);
     if (meta.noRecursion)    flags.push('--no-recursion');
     if (meta.ramSize)        flags.push('--ram-size', String(meta.ramSize));
     if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));

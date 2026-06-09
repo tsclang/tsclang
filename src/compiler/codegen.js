@@ -32,7 +32,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.target) ctx._optsTarget = opts.target;
   if (opts.defaultNumber) ctx._optsDefaultNumber = opts.defaultNumber;
   if (opts.allocator) ctx._optsAllocator = opts.allocator;
-  if (opts.scheduler) ctx._optsScheduler = opts.scheduler;
+  if (opts.scheduler) ctx._optsAsync = opts.scheduler;
   if (opts.noRecursion) ctx._optsNoRecursion = true;
   if (opts.strict) ctx._strictRules = new Set(opts.strict);
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
@@ -211,7 +211,7 @@ class Context {
     this._optsTarget = null;
     this._optsDefaultNumber = null;
     this._optsAllocator = null;
-    this._optsScheduler = null;
+    this._optsAsync = null;
     this._optsNoRecursion = false;
     this._optsRamSize = null;
     this._optsStackSize = null;
@@ -650,7 +650,7 @@ class Context {
 
     // Full emit: includes → typedefs → lambdas → topLevel → main
     const parts = [];
-    if (this._schedulerName === 'libuv') parts.push('#define TSC_SCHEDULER_LIBUV');
+    if (this._asyncName === 'libuv') parts.push('#define TSC_SCHEDULER_LIBUV');
     parts.push(...[...this.includes].sort());
     parts.push('');
     _pushSection(this.typedefs, parts);
@@ -685,7 +685,7 @@ class Context {
       // Async main bootstrap
       if (this._asyncMainPollFn) {
         parts.push(`${this.ind()}${this._asyncMainStateType} _main_sm = {0};`);
-        if (this._schedulerName === 'libuv') {
+        if (this._asyncName === 'libuv') {
           parts.push(`${this.ind()}TSC_RUN_ASYNC(${this._asyncMainStateType}, ${this._asyncMainPollFn}, &_main_sm);`);
         } else {
           parts.push(`${this.ind()}while (!_main_sm._done) {`);

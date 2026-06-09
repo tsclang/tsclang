@@ -91,7 +91,7 @@ export default {
     this._targetName = this._optsTarget || 'desktop';
     this._allocatorName = this._optsAllocator || this._cap('allocator') || 'default';
     this._noRecursion = this._optsNoRecursion || false;
-    this._schedulerName = this._optsScheduler || null;
+    this._asyncName = this._optsAsync || null;
     this._ramSize = this._optsRamSize || null;
     this._stackSize = this._optsStackSize || null;
 
