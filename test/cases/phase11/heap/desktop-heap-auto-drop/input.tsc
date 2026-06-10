@@ -1,0 +1,10 @@
+@heap
+class Box { value: i32; }
+function make(): void {
+    const a = new Box();
+    a.value = 1;
+    const b = new Box();
+    b.value = 2;
+}
+make();
+console.log("done");

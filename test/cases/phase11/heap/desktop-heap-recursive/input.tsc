@@ -1,0 +1,16 @@
+@heap
+class Node {
+    value: i32;
+    next: Node | null;
+    constructor(v: i32) {
+        this.value = v;
+        this.next = null;
+    }
+}
+function main(): i32 {
+    const root = new Node(1);
+    const child = new Node(2);
+    child.next = root;
+    return root.value;
+}
+console.log(main());

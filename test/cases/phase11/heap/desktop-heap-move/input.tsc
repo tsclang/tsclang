@@ -1,0 +1,12 @@
+@heap
+class Gem {
+    value: i32;
+    constructor(v: i32) { this.value = v; }
+}
+function main(): void {
+    const a = new Gem(42);
+    const b = a;
+    console.log(b.value);
+    console.log(a.value);
+}
+main();

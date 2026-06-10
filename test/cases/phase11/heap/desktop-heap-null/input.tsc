@@ -1,0 +1,12 @@
+@heap
+class Node {
+    value: i32;
+    constructor(v: i32) { this.value = v; }
+}
+function main(): i32 {
+    let n: Node | null = new Node(42);
+    const v: i32 = (n as Node).value;
+    n = null;
+    return v;
+}
+console.log(main());

@@ -1,0 +1,10 @@
+@heap
+class Box {
+    value: i32;
+    constructor(v: i32) { this.value = v; }
+}
+function main(): i32 {
+    const b = new Box(42);
+    return b.value;
+}
+console.log(main());
