@@ -137,9 +137,9 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `no_recursion: true` | `--strict no-recursion` | Рекурсия — код-ограничение, не capability платформы |
 | `heap: boolean` | удалён | Дублировал `allocator` |
 | `_noFloatTargets` хардкод | → `fpu: false` из профиля | |
-| `_noHeapTargets` хардкод | → `allocator: "static"` из профиля | |
 | `_retroTargets` хардкод | → комбинация `async`, `os`, `fpu` | |
 | `EMBEDDED_TARGETS` хардкод | → capabilities из профиля | |
+| `@embedded.noHeap` decorator | удалён | Существующая защита через `allocator` достаточна (2026-06-10) |
 
 ## Решения компилятора из capabilities
 

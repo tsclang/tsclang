@@ -178,7 +178,7 @@
 | **@embedded.isr** | Embedded: обработчики прерываний (`@embedded.isr`); запреты (no alloc, no throw, no await). |
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
-| **Embedded-аннотации** | `@embedded.noHeap`, `@signal` — fine-grained контроль над поведением на embedded. |
+| **Embedded-аннотации** | `@signal` — fine-grained контроль над поведением на embedded. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
 ### 12 — Модульная система ([spec/12-modules/](spec/12-modules/))

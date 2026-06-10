@@ -855,44 +855,9 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 Декораторы для fine-grained контроля над поведением на embedded платформах.
 
-> **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class).
+> **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes/07-classes-ownership.md#struct--value-type-class).
 
-### `@embedded.noHeap`
-
-Статическая проверка компилятором: функция не использует heap.
-
-```typescript
-@embedded.noHeap
-function process(data: Ref<u8[]>): i32 {
-    // ❌ ошибка компиляции: new Array использует heap
-    const temp = new Array<u8>(10);
-    
-    // ❌ ошибка: new Map использует heap
-    const map = new Map<string, i32>();
-    
-    // ✅ ok: stack allocation (fixed size)
-    const temp: u8[10] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    
-    // ✅ ok: borrowed reference
-    return data.length;
-}
-```
-
-**Когда использовать:**
-- ISR (прерывания) — heap внутри ISR = crash
-- Функции в no-heap платформах
-- Явное документирование ограничений
-
-**Альтернатива через `declare platform`:**
-
-```typescript
-// В platform profile
-declare platform {
-    heap: false  // Компилятор проверит все new Array/Map
-}
-```
-
-Доступен на всех платформах (desktop, embedded).
+> **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Shared<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен. См. обсуждение в LOG.md (2026-06-10).
 
 ### `@signal` — POSIX-сигналы (desktop)
 
@@ -955,7 +920,6 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 | Аннотация | Desktop | Embedded | Проверка |
 |-----------|---------|----------|----------|
 | `@inline` (бывший `@struct` для функций) | ✅ | ✅ | — |
-| `@embedded.noHeap` | ✅ | ✅ | Compile-time |
 | `@isr` | ❌ | ✅ | Compile-time |
 | `@signal` | ✅ | ❌ | Compile-time |
 
@@ -1053,6 +1017,6 @@ void main(void) {
 │  @signal ──────── POSIX signal ──── desktop only     │
 │                                                      │
 │  @platform ────── условная компиляция ─── все        │
-│  @inline / @embedded.noHeap ──── все        │
+│  @inline ──── все        │
 └─────────────────────────────────────────────────────┘
 ```
