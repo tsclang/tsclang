@@ -1,0 +1,11 @@
+import { push, pop, empty } from "std/stack";
+
+@stack("items", 16)
+function process(): void {
+    push("items", 42);
+    const e = empty("items");
+    console.log(e);
+    const val = pop<i32>("items");
+    console.log(val);
+}
+process();

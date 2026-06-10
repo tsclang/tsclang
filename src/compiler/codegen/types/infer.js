@@ -304,6 +304,15 @@ export default {
       return 'int32_t';
     }
     if (node.callee.kind === 'Ident') {
+      const sym = this.lookup(node.callee.name);
+      if (sym?._isStackMacro === 'push') return 'void';
+      if (sym?._isStackMacro === 'empty') return 'bool';
+      if (sym?._isStackMacro === 'pop') {
+        const tArg = node.typeArgs?.[0];
+        return tArg ? this.resolveType(tArg) : 'int32_t';
+      }
+    }
+    if (node.callee.kind === 'Ident') {
       const _sfn = node.callee.name;
       if (_sfn === 'structuredClone' && node.args?.[0]) {
         return this.inferType(node.args[0].expr);

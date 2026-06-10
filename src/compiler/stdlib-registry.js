@@ -94,6 +94,10 @@ export const STDLIB_MODULES = {
     flag: '_stdHalImported',
     platformCheck: 'embedded-only',
   },
+
+  'std/stack': {
+    handler: '_handleStdStack',
+  },
 };
 
 const _LIBC_VARIADIC = new Set([
@@ -257,6 +261,19 @@ export const STDLIB_HANDLERS = {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
       this.define(nm, { ctype: 'int32_t', funcName: nm, params: null, _isLibcFunc: true, _isLibcVariadic: isVar });
+    }
+  },
+
+  _handleStdStack(node) {
+    for (const n of (node.names ?? [])) {
+      const nm = typeof n === 'object' ? n.name : n;
+      if (nm === 'push') {
+        this.define('push', { ctype: 'void', varKind: 'const', _isStackMacro: 'push' });
+      } else if (nm === 'pop') {
+        this.define('pop', { ctype: 'void', varKind: 'const', _isStackMacro: 'pop' });
+      } else if (nm === 'empty') {
+        this.define('empty', { ctype: 'bool', varKind: 'const', _isStackMacro: 'empty' });
+      }
     }
   },
 };

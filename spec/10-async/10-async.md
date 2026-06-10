@@ -464,19 +464,21 @@ async function pong(): void { await ping() }
 
 На **embedded** рекурсивная async функция — ошибка компилятора с подсказкой переписать через явный стек (`u8[]` или `i32[]`) или итеративно.
 
-#### `@embedded.stack(name, N)` — явный стек для async-рекурсии
+#### `@stack(name, N)` — явный стек для async-рекурсии
 
-Встроенный декоратор. Создаёт статический стек размером N в BSS. `@embedded.stack` — компаньон для случаев когда рекурсия необходима: обход деревьев, парсинг, DFS:
+Встроенный декоратор. Создаёт статический стек размером N в BSS. `@stack` — компаньон для случаев когда рекурсия необходима: обход деревьев, парсинг, DFS:
 
 ```typescript
-@embedded.stack("nodes", 64)
+import { push, pop, empty } from "std/stack";
+
+@stack("nodes", 64)
 async function traverse(root: Node): Promise<void> {
-    @embedded.stack_push("nodes", root)
-    while (!@embedded.stack_empty("nodes")) {
-        const n: Node = @embedded.stack_pop<Node>("nodes")
+    push("nodes", root)
+    while (!empty("nodes")) {
+        const n: Node = pop<Node>("nodes")
         await process(n)
-        if (n.left)  @embedded.stack_push("nodes", n.left)
-        if (n.right) @embedded.stack_push("nodes", n.right)
+        if (n.left)  push("nodes", n.left)
+        if (n.right) push("nodes", n.right)
     }
 }
 ```
@@ -507,7 +509,7 @@ void traverse_poll(Traverse_SM* sm) {
 
 | Конструкция | Desktop | Embedded |
 |-------------|---------|----------|
-| Рекурсивная async | ✅ heap | ❌ ошибка → используй `@embedded.stack` |
+| Рекурсивная async | ✅ heap | ❌ ошибка → используй `@stack` |
 | `Ref<T>` через `await` | ❌ всегда | ❌ всегда |
 | `Promise.all` / `Promise.race` | ✅ | ❌ требует heap |
 | `@static async function` | работает | обязателен при `allocator: "static"` |

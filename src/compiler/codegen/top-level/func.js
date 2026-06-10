@@ -136,9 +136,9 @@ export default {
       return;
     }
 
-    // @embedded.stack("name", N) → emit static stack arrays in BSS
+    // @stack("name", N) → emit static stack arrays in BSS
     for (const dec of (node.decorators ?? [])) {
-      if (dec.name === 'embedded.stack' && dec.args?.length >= 2) {
+      if (dec.name === 'stack' && dec.args?.length >= 2) {
         const sName = dec.args[0]?.value ?? dec.args[0];
         const sSize = dec.args[1]?.value ?? dec.args[1];
         this._topBlank();

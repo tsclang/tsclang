@@ -656,26 +656,6 @@ export default {
         }
         return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
       }
-      case 'EmbeddedMacro': {
-        const macroName = node.name;
-        const strArg = (i) => node.args[i]?.kind === 'Literal' ? node.args[i].value : '??';
-        if (macroName === 'embedded.stack_empty') {
-          const sName = strArg(0);
-          return `(${sName}_stack_top == 0)`;
-        }
-        if (macroName === 'embedded.stack_push') {
-          const sName = strArg(0);
-          const val = this.exprToC(node.args[1], lines, depth);
-          return `(${sName}_stack[${sName}_stack_top++] = (uintptr_t)(${val}))`;
-        }
-        if (macroName === 'embedded.stack_pop') {
-          const sName = strArg(0);
-          const tArg = node.typeArgs?.[0];
-          const ct = tArg ? this.resolveType(tArg) : 'int32_t';
-          return `((${ct})${sName}_stack[--${sName}_stack_top])`;
-        }
-        return `/* @${macroName} */0`;
-      }
       case 'NonNull':  return this.exprToC(node.expr, lines, depth);
       case 'Propagate': return this.exprToC(node.expr, lines, depth);
       case 'OptChain': {

@@ -62,6 +62,28 @@
       throw this.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
     }
 
+    if (callee.kind === 'Ident') {
+      const sym = this.lookup(callee.name);
+      if (sym?._isStackMacro) {
+        const strArg = (i) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
+        if (sym._isStackMacro === 'push') {
+          const sName = strArg(0);
+          const val = this.exprToC(args[1].expr, lines, depth);
+          return `(${sName}_stack[${sName}_stack_top++] = (uintptr_t)(${val}))`;
+        }
+        if (sym._isStackMacro === 'empty') {
+          const sName = strArg(0);
+          return `(${sName}_stack_top == 0)`;
+        }
+        if (sym._isStackMacro === 'pop') {
+          const sName = strArg(0);
+          const tArg = node.typeArgs?.[0];
+          const ct = tArg ? this.resolveType(tArg) : 'int32_t';
+          return `((${ct})${sName}_stack[--${sName}_stack_top])`;
+        }
+      }
+    }
+
     // super(args) in constructor в†’ initialize base struct
     if (callee.kind === 'Ident' && callee.name === 'super') {
       const selfSym = this.lookup('self');
