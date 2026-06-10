@@ -161,6 +161,17 @@ export default {
     // Known class with constructor
     const cls = this.classes.get(name);
     if (cls) {
+      // Heap class: new HeapClass() → malloc + constructor (auto-free on scope exit)
+      if (cls._isHeap) {
+        this._lastSuppressConst = true;
+        const tmpName = `_heap_${this.tempCount++}`;
+        this.includes.add('#include <stdlib.h>');
+        lines.push(`${name} *${tmpName} = (${name} *)tsc_malloc(sizeof(${name}));`);
+        const hasCtor = cls.methods?.some(m => m.name === 'constructor');
+        const ctorArgs = hasCtor ? node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ') : '';
+        lines.push(`*${tmpName} = ${name}_new(${ctorArgs});`);
+        return tmpName;
+      }
       // Pool class: new PoolClass() → alloc from pool + null check
       if (cls._isPool) {
         this._ensurePoolAlloc(name);
