@@ -358,15 +358,15 @@ const { name, email } = user;
 | `class` (default) | `new Point(10, 20)` | `Point p = Point_new(10, 20)` | Стек (на всех платформах) | `opt_Point` inline | memset src=0 | `_free()` release string-полей |
 | `@struct` | `Point(10, 20)` (без `new`) | `Point p = {10, 20}` | Стек/inline | Запрещён | copy | no-op |
 | `@pool(N)` | `new Gem(42)` | alloc from pool + constructor | BSS static pool | `opt_ref_Gem` pointer | pointer copy + `a = NULL` | `drop()` или auto-drop |
-| `@heap` (future) | `new Node(42)` | `malloc + constructor` | Heap | `Node*` (NULL) | pointer copy + `a = NULL` | auto-free при scope exit |
+| `@heap` | `new Node(42)` | `malloc + constructor` | Heap | `Node*` (NULL) | pointer copy + `a = NULL` | auto-free при scope exit |
 
 #### Принципы
 
-1. **Классы = value types** на стеке по умолчанию. Heap malloc для классов **не используется** — `allocator: "heap"` означает malloc только для `Array`, `Map`, `Set`, `closures`, но не для классов.
+1. **Классы = value types** на стеке по умолчанию. **`@heap` decorator** позволяет выбрать heap-аллокацию явно. `allocator: "heap"` означает malloc только для `Array`, `Map`, `Set`, `closures` + `@heap` классов.
 2. **Единый синтаксис `new`** для всех типов классов (П2 — совместимость с TypeScript). Разница только в C-выводе.
 3. **Move semantics** на всех платформах: `let b = a` — bitwise copy (стек) или pointer copy + zero-out (pool/heap), `a` помечается как moved.
 4. **Детерминированное освобождение** — никакого GC, никакого ARC. Drop вызывается compile-time предсказуемо.
-5. **`@heap` — future feature** (Шаг 2). В текущей реализации не поддерживается; на `allocator: "static"` → compile error. Pool покрывает основные use-cases (рекурсивные типы, множественные объекты).
+5. **`@heap` — реализовано** (Шаг 2, коммит cc97b2e). Требует `allocator: "heap"`; на `allocator: "static"` → compile error. Pool покрывает BSS-аллокацию, heap — malloc.
 
 ### Почему так
 
@@ -516,13 +516,18 @@ child.next = root;
 
 ---
 
-## `@heap` — heap-аллокация классов (future feature)
+## `@heap` — heap-аллокация классов
 
-Декоратор `@heap` (будущая фича, Шаг 2) создаёт класс с **heap-аллокацией через `malloc`/`free`**. Используется для сложных динамических структур (деревья, графы, циклические ссылки) на desktop.
+Декоратор `@heap` создаёт класс с **heap-аллокацией через `malloc`/`free`**. Используется для сложных динамических структур (деревья, графы, циклические ссылки) на desktop.
 
 ### Статус
 
-**Не реализовано в текущей версии.** В этом разделе описана целевая семантика для будущей реализации.
+**Реализовано** (Шаг 2, коммит `cc97b2e`). Компилятор автоматически:
+- Генерирует `*_destructor()` (auto-gen string release для string-полей)
+- Emit `*_constructor()` wrapper поверх `*_new()`
+- Auto-malloc на `new X()`, auto-free на scope exit
+- Move semantics с `a = NULL` zero-out
+- Use-after-move detection (E002)
 
 ### Синтаксис
 
@@ -538,18 +543,22 @@ let child = new HeavyNode("child");
 child.next = root;  // OK: циклические ссылки допустимы
 ```
 
-### C-вывод (целевой)
+### C-вывод
 
 ```c
 typedef struct HeavyNode HeavyNode;
 struct HeavyNode { String data; HeavyNode *next; };
 
+static void HeavyNode_destructor(HeavyNode *self) {
+    tsc_string_release(&self->data);
+}
+
 int main(void) {
     HeavyNode* root = (HeavyNode*)tsc_malloc(sizeof(HeavyNode));
-    HeavyNode_constructor(root, "root");
+    *root = HeavyNode_new("root");
     
     HeavyNode* child = (HeavyNode*)tsc_malloc(sizeof(HeavyNode));
-    HeavyNode_constructor(child, "child");
+    *child = HeavyNode_new("child");
     
     child->next = root;  // OK: указатели допускают циклы
     
@@ -560,12 +569,12 @@ int main(void) {
 }
 ```
 
-### Move semantics (целевая)
+### Move semantics
 
 ```typescript
 let a = new HeavyNode("data");
-let b = a;  // pointer copy
-a = null;   // zero-out (C-указатель)
+let b = a;  // Move: pointer copy + a = NULL (zero-out)
+a.value // ❌ use of moved value: "a" (E002)
 ```
 
 ### Когда использовать
@@ -582,8 +591,9 @@ a = null;   // zero-out (C-указатель)
 ### Ограничения
 
 - **Только `allocator: "heap"`** — на `allocator: "static"` → compile error
-- **Деструктор обязателен** — компилятор генерирует auto-free, но пользовательский `destructor` нужен для cleanup полей
-- **Не перемещается в `@pool`/`@struct`** — `@heap` исключает другие декораторы аллокации
+- **Без наследования** — `@heap` + `extends` → compile error
+- **Не совместим с `@pool`/`@struct`** — `@heap` исключает другие декораторы аллокации
+- **Move from const** — допустимо, но без zero-out (компилятор предупреждает в strict mode)
 
 ---
 
