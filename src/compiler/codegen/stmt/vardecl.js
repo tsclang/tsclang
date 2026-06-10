@@ -581,7 +581,7 @@ export default {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
-            if (this._allocatorName === 'none' || this._allocatorName === 'static') {
+            if (this._allocatorName === 'static') {
               throw this.error(`TypeError: 'new Shared<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
             }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
@@ -625,7 +625,7 @@ export default {
         }
 
         // Borrow check: Shared<T> requires a heap allocator
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && (this._allocatorName === 'none' || this._allocatorName === 'static')) {
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'static') {
           throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
 
@@ -747,7 +747,7 @@ export default {
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
           throw this.error(`"void" can only be used as a return type`);
         }
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && (this._allocatorName === 'none' || this._allocatorName === 'static')) {
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'static') {
           throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())

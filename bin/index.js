@@ -133,7 +133,7 @@ OPTIONS:
   --build <name>           Use named build from tsc.package.json
   --mcu <chip>             Target MCU (e.g. atmega328p, atmega2560)
   --default-number <type>  Default number type (f64, f32, i32, ...)
-  --allocator <type>       Allocator strategy (default, static, none)
+  --allocator <type>       Allocator strategy (heap, static)
   --async <type>           Async model (libuv, state_machine, none)
   --optimize <O0-O3|Os|Oz> Optimization level
   --debug                  Compile with debug info
@@ -1223,7 +1223,7 @@ if (command === 'build') {
   if (!_capabilities && (_allocatorFlag || _asyncFlag)) {
     _capabilities = {
       ...DESKTOP_CAPABILITIES,
-      allocator: _allocatorFlag === 'static' || _allocatorFlag === 'none' ? 'static' : 'heap',
+      allocator: _allocatorFlag === 'static' ? 'static' : 'heap',
       async: _asyncFlag === 'state_machine' ? 'state_machine' : (_asyncFlag === 'libuv' ? 'libuv' : (_asyncFlag === 'none' ? 'none' : 'libuv')),
     };
     if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {

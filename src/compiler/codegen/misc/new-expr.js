@@ -58,7 +58,7 @@ export default {
 
     // new Shared<T>()
     if (name === 'Shared') {
-      if (this._allocatorName === 'none' || this._allocatorName === 'static') {
+      if (this._allocatorName === 'static') {
         const t2 = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
         const tsName = this.ctypeToTsName(t2);
         throw this.error(`TypeError: 'new Shared<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
@@ -192,10 +192,6 @@ export default {
           lines.push(`*${tmpName}.value = ${name}_new(${argsC});`);
         }
         return tmpName;
-      }
-      // allocator-none: no heap allocation via new (except @embedded.inline which is stack-allocated)
-      if (this._allocatorName === 'none' && !cls._isInline) {
-        throw this.error(`TypeError: Heap allocation ('new ${name}()') is not allowed when allocator is "none"`);
       }
       const hasCtor = cls.methods?.some(m => m.name === 'constructor');
       // Suppress const for class instances unless ALL fields are readonly
