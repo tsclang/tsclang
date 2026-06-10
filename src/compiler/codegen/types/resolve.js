@@ -174,6 +174,9 @@ export default {
         this._ensurePoolAlloc(name);
         return _cls._poolOptType;
       }
+      if (_cls?._isHeap) {
+        return `${_cls?._cname ?? name} *`;
+      }
       return _cls?._cname ?? name;
     }
 

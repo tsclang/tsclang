@@ -31,7 +31,7 @@ export default {
     const _classDecoratorFields = [];   // extra fields to add to struct
     const _classDecoratorInits  = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
-      if (['struct', 'pool', 'packed', 'align'].includes(d.name)) continue;
+      if (['struct', 'pool', 'heap', 'packed', 'align'].includes(d.name)) continue;
       const decFn = this._decoratorFns?.get(d.name);
       if (decFn) {
         const { fields: df, inits: di } = this._analyzeClassDecorator(decFn);
@@ -48,11 +48,27 @@ export default {
     if (inlineDec && !isEmbedded) {
       throw this.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
+    // @pool: require numeric capacity arg
     if (poolDec) {
       const poolSizeArg = poolDec.args?.[0];
       if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
         throw this.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
       }
+    }
+
+    // @heap: only valid on allocator: "heap"
+    const heapDec = decorators?.find(d => d.name === 'heap');
+    if (heapDec && this._allocatorName === 'static') {
+      throw this.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
+    }
+    if (heapDec && poolDec) {
+      throw this.error(`@heap and @pool are mutually exclusive; use one allocation strategy`, node);
+    }
+    if (heapDec && inlineDec) {
+      throw this.error(`@heap and @struct are mutually exclusive; use one allocation strategy`, node);
+    }
+    if (heapDec && this._classHasInheritance(cBase, name)) {
+      throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {
       const badMethods = members.filter(m => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
@@ -117,7 +133,8 @@ export default {
       ...(cname !== name ? { _cname: cname } : {}),
       ...(isThrowsClass ? { _isThrowsClass: true } : {}),
       ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}),
-      ...(_iterableElemType ? { _iterableElemType } : {}) };
+      ...(_iterableElemType ? { _iterableElemType } : {}),
+      ...(heapDec ? { _isHeap: true } : {}) };
     this.classes.set(cname, _classEntry);
     // Also register under original name so local TypeRef resolution works
     if (cname !== name) this.classes.set(name, _classEntry);
@@ -270,6 +287,10 @@ export default {
     if (poolDec) {
       this._emitPoolClass(cname, poolDec, node);
     }
+    // @heap: mark class for heap allocation
+    if (heapDec) {
+      this._markHeapClass(cname, node);
+    }
     // Mark class as inline value type
     if (inlineDec && isEmbedded) {
       const cls = this.classes.get(cname);
@@ -338,6 +359,38 @@ export default {
     this.addTop(`    if (${param}.has_value) ${maskVar} &= ~((${maskType})1 << ${param}._pool_idx);`);
     this.addTop(`}`);
     this.addTop('');
+  },
+
+  _markHeapClass(name, node) {
+    const cls = this.classes.get(name);
+    if (cls) {
+      cls._heapClassName = name;
+      // Register for runtime malloc include
+      this.includes.add('#include <stdlib.h>');
+    }
+  },
+
+  _ensureHeapDestructor(className) {
+    const cls = this.classes.get(className);
+    if (!cls?._isHeap || cls._heapDestructorEmitted) return;
+    cls._heapDestructorEmitted = true;
+    const dtorFn = `${className}_destructor`;
+    const param = className[0].toLowerCase();
+    this.addTop(`static void ${dtorFn}(${className} *${param}) {`);
+    // Release string fields (auto-generated)
+    if (cls.fields) {
+      for (const f of cls.fields) {
+        if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'string') {
+          this.addTop(`    tsc_string_release(&${param}->${f.name});`);
+        }
+      }
+    }
+    this.addTop(`}`);
+    this.addTop('');
+  },
+
+  _classHasInheritance(cBase) {
+    return cBase != null;
   },
 
   emitVtableConstant(className, ifaceName, classNode = null) {

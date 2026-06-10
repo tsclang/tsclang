@@ -1,1 +1,1 @@
-@heap class is not supported on allocator "static"
+@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"

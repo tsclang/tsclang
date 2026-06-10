@@ -201,6 +201,7 @@ export default {
         }
         const poolCls = this.classes.get(node.name);
         if (poolCls?._isPool) return `opt_ref_${node.name}`;
+        if (poolCls?._isHeap) return `${node.name} *`;
         return node.name;
       }
       case 'ObjLit': return 'int32_t';
