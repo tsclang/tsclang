@@ -40,9 +40,9 @@ Result_i32_TscError _tsc_main(void) {
         return (Result_i32_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Counter"))};
     }
     opt_ref_Counter c = _pool_0;
-    c.increment();
-    c.increment();
-    return (Result_i32_TscError){.ok = true, .value = c.get()};
+    Counter_increment(c.value);
+    Counter_increment(c.value);
+    return (Result_i32_TscError){.ok = true, .value = Counter_get(c.value)};
     Counter_drop(c);
 }
 

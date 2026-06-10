@@ -349,7 +349,12 @@ export default {
       const obj2 = node.callee.object;
       const sym2 = obj2.kind === 'Ident' ? this.lookup(obj2.name) : null;
       const objType2 = sym2?.ctype ?? this.inferType(obj2);
-      const cls2 = this.classes.get(objType2);
+      let lookupType = objType2;
+      if (lookupType?.startsWith('opt_ref_')) {
+        const inner = lookupType.slice(8);
+        if (this.classes.get(inner)?._isPool) lookupType = inner;
+      }
+      const cls2 = this.classes.get(lookupType);
       if (cls2?.methods) {
         const m2 = cls2.methods.find(m => m.name === node.callee.prop);
         if (m2?.returnType) return this.resolveType(m2.returnType);
