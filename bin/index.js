@@ -1080,7 +1080,6 @@ if (command === 'build') {
   const _defaultNumberFlag = _flagVal('--default-number');
   const _allocatorFlag    = _flagVal('--allocator');
   const _asyncFlag        = _flagVal('--async');
-  const _noRecursionFlag  = args.includes('--no-recursion');
   const _strictFlag       = _flagVal('--strict');
   const _ramSizeFlag      = _flagVal('--ram-size');
   const _stackSizeFlag    = _flagVal('--stack-size');
@@ -1268,7 +1267,7 @@ if (command === 'build') {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
     target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,
     allocator: _allocatorFlag, scheduler: _asyncFlag,
-    noRecursion: _noRecursionFlag, ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
+    ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
     stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
     optimize: !!optimize, strict: _strictFlag ? _strictFlag.split(',') : _pkgStrict,
     mcu: _mcu,

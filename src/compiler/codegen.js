@@ -33,7 +33,6 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.defaultNumber) ctx._optsDefaultNumber = opts.defaultNumber;
   if (opts.allocator) ctx._optsAllocator = opts.allocator;
   if (opts.scheduler) ctx._optsAsync = opts.scheduler;
-  if (opts.noRecursion) ctx._optsNoRecursion = true;
   if (opts.strict) ctx._strictRules = new Set(opts.strict);
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
@@ -212,7 +211,6 @@ class Context {
     this._optsDefaultNumber = null;
     this._optsAllocator = null;
     this._optsAsync = null;
-    this._optsNoRecursion = false;
     this._optsRamSize = null;
     this._optsStackSize = null;
     this._defaultNumber = 'f64';

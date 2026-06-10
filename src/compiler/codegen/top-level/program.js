@@ -90,7 +90,6 @@ export default {
     // Priority: opts > default
     this._targetName = this._optsTarget || 'desktop';
     this._allocatorName = this._optsAllocator || this._cap('allocator') || 'default';
-    this._noRecursion = this._optsNoRecursion || false;
     this._asyncName = this._optsAsync || null;
     this._ramSize = this._optsRamSize || null;
     this._stackSize = this._optsStackSize || null;
@@ -137,8 +136,8 @@ export default {
       for (const node of ast.body) _walkWasm(node);
     }
 
-    // Pre-scan: recursion detection when no_recursion is true
-    if (this._noRecursion) {
+    // Pre-scan: recursion detection when no-recursion strict rule is set
+    if (this._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames
       const callGraph = new Map();
       const _collectCalls = (nd, result) => {
@@ -168,10 +167,10 @@ export default {
           const cycleStart = inStack.get(fn);
           const cycle = path.slice(cycleStart);
           if (cycle.length === 1) {
-            throw this.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden when no_recursion is true`);
+            throw this.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden by strict rule 'no-recursion'`);
           } else {
             const cycleStr = [...cycle, fn].join(' → ');
-            throw this.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden when no_recursion is true`);
+            throw this.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden by strict rule 'no-recursion'`);
           }
         }
         if (visited.has(fn)) return;

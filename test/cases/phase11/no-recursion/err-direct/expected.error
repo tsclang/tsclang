@@ -1,1 +1,1 @@
-TypeError: Direct recursion detected in 'f()': recursion is forbidden when no_recursion is true
+TypeError: Direct recursion detected in 'f()': recursion is forbidden by strict rule 'no-recursion'

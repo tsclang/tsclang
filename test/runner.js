@@ -409,7 +409,6 @@ function readMeta(testDir) {
       if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
       if (meta.ramSize)        flags.push('--ram-size', String(meta.ramSize));
       if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
-      if (meta.noRecursion)    flags.push('--no-recursion');
       if (meta.optimize)       flags.push('--optimize', 'O2');
       if (meta.debug)          flags.push('--debug');
       if (meta.strict) {
@@ -424,7 +423,6 @@ function readMeta(testDir) {
     if (meta.defaultNumber)  flags.push('--default-number', meta.defaultNumber);
     if (meta.allocator)      flags.push('--allocator', meta.allocator);
     if (meta.scheduler)      flags.push('--async', meta.scheduler);
-    if (meta.noRecursion)    flags.push('--no-recursion');
     if (meta.ramSize)        flags.push('--ram-size', String(meta.ramSize));
     if (meta.stackSize)      flags.push('--stack-size', String(meta.stackSize));
     if (meta.optimize)       flags.push('--optimize', 'O2');

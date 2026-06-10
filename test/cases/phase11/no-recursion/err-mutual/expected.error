@@ -1,1 +1,1 @@
-TypeError: Mutual recursion detected: g → h → g; recursion is forbidden when no_recursion is true
+TypeError: Mutual recursion detected: g → h → g; recursion is forbidden by strict rule 'no-recursion'
