@@ -1,0 +1,9 @@
+function helper(): i32 {
+  let buf: i32[20] = [0];
+  return buf[0];
+}
+
+function main(): i32 {
+  let x: i32 = 1;
+  return x + helper();
+}

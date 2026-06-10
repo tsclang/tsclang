@@ -1,0 +1,19 @@
+function small(): i32 {
+  let a: i32 = 1;
+  return a;
+}
+
+function big(): i32 {
+  let buf: i32[16] = [0];
+  return buf[0];
+}
+
+function dispatch(cond: boolean): i32 {
+  let x: i32 = 0;
+  if (cond) {
+    x = small();
+  } else {
+    x = big();
+  }
+  return x;
+}

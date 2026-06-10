@@ -1,0 +1,10 @@
+class Vec3 {
+  x: i32;
+  y: i32;
+  z: i32;
+}
+
+function test(): i32 {
+  let v: Vec3 = { x: 1, y: 2, z: 3 };
+  return v.x + v.y + v.z;
+}

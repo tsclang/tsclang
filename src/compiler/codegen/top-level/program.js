@@ -93,6 +93,7 @@ export default {
     this._asyncName = this._optsAsync || null;
     this._ramSize = this._optsRamSize || null;
     this._stackSize = this._optsStackSize || null;
+    this._funcStackInfo = new Map();
 
     // Default number type: opts > auto-detect from capabilities
     const _autoDefaultNumber = this._isEmbedded() ? 'f32' : 'f64';
@@ -420,6 +421,36 @@ export default {
       bag.isTscErrorBag = true;
       bag.errors = this._errors;
       throw bag;
+    }
+
+    if (this._stackSize != null && this._funcStackInfo.size > 0) {
+      const _worstCase = new Map();
+      const _visiting = new Set();
+      const _computeWorst = (astName, path) => {
+        if (_worstCase.has(astName)) return _worstCase.get(astName);
+        const info = this._funcStackInfo.get(astName);
+        if (!info) return 0;
+        if (_visiting.has(astName)) return 0;
+        _visiting.add(astName);
+        let calleeMax = 0;
+        for (const callee of info.callees) {
+          const calleeWorst = _computeWorst(callee, [...path, astName]);
+          if (calleeWorst > calleeMax) calleeMax = calleeWorst;
+        }
+        _visiting.delete(astName);
+        const total = info.ownBytes + calleeMax;
+        _worstCase.set(astName, total);
+        return total;
+      };
+      const _checked = new Set();
+      for (const [cname, info] of this._funcStackInfo) {
+        if (_checked.has(info.name)) continue;
+        _checked.add(info.name);
+        const worst = _computeWorst(info.name, []);
+        if (worst > this._stackSize) {
+          throw this.error(`Warning: Worst-case stack depth (${worst} bytes) exceeds stack_size (${this._stackSize} bytes) in '${info.name}()'`);
+        }
+      }
     }
   },
 };

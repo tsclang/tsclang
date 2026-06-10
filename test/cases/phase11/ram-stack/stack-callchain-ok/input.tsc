@@ -1,0 +1,15 @@
+function leaf(): i32 {
+  let a: i32 = 1;
+  let b: i32 = 2;
+  return a + b;
+}
+
+function mid(): i32 {
+  let x: i32 = 3;
+  return x + leaf();
+}
+
+function top(): i32 {
+  let y: i32 = 4;
+  return y + mid();
+}

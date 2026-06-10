@@ -421,7 +421,8 @@
 - [x] `#[profile(allocator: "static")]` — static-backed массивы/map с проверкой capacity
 - [x] `@static let` / `@static const` — объекты в BSS (static backing)
 - [x] `#[no_recursion]` — проверка отсутствия рекурсии (direct + mutual)
-- [x] `#[stack_size(N)]` / `#[ram_size(N)]` — ограничения стека и BSS
+- [x] `#[stack_size(N)]` / `#[ram_size(N)]` — ограничения стека и BSS (L1: все VarDecl, L2: call graph worst-case)
+
 - [x] `#[profile(scheduler: "cooperative")]` + `@static async function*` — кооперативный планировщик
 - [x] `#[target(avr)]` + CMake AVR toolchain
 
@@ -431,6 +432,7 @@
 > 2026-06-09: pool auto-drop + move semantics — исправлены 4 бага: (1) `let b = a` для pool ref — move tracking + zero-out в opt_ блоке vardecl.js, (2) return pool var — `_markPoolVarMoved` на всех путях возврата, (3) throw + pool — `_emitPoolDrops` перед throw в control-flow.js, (4) `visitBlock` auto-drop проверяет `_moved`. Также: `Spark | null` для pool классов резолвится в `opt_ref_Spark` вместо `opt_Spark` (resolve.js). Новые тесты: `move-assign`, `return-pool`. **Статус: 40/40 ✓**
 > 2026-06-10: unified `new` для pool классов — (1) `.alloc()` удалён, бросает compile error "use new X() instead" (method-dispatch.js, infer.js), (2) `new PoolClass()` в throws-функции — Result-based pool-full error (new-expr.js), (3) `new PoolClass()` в try/catch — goto-based catch dispatch с `_inTryBlock` + `_tryCatchInfo` (control-flow.js), (4) pool-full вне throws/try/catch = compile error. Все 6 существующих pool-тестов мигрированы с `.alloc()` на `new`. Новые тесты: `new-pool`, `err-new-no-try`, `new-pool-trycatch`. **Статус: 43/43 ✓**
 > 2026-06-10: pool constructor support — `new PoolClass(args)` с конструктором: alloc + `*_pool_N.value = ClassName_new(args)`. Конструктор генерируется как обычно (`ClassName_new`), после alloc вызывается и результат копируется в pool-слот. Новый тест: `new-pool-ctor`. **Статус: 44/44 ✓**
+> 2026-06-10: `stack_size` L1 + L2 — (1) `_stackSizeOf(ct)` в helpers.js: рекурсивный подсчёт размера любого C-типа (примитивы, указатели, opt/ref, struct/tuple по полям, Array/Map/Set как указатель), (2) `_scanStack` в func.js теперь считает все VarDecl (не только TypeFixedArray), (3) L2: call graph worst-case DFS — `_funcStackInfo` собирает ownBytes + callees для каждой функции, после компиляции всех функций вычисляет `worstCase(fn) = ownBytes + max(worstCase(callee))`, при превышении stack_size — compile error. Новые тесты: `err-stack-primitives`, `err-stack-struct`, `stack-ok`, `err-stack-callchain`, `err-stack-callchain-branch`, `stack-callchain-ok`. **Статус: 49/49 ✓**
 
 ---
 

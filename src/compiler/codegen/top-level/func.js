@@ -213,15 +213,29 @@ export default {
       retType = 'void';
     }
     const origRetType = retType;
-    // Stack size check
+    // Stack size: collect own bytes + callees for call-graph analysis
+    let _ownBytes = 0;
+    const _callees = new Set();
     if (this._stackSize != null && body) {
-      let stackBytes = 0;
       const _scanStack = (nd) => {
         if (!nd || typeof nd !== 'object') return;
         if (Array.isArray(nd)) { nd.forEach(_scanStack); return; }
-        if (nd.kind === 'VarDecl' && nd.typeAnn?.kind === 'TypeFixedArray') {
-          const et = this.resolveType(nd.typeAnn.element);
-          stackBytes += nd.typeAnn.size * this._cTypeBytes(et);
+        if (nd.kind === 'VarDecl') {
+          if (nd.typeAnn?.kind === 'TypeFixedArray') {
+            const et = this.resolveType(nd.typeAnn.element);
+            _ownBytes += nd.typeAnn.size * this._cTypeBytes(et);
+          } else if (nd.typeAnn) {
+            const ct = this.resolveType(nd.typeAnn);
+            _ownBytes += this._stackSizeOf(ct);
+          } else if (nd.init) {
+            const ct = this.inferType(nd.init);
+            _ownBytes += this._stackSizeOf(ct);
+          } else {
+            _ownBytes += this._stackSizeOf(this._tsNameToCType(this._defaultNumber));
+          }
+        }
+        if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') {
+          _callees.add(nd.callee.name);
         }
         if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
         for (const v of Object.values(nd)) {
@@ -229,19 +243,20 @@ export default {
         }
       };
       _scanStack(body);
-      if (stackBytes > this._stackSize) {
-        throw this.error(`Warning: Worst-case stack depth (${stackBytes} bytes) exceeds stack_size (${this._stackSize} bytes) in '${name}()'`);
-      }
     }
 
     const suffix = node._monoName ? '' : mangleParams(params, this._defaultNumber);
     let cname = node._monoName ?? (name ? `${name}${suffix}` : `_anon_${this.lambdaCount++}`);
     if (this._modulePrefix && name && !node._noPrefix) cname = this._modulePrefix + cname;
-    // Rename user-defined main() to avoid conflict with generated int main()
     if (name === 'main' && !node.async && !generator) {
       cname = '_tsc_main';
       this._hasExplicitMain = true;
       this._explicitMainRetType = origRetType;
+    }
+
+    if (this._stackSize != null && name) {
+      this._funcStackInfo.set(cname, { name, ownBytes: _ownBytes, callees: [..._callees] });
+      if (cname !== name) this._funcStackInfo.set(name, { name, ownBytes: _ownBytes, callees: [..._callees] });
     }
 
     // Throws function handling

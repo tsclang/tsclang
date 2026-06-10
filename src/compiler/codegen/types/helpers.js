@@ -6,6 +6,32 @@ export default {
     return m[ct] ?? 4;
   },
 
+  _stackSizeOf(ct) {
+    if (!ct || ct === 'void') return 0;
+    if (ct.endsWith(' *')) return this._isEmbedded() ? 4 : 8;
+    if (ct.startsWith('opt_ref_')) return this._isEmbedded() ? 8 : 16;
+    if (ct.startsWith('opt_')) {
+      const inner = ct.slice(4);
+      return this._stackSizeOf(inner) + 4;
+    }
+    if (ct.startsWith('tuple_')) {
+      const def = this.classes.get(ct);
+      if (def?.fields) return def.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+      return 4;
+    }
+    const cls = this.classes.get(ct);
+    if (cls?.isStruct && cls.fields) {
+      return cls.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+    }
+    if (cls?.isTuple && cls.fields) {
+      return cls.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+    }
+    if (ct.startsWith('Array_') || ct.startsWith('TscMap_') || ct.startsWith('Map_') || ct.startsWith('Set_') || ct.startsWith('TscSet_')) {
+      return this._isEmbedded() ? 4 : 8;
+    }
+    return this._cTypeBytes(ct);
+  },
+
   cTypeToIdent(ctype) {
     // Map C type to a valid identifier suffix
     const m = {
