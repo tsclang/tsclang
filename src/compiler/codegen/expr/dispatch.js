@@ -194,6 +194,16 @@ export default {
             }
           }
         }
+        // Heap pointer var: p.field → p->field (heap class is already a pointer)
+        if (sym?._isHeap) {
+          const rawName = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
+          return `${rawName}->${node.prop}`;
+        }
+        const symType = sym?.ctype?.replace(' *', '');
+        if (this.classes.get(symType)?._isHeap && sym?.ctype?.endsWith(' *')) {
+          const rawName = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
+          return `${rawName}->${node.prop}`;
+        }
         // Pool opt_ref var: p.field → p.value->field (route through pool pointer)
         // Note: only exclude has_value and _pool_idx (struct meta-fields); 'value' may be a class field
         if (sym?.ctype?.startsWith('opt_ref_') && !['has_value','_pool_idx'].includes(node.prop)) {

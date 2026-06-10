@@ -340,7 +340,17 @@ class Context {
       }
     }
   }
-  define(name, info) { this.scopes[this.scopes.length - 1].set(name, info); }
+  define(name, info) {
+    // Auto-mark heap pointer vars (ctype is "ClassName *" where ClassName is @heap)
+    if (info?.ctype?.endsWith(' *') && !info._isHeap && !info._isPointer) {
+      const clsName = info.ctype.slice(0, -2);
+      const clsDef = this.classes.get(clsName);
+      if (clsDef?._isHeap) {
+        info._isHeap = true;
+      }
+    }
+    this.scopes[this.scopes.length - 1].set(name, info);
+  }
   _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
   _isEmbedded() {
     return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;

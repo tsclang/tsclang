@@ -688,6 +688,25 @@ export default {
     }
 
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    if (classSym?._isHeap) {
+      const poolClassName = classSym.ctype;
+      const poolCls = this.classes.get(poolClassName);
+      if (poolCls) {
+        const methodInfo = poolCls._methodNames?.get(prop);
+        if (methodInfo?.isMoveMethod) {
+          if (classSym.varKind === 'const') {
+            throw this.error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+          }
+          return `${methodInfo.nameMangled}(*${objC}${argsC ? ', ' + argsC : ''})`;
+        }
+        if (methodInfo?.isExplicitMut && classSym.varKind === 'const') {
+          throw this.error(`cannot call "mut" method on const binding`);
+        }
+        if (methodInfo) {
+          return `${poolClassName}_${prop}(${objC}${argsC ? ', ' + argsC : ''})`;
+        }
+      }
+    }
     if (classSym?.ctype?.startsWith('opt_ref_')) {
       const poolClassName = classSym.ctype.slice(8);
       const poolCls = this.classes.get(poolClassName);
