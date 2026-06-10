@@ -349,6 +349,331 @@ const { name, email } = user;
 
 **Ключевое отличие:** классы — **value types**, размещаются на стеке как struct. Конструктор возвращает struct by value (`User User_new(args) { User self = {0}; ... return self; }`), call site: `User u = User_new(args)`. Нет `malloc`/`free` для самого объекта. `ClassName_free(&u)` освобождает только string-поля, не вызывает `free(self)`. На embedded нет heap → нет `malloc`/`free` вообще. String-поля на embedded — no-op retain/release (ring buffer).
 
+### Allocation Strategy
+
+Стратегия размещения класса в памяти определяется **декоратором** на классе, а не платформой. Платформа (`allocator: "heap"` / `allocator: "static"`) не меняет аллокацию класса — классы ВСЕГДА живут в памяти, известной на этапе компиляции.
+
+| Тип класса | Синтаксис | C-вывод | Размещение | `T \| null` | Move | Drop |
+|------------|-----------|---------|------------|-------------|------|------|
+| `class` (default) | `new Point(10, 20)` | `Point p = Point_new(10, 20)` | Стек (на всех платформах) | `opt_Point` inline | memset src=0 | `_free()` release string-полей |
+| `@struct` | `Point(10, 20)` (без `new`) | `Point p = {10, 20}` | Стек/inline | Запрещён | copy | no-op |
+| `@pool(N)` | `new Gem(42)` | alloc from pool + constructor | BSS static pool | `opt_ref_Gem` pointer | pointer copy + `a = NULL` | `drop()` или auto-drop |
+| `@heap` (future) | `new Node(42)` | `malloc + constructor` | Heap | `Node*` (NULL) | pointer copy + `a = NULL` | auto-free при scope exit |
+
+#### Принципы
+
+1. **Классы = value types** на стеке по умолчанию. Heap malloc для классов **не используется** — `allocator: "heap"` означает malloc только для `Array`, `Map`, `Set`, `closures`, но не для классов.
+2. **Единый синтаксис `new`** для всех типов классов (П2 — совместимость с TypeScript). Разница только в C-выводе.
+3. **Move semantics** на всех платформах: `let b = a` — bitwise copy (стек) или pointer copy + zero-out (pool/heap), `a` помечается как moved.
+4. **Детерминированное освобождение** — никакого GC, никакого ARC. Drop вызывается compile-time предсказуемо.
+5. **`@heap` — future feature** (Шаг 2). В текущей реализации не поддерживается; на `allocator: "static"` → compile error. Pool покрывает основные use-cases (рекурсивные типы, множественные объекты).
+
+### Почему так
+
+Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead. Один владелец = один destructor call. Borrow (Ref/Mut) = pointer — нулевой overhead, но compile-time guarantee безопасности.
+
+---
+
+## `@struct` — value-type class
+
+Декоратор `@struct` превращает класс в **принудительный value-type** — плоская структура без heap и vtable, размещается inline в родительском scope.
+
+### Синтаксис
+
+```typescript
+@struct
+class Point { x: i32; y: i32; }
+
+// Используется БЕЗ new — value, как struct
+let p = Point(10, 20);
+p.x = 15;
+```
+
+### C-вывод
+
+```c
+typedef struct { int32_t x; int32_t y; } Point;
+
+// Inline в scope, без вызова Point_new()
+int32_t main(void) {
+    Point p = {10, 20};
+    p.x = 15;
+    return 0;
+}
+```
+
+### Ограничения
+
+- **Нет методов** (кроме `constructor`) — компилятор выдаёт ошибку если класс содержит не-конструктор методы
+- **Нет интерфейсов** (no vtable) — `Point` не может реализовывать интерфейсы
+- **Нет `@pool`/`@heap`** — `@struct` исключает другие декораторы аллокации
+- **На non-embedded платформах** — `@struct` допустим, компилируется в тот же inline-стиль
+
+### Когда использовать
+
+- Маленькие POD-типы (Point, Color, Matrix)
+- Когда нужна максимальная производительность (no function call overhead)
+- Когда объекты всегда живут короткое время (на стеке)
+
+---
+
+## `@pool(N)` — статический пул объектов
+
+Декоратор `@pool(N)` создаёт **статический пул из N слотов в BSS** для размещения объектов. На embedded — единственный способ динамически создавать объекты без heap. На desktop — детерминированная альтернатива heap malloc (для mission-critical потоков, real-time систем).
+
+### Синтаксис
+
+```typescript
+@pool(4)
+class Gem { value: i32; }
+
+// Используется через new (как обычный класс)
+let g = new Gem(42);
+g.value = 99;
+drop(g); // или auto-drop при выходе из scope
+```
+
+### C-вывод
+
+```c
+// В BSS сегменте
+static Gem _Gem_pool[4];
+static uint8_t _Gem_pool_used = 0;  // bitmask (uint8/16/32/64 в зависимости от N)
+
+typedef struct { bool has_value; Gem *value; int _pool_idx; } opt_ref_Gem;
+
+static opt_ref_Gem Gem_pool_alloc(void) {
+    for (int _i = 0; _i < 4; _i++) {
+        if (!(_Gem_pool_used & ((uint8_t)1 << _i))) {
+            _Gem_pool_used |= ((uint8_t)1 << _i);
+            return (opt_ref_Gem){true, &_Gem_pool[_i], _i};
+        }
+    }
+    return (opt_ref_Gem){false, NULL, -1};
+}
+
+static void Gem_pool_free(opt_ref_Gem x) {
+    if (x.has_value) _Gem_pool_used &= ~((uint8_t)1 << x._pool_idx);
+}
+```
+
+### Move semantics
+
+```typescript
+let a = new Gem(42);
+let b = a; // Move: a → b, a становится null
+// a.value // ❌ Ошибка компиляции (E002: use of moved value)
+```
+
+C-вывод:
+
+```c
+opt_ref_Gem a = Gem_pool_alloc();
+Gem_constructor(a.value, 42);
+
+opt_ref_Gem b = a;  // pointer copy
+a = (opt_ref_Gem){false, NULL, -1};  // zero-out source
+```
+
+### Pool-full → exception (не panic)
+
+```typescript
+try {
+    let g = new Gem(42);
+} catch (e) {
+    // обработка pool-full
+}
+```
+
+### Рекурсивные типы через `@pool`
+
+Pool решает проблему рекурсивных структур на embedded (tree, linked list, graph) без malloc:
+
+```typescript
+@pool(16)
+class HeavyNode {
+    data: string;
+    next: HeavyNode | null;  // HeavyNode* next в C — указатель на слот пула
+}
+
+let root = new HeavyNode("root");
+let child = new HeavyNode("child");
+child.next = root;
+```
+
+### Ограничения
+
+- **N ≤ 64** — компилятор выдаёт ошибку для N > 64
+- **Работает на всех платформах** — desktop (детерминированный пул) и embedded (BSS)
+- **Pool-full** — обрабатывается через try/catch или throws-функции (Result-based error)
+- **Drop** — explicit `drop(g)` или auto-drop при выходе из scope (с проверкой `_moved`)
+
+### Когда использовать
+
+- Объекты, которые создаются/уничтожаются часто (particle systems, scene graph nodes)
+- На embedded: единственный способ динамических объектов
+- На desktop: real-time потоки, где malloc недопустим
+
+---
+
+## `@heap` — heap-аллокация классов (future feature)
+
+Декоратор `@heap` (будущая фича, Шаг 2) создаёт класс с **heap-аллокацией через `malloc`/`free`**. Используется для сложных динамических структур (деревья, графы, циклические ссылки) на desktop.
+
+### Статус
+
+**Не реализовано в текущей версии.** В этом разделе описана целевая семантика для будущей реализации.
+
+### Синтаксис
+
+```typescript
+@heap
+class HeavyNode {
+    data: string;
+    next: HeavyNode | null;  // HeavyNode* в C
+}
+
+let root = new HeavyNode("root");
+let child = new HeavyNode("child");
+child.next = root;  // OK: циклические ссылки допустимы
+```
+
+### C-вывод (целевой)
+
+```c
+typedef struct HeavyNode HeavyNode;
+struct HeavyNode { String data; HeavyNode *next; };
+
+int main(void) {
+    HeavyNode* root = (HeavyNode*)tsc_malloc(sizeof(HeavyNode));
+    HeavyNode_constructor(root, "root");
+    
+    HeavyNode* child = (HeavyNode*)tsc_malloc(sizeof(HeavyNode));
+    HeavyNode_constructor(child, "child");
+    
+    child->next = root;  // OK: указатели допускают циклы
+    
+    // Auto-drop при выходе из scope
+    if (child != NULL) { HeavyNode_destructor(child); tsc_free(child); }
+    if (root != NULL) { HeavyNode_destructor(root); tsc_free(root); }
+    return 0;
+}
+```
+
+### Move semantics (целевая)
+
+```typescript
+let a = new HeavyNode("data");
+let b = a;  // pointer copy
+a = null;   // zero-out (C-указатель)
+```
+
+### Когда использовать
+
+- Рекурсивные типы с неизвестной глубиной (деревья, графы)
+- Циклические ссылки (невозможно на стеке)
+- Объекты, время жизни которых выходит за рамки scope
+
+### Альтернативы
+
+- **`@pool(N)`** — для embedded и real-time desktop (детерминированный пул, N ≤ 64)
+- **`class` default** — для value types на стеке (самый быстрый)
+
+### Ограничения
+
+- **Только `allocator: "heap"`** — на `allocator: "static"` → compile error
+- **Деструктор обязателен** — компилятор генерирует auto-free, но пользовательский `destructor` нужен для cleanup полей
+- **Не перемещается в `@pool`/`@struct`** — `@heap` исключает другие декораторы аллокации
+
+---
+
+## `@static class field` — статическое поле класса
+
+Декоратор `@static` на поле класса создаёт **одно статическое поле на класс** (не per-instance), размещённое в BSS. Все экземпляры класса разделяют это поле.
+
+### Синтаксис
+
+```typescript
+class Counter {
+    @static instances: i32 = 0;  // BSS, одно на класс
+    
+    constructor() {
+        Counter.instances = Counter.instances + 1;
+    }
+}
+
+let c1 = new Counter();
+let c2 = new Counter();
+// Counter.instances == 2
+```
+
+### C-вывод
+
+```c
+typedef struct Counter Counter;  // opaque (нет per-instance полей)
+static int32_t Counter_instances = 0;
+
+void Counter_constructor(Counter* self) {
+    Counter_instances = Counter_instances + 1;
+}
+```
+
+### Ограничения
+
+- **Инициализатор обязателен** — `@static field` должно иметь начальное значение (compile-time constant)
+- **Доступ через `ClassName.field`** — не через `instance.field` (хотя TS может разрешать оба)
+- **`@readonly` совместим** — `@static readonly` создаёт compile-time константу
+
+### Когда использовать
+
+- Счётчики экземпляров
+- Кеши, разделяемые между всеми экземплярами
+- Конфигурация класса (defaults, feature flags)
+
+---
+
+## `@readonly` class field
+
+Декоратор `@readonly` на поле класса делает поле **неизменяемым после инициализации в конструкторе**. После выхода из конструктора — только чтение.
+
+### Синтаксис
+
+```typescript
+class User {
+    @readonly id: i32;
+    name: string;
+    
+    constructor(id: i32, name: string) {
+        this.id = id;     // OK: инициализация в конструкторе
+        this.name = name;
+    }
+}
+
+let u = new User(42, "Alice");
+// u.id = 100;          // ❌ Ошибка компиляции (E00X: cannot assign to readonly field)
+console.log(u.id);       // OK: чтение
+```
+
+### C-вывод
+
+```c
+typedef struct { const int32_t id; String name; } User;
+```
+
+`const` в C гарантирует, что компилятор C тоже запретит мутацию.
+
+### Ограничения
+
+- **Инициализация только в конструкторе** — после конструктора поле неизменяемо
+- **`@readonly` + `@static` совместимы** — статическое readonly поле = compile-time константа
+- **`@readonly` на параметрах запрещён** — параметры по определению `let`
+
+### Когда использовать
+
+- Идентификаторы (id, uuid)
+- Константы уровня экземпляра
+- Immutability pattern (immutable objects)
+
 ### Почему так
 
 Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead. Один владелец = один destructor call. Borrow (Ref/Mut) = pointer — нулевой overhead, но compile-time guarantee безопасности.

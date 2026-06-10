@@ -15,7 +15,7 @@
 | [07-classes](spec/07-classes/) | Классы: generics, интерфейсы, instanceof, this, packed/align |
 | [08-collections](spec/08-collections/) | Массивы, tuples, slices, spread/destructuring |
 | [09-errors](spec/09-errors/) | Обработка ошибок: throws, try/catch, cleanup |
-| [10-async](spec/10-async/) | Async/await: state machines, Promise, AbortSignal, AsyncMutex, async generators, @embedded.singleton/stack |
+| [10-async](spec/10-async/) | Async/await: state machines, Promise, AbortSignal, AsyncMutex, async generators, @static generators, @stack |
 | [11-concurrency](spec/11-concurrency/) | Threads, Atomic, channel, ISR, Volatile, std/sync, embedded annotations |
 | [12-modules](spec/12-modules/) | Модульная система, C interop, .d.tsc, @platform, import/export |
 | [13-build](spec/13-build/) | Система сборки, CLI, tsc.package.json, package manager, embedded inline/pool |
@@ -159,8 +159,8 @@
 | **Рекурсивные async** | Ограничения; риски стека на embedded. |
 | **AbortSignal** | Отмена задач; `atomic_bool` на desktop vs `bool` на embedded; callbacks через event loop. |
 | **AsyncMutex** | Честная FIFO-очередь для координации async-функций на event loop; отличие от `Mutex` (std/sync, только для thread-контекста). |
-| **@embedded.singleton** | Единственный экземпляр класса в BSS; `Cls.instance()` → `Mut<Cls>`; нет malloc. |
-| **@embedded.stack** | Статический стек для async-рекурсии на embedded: N frame slots в BSS. |
+| **`@static async function*`** | Единственный экземпляр генератора в BSS; `new Gen()` не нужен — генератор живёт в BSS. |
+| **`@stack(name, N)`** | Статический стек для async-рекурсии на embedded: N frame slots в BSS + макросы `import { push, pop, empty } from "std/stack"`. |
 | **Async generators** | `async function*` + `for await`: потоковая обработка данных; backpressure; C-output как state machine; недоступны на `heap: false`. |
 | **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
 
@@ -210,8 +210,8 @@
 | **Поля build конфига** | Детальные поля конфигурации сборки. |
 | **Platform Profile** | AVR/Cortex/desktop-специфичные настройки: stack_size, MCU, частота. |
 | **Полная таблица платформ** | Справочная таблица всех поддерживаемых платформ (Desktop, Mobile, Embedded, Retro, Consoles). |
-| **@embedded.inline** | Value type без heap и vtable; копируется как C struct; рекурсивное разворачивание. |
-| **@embedded.pool(N)** | Статический пул N слотов в BSS; `Cls.alloc()` → `Cls \| null`; release через ownership или `drop()`. |
+| **`@struct` class** | Value type без heap и vtable; копируется как C struct; inline-размещение. |
+| **`@pool(N)` class** | Статический пул N слотов в BSS; `new Cls()` берёт слот; release через ownership или `drop()`. |
 | **declare library** | Требования библиотеки к платформе: поля `declare library`, проверка совместимости при установке. |
 | **Pipeline сборки** | Шаги: parse → typecheck → IR → ownership → codegen → cmake → build. |
 | **CLI команды** | `build`, `run`, `dev`, `init`, `install`, `update`, `lint`, `format` — описание и флаги. |
@@ -322,7 +322,7 @@
 | 5  | [09-errors](spec/09-errors/) |
 | 6  | [12-modules](spec/12-modules/) |
 | 7  | [10-async](spec/10-async/) |
-| 8  | [11-concurrency](spec/11-concurrency/), [13-build](spec/13-build/) (@embedded.inline, @embedded.pool) |
+| 8  | [11-concurrency](spec/11-concurrency/), [13-build](spec/13-build/) (@struct, @pool) |
 | 9  | [13-build](spec/13-build/) (CLI, tsc.package.json) |
 | 10 | [13-build](spec/13-build/) (pipeline, зависимости, версионирование) |
 | 11 | [13-build](spec/13-build/) (dev/lint/format, Platform Profile) |
@@ -425,8 +425,8 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - `async main` / event loop integration
 - Stack safety анализ на embedded
 - `async function*` + `for await` (async generators, только heap-платформы)
-- `@embedded.singleton` (единственный экземпляр в BSS)
-- `@embedded.stack(name, N)` (статический стек для async-рекурсии)
+- `@static function*` (единственный экземпляр в BSS)
+- `@stack(name, N)` (статический стек для async-рекурсии)
 - Кооперативная многозадачность через генераторы (общий паттерн)
 
 ### Фаза 8 — Threads и низкоуровневая конкурентность
@@ -436,8 +436,8 @@ cleanup при throw внутри async; `async main` нуждается в entr
 - `std/threads`: `Thread<T>`, `channel<T>`, `select`
 - `Atomic<T>`, `AtomicArray<T>`, `Readonly<T>`
 - `@embedded.isr`, `Volatile<T>`, `std/sync`, Embedded-аннотации (embedded)
-- `@embedded.inline` (value type без heap/vtable)
-- `@embedded.pool(N)` (статический пул слотов в BSS)
+- `@struct` (value type без heap/vtable)
+- `@pool(N)` (статический пул слотов в BSS)
 
 ### Фаза 9 — CLI core + tsc.package.json
 

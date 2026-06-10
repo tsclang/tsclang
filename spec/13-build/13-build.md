@@ -1630,105 +1630,16 @@ while (counter_next(&gen)) {
 
 #### Классы без heap: `@struct` и `@pool(N)`
 
-Обычный `new` требует heap. На embedded — два встроенных декоратора:
+> **Полная спецификация:** см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md) — секции `@struct`, `@pool(N)`, `@heap`, Allocation Strategy.
 
-**`@struct`** — value-тип. Объект живёт на стеке как C struct, без указателя и vtable:
+Краткая сводка:
 
-```typescript
-@struct
-class Point { x: i16; y: i16 }
+- **`@struct`** — value-тип на стеке, без vtable, синтаксис `Point(10, 20)` (без `new`)
+- **`@pool(N)`** — статический пул в BSS, `new` берёт слот; работает на всех платформах; pool-full → exception
+- **`@heap`** (future) — heap-аллокация для рекурсивных типов; только `allocator: "heap"`
+- **Default class** — value-тип на стеке, `new Point()` → `Point p = Point_new(args)`
 
-let p = Point(10, 20)   // не new — value, как struct
-p.x = 15
-```
-
-```c
-typedef struct { int16_t x, y; } Point;
-Point p = {10, 20};
-p.x = 15;
-```
-
-**`@pool(N)`** — статический пул на N экземпляров. `new` берёт слот из пула:
-
-```typescript
-`@pool(N)`
-class Sprite {
-    x: i16; y: i16; bitmap: u8[8]
-    constructor(x: i16, y: i16) { ... }
-}
-
-// Автоматически — компилятор возвращает слот при выходе из scope
-{
-    const s = new Sprite(10, 20)
-    s.move(5, 0)
-}  // ← слот возвращён автоматически
-
-// Вручную — если нужно освободить раньше (объект "убит" в игре)
-const s = new Sprite(10, 20)
-if (s.isOutOfBounds()) {
-    drop(s)  // явный возврат слота, s больше недоступен
-}
-```
-
-**Pool-full обработка:** если пул полон, `new` генерирует ошибку. Два способа обработки:
-
-```typescript
-// 1. throws-функция — pool-full → Result error
-function create(): Sprite throws Error {
-    const s = new Sprite(10, 20)
-    return s
-}
-
-// 2. try/catch — pool-full → catch
-try {
-    const s = new Sprite(10, 20)
-} catch (e: Error) {
-    // pool exhausted
-}
-
-// new без throws/try/catch → compile error
-```
-
-```c
-typedef struct { bool active; } Spark;
-typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
-
-static Spark _spark_pool[4];
-static uint8_t _spark_pool_mask = 0;
-
-static opt_ref_Spark Spark_alloc(void) {
-    for (int _i = 0; _i < 4; _i++) {
-        if (!(_spark_pool_mask & (1 << _i))) {
-            _spark_pool_mask |= (1 << _i);
-            return (opt_ref_Spark){true, &_spark_pool[_i], _i};
-        }
-    }
-    return (opt_ref_Spark){false, NULL, -1};  // пул полон
-}
-
-static void Spark_drop(opt_ref_Spark s) {
-    if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
-}
-
-// В throws-функции:
-Result_opt_ref_Spark_TscError create(void) {
-    opt_ref_Spark _pool_0 = Spark_alloc();
-    if (!_pool_0.has_value) {
-        return (Result_opt_ref_Spark_TscError){.ok = false, .error = ...};
-    }
-    *_pool_0.value = Spark_new(args);  // если есть конструктор
-    Spark_drop(_pool_0);   // auto-drop при выходе из scope
-}
-```
-
-`new` без compile-time capacity при `allocator: "static"` → ошибка компилятора.
-`@pool(N)` на desktop — работает, но обычно не нужен.
-
-| Декоратор | Где живёт объект | `new` |
-|-----------|-----------------|-------|
-| `@struct` | стек (value-тип) | не используется |
-| `@pool(N)` | BSS (статический пул) | берёт слот из пула |
-| *(нет декоратора)* | heap | требует `allocator: "heap"` |
+Подробное описание, C-вывод, move semantics, ограничения и примеры — в `07-classes-ownership.md`.
 
 ---
 

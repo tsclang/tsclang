@@ -425,14 +425,20 @@ input.tsc:3:5  TypeError: function `traverse()` is recursive and stack usage can
 
 Два режима: `"heap"` | `"static"`.
 
-| `allocator` | `new X()` | `new X(N)` | `Shared<T>` / `Weak<T>` | Генерирует |
-|-------------|-----------|------------|--------------------------|-----------|
-| `"heap"` | malloc | malloc | malloc + ARC | `malloc`/`free` |
-| `"heap"` + `heap_size` | malloc (лимит) | malloc (лимит) | malloc + ARC | `malloc`/`free` + compile-time check |
-| `"static"` | ошибка | BSS | **ошибка** | static arrays |
+**Классы НЕ используют malloc**, независимо от `allocator`. `new X()` для обычного класса всегда генерирует stack value (`X x = X_new(args)`). Heap (malloc) используется только для `Array`, `Map`, `Set`, `closures`.
 
-`"pool"` удалён — pool это реализация heap, не режим.
-`"none"` слит с `"static"` — разницы нет, value types не требуют malloc.
+> **Полная спецификация:** см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md) — секция Allocation Strategy.
+
+| `allocator` | `new X()` (class) | `new Array<T>(N)` | `Shared<T>` / `Weak<T>` | Генерирует |
+|-------------|-------------------|-------------------|--------------------------|-----------|
+| `"heap"` | stack value | malloc | malloc + ARC | `malloc`/`free` для контейнеров |
+| `"heap"` + `heap_size` | stack value | malloc (лимит) | malloc + ARC | `malloc`/`free` + compile-time check |
+| `"static"` | stack value / `@pool(N)` | BSS static array | **ошибка** | static arrays / BSS pools |
+
+`@pool(N)` работает на обоих allocator — на embedded (BSS) и на desktop (детерминированный пул). N ≤ 64.
+
+`@heap` (future) работает **только** с `allocator: "heap"`. На `allocator: "static"` → compile error.
+
 `Shared<T>` и `Weak<T>` при `allocator: "static"` → compile error. Нет heap → нет ARC → нет shared ownership. На embedded: `@static let` + `Ref<T>`/`Mut<T>`.
 
 ### 2. Migration path — РЕШЕНО
