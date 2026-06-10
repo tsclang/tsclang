@@ -15,8 +15,8 @@ static uint8_t _sensor_pool_mask = 0;
 
 static opt_ref_Sensor Sensor_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_sensor_pool_mask & (1 << _i))) {
-            _sensor_pool_mask |= (1 << _i);
+        if (!(_sensor_pool_mask & ((uint8_t)1 << _i))) {
+            _sensor_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Sensor){true, &_sensor_pool[_i], _i};
         }
     }

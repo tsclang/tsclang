@@ -8,8 +8,8 @@ static uint8_t _spark_pool_mask = 0;
 
 static opt_ref_Spark Spark_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_spark_pool_mask & (1 << _i))) {
-            _spark_pool_mask |= (1 << _i);
+        if (!(_spark_pool_mask & ((uint8_t)1 << _i))) {
+            _spark_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Spark){true, &_spark_pool[_i], _i};
         }
     }

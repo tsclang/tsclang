@@ -1,0 +1,1 @@
+@pool(65) class Item { id: i32; }

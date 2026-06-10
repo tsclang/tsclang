@@ -8,8 +8,8 @@ static uint8_t _gem_pool_mask = 0;
 
 static opt_ref_Gem Gem_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_gem_pool_mask & (1 << _i))) {
-            _gem_pool_mask |= (1 << _i);
+        if (!(_gem_pool_mask & ((uint8_t)1 << _i))) {
+            _gem_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Gem){true, &_gem_pool[_i], _i};
         }
     }
@@ -17,7 +17,7 @@ static opt_ref_Gem Gem_alloc(void) {
 }
 
 static void Gem_drop(opt_ref_Gem g) {
-    if (g.has_value) _gem_pool_mask &= ~(1 << g._pool_idx);
+    if (g.has_value) _gem_pool_mask &= ~((uint8_t)1 << g._pool_idx);
 }
 
 Result_void_TscError test(void) {

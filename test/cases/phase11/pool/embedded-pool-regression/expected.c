@@ -8,8 +8,8 @@ static uint8_t _particle_pool_mask = 0;
 
 static opt_ref_Particle Particle_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_particle_pool_mask & (1 << _i))) {
-            _particle_pool_mask |= (1 << _i);
+        if (!(_particle_pool_mask & ((uint8_t)1 << _i))) {
+            _particle_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Particle){true, &_particle_pool[_i], _i};
         }
     }

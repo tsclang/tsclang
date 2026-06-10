@@ -48,10 +48,7 @@ export default {
     if (inlineDec && !isEmbedded) {
       throw this.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
-    if (poolDec && !isEmbedded) {
-      throw this.error(`Warning: @pool on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
-    }
-    if (poolDec && isEmbedded) {
+    if (poolDec) {
       const poolSizeArg = poolDec.args?.[0];
       if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
         throw this.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
@@ -269,9 +266,9 @@ export default {
       this.emitVtableConstant(cname, ifaceName);
     }
 
-    // @embedded.pool: generate pool array, mask (alloc/drop emitted lazily)
-    if (poolDec && isEmbedded) {
-      this._emitPoolClass(cname, poolDec);
+    // @pool: generate pool array, mask (alloc/drop emitted lazily)
+    if (poolDec) {
+      this._emitPoolClass(cname, poolDec, node);
     }
     // Mark class as inline value type
     if (inlineDec && isEmbedded) {
@@ -280,14 +277,21 @@ export default {
     }
   },
 
-  _emitPoolClass(name, poolDec) {
+  _emitPoolClass(name, poolDec, node) {
     const poolSize = parseInt(poolDec.args[0].value);
     const poolVar  = `_${name.toLowerCase()}_pool`;
     const maskVar  = `_${name.toLowerCase()}_pool_mask`;
     const optType  = `opt_ref_${name}`;
     const allocFn  = `${name}_alloc`;
     const dropFn   = `${name}_drop`;
-    const maskType = poolSize <= 8 ? 'uint8_t' : 'uint16_t';
+    let maskType;
+    if      (poolSize <= 8)  maskType = 'uint8_t';
+    else if (poolSize <= 16) maskType = 'uint16_t';
+    else if (poolSize <= 32) maskType = 'uint32_t';
+    else if (poolSize <= 64) maskType = 'uint64_t';
+    else {
+      throw this.error(`TypeError: @pool(N) supports a maximum of 64 instances; got N=${poolSize}`, node);
+    }
 
     // Always emit pool storage
     this.addTop(`static ${name} ${poolVar}[${poolSize}];`);
@@ -308,13 +312,13 @@ export default {
     if (!cls?._isPool || cls._poolAllocEmitted) return;
     cls._poolAllocEmitted = true;
     const { _poolOptType: optType, _poolAllocFn: allocFn, _poolVar: poolVar,
-            _poolMaskVar: maskVar, _poolSize: poolSize } = cls;
+            _poolMaskVar: maskVar, _poolSize: poolSize, _poolMaskType: maskType } = cls;
     this.addTop(`typedef struct { bool has_value; ${className} *value; int _pool_idx; } ${optType};`);
     this.addTop('');
     this.addTop(`static ${optType} ${allocFn}(void) {`);
     this.addTop(`    for (int _i = 0; _i < ${poolSize}; _i++) {`);
-    this.addTop(`        if (!(${maskVar} & (1 << _i))) {`);
-    this.addTop(`            ${maskVar} |= (1 << _i);`);
+    this.addTop(`        if (!(${maskVar} & ((${maskType})1 << _i))) {`);
+    this.addTop(`            ${maskVar} |= ((${maskType})1 << _i);`);
     this.addTop(`            return (${optType}){true, &${poolVar}[_i], _i};`);
     this.addTop(`        }`);
     this.addTop(`    }`);
@@ -328,10 +332,10 @@ export default {
     if (!cls?._isPool || cls._poolDropEmitted) return;
     this._ensurePoolAlloc(className); // drop requires alloc
     cls._poolDropEmitted = true;
-    const { _poolOptType: optType, _poolDropFn: dropFn, _poolMaskVar: maskVar } = cls;
+    const { _poolOptType: optType, _poolDropFn: dropFn, _poolMaskVar: maskVar, _poolMaskType: maskType } = cls;
     const param = className[0].toLowerCase();
     this.addTop(`static void ${dropFn}(${optType} ${param}) {`);
-    this.addTop(`    if (${param}.has_value) ${maskVar} &= ~(1 << ${param}._pool_idx);`);
+    this.addTop(`    if (${param}.has_value) ${maskVar} &= ~((${maskType})1 << ${param}._pool_idx);`);
     this.addTop(`}`);
     this.addTop('');
   },

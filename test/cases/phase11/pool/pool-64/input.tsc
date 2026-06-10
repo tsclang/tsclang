@@ -1,0 +1,7 @@
+@pool(64) class Item { id: i32; }
+function main(): i32 throws Error {
+    const a = new Item();
+    a.id = 1;
+    return a.id;
+}
+console.log(main());

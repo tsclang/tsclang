@@ -4,7 +4,7 @@
     increment(): void { this.count = this.count + 1; }
     get(): i32 { return this.count; }
 }
-function main(): i32 {
+function main(): i32 throws Error {
     const c = new Counter();
     c.increment();
     c.increment();

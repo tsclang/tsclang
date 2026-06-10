@@ -22,8 +22,8 @@ static uint8_t _counter_pool_mask = 0;
 
 static opt_ref_Counter Counter_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_counter_pool_mask & (1 << _i))) {
-            _counter_pool_mask |= (1 << _i);
+        if (!(_counter_pool_mask & ((uint8_t)1 << _i))) {
+            _counter_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Counter){true, &_counter_pool[_i], _i};
         }
     }
@@ -31,7 +31,7 @@ static opt_ref_Counter Counter_alloc(void) {
 }
 
 static void Counter_drop(opt_ref_Counter c) {
-    if (c.has_value) _counter_pool_mask &= ~(1 << c._pool_idx);
+    if (c.has_value) _counter_pool_mask &= ~((uint8_t)1 << c._pool_idx);
 }
 
 Result_i32_TscError _tsc_main(void) {

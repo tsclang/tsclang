@@ -8,8 +8,8 @@ static uint8_t _slot_pool_mask = 0;
 
 static opt_ref_Slot Slot_alloc(void) {
     for (int _i = 0; _i < 2; _i++) {
-        if (!(_slot_pool_mask & (1 << _i))) {
-            _slot_pool_mask |= (1 << _i);
+        if (!(_slot_pool_mask & ((uint8_t)1 << _i))) {
+            _slot_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Slot){true, &_slot_pool[_i], _i};
         }
     }

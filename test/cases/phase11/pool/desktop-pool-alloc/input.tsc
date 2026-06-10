@@ -1,9 +1,9 @@
 @pool(2) class Item { id: i32; }
-function main(): i32 {
+function makeSum(): i32 throws Error {
     const a = new Item();
     a.id = 1;
     const b = new Item();
     b.id = 2;
     return a.id + b.id;
 }
-main();
+console.log(makeSum());

@@ -8,8 +8,8 @@ static uint8_t _slot_pool_mask = 0;
 
 static opt_ref_Slot Slot_alloc(void) {
     for (int _i = 0; _i < 2; _i++) {
-        if (!(_slot_pool_mask & (1 << _i))) {
-            _slot_pool_mask |= (1 << _i);
+        if (!(_slot_pool_mask & ((uint8_t)1 << _i))) {
+            _slot_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Slot){true, &_slot_pool[_i], _i};
         }
     }
@@ -17,7 +17,7 @@ static opt_ref_Slot Slot_alloc(void) {
 }
 
 static void Slot_drop(opt_ref_Slot s) {
-    if (s.has_value) _slot_pool_mask &= ~(1 << s._pool_idx);
+    if (s.has_value) _slot_pool_mask &= ~((uint8_t)1 << s._pool_idx);
 }
 
 int32_t _tsc_main(void) {

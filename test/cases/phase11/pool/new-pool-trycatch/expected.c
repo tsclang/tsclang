@@ -8,8 +8,8 @@ static uint8_t _gem_pool_mask = 0;
 
 static opt_ref_Gem Gem_alloc(void) {
     for (int _i = 0; _i < 2; _i++) {
-        if (!(_gem_pool_mask & (1 << _i))) {
-            _gem_pool_mask |= (1 << _i);
+        if (!(_gem_pool_mask & ((uint8_t)1 << _i))) {
+            _gem_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Gem){true, &_gem_pool[_i], _i};
         }
     }

@@ -8,8 +8,8 @@ static uint8_t _spark_pool_mask = 0;
 
 static opt_ref_Spark Spark_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_spark_pool_mask & (1 << _i))) {
-            _spark_pool_mask |= (1 << _i);
+        if (!(_spark_pool_mask & ((uint8_t)1 << _i))) {
+            _spark_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Spark){true, &_spark_pool[_i], _i};
         }
     }
@@ -17,7 +17,7 @@ static opt_ref_Spark Spark_alloc(void) {
 }
 
 static void Spark_drop(opt_ref_Spark s) {
-    if (s.has_value) _spark_pool_mask &= ~(1 << s._pool_idx);
+    if (s.has_value) _spark_pool_mask &= ~((uint8_t)1 << s._pool_idx);
 }
 
 Result_void_TscError test(void) {

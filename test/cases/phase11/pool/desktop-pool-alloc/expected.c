@@ -8,8 +8,8 @@ static uint8_t _item_pool_mask = 0;
 
 static opt_ref_Item Item_alloc(void) {
     for (int _i = 0; _i < 2; _i++) {
-        if (!(_item_pool_mask & (1 << _i))) {
-            _item_pool_mask |= (1 << _i);
+        if (!(_item_pool_mask & ((uint8_t)1 << _i))) {
+            _item_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Item){true, &_item_pool[_i], _i};
         }
     }
@@ -17,7 +17,7 @@ static opt_ref_Item Item_alloc(void) {
 }
 
 static void Item_drop(opt_ref_Item i) {
-    if (i.has_value) _item_pool_mask &= ~(1 << i._pool_idx);
+    if (i.has_value) _item_pool_mask &= ~((uint8_t)1 << i._pool_idx);
 }
 
 Result_i32_TscError makeSum(void) {

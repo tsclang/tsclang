@@ -8,8 +8,8 @@ static uint8_t _node_pool_mask = 0;
 
 static opt_ref_Node Node_alloc(void) {
     for (int _i = 0; _i < 4; _i++) {
-        if (!(_node_pool_mask & (1 << _i))) {
-            _node_pool_mask |= (1 << _i);
+        if (!(_node_pool_mask & ((uint8_t)1 << _i))) {
+            _node_pool_mask |= ((uint8_t)1 << _i);
             return (opt_ref_Node){true, &_node_pool[_i], _i};
         }
     }
