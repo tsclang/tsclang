@@ -860,6 +860,7 @@ export default {
               this._currentBlockPoolVars.push({ name, className: _pcls2 });
             }
           }
+          // Heap vars are auto-registered in codegen.js:define
           // Move semantics for pool refs: mark source moved and zero out
           if (ctype?.startsWith('opt_ref_') && init?.kind === 'Ident') {
             const initSym2 = this.lookup(init.name);
@@ -874,6 +875,22 @@ export default {
           }
           if (this._lastHalRead) { p(`(void)${name};`); this._lastHalRead = null; }
           return;
+        }
+
+        // Move semantics for heap pointers: mark source moved and zero out
+        if (ctype?.endsWith(' *') && init?.kind === 'Ident' && this.classes.get(ctype.slice(0, -2))?._isHeap) {
+          const initSym3 = this.lookup(init.name);
+          if (initSym3?._moved) {
+            throw this.error(`use of moved value: "${init.name}"`, init, { code: 'E002' });
+          }
+          if (initSym3) {
+            initSym3._moved = true;
+            initSym3._movedLine = node.line;
+            initSym3._movedSourceNode = init;
+          }
+          if (initSym3?.varKind === 'let') {
+            p(`${init.name} = NULL;`);
+          }
         }
 
         // String literal union: handle string literal init тЖТ enum value

@@ -347,6 +347,10 @@ class Context {
       const clsDef = this.classes.get(clsName);
       if (clsDef?._isHeap) {
         info._isHeap = true;
+        // Auto-register in current block for auto-free at scope exit
+        if (this._currentBlockHeapVars) {
+          this._currentBlockHeapVars.push({ name, className: clsName });
+        }
       }
     }
     this.scopes[this.scopes.length - 1].set(name, info);
@@ -584,6 +588,24 @@ class Context {
         if (cls?._isPool) {
           this._ensurePoolDrop(className);
           lines.push(`${I}${cls._poolDropFn}(${name});`);
+          if (sym) sym._moved = true;
+        }
+      }
+    }
+  }
+
+  _emitHeapDrops(lines, I) {
+    if (!this._heapVarStack?.length) return;
+    for (let p = this._heapVarStack.length - 1; p >= 0; p--) {
+      const heapVars = this._heapVarStack[p];
+      for (let i = heapVars.length - 1; i >= 0; i--) {
+        const { name, className } = heapVars[i];
+        const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+        if (sym?._moved) continue;
+        const cls = this.classes.get(className);
+        if (cls?._isHeap) {
+          this._ensureHeapDestructor(className);
+          lines.push(`${I}if (${name} != NULL) { ${className}_destructor(${name}); tsc_free(${name}); }`);
           if (sym) sym._moved = true;
         }
       }

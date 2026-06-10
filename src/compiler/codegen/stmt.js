@@ -4,10 +4,15 @@ export default {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars = [];
+    const blockHeapVars = [];
     const prevPoolVars = this._currentBlockPoolVars;
+    const prevHeapVars = this._currentBlockHeapVars;
     this._currentBlockPoolVars = blockPoolVars;
+    this._currentBlockHeapVars = blockHeapVars;
     if (!this._poolVarStack) this._poolVarStack = [];
+    if (!this._heapVarStack) this._heapVarStack = [];
     this._poolVarStack.push(blockPoolVars);
+    this._heapVarStack.push(blockHeapVars);
     for (const s of block.body) this.visitStmt(s, lines, depth);
     const I = ' '.repeat(this.indent * depth);
     for (let i = blockPoolVars.length - 1; i >= 0; i--) {
@@ -20,12 +25,25 @@ export default {
         lines.push(`${I}${cls._poolDropFn}(${name});`);
       }
     }
+    for (let i = blockHeapVars.length - 1; i >= 0; i--) {
+      const { name, className } = blockHeapVars[i];
+      const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+      if (sym?._moved) continue;
+      const cls = this.classes.get(className);
+      if (cls?._isHeap) {
+        this._ensureHeapDestructor(className);
+        lines.push(`${I}if (${name} != NULL) { ${className}_destructor(${name}); tsc_free(${name}); }`);
+        if (sym) sym._moved = true;
+      }
+    }
     const blockCleanup = this._blockCleanupStack.pop();
     for (let i = blockCleanup.list.length - 1; i >= 0; i--) {
       lines.push(`${I}${blockCleanup.list[i]};`);
     }
     this._currentBlockPoolVars = prevPoolVars;
+    this._currentBlockHeapVars = prevHeapVars;
     this._poolVarStack.pop();
+    this._heapVarStack.pop();
     this.popScope();
   },
 
