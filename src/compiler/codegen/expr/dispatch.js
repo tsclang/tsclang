@@ -31,7 +31,10 @@ export default {
             const getter = this._unknownGetterFor(narrowedCtype);
             return `${getter}(&${node.name})`;
           }
-          if (sym2?.ctype?.startsWith('opt_')) return `${node.name}.value`;
+          if (sym2?.ctype?.startsWith('opt_')) {
+            this._checkMoved(sym2, node, node.name);
+            return `${node.name}.value`;
+          }
         }
         // Function reference (not a func-ptr variable): use mangled name
         const sym = this.lookup(node.name);

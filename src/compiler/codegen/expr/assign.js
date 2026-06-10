@@ -135,6 +135,28 @@ export default {
     }
     if (r === undefined) r = this.exprToC(node.right, lines, depth);
 
+    // Move tracking for `b = a` where a is Ident of owned type (opt_ref_ or struct)
+    if (node.op === '=' && node.left.kind === 'Ident' && node.right?.kind === 'Ident' && node.left.name !== node.right.name) {
+      const rightSym = this.lookup(node.right.name);
+      const leftSym = this.lookup(node.left.name);
+      const rightCtype = rightSym?.ctype;
+      if (rightCtype && rightCtype.startsWith('opt_ref_')) {
+        if (rightSym._moved) {
+          throw this.error(`use of moved value: "${node.right.name}"`, node.right, { code: 'E002' });
+        }
+        if (rightSym.varKind === 'const') {
+          throw this.error(`cannot move out of "const" binding`, null, { code: 'E003' });
+        }
+        rightSym._moved = true;
+        rightSym._movedLine = node.line;
+        rightSym._movedSourceNode = node.right;
+        if (rightSym.varKind === 'let') {
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}${node.right.name} = (${rightCtype}){false, NULL, -1};`);
+        }
+      }
+    }
+
     // opt_T value/null assignment: wrap in compound literal
     if (node.op === '=' && node.left.kind === 'Ident') {
       const leftSym = this.lookup(node.left.name);

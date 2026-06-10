@@ -1,5 +1,5 @@
 @pool(4) class Gem { value: i32; }
-function main(): void {
+function main(): void throws Error {
     const a = new Gem();
     a.value = 42;
     const b = a;
