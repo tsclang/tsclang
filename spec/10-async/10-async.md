@@ -992,6 +992,62 @@ static counter_result counter_next(counter_state *self) {
 static counter_state _counter_instance;
 ```
 
+#### `@static async function*` — async генератор в BSS (cooperative scheduler)
+
+Декоратор `@static` на `async function*` создаёт **один экземпляр async state machine в BSS**, используется cooperative scheduler. Без `@static` async generator требует heap-аллокацию (недопустимо на embedded).
+
+##### Синтаксис
+
+```typescript
+@static
+async function* sensorPoll(): AsyncGenerator<i32> {
+    while (true) {
+        await sleep(100);
+        yield readSensor();
+    }
+}
+```
+
+##### C-вывод
+
+```c
+typedef struct { int32_t _state; bool _done; int32_t _value; int32_t _await_id; } sensorPoll_state;
+typedef struct { int32_t value; bool done; } sensorPoll_result;
+
+static sensorPoll_result sensorPoll_poll(sensorPoll_state *self) {
+    switch (self->_state) {
+        case 0:
+            self->_await_id = tsc_sleep_register(100);
+            self->_state = 1;
+            return (sensorPoll_result){0, false};
+        case 1:
+            if (tsc_sleep_ready(self->_await_id)) {
+                self->_value = readSensor();
+                self->_state = 0;
+                return (sensorPoll_result){self->_value, false};
+            }
+            return (sensorPoll_result){0, false};
+    }
+    return (sensorPoll_result){0, true};
+}
+
+static sensorPoll_state _sensorPoll_instance;
+```
+
+##### Ограничения
+
+- **Один экземпляр на программу** — генератор живёт в BSS, не может быть создан несколько раз
+- **`@static` обязателен при `allocator: "static"`** — без него async generator требует heap
+- **На `allocator: "none"` (heap-only платформы)** — `@static` опционален, но рекомендуется (zero heap overhead)
+- **Cooperative scheduling** — используется `Tasks<N>` или ручной poll loop из [13-build.md](../13-build/13-build.md#кооперативная-многозадачность)
+
+##### Связанные декораторы
+
+- `@static function*` (sync generator) — описан выше в этом файле
+- `@static let/const` → [04-borrow.md](../04-ownership/04-borrow.md)
+- `@static class field` → [07-classes-ownership.md](../07-classes/07-classes-ownership.md)
+- Полный индекс `@static` контекстов: [15-decorators.md](../15-decorators/15-decorators.md#встроенные-декораторы)
+
 ### Embedded: альтернативы async generators
 
 На `heap: false` (AVR, bare-metal ARM) async generators недоступны. Streaming реализуется синхронными паттернами:
