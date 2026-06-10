@@ -315,7 +315,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     while (cur().type === TK.AT) {
       eat(TK.AT);
       let name = eat(TK.IDENT).value;
-      // @embedded.inline etc.
+      // dotted decorators: @some.name etc.
       while (cur().type === TK.DOT) { eat(TK.DOT); name += '.' + eat(TK.IDENT).value; }
       let args = null;
       if (cur().type === TK.LPAREN) {

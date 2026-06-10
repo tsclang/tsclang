@@ -415,7 +415,7 @@
 
 > Продвинутые возможности компилятора для embedded-платформ.
 
-- [x] `@embedded.inline class` — value-type без указателей, pass-by-value, нет методов
+- [x] `@struct class` — value-type без указателей, pass-by-value, нет методов (было `@embedded.inline`)
 - [x] `@embedded.pool(N) class` — пул объектов фиксированного размера в BSS
 - [x] `#[profile(allocator: "none")]` — запрет heap-аллокаций; `#[profile(allocator: "static")]`
 - [x] `#[profile(allocator: "static")]` — static-backed массивы/map с проверкой capacity
@@ -433,6 +433,7 @@
 > 2026-06-10: unified `new` для pool классов — (1) `.alloc()` удалён, бросает compile error "use new X() instead" (method-dispatch.js, infer.js), (2) `new PoolClass()` в throws-функции — Result-based pool-full error (new-expr.js), (3) `new PoolClass()` в try/catch — goto-based catch dispatch с `_inTryBlock` + `_tryCatchInfo` (control-flow.js), (4) pool-full вне throws/try/catch = compile error. Все 6 существующих pool-тестов мигрированы с `.alloc()` на `new`. Новые тесты: `new-pool`, `err-new-no-try`, `new-pool-trycatch`. **Статус: 43/43 ✓**
 > 2026-06-10: pool constructor support — `new PoolClass(args)` с конструктором: alloc + `*_pool_N.value = ClassName_new(args)`. Конструктор генерируется как обычно (`ClassName_new`), после alloc вызывается и результат копируется в pool-слот. Новый тест: `new-pool-ctor`. **Статус: 44/44 ✓**
 > 2026-06-10: `stack_size` L1 + L2 — (1) `_stackSizeOf(ct)` в helpers.js: рекурсивный подсчёт размера любого C-типа (примитивы, указатели, opt/ref, struct/tuple по полям, Array/Map/Set как указатель), (2) `_scanStack` в func.js теперь считает все VarDecl (не только TypeFixedArray), (3) L2: call graph worst-case DFS — `_funcStackInfo` собирает ownBytes + callees для каждой функции, после компиляции всех функций вычисляет `worstCase(fn) = ownBytes + max(worstCase(callee))`, при превышении stack_size — compile error. Новые тесты: `err-stack-primitives`, `err-stack-struct`, `stack-ok`, `err-stack-callchain`, `err-stack-callchain-branch`, `stack-callchain-ok`. **Статус: 49/49 ✓**
+> 2026-06-10: `@embedded.inline` → `@struct` — rename декоратора: class.js (4 строки), parser.js (комментарий), 6 тестов (input.tsc + 2 expected.error), spec (2 файла). **Статус: 49/49 ✓**
 
 ---
 

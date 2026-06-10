@@ -31,7 +31,7 @@ export default {
     const _classDecoratorFields = [];   // extra fields to add to struct
     const _classDecoratorInits  = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
-      if (['embedded.inline', 'pool', 'packed', 'align'].includes(d.name)) continue;
+      if (['struct', 'pool', 'packed', 'align'].includes(d.name)) continue;
       const decFn = this._decoratorFns?.get(d.name);
       if (decFn) {
         const { fields: df, inits: di } = this._analyzeClassDecorator(decFn);
@@ -41,12 +41,12 @@ export default {
     }
 
     // Process @embedded.* decorators
-    const inlineDec = decorators?.find(d => d.name === 'embedded.inline');
+    const inlineDec = decorators?.find(d => d.name === 'struct');
     const poolDec   = decorators?.find(d => d.name === 'pool');
     const isEmbedded = this._isEmbeddedOrRetro();
 
     if (inlineDec && !isEmbedded) {
-      throw this.error(`Warning: @embedded.inline on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+      throw this.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
     if (poolDec && !isEmbedded) {
       throw this.error(`Warning: @pool on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
@@ -60,7 +60,7 @@ export default {
     if (inlineDec && isEmbedded) {
       const badMethods = members.filter(m => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
       if (badMethods.length > 0) {
-        throw this.error(`TypeError: @embedded.inline class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
+        throw this.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
       }
     }
 

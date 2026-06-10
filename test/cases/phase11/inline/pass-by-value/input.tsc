@@ -1,4 +1,4 @@
-@embedded.inline class Point { x: i32; y: i32; }
+@struct class Point { x: i32; y: i32; }
 function move(p: Point, dx: i32): Point {
     p.x += dx;
     return p;

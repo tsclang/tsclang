@@ -855,12 +855,12 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 Декораторы для fine-grained контроля над поведением на embedded платформах.
 
-### `@embedded.inline`
+### `@struct`
 
 Принудительный инлайн функции. Без декоратора — решение за C компилятором.
 
 ```typescript
-@embedded.inline
+@struct
 function setBit(reg: Mut<u8>, bit: u8): void {
     reg |= (1 << bit);
 }
@@ -984,7 +984,7 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 
 | Аннотация | Desktop | Embedded | Проверка |
 |-----------|---------|----------|----------|
-| `@embedded.inline` | ✅ | ✅ | — |
+| `@struct` | ✅ | ✅ | — |
 | `@embedded.noHeap` | ✅ | ✅ | Compile-time |
 | `@isr` | ❌ | ✅ | Compile-time |
 | `@signal` | ✅ | ❌ | Compile-time |
@@ -1083,6 +1083,6 @@ void main(void) {
 │  @signal ──────── POSIX signal ──── desktop only     │
 │                                                      │
 │  @platform ────── условная компиляция ─── все        │
-│  @embedded.inline / @embedded.noHeap ──── все        │
+│  @struct / @embedded.noHeap ──── все        │
 └─────────────────────────────────────────────────────┘
 ```

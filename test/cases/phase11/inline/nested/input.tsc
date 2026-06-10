@@ -1,2 +1,2 @@
-@embedded.inline class V2 { x: i32; y: i32; }
-@embedded.inline class Transform { pos: V2; scale: i32; }
+@struct class V2 { x: i32; y: i32; }
+@struct class Transform { pos: V2; scale: i32; }

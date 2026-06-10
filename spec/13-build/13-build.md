@@ -1628,14 +1628,14 @@ while (counter_next(&gen)) {
 
 **Размер:** `sizeof(counter_gen)` = 16 байт. На стеке или `@static`.
 
-#### Классы без heap: `@embedded.inline` и `@pool(N)`
+#### Классы без heap: `@struct` и `@pool(N)`
 
 Обычный `new` требует heap. На embedded — два встроенных декоратора:
 
-**`@embedded.inline`** — value-тип. Объект живёт на стеке как C struct, без указателя и vtable:
+**`@struct`** — value-тип. Объект живёт на стеке как C struct, без указателя и vtable:
 
 ```typescript
-@embedded.inline
+@struct
 class Point { x: i16; y: i16 }
 
 let p = Point(10, 20)   // не new — value, как struct
@@ -1726,7 +1726,7 @@ Result_opt_ref_Spark_TscError create(void) {
 
 | Декоратор | Где живёт объект | `new` |
 |-----------|-----------------|-------|
-| `@embedded.inline` | стек (value-тип) | не используется |
+| `@struct` | стек (value-тип) | не используется |
 | `@pool(N)` | BSS (статический пул) | берёт слот из пула |
 | *(нет декоратора)* | heap | требует `allocator: "heap"` |
 

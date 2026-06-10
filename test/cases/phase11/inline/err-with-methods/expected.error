@@ -1,1 +1,1 @@
-TypeError: @embedded.inline class 'Bad' cannot have non-trivial methods; remove 'compute()' or use a regular class
+TypeError: @struct class 'Bad' cannot have non-trivial methods; remove 'compute()' or use a regular class
