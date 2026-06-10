@@ -1,0 +1,15 @@
+@pool(2) class Slot { id: i32; }
+function main(): i32 {
+    let count: i32 = 0;
+    for (let i: i32 = 0; i < 5; i = i + 1) {
+        try {
+            const s = new Slot();
+            s.id = i;
+            count = count + s.id;
+        } catch (e: Error) {
+            count = count + 100;
+        }
+    }
+    return count;
+}
+console.log(main());

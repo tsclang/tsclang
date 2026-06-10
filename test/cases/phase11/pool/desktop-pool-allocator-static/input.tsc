@@ -1,0 +1,6 @@
+@pool(4) class Node { id: i32; }
+function make(): Node throws Error {
+    const n = new Node();
+    n.id = 1;
+    return n;
+}

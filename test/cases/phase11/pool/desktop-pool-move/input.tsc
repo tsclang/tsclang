@@ -1,0 +1,9 @@
+@pool(4) class Gem { value: i32; }
+function main(): void {
+    const a = new Gem();
+    a.value = 42;
+    const b = a;
+    console.log(b.value);
+    console.log(a.value);
+}
+main();

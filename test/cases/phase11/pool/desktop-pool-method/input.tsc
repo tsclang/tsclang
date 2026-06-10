@@ -1,0 +1,13 @@
+@pool(4) class Counter {
+    count: i32;
+    constructor() { this.count = 0; }
+    increment(): void { this.count = this.count + 1; }
+    get(): i32 { return this.count; }
+}
+function main(): i32 {
+    const c = new Counter();
+    c.increment();
+    c.increment();
+    return c.get();
+}
+console.log(main());

@@ -1,0 +1,9 @@
+@pool(2) class Item { id: i32; }
+function main(): i32 {
+    const a = new Item();
+    a.id = 1;
+    const b = new Item();
+    b.id = 2;
+    return a.id + b.id;
+}
+main();

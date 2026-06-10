@@ -1,0 +1,12 @@
+@pool(2) class Slot { id: i32; }
+function create(i: i32): Slot throws Error {
+    const s = new Slot();
+    s.id = i;
+    return s;
+}
+function main(): i32 {
+    const a = create(1);
+    const b = create(2);
+    return a.id + b.id;
+}
+console.log(main());
