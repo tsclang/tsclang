@@ -1,6 +1,7 @@
 node_modules/
 .tsclang-cache/
 .tsclang-tmp/
+.tsclang-tmp2/
 *.c
 !src/**/*.c
 !test/**/*.c
