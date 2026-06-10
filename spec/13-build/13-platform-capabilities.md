@@ -103,7 +103,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | Поле | Тип | Обязательное | Описание |
 |------|-----|-------------|----------|
 | `heap_size` | `u32` | нет (только при `allocator: "heap"`) | Лимит heap в байтах для compile-time проверки: BSS + heap_size + stack ≤ ram_size. |
-| `stack_size` | `u32` | нет | Размер стека в байтах. Если задан — компилятор проверяет call graph, рекурсия → error с подсказкой про `@stack`. Если не задан — рекурсия разрешена. |
+| `stack_size` | `u32` | нет | Размер стека в байтах. Если задан — компилятор проверяет: (1) суммарный размер локальных переменных в каждой функции ≤ stack_size, (2) worst-case stack depth по call graph (sum locals через цепочку вызовов) ≤ stack_size. Если не задан — проверка отключена. Рекурсия проверяется отдельно через `--strict no-recursion`. |
 | `ram_size` | `u32` | нет | Общий размер RAM в байтах. Компилятор проверяет суммарный BSS + stack ≤ ram_size. |
 | `flash_size` | `u32` | нет | Размер Flash/ROM в байтах. Компилятор проверяет размер сгенерированного кода. |
 
@@ -134,7 +134,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `"pool"` allocator | удалён | Pool — реализация heap, не отдельный режим |
 | `"none"` allocator | удалён (слит с `"static"`) | Разницы нет: value types не требуют malloc |
 | `address_bits` | `usize` (явное поле) | `address_bits` использовался только для usize |
-| `no_recursion: true` | удалён | Автоматическая проверка `stack_size` |
+| `no_recursion: true` | `--strict no-recursion` | Рекурсия — код-ограничение, не capability платформы |
 | `heap: boolean` | удалён | Дублировал `allocator` |
 | `_noFloatTargets` хардкод | → `fpu: false` из профиля | |
 | `_noHeapTargets` хардкод | → `allocator: "static"` из профиля | |
