@@ -855,37 +855,7 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 Декораторы для fine-grained контроля над поведением на embedded платформах.
 
-### `@struct`
-
-Принудительный инлайн функции. Без декоратора — решение за C компилятором.
-
-```typescript
-@struct
-function setBit(reg: Mut<u8>, bit: u8): void {
-    reg |= (1 << bit);
-}
-```
-
-Генерирует:
-```c
-static inline void setBit(volatile uint8_t* reg, uint8_t bit) {
-    *reg |= (1 << bit);
-}
-```
-
-**Когда использовать:**
-- Критичные к производительности участки
-- Очень маленькие функции (set bit, read register)
-- Когда C-компилятор не инлайнит сам
-
-**Альтернатива через native:**
-
-```typescript
-// Макрос в C — тоже inline
-native `#define SET_BIT(reg, bit) ((reg) |= (1 << (bit)))`;
-```
-
-Доступен на всех платформах (desktop, embedded).
+> **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class).
 
 ### `@embedded.noHeap`
 
@@ -984,7 +954,7 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 
 | Аннотация | Desktop | Embedded | Проверка |
 |-----------|---------|----------|----------|
-| `@struct` | ✅ | ✅ | — |
+| `@inline` (бывший `@struct` для функций) | ✅ | ✅ | — |
 | `@embedded.noHeap` | ✅ | ✅ | Compile-time |
 | `@isr` | ❌ | ✅ | Compile-time |
 | `@signal` | ✅ | ❌ | Compile-time |
@@ -1083,6 +1053,6 @@ void main(void) {
 │  @signal ──────── POSIX signal ──── desktop only     │
 │                                                      │
 │  @platform ────── условная компиляция ─── все        │
-│  @struct / @embedded.noHeap ──── все        │
+│  @inline / @embedded.noHeap ──── все        │
 └─────────────────────────────────────────────────────┘
 ```
