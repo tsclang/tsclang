@@ -949,12 +949,12 @@ static _AdcSampler_result adcSampler_next(_AdcSampler_state *self) {
 
 Обычные (синхронные) генераторы (`function*` без `async`) всегда работают на стеке — heap не требуется ни на каких платформах.
 
-#### `@embedded.singleton` — единственный экземпляр генератора
+#### `@static function*` — единственный экземпляр генератора
 
-Семантически эквивалентен `@static function*`, но явно выражает намерение: один экземпляр state machine на всю программу, живёт в BSS.
+`@static` на генераторе создаёт один экземпляр state machine на всю программу, живёт в BSS.
 
 ```typescript
-@embedded.singleton
+@static
 function* scanline(): Generator<u8[256]> {
     while (true) {
         yield renderLine()
@@ -989,8 +989,6 @@ static counter_result counter_next(counter_state *self) {
 
 static counter_state _counter_instance;
 ```
-
-`@embedded.singleton` применяется только к `function*` — ошибка компилятора на любом другом таргете.
 
 ### Embedded: альтернативы async generators
 

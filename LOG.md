@@ -434,6 +434,7 @@
 > 2026-06-10: pool constructor support — `new PoolClass(args)` с конструктором: alloc + `*_pool_N.value = ClassName_new(args)`. Конструктор генерируется как обычно (`ClassName_new`), после alloc вызывается и результат копируется в pool-слот. Новый тест: `new-pool-ctor`. **Статус: 44/44 ✓**
 > 2026-06-10: `stack_size` L1 + L2 — (1) `_stackSizeOf(ct)` в helpers.js: рекурсивный подсчёт размера любого C-типа (примитивы, указатели, opt/ref, struct/tuple по полям, Array/Map/Set как указатель), (2) `_scanStack` в func.js теперь считает все VarDecl (не только TypeFixedArray), (3) L2: call graph worst-case DFS — `_funcStackInfo` собирает ownBytes + callees для каждой функции, после компиляции всех функций вычисляет `worstCase(fn) = ownBytes + max(worstCase(callee))`, при превышении stack_size — compile error. Новые тесты: `err-stack-primitives`, `err-stack-struct`, `stack-ok`, `err-stack-callchain`, `err-stack-callchain-branch`, `stack-callchain-ok`. **Статус: 49/49 ✓**
 > 2026-06-10: `@embedded.inline` → `@struct` — rename декоратора: class.js (4 строки), parser.js (комментарий), 6 тестов (input.tsc + 2 expected.error), spec (2 файла). **Статус: 49/49 ✓**
+> 2026-06-10: удалён `@embedded.singleton` — был бесполезным алиасом `@static` на генераторах. generator.js: убран `'embedded.singleton'` из условия, тест `phase7/embedded-singleton` → `phase7/static-generator` с `@static`, spec обновлён. **Статус: 1902/1902 ✓**
 
 ---
 

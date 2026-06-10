@@ -149,9 +149,9 @@ export default {
 
     this._emitTopFn(fnSig, nextLines);
 
-    // @static / @embedded.singleton generator: emit static instance in BSS
+    // @static generator: emit static instance in BSS
     const _hasStaticDecGen = (node.decorators ?? []).some(d =>
-      d.name === 'static' || d.name === 'embedded.singleton');
+      d.name === 'static');
     if (_hasStaticDecGen) {
       this.topLevel.push('');
       this.topLevel.push(`static ${stateType} _${name}_instance;`);
