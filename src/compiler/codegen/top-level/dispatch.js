@@ -198,15 +198,52 @@ export default {
           // Module-level variable → static global (not inside main)
           const _origName = node.name;
           if (this._modulePrefix) node.name = this._modulePrefix + _origName;
-          const varLines = [];
-          this.visitStmt(node, varLines, 0);
-          node.name = _origName;
-          for (const line of varLines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            this.topLevel.push('static ' + trimmed);
+
+          // Detect non-constant initializer — C requires static globals to have
+          // constant initializers. Split: zero-init declaration + runtime assignment.
+          // Use AST inspection (not exprToC) to avoid codegen side effects.
+          const _hasCallNode = (nd) => {
+            if (!nd || typeof nd !== 'object') return false;
+            if (Array.isArray(nd)) return nd.some(_hasCallNode);
+            if (nd.kind === 'Call') return true;
+            if (nd.kind === 'Arrow' || nd.kind === 'FuncDecl') return false;
+            return _hasCallNode(nd.callee) || _hasCallNode(nd.object) || _hasCallNode(nd.expr) ||
+                   _hasCallNode(nd.left) || _hasCallNode(nd.right) || _hasCallNode(nd.init) ||
+                   _hasCallNode(nd.value) || _hasCallNode(nd.args) || _hasCallNode(nd.elems);
+          };
+          let _splitInit = null;
+          if (node.init && _hasCallNode(node.init)) {
+            const _savedInit = node.init;
+            node.init = null;
+            const varLines = [];
+            this.visitStmt(node, varLines, 0);
+            node.init = _savedInit;
+            for (const line of varLines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              this.topLevel.push('static ' + trimmed);
+            }
+            this.topLevel.push('');
+            // Generate init expression and collect runtime assignment
+            const _initC = this.exprToC(_savedInit, [], 0);
+            _splitInit = `${this._modulePrefix ? (this._modulePrefix + _origName) : _origName} = ${_initC};`;
+            if (this._libraryMode) {
+              this._libInitStmts.push(_splitInit);
+            } else {
+              this.mainStmts.push(_splitInit);
+            }
+          } else {
+            const varLines = [];
+            this.visitStmt(node, varLines, 0);
+            for (const line of varLines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              this.topLevel.push('static ' + trimmed);
+            }
+            this.topLevel.push('');
           }
-          this.topLevel.push('');
+
+          node.name = _origName;
           if (this._modulePrefix) {
             const _cName = this._modulePrefix + _origName;
             const _sym = this.lookup(_cName);

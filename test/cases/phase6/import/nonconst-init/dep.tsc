@@ -1,0 +1,2 @@
+export function compute(): number { return 42; }
+export let result = compute();

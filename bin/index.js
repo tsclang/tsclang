@@ -572,6 +572,7 @@ function compileTsc(inputPath, opts = {}) {
   const aliases = opts._aliases ?? loadPathAliases(inputPath);
   const depCParts = [];
   const depCacheKeys = []; // [[depPath, cacheKey], ...] for cache key computation
+  const depInitFns = []; // dep __init function names (for runtime-initialized static vars)
 
   if (compilingStack.has(inputPath)) {
     const cycle = [...compilingStack, inputPath].map(p => basename(p)).join(' → ');
@@ -624,6 +625,7 @@ function compileTsc(inputPath, opts = {}) {
     importedModules[depPath] = depResult.exports;
     depCParts.push(depResult.c);
     if (depResult._cacheKey) depCacheKeys.push([depPath, depResult._cacheKey]);
+    if (depResult._initFn) depInitFns.push(depResult._initFn);
   }
   compilingStack.delete(inputPath);
 
@@ -639,11 +641,11 @@ function compileTsc(inputPath, opts = {}) {
       const cachedC = depCParts.length > 0
         ? (depCParts.join('\n').trimEnd() + '\n\n' + cached.c)
         : cached.c;
-      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey };
+      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
     }
   }
 
-  const result = codegen(ast, filename, src, { ...opts, importedModules, sourceToPath });
+  const result = codegen(ast, filename, src, { ...opts, importedModules, sourceToPath, depInitFns });
 
   // Build source map: collect [tscLine, cLine] pairs from emitted C
   const lineMap = opts.sourcemap ? _buildLineMap(src, result.c) : null;
@@ -665,10 +667,10 @@ function compileTsc(inputPath, opts = {}) {
 
   // Store library modules to cache
   if (opts.libraryMode && cacheKey) {
-    _cacheSet(cacheKey, { c: result.c, exports: result.exports });
+    _cacheSet(cacheKey, { c: result.c, exports: result.exports, _initFn: result._initFn ?? null });
   }
 
-  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, lineMap };
+  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, _initFn: result._initFn ?? null, lineMap };
 }
 
 // Build [tscLine, cLine] mapping by matching line numbers in #line directives or heuristically.

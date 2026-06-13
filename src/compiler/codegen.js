@@ -28,6 +28,7 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
   if (opts.libraryMode) ctx._libraryMode = true;
+  if (opts.depInitFns) ctx._depInitFns = opts.depInitFns;
   if (opts.modulePrefix) ctx._modulePrefix = opts.modulePrefix;
   if (opts.target) ctx._optsTarget = opts.target;
   if (opts.defaultNumber) ctx._optsDefaultNumber = opts.defaultNumber;
@@ -96,7 +97,9 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   ctx._sourceToPath = opts.sourceToPath ?? {};
 
   ctx.visitProgram(ast);
-  return { c: ctx.emit(), warnings: ctx._warnings, exports: Object.fromEntries(ctx._exports) };
+  const _hasInit = ctx._libInitStmts.length > 0 || ctx._depInitFns.length > 0;
+  const _initFn = _hasInit ? `${ctx._modulePrefix ?? ''}__init` : null;
+  return { c: ctx.emit(), warnings: ctx._warnings, exports: Object.fromEntries(ctx._exports), _initFn };
 }
 
 // ============================================================
@@ -211,6 +214,10 @@ class Context {
 
     // Library mode: emit without includes/main (for bundled deps)
     this._libraryMode = false;
+    // Runtime init statements for library mode (non-const top-level vars)
+    this._libInitStmts = [];
+    // Dep init function names to call (from imported modules)
+    this._depInitFns = [];
     // Exported symbols: name → scope entry (populated by case 'Export')
     this._exports = new Map();
 
@@ -726,12 +733,25 @@ class Context {
       parts.push('');
     };
 
-    // Library mode: emit typedefs + lambdas + topLevel only (no includes, no main)
+    // Library mode: emit typedefs + lambdas + topLevel + __init (no includes, no main)
     if (this._libraryMode) {
       const parts = [];
       _pushSection(this.typedefs, parts);
       _pushSection(this.lambdaLines, parts);
       _pushSection(this.topLevel, parts);
+      // Emit __init function for runtime initializations
+      if (this._libInitStmts.length > 0 || this._depInitFns.length > 0) {
+        const _fnName = `${this._modulePrefix ?? ''}__init`;
+        parts.push(`void ${_fnName}(void) {`);
+        for (const fn of this._depInitFns) {
+          parts.push(`    ${fn}();`);
+        }
+        for (const stmt of this._libInitStmts) {
+          parts.push(`    ${stmt}`);
+        }
+        parts.push('}');
+        parts.push('');
+      }
       while (parts.length && parts[parts.length - 1] === '') parts.pop();
       return parts.length ? parts.join('\n') + '\n' : '';
     }
@@ -749,6 +769,10 @@ class Context {
       const mainSig = this._useArgcArgv ? 'int main(int argc, char **argv)' : 'int main(void)';
       parts.push(`${mainSig} {`);
       parts.push(`${this.ind()}TSC_INIT();`);
+      // Call dep module init functions (runtime-initialized static vars)
+      for (const fn of this._depInitFns) {
+        parts.push(`${this.ind()}${fn}();`);
+      }
       if (this._useArgcArgv) {
         parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
       }
