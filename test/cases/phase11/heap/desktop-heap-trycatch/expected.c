@@ -3,14 +3,19 @@
 
 typedef struct { int32_t value; } Box;
 
+static void Box_destructor(Box *b) {
+}
+
 Result_void_TscError make_bool(bool shouldThrow) {
     Box *_heap_0 = (Box *)tsc_malloc(sizeof(Box));
     *_heap_0 = Box_new();
     Box *b = _heap_0;
     b->value = 42;
     if (shouldThrow) {
+        if (b != NULL) { Box_destructor(b); tsc_free(b); }
         return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("oops"))};
     }
+    if (b != NULL) { Box_destructor(b); tsc_free(b); }
     return (Result_void_TscError){.ok = true};
 }
 

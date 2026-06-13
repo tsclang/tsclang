@@ -507,7 +507,37 @@ class Context {
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       if (this._blockCleanupStack[b].list.length) return true;
     }
+    if (this._hasPendingHeapCleanups()) return true;
     return false;
+  }
+
+  _hasPendingHeapCleanups() {
+    if (!this._heapVarStack) return false;
+    for (let s = this._heapVarStack.length - 1; s >= 0; s--) {
+      for (const { name } of this._heapVarStack[s]) {
+        const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+        if (!sym?._moved) return true;
+      }
+    }
+    return false;
+  }
+
+  _emitHeapCleanup(lines, I) {
+    if (!this._heapVarStack) return;
+    for (let s = this._heapVarStack.length - 1; s >= 0; s--) {
+      const vars = this._heapVarStack[s];
+      for (let i = vars.length - 1; i >= 0; i--) {
+        const { name, className } = vars[i];
+        const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+        if (sym?._moved) continue;
+        const cls = this.classes.get(className);
+        if (cls?._isHeap) {
+          this._ensureHeapDestructor(className);
+          lines.push(`${I}if (${name} != NULL) { ${className}_destructor(${name}); tsc_free(${name}); }`);
+          if (sym) sym._moved = true;
+        }
+      }
+    }
   }
 
   _suppressCleanupFor(varName) {
@@ -530,6 +560,24 @@ class Context {
       this._throwsOwnedVars = this._throwsOwnedVars.filter(
         s => !s.includes(`&${varName})`) && !s.includes(`(${varName})`) && !s.includes(`(${varName},`)
       );
+    }
+  }
+
+  _snapshotHeapMoved() {
+    const snapshot = new Map();
+    if (!this._heapVarStack) return snapshot;
+    for (let s = 0; s < this._heapVarStack.length; s++) {
+      for (const { name } of this._heapVarStack[s]) {
+        const sym = this.scopes.length > 0 ? this.lookup(name) : null;
+        if (sym) snapshot.set(sym, !!sym._moved);
+      }
+    }
+    return snapshot;
+  }
+
+  _restoreHeapMoved(snapshot) {
+    for (const [sym, moved] of snapshot) {
+      sym._moved = moved;
     }
   }
 
@@ -640,6 +688,7 @@ class Context {
       level.list = [];
       level.set = new Set();
     }
+    this._emitHeapCleanup(lines, I);
   }
 
   _snapshotCleanups() {

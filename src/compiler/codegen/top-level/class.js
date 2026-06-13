@@ -67,7 +67,7 @@ export default {
     if (heapDec && inlineDec) {
       throw this.error(`@heap and @struct are mutually exclusive; use one allocation strategy`, node);
     }
-    if (heapDec && this._classHasInheritance(cBase, name)) {
+    if (heapDec && this._classHasInheritance(superClass, name)) {
       throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {

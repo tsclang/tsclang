@@ -13,7 +13,9 @@ export default {
     if (!this._heapVarStack) this._heapVarStack = [];
     this._poolVarStack.push(blockPoolVars);
     this._heapVarStack.push(blockHeapVars);
+    const _heapMovedSnapshot = this._snapshotHeapMoved();
     for (const s of block.body) this.visitStmt(s, lines, depth);
+    this._restoreHeapMoved(_heapMovedSnapshot);
     const I = ' '.repeat(this.indent * depth);
     for (let i = blockPoolVars.length - 1; i >= 0; i--) {
       const { name, className } = blockPoolVars[i];

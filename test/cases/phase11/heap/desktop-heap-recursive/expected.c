@@ -10,6 +10,9 @@ static Node Node_new(int32_t v) {
     return self;
 }
 
+static void Node_destructor(Node *n) {
+}
+
 int32_t _tsc_main(void) {
     Node *_heap_0 = (Node *)tsc_malloc(sizeof(Node));
     *_heap_0 = Node_new(1);
@@ -18,7 +21,10 @@ int32_t _tsc_main(void) {
     *_heap_1 = Node_new(2);
     Node *child = _heap_1;
     child->next = root;
-    return root->value;
+    int32_t _ret_2 = root->value;
+    if (child != NULL) { Node_destructor(child); tsc_free(child); }
+    if (root != NULL) { Node_destructor(root); tsc_free(root); }
+    return _ret_2;
 }
 
 int main(void) {

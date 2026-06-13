@@ -9,11 +9,16 @@ static Box Box_new(int32_t v) {
     return self;
 }
 
+static void Box_destructor(Box *b) {
+}
+
 int32_t _tsc_main(void) {
     Box *_heap_0 = (Box *)tsc_malloc(sizeof(Box));
     *_heap_0 = Box_new(42);
     Box *b = _heap_0;
-    return b->value;
+    int32_t _ret_1 = b->value;
+    if (b != NULL) { Box_destructor(b); tsc_free(b); }
+    return _ret_1;
 }
 
 int main(void) {
