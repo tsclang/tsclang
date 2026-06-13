@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #25 Phase 1a-c).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #35).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1900 tests, 0 `--no-gcc` failures; ~25 gcc failures in heap/pool — #35)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1958 tests, **all pass with gcc**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -35,7 +35,7 @@ input.tsc
 - `visitStmtInMain(node)` in `stmt.js` — thin dispatcher for statements
 - `exprToC(node)` in `expr/dispatch.js` — main expression → C string converter
 
-**Pre-scan phase:** Before codegen of function bodies, compiler pre-scans top-level declarations to populate `this.classes`, `this.interfaces`, `this._typeAliases`, function signatures (for overloads), and platform capability checks.
+**Pre-scan phase:** Before codegen of function bodies, compiler pre-scans top-level declarations to populate `this.classes`, `this.interfaces`, `this._typeAliases`, function signatures (for overloads), and platform capability checks. (Note: Result type emission is now **lazy** per-function via `_emittedResultTypes` Set in `func.js`, not pre-scanned.)
 
 **Generics:** Monomorphization in `generics.js`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
 
@@ -101,7 +101,7 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 **Lazy emission guards (prevent duplicate C typedefs):**
 - `this._emittedArrayStructs` — `Set<'Array_i32', ...>` — `_ensureArrayStruct(ident, elemC)`
 - `this._emittedOptStructs` — `Set<'opt_i32', ...>` — `_ensureOptStruct(name, innerCType)`
-- `this._emittedResultTypes` — `Set<'Result_i32_Error', ...>`
+- `this._emittedResultTypes` — `Set<'Result_i32_Error', ...>` — used by both `async-emit.js` and `func.js` (lazy per-function emission via `resolveType()`, not pre-scan)
 - `this._emittedTuples`, `_emittedMapStructs`, `_emittedChannelTypes`, etc.
 - Pattern: `_ensureXxx(name, ...)` checks Set, emits typedef if missing, adds to Set
 
@@ -370,7 +370,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 | 8 | ~44 | Concurrency (threads, channels, Atomic) |
 | 9 | ~57 | CLI, build, strict mode |
 | 10 | 20 | Strings & encodings |
-| 11 | ~50 | Embedded (pool, heap, stack_size, @struct) |
+| 11 | 69 | Embedded (pool, heap, stack_size, @struct) |
 | 12 | ~120 | Stdlib runtime |
 | 13 | 21 | Decorators |
 | 14 | 7 | Reactive |
@@ -380,7 +380,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1900 tests, 0 `--no-gcc` failures.** ~25 gcc compilation failures in phase11/heap + phase11/pool (#35, pre-existing codegen bugs unmasked by #34 fix: missing `Result_*` types, `->` vs `.`, missing default constructors).
+**Total: ~1958 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -401,10 +401,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `0069c13`
-- **GitHub Issues:** #1–#35. Closed: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #5 (closure type loss), #8 (string concat leak), #9 (non-const static init), #10 (module prefix), #14 (NULL check), #21 (for-of reassign), #22 (range inclusivity), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Refactoring: #25–#31 (tech-debt).
-- **Bug fix progress:** #1 ✅, #2 ✅, #3 ✅, #4 ✅, #5 ✅, #8 ✅, #9 ✅, #10 ✅, #14 ✅, #21 ✅, #22 ✅, #34 ✅.
-- **Refactoring Phase 1 (#25) — IN PROGRESS:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. Remaining: TypeRegistry (deferred — `_typeCache` doesn't exist, design needed). All 1958 tests pass.
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `90764c1`
+- **GitHub Issues:** #1–#35. **All closed.** Closed bugs: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #5 (closure type loss), #8 (string concat leak), #9 (non-const static init), #10 (module prefix), #14 (NULL check), #21 (for-of reassign), #22 (range inclusivity), #34 (test failures), #35 (gcc compilation failures heap/pool). Refactoring: #25–#31 (tech-debt).
+- **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All 1958 tests pass with gcc.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
@@ -469,6 +468,14 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 - **Closure env always heap-allocated** — `hoistClosure` always emits destroy function (`_closure_N_destroy`: releases strings + `free(env)`). All 6 allocation sites use `tsc_malloc`. Cleanup via `_registerCleanup(${destroyFn}(env))`. `_suppressCleanupFor`/`_hasCleanupFor` match `${name}_env)` pattern. Functions returning capturing closures tracked via `_returnsCapturingClosure` flag (set in `hoistClosure` when `_inReturnContext`); call dispatch passes `.env` for `isClosure || !funcPtr` closures.
 - **Recursive type detection** — `_resolvingTypes` Set tracks types currently being defined. In `visitTypeAlias` (TypeObject) and `visitInterface` (struct branch), name is added before field processing, removed after. If `resolveType` returns the type's own name → compile error ("use Ref/Arc/Mut for indirection"). Only catches direct by-value self-reference; indirect cycles (`A→B→A`) caught by C compiler. Pointer-based (`Ref<A>`, `Arc<A>`, `A[]`) not affected.
 - **Cross-module type resolution** — Types (class/interface/enum/type-alias) are NOT in scope (`this.define`), they're in type tables (`this.classes`, `this._typeAliases`). Export side: `dispatch.js` Export/ExportFrom cases check type tables as fallback when `lookup()` fails. Import side: `codegen.js` pre-population routes type entries to type tables (`isStruct`/`isEnum`/`isScalarAlias` → `this.classes`, `_isTypeAlias` → `this._typeAliases`) instead of scope. `newToC` (`new-expr.js`) uses `cls._cname ?? name` for all C identifiers. Module prefix: ALL declaration types now get prefixed (`_cname` for types, `_cAlias` for consts, `funcName` for functions, `<prefix>_closure_N`/`<prefix>_lambda_N` for closures). `import type { X }` parsed but treated same as `import { X }` (typeOnly flag not enforced).
+- **Result type emission (#35)** — Lazy per-function in `func.js` using `resolveType()` + `_emittedResultTypes` Set. Pre-scan removed (used simplified type mapping that missed pool/heap wrapping). Union error types still emitted per-errKey via `_emittedResultErrKeys`. Throws function symbols carry `_resultType`, `_resultValueType`, `_resultErrTypes`, `_isThrowsFunc` for use by call sites.
+- **Error vs TscError (#35)** — Built-in error type is `TscError` in C, not `Error`. `_errMsgField(errTypes)` helper returns `'message'` for `TscError`, `'_base.message'` for user-defined throws classes. `throw new Error("msg")` → compound literal `(TscError){ .message = ... }`, NOT `TscError_new()`. User-defined throw classes use `_new()` constructor.
+- **Heap/pool method dispatch (#35)** — `classSym.ctype` may be `'Counter *'` (with trailing ` *`). Strip with `.replace(/ \*$/, '')` before looking up class in `this.classes`.
+- **Default constructor for heap (#35)** — `new Box()` without constructor: emit `(Box){0}` zero-init instead of undefined `Box_new()`. Pool exhaustion: `(TscError){ .message = STR_LIT("pool exhausted: ClassName") }`.
+- **Recursive struct forward declaration (#35)** — Non-Arc self-referential classes (e.g., `class Node { value: i32; next: Node }`) need `typedef struct Name Name;` before struct body. Previously only Arc classes had this.
+- **Field access after cast on heap (#35)** — `(n as Node).value` on heap pointer: `dispatch.js` must `inferType()` for non-Ident member objects to decide `->` vs `.`. Without this, generated `n.value` instead of `n->value`.
+- **Synthesized main with throws (#35)** — When `_tsc_main()` returns `Result<T,E>`, `int main()` must unwrap: check `.ok`, panic on error with `.error` message, return `.value`. Added `_explicitMainThrows`/`_explicitMainResultType`/`_explicitMainErrTypes` fields.
+- **Auto-propagation in VarDecl (#35)** — `const a = create(1)` inside throws function: `vardecl.js` detects throws func call in init, emits Result temp + `.ok` check + error propagation (goto cleanup or return), binds var to `.value`.
 - **Recursive closures** — Closures (`const f = (n) => f(n-1)`) need pre-declaration before body compilation. `vardecl.js` pre-declares name with `_isRecursiveSelf: true` and predicted `_closureFnName` BEFORE calling `hoistClosure`/`hoistArrow`. Prediction: `_closure_${this.closureCount}_fn` for capturing path, `_lambda_${this.lambdaCount}_${retSuffix}` for non-capturing path. `_findFreeVars` (`closures.js`) excludes self name (3rd param `selfName`). `call-dispatch.js` checks `_isRecursiveSelf` before `tsc_closure` dispatch: emitting direct static call `_closure_N_fn(env, args)` (capturing) or `_lambda_N_ret(args)` (non-capturing) instead of indirect `fn.fn(env, args)`. Inside closure body, `env` is the first parameter name. Pattern mirrors `func.js:372` define-before-body for named functions.
 - **Closure type preservation** — Two call dispatch patterns: `isClosure:true` (capturing, passes `.env`: `((ret)(*)(void*,params)fn)(env, args)`) vs `funcPtr:true` (non-capturing, no `.env`: `((ret)(*)(params)fn)(args)`). Choice depends on whether the underlying C function expects `void*` first param. `func.js:395` sets `closureRetType` on function symbols for TypeFunc returns. `closures.js:181` sets `_returnsCapturingClosure` on enclosing function when hoisting a capturing closure in return context. `vardecl.js` Path C (line 1301) uses `_returnsCapturingClosure` to choose isClosure vs funcPtr. `infer.js:376` must check `!sym.funcName` — functions returning tsc_closure (funcName set) should return ctype, not closureRetType. Known limitations: chained calls `f()()` need temp-var mechanism; array-of-closures `arr[i]()` needs `.env` passing in non-Ident callee dispatch.
 - **Non-const static init splitting** — C requires static/global vars to have constant initializers. `dispatch.js` `needsStatic` block detects `Call` nodes in init AST (NOT `New` — `new Struct()` generates `{0}` which IS constant). When non-const: zero-init declaration at top level + runtime assignment. Library mode: assignment goes to `_libInitStmts` → emitted as `void <prefix>__init(void) { ... }`. Non-library: assignment goes to `mainStmts`. `compileTsc` collects `_initFn` from deps → passes as `depInitFns` to consuming module's codegen → injected after `TSC_INIT()` in main(). Each library `__init` calls its own deps' `__init` (transitive chain). Limitation: `new Arc<T>()` at top-level in library mode still generates non-constant static init (edge case).
