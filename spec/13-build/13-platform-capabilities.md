@@ -5,7 +5,7 @@
 
 ## Приоритет
 
-Этот документ имеет **приоритет** над всеми остальными файлами спецификации (`spec/*.md`) в вопросах platform capabilities: поля `declare platform`, значения `allocator`, `async` (ранее `scheduler`), `usize` (ранее `address_bits`), поведение `Shared<T>`/`Weak<T>`, runtime level, обязательные поля. При расхождении — считать верным этот документ.
+Этот документ имеет **приоритет** над всеми остальными файлами спецификации (`spec/*.md`) в вопросах platform capabilities: поля `declare platform`, значения `allocator`, `async` (ранее `scheduler`), `usize` (ранее `address_bits`), поведение `Arc<T>`/`Weak<T>`, runtime level, обязательные поля. При расхождении — считать верным этот документ.
 
 ## Принцип
 
@@ -73,7 +73,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 | Поле | Тип | Допустимые значения | Описание |
 |------|-----|--------------------|----------|
-| `allocator` | `string` | `"heap"`, `"static"` | Стратегия аллокации памяти. `"heap"` — стандартный `malloc`/`free`. `"static"` — все объекты в BSS, размеры должны быть compile-time. При `"static"`: `Shared<T>`, `Weak<T>` → compile error; `new X()` без capacity → compile error; `new X(N)` с compile-time N → BSS |
+| `allocator` | `string` | `"heap"`, `"static"` | Стратегия аллокации памяти. `"heap"` — стандартный `malloc`/`free`. `"static"` — все объекты в BSS, размеры должны быть compile-time. При `"static"`: `Arc<T>`, `Weak<T>` → compile error; `new X()` без capacity → compile error; `new X(N)` с compile-time N → BSS |
 | `async` | `string` | `"libuv"`, `"state_machine"`, `"none"` | Модель async-выполнения. `"libuv"` — event loop через libuv (desktop). `"state_machine"` — C switch-based state machine (embedded). `"none"` — `async function` запрещена |
 
 ### Build
@@ -146,8 +146,8 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | Capability | Решение компилятора |
 |-----------|-------------------|
 | `fpu: false` | Запрещает `f32`/`f64` TypeRef. Если `defaultNumber` не integer → ошибка с точным указанием места и подсказкой |
-| `allocator: "static"` | `new` только с compile-time capacity → BSS. `Shared<T>`, `Weak<T>` → compile error |
-| `allocator: "heap"` | Все виды `new`, `Shared<T>`, `Weak<T>` разрешены |
+| `allocator: "static"` | `new` только с compile-time capacity → BSS. `Arc<T>`, `Weak<T>` → compile error |
+| `allocator: "heap"` | Все виды `new`, `Arc<T>`, `Weak<T>` разрешены |
 | `allocator: "heap"` + `heap_size` | Как heap, но compile-time проверка BSS + heap_size + stack ≤ ram_size |
 | `async: "none"` | Запрещает `async function` |
 | `async: "state_machine"` | Async через C switch-based state machine |
@@ -429,7 +429,7 @@ input.tsc:3:5  TypeError: function `traverse()` is recursive and stack usage can
 
 > **Полная спецификация:** см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md) — секция Allocation Strategy.
 
-| `allocator` | `new X()` (class) | `new Array<T>(N)` | `Shared<T>` / `Weak<T>` | Генерирует |
+| `allocator` | `new X()` (class) | `new Array<T>(N)` | `Arc<T>` / `Weak<T>` | Генерирует |
 |-------------|-------------------|-------------------|--------------------------|-----------|
 | `"heap"` | stack value | malloc | malloc + ARC | `malloc`/`free` для контейнеров |
 | `"heap"` + `heap_size` | stack value | malloc (лимит) | malloc + ARC | `malloc`/`free` + compile-time check |
@@ -439,7 +439,7 @@ input.tsc:3:5  TypeError: function `traverse()` is recursive and stack usage can
 
 `@heap` (future) работает **только** с `allocator: "heap"`. На `allocator: "static"` → compile error.
 
-`Shared<T>` и `Weak<T>` при `allocator: "static"` → compile error. Нет heap → нет ARC → нет shared ownership. На embedded: `@static let` + `Ref<T>`/`Mut<T>`.
+`Arc<T>` и `Weak<T>` при `allocator: "static"` → compile error. Нет heap → нет ARC → нет shared ownership. На embedded: `@static let` + `Ref<T>`/`Mut<T>`.
 
 ### 2. Migration path — РЕШЕНО
 
@@ -462,9 +462,9 @@ input.tsc:3:5  TypeError: function `traverse()` is recursive and stack usage can
 
 Все ~90 существующих `meta.json` обновляются с явными capabilities.
 
-### 3. `Shared<T>` / `Weak<T>` без heap — РЕШЕНО
+### 3. `Arc<T>` / `Weak<T>` без heap — РЕШЕНО
 
-**Compile error.** `Shared<T>` требует ARC (refcount + free). При `allocator: "static"` нет heap → нет `free()` → refcount бессмысленен. String работает без heap потому что immutable + ring buffer, но `Shared<T>` — mutable shared state, ring buffer не подходит.
+**Compile error.** `Arc<T>` требует ARC (refcount + free). При `allocator: "static"` нет heap → нет `free()` → refcount бессмысленен. String работает без heap потому что immutable + ring buffer, но `Arc<T>` — mutable shared state, ring buffer не подходит.
 
 ### 4. Runtime level — РЕШЕНО
 
@@ -510,6 +510,6 @@ resolve.js:14    usize → uint16_t для nes/spectrum (хардкод)
 3. ~~Обновить компилятор~~ — DONE (capabilities + fallback в codegen.js, program.js, resolve.js)
 4. ~~Обновить CLI~~ — DONE (`--platform`, `--build`, `node_modules` → `tsc_packages`)
 5. ~~Создать встроенные профили~~ — DONE (`src/profiles/` — 12 JSON-профилей)
-6. ~~Добавить тесты на новые ошибки~~ — DONE (fpu:false + float, Shared+static, async:none + async function)
+6. ~~Добавить тесты на новые ошибки~~ — DONE (fpu:false + float, Arc+static, async:none + async function)
 7. ~~Удалить fallback-хардкод~~ — DONE (capabilities всегда передаются, хардкод удалён из codegen.js, program.js, resolve.js)
 8. ~~Превратить JSON-профили в profile-пакеты~~ — DONE (`index.d.tsc` для всех 12 профилей; `include/` и `toolchain.cmake` отложены до реализации runtime)

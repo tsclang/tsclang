@@ -1,0 +1,2 @@
+class Node { value: i32; }
+let x: Arc<Node> = new Node();

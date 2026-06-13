@@ -1,5 +1,5 @@
 class Box { value: i32 = 0; }
-function share(s: Shared<Box>): void {
+function share(s: Arc<Box>): void {
     console.log(s.value);
 }
 function mutate(m: Mut<Box>): void {

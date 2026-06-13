@@ -1,4 +1,4 @@
-﻿## Clone
+## Clone
 
 `Clone` — интерфейс для deep copy. Два синтаксиса, одна семантика:
 
@@ -24,7 +24,7 @@ console.log(u1);               // ok — u1 жив
 
 - Примитивы и `string` — auto-implement Clone
 - Массивы — `clone()` / `structuredClone` работают если элементы реализуют `Clone`
-- `Shared<T>` — `structuredClone` создаёт новый независимый объект (deep copy, не retain)
+- `Arc<T>` — `structuredClone` создаёт новый независимый объект (deep copy, не retain)
 - Spread = всегда copy для всех типов (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md) — spread/destructuring/merge всегда copy)
 
 ```typescript

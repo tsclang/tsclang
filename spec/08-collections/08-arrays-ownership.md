@@ -41,12 +41,12 @@ memset(&data, 0, sizeof(Array_f64));  // zero-out после вызова
 
 Borrow на коллекцию **блокирует мутацию** (`push`, `pop`, `remove`) пока borrow жив. Borrow отпускается при выходе из scope.
 
-### Shared\<T\> / Weak\<T\>
+### Arc\<T\> / Weak\<T\>
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `const b: Shared<i32[]> = a` | **Ошибка** — `a` не является `Shared<T>` | Нельзя создать Shared из owned |
-| `const b: Weak<i32[]> = a` | **Ошибка** — `a` не является `Shared<T>` | Weak только из Shared |
+| `const b: Arc<i32[]> = a` | **Ошибка** — `a` не является `Arc<T>` | Нельзя создать Arc из owned |
+| `const b: Weak<i32[]> = a` | **Ошибка** — `a` не является `Arc<T>` | Weak только из Arc |
 
 ### Borrow из массива
 
@@ -143,10 +143,10 @@ Array_Admin users = {.data = _d0, .length = 4, .capacity = 4};
 // admins untouched
 ```
 
-**Массивы из `Shared<T[]>` — retain:**
+**Массивы из `Arc<T[]>` — retain:**
 
 ```typescript
-const base: Shared<Item[]> = [item1, item2];
+const base: Arc<Item[]> = [item1, item2];
 const listA = [...base, itemA];  // ok — retain, base жив
 const listB = [...base, itemB];  // ok — retain, base жив
 ```

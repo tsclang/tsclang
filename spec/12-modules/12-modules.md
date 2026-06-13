@@ -148,7 +148,7 @@ let counter = 0                     // ⚠️ ошибка если Thread.spawn
 const counter = new Atomic<i32>(0)  // ✅ thread-safe
 ```
 
-**`heap: false` платформы:** module-level owned объекты (`new`, `Shared<T>`) запрещены — нет heap. Используй value types или фиксированные массивы:
+**`heap: false` платформы:** module-level owned объекты (`new`, `Arc<T>`) запрещены — нет heap. Используй value types или фиксированные массивы:
 ```typescript
 // AVR (heap: false)
 const config = new Config()         // ❌ heap allocation запрещён

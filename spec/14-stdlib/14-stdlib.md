@@ -1106,7 +1106,7 @@ const pretty = JSON.stringify(user, 2)    // форматированный с �
 **Ограничения типов:**
 - `undefined` отсутствует — поля с `null` в JSON маппятся в `null`
 - Приватные поля класса в JSON не включаются
-- Цикличные ссылки (`Shared<T>` указывающий сам на себя) — runtime error при stringify
+- Цикличные ссылки (`Arc<T>` указывающий сам на себя) — runtime error при stringify
 
 **Платформа:**
 - Desktop/server — всегда доступен
@@ -1554,7 +1554,7 @@ import { Thread, channel } from "std/threads"
 
 Только для **desktop** — на embedded ошибка компилятора (нет heap-async).
 
-Реактивность с явными зависимостями (explicit-deps, React-style). Auto-tracking (Vue/SolidJS) не поддерживается — требует interior mutability в `get()`, что нарушает гарантии `Shared<T>`.
+Реактивность с явными зависимостями (explicit-deps, React-style). Auto-tracking (Vue/SolidJS) не поддерживается — требует interior mutability в `get()`, что нарушает гарантии `Arc<T>`.
 
 ```typescript
 import { signal, computed, effect } from "std/reactive"

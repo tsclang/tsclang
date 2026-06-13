@@ -1,4 +1,4 @@
-﻿## Автоматический cleanup (`_free`)
+## Автоматический cleanup (`_free`)
 
 Компилятор автоматически генерирует функцию `ClassName_free(ClassName *self)` для классов, содержащих `string`-поля. Эта функция вызывается при выходе переменной из scope.
 
@@ -34,10 +34,10 @@ int main(void) {
 }
 ```
 
-Для `Shared<T>` cleanup дополнительно вызывает `tsc_arc_release`:
+Для `Arc<T>` cleanup дополнительно вызывает `tsc_arc_release`:
 
 ```c
-// Shared<User> cleanup:
+// Arc<User> cleanup:
 User_free(user);                       // release string-полей
 tsc_arc_release(user);                 // decrement refcount, free если 0
 ```

@@ -20,7 +20,7 @@ TSC разделяет конкурентность на три независи
 
 ### Atomic<T>
 
-Единственный способ разделить значение между потоками без канала. Текущая реализация: два явных варианта — `new Atomic<T>(val)` (stack, без ref count) и `new Shared<Atomic<T>>(val)` (heap, с ARC). Автоматический escape analysis *[NOT YET IMPLEMENTED]*.
+Единственный способ разделить значение между потоками без канала. Текущая реализация: два явных варианта — `new Atomic<T>(val)` (stack, без ref count) и `new Arc<Atomic<T>>(val)` (heap, с ARC). Автоматический escape analysis *[NOT YET IMPLEMENTED]*.
 
 ```typescript
 import { Atomic, AtomicArray, LoadOrdering, StoreOrdering, RmwOrdering } from "std/threads"
@@ -117,7 +117,7 @@ const int32_t v = atomic_load_explicit(&arr.data[0], memory_order_acquire);
 | `AtomicArray<T>` | ✅ | retain/release автоматически |
 | `Readonly<T>` | ✅ | retain/release автоматически |
 | `Ref<T>` / `Mut<T>` | ❌ | ошибка компилятора |
-| `Shared<T>` / `Weak<T>` | ❌ | ошибка компилятора |
+| `Arc<T>` / `Weak<T>` | ❌ | ошибка компилятора |
 | `await` внутри callback | ❌ | ошибка компилятора |
 
 Только там где есть OS. Потоки работают как **изоляты** — без общей памяти. Связь через каналы с передачей владения или через `Atomic<T>`.
@@ -277,7 +277,7 @@ const cfg = new Readonly<Config>(d)
 const cfg = new Readonly({ maxRetries: 3 })  // ok: T inferred
 ```
 
-Нельзя создать `Readonly<T>` если `T` содержит `Shared<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` или мутабельное поле — ошибка компилятора.
+Нельзя создать `Readonly<T>` если `T` содержит `Arc<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` или мутабельное поле — ошибка компилятора.
 
 C-output — zero overhead (`const` copy, без аллокации):
 ```c
@@ -289,7 +289,7 @@ Thread-safe retain/release для `Readonly<T>` в `Thread.spawn` — плани
 
 Зачем не `const`: `const` локальная переменная — это гарантия компилятора только в текущем потоке. `Readonly<T>`:
 1. **Thread-safe** *(запланировано)* — атомарный ref count, safe для `Thread.spawn`
-2. **Deep** — рекурсивная проверка; `const obj` может хранить `Shared<T>` внутри
+2. **Deep** — рекурсивная проверка; `const obj` может хранить `Arc<T>` внутри
 3. **Owned** — автоматическое управление памятью
 
 Типичное использование: конфиги, lookup-таблицы, скомпилированные шейдеры, статичные данные уровня — один раз создать, раздать во все потоки без копирования.
@@ -403,7 +403,7 @@ class Server {
 
 Компилятор проверяет захваченные переменные **на границе `Thread.spawn`**:
 - Мутабельный `let` или глобаль → ошибка компилятора
-- `Shared<T>` или `Weak<T>` → ошибка компилятора
+- `Arc<T>` или `Weak<T>` → ошибка компилятора
 - `Ref<T>` / `Mut<T>` → ошибка компилятора
 - `@static let` → ошибка компилятора (используй `Atomic<T>`)
 - `await` внутри callback → ошибка компилятора
@@ -421,18 +421,18 @@ class Server {
 - `Atomic<T>` / `AtomicArray<T>` / `Readonly<T>`
 - другим owned типом, рекурсивно прошедшим ту же проверку
 
-Любое поле `Shared<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` — ошибка компилятора с указанием пути к проблемному полю:
+Любое поле `Arc<U>`, `Weak<U>`, `Ref<U>`, `Mut<U>` — ошибка компилятора с указанием пути к проблемному полю:
 
 ```typescript
 class Node {
     value: i32
-    next: Shared<Node>   // ← проблема
+    next: Arc<Node>   // ← проблема
 }
 
 const n = new Node()
 Thread.spawn(() => { use(n) })
 // error: cannot send `Node` to thread
-//   field `next: Shared<Node>` is not thread-safe
+//   field `next: Arc<Node>` is not thread-safe
 //   hint: use Atomic<T>, channel<T>, or Readonly<T> for shared state
 ```
 
@@ -592,7 +592,7 @@ native `}`
 | `await` | ❌ ошибка компилятора |
 | `new` (heap allocation) | ❌ ошибка компилятора |
 | `tx.send()` / `rx.receive()` (блокирующие) | ❌ ошибка компилятора |
-| `Shared<T>` / `Weak<T>` | ❌ ошибка компилятора |
+| `Arc<T>` / `Weak<T>` | ❌ ошибка компилятора |
 | string concatenation | ❌ ошибка компилятора (heap) |
 | `Map`, `Set` операции | ❌ ошибка компилятора (heap) |
 | `throw` / `throws` | ❌ ошибка компилятора |
@@ -857,7 +857,7 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 > **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes/07-classes-ownership.md#struct--value-type-class).
 
-> **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Shared<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен.
+> **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Arc<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен.
 
 ### `@signal` — POSIX-сигналы (desktop)
 
@@ -999,7 +999,7 @@ void main(void) {
 │       │                                              │
 │       └── async generators / for await ─ heap only  │
 │       │                                              │
-│       └── Shared<T>/Weak<T> не атомарны              │
+│       └── Arc<T>/Weak<T> не атомарны              │
 │       └── Weak narrowing безопасен                   │
 │                                                      │
 │  std/threads ───── isolates ────── OS only            │

@@ -1,4 +1,4 @@
-﻿## Массивы и коллекции
+## Массивы и коллекции
 
 ### Массивы
 
@@ -377,7 +377,7 @@ s.add(x);           // copy
 console.log(x);     // ok
 ```
 
-Теоретико-множественные операции — доступны для примитивов, `string` и `Shared<T>`:
+Теоретико-множественные операции — доступны для примитивов, `string` и `Arc<T>`:
 ```typescript
 s.union(other)               // новый owned Set — все элементы из s и other
 s.intersection(other)        // новый owned Set — только общие элементы
@@ -388,13 +388,13 @@ s.isSupersetOf(other)        // boolean
 s.isDisjointFrom(other)      // boolean
 ```
 
-Для `Shared<T>` — union это просто retain на каждый элемент, без копирования объектов:
+Для `Arc<T>` — union это просто retain на каждый элемент, без копирования объектов:
 ```typescript
-let user1: Shared<User> = new User();
-let user2: Shared<User> = new User();
+let user1: Arc<User> = new User();
+let user2: Arc<User> = new User();
 
-let a = new Set<Shared<User>>([user1, user2]);
-let b = new Set<Shared<User>>([user2]);
+let a = new Set<Arc<User>>([user1, user2]);
+let b = new Set<Arc<User>>([user2]);
 let c = a.union(b);  // ok — retain на элементы, refcount растёт
 ```
 
@@ -410,8 +410,8 @@ let common = morphemes.intersection(suffixes);  // new Set<string> {"ать"}
 let a = new Set<User>([user1, user2]);
 let b = new Set<User>([user2]);
 let c = a.union(b);
-// ошибка: union requires Set<primitive>, Set<string> or Set<Shared<T>>
-// hint: use Set<Shared<User>> instead
+// ошибка: union requires Set<primitive>, Set<string> or Set<Arc<T>>
+// hint: use Set<Arc<User>> instead
 ```
 
 Итерация — `v` это `Ref<T>` для сложных типов, copy для примитивов:

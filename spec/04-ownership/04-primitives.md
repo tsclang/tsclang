@@ -20,7 +20,7 @@
 | `07-classes-ownership.md` | Классы: move, borrow, spread, destructuring |
 | `08-arrays-ownership.md` | Массивы: move, borrow, spread, destructuring, capacity |
 | `08-tuples-ownership.md` | Кортежи: move, borrow, spread, destructuring, optional, rest |
-| `04-shared-weak.md` | Shared\<T\> и Weak\<T\>: ARC ownership, cycles |
+| `04-arc-weak.md` | Arc\<T\> и Weak\<T\>: ARC ownership, cycles |
 | `10-async-ownership.md` | Ownership в async: retain-on-capture, cleanup, generators |
 
 ---
@@ -48,14 +48,14 @@
 
 `Ref<primitive>` и `Mut<primitive>` допустимы — они нужны для **array element borrows** (`arr[i]` → `Ref<i32>`). Для отдельной переменной это технически работает, но практически бессмысленно: указатель на стековую переменную, которая и так доступна по имени.
 
-### Shared\<T\> / Weak\<T\>
+### Arc\<T\> / Weak\<T\>
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `const b: Shared<i32> = a` | **Ошибка компиляции** | `TypeError: Shared<T> requires a non-primitive type, got i32` |
+| `const b: Arc<i32> = a` | **Ошибка компиляции** | `TypeError: Arc<T> requires a non-primitive type, got i32` |
 | `const b: Weak<boolean> = a` | **Ошибка компиляции** | `TypeError: Weak<T> requires a non-primitive type, got boolean` |
 
-Shared ownership и weak references для copy-типов бессмысленны — нет смысла делать refcount для значения, которое и так копируется.
+Arc ownership и weak references для copy-типов бессмысленны — нет смысла делать refcount для значения, которое и так копируется.
 
 ### Очистка памяти
 
@@ -142,4 +142,4 @@ int main(void) {
 
 ### Почему так
 
-Copy-типам не нужен ownership management — значение копируется при присваивании, оригинал не теряется. Borrow допустим (pointer), но не имеет практического смысла для отдельной переменной. Shared/Weak запрещены — refcount для числа бессмысленен.
+Copy-типам не нужен ownership management — значение копируется при присваивании, оригинал не теряется. Borrow допустим (pointer), но не имеет практического смысла для отдельной переменной. Arc/Weak запрещены — refcount для числа бессмысленен.

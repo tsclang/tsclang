@@ -136,7 +136,7 @@ npx tsclang build hello.tsc
 |--------|-------|
 | [02-syntax/](../02-syntax/) | Операторы, выражения, инструкции, форматирование |
 | [03-types/](../03-types/) | Примитивы, number, string, enum, null, generics, utility types |
-| [04-ownership/](../04-ownership/) | Ownership, borrow checker, Ref/Mut/Shared/Weak, scope constraint, clone |
+| [04-ownership/](../04-ownership/) | Ownership, borrow checker, Ref/Mut/Arc/Weak, scope constraint, clone |
 | [05-control-flow/](../05-control-flow/) | if/else, loops, for-of, match, switch, while |
 | [06-functions/](../06-functions/) | Функции, замыкания, extension methods, перегрузки |
 | [07-classes/](../07-classes/) | Классы, интерфейсы, vtable, this-семантика, cleanup |

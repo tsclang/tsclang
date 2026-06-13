@@ -488,18 +488,18 @@ export default {
         if (_scalarRest && p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'string') _ct = 'const char *';
         const _isRef = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Ref';
         const _isMut = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Mut';
-        const _isShared = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Shared';
+        const _isArc = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Arc';
         const _isBorrow = _isRef || _isMut;
-        const _derefType = (_isBorrow || _isShared) && _ct.endsWith('*')
+        const _derefType = (_isBorrow || _isArc) && _ct.endsWith('*')
           ? this.resolveType(p.typeAnn.typeArgs?.[0] ?? {})
           : undefined;
         const _funcRet = _isFuncParam ? (p.typeAnn.ret ? this.resolveType(p.typeAnn.ret) : 'void') : undefined;
         const _funcParams = _isFuncParam ? (p.typeAnn.params ?? []).map(pt => this.resolveType(pt)) : undefined;
         this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
                               ...(_isMut ? { isMutParam: true } : {}),
-                              ...(_isShared ? { isShared: true, derefType: _derefType } : {}),
+                              ...(_isArc ? { isArc: true, derefType: _derefType } : {}),
                               ...(_isFuncParam ? { funcPtr: true, closureRetType: _funcRet, closureParamTypes: _funcParams } : {}),
-                              ...(_derefType && !_isShared ? { derefType: _derefType } : {}) });
+                              ...(_derefType && !_isArc ? { derefType: _derefType } : {}) });
       }
     }
     if (_scalarRest && _lastNonRest) {

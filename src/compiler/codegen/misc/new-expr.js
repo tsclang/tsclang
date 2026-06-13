@@ -56,12 +56,12 @@ export default {
       return `tsc_array_create_${elemIdent}(${capArg})`;
     }
 
-    // new Shared<T>()
-    if (name === 'Shared') {
+    // new Arc<T>()
+    if (name === 'Arc') {
       if (this._allocatorName === 'static') {
         const t2 = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
         const tsName = this.ctypeToTsName(t2);
-        throw this.error(`TypeError: 'new Shared<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
+        throw this.error(`TypeError: 'new Arc<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
       }
       const t = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'void';
       return `tsc_arc_alloc(sizeof(${t}))`;

@@ -32,9 +32,9 @@ typedef struct {
 | `const b: Ref<[User, string]> = a` | Borrow всей struct | `const tuple_User_string *b = &a;` |
 | `const b: Mut<[User, string]> = a` | Mutable borrow | `tuple_User_string *b = &a;` |
 
-### Shared\<T\> / Weak\<T\>
+### Arc\<T\> / Weak\<T\>
 
-Аналогично классам — нельзя создать `Shared<tuple>` из owned. Tuple — value type, как класс.
+Аналогично классам — нельзя создать `Arc<tuple>` из owned. Tuple — value type, как класс.
 
 ### Доступ к элементам
 

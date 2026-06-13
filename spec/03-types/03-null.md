@@ -1,4 +1,4 @@
-﻿## Null
+## Null
 
 - `null` — единственное "отсутствующее значение"
 - `undefined` — синоним `null`. Компилируется в C `NULL`. В отличие от JS, `null` и `undefined` идентичны (нет разделения). Рекомендуется использовать `null`.
@@ -121,7 +121,7 @@ interface SensorData {
 
 - `x = null` для **non-nullable** типа → compile error
 - `x = null` для `opt_T` → `x = (opt_T){false, 0}`
-- `x = null` для указателя (`Shared<T>`, `Weak<T>`) → допустимо (pointer = NULL)
+- `x = null` для указателя (`Arc<T>`, `Weak<T>`) → допустимо (pointer = NULL)
 
 ```typescript
 let x: i32 = 5;

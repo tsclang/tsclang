@@ -15,16 +15,16 @@ export default {
       }
     }
 
-    // Pre-scan: find Shared<T> and Weak<T> usage to know which classes need _refcount/_weakcount
+    // Pre-scan: find Arc<T> and Weak<T> usage to know which classes need _refcount/_weakcount
     this._arcClasses = new Map();
     const _scanArc = (n) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_scanArc); return; }
-      if (n.kind === 'New' && (n.name === 'Shared' || n.name === 'Weak')) {
+      if (n.kind === 'New' && (n.name === 'Arc' || n.name === 'Weak')) {
         const tArg = n.typeArgs?.[0];
         if (tArg?.kind === 'TypeRef') {
           const info = this._arcClasses.get(tArg.name) ?? {};
-          if (n.name === 'Shared') { info.shared = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+          if (n.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
           if (n.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
           this._arcClasses.set(tArg.name, info);
         }
@@ -32,11 +32,11 @@ export default {
       if (n.kind === 'VarDecl') {
         const _checkTypeAnn = (ta) => {
           if (!ta) return;
-          if (ta.kind === 'TypeRef' && (ta.name === 'Shared' || ta.name === 'Weak')) {
+          if (ta.kind === 'TypeRef' && (ta.name === 'Arc' || ta.name === 'Weak')) {
             const tArg = ta.typeArgs?.[0];
             if (tArg?.kind === 'TypeRef') {
               const info = this._arcClasses.get(tArg.name) ?? {};
-              if (ta.name === 'Shared') { info.shared = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+              if (ta.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
               if (ta.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
               this._arcClasses.set(tArg.name, info);
             }

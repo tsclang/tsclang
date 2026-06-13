@@ -1,4 +1,4 @@
-﻿const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
+const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export default {
@@ -209,8 +209,8 @@ export default {
           return;
         }
 
-        // new Shared<Atomic<T>>(val) тЖТ Atomic_T_shared typedef + arc alloc + atomic_init
-        if (init?.kind === 'New' && init.name === 'Shared' && init.typeArgs?.[0]?.name === 'Atomic') {
+        // new Arc<Atomic<T>>(val) тЖТ Atomic_T_shared typedef + arc alloc + atomic_init
+        if (init?.kind === 'New' && init.name === 'Arc' && init.typeArgs?.[0]?.name === 'Atomic') {
           const tArg = init.typeArgs[0].typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
           const ident = this.cTypeToIdent(innerCtype);
@@ -224,7 +224,7 @@ export default {
           const initVal = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
           p(`${sharedType} *${name} = tsc_arc_alloc(sizeof(${sharedType}));`);
           p(`atomic_init(&${name}->value, ${initVal});`);
-          this.define(name, { ctype: `${sharedType} *`, varKind, _isAtomic: true, _isSharedAtomic: true, _atomicInner: innerCtype });
+          this.define(name, { ctype: `${sharedType} *`, varKind, _isAtomic: true, _isArcAtomic: true, _atomicInner: innerCtype });
           this._registerCleanup(`tsc_arc_release(${name})`);
           return;
         }
@@ -576,16 +576,16 @@ export default {
           return;
         }
 
-        // new Shared<T>() тЖТ arc alloc
-        if (!typeAnn && init?.kind === 'New' && init.name === 'Shared') {
+        // new Arc<T>() тЖТ arc alloc
+        if (!typeAnn && init?.kind === 'New' && init.name === 'Arc') {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
             if (this._allocatorName === 'static') {
-              throw this.error(`TypeError: 'new Shared<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
+              throw this.error(`TypeError: 'new Arc<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${this._allocatorName}"`);
             }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
-            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isArc: true, derefType: innerType });
             const sFields = this._getStringFields(innerType);
             if (sFields.length > 0) {
               this._ensureClassFree(innerType);
@@ -624,13 +624,13 @@ export default {
           }
         }
 
-        // Borrow check: Shared<T> requires a heap allocator
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'static') {
-          throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
+        // Borrow check: Arc<T> requires a heap allocator
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && this._allocatorName === 'static') {
+          throw this.error(`"Arc<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
 
-        // let x: Shared<T> = new T() тЖТ arc alloc with explicit field init
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && init?.kind === 'New' && init.name !== 'Shared') {
+        // let x: Arc<T> = new T() тЖТ arc alloc with explicit field init
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && init?.kind === 'New' && init.name !== 'Arc') {
           const tArg = typeAnn.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
@@ -642,7 +642,7 @@ export default {
                 p(`${name}->${fname} = 0;`);
               }
             }
-            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isShared: true, derefType: innerType });
+            this.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isArc: true, derefType: innerType });
             this._registerCleanup(`tsc_arc_release(${name})`);
             return;
           }
@@ -658,18 +658,18 @@ export default {
             const weakC2 = this.exprToC(init.callee.object, lines, depth);
             this._inWeakUpgrade = false;
             p(`${innerType2} *${name} = tsc_weak_upgrade(${weakC2});`);
-            this.define(name, { ctype: `${innerType2} *`, varKind, isPointer: true, isSharedUpgrade: true, derefType: innerType2 });
+            this.define(name, { ctype: `${innerType2} *`, varKind, isPointer: true, isArcUpgrade: true, derefType: innerType2 });
             return;
           }
         }
 
-        // let b = a where a is Shared тЖТ arc retain
+        // let b = a where a is Arc тЖТ arc retain
         if (!typeAnn && init?.kind === 'Ident') {
           const initSym3 = this.lookup(init.name);
-          if (initSym3?.isShared) {
+          if (initSym3?.isArc) {
             const innerType3 = initSym3.derefType;
             p(`${innerType3} *${name} = tsc_arc_retain(${init.name});`);
-            this.define(name, { ctype: `${innerType3} *`, varKind, isPointer: true, isShared: true, derefType: innerType3 });
+            this.define(name, { ctype: `${innerType3} *`, varKind, isPointer: true, isArc: true, derefType: innerType3 });
             this._registerCleanup(`tsc_arc_release(${name})`);
             return;
           }
@@ -747,8 +747,8 @@ export default {
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
           throw this.error(`"void" can only be used as a return type`);
         }
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Shared' && this._allocatorName === 'static') {
-          throw this.error(`"Shared<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && this._allocatorName === 'static') {
+          throw this.error(`"Arc<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
         if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {

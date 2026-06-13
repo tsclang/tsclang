@@ -10,11 +10,11 @@
 | `string` | **Immutable + ARC** — copy + retain при присвоении, release при выходе из scope |
 | `Ref<T>` | **Immutable borrow** — только чтение |
 | `Mut<T>` | **Mutable borrow** — чтение и запись |
-| `Shared<T>` | **ARC** — strong ref, увеличивает refcount |
+| `Arc<T>` | **ARC** — strong ref, увеличивает refcount |
 | `Weak<T>` | **Weak ref** — не увеличивает refcount, разрывает циклы |
 | `Slice<T>` | **Borrowed array view** — zero-copy sub-range, pointer + length |
 
-`Ref<T>`, `Mut<T>`, `Shared<T>`, `Weak<T>` — **режимы хранения**, каждый имеет конкретное C-представление:
+`Ref<T>`, `Mut<T>`, `Arc<T>`, `Weak<T>` — **режимы хранения**, каждый имеет конкретное C-представление:
 
 | Тип | C-представление | Примечание |
 |-----|----------------|-----------|
@@ -22,8 +22,8 @@
 | `string` | `String` struct + ARC | immutable, copy + retain на присвоении, release при выходе из scope |
 | `Ref<T>` | `const T* ptr` | read-only pointer |
 | `Mut<T>` | `T* ptr` | read-write pointer |
-| `Shared<T>` | `int32_t _refcount; int32_t _weakcount;` встроены в struct T | ARC |
-| `Weak<T>` | Тот же struct что Shared; `tsc_weak_create` = инкремент `_weakcount` | не удерживает объект |
+| `Arc<T>` | `int32_t _refcount; int32_t _weakcount;` встроены в struct T | ARC |
+| `Weak<T>` | Тот же struct что Arc; `tsc_weak_create` = инкремент `_weakcount` | не удерживает объект |
 
 > **`Move<T>` не существует** — move это операция передачи ownership, а не режим хранения. В C нет нового типа: `Move<T>` = `T`. Bare `T` в параметрах и возвращаемых типах уже означает move.
 
@@ -39,7 +39,7 @@
 |------|------|
 | Примитивы: copy, cleanup, функции, closures | `04-primitives.md` |
 | Ref\<T\>, Mut\<T\>, Borrow Checker, передача аргументов, Scope Constraint, @static let | `04-borrow.md` |
-| Shared\<T\>/Weak\<T\>: ARC, циклы, upgrade | `04-shared-weak.md` |
+| Arc\<T\>/Weak\<T\>: ARC, циклы, upgrade | `04-arc-weak.md` |
 | Clone: интерфейс, structuredClone, auto-impl | `04-clone.md` |
 | const vs let: мутация, move, Mut\<T\> | `04-const-vs-let.md` |
 

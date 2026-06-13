@@ -21,7 +21,7 @@ TSC код (async/await)
 
 TSC-код не знает какой runtime под капотом — работает с абстракцией. Runtime задаётся в `tsc.package.json` через поле `"runtime"`. `std/fs`, `std/net`, `std/ws` зависят от этого runtime.
 
-Единственный event loop, один поток исполнения. `Shared<T>` и `Weak<T>` **не атомарны** — никаких накладных расходов. Narrowing через `if (x != null)` безопасен — между проверкой и использованием никакой другой код не выполняется.
+Единственный event loop, один поток исполнения. `Arc<T>` и `Weak<T>` **не атомарны** — никаких накладных расходов. Narrowing через `if (x != null)` безопасен — между проверкой и использованием никакой другой код не выполняется.
 
 ```typescript
 async function fetchUser(id: i32): User throws NetworkError {

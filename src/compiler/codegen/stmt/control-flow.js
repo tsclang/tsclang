@@ -1,8 +1,8 @@
-﻿export default {
+export default {
   _emitRetainIfNeeded(valC, valNode, p) {
     if (valNode.kind === 'Ident') {
       const sym = this.lookup(valNode.name);
-      if (sym?.isShared) {
+      if (sym?.isArc) {
         p(`tsc_arc_retain(${valC});`);
         return;
       }
@@ -204,7 +204,7 @@
               // Pool opt_ref types: don't narrow (member access routed via .value-> in expr.js)
               const isPool = sym?.ctype?.startsWith('opt_ref_') && this.classes.get(sym.ctype.slice(8))?._isPool;
               if (sym?.ctype?.startsWith('opt_') && !isPool) narrowVar = optSide.name;
-              else if (sym?.isSharedUpgrade) upgradeReleaseVar = optSide.name;
+              else if (sym?.isArcUpgrade) upgradeReleaseVar = optSide.name;
             }
           }
         }

@@ -1,1 +1,1 @@
-TypeError: Shared<T> requires a non-primitive type, got i32
+TypeError: Arc<T> requires a non-primitive type, got i32

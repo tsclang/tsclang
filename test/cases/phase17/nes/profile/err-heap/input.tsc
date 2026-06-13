@@ -1,1 +1,1 @@
-let s: Shared<Sprite> = new Sprite();
+let s: Arc<Sprite> = new Sprite();

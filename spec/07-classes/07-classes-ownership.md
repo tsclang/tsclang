@@ -41,12 +41,12 @@ memset(&user, 0, sizeof(User));  // zero-out после вызова
 | `const b: Ref<User> = a` (где `a: const`) | ✅ ok | borrow из const — read-only |
 | `const b: Mut<User> = a` (где `a: const`) | ❌ ошибка | нельзя Mut из const binding |
 
-### Shared\<T\> / Weak\<T\>
+### Arc\<T\> / Weak\<T\>
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `const b: Shared<User> = a` | **Ошибка** — `a` не является `Shared<T>` | Нельзя создать Shared из owned |
-| `const b: Weak<User> = a` | **Ошибка** — `a` не является `Shared<T>` | Weak только из Shared |
+| `const b: Arc<User> = a` | **Ошибка** — `a` не является `Arc<T>` | Нельзя создать Arc из owned |
+| `const b: Weak<User> = a` | **Ошибка** — `a` не является `Arc<T>` | Weak только из Arc |
 
 ### Borrow из массива
 
@@ -96,9 +96,9 @@ buf.append(more)   // ✅ — buf снова свободен для мутац�
 
 > **Примечание:** borrow на коллекции (включая `arr[i]`) блокирует мутацию только до конца `{}`-scope, в котором создана переменная-borrow. После выхода из блока мутация снова разрешена.
 
-**Паттерн 3: `Shared<T>` (только desktop)**
+**Паттерн 3: `Arc<T>` (только desktop)**
 
-Если методов много и многословность неприемлема — `Shared<T>` даёт ARC-семантику вместо borrow. Не работает на embedded.
+Если методов много и многословность неприемлема — `Arc<T>` даёт ARC-семантику вместо borrow. Не работает на embedded.
 
 **Паттерн 4: owned поле**
 
@@ -193,10 +193,10 @@ console.log(base);  // ok — base жив
 
 `let`/`const` на source не влияет на copy/move — spread всегда copy (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md), D1).
 
-**Object spread из `Shared<T>` — retain:**
+**Object spread из `Arc<T>` — retain:**
 
 ```typescript
-const obj: Shared<Config> = new Config();
+const obj: Arc<Config> = new Config();
 const a = { ...obj, y: 2 };  // ok — retain, obj жив
 const b = { ...obj, z: 3 };  // ok — retain, obj жив
 ```
@@ -276,9 +276,9 @@ class View {
     data: User[];  // owned
 }
 
-// Или Shared
+// Или Arc
 class View {
-    data: Shared<User[]>;  // ARC
+    data: Arc<User[]>;  // ARC
 }
 
 // Временный доступ — через параметр метода

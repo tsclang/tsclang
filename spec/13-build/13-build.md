@@ -1002,7 +1002,7 @@ tsclang build nes
   ├─ 3. Проверить код проекта:
   │      - allocator: "static" → Map/Set/new без compile-time capacity → ошибка
   │      - allocator: "static" → Map/Set с compile-time N → BSS (✅)
-  │      - Shared<T> / Weak<T> при allocator: "static" → ошибка (ARC требует heap)
+  │      - Arc<T> / Weak<T> при allocator: "static" → ошибка (ARC требует heap)
   │      - fpu: false → f32/f64 операции → предупреждение (software float)
   │      - импорт недекларированного std/libc → ошибка
   │
@@ -1328,7 +1328,7 @@ declare platform {
 
     allocator: "static"  // нет malloc/free → new без compile-time capacity → ошибка
                          // new X(N) с compile-time N → статический BSS
-                         // Shared<T> → ошибка (ARC требует malloc)
+                         // Arc<T> → ошибка (ARC требует malloc)
     async: "state_machine"  // кооперативный poll loop, без heap
     fpu: false           // нет FPU → f32/f64 через software float → предупреждение
     bits: 8

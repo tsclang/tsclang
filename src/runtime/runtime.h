@@ -596,7 +596,7 @@ static inline TscRandom tsc_random_default(void) {
 
 /* -------------------------------------------------------------------------
  * ARC — Atomic Reference Counting
- * All Shared<T> structs have int32_t _refcount as their first field.
+ * All Arc<T> structs have int32_t _refcount as their first field.
  * Weak<T> structs also have int32_t _weakcount as their second field.
  * tsc_arc_alloc sets _refcount = 1; all other fields are zero-initialized.
  * ------------------------------------------------------------------------- */

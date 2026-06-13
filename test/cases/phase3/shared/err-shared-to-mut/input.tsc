@@ -1,9 +1,0 @@
-class Box {
-    value: i32;
-}
-function mutate(b: Mut<Box>): void {
-    b.value = 99;
-}
-let s = new Shared<Box>();
-s.value = 10;
-mutate(s);

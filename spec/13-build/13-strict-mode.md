@@ -204,7 +204,7 @@ let s = "hello" + " world";       // compile-time concatenation possible
 **Не запрещается:**
 - Array literals `[1, 2, 3]` — размер известен
 - String операции — ARC-managed, deterministic
-- `Shared<T>`, `Weak<T>` — ARC-managed
+- `Arc<T>`, `Weak<T>` — ARC-managed
 - `new ClassName()` — один объект, не растущий массив
 
 **Обоснование:** `malloc`/`realloc` могут вернуть NULL → UB. В safety-critical системах потребление памяти должно быть детерминировано на этапе компиляции.

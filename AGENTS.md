@@ -1,4 +1,4 @@
-﻿# TSClang — инструкции для ИИ
+# TSClang — инструкции для ИИ
 
 ## О проекте
 
@@ -6,7 +6,7 @@ TSClang — компилятор TypeScript-подобного языка (`.tsc
 
 - **Компилятор:** JavaScript (Node.js, ESM)
 - **Выход:** `.c` + `runtime.h` (single-header)
-- **Киллер-фича:** TS-синтаксис на bare metal — heap опционален (стек + static pool), ownership/borrow checker без GC — `T`=move, `Ref<T>`=const ptr, `Shared<T>`=ARC
+- **Киллер-фича:** TS-синтаксис на bare metal — heap опционален (стек + static pool), ownership/borrow checker без GC — `T`=move, `Ref<T>`=const ptr, `Arc<T>`=ARC
 - **Таргеты:** desktop (libuv), embedded (AVR, без heap), retro (NES, Genesis, и др.)
 
 ## Манифест TSClang — 6 принципов

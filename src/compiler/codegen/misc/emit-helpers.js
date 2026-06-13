@@ -151,8 +151,8 @@ export default {
       if (fv.ctype.endsWith(' *') && fv.ctype.includes('const ')) {
         throw this.error(`thread closure cannot capture "Ref<T>": not Send`);
       }
-      if (sym?.isShared) {
-        throw this.error(`thread closure cannot capture "Shared<T>": use Atomic<T> for thread-safe shared state`);
+      if (sym?.isArc) {
+        throw this.error(`thread closure cannot capture "Arc<T>": use Atomic<T> for thread-safe shared state`);
       }
       if (sym?._isStaticArray || sym?._isStaticMap) {
         throw this.error(`TypeError: Cannot capture @static variable '${fv.name}' in spawn block; use Atomic<T> for thread-safe access`);
@@ -160,13 +160,13 @@ export default {
       if (writtenVars.has(fv.name) && sym?.varKind === 'let') {
         const classDef = this.classes.get(fv.ctype);
         if (classDef?.fields) {
-          throw this.error(`TypeError: Cannot capture '${fv.ctype}' by move into spawn block; use Shared<${fv.ctype}> for shared ownership across threads`);
+          throw this.error(`TypeError: Cannot capture '${fv.ctype}' by move into spawn block; use Arc<${fv.ctype}> for shared ownership across threads`);
         } else {
-          throw this.error(`TypeError: Cannot capture mutable variable '${fv.name}' by reference in a spawn block; use Shared<T> or Atomic<T>`);
+          throw this.error(`TypeError: Cannot capture mutable variable '${fv.name}' by reference in a spawn block; use Arc<T> or Atomic<T>`);
         }
       }
       if (!_checkSend(fv.ctype)) {
-        throw this.error(`TypeError: Type '${fv.ctype}' is not Send — cannot be safely shared across threads; use Shared<T> or Atomic<T>`);
+        throw this.error(`TypeError: Type '${fv.ctype}' is not Send — cannot be safely shared across threads; use Arc<T> or Atomic<T>`);
       }
     }
 

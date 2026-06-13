@@ -1,1 +1,1 @@
-TypeError: Cannot pass Mut<T> 'm' as Shared<T> — mutable borrow cannot become shared reference
+TypeError: Cannot pass Mut<T> 'm' as Arc<T> — mutable borrow cannot become shared reference

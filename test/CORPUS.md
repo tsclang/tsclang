@@ -759,18 +759,18 @@ input.tsc:1:
 - [E] move из const → ошибка
 - [E] move из Ref → ошибка
 - [E] move из Mut → ошибка
-- [E] Mut<T> из Shared<T> → ошибка
+- [E] Mut<T> из Arc<T> → ошибка
 - [E] Ref<T> нельзя вернуть если переживёт owner → ошибка
 - [E] Ref не может пережить `await` → ошибка (Phase 7)
 - [E] Ref в глобальной переменной → ошибка
 
-### Shared<T> / Weak<T>
+### Arc<T> / Weak<T>
 
-- [R] `let x: Shared<Node> = new Node()` — ARC
+- [R] `let x: Arc<Node> = new Node()` — ARC
 - [R] `x.next = y` — retain (refcount++)
 - [R] `Weak<T>` в поле — не увеличивает refcount
 - [R] обращение к Weak → `T | null` (может быть освобождён)
-- [E] `Shared<T>` на `allocator: "none"` / `allocator: "static"` → ошибка (ARC требует malloc/free)
+- [E] `Arc<T>` на `allocator: "none"` / `allocator: "static"` → ошибка (ARC требует malloc/free)
 
 ### goto cleanup pattern
 
@@ -794,7 +794,7 @@ input.tsc:1:
 - [E] spread массива сложных типов из const → ошибка
 - [R] spread массива сложных типов из let — ok (move)
 - [E] использование источника после spread → ошибка
-- [R] `Shared<T>` spread из const — ok (retain)
+- [R] `Arc<T>` spread из const — ok (retain)
 - [E] spread объекта из const → ошибка
 - [R] spread объекта из let → ok
 
@@ -996,7 +996,7 @@ input.tsc:1:
 - [F] функция с параметрами примитивов
 - [F] функция с `Ref<User>` параметром → `ref_User`
 - [F] функция с `Mut<i32[]>` → `mut_arr_i32`
-- [F] функция с `Shared<Node>` → `arc_Node`
+- [F] функция с `Arc<Node>` → `arc_Node`
 - [F] функция с `i32 | null` → `opt_i32`
 - [F] функция с `Map<string, User[]>` → `Map2_string_arr_User`
 - [F] метод класса → `ClassName_methodName`
@@ -1341,10 +1341,10 @@ input.tsc:1:
 - [R] spawn с примитивом (copy)
 - [E] spawn захватывает Ref<T> → ошибка
 - [E] spawn захватывает Mut<T> → ошибка
-- [E] spawn захватывает Shared<T> → ошибка
+- [E] spawn захватывает Arc<T> → ошибка
 - [E] spawn захватывает mutable let → ошибка
 - [E] `await` внутри spawn callback → ошибка
-- [E] owned тип с полем Shared<U> → ошибка рекурсивной проверки
+- [E] owned тип с полем Arc<U> → ошибка рекурсивной проверки
 
 ### Thread<T>
 
@@ -1404,7 +1404,7 @@ input.tsc:1:
 - [E] без `<T>` → ошибка
 - [R] передача в Thread.spawn — retain/release автоматически
 - [E] запись в поле Readonly → ошибка
-- [E] T содержит Shared<U> → ошибка
+- [E] T содержит Arc<U> → ошибка
 - [E] T содержит Ref<U> → ошибка
 - [R] T содержит Atomic<U> → ok
 - [E] subtype с лишним полем при создании → ошибка
@@ -1524,7 +1524,7 @@ input.tsc:1:
 - [E] `new Array<Sprite>()` без capacity → ошибка
 - [R] `@static const sprites = new Array<Sprite>(64)` → BSS
 - [F] C-output: `static Sprite sprites_data[64]; static Array_Sprite sprites = {...}`
-- [E] `new Shared<Node>()` → ошибка (ARC требует malloc)
+- [E] `new Arc<Node>()` → ошибка (ARC требует malloc)
 - [R] класс без heap (`class Brush { size: u8; color: u8 }`) → на стеке, ok
 - [R] интерфейс с vtable на стеке → ok (vtable — static const, не malloc)
 

@@ -1,4 +1,4 @@
-﻿# TSClang — Спецификация и фазы реализации
+# TSClang — Спецификация и фазы реализации
 
 ## Разделы
 
@@ -9,7 +9,7 @@
 | [01-intro](./01-intro/) | Зачем, дизайн-философия, overview, установка |
 | [02-syntax](./02-syntax/) | Синтаксис: форматирование, переменные, операторы, truthy/falsy |
 | [03-types](./03-types/) | Типы: числа, строки, null, enum, Date, Type Aliases, конвертация, special types |
-| [04-ownership](./04-ownership/) | Ownership, borrow checker, Clone, Shared/Weak, const vs let |
+| [04-ownership](./04-ownership/) | Ownership, borrow checker, Clone, Arc/Weak, const vs let |
 | [05-control-flow](./05-control-flow/) | Управляющие конструкции: match, switch, for-of, while |
 | [06-functions](./06-functions/) | Функции: перегрузка, name mangling, closures, extension methods, extern "C", default params |
 | [07-classes](./07-classes/) | Классы: generics, интерфейсы, instanceof, this, packed/align |
@@ -70,12 +70,12 @@
 
 | Раздел | О чём |
 |--------|-------|
-| **Типы владения** | Таблица: `T` (owner), `Ref<T>`, `Mut<T>`, `Shared<T>` (ARC), `Weak<T>`, `Slice<T>` — и их C-представления. |
+| **Типы владения** | Таблица: `T` (owner), `Ref<T>`, `Mut<T>`, `Arc<T>` (ARC), `Weak<T>`, `Slice<T>` — и их C-представления. |
 | **Базовые правила** | Примитивы копируются; сложные типы управляются ownership; `string` — heap-allocated owner. |
 | **Owner (T)** | Move при присвоении и передаче в функцию; после move исходная переменная невалидна. |
 | **Ref\<T\>** | Immutable borrow; запрещён в полях класса; разрешён в замыканиях; view-паттерн через параметры методов. |
 | **Mut\<T\>** | Mutable borrow; только один `Mut` одновременно. |
-| **Shared\<T\>** | ARC (atomic refcount); только desktop/server; строго read-only; не требует interior mutability. |
+| **Arc\<T\>** | ARC (atomic refcount); только desktop/server; строго read-only; не требует interior mutability. |
 | **Правила Borrow Checker** | Aliasing XOR mutability; scope-based lifetime без явных аннотаций. |
 | **Правила передачи аргументов** | Таблица: что передаётся при разных комбинациях caller/callee ownership. |
 | **Interior Mutability** | Почему её нет: event loop однопоточен, actor-паттерн через `Channel`, `Atomic<T>` для счётчиков. |
@@ -380,7 +380,7 @@ Borrow checker работает; C-output безопасен по памяти. 
 - Ownership: T (owned), `Ref<T>`, `Mut<T>`, move семантика
 - Borrow checker
 - Cleanup / goto pattern в C-output
-- `Shared<T>`, `Weak<T>` (ARC)
+- `Arc<T>`, `Weak<T>` (ARC)
 - Деструктуризация с ownership
 - `Iterable<T>` протокол (`iter(): mut () => T | null`)
 - `for-of` → while-цикл через `Iterable<T>`

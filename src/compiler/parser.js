@@ -260,7 +260,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       return { kind: 'TypeObject', fields };
     }
 
-    // Optional prefix: Ref<T>, Mut<T>, Shared<T>, Weak<T>, etc.
+    // Optional prefix: Ref<T>, Mut<T>, Arc<T>, Weak<T>, etc.
     // keyof T in type position
     if (cur().type === TK.IDENT && cur().value === 'keyof') {
       eat(TK.IDENT);

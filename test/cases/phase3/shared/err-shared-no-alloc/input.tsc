@@ -1,2 +1,0 @@
-class Node { value: i32; }
-let x: Shared<Node> = new Node();

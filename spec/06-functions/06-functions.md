@@ -1,4 +1,4 @@
-﻿## Функции
+## Функции
 
 - Ключевое слово: `function`
   ```typescript
@@ -152,7 +152,7 @@ static inline void setBit(uint8_t *reg, uint8_t bit) {
     fn();  // 5 — захвачена копия на момент создания
     ```
   - Захват **по значению** (copy) для всех типов — по умолчанию. Struct copy для классов/массивов, value copy для примитивов. Для borrow-захвата — explicit capture list `[x: Ref<T>]` / `[x: Mut<T>]`
-  - Явный список захвата — те же типы что везде: `T`, `Ref<T>`, `Mut<T>`, `Shared<T>`:
+  - Явный список захвата — те же типы что везде: `T`, `Ref<T>`, `Mut<T>`, `Arc<T>`:
     ```typescript
     const fn = [data: Data]() => process(data);          // T — move (Owner)
     const fn = [data: Ref<Data>]() => data.length;       // Ref — immutable borrow

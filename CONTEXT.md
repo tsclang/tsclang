@@ -70,7 +70,7 @@ God-object with ~300+ methods. Split across **46 files** via mixin pattern (modu
 - `this.classes` — `Map<name, { fields, methods, decorators, _isHeap, _isPool, ... }>`
 - `this.interfaces` — `Map<name, { methods }>`
 - `this._typeAliases` — `Map<name, TypeRef>`
-- `define(name, info)` — adds symbol to current scope. `info` = `{ ctype, varKind, isRefParam, isMutParam, isShared, isWeak, _moved, _movedLine, _refBorrowCount, _mutQuarantined, ... }`
+- `define(name, info)` — adds symbol to current scope. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, _movedLine, _refBorrowCount, _mutQuarantined, ... }`
 
 **Borrow tracking (core safety):**
 - `this._scopeBorrowStack` — `Sym[][]` — Ref borrows per scope, auto-released on `popScope()`
@@ -171,8 +171,8 @@ typedef struct {
 | `T | null` (nullable) | `opt_T { bool has_value; T value; }` or `{ bool has_value; T* ptr; }` | primitive vs complex |
 | `Ref<T>` | `const T* ptr` | immutable borrow |
 | `Mut<T>` | `T* ptr` | mutable borrow |
-| `Shared<T>` | `T* ptr` + `_refcount`/`_weakcount` in struct | ARC, desktop only |
-| `Weak<T>` | same struct as Shared | `tsc_weak_create`/`upgrade`/`release` |
+| `Arc<T>` | `T* ptr` + `_refcount`/`_weakcount` in struct | ARC, desktop only |
+| `Weak<T>` | same struct as Arc | `tsc_weak_create`/`upgrade`/`release` |
 | `Slice<T>` | `{ T* ptr; size_t length; }` | zero-copy view |
 | interface w/ methods | fat ptr `{ void* self; const Iface_vtable* vtable; }` | dyn dispatch |
 | `@heap` class | `T* ptr` (malloc'd) | heap-allocated, auto-free at scope |
@@ -191,7 +191,7 @@ Map<K,V>             → TscMap_K_V (e.g., TscMap_string_i32)
 Result<T,E>          → Result_T_E (e.g., Result_i32_TscError)
 ```
 
-Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `shared_`, `weak_`, `opt_`, `Array_`, `Tuple_`, `TscMap_`, `Result_`
+Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `arc_`, `weak_`, `opt_`, `Array_`, `Tuple_`, `TscMap_`, `Result_`
 
 ---
 
@@ -207,7 +207,7 @@ Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `sha
 | `foo(a)` (T param) | copy | implicit borrow (no retain) | **move** (zero-out caller) |
 | `foo(a)` (Ref param) | copy | borrow | borrow (`const T*`) |
 | `foo(a)` (Mut param) | copy | borrow | borrow (`T*`) |
-| `foo(a)` (Shared param) | N/A | N/A | ARC retain |
+| `foo(a)` (Arc param) | N/A | N/A | ARC retain |
 | `return a` | copy | retain (if borrowed expr) | move (no zero-out, scope ending) |
 | spread / destruct | copy | copy + retain | **always copy** (source alive!) |
 | `arr[i]` (read) | copy | ARC copy (retain) | borrow (`Ref<T>`) |
@@ -232,11 +232,11 @@ Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `sha
 - **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit.
 - **@pool classes:** `ClassName_drop(&ref, idx)` returns slot to pool.
 
-### Shared/Weak (ARC, desktop only)
+### Arc/Weak (ARC, desktop only)
 
-- `Shared<T>` — `_refcount` + `_weakcount` embedded in struct. `tsc_arc_alloc` (calloc + refcount=1), `tsc_arc_retain`, `tsc_arc_release`.
-- `Weak<T>` — `tsc_weak_create` (weakcount++), `tsc_weak_upgrade` → `Shared<T> | null`, `tsc_weak_release`.
-- `allocator: 'static'` → `Shared<T>` = compile error.
+- `Arc<T>` — `_refcount` + `_weakcount` embedded in struct. `tsc_arc_alloc` (calloc + refcount=1), `tsc_arc_retain`, `tsc_arc_release`.
+- `Weak<T>` — `tsc_weak_create` (weakcount++), `tsc_weak_upgrade` → `Arc<T> | null`, `tsc_weak_release`.
+- `allocator: 'static'` → `Arc<T>` = compile error.
 
 ---
 
@@ -279,7 +279,7 @@ opt_T asyncFunc_poll_N(asyncFunc_frame_N* self) {
 
 - `Thread.spawn(fn)` — OS thread (pthread/Win32). **Isolates:** no shared memory.
 - Communication via `channel<T>` (SPSC ring buffer).
-- `spawn {}` blocks require `Send` type (checked by `_checkSend()`): primitives, String, Atomic, Readonly = OK; Array/Set/Map/Ref/Mut/Shared/Weak = error.
+- `spawn {}` blocks require `Send` type (checked by `_checkSend()`): primitives, String, Atomic, Readonly = OK; Array/Set/Map/Ref/Mut/Arc/Weak = error.
 - `await t.join()` — join thread from async context.
 
 ### Atomic / Volatile / ISR
@@ -304,7 +304,7 @@ Single-header C library. `#include`d in every output. Key components:
 | `Tuple_A_B` structs | Generated per-use by codegen |
 | `opt_T` structs | `{ bool has_value; T value; }` |
 | `Result_T_E` structs | `{ bool ok; T value; E error; }` for throws |
-| `tsc_arc_*` | ARC alloc/retain/release for Shared |
+| `tsc_arc_*` | ARC alloc/retain/release for Arc |
 | `tsc_weak_*` | Weak ref create/upgrade/release |
 | `tsc_closure` | Fat ptr `{ void(*fn)(void*,...); void* env; }` for closures |
 | `tsc_channel_*` | SPSC ring buffer channel |

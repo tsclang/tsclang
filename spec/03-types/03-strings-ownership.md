@@ -1,4 +1,4 @@
-﻿## 2. a — string
+## 2. a — string
 
 Строки — **immutable + ARC**. Не move, не чистый copy. Каждый владелец `String` struct делает `tsc_string_retain` при получении и `tsc_string_release` при потере значения.
 
@@ -32,14 +32,14 @@ Safe temp pattern предотвращает use-after-free при `obj.name = o
 
 Указатель на оригинальную строку. Позволяет мутировать строку через указатель. Но строки immutable по дизайну — `Mut<string>` в основном для внутренних нужд компилятора (конкатенация, изменение полей).
 
-### Shared\<T\> / Weak\<T\>
+### Arc\<T\> / Weak\<T\>
 
 | Паттерн | Семантика | C-вывод |
 |---------|-----------|---------|
-| `const b: Shared<string> = a` | Не поддерживается | Строки используют свой ARC, `Shared<string>` не нужен
-| `const b: Weak<string> = a` | Не поддерживается | Weak нужен для разрыва циклов в Shared, строки не участвуют в Shared-циклах
+| `const b: Arc<string> = a` | Не поддерживается | Строки используют свой ARC, `Arc<string>` не нужен
+| `const b: Weak<string> = a` | Не поддерживается | Weak нужен для разрыва циклов в Arc, строки не участвуют в Arc-циклах
 
-У строк уже есть встроенный ARC (_refcount в struct). `Shared<string>` был бы двойным refcounting.
+У строк уже есть встроенный ARC (_refcount в struct). `Arc<string>` был бы двойным refcounting.
 
 ### Конкатенация (+=)
 
@@ -173,7 +173,7 @@ _closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
 | Safe temp pattern | retain new → release old → assign | Присваивание без retain/release (no-ops) |
 | Implicit borrow параметров | Caller не retain, callee не release | Аналогично |
 | Замыкания с string capture | Retain в env, release в destroy fn | No-op retain/release |
-| `Shared<string>` | Не поддерживается (свой ARC) | Не поддерживается |
+| `Arc<string>` | Не поддерживается (свой ARC) | Не поддерживается |
 
 **Ключевое отличие:** на embedded нет ARC — нет `_refcount`, `retain`/`release` = no-ops. Строки выделяются из ring buffer (`_tsc_str_pool`) при конкатенации/slice; литералы — rodata (`capacity = 0`). Ring buffer не поддерживает индивидуальный `free` — память переиспользуется при переполнении. Нет sharing, нет refcount.
 

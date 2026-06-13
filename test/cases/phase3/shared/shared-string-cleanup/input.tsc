@@ -1,6 +1,0 @@
-class Item { label: string; value: i32; }
-let item = new Shared<Item>();
-item.label = "hello";
-item.value = 42;
-console.log(item.label);
-console.log(item.value);

@@ -1,9 +1,9 @@
-// [R] Shared<T> return retains — source remains accessible (ARC)
+// [R] Arc<T> return retains — source remains accessible (ARC)
 class Node { value: i32; }
-function share(n: Shared<Node>): Shared<Node> {
+function share(n: Arc<Node>): Arc<Node> {
   return n;
 }
-let x: Shared<Node> = new Node();
+let x: Arc<Node> = new Node();
 x.value = 42;
 const s = share(x);
 x.value = 99;

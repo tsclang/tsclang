@@ -1,11 +1,11 @@
 // [R] Weak<T> return does not create borrow — source remains accessible
-class Node { value: i32; next: Shared<Node> | null; prev: Weak<Node> | null; }
+class Node { value: i32; next: Arc<Node> | null; prev: Weak<Node> | null; }
 function getWeak(n: Weak<Node>): Weak<Node> {
   return n;
 }
-let a: Shared<Node> = new Node();
+let a: Arc<Node> = new Node();
 a.value = 1;
-let b: Shared<Node> = new Node();
+let b: Arc<Node> = new Node();
 b.value = 2;
 b.prev = a;
 const w = getWeak(b.prev);

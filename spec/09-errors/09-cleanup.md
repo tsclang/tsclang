@@ -20,10 +20,10 @@ cleanup:
 `Result<T, E>` — discriminated union. Когда `?` пропагирует ошибку, T никогда не был создан → утечки нет. Но когда `Result<T, E>` dropped без потребления (например, возвращён из функции и проигнорирован), компилятор генерирует `_free_Result_T_E` который проверяет дискриминант и вызывает нужный деструктор:
 
 ```c
-// генерируемый _free для Result<Shared<User>, Error>
+// генерируемый _free для Result<Arc<User>, Error>
 void _free_Result_SharedUser_Error(Result_SharedUser_Error* r) {
     if (r->is_ok) {
-        // успех — освобождаем Shared<User>
+        // успех — освобождаем Arc<User>
         SharedUser_release(r->value.ok);
     } else {
         // ошибка — освобождаем Error

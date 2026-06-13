@@ -1,2 +1,2 @@
 let a = 42;
-const s: Shared<i32> = a;
+const s: Arc<i32> = a;

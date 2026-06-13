@@ -424,7 +424,7 @@ Array_f64 merged = {.data = _d, .length = 4, .capacity = 4};
 
 ### Единое правило: всегда copy
 
-Для `Shared<T>` «copy» = retain (refcount++), для остальных — struct copy.
+Для `Arc<T>` «copy» = retain (refcount++), для остальных — struct copy.
 
 | Resource | Action | Element | TSC | TS/JS |
 |----------|--------|---------|-----|-------|
@@ -446,7 +446,7 @@ Array_f64 merged = {.data = _d, .length = 4, .capacity = 4};
 
 **Единственное расхождение с TS/JS:** class-элементы. TS = reference copy (aliased), TSC = struct copy (независимо). Это фундаментальное отличие value types от reference types.
 
-### `Shared<T>` source — retain
+### `Arc<T>` source — retain
 
 | Action | Element | TSC |
 |--------|---------|-----|
@@ -512,7 +512,7 @@ Source всегда жив. Нет move, нет E002. `let`/`const` на source 
 | Деструктуризация кортежа | ✅ | Убрать move для let source |
 | Rest tuple деструктуризация | ❌ Заглушка | Реализовать |
 | Merge (несколько spread) | ⚠️ Частично | Убрать move |
-| `Shared<T>` spread/retain | ❌ | Реализовать retain |
+| `Arc<T>` spread/retain | ❌ | Реализовать retain |
 
 ---
 

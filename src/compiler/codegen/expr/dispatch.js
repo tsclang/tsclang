@@ -535,7 +535,7 @@ export default {
           if (/^0x[0-9a-fA-F]+$/.test(exprC)) exprC += 'U';
           return `(volatile ${inner} *)${exprC}`;
         }
-        const ownershipTypes = ['Ref', 'Mut', 'Shared', 'Weak', 'Box', 'Arc', 'Rc'];
+        const ownershipTypes = ['Ref', 'Mut', 'Arc', 'Weak', 'Box', 'Rc'];
         if (node.castType.kind === 'TypeRef' && ownershipTypes.includes(node.castType.name)) {
           throw this.error(`cannot use "as" for ownership types`, node);
         }

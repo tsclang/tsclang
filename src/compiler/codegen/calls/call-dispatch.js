@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   callToC(node, lines, depth) {
     const { callee, args } = node;
 
@@ -395,18 +395,18 @@
             return fatName;
           }
         }
-        if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Shared') {
+        if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Arc') {
           const argSymSh = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
           if (argSymSh && a.expr.kind === 'Ident') {
             if (argSymSh.isRefParam) {
               throw this.error(
-                `TypeError: Cannot pass Ref<T> '${a.expr.name}' as Shared<T> — incompatible borrow types`,
+                `TypeError: Cannot pass Ref<T> '${a.expr.name}' as Arc<T> — incompatible borrow types`,
                 a.expr
               );
             }
             if (argSymSh.isMutParam) {
               throw this.error(
-                `TypeError: Cannot pass Mut<T> '${a.expr.name}' as Shared<T> — mutable borrow cannot become shared reference`,
+                `TypeError: Cannot pass Mut<T> '${a.expr.name}' as Arc<T> — mutable borrow cannot become shared reference`,
                 a.expr
               );
             }
@@ -426,9 +426,9 @@
                     a.expr
                   );
                 }
-                if (argSym2.isShared) {
+                if (argSym2.isArc) {
                   throw this.error(
-                    `TypeError: Cannot create mutable borrow of Shared<T> '${a.expr.name}' — Shared does not give exclusive access`,
+                    `TypeError: Cannot create mutable borrow of Arc<T> '${a.expr.name}' — Arc does not give exclusive access`,
                     a.expr
                   );
                 }
@@ -505,7 +505,7 @@
           const _hasFields = !!_moveClassDef?.fields;
           const _isArray = paramType.startsWith('Array_');
           const _isBorrow = param.typeAnn?.kind === 'TypeRef' &&
-            (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut' || param.typeAnn.name === 'Shared');
+            (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut' || param.typeAnn.name === 'Arc');
           if ((_hasFields || _isArray) && !_isBorrow) {
             const _moveArgSym = this.lookup(a.expr.name);
             if (_moveArgSym) {
@@ -521,9 +521,9 @@
                   a.expr
                 );
               }
-              if (_moveArgSym.isShared) {
+              if (_moveArgSym.isArc) {
                 throw this.error(
-                  `TypeError: Cannot pass Shared<T> '${a.expr.name}' as owned parameter — shared reference cannot be consumed`,
+                  `TypeError: Cannot pass Arc<T> '${a.expr.name}' as owned parameter — shared reference cannot be consumed`,
                   a.expr
                 );
               }

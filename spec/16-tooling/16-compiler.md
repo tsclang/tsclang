@@ -73,7 +73,7 @@ block end_block:
 |----------|----------|
 | `alloc x, type, value` | Создать переменную, владелец |
 | `borrow x, source, imm\|mut` | Заимствовать (`Ref`/`Mut`) |
-| `retain x` | Увеличить refcount (`Shared`) |
+| `retain x` | Увеличить refcount (`Arc`) |
 | `release x` | Уменьшить refcount |
 | `call x, fn, args` | Вызов функции, результат в `x` |
 | `assign x, value` | Присвоение |
@@ -552,10 +552,10 @@ error[TSC-E021]: property `nmae` does not exist on type `User`
 #### Embedded / платформа
 
 ```
-error[TSC-E071]: `Shared<T>` is not available on heap:false platforms
+error[TSC-E071]: `Arc<T>` is not available on heap:false platforms
   --> src/sensor.tsc:4:18
    |
- 4 |     let shared = new Shared(sensor)
+ 4 |     let shared = new Arc(sensor)
    |                  ^^^^^^^^^^^^^^^ requires heap allocation
    |
    = hint: use owned value or pass as `Ref<T>` parameter

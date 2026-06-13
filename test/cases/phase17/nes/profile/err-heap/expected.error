@@ -1,1 +1,1 @@
-"Shared<T>" requires a heap allocator; "static" allocator does not support ARC
+"Arc<T>" requires a heap allocator; "static" allocator does not support ARC

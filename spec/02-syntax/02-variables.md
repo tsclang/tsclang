@@ -1,4 +1,4 @@
-﻿## Переменные
+## Переменные
 
 - `let` — мутабельная переменная: можно переприсвоить, можно вызывать `mut` методы, можно передавать как `Mut<T>`
 - `const` — иммутабельная: нельзя переприсвоить, нельзя вызывать `mut` методы, нельзя передавать как `Mut<T>`
@@ -17,7 +17,7 @@
 | Класс, интерфейс, tuple, type alias (struct) | `{0}` (все поля нулевые) | `= {0};` |
 | Массив (`Array<T>`), Map, Set | Пустой контейнер | `= {0};` |
 | Специальные (Date, Buffer, Promise, ...) | `{0}` | `= {0};` |
-| Указатели (`Shared<T>`, `Weak<T>`, closure) | `NULL` | `= NULL;` или `= {0};` |
+| Указатели (`Arc<T>`, `Weak<T>`, closure) | `NULL` | `= NULL;` или `= {0};` |
 | `opt_T` / `T \| null` / `T?` | `null` | `= {false, 0};` |
 | `enum` | **Compile error** | — |
 
@@ -38,7 +38,7 @@ let x?: Color;             // OK — sugar for Color | null, default null
 
 - `x = null` для **non-nullable** типа → compile error
 - `x = null` для `opt_T` → `x = (opt_T){false, 0}`
-- `x = null` для указателя (`Shared<T>`, `Weak<T>`) → допустимо (pointer = NULL)
+- `x = null` для указателя (`Arc<T>`, `Weak<T>`) → допустимо (pointer = NULL)
 
 ```typescript
 let x: i32 = 5;

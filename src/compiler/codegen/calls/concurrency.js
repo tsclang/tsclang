@@ -1,4 +1,4 @@
-﻿const ORDERING_MAP = {
+const ORDERING_MAP = {
   'LoadOrdering.Acquire': 'memory_order_acquire',
   'LoadOrdering.SeqCst': 'memory_order_seq_cst',
   'LoadOrdering.Relaxed': 'memory_order_relaxed',
@@ -18,7 +18,7 @@ export default {
       const atomicSym = objName2 ? this.lookup(objName2) : null;
       if (atomicSym?._isAtomic) {
         const inner = atomicSym._atomicInner ?? 'int32_t';
-        const isPtr = atomicSym._isSharedAtomic;
+        const isPtr = atomicSym._isArcAtomic;
         const ref = isPtr ? `${objName2}->value` : `${objName2}.value`;
 
         const resolveOrdering = (argNode, op) => {

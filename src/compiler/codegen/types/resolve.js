@@ -39,7 +39,7 @@ export default {
         return PRIMITIVE_MAP[name];
       }
 
-      if (name === 'Shared' || name === 'Weak') {
+      if (name === 'Arc' || name === 'Weak') {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
         const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize','isize','char']);
         if (innerName && COPY_ONLY.has(innerName)) {

@@ -1,4 +1,4 @@
-﻿## `const` vs `let`
+## `const` vs `let`
 
 - `const obj` — нельзя вызывать `mut` методы, нельзя передать как `Mut`, нельзя move
 - `let obj` — можно всё
@@ -15,9 +15,9 @@ foo(c2);  // ok
 // move из const — запрещён
 const arr = [user1, user2];
 let b = arr;       // ошибка: cannot move out of const
-                   // hint: use Shared<T> if shared ownership is needed
+                   // hint: use Arc<T> if shared ownership is needed
 
-const arr2: Shared<User[]> = [user1, user2];
+const arr2: Arc<User[]> = [user1, user2];
 let b2 = arr2;     // ok — retain, не move
 ```
 

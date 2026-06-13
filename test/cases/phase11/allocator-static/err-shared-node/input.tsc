@@ -1,2 +1,2 @@
 class Node { value: i32; }
-let n = new Shared<Node>();
+let n = new Arc<Node>();

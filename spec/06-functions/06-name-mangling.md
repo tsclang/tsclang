@@ -1,4 +1,4 @@
-﻿## Name mangling — формальная схема
+## Name mangling — формальная схема
 
 ### Правила именования пользовательских типов
 
@@ -10,7 +10,7 @@ class ref_User { } // ❌ ошибка: type name uses reserved mangling prefix
 class User { }     // ✅
 ```
 
-Зарезервированные префиксы имён типов: `ref_`, `mut_`, `shared_`, `weak_`, `opt_`, `Array_`. Это гарантирует отсутствие коллизий с encoding ownership-квалификаторов.
+Зарезервированные префиксы имён типов: `ref_`, `mut_`, `arc_`, `weak_`, `opt_`, `Array_`. Это гарантирует отсутствие коллизий с encoding ownership-квалификаторов.
 
 ### Кодирование типов
 
@@ -23,7 +23,7 @@ class User { }     // ✅
 | `UserType` (non-generic) | `UserType` |
 | `Ref<T>` | `ref_` + enc(T) |
 | `Mut<T>` | `mut_` + enc(T) |
-| `Shared<T>` | `shared_` + enc(T) |
+| `Arc<T>` | `arc_` + enc(T) |
 | `Weak<T>` | `weak_` + enc(T) |
 | `T | null` | `opt_` + enc(T) |
 | `T[]` | `Array_` + enc(T) |
@@ -45,7 +45,7 @@ Ref<User>                   →  ref_User
 Mut<i32[]>                  →  mut_Array_i32
 User | null                 →  opt_User
 Map<string, User[]>         →  Map_string_Array_User
-Shared<Node>                →  shared_Node
+Arc<Node>                →  arc_Node
 ```
 
 ### Манглинг функций

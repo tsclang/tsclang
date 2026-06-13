@@ -55,9 +55,9 @@ const m1: Mut<Box> = d;
 const m2: Mut<Box> = d;  // ❌ Cannot create two simultaneous mutable borrows
 ```
 
-## Shared\<T\> / Weak\<T\> — см. `04-shared-weak.md`
+## Arc\<T\> / Weak\<T\> — см. `04-arc-weak.md`
 
-Полная спецификация ARC ownership, Weak references, upgrade, разрыв циклов, Desktop vs Embedded — см. `04-shared-weak.md`.
+Полная спецификация ARC ownership, Weak references, upgrade, разрыв циклов, Desktop vs Embedded — см. `04-arc-weak.md`.
 
 ## Правила Borrow Checker
 
@@ -106,11 +106,11 @@ Caller **не** делает `tsc_string_retain`; callee **не** делает `
 function toRef(x: Ref<User>): void { ... }        // borrow
 function toMut(x: Mut<User>): void { ... }        // mutable borrow
 function toOwned(x: User): void { ... }           // move
-function toShared(x: Shared<User>): void { ... }  // retain
+function toShared(x: Arc<User>): void { ... }  // retain
 
 let u = new User();
 const c = new User();
-let s: Shared<User> = new User();
+let s: Arc<User> = new User();
 
 toRef(u);    // ok — auto borrow, u жив
 toRef(c);    // ok — auto borrow, c жив
@@ -119,10 +119,10 @@ toMut(c);    // ошибка: нельзя Mut<T> из const
 toOwned(u);  // ok — move, u недоступен после вызова
 toOwned(c);  // ошибка: нельзя move из const
 toShared(s); // ok — retain (refcount++)
-toShared(u); // ошибка: u не является Shared<T>
+toShared(u); // ошибка: u не является Arc<T>
 ```
 
-**Передача через промежуточный тип (Ref/Mut/Shared как источник):**
+**Передача через промежуточный тип (Ref/Mut/Arc как источник):**
 ```typescript
 function bar(u: Ref<User>): void {
     toRef(u);    // ok — re-borrow
@@ -137,31 +137,31 @@ function baz(u: Mut<User>): void {
     toOwned(u);  // ошибка: нельзя move из Mut
 }
 
-function qux(u: Shared<User>): void {
-    toRef(u);    // ok — borrow из Shared
-    toMut(u);    // ошибка: Shared не даёт Mut (нет эксклюзивного владения)
-    toOwned(u);  // ошибка: нельзя move из Shared
+function qux(u: Arc<User>): void {
+    toRef(u);    // ok — borrow из Arc
+    toMut(u);    // ошибка: Arc не даёт Mut (нет эксклюзивного владения)
+    toOwned(u);  // ошибка: нельзя move из Arc
     toShared(u); // ok — retain
 }
 ```
 
 **Матрица совместимости:**
 
-| Источник ↓ \ Параметр → | `Ref<T>` | `Mut<T>` | `T` (owned) | `Shared<T>` |
+| Источник ↓ \ Параметр → | `Ref<T>` | `Mut<T>` | `T` (owned) | `Arc<T>` |
 |--------------------------|----------|----------|-------------|-------------|
 | `let T`                  | ✅ auto borrow | ✅ auto mut borrow | ✅ move | ❌ |
 | `const T`                | ✅ auto borrow | ❌ | ❌ | ❌ |
 | `Ref<T>`                 | ✅ re-borrow | ❌ | ❌ | ❌ |
 | `Mut<T>`                 | ✅ понижение | ✅ re-borrow | ❌ | ❌ |
-| `Shared<T>`              | ✅ borrow | ❌ | ❌ | ✅ retain |
+| `Arc<T>`              | ✅ borrow | ❌ | ❌ | ✅ retain |
 
-> **Примечание к реализации:** Все ❌-ячейки матрицы проверяются компилятором на этапе codegen. Для `Ref→Mut`, `Mut→Shared`, `Ref→owned`, `Mut→owned`, `Shared→owned` — compile-time error с понятным сообщением. `const→Mut` и `const→owned` — тоже error (const binding нельзя переместить или мутировать).
+> **Примечание к реализации:** Все ❌-ячейки матрицы проверяются компилятором на этапе codegen. Для `Ref→Mut`, `Mut→Arc`, `Ref→owned`, `Mut→owned`, `Arc→owned` — compile-time error с понятным сообщением. `const→Mut` и `const→owned` — тоже error (const binding нельзя переместить или мутировать).
 
 ## Interior Mutability — почему её нет
 
-`Shared<T>` — строго read-only (матрица: `Shared<T>` → `Mut<T>` = ❌). Это намеренное ограничение.
+`Arc<T>` — строго read-only (матрица: `Arc<T>` → `Mut<T>` = ❌). Это намеренное ограничение.
 
-**На embedded** `Shared<T>` нет вообще — нет heap, нет ARC. Глобальное мутабельное состояние — через `@static let`.
+**На embedded** `Arc<T>` нет вообще — нет heap, нет ARC. Глобальное мутабельное состояние — через `@static let`.
 
 ## `@static let` — мутабельное глобальное состояние
 
@@ -203,9 +203,9 @@ Thread.spawn(() => { counter++ })  // ошибка: @static variable captured in
 
 > **Реализовано:** Компилятор проверяет захват `@static let` переменных (с `_isStaticArray` / `_isStaticMap` маркерами) в spawn-блоках и выбрасывает ошибку. Также реализована рекурсивная Send-проверка: Array, Set, Map, opt-типы и классы с непримитивными полями отвергаются. Разрешены: примитивы, string, Atomic, Readonly.
 
-**На desktop** event loop однопоточный. `Shared<T>` с мутацией нужен только при `Thread.spawn`. Реальные кейсы и их решения:
+**На desktop** event loop однопоточный. `Arc<T>` с мутацией нужен только при `Thread.spawn`. Реальные кейсы и их решения:
 
-| Кейс | Нужен Shared<T> + мутация? | Альтернатива |
+| Кейс | Нужен Arc<T> + мутация? | Альтернатива |
 |------|---------------------------|--------------|
 | Счётчик запросов | да | `Atomic<i32>` |
 | HTTP-кэш | только multi-thread | actor через `Channel` |
@@ -217,9 +217,9 @@ Thread.spawn(() => { counter++ })  // ошибка: @static variable captured in
 **Actor-паттерн** покрывает все multi-thread кейсы — один поток владеет состоянием, остальные шлют запросы через `Channel`:
 
 ```typescript
-// вместо Shared<Cache> с мутацией:
+// вместо Arc<Cache> с мутацией:
 async function cacheActor(rx: Rx<CacheRequest>): Promise<void> {
-    let cache = new Map<string, Buffer>()  // owned, не Shared
+    let cache = new Map<string, Buffer>()  // owned, не Arc
     for await (const req of rx) {
         match (req) {
             Get { key, reply } => reply.send(cache.get(key)),
@@ -322,23 +322,23 @@ const m = pickMut(b1, b2)
 box.x = 99   // ✅ ok
 ```
 
-### `Shared<T>` / `Weak<T>` return — нет borrow tracking
+### `Arc<T>` / `Weak<T>` return — нет borrow tracking
 
-Возврат `Shared<T>` и `Weak<T>` **не создаёт borrow** — они управляют памятью через refcount. Источник остаётся полностью доступен:
+Возврат `Arc<T>` и `Weak<T>` **не создаёт borrow** — они управляют памятью через refcount. Источник остаётся полностью доступен:
 
 ```typescript
-function share(n: Shared<Node>): Shared<Node> {
+function share(n: Arc<Node>): Arc<Node> {
     return n   // refcount++ — без borrow
 }
 
-let x: Shared<Node> = new Node()
+let x: Arc<Node> = new Node()
 const s = share(x)
-x.value = 99   // ✅ ok — Shared не блокирует источник
+x.value = 99   // ✅ ok — Arc не блокирует источник
 ```
 
 ### Почему консервативно
 
-При нескольких Ref/Mut-параметрах компилятор заимствует **все**, даже если функция возвращает только один. Это sound: компилятор не может знать какой именно параметр вернётся. Обход — `clone()` или `Shared<T>`:
+При нескольких Ref/Mut-параметрах компилятор заимствует **все**, даже если функция возвращает только один. Это sound: компилятор не может знать какой именно параметр вернётся. Обход — `clone()` или `Arc<T>`:
 
 ```typescript
 function getLongerOwned(a: Ref<string>, b: Ref<string>): string {

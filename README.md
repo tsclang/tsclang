@@ -30,7 +30,7 @@ tsclang run src/main.tsc
 ## Language features
 
 - TypeScript syntax: `const`/`let`, arrow functions, classes, generics, enums, interfaces
-- Ownership and borrow checker (Rust-inspired): `Ref<T>`, `Mut<T>`, `Shared<T>` (ARC)
+- Ownership and borrow checker (Rust-inspired): `Ref<T>`, `Mut<T>`, `Arc<T>` (ARC)
 - Async/await → C state machine (no runtime, no heap required for embedded)
 - Threads, channels, atomics
 - `std/fs`, `std/net`, `std/ws`, `std/io` — real POSIX/BSD sockets implementation

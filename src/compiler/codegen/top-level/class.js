@@ -10,7 +10,7 @@ export default {
     }
 
     // Reserved prefix check (runs before PascalCase to give precise message)
-    for (const pfx of ['ref_', 'mut_', 'shared_', 'weak_', 'opt_', 'Array_']) {
+    for (const pfx of ['ref_', 'mut_', 'arc_', 'weak_', 'opt_', 'Array_']) {
       if (name.startsWith(pfx)) {
         throw this.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
       }
@@ -142,7 +142,7 @@ export default {
     // Map TSClang base class names → C names
     const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
 
-    // Check if this class is used as Shared<T> or Weak<T>
+    // Check if this class is used as Arc<T> or Weak<T>
     const arcInfo = this._arcClasses?.get(name);
 
     // All-static class with no fields → skip struct unless class name used as a type
@@ -181,10 +181,10 @@ export default {
 
       if (arcInfo) {
         const arcPre = arcInfo.refFirst ? [
-          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
+          ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ] : [];
         const arcPost = arcInfo.refFirst ? [] : [
-          ...(arcInfo.shared || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
+          ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
         const isSelfRef = fields.some(f => {

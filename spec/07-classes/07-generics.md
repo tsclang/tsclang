@@ -1,4 +1,4 @@
-﻿## Generics
+## Generics
 
 - **Монорфизация** — компилятор генерирует отдельный код для каждого конкретного типа:
   - `identity<i32>` → `identity_i32` в C
@@ -36,11 +36,11 @@
   first<i32>(arr);   // ok — примитив, копируется
   first<User>(arr);  // ошибка в точке вызова: User — сложный тип, нельзя вернуть T из Ref<T[]>
   ```
-- **Ownership с generics** — `Ref<T>`, `Mut<T>`, `Shared<T>`, `Weak<T>` работают как обычно:
+- **Ownership с generics** — `Ref<T>`, `Mut<T>`, `Arc<T>`, `Weak<T>` работают как обычно:
   ```typescript
   function first<T>(arr: Ref<T[]>): Ref<T> { ... }  // borrow элемента
   function pop<T>(arr: Mut<T[]>): T { ... }          // move с удалением
-  function process<T>(graph: Shared<T>) { ... }      // ARC
+  function process<T>(graph: Arc<T>) { ... }      // ARC
   ```
 
 ## Extension Methods

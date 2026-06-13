@@ -50,7 +50,7 @@ export function mangleType(typeNode, defaultNumber = 'f64') {
     const { name, typeArgs } = typeNode;
     if (name === 'Ref')    return 'ref_' + mangleType(typeArgs[0], defaultNumber);
     if (name === 'Mut')    return 'mut_' + mangleType(typeArgs[0], defaultNumber);
-    if (name === 'Shared') return 'shared_' + mangleType(typeArgs[0], defaultNumber);
+    if (name === 'Arc') return 'arc_' + mangleType(typeArgs[0], defaultNumber);
     if (name === 'Weak')   return 'weak_' + mangleType(typeArgs[0], defaultNumber);
     if (typeArgs.length === 0) {
       if (name === 'number') return defaultNumber;

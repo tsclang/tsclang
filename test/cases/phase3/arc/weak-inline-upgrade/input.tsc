@@ -1,0 +1,13 @@
+// [R] inline w.upgrade() in if-condition (not let x = ...)
+class Data {
+    x: i32;
+}
+let d = new Arc<Data>();
+d.x = 42;
+let w = new Weak<Data>(d);
+if (w.upgrade() != null) {
+    let strong = w.upgrade();
+    if (strong != null) {
+        console.log(strong.x);
+    }
+}
