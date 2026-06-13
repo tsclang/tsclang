@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t value; } Gem;
+typedef struct { bool ok; union { int _dummy; TscError error; }; } Result_void_TscError;
 typedef struct { bool has_value; Gem *value; int _pool_idx; } opt_ref_Gem;
 
 static Gem _gem_pool[4];
@@ -23,7 +24,7 @@ static void Gem_drop(opt_ref_Gem g) {
 Result_void_TscError test(void) {
     opt_ref_Gem _pool_0 = Gem_alloc();
     if (!_pool_0.has_value) {
-        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Gem"))};
+        return (Result_void_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Gem") }};
     }
     opt_ref_Gem g = _pool_0;
     g.value->value = 99;

@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t count; } Counter;
+typedef struct { bool ok; union { int32_t value; TscError error; }; } Result_i32_TscError;
 typedef struct { bool has_value; Counter *value; int _pool_idx; } opt_ref_Counter;
 
 static Counter Counter_new(void) {
@@ -37,7 +38,7 @@ static void Counter_drop(opt_ref_Counter c) {
 Result_i32_TscError _tsc_main(void) {
     opt_ref_Counter _pool_0 = Counter_alloc();
     if (!_pool_0.has_value) {
-        return (Result_i32_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Counter"))};
+        return (Result_i32_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Counter") }};
     }
     opt_ref_Counter c = _pool_0;
     Counter_increment(c.value);
@@ -49,7 +50,9 @@ Result_i32_TscError _tsc_main(void) {
 int main(void) {
     TSC_INIT();
     Result_i32_TscError _unwrap_1 = _tsc_main();
-    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error._base.message); }
+    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error.message); }
     printf("%d\n", _unwrap_1.value);
-    return _tsc_main();
+    Result_i32_TscError _unwrap_main = _tsc_main();
+    if (!_unwrap_main.ok) { tsc_panic(_unwrap_main.error.message); }
+    return _unwrap_main.value;
 }

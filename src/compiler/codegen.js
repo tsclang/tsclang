@@ -233,6 +233,9 @@ class Context {
     // Explicit user-defined main() — rename to __main and call from generated int main()
     this._hasExplicitMain = false;
     this._explicitMainRetType = null;
+    this._explicitMainThrows = false;
+    this._explicitMainResultType = null;
+    this._explicitMainErrTypes = null;
 
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
@@ -332,6 +335,10 @@ class Context {
     this._scopeMgr.define(name, info);
   }
   _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
+  _errMsgField(errTypes) {
+    const errType = errTypes?.[0];
+    return errType === 'TscError' ? 'message' : '_base.message';
+  }
   _isEmbedded() {
     return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
   }
@@ -769,7 +776,17 @@ class Context {
         parts.push(`${this.ind()}${mainLevel.list[i]};`);
       }
       if (this._hasExplicitMain) {
-        if (this._explicitMainRetType === 'void') {
+        if (this._explicitMainThrows) {
+          const unwrap = `_unwrap_main`;
+          parts.push(`${this.ind()}${this._explicitMainResultType} ${unwrap} = _tsc_main();`);
+          const msgField = this._errMsgField(this._explicitMainErrTypes);
+          parts.push(`${this.ind()}if (!${unwrap}.ok) { tsc_panic(${unwrap}.error.${msgField}); }`);
+          if (this._explicitMainRetType === 'void') {
+            parts.push(`${this.ind()}return 0;`);
+          } else {
+            parts.push(`${this.ind()}return ${unwrap}.value;`);
+          }
+        } else if (this._explicitMainRetType === 'void') {
           parts.push(`${this.ind()}_tsc_main();`);
           parts.push(`${this.ind()}return 0;`);
         } else {

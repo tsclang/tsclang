@@ -2,6 +2,7 @@
 
 typedef struct { int32_t id; int32_t temp; } Sensor;
 typedef struct { bool has_value; Sensor *value; int _pool_idx; } opt_ref_Sensor;
+typedef struct { bool ok; union { opt_ref_Sensor value; TscError error; }; } Result_opt_ref_Sensor_TscError;
 
 static Sensor Sensor_new(int32_t id, int32_t temp) {
     Sensor self = {0};
@@ -26,7 +27,7 @@ static opt_ref_Sensor Sensor_alloc(void) {
 Result_opt_ref_Sensor_TscError makeSensor_i32_i32(int32_t id, int32_t t) {
     opt_ref_Sensor _pool_0 = Sensor_alloc();
     if (!_pool_0.has_value) {
-        return (Result_opt_ref_Sensor_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Sensor"))};
+        return (Result_opt_ref_Sensor_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Sensor") }};
     }
     *_pool_0.value = Sensor_new(id, t);
     opt_ref_Sensor s = _pool_0;

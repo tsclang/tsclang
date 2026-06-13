@@ -689,7 +689,7 @@ export default {
 
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (classSym?._isHeap) {
-      const poolClassName = classSym.ctype;
+      const poolClassName = classSym.ctype.replace(/ \*$/, '');
       const poolCls = this.classes.get(poolClassName);
       if (poolCls) {
         const methodInfo = poolCls._methodNames?.get(prop);

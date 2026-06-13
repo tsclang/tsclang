@@ -1,7 +1,8 @@
 #include "runtime.h"
 #include <stdlib.h>
 
-typedef struct { int32_t value; Node *next; } Node;
+typedef struct Node Node;
+struct Node { int32_t value; Node *next; };
 
 static Node Node_new(int32_t v) {
     Node self = {0};

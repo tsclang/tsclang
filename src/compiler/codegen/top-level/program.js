@@ -256,37 +256,6 @@ export default {
       }
     }
 
-    // Pre-scan: collect all Result typedefs needed, grouped by errKey
-    // Map: errKey → [{ retCtype, retIdent, resultName }]
-    this._resultTypesByErrKey = new Map();
-    this._emittedResultErrKeys = new Set();
-    const _basicTypeMap = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
-      'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
-      'f32':'float','f64':'double','bool':'bool','string':'String',
-      'void':'void','usize':'size_t','char':'char' };
-    for (const node of ast.body) {
-      const n = node.kind === 'Export' ? node.decl : node;
-      if (n?.kind !== 'FuncDecl' || !n.throwsTypes?.length) continue;
-      const throwsNames = _flattenThrowsNames(n.throwsTypes);
-      if (!throwsNames.length) continue;
-      const errKey = throwsNames.join('_');
-      let retCtype;
-      if (!n.returnType || (n.returnType.kind === 'TypeRef' && n.returnType.name === 'void')) {
-        retCtype = 'void';
-      } else if (n.returnType.kind === 'TypeRef') {
-        retCtype = _basicTypeMap[n.returnType.name] ?? n.returnType.name;
-      } else {
-        retCtype = 'void';
-      }
-      const retIdent = this.cTypeToIdent(retCtype);
-      const resultName = `Result_${retIdent}_${errKey}`;
-      if (!this._resultTypesByErrKey.has(errKey)) this._resultTypesByErrKey.set(errKey, []);
-      const list = this._resultTypesByErrKey.get(errKey);
-      if (!list.some(r => r.resultName === resultName)) {
-        list.push({ retCtype, retIdent, resultName });
-      }
-    }
-
     // Pre-scan: collect names used as decorators (so we can suppress C emission for those functions)
     this._decoratorFns = new Map();   // name → FuncDecl AST
     this._decoratorNames = new Set(); // all names used with @

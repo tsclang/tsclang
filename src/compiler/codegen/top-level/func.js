@@ -283,36 +283,31 @@ export default {
       // Rename 'ok' → 'ok_fn' to avoid C ambiguity
       if (cname === 'ok') cname = 'ok_fn';
 
-      // Emit all Result typedefs for this errKey (first time only)
+      // Emit union error types on first encounter of errKey
       if (!this._emittedResultErrKeys.has(errKey)) {
         this._emittedResultErrKeys.add(errKey);
         if (throwsNames.length > 1) {
-          // Union error: emit _ErrTag + _ErrUnion + blank + all Results + blank
           const tagEntries = throwsNames.map((n, i) => `_Err_${n} = ${i}`).join(', ');
           this.addTop(`typedef enum { ${tagEntries} } _ErrTag_${errKey};`);
           this.addTop(`typedef struct {`);
           this.addTop(`    _ErrTag_${errKey} tag;`);
           this.addTop(`    union { ${throwsNames.map((n, i) => `${n} _${i};`).join(' ')} };`);
           this.addTop(`} _ErrUnion_${errKey};`);
-          this.typedefs.push('');  // blank between _ErrUnion and Result typedefs
+          this.typedefs.push('');
         }
-        // Emit all Result types for this errKey (in pre-scan order)
-        const resultList = this._resultTypesByErrKey.get(errKey) ?? [];
-        for (const r of resultList) {
-          if (throwsNames.length > 1) {
-            // Union: multi-line Result
-            const valPart = r.retCtype === 'void' ? 'int _dummy' : `${r.retCtype} value`;
-            this.addTop(`typedef struct {`);
-            this.addTop(`    bool ok;`);
-            this.addTop(`    union { ${valPart}; _ErrUnion_${errKey} error; };`);
-            this.addTop(`} ${r.resultName};`);
-          } else {
-            // Single: single-line Result
-            const valPart = r.retCtype === 'void' ? 'int _dummy' : `${r.retCtype} value`;
-            this.addTop(`typedef struct { bool ok; union { ${valPart}; ${throwsNames[0]} error; }; } ${r.resultName};`);
-          }
+      }
+      // Emit this function's Result type (lazy, using resolved retType)
+      if (!this._emittedResultTypes.has(resultType)) {
+        this._emittedResultTypes.add(resultType);
+        const valPart = isVoid ? 'int _dummy' : `${retType} value`;
+        if (throwsNames.length > 1) {
+          this.addTop(`typedef struct {`);
+          this.addTop(`    bool ok;`);
+          this.addTop(`    union { ${valPart}; _ErrUnion_${errKey} error; };`);
+          this.addTop(`} ${resultType};`);
+        } else {
+          this.addTop(`typedef struct { bool ok; union { ${valPart}; ${throwsNames[0]} error; }; } ${resultType};`);
         }
-        if (throwsNames.length > 1) this.typedefs.push('');  // blank after union Result typedefs
       }
 
       // Build throwsCtx for function body
@@ -325,6 +320,12 @@ export default {
       };
       // Replace retType with Result type
       retType = resultType;
+    }
+
+    if (name === 'main' && !node.async && !generator) {
+      this._explicitMainThrows = throwsCtx !== null;
+      this._explicitMainResultType = throwsCtx ? throwsCtx.resultType : null;
+      this._explicitMainErrTypes = throwsCtx ? throwsCtx.throwsNames : null;
     }
 
     // never return type: body must end with throw/abort

@@ -23,10 +23,10 @@ static void Slot_drop(opt_ref_Slot s) {
 int32_t _tsc_main(void) {
     int32_t count = 0;
     for (int32_t i = 0; i < 5; i = i + 1) {
-        Error _catch_err_0 = {0};
+        TscError _catch_err_0 = {0};
     opt_ref_Slot _pool_1 = Slot_alloc();
     if (!_pool_1.has_value) {
-        _catch_err_0 = Error_new(STR_LIT("pool exhausted: Slot"));
+        _catch_err_0 = (TscError){ .message = STR_LIT("pool exhausted: Slot") };
         goto _catch_0;
     }
         opt_ref_Slot s = _pool_1;

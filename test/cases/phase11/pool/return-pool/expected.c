@@ -2,6 +2,7 @@
 
 typedef struct { bool active; } Spark;
 typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
+typedef struct { bool ok; union { opt_ref_Spark value; TscError error; }; } Result_opt_ref_Spark_TscError;
 
 static Spark _spark_pool[4];
 static uint8_t _spark_pool_mask = 0;
@@ -19,7 +20,7 @@ static opt_ref_Spark Spark_alloc(void) {
 Result_opt_ref_Spark_TscError create(void) {
     opt_ref_Spark _pool_0 = Spark_alloc();
     if (!_pool_0.has_value) {
-        return (Result_opt_ref_Spark_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Spark"))};
+        return (Result_opt_ref_Spark_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Spark") }};
     }
     opt_ref_Spark s = _pool_0;
     s.value->active = true;

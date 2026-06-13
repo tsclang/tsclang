@@ -889,22 +889,23 @@ export default {
           this._emitPoolDrops(lines, I);
           const ctx = this._throwsCtx;
           if (val?.kind === 'New') {
-            const errClass = val.name;
+            const errClass = val.name === 'Error' ? 'TscError' : val.name;
             const msgArg = val.args?.[0];
             const msgC = msgArg ? this.exprToC(msgArg.expr ?? msgArg, lines, depth) : 'STR_LIT("")';
+            const errCtor = errClass === 'TscError' ? `(TscError){ .message = ${msgC} }` : `${errClass}_new(${msgC})`;
             if (ctx.throwsNames.length === 1) {
               if (this._usesGotoCleanup) {
                 this._emitFuncCleanup(lines, I);
-                p(`_result = (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+                p(`_result = (${ctx.resultType}){.ok = false, .error = ${errCtor}};`);
                 p(`goto cleanup;`);
               } else {
                 this._emitFuncCleanup(lines, I);
-                p(`return (${ctx.resultType}){.ok = false, .error = ${errClass}_new(${msgC})};`);
+                p(`return (${ctx.resultType}){.ok = false, .error = ${errCtor}};`);
               }
             } else {
               const idx = ctx.throwsNames.indexOf(errClass);
               const errUnionName = `_ErrUnion_${ctx.errKey}`;
-              p(`${errUnionName} _err = {.tag = _Err_${errClass}, ._${idx} = ${errClass}_new(${msgC})};`);
+              p(`${errUnionName} _err = {.tag = _Err_${errClass}, ._${idx} = ${errCtor}};`);
               if (this._usesGotoCleanup) {
                 this._emitFuncCleanup(lines, I);
                 p(`_result = (${ctx.resultType}){.ok = false, .error = _err};`);
@@ -992,7 +993,7 @@ export default {
             const errVar = `_catch_err_${catchIdx}`;
             const catches = node.catches ?? [];
 
-            p(`Error ${errVar} = {0};`);
+            p(`TscError ${errVar} = {0};`);
 
             const prevInTryBlock = this._inTryBlock;
             const prevTryCatchInfo = this._tryCatchInfo;
@@ -1003,12 +1004,12 @@ export default {
               const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
               if (isThrowNew) {
                 const val = s.value;
-                const errClass = val.name;
+                const errClass = val.name === 'Error' ? 'TscError' : val.name;
                 const errVarName = `_err_${this.tempCount++}`;
                 const errC = this.exprToC(val, lines, depth);
                 p(`${errClass} ${errVarName} = ${errC};`);
                 for (const c of catches) {
-                  if (!c.typeAnn || c.typeAnn.name === errClass) {
+                  if (!c.typeAnn || c.typeAnn.name === errClass || (errClass === 'TscError' && c.typeAnn?.name === 'Error')) {
                     this.pushScope();
                     this.define(c.param, { ctype: errClass, _alias: errVarName });
                     this.visitBlock(c.body, lines, depth);
@@ -1028,7 +1029,7 @@ export default {
             for (const c of catches) {
               this.pushScope();
               if (c.param) {
-                const catchType = c.typeAnn?.name ?? 'Error';
+                const catchType = c.typeAnn?.name === 'Error' ? 'TscError' : (c.typeAnn?.name ?? 'TscError');
                 this.define(c.param, { ctype: catchType, _alias: errVar });
               }
               this.visitBlock(c.body, lines, depth);
@@ -1047,12 +1048,12 @@ export default {
               const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
               if (isThrowNew) {
                 const val = s.value;
-                const errClass = val.name;
+                const errClass = val.name === 'Error' ? 'TscError' : val.name;
                 const errVarName = `_err_${this.tempCount++}`;
                 const errC = this.exprToC(val, lines, depth);
                 p(`${errClass} ${errVarName} = ${errC};`);
                 for (const c of node.catches) {
-                  if (!c.typeAnn || c.typeAnn.name === errClass) {
+                  if (!c.typeAnn || c.typeAnn.name === errClass || (errClass === 'TscError' && c.typeAnn?.name === 'Error')) {
                     this.pushScope();
                     this.define(c.param, { ctype: errClass, _alias: errVarName });
                     this.visitBlock(c.body, lines, depth);

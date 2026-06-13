@@ -169,8 +169,12 @@ export default {
         this.includes.add('#include <stdlib.h>');
         lines.push(`${cname} *${tmpName} = (${cname} *)tsc_malloc(sizeof(${cname}));`);
         const hasCtor = cls.methods?.some(m => m.name === 'constructor');
-        const ctorArgs = hasCtor ? node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ') : '';
-        lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
+        if (hasCtor) {
+          const ctorArgs = node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
+          lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
+        } else {
+          lines.push(`*${tmpName} = (${cname}){0};`);
+        }
         return tmpName;
       }
       // Pool class: new PoolClass() → alloc from pool + null check
@@ -184,7 +188,7 @@ export default {
           throw this.error(`pool allocation via "new ${name}()" may fail; wrap in try/catch or declare function as "throws Error"`, node);
         }
         lines.push(`if (!${tmpName}.has_value) {`);
-        const errC = `Error_new(STR_LIT("pool exhausted: ${name}"))`;
+        const errC = `(TscError){ .message = STR_LIT("pool exhausted: ${name}") }`;
         if (this._usesGotoCleanup) {
           lines.push(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${errC}};`);
           lines.push(`    goto cleanup;`);

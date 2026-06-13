@@ -198,9 +198,17 @@ export default {
           this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
-        // C does not allow empty structs; use a dummy field when no user fields exist
+        const isSelfRef = fields.some(f => {
+          const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
+          return ct.includes(name + ' *') || ct.includes(name + '*');
+        });
         const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
-        this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
+        if (isSelfRef) {
+          this.addTop(`typedef struct ${cname} ${cname};`);
+          this.addTop(`struct${structAttr} ${cname} { ${fieldContent} };`);
+        } else {
+          this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
+        }
       }
 
       // For throws classes: emit _new function directly to typedefs (so it appears between

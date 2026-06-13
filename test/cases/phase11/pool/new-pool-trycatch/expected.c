@@ -18,10 +18,10 @@ static opt_ref_Gem Gem_alloc(void) {
 
 int main(void) {
     TSC_INIT();
-    Error _catch_err_0 = {0};
+    TscError _catch_err_0 = {0};
     opt_ref_Gem _pool_1 = Gem_alloc();
     if (!_pool_1.has_value) {
-        _catch_err_0 = Error_new(STR_LIT("pool exhausted: Gem"));
+        _catch_err_0 = (TscError){ .message = STR_LIT("pool exhausted: Gem") };
         goto _catch_0;
     }
     opt_ref_Gem g = _pool_1;

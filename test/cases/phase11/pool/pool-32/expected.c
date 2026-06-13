@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { int32_t id; } Item;
+typedef struct { bool ok; union { int32_t value; TscError error; }; } Result_i32_TscError;
 typedef struct { bool has_value; Item *value; int _pool_idx; } opt_ref_Item;
 
 static Item _item_pool[32];
@@ -23,7 +24,7 @@ static void Item_drop(opt_ref_Item i) {
 Result_i32_TscError _tsc_main(void) {
     opt_ref_Item _pool_0 = Item_alloc();
     if (!_pool_0.has_value) {
-        return (Result_i32_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Item"))};
+        return (Result_i32_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Item") }};
     }
     opt_ref_Item a = _pool_0;
     a.value->id = 1;
@@ -34,7 +35,9 @@ Result_i32_TscError _tsc_main(void) {
 int main(void) {
     TSC_INIT();
     Result_i32_TscError _unwrap_1 = _tsc_main();
-    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error._base.message); }
+    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error.message); }
     printf("%d\n", _unwrap_1.value);
-    return _tsc_main();
+    Result_i32_TscError _unwrap_main = _tsc_main();
+    if (!_unwrap_main.ok) { tsc_panic(_unwrap_main.error.message); }
+    return _unwrap_main.value;
 }

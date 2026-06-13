@@ -256,6 +256,12 @@ export default {
             return `tsc_url_search(&${node.object.name})`;
           }
         }
+        if (!sym) {
+          const inferredType = this.inferType(node.object);
+          if (inferredType?.endsWith(' *')) {
+            return `${objC}->${node.prop}`;
+          }
+        }
         return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
       }
 

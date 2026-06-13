@@ -297,7 +297,7 @@
         const fnName = this.currentFuncName ?? '<function>';
         throw this.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
       }
-      p(`if (!${resName}.ok) { tsc_panic(${resName}.error._base.message); }`);
+      p(`if (!${resName}.ok) { tsc_panic(${resName}.error.${this._errMsgField(calleeSym._resultErrTypes)}); }`);
     }
 
     // Bind the value

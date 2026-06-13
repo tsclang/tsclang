@@ -2,6 +2,7 @@
 
 typedef struct { int32_t id; } Node;
 typedef struct { bool has_value; Node *value; int _pool_idx; } opt_ref_Node;
+typedef struct { bool ok; union { opt_ref_Node value; TscError error; }; } Result_opt_ref_Node_TscError;
 
 static Node _node_pool[4];
 static uint8_t _node_pool_mask = 0;
@@ -19,7 +20,7 @@ static opt_ref_Node Node_alloc(void) {
 Result_opt_ref_Node_TscError make(void) {
     opt_ref_Node _pool_0 = Node_alloc();
     if (!_pool_0.has_value) {
-        return (Result_opt_ref_Node_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Node"))};
+        return (Result_opt_ref_Node_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Node") }};
     }
     opt_ref_Node n = _pool_0;
     n.value->id = 1;

@@ -2,18 +2,19 @@
 #include <stdlib.h>
 
 typedef struct { int32_t value; } Box;
+typedef struct { bool ok; union { int _dummy; TscError error; }; } Result_void_TscError;
 
 static void Box_destructor(Box *b) {
 }
 
 Result_void_TscError make_bool(bool shouldThrow) {
     Box *_heap_0 = (Box *)tsc_malloc(sizeof(Box));
-    *_heap_0 = Box_new();
+    *_heap_0 = (Box){0};
     Box *b = _heap_0;
     b->value = 42;
     if (shouldThrow) {
         if (b != NULL) { Box_destructor(b); tsc_free(b); }
-        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("oops"))};
+        return (Result_void_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("oops") }};
     }
     if (b != NULL) { Box_destructor(b); tsc_free(b); }
     return (Result_void_TscError){.ok = true};

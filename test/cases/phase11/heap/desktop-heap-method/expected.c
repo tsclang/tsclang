@@ -24,9 +24,9 @@ int32_t _tsc_main(void) {
     Counter *_heap_0 = (Counter *)tsc_malloc(sizeof(Counter));
     *_heap_0 = Counter_new();
     Counter *c = _heap_0;
-    c.increment();
-    c.increment();
-    int32_t _ret_1 = c.get();
+    Counter_increment(c);
+    Counter_increment(c);
+    int32_t _ret_1 = Counter_get(c);
     if (c != NULL) { Counter_destructor(c); tsc_free(c); }
     return _ret_1;
 }

@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 typedef struct { bool active; } Spark;
+typedef struct { bool ok; union { int _dummy; TscError error; }; } Result_void_TscError;
 typedef struct { bool has_value; Spark *value; int _pool_idx; } opt_ref_Spark;
 
 static Spark _spark_pool[4];
@@ -23,7 +24,7 @@ static void Spark_drop(opt_ref_Spark s) {
 Result_void_TscError test(void) {
     opt_ref_Spark _pool_0 = Spark_alloc();
     if (!_pool_0.has_value) {
-        return (Result_void_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Spark"))};
+        return (Result_void_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Spark") }};
     }
     opt_ref_Spark s = _pool_0;
     Spark_drop(s);

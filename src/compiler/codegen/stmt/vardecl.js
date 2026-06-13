@@ -1324,6 +1324,36 @@ export default {
             if (init.kind === 'Member' && (typeAnn?.name === 'Ref' || typeAnn?.name === 'Mut')) {
               throw this.error(`TypeError: Cannot borrow a class field; pass the entire object as ${typeAnn.name}<T> instead`, init);
             }
+            // Auto-propagate throws function calls in throws context
+            if (this._throwsCtx && init?.kind === 'Call' && init.callee?.kind === 'Ident') {
+              const calleeSym = this.lookup(init.callee.name);
+              if (calleeSym?._isThrowsFunc) {
+                const ctx = this._throwsCtx;
+                const resName = `_res_${this.tempCount++}`;
+                const callC = this.exprToC(init, lines, depth);
+                p(`${calleeSym._resultType} ${resName} = ${callC};`);
+                p(`if (!${resName}.ok) {`);
+                if (this._usesGotoCleanup) {
+                  this._emitFuncCleanup(lines, I + '    ');
+                  p(`    _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+                  p(`    goto cleanup;`);
+                } else {
+                  this._emitFuncCleanup(lines, I + '    ');
+                  p(`    return (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+                }
+                p(`}`);
+                const valueType = calleeSym._resultValueType ?? 'int32_t';
+                p(`${this.varDecl(qualifier, valueType, name)} = ${resName}.value;`);
+                this.define(name, { ctype: valueType, varKind });
+                if (valueType?.startsWith('opt_ref_') && this._currentBlockPoolVars) {
+                  const _pcls = valueType.slice(8);
+                  if (this.classes.get(_pcls)?._isPool) {
+                    this._currentBlockPoolVars.push({ name, className: _pcls });
+                  }
+                }
+                return;
+              }
+            }
             let initC;
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);

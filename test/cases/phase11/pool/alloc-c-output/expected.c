@@ -2,6 +2,7 @@
 
 typedef struct { uint8_t id; } Token;
 typedef struct { bool has_value; Token *value; int _pool_idx; } opt_ref_Token;
+typedef struct { bool ok; union { opt_ref_Token value; TscError error; }; } Result_opt_ref_Token_TscError;
 
 static Token _token_pool[2];
 static uint8_t _token_pool_mask = 0;
@@ -19,7 +20,7 @@ static opt_ref_Token Token_alloc(void) {
 Result_opt_ref_Token_TscError make(void) {
     opt_ref_Token _pool_0 = Token_alloc();
     if (!_pool_0.has_value) {
-        return (Result_opt_ref_Token_TscError){.ok = false, .error = Error_new(STR_LIT("pool exhausted: Token"))};
+        return (Result_opt_ref_Token_TscError){.ok = false, .error = (TscError){ .message = STR_LIT("pool exhausted: Token") }};
     }
     opt_ref_Token t = _pool_0;
     return (Result_opt_ref_Token_TscError){.ok = true, .value = t};
