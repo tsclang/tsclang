@@ -1149,7 +1149,13 @@ export default {
             }
           }
           p(`tsc_closure ${name} = ${initC};`);
-          this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureParamTypes: _closureParamCtypes });
+          const _closureRetFromAnn = typeAnn.ret ? this.resolveType(typeAnn.ret) : 'void';
+          let _initIsClosure = false;
+          if (init?.kind === 'Call' && init.callee.kind === 'Ident') {
+            const _callSym = this.lookup(init.callee.name);
+            if (_callSym?._returnsCapturingClosure) _initIsClosure = true;
+          }
+          this.define(name, { ctype: 'tsc_closure', ...(_initIsClosure ? { isClosure: true } : { funcPtr: true }), varKind, closureRetType: _closureRetFromAnn, closureParamTypes: _closureParamCtypes });
           return;
         }
 
