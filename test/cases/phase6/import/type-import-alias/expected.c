@@ -1,8 +1,8 @@
 #include "runtime.h"
 
-typedef int32_t UserId;
+typedef int32_t types_UserId;
 
-int32_t validate_UserId(UserId id) {
+int32_t validate_UserId(types_UserId id) {
     return id;
 }
 

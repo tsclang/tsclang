@@ -5,6 +5,7 @@ export default {
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`interface name "${name}" must start with uppercase (PascalCase)`, node);
     }
+    const cname = this._modulePrefix ? this._modulePrefix + name : name;
     this.interfaces.set(name, members);
 
     const props = members.filter(m => m.kind === 'PropSig');
@@ -28,9 +29,9 @@ export default {
         }
       }
       this._resolvingTypes.delete(name);
-      this.addTop(`typedef struct { ${fieldParts.join(' ')} } ${name};`);
+      this.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
       // No blank line — consecutive typedefs can follow immediately
-      this.classes.set(name, { isStruct: true, fields: props });
+      this.classes.set(name, { isStruct: true, _cname: cname, fields: props });
       return;
     }
 
@@ -46,8 +47,8 @@ export default {
       const params = m.params.map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
       return `${ret} (*${m.name})(void *self${params ? ', ' + params : ''});`;
     });
-    this.addTop(`typedef struct { ${vtableFields.join(' ')} } ${name}_vtable;`);
-    this.addTop(`typedef struct { void *self; const ${name}_vtable *vtable; } ${name};`);
+    this.addTop(`typedef struct { ${vtableFields.join(' ')} } ${cname}_vtable;`);
+    this.addTop(`typedef struct { void *self; const ${cname}_vtable *vtable; } ${cname};`);
     // Push blank directly so it appears between interface typedefs and following class typedefs
     this.typedefs.push('');
     this._lastAddedToTypedefs = true;
@@ -61,16 +62,17 @@ export default {
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`type alias name "${name}" must start with uppercase (PascalCase)`, node);
     }
+    const cname = this._modulePrefix ? this._modulePrefix + name : name;
     // String literal union: type Dir = "north" | "south"
     // → typedef enum + static const char* values[]
     if (this.isStringLiteralUnion(typeAnn)) {
       const members = this.getStringLiteralMembers(typeAnn);
-      const enumVals = members.map(v => `${name}_${v}`).join(', ');
-      this.addTop(`typedef enum { ${enumVals} } ${name};`);
+      const enumVals = members.map(v => `${cname}_${v}`).join(', ');
+      this.addTop(`typedef enum { ${enumVals} } ${cname};`);
       const strVals = members.map(v => `"${v}"`).join(', ');
-      this.addTop(`static const char *${name}_values[] = { ${strVals} };`);
+      this.addTop(`static const char *${cname}_values[] = { ${strVals} };`);
       this.addTop('');
-      this.classes.set(name, { isEnum: true, isStringLiteralUnion: true, members });
+      this.classes.set(name, { isEnum: true, _cname: cname, isStringLiteralUnion: true, members });
     } else if (typeAnn?.kind === 'TypeObject') {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
       const hasMethod = typeAnn.fields.some(f => f.isMethod);
@@ -85,11 +87,11 @@ export default {
         return `${ct} ${f.name};`;
       }).join(' ');
       this._resolvingTypes.delete(name);
-      this.addTop(`typedef struct { ${fields} } ${name};`);
-      this.classes.set(name, { isStruct: true, fields: typeAnn.fields });
+      this.addTop(`typedef struct { ${fields} } ${cname};`);
+      this.classes.set(name, { isStruct: true, _cname: cname, fields: typeAnn.fields });
     } else if (typeAnn?.kind === 'TypeTuple') {
       // Tuple alias: type Point = [x: f64, y: f64] → typedef struct { double _0; double _1; } Point;
-      this.resolveTupleType(typeAnn, name);
+      this.resolveTupleType(typeAnn, cname);
     } else if (typeAnn?.kind === 'TypeRef' && typeAnn.typeArgs.length > 0) {
       // Utility types
       const utName = typeAnn.name;
@@ -106,8 +108,8 @@ export default {
           // Multi-pick: "name" | "age" → both picked
           const picked = fields.filter(f => pickedNames.length > 0 ? pickedNames.includes(f.name) : true);
           const fieldDecls = picked.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, fields: picked });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, fields: picked });
         }
       } else if (utName === 'Omit' && utArgs.length >= 2) {
         const baseTypeName = utArgs[0].name;
@@ -120,8 +122,8 @@ export default {
           }
           const kept = fields.filter(f => !omitNames.includes(f.name));
           const fieldDecls = kept.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, fields: kept });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, fields: kept });
         }
       } else if (utName === 'Partial' && utArgs.length >= 1) {
         const baseTypeName = utArgs[0].name;
@@ -131,24 +133,24 @@ export default {
             const ct = this.resolveType(f.typeAnn);
             return [`bool has_${f.name};`, `${ct} ${f.name};`];
           }).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, isMutable: true, isPartial: true, fields });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, isMutable: true, isPartial: true, fields });
         }
       } else if (utName === 'Required' && utArgs.length >= 1) {
         const baseTypeName = utArgs[0].name;
         const fields = this.getStructFields(baseTypeName);
         if (fields) {
           const fieldDecls = fields.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, isMutable: true, fields });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, isMutable: true, fields });
         }
       } else if (utName === 'Readonly' && utArgs.length >= 1) {
         const baseTypeName = utArgs[0].name;
         const fields = this.getStructFields(baseTypeName);
         if (fields) {
           const fieldDecls = fields.map(f => `const ${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, fields });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, fields });
         }
       } else if (utName === 'NonNullable' && utArgs.length >= 1) {
         // NonNullable<T | null> → T (transparent alias, strips opt_)
@@ -177,8 +179,8 @@ export default {
           // Record<"x"|"y", f64> → struct { double x; double y; }
           const keys = this.getStringLiteralMembers(keyTypeNode);
           const fieldDecls = keys.map(k => `${valCtype} ${k};`).join(' ');
-          this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-          this.classes.set(name, { isStruct: true, fields: keys.map(k => ({ name: k, typeAnn: valTypeNode })) });
+          this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+          this.classes.set(name, { isStruct: true, _cname: cname, fields: keys.map(k => ({ name: k, typeAnn: valTypeNode })) });
         } else {
           const keyCtype = this.resolveType(keyTypeNode);
           const keyEnumDef = this.classes.get(keyCtype);
@@ -187,8 +189,8 @@ export default {
             const rawMembers = keyEnumDef.members ?? [];
             const memberNames = rawMembers.map(m => typeof m === 'string' ? m : m.name);
             const fieldDecls = memberNames.map(m => `${valCtype} ${m};`).join(' ');
-            this.addTop(`typedef struct { ${fieldDecls} } ${name};`);
-            this.classes.set(name, { isStruct: true, fields: memberNames.map(m => ({ name: m, typeAnn: valTypeNode })) });
+            this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
+            this.classes.set(name, { isStruct: true, _cname: cname, fields: memberNames.map(m => ({ name: m, typeAnn: valTypeNode })) });
           } else if (keyCtype === 'String' || keyCtype === 'string' || keyTypeNode.name === 'string') {
             // Record<string, V> → TscMap alias
             const k = this.cTypeToIdent(keyCtype);
@@ -246,20 +248,20 @@ export default {
       const fields = targetTypeName ? this.getStructFields(targetTypeName) : null;
       if (fields && fields.length > 0) {
         const fieldNames = fields.map(f => f.name);
-        const enumVals = fieldNames.map(v => `${name}_${v}`).join(', ');
-        this.addTop(`typedef enum { ${enumVals} } ${name};`);
+        const enumVals = fieldNames.map(v => `${cname}_${v}`).join(', ');
+        this.addTop(`typedef enum { ${enumVals} } ${cname};`);
         const strVals = fieldNames.map(v => `"${v}"`).join(', ');
-        this.addTop(`static const char *${name}_values[] = { ${strVals} };`);
+        this.addTop(`static const char *${cname}_values[] = { ${strVals} };`);
         this.addTop('');
-        this.classes.set(name, { isEnum: true, isStringLiteralUnion: true, isKeyOf: true, members: fieldNames });
+        this.classes.set(name, { isEnum: true, _cname: cname, isStringLiteralUnion: true, isKeyOf: true, members: fieldNames });
       }
     } else if (typeAnn?.kind === 'TypeRef' && typeAnn.typeArgs.length === 0) {
       // Scalar alias: type UserId = i32 → typedef int32_t UserId;
       // Skip generic type aliases (Pick<User, Fields>, etc.) — no C output
       const inner = this.resolveType(typeAnn);
       if (inner !== name) {
-        this.addTop(`typedef ${inner} ${name};`);
-        this.classes.set(name, { isScalarAlias: true, innerType: inner });
+        this.addTop(`typedef ${inner} ${cname};`);
+        this.classes.set(name, { isScalarAlias: true, _cname: cname, innerType: inner });
       }
     } else if (typeAnn?.kind === 'TypeUnion') {
       // Mixed union (non-string) → error if any member is a string literal
