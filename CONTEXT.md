@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #9).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #25 Phase 1a-c).
 
 ---
 
@@ -45,15 +45,23 @@ input.tsc
 
 ## 3. Codegen Architecture
 
-### Context class (`codegen.js:96`)
+### Context class (`codegen.js:109`)
 
-God-object with ~300+ methods. Split across **46 files** via mixin pattern (modules export a function that adds methods to `Context.prototype`).
+God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin pattern (modules export a function that adds methods to `Context.prototype`).
+
+**Refactoring Phase 1 (#25) — extracted state objects:**
+- `ScopeManager` (`codegen/scope-manager.js`) — scope stack, `define()`/`lookup()`. Context delegates via wrappers + `get scopes()` backward-compat getter.
+- `BorrowTracker` (`codegen/borrow-tracker.js`) — `_scopeBorrowStack`, `_scopeMutQuarantineStack`, `_scopeMutBorrowStack`, `trackRefBorrow`/`trackMutBorrow`/`trackMutQuarantine`/`releaseQuarantineBy`. Depends on ScopeManager. Context delegates via thin wrappers.
+- `OutputBuffer` (`codegen/output-buffer.js`) — `includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines` + `addTop()`/`addLambda()`. Context delegates via backward-compat getters.
 
 ### Module map
 
 | Directory | Files | Responsibility |
 |-----------|-------|----------------|
-| `codegen.js` | 1 | `codegen()` entry, `Context` class, scope/borrow/cleanup core |
+| `codegen.js` | 1 | `codegen()` entry, `Context` class, cleanup core, `emit()` assembly |
+| `codegen/scope-manager.js` | 1 | **ScopeManager** — scope stack, `define()`/`lookup()`/`pushScope()`/`popScope()` |
+| `codegen/borrow-tracker.js` | 1 | **BorrowTracker** — Ref/Mut borrow tracking, quarantine, scope-exit cleanup |
+| `codegen/output-buffer.js` | 1 | **OutputBuffer** — output sections, `addTop()` smart routing, `addLambda()` |
 | `top-level/` | 6 | `dispatch.js` (entry), `program.js` (visitProgram, pre-scan), `func.js`, `class.js`, `types-alias.js`, `decorators.js` |
 | `stmt/` | 4 | `index.js`→`stmt.js` (visitStmtInMain dispatcher), `vardecl.js` (let/const), `control-flow.js` (if/while/for/switch/try-catch/break/continue), `destruct.js`, `match.js` |
 | `expr/` | 4 | `index.js`→`dispatch.js` (exprToC), `operators.js`, `assign.js`, `literals.js` |
@@ -65,20 +73,19 @@ God-object with ~300+ methods. Split across **46 files** via mixin pattern (modu
 
 ### Key Context state (the `this.*` properties)
 
-**Symbol table & scope:**
-- `this.scopes` — `Map[]` stack, `[0]` = global. `pushScope()`/`popScope()` manage it.
+**Symbol table & scope (delegated to ScopeManager):**
+- `this._scopeMgr` — `ScopeManager` instance. `this.scopes` getter returns `_scopeMgr.scopes`.
 - `this.classes` — `Map<name, { fields, methods, decorators, _isHeap, _isPool, ... }>`
 - `this.interfaces` — `Map<name, { methods }>`
 - `this._typeAliases` — `Map<name, TypeRef>`
-- `define(name, info)` — adds symbol to current scope. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, _movedLine, _refBorrowCount, _mutQuarantined, ... }`
+- `define(name, info)` — Context wrapper: auto-marks heap vars, then delegates to `_scopeMgr.define()`. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, _movedLine, _refBorrowCount, _mutQuarantined, ... }`
 
-**Borrow tracking (core safety):**
-- `this._scopeBorrowStack` — `Sym[][]` — Ref borrows per scope, auto-released on `popScope()`
-- `this._scopeMutQuarantineStack` — Mut quarantine per scope
-- `this._scopeMutBorrowStack` — Mut borrow per scope
-- `_trackRefBorrow(sym)` — increments `_refBorrowCount`, pushes to current scope
-- `_trackMutBorrow(sym)` / `_trackMutQuarantine(sym)` — Mut tracking
-- `_checkBorrowsAcrossAwait(node)` — throws E051 if Ref/Mut alive across await
+**Borrow tracking (delegated to BorrowTracker):**
+- `this._borrowTracker` — `BorrowTracker` instance (depends on `_scopeMgr`).
+- `pushScope()`/`popScope()` — Context coordinates: calls both `_scopeMgr` + `_borrowTracker`.
+- `_trackRefBorrow(sym)` / `_trackMutBorrow(sym)` / `_trackMutQuarantine(sym)` — thin wrappers delegating to `_borrowTracker`.
+- `_checkBorrowsAcrossAwait(node)` — stays on Context (needs `this.error()`).
+- `_trackBorrowForRefReturn(callNode, resultName, mode)` — stays on Context (needs `this.lookup()`/`this.interfaces`).
 
 **Cleanup system:**
 - `this._blockCleanupStack` — `[{ list: [], set: Set }]` — per-block owned-var cleanups
@@ -105,13 +112,11 @@ God-object with ~300+ methods. Split across **46 files** via mixin pattern (modu
 - `this._strictRules` — `Set<string>` — strict mode rules (`no-any`, `safe-div`, `no-closures`, ...)
 - `this._defaultNumber` — `'f64'` (desktop) or `'f32'` (embedded)
 
-**Output buffers:**
-- `this.includes` — `Set<string>` — `#include` lines
-- `this.typedefs` — `string[]` — struct typedefs (emitted first)
-- `this.topLevel` — `string[]` — function definitions
-- `this.mainStmts` — `string[]` — statements inside `main()`
-- `this.lambdaLines` — `string[]` — hoisted lambda functions (before topLevel)
-- `ctx.emit()` — concatenates: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`
+**Output buffers (delegated to OutputBuffer):**
+- `this._output` — `OutputBuffer` instance.
+- `this.includes` / `this.typedefs` / `this.topLevel` / `this.mainStmts` / `this.lambdaLines` — backward-compat getters return `_output.*`.
+- `addTop(line)` / `addLambda(line)` — delegate to `_output`. `addTop()` routes typedefs vs. topLevel.
+- `ctx.emit()` — final assembly: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`. Stays on Context (needs cross-cutting state).
 
 ### Common patterns
 
@@ -396,10 +401,11 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `e178a58`
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `0069c13`
 - **GitHub Issues:** #1–#35. Closed: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #5 (closure type loss), #8 (string concat leak), #9 (non-const static init), #10 (module prefix), #14 (NULL check), #21 (for-of reassign), #22 (range inclusivity), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Refactoring: #25–#31 (tech-debt).
-- **Bug fix progress:** #1 ✅, #2 ✅, #3 ✅, #4 ✅, #5 ✅, #8 ✅, #9 ✅, #10 ✅, #14 ✅, #21 ✅, #22 ✅, #34 ✅. Next: Refactoring Phase 1 (#25).
-- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
+- **Bug fix progress:** #1 ✅, #2 ✅, #3 ✅, #4 ✅, #5 ✅, #8 ✅, #9 ✅, #10 ✅, #14 ✅, #21 ✅, #22 ✅, #34 ✅.
+- **Refactoring Phase 1 (#25) — IN PROGRESS:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. Remaining: TypeRegistry (deferred — `_typeCache` doesn't exist, design needed). All 1958 tests pass.
+- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
 ### Architectural decisions (2026-06-13)
