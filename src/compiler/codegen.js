@@ -6,6 +6,7 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 import { ScopeManager } from './codegen/scope-manager.js';
+import { BorrowTracker } from './codegen/borrow-tracker.js';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -123,9 +124,8 @@ class Context {
 
     // Symbol table: delegated to ScopeManager
     this._scopeMgr = new ScopeManager();
-    this._scopeBorrowStack = [[]];
-    this._scopeMutQuarantineStack = [[]];
-    this._scopeMutBorrowStack = [[]];
+    // Borrow tracking: delegated to BorrowTracker
+    this._borrowTracker = new BorrowTracker(this._scopeMgr);
     this._languageBuiltins = LANGUAGE_BUILTINS;
     // Known classes: name → { fields, methods }
     this.classes = new Map();
@@ -249,69 +249,16 @@ class Context {
 
   pushScope() {
     this._scopeMgr.pushScope();
-    this._scopeBorrowStack.push([]);
-    this._scopeMutQuarantineStack.push([]);
-    this._scopeMutBorrowStack.push([]);
+    this._borrowTracker.pushScope();
   }
   popScope()  {
     const scope = this._scopeMgr.popScope();
-    const dyingClosures = new Set();
-    for (const [name, sym] of scope) {
-      if (sym.funcPtr || sym.isClosure) dyingClosures.add(name);
-    }
-    if (dyingClosures.size > 0) {
-      for (const scopeLevel of this._scopeMgr.scopes) {
-        for (const [, sym] of scopeLevel) {
-          if (sym._quarantinedBy && dyingClosures.has(sym._quarantinedBy)) {
-            delete sym._mutQuarantined;
-            delete sym._quarantinedBy;
-          }
-        }
-      }
-    }
-    const borrows = this._scopeBorrowStack.pop();
-    for (const sym of borrows) {
-      sym._refBorrowCount = (sym._refBorrowCount || 0) - 1;
-      if (sym._refBorrowCount <= 0) sym._refBorrowCount = 0;
-    }
-    const mutQ = this._scopeMutQuarantineStack.pop();
-    for (const sym of mutQ) {
-      delete sym._mutQuarantined;
-      delete sym._quarantinedBy;
-    }
-    const mutB = this._scopeMutBorrowStack.pop();
-    for (const sym of mutB) {
-      delete sym._mutBorrowedBy;
-    }
+    this._borrowTracker.onScopeExit(scope);
   }
-  _trackRefBorrow(sym) {
-    if (!sym) return;
-    sym._refBorrowCount = (sym._refBorrowCount || 0) + 1;
-    const current = this._scopeBorrowStack[this._scopeBorrowStack.length - 1];
-    if (current) current.push(sym);
-  }
-  _trackMutBorrow(sym) {
-    if (!sym) return;
-    const current = this._scopeMutBorrowStack[this._scopeMutBorrowStack.length - 1];
-    if (current) current.push(sym);
-  }
-  _trackMutQuarantine(sym, closureVarName = null) {
-    if (!sym) return;
-    sym._mutQuarantined = true;
-    if (closureVarName) sym._quarantinedBy = closureVarName;
-    const current = this._scopeMutQuarantineStack[this._scopeMutQuarantineStack.length - 1];
-    if (current) current.push(sym);
-  }
-  _releaseQuarantineBy(closureVarName) {
-    for (const scopeLevel of this.scopes) {
-      for (const [, sym] of scopeLevel) {
-        if (sym._quarantinedBy === closureVarName) {
-          delete sym._mutQuarantined;
-          delete sym._quarantinedBy;
-        }
-      }
-    }
-  }
+  _trackRefBorrow(sym) { this._borrowTracker.trackRefBorrow(sym); }
+  _trackMutBorrow(sym) { this._borrowTracker.trackMutBorrow(sym); }
+  _trackMutQuarantine(sym, closureVarName = null) { this._borrowTracker.trackMutQuarantine(sym, closureVarName); }
+  _releaseQuarantineBy(closureVarName) { this._borrowTracker.releaseQuarantineBy(closureVarName); }
   _derefStrPtr(sym, cexpr) {
     return sym?.ctype === 'String *' ? `(*${cexpr})` : cexpr;
   }
