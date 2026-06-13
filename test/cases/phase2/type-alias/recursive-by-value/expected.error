@@ -1,0 +1,1 @@
+type "Node" recursively references itself by value; use Ref<Node>, Arc<Node>, or Mut<Node> for indirection

@@ -1,0 +1,1 @@
+type "LinkedList" recursively references itself by value; use Ref<LinkedList>, Arc<LinkedList>, or Mut<LinkedList> for indirection

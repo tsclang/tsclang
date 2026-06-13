@@ -189,6 +189,7 @@ class Context {
     this._extensions = new Map();
     this._typeAliases = new Map();
     this._pendingOptTypedefs = new Map();
+    this._resolvingTypes = new Set();
     this._narrowedVars = new Set();
     this._narrowedUnknownVars = new Map();
     this._emittedUnknownStruct = false;

@@ -1,0 +1,1 @@
+interface LinkedList { value: i32; next: LinkedList }

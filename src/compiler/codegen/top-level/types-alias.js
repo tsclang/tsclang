@@ -12,9 +12,14 @@ export default {
 
     // Pure struct interface (no methods) → emit typedef struct
     if (methods.length === 0 && props.length > 0) {
+      this._resolvingTypes.add(name);
       const fieldParts = [];
       for (const f of props) {
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+        if (ct === name) {
+          this._resolvingTypes.delete(name);
+          throw this.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
+        }
         if (f.optional) {
           // Optional field: bool has_X; T X; (no opt_T wrapper needed)
           fieldParts.push(`bool has_${f.name}; ${ct} ${f.name};`);
@@ -22,6 +27,7 @@ export default {
           fieldParts.push(`${ct} ${f.name};`);
         }
       }
+      this._resolvingTypes.delete(name);
       this.addTop(`typedef struct { ${fieldParts.join(' ')} } ${name};`);
       // No blank line — consecutive typedefs can follow immediately
       this.classes.set(name, { isStruct: true, fields: props });
@@ -69,10 +75,16 @@ export default {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
       const hasMethod = typeAnn.fields.some(f => f.isMethod);
       if (hasMethod) throw this.error(`"type" alias cannot contain methods; use "interface" instead`);
+      this._resolvingTypes.add(name);
       const fields = typeAnn.fields.map(f => {
         const ct = this.resolveType(f.typeAnn);
+        if (ct === name) {
+          this._resolvingTypes.delete(name);
+          throw this.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
+        }
         return `${ct} ${f.name};`;
       }).join(' ');
+      this._resolvingTypes.delete(name);
       this.addTop(`typedef struct { ${fields} } ${name};`);
       this.classes.set(name, { isStruct: true, fields: typeAnn.fields });
     } else if (typeAnn?.kind === 'TypeTuple') {
