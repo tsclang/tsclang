@@ -857,7 +857,7 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 > **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes/07-classes-ownership.md#struct--value-type-class).
 
-> **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Shared<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен. См. обсуждение в LOG.md (2026-06-10).
+> **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Shared<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен.
 
 ### `@signal` — POSIX-сигналы (desktop)
 

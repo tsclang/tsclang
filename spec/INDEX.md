@@ -2,36 +2,35 @@
 
 ## Разделы
 
-Спецификация языка организована по логическим слоям в `spec/`.
+Спецификация языка организована по логическим слоям.
 
 | Раздел | Содержимое |
 |--------|-----------|
-| [01-intro](spec/01-intro/) | Зачем, дизайн-философия, overview, установка |
-| [02-syntax](spec/02-syntax/) | Синтаксис: форматирование, переменные, операторы, truthy/falsy |
-| [03-types](spec/03-types/) | Типы: числа, строки, null, enum, Date, Type Aliases, конвертация, special types |
-| [04-ownership](spec/04-ownership/) | Ownership, borrow checker, Clone, Shared/Weak, const vs let |
-| [05-control-flow](spec/05-control-flow/) | Управляющие конструкции: match, switch, for-of, while |
-| [06-functions](spec/06-functions/) | Функции: перегрузка, name mangling, closures, extension methods, extern "C", default params |
-| [07-classes](spec/07-classes/) | Классы: generics, интерфейсы, instanceof, this, packed/align |
-| [08-collections](spec/08-collections/) | Массивы, tuples, slices, spread/destructuring |
-| [09-errors](spec/09-errors/) | Обработка ошибок: throws, try/catch, cleanup |
-| [10-async](spec/10-async/) | Async/await: state machines, Promise, AbortSignal, AsyncMutex, async generators, @static generators, @stack |
-| [11-concurrency](spec/11-concurrency/) | Threads, Atomic, channel, ISR, Volatile, std/sync, embedded annotations |
-| [12-modules](spec/12-modules/) | Модульная система, C interop, .d.tsc, @platform, import/export |
-| [13-build](spec/13-build/) | Система сборки, CLI, tsc.package.json, package manager, embedded inline/pool |
-| [14-stdlib](spec/14-stdlib/) | Стандартная библиотека (IO, FS, Net, WS, HAL, AVR, Reactive, Regex) |
-| [15-decorators](spec/15-decorators/) | Декораторы: синтаксис, Descriptor API, codegen |
-| [16-tooling](spec/16-tooling/) | Компилятор, IR, LSP, Linter, Оптимизатор |
-| [17-migration](spec/17-migration/) | Migration guide: TypeScript → TSClang |
+| [01-intro](./01-intro/) | Зачем, дизайн-философия, overview, установка |
+| [02-syntax](./02-syntax/) | Синтаксис: форматирование, переменные, операторы, truthy/falsy |
+| [03-types](./03-types/) | Типы: числа, строки, null, enum, Date, Type Aliases, конвертация, special types |
+| [04-ownership](./04-ownership/) | Ownership, borrow checker, Clone, Shared/Weak, const vs let |
+| [05-control-flow](./05-control-flow/) | Управляющие конструкции: match, switch, for-of, while |
+| [06-functions](./06-functions/) | Функции: перегрузка, name mangling, closures, extension methods, extern "C", default params |
+| [07-classes](./07-classes/) | Классы: generics, интерфейсы, instanceof, this, packed/align |
+| [08-collections](./08-collections/) | Массивы, tuples, slices, spread/destructuring |
+| [09-errors](./09-errors/) | Обработка ошибок: throws, try/catch, cleanup |
+| [10-async](./10-async/) | Async/await: state machines, Promise, AbortSignal, AsyncMutex, async generators, @static generators, @stack |
+| [11-concurrency](./11-concurrency/) | Threads, Atomic, channel, ISR, Volatile, std/sync, embedded annotations |
+| [12-modules](./12-modules/) | Модульная система, C interop, .d.tsc, @platform, import/export |
+| [13-build](./13-build/) | Система сборки, CLI, tsc.package.json, package manager, embedded inline/pool |
+| [14-stdlib](./14-stdlib/) | Стандартная библиотека (IO, FS, Net, WS, HAL, AVR, Reactive, Regex) |
+| [15-decorators](./15-decorators/) | Декораторы: синтаксис, Descriptor API, codegen |
+| [16-tooling](./16-tooling/) | Компилятор, IR, LSP, Linter, Оптимизатор |
+| [17-migration](./17-migration/) | Migration guide: TypeScript → TSClang |
 
-Маппинг тестовых фаз → разделы: [spec/PHASES.md](spec/PHASES.md).
-Лог миграции spec → spec: [spec/PROGRESS.md](spec/PROGRESS.md).
+Маппинг тестовых фаз → разделы: [PHASES.md](./PHASES.md).
 
 ---
 
 ## Оглавление
 
-### 01 — Введение ([spec/01-intro/](spec/01-intro/))
+### 01 — Введение ([01-intro/](./01-intro/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -41,7 +40,7 @@
 | **Overview** | Краткое техническое описание: расширение `.tsc`, CLI `tsclang`, выход `.c/.h + CMakeLists.txt`. |
 | **Установка** | Требования (Node, CMake, gcc/clang/avr-gcc) и команды npm-установки CLI. |
 
-### 02 — Синтаксис ([spec/02-syntax/](spec/02-syntax/))
+### 02 — Синтаксис ([02-syntax/](./02-syntax/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -50,7 +49,7 @@
 | **Операторы** | Арифметика, присваивание, сравнения, логика, битовые, прочие; таблица приоритетов. |
 | **Truthy / Falsy** | Правила неявного приведения к boolean (отличия от JS). |
 
-### 03 — Система типов ([spec/03-types/](spec/03-types/))
+### 03 — Система типов ([03-types/](./03-types/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -67,7 +66,7 @@
 | **String Literal Union** | Compile-time only; компилируется в C enum + rodata таблицу строк; явная конверсия в string. |
 | **Utility Types** | Compile-time type operators: Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited; правило А+Б для generic functions. |
 
-### 04 — Ownership и модель памяти ([spec/04-ownership/](spec/04-ownership/))
+### 04 — Ownership и модель памяти ([04-ownership/](./04-ownership/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -86,7 +85,7 @@
 | **Clone** | Явное клонирование owned значений; `clone()` метод. |
 | **const vs let** | Подробная семантика иммутабельности и ограничения `const`. |
 
-### 05 — Управляющие конструкции ([spec/05-control-flow/](spec/05-control-flow/))
+### 05 — Управляющие конструкции ([05-control-flow/](./05-control-flow/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -95,7 +94,7 @@
 | **for-of цикл** | Итерация по массивам и строкам; семантика `item` внутри цикла. |
 | **while / do-while** | Циклы с условием; `async/await` внутри циклов. |
 
-### 06 — Функции ([spec/06-functions/](spec/06-functions/))
+### 06 — Функции ([06-functions/](./06-functions/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -107,7 +106,7 @@
 | **Extension Methods** | Добавление методов к существующим типам через явный импорт; zero-overhead C-output. |
 | **Замыкания** | Правила захвата (примитивы — copy, сложные — `Ref`); явный capture list; C-output — struct. |
 
-### 07 — Классы и объектная система ([spec/07-classes/](spec/07-classes/))
+### 07 — Классы и объектная система ([07-classes/](./07-classes/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -118,7 +117,7 @@
 | **Семантика `this`** | Правила `self`/`this`; доступ к полям внутри методов; разрешение неоднозначности. |
 | **packed / align** | Управление layout: `@packed` (no padding) и `@align(N)` для embedded/FFI. |
 
-### 08 — Коллекции ([spec/08-collections/](spec/08-collections/))
+### 08 — Коллекции ([08-collections/](./08-collections/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -129,7 +128,7 @@
 | **Move из массива** | Семантика `arr[i]` как move; borrow через `arr[i]` как `Ref`. |
 | **Мутация коллекции при borrow** | Запрет: активный borrow блокирует мутацию коллекции. |
 
-### 09 — Обработка ошибок ([spec/09-errors/](spec/09-errors/))
+### 09 — Обработка ошибок ([09-errors/](./09-errors/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -145,7 +144,7 @@
 | **Cleanup при throw** | `goto cleanup` паттерн в C-output: O(N+M) вместо дублирования, все указатели NULL-инициализированы. |
 | **Ограничения** | `throw` запрещён в `@interrupt` обработчиках; в `Thread.spawn` — особая семантика. |
 
-### 10 — Async/Await ([spec/10-async/](spec/10-async/))
+### 10 — Async/Await ([10-async/](./10-async/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -164,7 +163,7 @@
 | **Async generators** | `async function*` + `for await`: потоковая обработка данных; backpressure; C-output как state machine; недоступны на `heap: false`. |
 | **Кооперативная многозадачность** | Общий паттерн поверх `@static async function*`; ручной poll loop; `Tasks<N>` как обёртка. |
 
-### 11 — Конкурентность ([spec/11-concurrency/](spec/11-concurrency/))
+### 11 — Конкурентность ([11-concurrency/](./11-concurrency/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -181,7 +180,7 @@
 | **Embedded-аннотации** | `@signal` — fine-grained контроль над поведением на embedded. |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
-### 12 — Модульная система ([spec/12-modules/](spec/12-modules/))
+### 12 — Модульная система ([12-modules/](./12-modules/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -200,7 +199,7 @@
 | **`unsafe {}`** | Отключение проверок TSClang (borrow checker, null checks); эскейп хетч. |
 | **@platform** | Декоратор условной компиляции: платформо-зависимые реализации одной функции/класса. |
 
-### 13 — Система сборки ([spec/13-build/](spec/13-build/))
+### 13 — Система сборки ([13-build/](./13-build/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -226,7 +225,7 @@
 | **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
 | **Strict Mode** | Granular compile-time правила: `no-any`, `no-unsafe`, `no-native`, `no-extern-c`, `safe-div`, `no-lossy-cast`, `no-dynamic-alloc`. Для safety-critical кода (IEC 61508). |
 
-### 14 — Стандартная библиотека ([spec/14-stdlib/](spec/14-stdlib/))
+### 14 — Стандартная библиотека ([14-stdlib/](./14-stdlib/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -260,7 +259,7 @@
 | **std/embedded** | Общие embedded утилиты поверх `std/hal`: `HashMap<K,V,N>` (struct-of-arrays, djb2+linear probing), `StaticMap` (perfect hash switch), `Tasks<N>` (кооперативный планировщик), `pointer<T>` (raw-указатель), `Volatile<T>` (MMIO-регистры), `MMIO` через `declare const`. |
 | **HAL реализация в platform profile** | Как platform profile предоставляет конкретные реализации интерфейсов `std/hal`. |
 
-### 15 — Декораторы ([spec/15-decorators/](spec/15-decorators/))
+### 15 — Декораторы ([15-decorators/](./15-decorators/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -282,7 +281,7 @@
 | **Модель кодогенерации** | Цепочка wrapper-функций в C; именование; компиляция `ctx.self.field<T>(name)`. |
 | **C-вывод** | Примеры итогового C-output: `@log` на методе, `@timing` на async, `@minLength` на свойстве. |
 
-### 16 — Инструментарий ([spec/16-tooling/](spec/16-tooling/))
+### 16 — Инструментарий ([16-tooling/](./16-tooling/))
 
 | Раздел | О чём |
 |--------|-------|
@@ -300,7 +299,7 @@
 | **Linter** | AST-правила: `no-unreachable`, `prefer-const`, `no-unused-var`; авто-исправление через `--fix`. |
 | **Оптимизатор** | AST-оптимизации: constant folding, dead branch elimination, unused const elimination, borrow elision. |
 
-### 17 — Migration Guide ([spec/17-migration/](spec/17-migration/))
+### 17 — Migration Guide ([17-migration/](./17-migration/))
 
 Руководство по миграции с TypeScript на TSClang: отличия, несовместимости, паттерны адаптации.
 
@@ -310,30 +309,30 @@
 
 ### Навигация фаза → разделы spec
 
-Подробный маппинг: [spec/PHASES.md](spec/PHASES.md).
+Подробный маппинг: [PHASES.md](./PHASES.md).
 
 | Фаза | Разделы spec |
 |------|----------------|
-| 0  | [01-intro](spec/01-intro/), [14-stdlib](spec/14-stdlib/) (Error, Globals) |
-| 1  | [02-syntax](spec/02-syntax/), [03-types](spec/03-types/) (примитивы) |
-| 2  | [03-types](spec/03-types/) (null, enum, type aliases, tuples, utility types) |
-| 3  | [04-ownership](spec/04-ownership/), [03-types](spec/03-types/) (строки), [08-collections](spec/08-collections/) |
-| 4  | [07-classes](spec/07-classes/), [05-control-flow](spec/05-control-flow/) (match), [06-functions](spec/06-functions/) (closures) |
-| 5  | [09-errors](spec/09-errors/) |
-| 6  | [12-modules](spec/12-modules/) |
-| 7  | [10-async](spec/10-async/) |
-| 8  | [11-concurrency](spec/11-concurrency/), [13-build](spec/13-build/) (@struct, @pool) |
-| 9  | [13-build](spec/13-build/) (CLI, tsc.package.json) |
-| 10 | [13-build](spec/13-build/) (pipeline, зависимости, версионирование) |
-| 11 | [13-build](spec/13-build/) (dev/lint/format, Platform Profile) |
-| 12 | [14-stdlib](spec/14-stdlib/) |
-| 13 | [15-decorators](spec/15-decorators/) |
-| 14 | [14-stdlib](spec/14-stdlib/) (std/reactive) |
-| 15 | [14-stdlib](spec/14-stdlib/) (std/regex) |
-| 16 | [16-tooling](spec/16-tooling/) (LSP) |
-| 17 | [16-tooling](spec/16-tooling/) (Linter) |
-| 18 | [16-tooling](spec/16-tooling/) (Оптимизатор) |
-| 19 | [14-stdlib](spec/14-stdlib/) (IO/Net/WS) |
+| 0  | [01-intro](./01-intro/), [14-stdlib](./14-stdlib/) (Error, Globals) |
+| 1  | [02-syntax](./02-syntax/), [03-types](./03-types/) (примитивы) |
+| 2  | [03-types](./03-types/) (null, enum, type aliases, tuples, utility types) |
+| 3  | [04-ownership](./04-ownership/), [03-types](./03-types/) (строки), [08-collections](./08-collections/) |
+| 4  | [07-classes](./07-classes/), [05-control-flow](./05-control-flow/) (match), [06-functions](./06-functions/) (closures) |
+| 5  | [09-errors](./09-errors/) |
+| 6  | [12-modules](./12-modules/) |
+| 7  | [10-async](./10-async/) |
+| 8  | [11-concurrency](./11-concurrency/), [13-build](./13-build/) (@struct, @pool) |
+| 9  | [13-build](./13-build/) (CLI, tsc.package.json) |
+| 10 | [13-build](./13-build/) (pipeline, зависимости, версионирование) |
+| 11 | [13-build](./13-build/) (dev/lint/format, Platform Profile) |
+| 12 | [14-stdlib](./14-stdlib/) |
+| 13 | [15-decorators](./15-decorators/) |
+| 14 | [14-stdlib](./14-stdlib/) (std/reactive) |
+| 15 | [14-stdlib](./14-stdlib/) (std/regex) |
+| 16 | [16-tooling](./16-tooling/) (LSP) |
+| 17 | [16-tooling](./16-tooling/) (Linter) |
+| 18 | [16-tooling](./16-tooling/) (Оптимизатор) |
+| 19 | [14-stdlib](./14-stdlib/) (IO/Net/WS) |
 
 ### Фаза 0 — Core runtime
 
