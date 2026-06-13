@@ -182,7 +182,8 @@ export default {
     }
 
     const n = this.closureCount++;
-    const closureName = `_closure_${n}`;
+    const _pfx = this._modulePrefix ?? '';
+    const closureName = `${_pfx}_closure_${n}`;
     const envName = `${closureName}_env`;
     const fnName = `${closureName}_fn`;
 

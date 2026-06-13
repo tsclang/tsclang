@@ -1109,7 +1109,8 @@ export default {
           let initC;
           if (init?.kind === 'Arrow') {
             // Pre-declare for recursion support (before hoistClosure compiles body)
-            const _predFnName = `_closure_${this.closureCount}_fn`;
+            const _pfx1 = this._modulePrefix ?? '';
+            const _predFnName = `${_pfx1}_closure_${this.closureCount}_fn`;
             this.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = this.hoistClosure(init, name);
             if (closure) {
@@ -1130,7 +1131,7 @@ export default {
               _selfSym.isClosure = false;
               _selfSym.funcPtr = true;
               const _predRet = init.returnType ? this.resolveType(init.returnType) : this.inferArrowReturn(init);
-              _selfSym._closureFnName = `_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet)}`;
+              _selfSym._closureFnName = `${_pfx1}_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet)}`;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);
@@ -1191,7 +1192,8 @@ export default {
             }
             const _arrowParamCtypes = (init.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *');
             // Pre-declare for recursion support (before hoistClosure compiles body)
-            const _predFnName = `_closure_${this.closureCount}_fn`;
+            const _pfx2 = this._modulePrefix ?? '';
+            const _predFnName = `${_pfx2}_closure_${this.closureCount}_fn`;
             this.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = this.hoistClosure(init, name);
             if (closure) {
@@ -1212,7 +1214,7 @@ export default {
               _selfSym2.isClosure = false;
               _selfSym2.funcPtr = true;
               const _predRet2 = init.returnType ? this.resolveType(init.returnType) : this.inferArrowReturn(init);
-              _selfSym2._closureFnName = `_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet2)}`;
+              _selfSym2._closureFnName = `${_pfx2}_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet2)}`;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);

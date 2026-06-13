@@ -241,7 +241,8 @@ export default {
     let ret = retType === 'void' ? this.inferArrowReturn(node) : retType;
     // Name uses the mangled return type (e.g. _lambda_0_i32)
     const retSuffix = this.cTypeToIdent(ret);
-    const name = `_lambda_${n}_${retSuffix}`;
+    const _pfx = this._modulePrefix ?? '';
+    const name = `${_pfx}_lambda_${n}_${retSuffix}`;
     const paramStrs = (node.params ?? []).map((p, i) => {
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
