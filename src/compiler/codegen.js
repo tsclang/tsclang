@@ -5,6 +5,7 @@ import { PRIMITIVE_MAP, toCType, fmtSpec, mangleType, mangleParams, inferLiteral
 import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
+import { ScopeManager } from './codegen/scope-manager.js';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -120,8 +121,8 @@ class Context {
     this.loopCount = 0;
     this.indent = 4;
 
-    // Symbol table: name → { ctype, varKind }
-    this.scopes = [new Map()];
+    // Symbol table: delegated to ScopeManager
+    this._scopeMgr = new ScopeManager();
     this._scopeBorrowStack = [[]];
     this._scopeMutQuarantineStack = [[]];
     this._scopeMutBorrowStack = [[]];
@@ -240,22 +241,26 @@ class Context {
   }
 
   // ----------------------------------------------------------------
-  // Scope helpers
+  // Scope helpers (delegated to ScopeManager)
   // ----------------------------------------------------------------
+
+  // Backward-compatible accessor — subdirectory code reads this.scopes directly.
+  get scopes() { return this._scopeMgr.scopes; }
+
   pushScope() {
-    this.scopes.push(new Map());
+    this._scopeMgr.pushScope();
     this._scopeBorrowStack.push([]);
     this._scopeMutQuarantineStack.push([]);
     this._scopeMutBorrowStack.push([]);
   }
   popScope()  {
-    const scope = this.scopes.pop();
+    const scope = this._scopeMgr.popScope();
     const dyingClosures = new Set();
     for (const [name, sym] of scope) {
       if (sym.funcPtr || sym.isClosure) dyingClosures.add(name);
     }
     if (dyingClosures.size > 0) {
-      for (const scopeLevel of this.scopes) {
+      for (const scopeLevel of this._scopeMgr.scopes) {
         for (const [, sym] of scopeLevel) {
           if (sym._quarantinedBy && dyingClosures.has(sym._quarantinedBy)) {
             delete sym._mutQuarantined;
@@ -368,7 +373,7 @@ class Context {
         }
       }
     }
-    this.scopes[this.scopes.length - 1].set(name, info);
+    this._scopeMgr.define(name, info);
   }
   _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
   _isEmbedded() {
@@ -379,10 +384,7 @@ class Context {
   }
   _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
   lookup(name) {
-    for (let i = this.scopes.length - 1; i >= 0; i--) {
-      if (this.scopes[i].has(name)) return this.scopes[i].get(name);
-    }
-    return null;
+    return this._scopeMgr.lookup(name);
   }
 
   // Throw a positioned TscError.
