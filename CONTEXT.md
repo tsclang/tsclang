@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1828 tests, all pass)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1900 tests, 16 pre-existing failures in phases 1/10/11)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -368,7 +368,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1828 tests, 0 failures.** (AGENTS.md says 1256 — outdated, actual is higher)
+**Total: ~1900 tests, 16 pre-existing failures** (phase1: 8, phase10: 1, phase11: 7 — all predate current refactoring cycle)
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -386,6 +386,13 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 | Regex backreferences/lookahead | NOT YET | Use `@tsc/pcre` package |
 | Full Ref semantics in callbacks | Partial | String* auto-deref done, full auto-deref deferred |
 | `tsc_init_all()` topological module init | NOT YET | Module-level vars currently promoted to static |
+
+### Project state & tracking
+
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
+- **GitHub Issues:** 33 issues (#1–#33) track all work. Labels: `investigation` (#1–#24), `tech-debt` (#25–#31, refactoring phases 1–7), `enhancement` (#32–#33)
+- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
+- **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
 ---
 
