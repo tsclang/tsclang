@@ -7,6 +7,7 @@ import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
+import { OutputBuffer } from './codegen/output-buffer.js';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -110,13 +111,11 @@ class Context {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
-    this.includes = new Set([opts.target === 'wasm' ? '#include "runtime_wasm.h"' : '#include "runtime.h"']);
-    this.typedefs = [];    // struct typedefs (emitted first)
-    this.topLevel = [];    // named function definitions (emitted after lambdas)
-    this.mainStmts = [];    // statements inside main()
+    // Output buffers: delegated to OutputBuffer
+    const _initInclude = opts.target === 'wasm' ? '#include "runtime_wasm.h"' : '#include "runtime.h"';
+    this._output = new OutputBuffer(_initInclude);
     this.lambdaCount = 0;
     this.restCount = 0;
-    this.lambdaLines = [];  // hoisted lambda functions (emitted before topLevel)
     this.closureCount = 0;
     this.tempCount = 0;
     this.loopCount = 0;
@@ -246,6 +245,16 @@ class Context {
 
   // Backward-compatible accessor — subdirectory code reads this.scopes directly.
   get scopes() { return this._scopeMgr.scopes; }
+
+  // Backward-compatible accessors — subdirectory code accesses output buffers directly.
+  get includes()   { return this._output.includes; }
+  get typedefs()   { return this._output.typedefs; }
+  get topLevel()   { return this._output.topLevel; }
+  get mainStmts()  { return this._output.mainStmts; }
+  get lambdaLines() { return this._output.lambdaLines; }
+  // Allow subdirectory code to manipulate addTop routing state
+  get _lastAddedToTypedefs() { return this._output._lastAddedToTypedefs; }
+  set _lastAddedToTypedefs(v) { this._output._lastAddedToTypedefs = v; }
 
   pushScope() {
     this._scopeMgr.pushScope();
@@ -774,40 +783,8 @@ class Context {
     return parts.join('\n') + '\n';
   }
 
-  addTop(line) {
-    // Route typedef/enum declarations and their companion static const arrays to
-    // the typedefs section. Named function definitions go to topLevel.
-
-    // Inside a multi-line typedef/struct block — route continuation lines to typedefs
-    if (this._inTypedefBlock) {
-      this.typedefs.push(line);
-      if (line.startsWith('}')) this._inTypedefBlock = false;
-      return;
-    }
-
-    if (line.startsWith('typedef ') || line.startsWith('typedef\t') || line.startsWith('struct ')) {
-      this.typedefs.push(line);
-      this._lastAddedToTypedefs = true;
-      // Detect start of multi-line block (no closing } on same line)
-      if (!line.includes('}')) this._inTypedefBlock = true;
-    } else if (this._lastAddedToTypedefs && (line.startsWith('static const ') || line === '')) {
-      // Companion declarations (e.g. enum values/names arrays) follow typedefs directly.
-      // Absorb blank lines; add non-blank companion lines to typedefs.
-      if (line !== '') this.typedefs.push(line);
-      // Keep flag so multiple companions are grouped
-    } else {
-      this._lastAddedToTypedefs = false;
-      this.topLevel.push(line);
-    }
-  }
-  addLambda(line) { this.lambdaLines.push(line); }
-  addMain(line) {
-    if (this.inFunction) {
-      this._currentFuncLines.push(this.ind(this._funcDepth) + line);
-    } else {
-      this.mainStmts.push(line);
-    }
-  }
+  addTop(line) { this._output.addTop(line); }
+  addLambda(line) { this._output.addLambda(line); }
 
 }
 
