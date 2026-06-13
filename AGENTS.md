@@ -1,5 +1,14 @@
 ﻿# TSClang — инструкции для ИИ
 
+## О проекте
+
+TSClang — компилятор TypeScript-подобного языка (`.tsc`) в читаемый C.
+
+- **Компилятор:** JavaScript (Node.js, ESM)
+- **Выход:** `.c` + `runtime.h` (single-header)
+- **Ключевая фича:** ownership/borrow checker без GC — `T`=move, `Ref<T>`=const ptr, `Shared<T>`=ARC
+- **Таргеты:** desktop (libuv), embedded (AVR, без heap), retro (NES, Genesis, и др.)
+
 ## Манифест TSClang — 6 принципов
 
 ### П1 — Кроссплатформенность
@@ -62,14 +71,6 @@ TSClang — серьёзный продакшн-проект, не учебны�
 - Прогресс — в комментариях к issue
 - Коммит ссылается на issue: `refactor(codegen): [STABLE] extract Emitter (closes #42)`
 - LOG.md удалён — история разработки в `git log`
-
-## О проекте
-
-TSClang — компилятор TypeScript-подобного языка (расширение `.tsc`) в C.
-
-- CLI: `tsclang` (npm-пакет, `bin/index.js`)
-- Таргеты: desktop (libuv) и embedded (AVR, без heap-async)
-- Текущий статус: компилятор реализован (фазы 0–19)
 
 ## Ключевые файлы
 
