@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #4).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #5).
 
 ---
 
@@ -396,9 +396,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `7eea496`
-- **GitHub Issues:** #1–#35. Closed: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #8 (string concat leak), #14 (NULL check), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Correctness: #5, #9, #10, #21, #22. Refactoring: #25–#31 (tech-debt).
-- **Bug fix progress:** #1 ✅, #2 ✅, #3 ✅, #4 ✅, #8 ✅, #14 ✅, #34 ✅. Next: correctness issues (#5, #9, #10, #21, #22). Then refactoring Phase 1 (#25).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `cc46af6`
+- **GitHub Issues:** #1–#35. Closed: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #5 (closure type loss), #8 (string concat leak), #14 (NULL check), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Correctness: #9, #10, #21, #22. Refactoring: #25–#31 (tech-debt).
+- **Bug fix progress:** #1 ✅, #2 ✅, #3 ✅, #4 ✅, #5 ✅, #8 ✅, #14 ✅, #34 ✅. Next: correctness issues (#9, #10, #21, #22). Then refactoring Phase 1 (#25).
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
@@ -406,7 +406,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 - **Compiler language: JS, not TS.** Port to TS rejected — huge effort, no user value, types would need rewrite after refactoring. JSDoc annotations on critical files (`codegen.js`, `types.js`, `parser.js`) for IDE support instead. Long-term goal: self-host in `.tsc`.
 - **IR/SSA: own, not TypeScript compiler API.** TSClang ≠ TypeScript — ownership types, capabilities, C emission are fundamentally different. `typescript` package (~40MB) is unacceptable for embedded tooling. Spec in `spec/16-tooling/16-compiler.md`.
-- **Bug fix priority before refactoring:** (1) ~~16 test failures~~ ✅ #34; (2) memory safety: ~~#14~~ ✅, ~~#8~~ ✅, ~~#3~~ ✅, ~~#1~~ ✅; (3) correctness: ~~#2~~ ✅, ~~#4~~ ✅, #5, #9, #10, #21, #22; (4) then refactoring Phase 1 (#25). Rationale: P6 — can't refactor safely with red tests.
+- **Bug fix priority before refactoring:** (1) ~~16 test failures~~ ✅ #34; (2) memory safety: ~~#14~~ ✅, ~~#8~~ ✅, ~~#3~~ ✅, ~~#1~~ ✅; (3) correctness: ~~#2~~ ✅, ~~#4~~ ✅, ~~#5~~ ✅, #9, #10, #21, #22; (4) then refactoring Phase 1 (#25). Rationale: P6 — can't refactor safely with red tests.
 
 ---
 
@@ -464,6 +464,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 - **Recursive type detection** — `_resolvingTypes` Set tracks types currently being defined. In `visitTypeAlias` (TypeObject) and `visitInterface` (struct branch), name is added before field processing, removed after. If `resolveType` returns the type's own name → compile error ("use Ref/Arc/Mut for indirection"). Only catches direct by-value self-reference; indirect cycles (`A→B→A`) caught by C compiler. Pointer-based (`Ref<A>`, `Arc<A>`, `A[]`) not affected.
 - **Cross-module type resolution** — Types (class/interface/enum/type-alias) are NOT in scope (`this.define`), they're in type tables (`this.classes`, `this._typeAliases`). Export side: `dispatch.js` Export/ExportFrom cases check type tables as fallback when `lookup()` fails. Import side: `codegen.js` pre-population routes type entries to type tables (`isStruct`/`isEnum`/`isScalarAlias` → `this.classes`, `_isTypeAlias` → `this._typeAliases`) instead of scope. `newToC` (`new-expr.js`) uses `cls._cname ?? name` for all C identifiers. Module prefix: classes get prefixed (`shapes_Point`), but interfaces/enums/type-aliases do NOT — potential name collision in large projects. `import type { X }` parsed but treated same as `import { X }` (typeOnly flag not enforced).
 - **Recursive closures** — Closures (`const f = (n) => f(n-1)`) need pre-declaration before body compilation. `vardecl.js` pre-declares name with `_isRecursiveSelf: true` and predicted `_closureFnName` BEFORE calling `hoistClosure`/`hoistArrow`. Prediction: `_closure_${this.closureCount}_fn` for capturing path, `_lambda_${this.lambdaCount}_${retSuffix}` for non-capturing path. `_findFreeVars` (`closures.js`) excludes self name (3rd param `selfName`). `call-dispatch.js` checks `_isRecursiveSelf` before `tsc_closure` dispatch: emitting direct static call `_closure_N_fn(env, args)` (capturing) or `_lambda_N_ret(args)` (non-capturing) instead of indirect `fn.fn(env, args)`. Inside closure body, `env` is the first parameter name. Pattern mirrors `func.js:372` define-before-body for named functions.
+- **Closure type preservation** — Two call dispatch patterns: `isClosure:true` (capturing, passes `.env`: `((ret)(*)(void*,params)fn)(env, args)`) vs `funcPtr:true` (non-capturing, no `.env`: `((ret)(*)(params)fn)(args)`). Choice depends on whether the underlying C function expects `void*` first param. `func.js:395` sets `closureRetType` on function symbols for TypeFunc returns. `closures.js:181` sets `_returnsCapturingClosure` on enclosing function when hoisting a capturing closure in return context. `vardecl.js` Path C (line 1301) uses `_returnsCapturingClosure` to choose isClosure vs funcPtr. `infer.js:376` must check `!sym.funcName` — functions returning tsc_closure (funcName set) should return ctype, not closureRetType. Known limitations: chained calls `f()()` need temp-var mechanism; array-of-closures `arr[i]()` needs `.env` passing in non-Ident callee dispatch.
 
 ---
 
