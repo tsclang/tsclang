@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-13 (compact after #3).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-13 (compact after #1).
 
 ---
 
@@ -396,9 +396,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `1878551`
-- **GitHub Issues:** #1–#35. Closed: #3 (closure env heap), #8 (string concat leak), #14 (NULL check), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Memory safety: #1 (recursive type). Correctness: #2, #4, #5, #9, #10, #21, #22. Refactoring: #25–#31 (tech-debt).
-- **Bug fix progress:** #3 ✅, #8 ✅, #14 ✅, #34 ✅. Next: #1 (recursive type). Then correctness issues. Then refactoring Phase 1 (#25).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `c768558`
+- **GitHub Issues:** #1–#35. Closed: #1 (recursive type), #3 (closure env heap), #8 (string concat leak), #14 (NULL check), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Correctness: #2, #4, #5, #9, #10, #21, #22. Refactoring: #25–#31 (tech-debt).
+- **Bug fix progress:** #1 ✅, #3 ✅, #8 ✅, #14 ✅, #34 ✅. Next: correctness issues (#2, #4, #5, #9, #10, #21, #22). Then refactoring Phase 1 (#25).
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
@@ -406,7 +406,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 - **Compiler language: JS, not TS.** Port to TS rejected — huge effort, no user value, types would need rewrite after refactoring. JSDoc annotations on critical files (`codegen.js`, `types.js`, `parser.js`) for IDE support instead. Long-term goal: self-host in `.tsc`.
 - **IR/SSA: own, not TypeScript compiler API.** TSClang ≠ TypeScript — ownership types, capabilities, C emission are fundamentally different. `typescript` package (~40MB) is unacceptable for embedded tooling. Spec in `spec/16-tooling/16-compiler.md`.
-- **Bug fix priority before refactoring:** (1) ~~16 test failures~~ ✅ #34; (2) memory safety: ~~#14~~ ✅, ~~#8~~ ✅, ~~#3~~ ✅, #1; (3) correctness: #2, #4, #5, #9, #10, #21, #22; (4) then refactoring Phase 1 (#25). Rationale: P6 — can't refactor safely with red tests.
+- **Bug fix priority before refactoring:** (1) ~~16 test failures~~ ✅ #34; (2) memory safety: ~~#14~~ ✅, ~~#8~~ ✅, ~~#3~~ ✅, ~~#1~~ ✅; (3) correctness: #2, #4, #5, #9, #10, #21, #22; (4) then refactoring Phase 1 (#25). Rationale: P6 — can't refactor safely with red tests.
 
 ---
 
@@ -461,6 +461,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 - **`goto cleanup`** threshold: `_emitFuncCleanup` triggers when `_usesGotoCleanup && owned vars >= 2`.
 - **String concat chain (3+ operands)** — `_flattenStringConcat` recursively flattens `+` chain in `operators.js`; `_stringConcatChain` emits `tsc_string_concat_n((String[]){ ... }, N)` via C99 compound literal. Complex operands (heap String calls, non-string conversions) get temp vars + `_pushPostStmtCleanup` release. 2-operand case unchanged (`tsc_string_concat`).
 - **Closure env always heap-allocated** — `hoistClosure` always emits destroy function (`_closure_N_destroy`: releases strings + `free(env)`). All 6 allocation sites use `tsc_malloc`. Cleanup via `_registerCleanup(${destroyFn}(env))`. `_suppressCleanupFor`/`_hasCleanupFor` match `${name}_env)` pattern. Functions returning capturing closures tracked via `_returnsCapturingClosure` flag (set in `hoistClosure` when `_inReturnContext`); call dispatch passes `.env` for `isClosure || !funcPtr` closures.
+- **Recursive type detection** — `_resolvingTypes` Set tracks types currently being defined. In `visitTypeAlias` (TypeObject) and `visitInterface` (struct branch), name is added before field processing, removed after. If `resolveType` returns the type's own name → compile error ("use Ref/Arc/Mut for indirection"). Only catches direct by-value self-reference; indirect cycles (`A→B→A`) caught by C compiler. Pointer-based (`Ref<A>`, `Arc<A>`, `A[]`) not affected.
 
 ---
 
