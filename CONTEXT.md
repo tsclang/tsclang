@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-13.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-13 (compact after #14, #34).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1900 tests, 16 pre-existing failures in phases 1/10/11)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1900 tests, 0 `--no-gcc` failures; ~25 gcc failures in heap/pool — #35)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -82,9 +82,14 @@ God-object with ~300+ methods. Split across **46 files** via mixin pattern (modu
 
 **Cleanup system:**
 - `this._blockCleanupStack` — `[{ list: [], set: Set }]` — per-block owned-var cleanups
+- `this._heapVarStack` — `[{ name, className }][]` — per-block heap vars for auto-free at scope exit
 - `this._loopCleanupStack` — `Array<Array>` — stack of loop-level cleanup arrays (for labeled break)
 - `this._usesGotoCleanup` — boolean, throws functions use `goto cleanup` pattern
 - `this._throwsOwnedVars` — owned vars needing cleanup in throws functions
+- `_emitFuncCleanup(lines, I)` — emits all pending cleanups (block + heap) before return/throw
+- `_emitHeapCleanup(lines, I)` — emits `if (ptr != NULL) { Xxx_destructor(ptr); tsc_free(ptr); }` for all non-moved heap vars
+- `_hasPendingCleanups()` / `_hasPendingHeapCleanups()` — check if any cleanups are pending
+- `_snapshotHeapMoved()` / `_restoreHeapMoved(snapshot)` — save/restore `_moved` flags around conditional blocks (prevents leak when throw/return inside if-block marks vars moved but other paths still need cleanup)
 
 **Lazy emission guards (prevent duplicate C typedefs):**
 - `this._emittedArrayStructs` — `Set<'Array_i32', ...>` — `_ensureArrayStruct(ident, elemC)`
@@ -229,7 +234,7 @@ Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `arc
 - **Loop cleanup:** `_loopCleanupStack` — break/continue emit cleanups for loop-local vars.
 - **goto cleanup (throws functions):** `_usesGotoCleanup` — all cleanup at single `_cleanup:` label. Owned vars NULL-init'd. O(N+M) not O(N*M).
 - **Auto-destructors:** classes with string fields get `ClassName_free(ClassName*)` auto-generated (releases strings, does NOT free struct itself — value types on stack).
-- **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit.
+- **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit or before return (via `_emitHeapCleanup`). `_snapshotHeapMoved`/`_restoreHeapMoved` ensures conditional paths (throw inside if) don't leak.
 - **@pool classes:** `ClassName_drop(&ref, idx)` returns slot to pool.
 
 ### Arc/Weak (ARC, desktop only)
@@ -296,6 +301,8 @@ Single-header C library. `#include`d in every output. Key components:
 
 | Component | Purpose |
 |-----------|---------|
+| `_tsc_xmalloc`/`_tsc_xrealloc` | Fail-fast alloc wrappers — panic on NULL (OOM), all 83 malloc + 18 realloc calls routed through them |
+| `tsc_malloc`/`tsc_free` | Macros for @heap class codegen (`#define tsc_malloc _tsc_xmalloc`) |
 | `String` struct + ARC | String type with refcount |
 | `tsc_string_*` macros | retain/release/clone/eq/concat/format |
 | `Array_T` macros | `TSC_ARRAY_DECL(T,ident)` — create/push/pop/free/slice/get/map/filter/... |
@@ -368,7 +375,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1900 tests, 16 pre-existing failures** (phase1: 8, phase10: 1, phase11: 7 — all predate current refactoring cycle)
+**Total: ~1900 tests, 0 `--no-gcc` failures.** ~25 gcc compilation failures in phase11/heap + phase11/pool (#35, pre-existing codegen bugs unmasked by #34 fix: missing `Result_*` types, `->` vs `.`, missing default constructors).
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -389,8 +396,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** 33 issues (#1–#33) track all work. Labels: `investigation` (#1–#24), `tech-debt` (#25–#31, refactoring phases 1–7), `enhancement` (#32–#33)
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `20f5a54`
+- **GitHub Issues:** #1–#35. Closed: #14 (NULL check), #34 (test failures). Open bug: #35 (gcc compilation failures heap/pool). Memory safety: #1 (recursive type), #3 (closure env), #8 (string concat leak). Correctness: #2, #4, #5, #9, #10, #21, #22. Refactoring: #25–#31 (tech-debt).
+- **Bug fix progress:** #14 ✅, #34 ✅. Next: #8 (string concat leak), then #3 (closure env), then #1 (recursive type). Then correctness issues. Then refactoring Phase 1 (#25).
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
@@ -398,7 +406,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 - **Compiler language: JS, not TS.** Port to TS rejected — huge effort, no user value, types would need rewrite after refactoring. JSDoc annotations on critical files (`codegen.js`, `types.js`, `parser.js`) for IDE support instead. Long-term goal: self-host in `.tsc`.
 - **IR/SSA: own, not TypeScript compiler API.** TSClang ≠ TypeScript — ownership types, capabilities, C emission are fundamentally different. `typescript` package (~40MB) is unacceptable for embedded tooling. Spec in `spec/16-tooling/16-compiler.md`.
-- **Bug fix priority before refactoring:** (1) 16 test failures — 7 `@heap` tests in phase11 (likely single root cause), 1 format test in phase10; (2) memory safety issues #1, #3, #8, #14; (3) correctness issues #2, #4, #5, #9, #10, #21, #22; (4) then refactoring Phase 1. Rationale: P6 — can't refactor safely with red tests.
+- **Bug fix priority before refactoring:** (1) ~~16 test failures~~ ✅ #34; (2) memory safety: ~~#14~~ ✅, #8, #3, #1; (3) correctness: #2, #4, #5, #9, #10, #21, #22; (4) then refactoring Phase 1 (#25). Rationale: P6 — can't refactor safely with red tests.
 
 ---
 
