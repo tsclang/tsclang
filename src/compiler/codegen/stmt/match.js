@@ -46,7 +46,9 @@
       for (const c of cases) {
         const bodyC = this.exprToC(c.body, lines, depth);
         if (c.pattern.kind === 'MatchEnum') {
-          p(`    case ${c.pattern.enumName}_${c.pattern.caseName}: ${name} = ${bodyC}; break;`);
+          const _enumDef = this.classes.get(c.pattern.enumName);
+          const _enumCname = _enumDef?._cname ?? c.pattern.enumName;
+          p(`    case ${_enumCname}_${c.pattern.caseName}: ${name} = ${bodyC}; break;`);
         } else if (c.pattern.kind === 'MatchWild') {
           hasDefault = true;
           p(`    default: ${name} = ${bodyC}; break;`);
@@ -349,7 +351,11 @@
         return `${discC} == ${pattern.value}`;
       }
       case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} < ${pattern.hi}`;
-      case 'MatchEnum': return `${discC} == ${pattern.enumName}_${pattern.caseName}`;
+      case 'MatchEnum': {
+        const _enumDef = this.classes.get(pattern.enumName);
+        const _enumCname = _enumDef?._cname ?? pattern.enumName;
+        return `${discC} == ${_enumCname}_${pattern.caseName}`;
+      }
       case 'MatchIdent': {
         // Bare identifier: check if it's a known enum value or treat as wildcard
         if (enumDef) {

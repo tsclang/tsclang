@@ -196,14 +196,26 @@ export default {
         const needsStatic = this._libraryMode || this._funcRefVars?.has(node.name) || !!staticDec;
         if (needsStatic) {
           // Module-level variable → static global (not inside main)
+          const _origName = node.name;
+          if (this._modulePrefix) node.name = this._modulePrefix + _origName;
           const varLines = [];
           this.visitStmt(node, varLines, 0);
+          node.name = _origName;
           for (const line of varLines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
             this.topLevel.push('static ' + trimmed);
           }
           this.topLevel.push('');
+          if (this._modulePrefix) {
+            const _cName = this._modulePrefix + _origName;
+            const _sym = this.lookup(_cName);
+            if (_sym) {
+              this.scopes[this.scopes.length - 1].delete(_cName);
+              _sym._cAlias = _cName;
+              this.define(_origName, _sym);
+            }
+          }
         } else {
           // Runtime-init variable → stays inside main()
           this.visitStmtInMain(node);

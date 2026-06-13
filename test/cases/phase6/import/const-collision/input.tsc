@@ -1,0 +1,4 @@
+import { MAX as MAX_A } from "./a";
+import { MAX as MAX_B } from "./b";
+console.log(MAX_A);
+console.log(MAX_B);

@@ -17,10 +17,11 @@
         const enumDef = enumName ? this.classes.get(enumName) : null;
         if (enumDef?.isEnum) {
           if (enumDef.isConst) throw this.error(`"toString()" is not available on const enum`);
-          const memberC = `${enumName}_${callee.object.prop}`;
-          if (enumDef.isStringEnum) return `${enumName}_strings[(int)${memberC}]`;
-          if (enumDef.needsToString) return `${enumName}_toString(${memberC})`;
-          return `${enumName}_names[(int)${memberC}]`;
+          const ec = enumDef._cname ?? enumName;
+          const memberC = `${ec}_${callee.object.prop}`;
+          if (enumDef.isStringEnum) return `${ec}_strings[(int)${memberC}]`;
+          if (enumDef.needsToString) return `${ec}_toString(${memberC})`;
+          return `${ec}_names[(int)${memberC}]`;
         }
       }
       // Enum.values()
@@ -28,7 +29,7 @@
         const enumDef = this.classes.get(callee.object.name);
         if (enumDef?.isEnum) {
           if (enumDef.isConst) throw this.error(`"values()" is not available on const enum`);
-          return `${callee.object.name}_values`;
+          return `${enumDef._cname ?? callee.object.name}_values`;
         }
       }
       // Enum.fromValue(n) вЂ” needs helper function emitted at top
@@ -37,15 +38,16 @@
         const enumDef = this.classes.get(enumName);
         if (enumDef?.isEnum) {
           if (enumDef.isConst) throw this.error(`"fromValue()" is not available on const enum`);
+          const ec = enumDef._cname ?? enumName;
           const n = enumDef.members.length;
-          const helperName = `${enumName}_fromValue`;
+          const helperName = `${ec}_fromValue`;
           // Emit helper if not already emitted
           if (!this._emittedHelpers.has(helperName)) {
             this._emittedHelpers.add(helperName);
-            this.addTop(`typedef struct { bool has_value; ${enumName} value; } opt_${enumName};`);
-            this.addTop(`static inline opt_${enumName} ${helperName}(int32_t v) {`);
-            this.addTop(`    for (int i = 0; i < ${n}; i++) { if ((int32_t)${enumName}_values[i] == v) return (opt_${enumName}){true, ${enumName}_values[i]}; }`);
-            this.addTop(`    return (opt_${enumName}){false, 0};`);
+            this.addTop(`typedef struct { bool has_value; ${ec} value; } opt_${ec};`);
+            this.addTop(`static inline opt_${ec} ${helperName}(int32_t v) {`);
+            this.addTop(`    for (int i = 0; i < ${n}; i++) { if ((int32_t)${ec}_values[i] == v) return (opt_${ec}){true, ${ec}_values[i]}; }`);
+            this.addTop(`    return (opt_${ec}){false, 0};`);
             this.addTop(`}`);
             this.addTop(``);
           }

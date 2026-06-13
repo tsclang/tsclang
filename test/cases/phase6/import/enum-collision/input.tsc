@@ -1,0 +1,4 @@
+import { Color as ColorA } from "./a";
+import { Color as ColorB } from "./b";
+console.log(ColorA.Red);
+console.log(ColorB.Red);

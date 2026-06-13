@@ -88,8 +88,9 @@ export default {
           if (nsSym?._isNamespace) {
             const nsEntry = nsSym._namespaceExports?.[node.prop];
             if (nsEntry) {
-              // Put in local scope so subsequent uses work
               this.define(node.prop, nsEntry);
+              if (nsEntry._cAlias) return nsEntry._cAlias;
+              if (nsEntry.funcName && !nsEntry.funcPtr) return nsEntry.funcName;
               return node.prop;
             }
           }
@@ -182,7 +183,7 @@ export default {
         // Enum member access: Direction.North → Direction_North
         if (node.object.kind === 'Ident') {
           const enumDef = this.classes.get(node.object.name);
-          if (enumDef?.isEnum) return `${node.object.name}_${node.prop}`;
+          if (enumDef?.isEnum) return `${enumDef._cname ?? node.object.name}_${node.prop}`;
           // Labeled tuple field access: p.x → p._0 (look up via symbol type)
           const symForLabel = this.lookup(node.object.name);
           const tupleDef3 = symForLabel ? this.classes.get(symForLabel.ctype) : null;

@@ -6,6 +6,7 @@ export default {
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
     }
+    const cname = this._modulePrefix ? this._modulePrefix + name : name;
     let counter = 0;
     // Detect string enum: first member with a string value
     const isStringEnum = members.some(m => m.value?.litType === 'string');
@@ -38,26 +39,26 @@ export default {
       }
       return { name: m.name, val, numVal };
     });
-    this.addTop(`typedef enum { ${entries.map(e => `${name}_${e.name} = ${e.val}`).join(', ')} } ${name};`);
+    this.addTop(`typedef enum { ${entries.map(e => `${cname}_${e.name} = ${e.val}`).join(', ')} } ${cname};`);
     let needsToString = false;
     if (!isConst) {
       if (isStringEnum) {
-        this.addTop(`static const char *${name}_strings[] = { ${entries.map(e => `"${e.strVal}"`).join(', ')} };`);
+        this.addTop(`static const char *${cname}_strings[] = { ${entries.map(e => `"${e.strVal}"`).join(', ')} };`);
       } else {
-        this.addTop(`static const ${name} ${name}_values[] = { ${entries.map(e => `${name}_${e.name}`).join(', ')} };`);
+        this.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map(e => `${cname}_${e.name}`).join(', ')} };`);
         const numVals = entries.map(e => e.numVal);
         const isSequential = numVals.length > 0 && numVals.every((v, i) => v === i);
         if (isSequential) {
-          this.addTop(`static const char *${name}_names[] = { ${entries.map(e => `"${e.name}"`).join(', ')} };`);
+          this.addTop(`static const char *${cname}_names[] = { ${entries.map(e => `"${e.name}"`).join(', ')} };`);
         } else {
           needsToString = true;
-          const cases = entries.map(e => `        case ${name}_${e.name}: return "${e.name}";`).join('\n');
-          this.addTop(`static const char *${name}_toString(${name} v) {\n    switch (v) {\n${cases}\n        default: return "unknown";\n    }\n}`);
+          const cases = entries.map(e => `        case ${cname}_${e.name}: return "${e.name}";`).join('\n');
+          this.addTop(`static const char *${cname}_toString(${cname} v) {\n    switch (v) {\n${cases}\n        default: return "unknown";\n    }\n}`);
         }
       }
     }
     this.addTop('');
-    this.classes.set(name, { isEnum: true, isStringEnum, isConst, needsToString, members: entries });
+    this.classes.set(name, { isEnum: true, _cname: cname, isStringEnum, isConst, needsToString, members: entries });
   },
 
   // ----------------------------------------------------------------
