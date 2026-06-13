@@ -394,6 +394,12 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract `Emitter`/`ScopeManager`/`BorrowTracker`/`TypeRegistry` from Context (issue #25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
+### Architectural decisions (2026-06-13)
+
+- **Compiler language: JS, not TS.** Port to TS rejected — huge effort, no user value, types would need rewrite after refactoring. JSDoc annotations on critical files (`codegen.js`, `types.js`, `parser.js`) for IDE support instead. Long-term goal: self-host in `.tsc`.
+- **IR/SSA: own, not TypeScript compiler API.** TSClang ≠ TypeScript — ownership types, capabilities, C emission are fundamentally different. `typescript` package (~40MB) is unacceptable for embedded tooling. Spec in `spec/16-tooling/16-compiler.md`.
+- **Bug fix priority before refactoring:** (1) 16 test failures — 7 `@heap` tests in phase11 (likely single root cause), 1 format test in phase10; (2) memory safety issues #1, #3, #8, #14; (3) correctness issues #2, #4, #5, #9, #10, #21, #22; (4) then refactoring Phase 1. Rationale: P6 — can't refactor safely with red tests.
+
 ---
 
 ## 9. Gotchas & Non-Obvious Behavior
