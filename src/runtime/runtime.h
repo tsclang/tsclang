@@ -80,6 +80,24 @@
 #endif
 
 /* -------------------------------------------------------------------------
+ * Allocation helpers — fail-fast on OOM
+ * All heap allocations in the runtime go through these wrappers.
+ * If malloc/realloc returns NULL, a panic is emitted instead of a segfault.
+ * ------------------------------------------------------------------------- */
+static inline void *_tsc_xmalloc(size_t sz) {
+    void *p = malloc(sz);
+    if (!p) { fprintf(stderr, "panic: out of memory\n"); abort(); }
+    return p;
+}
+static inline void *_tsc_xrealloc(void *ptr, size_t sz) {
+    void *p = realloc(ptr, sz);
+    if (!p) { fprintf(stderr, "panic: out of memory\n"); abort(); }
+    return p;
+}
+#define tsc_malloc(sz) _tsc_xmalloc(sz)
+#define tsc_free(ptr) free(ptr)
+
+/* -------------------------------------------------------------------------
  * String — immutable, ARC on desktop, rodata-only on embedded
  * ------------------------------------------------------------------------- */
 #ifdef TSC_EMBEDDED
@@ -143,7 +161,7 @@ typedef struct {
 #define STR_LIT_RUNTIME(s) ((String){ .data = (s), .length = strlen(s), .capacity = 0, ._refcount = NULL })
 static inline String _tsc_str_make(const char *data, size_t len, size_t cap) {
     uint32_t *rc = NULL;
-    if (cap > 0) { rc = (uint32_t*)malloc(sizeof(uint32_t)); *rc = 1; }
+    if (cap > 0) { rc = (uint32_t*)_tsc_xmalloc(sizeof(uint32_t)); *rc = 1; }
     return (String){ .data = data, .length = len, .capacity = cap, ._refcount = rc };
 }
 static inline void tsc_string_retain(String s) {
@@ -236,7 +254,7 @@ static inline char *_tsc_str_malloc(size_t sz) {
 #ifdef TSC_EMBEDDED
     return _tsc_str_alloc(sz);
 #else
-    return (char *)malloc(sz);
+    return (char *)_tsc_xmalloc(sz);
 #endif
 }
 
@@ -450,7 +468,7 @@ static inline void tsc_date_set_time(Date *d, int64_t ms) { d->ms = ms; }
 static inline String tsc_date_to_iso_string(Date d) {
     time_t t = (time_t)(d.ms / 1000);
     struct tm *tm = gmtime(&t);
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     int ms = (int)(d.ms % 1000);
     if (ms < 0) ms += 1000;
     snprintf(buf, 32, "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
@@ -463,7 +481,7 @@ static inline String tsc_date_to_date_string(Date d) {
     static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     snprintf(buf, 32, "%s %s %02d %04d", days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
@@ -471,7 +489,7 @@ static inline String tsc_date_to_date_string(Date d) {
 static inline String tsc_date_to_time_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
     static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     snprintf(buf, 32, "%s %02d:%02d:%02d GMT+0000",
              days[tm->tm_wday], tm->tm_hour, tm->tm_min, tm->tm_sec);
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
@@ -479,7 +497,7 @@ static inline String tsc_date_to_time_string(Date d) {
 
 static inline String tsc_date_to_locale_date_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     snprintf(buf, 32, "%04d-%02d-%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
@@ -488,7 +506,7 @@ static inline String tsc_date_to_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
     static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
-    char *buf = (char *)malloc(64);
+    char *buf = (char *)_tsc_xmalloc(64);
     snprintf(buf, 64, "%s %s %02d %04d %02d:%02d:%02d GMT+0000",
              days[tm->tm_wday], months[tm->tm_mon], tm->tm_mday,
              tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -756,14 +774,14 @@ TSC_MAP_DECL(String, String, string_string)
         if (!_found_) { \
             _ki_ = _r_.size; \
             _r_._keys[_ki_] = _k_; \
-            _r_._vals[_ki_].data = (int32_t*)malloc(4 * sizeof(int32_t)); \
+            _r_._vals[_ki_].data = (int32_t*)_tsc_xmalloc(4 * sizeof(int32_t)); \
             _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
             _r_.size++; \
         } \
         Array_i32 *_slot_ = &_r_._vals[_ki_]; \
         if (_slot_->length >= _slot_->capacity) { \
             _slot_->capacity *= 2; \
-            _slot_->data = (int32_t*)realloc(_slot_->data, _slot_->capacity * sizeof(int32_t)); } \
+            _slot_->data = (int32_t*)_tsc_xrealloc(_slot_->data, _slot_->capacity * sizeof(int32_t)); } \
         _slot_->data[_slot_->length++] = _a_.data[_i_]; \
     } \
     _r_; })
@@ -780,14 +798,14 @@ TSC_MAP_DECL(String, String, string_string)
         if (!_found_) { \
             _ki_ = _r_.size; \
             _r_._keys[_ki_] = _k_; \
-            _r_._vals[_ki_].data = (String*)malloc(4 * sizeof(String)); \
+            _r_._vals[_ki_].data = (String*)_tsc_xmalloc(4 * sizeof(String)); \
             _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
             _r_.size++; \
         } \
         Array_string *_slot_ = &_r_._vals[_ki_]; \
         if (_slot_->length >= _slot_->capacity) { \
             _slot_->capacity *= 2; \
-            _slot_->data = (String*)realloc(_slot_->data, _slot_->capacity * sizeof(String)); } \
+            _slot_->data = (String*)_tsc_xrealloc(_slot_->data, _slot_->capacity * sizeof(String)); } \
         _slot_->data[_slot_->length++] = _a_.data[_i_]; \
     } \
     _r_; })
@@ -939,28 +957,28 @@ static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 
 #define tsc_set_values_i32(_s_) ({ \
     TscSet_i32 __s__ = (_s_); \
-    int32_t *__d__ = (int32_t*)malloc(__s__.size * sizeof(int32_t)); \
+    int32_t *__d__ = (int32_t*)_tsc_xmalloc(__s__.size * sizeof(int32_t)); \
     memcpy(__d__, __s__._vals, __s__.size * sizeof(int32_t)); \
     (Array_i32){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
 })
 
 #define tsc_set_values_string(_s_) ({ \
     TscSet_string __s__ = (_s_); \
-    String *__d__ = (String*)malloc(__s__.size * sizeof(String)); \
+    String *__d__ = (String*)_tsc_xmalloc(__s__.size * sizeof(String)); \
     for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__] = __s__._vals[__i__]; tsc_string_retain(__d__[__i__]); } \
     (Array_string){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
 })
 
 #define tsc_set_entries_i32(_s_) ({ \
     TscSet_i32 __s__ = (_s_); \
-    Tuple_i32_i32 *__d__ = (Tuple_i32_i32*)malloc(__s__.size * sizeof(Tuple_i32_i32)); \
+    Tuple_i32_i32 *__d__ = (Tuple_i32_i32*)_tsc_xmalloc(__s__.size * sizeof(Tuple_i32_i32)); \
     for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__]._0 = __s__._vals[__i__]; __d__[__i__]._1 = __s__._vals[__i__]; } \
     (Array_Tuple_i32_i32){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
 })
 
 #define tsc_set_entries_string(_s_) ({ \
     TscSet_string __s__ = (_s_); \
-    Tuple_string_string *__d__ = (Tuple_string_string*)malloc(__s__.size * sizeof(Tuple_string_string)); \
+    Tuple_string_string *__d__ = (Tuple_string_string*)_tsc_xmalloc(__s__.size * sizeof(Tuple_string_string)); \
     for (size_t __i__ = 0; __i__ < __s__.size; __i__++) { __d__[__i__]._0 = __s__._vals[__i__]; __d__[__i__]._1 = __s__._vals[__i__]; tsc_string_retain(__d__[__i__]._0); tsc_string_retain(__d__[__i__]._1); } \
     (Array_Tuple_string_string){.data = __d__, .length = __s__.size, .capacity = __s__.size}; \
 })
@@ -1121,7 +1139,7 @@ static inline String tsc_i32_to_string(int32_t v) {
     int n = sprintf(tmp, "%d", v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     int n = snprintf(buf, 32, "%d", v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
@@ -1144,7 +1162,7 @@ static inline String tsc_i64_to_string(int64_t v) {
     int n = sprintf(tmp, "%lld", (long long)v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     int n = snprintf(buf, 32, "%lld", (long long)v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
@@ -1163,7 +1181,7 @@ static inline String tsc_u64_to_string(uint64_t v) {
     int n = sprintf(tmp, "%llu", (unsigned long long)v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    char *buf = (char *)malloc(32);
+    char *buf = (char *)_tsc_xmalloc(32);
     int n = snprintf(buf, 32, "%llu", (unsigned long long)v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
@@ -1174,7 +1192,7 @@ static inline String tsc_f64_to_string(double v) {
     int n = sprintf(tmp, "%g", v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
-    char *buf = (char *)malloc(64);
+    char *buf = (char *)_tsc_xmalloc(64);
     int n = snprintf(buf, 64, "%g", v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 64);
 #endif
@@ -1703,7 +1721,7 @@ static inline bool tsc_env_has(String key) { return getenv(key.data) != NULL; }
 
 static inline Array_string tsc_make_argv(int argc, char **argv) {
     size_t n = (size_t)(argc > 0 ? argc : 0);
-    String *data = (String *)malloc(n * sizeof(String));
+    String *data = (String *)_tsc_xmalloc(n * sizeof(String));
     for (size_t i = 0; i < n; i++) {
         data[i].data = argv[i];
         data[i].length = strlen(argv[i]);
@@ -1730,7 +1748,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_create_i32(cap) ({ \
     size_t _c_ = (size_t)(cap); \
-    int32_t *_d_ = (int32_t*)malloc(_c_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_c_ * sizeof(int32_t)); \
     (Array_i32){ .data = _d_, .length = 0, .capacity = _c_ }; \
 })
 
@@ -1744,7 +1762,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     Array_i32 *_a_ = (arr); int32_t _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (int32_t*)realloc(_a_->data, _nc_ * sizeof(int32_t)); \
+        _a_->data = (int32_t*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(int32_t)); \
         _a_->capacity = _nc_; \
     } \
     _a_->data[_a_->length++] = _v_; \
@@ -1774,7 +1792,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_concat_i32(a, b) ({ \
     Array_i32 _a_ = (a), _b_ = (b); \
     size_t _n_ = _a_.length + _b_.length; \
-    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_n_ * sizeof(int32_t)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(int32_t)); \
     memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(int32_t)); \
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
@@ -1783,7 +1801,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_values_i32(arr) ({ \
     Array_i32 _a_ = (arr); \
     size_t _n_ = _a_.length; \
-    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_n_ * sizeof(int32_t)); \
     if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(int32_t)); \
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -1791,7 +1809,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_keys_i32(arr) ({ \
     Array_i32 _a_ = (arr); \
     size_t _n_ = _a_.length; \
-    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_n_ * sizeof(int32_t)); \
     for (size_t _i_ = 0; _i_ < _n_; _i_++) _d_[_i_] = (int32_t)_i_; \
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -1800,7 +1818,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
     Array_i32 _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
     if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
     size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
-    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_n_ * sizeof(int32_t)); \
     if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(int32_t)); \
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -1838,7 +1856,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_entries_i32(arr) ({ \
     Array_i32 _a_ = (arr); \
-    Tuple_i32_i32 *_d_ = (Tuple_i32_i32*)malloc(_a_.length * sizeof(Tuple_i32_i32)); \
+    Tuple_i32_i32 *_d_ = (Tuple_i32_i32*)_tsc_xmalloc(_a_.length * sizeof(Tuple_i32_i32)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_]._0 = (int32_t)_i_; _d_[_i_]._1 = _a_.data[_i_]; } \
     (Array_Tuple_i32_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -1920,7 +1938,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
         if ((pred)(&_a_.data[_i_])) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (String*)realloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
+                _r_.data = (String*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _a_.data[_i_]; \
         } \
@@ -1930,7 +1948,7 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_map_string_string(arr, fn) ({ \
     Array_string _a_ = (arr); \
-    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_a_.length * sizeof(String)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(&_a_.data[_i_]); \
     (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -1960,7 +1978,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
         if ((pred)(_a_.data[_i_])) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (int32_t*)realloc(_r_.data, _nc_ * sizeof(int32_t)); _r_.capacity = _nc_; \
+                _r_.data = (int32_t*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(int32_t)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _a_.data[_i_]; \
         } \
@@ -1970,7 +1988,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_map_i32_i32(arr, fn) ({ \
     Array_i32 _a_ = (arr); \
-    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
     (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -2006,7 +2024,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     Array_i32 *_a_ = (arr); int32_t _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (int32_t*)realloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
+        _a_->data = (int32_t*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
     } \
     memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(int32_t)); \
     _a_->data[0] = _v_; _a_->length++; \
@@ -2021,7 +2039,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     int32_t _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(int32_t); \
     Array_i32 _r_ = {NULL, 0, 0}; \
     if (_dc_ > 0) { \
-        _r_.data = (int32_t*)malloc((size_t)_dc_ * sizeof(int32_t)); \
+        _r_.data = (int32_t*)_tsc_xmalloc((size_t)_dc_ * sizeof(int32_t)); \
         memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(int32_t)); \
         _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
     } \
@@ -2029,7 +2047,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
     if (_new_len_ > _a_->capacity) { \
         size_t _nc_ = _new_len_ * 2; \
-        _a_->data = (int32_t*)realloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
+        _a_->data = (int32_t*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(int32_t)); _a_->capacity = _nc_; \
     } \
     if (_ni_ != (size_t)_dc_) { \
         memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(int32_t)); \
@@ -2048,7 +2066,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 #define tsc_array_with_i32(arr, idx, val) ({ \
     Array_i32 _a_ = (arr); int32_t _i_ = (idx); int32_t _v_ = (val); \
     if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
-    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(int32_t)); \
     _d_[(size_t)_i_] = _v_; \
     (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2064,14 +2082,14 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 #define tsc_array_join_i32(arr, sep) ({ \
     Array_i32 _a_ = (arr); String _sep_ = (sep); \
     String _jr_; \
-    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    if (_a_.length == 0) { char *_b_ = (char*)_tsc_xmalloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
     else { \
         char _buf_[16]; int _len_ = snprintf(_buf_, sizeof(_buf_), "%d", _a_.data[0]); \
         size_t _total_ = (size_t)_len_; \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
             _total_ += _sep_.length + 16; \
         } \
-        char *_out_ = (char*)malloc(_total_ + 1); \
+        char *_out_ = (char*)_tsc_xmalloc(_total_ + 1); \
         int _w_ = snprintf(_out_, _total_ + 1, "%d", _a_.data[0]); \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
             memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += (int)_sep_.length; \
@@ -2086,7 +2104,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     Array_i32 _a_ = (arr); \
     size_t _total_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_++; \
-    int32_t *_d_ = (int32_t*)malloc(_total_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_total_ * sizeof(int32_t)); \
     size_t _pos_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_pos_++] = _a_.data[_i_]; \
     (Array_i32){ .data = _d_, .length = _total_, .capacity = _total_ }; \
@@ -2096,7 +2114,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     Array_Array_i32 _a_ = (arr); \
     size_t _total_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_ += _a_.data[_i_].length; \
-    int32_t *_d_ = (int32_t*)malloc(_total_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_total_ * sizeof(int32_t)); \
     size_t _pos_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \
         for (size_t _j_ = 0; _j_ < _a_.data[_i_].length; _j_++) \
@@ -2128,7 +2146,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
         for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (int32_t*)realloc(_r_.data, _nc_ * sizeof(int32_t)); _r_.capacity = _nc_; \
+                _r_.data = (int32_t*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(int32_t)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _chunk_.data[_j_]; \
         } \
@@ -2139,14 +2157,14 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_to_reversed_i32(arr) ({ \
     Array_i32 _a_ = (arr); \
-    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; \
     (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
 
 #define tsc_array_to_sorted_i32(arr) ({ \
     Array_i32 _a_ = (arr); \
-    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(int32_t)); \
     qsort(_d_, _a_.length, sizeof(int32_t), _tsc_cmp_i32_asc); \
     (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2160,7 +2178,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
     int32_t _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(int32_t); \
     size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
-    int32_t *_d_ = (int32_t*)malloc(_new_len_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_new_len_ * sizeof(int32_t)); \
     memcpy(_d_, _a_.data, (size_t)_s_ * sizeof(int32_t)); \
     memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(int32_t)); \
     memcpy(_d_ + _s_ + _ni_, _a_.data + _s_ + _dc_, (_a_.length - (size_t)_s_ - (size_t)_dc_) * sizeof(int32_t)); \
@@ -2177,7 +2195,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 #define tsc_array_resize_i32(arr, new_len, def_val) do { \
     Array_i32 *_a_ = (arr); size_t _nl_ = (size_t)(new_len); int32_t _dv_ = (def_val); \
     if (_nl_ > _a_->capacity) { \
-        int32_t *_nd_ = (int32_t*)malloc(_nl_ * sizeof(int32_t)); \
+        int32_t *_nd_ = (int32_t*)_tsc_xmalloc(_nl_ * sizeof(int32_t)); \
         if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(int32_t)); \
         for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \
         _a_->data = _nd_; _a_->capacity = _nl_; \
@@ -2189,7 +2207,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_reallocate_i32(arr, new_cap) do { \
     Array_i32 *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \
-    int32_t *_nd_ = (int32_t*)malloc(_nc_ * sizeof(int32_t)); \
+    int32_t *_nd_ = (int32_t*)_tsc_xmalloc(_nc_ * sizeof(int32_t)); \
     size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \
     if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(int32_t)); \
     _a_->data = _nd_; _a_->capacity = _nc_; \
@@ -2213,7 +2231,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     Array_string *_a_ = (arr); String _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); \
+        _a_->data = (String*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(String)); \
         _a_->capacity = _nc_; \
     } \
     _a_->data[_a_->length++] = _v_; \
@@ -2237,7 +2255,7 @@ static inline int _tsc_cmp_string_user_adapter(const void *a, const void *b) {
     Array_string _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
     if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
     size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
-    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_n_ * sizeof(String)); \
     if (_n_) { memcpy(_d_, _a_.data + _s_, _n_ * sizeof(String)); \
                for (size_t _i_ = 0; _i_ < _n_; _i_++) tsc_string_retain(_d_[_i_]); } \
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
@@ -2252,7 +2270,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
 #define tsc_array_values_f64(arr) ({ \
     Array_f64 _a_ = (arr); \
     size_t _n_ = _a_.length; \
-    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_n_ * sizeof(double)); \
     if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(double)); \
     (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -2266,7 +2284,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
 #define tsc_array_with_f64(arr, idx, val) ({ \
     Array_f64 _a_ = (arr); int32_t _i_ = (idx); double _v_ = (val); \
     if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
     _d_[(size_t)_i_] = _v_; \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2282,12 +2300,12 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
 #define tsc_array_join_f64(arr, sep) ({ \
     Array_f64 _a_ = (arr); String _sep_ = (sep); \
     String _jr_; \
-    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    if (_a_.length == 0) { char *_b_ = (char*)_tsc_xmalloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
     else { \
         char _buf_[32]; int _len_ = snprintf(_buf_, sizeof(_buf_), "%g", _a_.data[0]); \
         size_t _total_ = (size_t)_len_; \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) _total_ += _sep_.length + 32; \
-        char *_out_ = (char*)malloc(_total_ + 1); \
+        char *_out_ = (char*)_tsc_xmalloc(_total_ + 1); \
         int _w_ = snprintf(_out_, _total_ + 1, "%g", _a_.data[0]); \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
             memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += (int)_sep_.length; \
@@ -2300,14 +2318,14 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
 
 #define tsc_array_map_i32_f64(arr, fn) ({ \
     Array_i32 _a_ = (arr); \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
 
 #define tsc_array_map_f64_f64(arr, fn) ({ \
     Array_f64 _a_ = (arr); \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(_a_.data[_i_]); \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -2345,7 +2363,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     Array_f64 *_a_ = (arr); double _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
+        _a_->data = (double*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
     } \
     memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(double)); \
     _a_->data[0] = _v_; _a_->length++; \
@@ -2360,7 +2378,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     double _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(double); \
     Array_f64 _r_ = {NULL, 0, 0}; \
     if (_dc_ > 0) { \
-        _r_.data = (double*)malloc((size_t)_dc_ * sizeof(double)); \
+        _r_.data = (double*)_tsc_xmalloc((size_t)_dc_ * sizeof(double)); \
         memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(double)); \
         _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
     } \
@@ -2368,7 +2386,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
     if (_new_len_ > _a_->capacity) { \
         size_t _nc_ = _new_len_ * 2; \
-        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
+        _a_->data = (double*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(double)); _a_->capacity = _nc_; \
     } \
     if (_ni_ != (size_t)_dc_) { \
         memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(double)); \
@@ -2382,7 +2400,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     Array_f64 _a_ = (arr); \
     size_t _total_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _total_++; \
-    double *_d_ = (double*)malloc(_total_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_total_ * sizeof(double)); \
     size_t _pos_ = 0; \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_pos_++] = _a_.data[_i_]; \
     (Array_f64){ .data = _d_, .length = _total_, .capacity = _total_ }; \
@@ -2396,7 +2414,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
         for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (double*)realloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
+                _r_.data = (double*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _chunk_.data[_j_]; \
         } \
@@ -2422,14 +2440,14 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
 
 #define tsc_array_to_reversed_f64(arr) ({ \
     Array_f64 _a_ = (arr); \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
 
 #define tsc_array_to_sorted_f64(arr) ({ \
     Array_f64 _a_ = (arr); \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
     qsort(_d_, _a_.length, sizeof(double), _tsc_cmp_f64_asc); \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2443,7 +2461,7 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
     double _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(double); \
     size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
-    double *_d_ = (double*)malloc(_new_len_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_new_len_ * sizeof(double)); \
     memcpy(_d_, _a_.data, (size_t)_s_ * sizeof(double)); \
     memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(double)); \
     memcpy(_d_ + _s_ + _ni_, _a_.data + _s_ + _dc_, (_a_.length - (size_t)_s_ - (size_t)_dc_) * sizeof(double)); \
@@ -2457,7 +2475,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_create_f64(cap) ({ \
     size_t _c_ = (size_t)(cap); \
-    double *_d_ = (double*)malloc(_c_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_c_ * sizeof(double)); \
     (Array_f64){ .data = _d_, .length = 0, .capacity = _c_ }; \
 })
 
@@ -2471,7 +2489,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
     Array_f64 *_a_ = (arr); double _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (double*)realloc(_a_->data, _nc_ * sizeof(double)); \
+        _a_->data = (double*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(double)); \
         _a_->capacity = _nc_; \
     } \
     _a_->data[_a_->length++] = _v_; \
@@ -2487,7 +2505,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 #define tsc_array_concat_f64(a, b) ({ \
     Array_f64 _a_ = (a), _b_ = (b); \
     size_t _n_ = _a_.length + _b_.length; \
-    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_n_ * sizeof(double)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(double)); \
     memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(double)); \
     (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
@@ -2497,7 +2515,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
     Array_f64 _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \
     if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \
     size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \
-    double *_d_ = (double*)malloc(_n_ * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_n_ * sizeof(double)); \
     if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(double)); \
     (Array_f64){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -2572,7 +2590,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
         if ((pred)(_a_.data[_i_])) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (double*)realloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
+                _r_.data = (double*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(double)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _a_.data[_i_]; \
         } \
@@ -2596,7 +2614,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 #define tsc_array_resize_f64(arr, new_len, def_val) do { \
     Array_f64 *_a_ = (arr); size_t _nl_ = (size_t)(new_len); double _dv_ = (def_val); \
     if (_nl_ > _a_->capacity) { \
-        double *_nd_ = (double*)malloc(_nl_ * sizeof(double)); \
+        double *_nd_ = (double*)_tsc_xmalloc(_nl_ * sizeof(double)); \
         if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(double)); \
         for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \
         _a_->data = _nd_; _a_->capacity = _nl_; \
@@ -2608,7 +2626,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_reallocate_f64(arr, new_cap) do { \
     Array_f64 *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \
-    double *_nd_ = (double*)malloc(_nc_ * sizeof(double)); \
+    double *_nd_ = (double*)_tsc_xmalloc(_nc_ * sizeof(double)); \
     size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \
     if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(double)); \
     _a_->data = _nd_; _a_->capacity = _nc_; \
@@ -2634,21 +2652,21 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
         if (!_found_) { \
             _ki_ = _r_.size; \
             _r_._keys[_ki_] = _k_; \
-            _r_._vals[_ki_].data = (double*)malloc(4 * sizeof(double)); \
+            _r_._vals[_ki_].data = (double*)_tsc_xmalloc(4 * sizeof(double)); \
             _r_._vals[_ki_].length = 0; _r_._vals[_ki_].capacity = 4; \
             _r_.size++; \
         } \
         Array_f64 *_slot_ = &_r_._vals[_ki_]; \
         if (_slot_->length >= _slot_->capacity) { \
             _slot_->capacity *= 2; \
-            _slot_->data = (double*)realloc(_slot_->data, _slot_->capacity * sizeof(double)); } \
+            _slot_->data = (double*)_tsc_xrealloc(_slot_->data, _slot_->capacity * sizeof(double)); } \
         _slot_->data[_slot_->length++] = _a_.data[_i_]; \
     } \
     _r_; })
 
 #define tsc_array_cast_f64_i32(arr) ({ \
     Array_f64 _a_ = (arr); \
-    int32_t *_d_ = (int32_t*)malloc(_a_.length * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
         _d_[_i_] = (int32_t)_a_.data[_i_]; \
     (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2656,7 +2674,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 
 #define tsc_array_cast_i32_f64(arr) ({ \
     Array_i32 _a_ = (arr); \
-    double *_d_ = (double*)malloc(_a_.length * sizeof(double)); \
+    double *_d_ = (double*)_tsc_xmalloc(_a_.length * sizeof(double)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) \
         _d_[_i_] = (double)_a_.data[_i_]; \
     (Array_f64){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
@@ -2677,7 +2695,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
     Array_string *_a_ = (arr); String _v_ = (val); \
     if (_a_->length >= _a_->capacity) { \
         size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \
-        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
+        _a_->data = (String*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
     } \
     memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(String)); \
     _a_->data[0] = _v_; _a_->length++; \
@@ -2692,7 +2710,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
     String _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(String); \
     Array_string _r_ = {NULL, 0, 0}; \
     if (_dc_ > 0) { \
-        _r_.data = (String*)malloc((size_t)_dc_ * sizeof(String)); \
+        _r_.data = (String*)_tsc_xmalloc((size_t)_dc_ * sizeof(String)); \
         memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(String)); \
         _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \
     } \
@@ -2700,7 +2718,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
     size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \
     if (_new_len_ > _a_->capacity) { \
         size_t _nc_ = _new_len_ * 2; \
-        _a_->data = (String*)realloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
+        _a_->data = (String*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(String)); _a_->capacity = _nc_; \
     } \
     if (_ni_ != (size_t)_dc_) { \
         memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(String)); \
@@ -2719,7 +2737,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 #define tsc_array_with_string(arr, idx, val) ({ \
     Array_string _a_ = (arr); int32_t _i_ = (idx); String _v_ = (val); \
     if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \
-    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_a_.length * sizeof(String)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
     for (size_t _j_ = 0; _j_ < _a_.length; _j_++) tsc_string_retain(_d_[_j_]); \
     tsc_string_retain(_v_); \
@@ -2744,7 +2762,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_array_to_sorted_string(arr) ({ \
     Array_string _a_ = (arr); \
-    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_a_.length * sizeof(String)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
     for (size_t _j_ = 0; _j_ < _a_.length; _j_++) tsc_string_retain(_d_[_j_]); \
     qsort(_d_, _a_.length, sizeof(String), _tsc_cmp_string_asc); \
@@ -2754,11 +2772,11 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 #define tsc_array_join_string(arr, sep) ({ \
     Array_string _a_ = (arr); String _sep_ = (sep); \
     String _jr_; \
-    if (_a_.length == 0) { char *_b_ = (char*)malloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
+    if (_a_.length == 0) { char *_b_ = (char*)_tsc_xmalloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
     else { \
         size_t _total_ = _a_.data[0].length; \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) _total_ += _sep_.length + _a_.data[_i_].length; \
-        char *_out_ = (char*)malloc(_total_ + 1); \
+        char *_out_ = (char*)_tsc_xmalloc(_total_ + 1); \
         memcpy(_out_, _a_.data[0].data, _a_.data[0].length); \
         size_t _w_ = _a_.data[0].length; \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
@@ -2772,7 +2790,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_array_flat_string(arr) ({ \
     Array_string _a_ = (arr); \
-    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_a_.length * sizeof(String)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_] = _a_.data[_i_]; tsc_string_retain(_d_[_i_]); } \
     (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -2800,7 +2818,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
         for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \
             if (_r_.length >= _r_.capacity) { \
                 size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \
-                _r_.data = (String*)realloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
+                _r_.data = (String*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(String)); _r_.capacity = _nc_; \
             } \
             _r_.data[_r_.length++] = _chunk_.data[_j_]; \
         } \
@@ -2811,7 +2829,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_array_to_reversed_string(arr) ({ \
     Array_string _a_ = (arr); \
-    String *_d_ = (String*)malloc(_a_.length * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_a_.length * sizeof(String)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; tsc_string_retain(_d_[_i_]); } \
     (Array_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -2824,7 +2842,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \
     String _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(String); \
     size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \
-    String *_d_ = (String*)malloc(_new_len_ * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_new_len_ * sizeof(String)); \
     for (size_t _j_ = 0; _j_ < (size_t)_s_; _j_++) { _d_[_j_] = _a_.data[_j_]; tsc_string_retain(_d_[_j_]); } \
     memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(String)); \
     for (size_t _j_ = 0; _j_ < _ni_; _j_++) tsc_string_retain(_d_[_s_ + _j_]); \
@@ -2838,7 +2856,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 /* keys: returns Array_string of all keys (heap-allocated copy) */
 #define tsc_map_keys_string_i32(_m_) ({ \
     const TscMap_string_i32 *_mk_ = (_m_); \
-    String *_dk_ = (String*)malloc(_mk_->size * sizeof(String)); \
+    String *_dk_ = (String*)_tsc_xmalloc(_mk_->size * sizeof(String)); \
     memcpy(_dk_, _mk_->_keys, _mk_->size * sizeof(String)); \
     (Array_string){ .data = _dk_, .length = _mk_->size, .capacity = _mk_->size }; \
 })
@@ -2846,7 +2864,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 /* entries: returns Array_MapEntry_string_i32 (heap-allocated copy) */
 #define tsc_map_entries_string_i32(_m_) ({ \
     const TscMap_string_i32 *_me_ = (_m_); \
-    MapEntry_string_i32 *_de_ = (MapEntry_string_i32*)malloc(_me_->size * sizeof(MapEntry_string_i32)); \
+    MapEntry_string_i32 *_de_ = (MapEntry_string_i32*)_tsc_xmalloc(_me_->size * sizeof(MapEntry_string_i32)); \
     for (size_t _i_ = 0; _i_ < _me_->size; _i_++) { _de_[_i_].key = _me_->_keys[_i_]; _de_[_i_].value = _me_->_vals[_i_]; } \
     (Array_MapEntry_string_i32){ .data = _de_, .length = _me_->size, .capacity = _me_->size }; \
 })
@@ -2858,7 +2876,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_map_values_string_i32(_m_) ({ \
     const TscMap_string_i32 *_mv_ = (_m_); \
-    int32_t *_dv_ = (int32_t*)malloc(_mv_->size * sizeof(int32_t)); \
+    int32_t *_dv_ = (int32_t*)_tsc_xmalloc(_mv_->size * sizeof(int32_t)); \
     memcpy(_dv_, _mv_->_vals, _mv_->size * sizeof(int32_t)); \
     (Array_i32){ .data = _dv_, .length = _mv_->size, .capacity = _mv_->size }; \
 })
@@ -2870,7 +2888,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 #define tsc_array_concat_string(a, b) ({ \
     Array_string _a_ = (a), _b_ = (b); \
     size_t _n_ = _a_.length + _b_.length; \
-    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_n_ * sizeof(String)); \
     memcpy(_d_, _a_.data, _a_.length * sizeof(String)); \
     memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(String)); \
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
@@ -2879,7 +2897,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 #define tsc_array_values_string(arr) ({ \
     Array_string _a_ = (arr); \
     size_t _n_ = _a_.length; \
-    String *_d_ = (String*)malloc(_n_ * sizeof(String)); \
+    String *_d_ = (String*)_tsc_xmalloc(_n_ * sizeof(String)); \
     if (_n_) memcpy(_d_, _a_.data, _n_ * sizeof(String)); \
     (Array_string){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -2887,7 +2905,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 #define tsc_array_keys_string(arr) ({ \
     Array_string _a_ = (arr); \
     size_t _n_ = _a_.length; \
-    int32_t *_d_ = (int32_t*)malloc(_n_ * sizeof(int32_t)); \
+    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_n_ * sizeof(int32_t)); \
     for (size_t _i_ = 0; _i_ < _n_; _i_++) _d_[_i_] = (int32_t)_i_; \
     (Array_i32){ .data = _d_, .length = _n_, .capacity = _n_ }; \
 })
@@ -2919,7 +2937,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_array_entries_string(arr) ({ \
     Array_string _a_ = (arr); \
-    Tuple_i32_string *_d_ = (Tuple_i32_string*)malloc(_a_.length * sizeof(Tuple_i32_string)); \
+    Tuple_i32_string *_d_ = (Tuple_i32_string*)_tsc_xmalloc(_a_.length * sizeof(Tuple_i32_string)); \
     for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { _d_[_i_]._0 = (int32_t)_i_; _d_[_i_]._1 = _a_.data[_i_]; } \
     (Array_Tuple_i32_string){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \
 })
@@ -2933,7 +2951,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 #define tsc_array_resize_string(arr, new_len, def_val) do { \
     Array_string *_a_ = (arr); size_t _nl_ = (size_t)(new_len); String _dv_ = (def_val); \
     if (_nl_ > _a_->capacity) { \
-        String *_nd_ = (String*)malloc(_nl_ * sizeof(String)); \
+        String *_nd_ = (String*)_tsc_xmalloc(_nl_ * sizeof(String)); \
         if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(String)); \
         for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \
         _a_->data = _nd_; _a_->capacity = _nl_; \
@@ -2945,7 +2963,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_array_reallocate_string(arr, new_cap) do { \
     Array_string *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \
-    String *_nd_ = (String*)malloc(_nc_ * sizeof(String)); \
+    String *_nd_ = (String*)_tsc_xmalloc(_nc_ * sizeof(String)); \
     size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \
     if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(String)); \
     _a_->data = _nd_; _a_->capacity = _nc_; \
@@ -2958,21 +2976,21 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 
 #define tsc_map_keys_string_string(_m_) ({ \
     const TscMap_string_string *_mk_ = (_m_); \
-    String *_dk_ = (String*)malloc(_mk_->size * sizeof(String)); \
+    String *_dk_ = (String*)_tsc_xmalloc(_mk_->size * sizeof(String)); \
     memcpy(_dk_, _mk_->_keys, _mk_->size * sizeof(String)); \
     (Array_string){ .data = _dk_, .length = _mk_->size, .capacity = _mk_->size }; \
 })
 
 #define tsc_map_values_string_string(_m_) ({ \
     const TscMap_string_string *_mv_ = (_m_); \
-    String *_dv_ = (String*)malloc(_mv_->size * sizeof(String)); \
+    String *_dv_ = (String*)_tsc_xmalloc(_mv_->size * sizeof(String)); \
     memcpy(_dv_, _mv_->_vals, _mv_->size * sizeof(String)); \
     (Array_string){ .data = _dv_, .length = _mv_->size, .capacity = _mv_->size }; \
 })
 
 #define tsc_map_entries_string_string(_m_) ({ \
     const TscMap_string_string *_me_ = (_m_); \
-    MapEntry_string_string *_de_ = (MapEntry_string_string*)malloc(_me_->size * sizeof(MapEntry_string_string)); \
+    MapEntry_string_string *_de_ = (MapEntry_string_string*)_tsc_xmalloc(_me_->size * sizeof(MapEntry_string_string)); \
     for (size_t _i_ = 0; _i_ < _me_->size; _i_++) { _de_[_i_].key = _me_->_keys[_i_]; _de_[_i_].value = _me_->_vals[_i_]; } \
     (Array_MapEntry_string_string){ .data = _de_, .length = _me_->size, .capacity = _me_->size }; \
 })
@@ -3087,7 +3105,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
         memcpy(buf, start, len);
     }
 #else
-    char *buf = (char *)malloc(len + 1);
+    char *buf = (char *)_tsc_xmalloc(len + 1);
     memcpy(buf, start, len);
 #endif
     buf[len] = '\0';
@@ -3101,14 +3119,14 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
  * ------------------------------------------------------------------------- */
 #define tsc_encode_utf8(_tsc_str) ({ \
     String _es = (_tsc_str); \
-    uint8_t *_ebuf = (uint8_t *)malloc(_es.length); \
+    uint8_t *_ebuf = (uint8_t *)_tsc_xmalloc(_es.length); \
     memcpy(_ebuf, _es.data, _es.length); \
     (Array_u8){ .data = _ebuf, .length = _es.length, .capacity = _es.length }; \
 })
 
 #define tsc_decode_utf8(_tsc_bytes) ({ \
     size_t _dlen = (_tsc_bytes).length; \
-    char *_dbuf = (char *)malloc(_dlen + 1); \
+    char *_dbuf = (char *)_tsc_xmalloc(_dlen + 1); \
     memcpy(_dbuf, (_tsc_bytes).data, _dlen); \
     _dbuf[_dlen] = '\0'; \
     _tsc_str_make(_dbuf, _dlen, _dlen + 1); \
@@ -3204,7 +3222,7 @@ static DWORD WINAPI _tsc_thread_trampoline(LPVOID arg) {
     return 0;
 }
 static inline tsc_thread_t tsc_thread_spawn(void *(*fn)(void *), void *arg) {
-    _TscThread *t = (_TscThread *)malloc(sizeof(_TscThread));
+    _TscThread *t = (_TscThread *)_tsc_xmalloc(sizeof(_TscThread));
     t->_fn = fn; t->_arg = arg;
     t->_h = CreateThread(NULL, 0, _tsc_thread_trampoline, t, 0, NULL);
     return t;
@@ -3257,8 +3275,8 @@ typedef struct { \
 } TscChannel_##TNAME; \
 \
 static inline TscChannel_##TNAME *tsc_channel_create_##TNAME(size_t cap) { \
-    TscChannel_##TNAME *ch = (TscChannel_##TNAME *)malloc(sizeof(TscChannel_##TNAME)); \
-    ch->_data   = (T *)malloc(cap * sizeof(T)); \
+    TscChannel_##TNAME *ch = (TscChannel_##TNAME *)_tsc_xmalloc(sizeof(TscChannel_##TNAME)); \
+    ch->_data   = (T *)_tsc_xmalloc(cap * sizeof(T)); \
     ch->_cap    = cap; \
     ch->_len    = 0; \
     ch->_head   = 0; \
