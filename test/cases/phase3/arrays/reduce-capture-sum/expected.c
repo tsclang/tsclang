@@ -4,6 +4,11 @@ typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 typedef struct { int32_t factor; } _closure_0_env;
 
+static void _closure_0_destroy(void *_env) {
+    _closure_0_env *env = (_closure_0_env *)_env;
+    free(env);
+}
+
 static int32_t _closure_0_fn(_closure_0_env *env, int32_t acc, int32_t x) {
     return acc + x * env->factor;
 }
@@ -14,8 +19,9 @@ static int32_t _closure_0_adapter(int32_t _p0, int32_t _p1) {
 }
 
 int32_t sumScaled_Array_i32_i32(Array_i32 items, int32_t factor) {
-    _closure_0_env _cb_env_0 = {.factor = factor};
-    _tsc_cb_env_0 = &_cb_env_0;
+    _closure_0_env *_cb_env_0 = tsc_malloc(sizeof(_closure_0_env));
+    *_cb_env_0 = (_closure_0_env){.factor = factor};
+    _tsc_cb_env_0 = _cb_env_0;
     return tsc_array_reduce_i32_f64(items, _closure_0_adapter, 0);
 }
 

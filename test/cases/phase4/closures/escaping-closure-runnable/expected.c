@@ -7,8 +7,8 @@ static void _closure_0_destroy(void *_env) {
     free(env);
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
-    return env->n + 1;
+static int32_t _closure_0_fn(_closure_0_env *env, int32_t x) {
+    return x + env->n;
 }
 
 tsc_closure makeAdder_i32(int32_t n) {
@@ -21,7 +21,7 @@ int main(void) {
     TSC_INIT();
     tsc_closure add5 = makeAdder_i32(5);
     tsc_closure add10 = makeAdder_i32(10);
-    printf("%d\n", ((int32_t (*)(void *))add5.fn)(add5.env));
-    printf("%d\n", ((int32_t (*)(void *))add10.fn)(add10.env));
+    printf("%d\n", ((int32_t (*)(void *, int32_t))add5.fn)(add5.env, 3));
+    printf("%d\n", ((int32_t (*)(void *, int32_t))add10.fn)(add10.env, 3));
     return 0;
 }

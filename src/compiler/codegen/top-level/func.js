@@ -397,7 +397,10 @@ export default {
       }
     }
 
+    const prevFuncName = this._curFuncName;
+    this._curFuncName = name;
     const lines = this.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx, isNever);
+    this._curFuncName = prevFuncName;
     // Track whether this function heap-allocates String return values
     if (retType === 'String') {
       const heapOps = ['tsc_string_concat','tsc_string_repeat','tsc_string_replace',

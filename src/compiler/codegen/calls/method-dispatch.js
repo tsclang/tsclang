@@ -815,8 +815,9 @@ export default {
         const envLocal = `_cb_env_${envIdx}`;
         const envGlobal = `_tsc_cb_env_${envIdx}`;
         this.addLambda(`static ${closure.envName} *${envGlobal};`);
-        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} ${envLocal} = ${closure.envInit};`);
-        lines.push(`${' '.repeat(this.indent * depth)}${envGlobal} = &${envLocal};`);
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envLocal} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(this.indent * depth)}*${envLocal} = (${closure.envName})${closure.envInit};`);
+        lines.push(`${' '.repeat(this.indent * depth)}${envGlobal} = ${envLocal};`);
         const hint = this._lambdaParamHint ?? [];
         const adapterParams = hint.length > 0
           ? hint.map((ct, i) => `${ct} _p${i}`).join(', ')

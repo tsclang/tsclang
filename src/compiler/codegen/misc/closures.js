@@ -175,6 +175,11 @@ export default {
     }
     if (captured.size === 0) return null;
 
+    if (this._inReturnContext && this._curFuncName) {
+      const fnSym = this.lookup(this._curFuncName);
+      if (fnSym) fnSym._returnsCapturingClosure = true;
+    }
+
     const n = this.closureCount++;
     const closureName = `_closure_${n}`;
     const envName = `${closureName}_env`;
@@ -210,7 +215,7 @@ export default {
     this.addLambda('');
 
     const destroyFnName = `${closureName}_destroy`;
-    if (hasStringCapture) {
+    {
       this.addLambda(`static void ${destroyFnName}(void *_env) {`);
       this.addLambda(`    ${envName} *env = (${envName} *)_env;`);
       for (const nm of capturedStringFields) {

@@ -126,8 +126,9 @@ export default {
         const paramTypes = args.map(a => this.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
         const envName = `_iife_env_${this.closureCount - 1}`;
-        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} ${envName} = ${closure.envInit};`);
-        return `((${closure.ret} (*)(${sigArgs}))${closure.fnName})(&${envName}${argsC ? ', ' + argsC : ''})`;
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(this.indent * depth)}*${envName} = (${closure.envName})${closure.envInit};`);
+        return `((${closure.ret} (*)(${sigArgs}))${closure.fnName})(${envName}${argsC ? ', ' + argsC : ''})`;
       }
       const fnName = this.hoistArrow(callee, 'void', '_iife');
       const argsC = this.argsToC(args, lines, depth);
@@ -183,7 +184,7 @@ export default {
       const argsC = this.argsToC(args, lines, depth);
       const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
-      if (sym.isClosure) {
+      if (sym.isClosure || !sym.funcPtr) {
         this._releaseQuarantineBy(callee.name);
         const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
         const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
@@ -462,7 +463,7 @@ export default {
         if (paramType === 'tsc_closure' && a.expr.kind === 'Ident') {
           const argSym = this.lookup(a.expr.name);
           if (argSym?.isClosure && argSym._closureEnvName) {
-            return `(tsc_closure){.env = &${a.expr.name}_env, .fn = (void*)${argSym._closureFnName}}`;
+            return `(tsc_closure){.env = ${a.expr.name}_env, .fn = (void*)${argSym._closureFnName}}`;
           }
           if (argSym?.funcPtr && argSym.ctype === 'tsc_closure') {
             return a.expr.name;
@@ -481,8 +482,9 @@ export default {
               const I = ' '.repeat(this.indent * depth);
               for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
             }
-            lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _cb_env_${this.closureCount - 1} = ${closure.envInit};`);
-            return `(tsc_closure){.env = &_cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
+            lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *_cb_env_${this.closureCount - 1} = tsc_malloc(sizeof(${closure.envName}));`);
+            lines.push(`${' '.repeat(this.indent * depth)}*_cb_env_${this.closureCount - 1} = (${closure.envName})${closure.envInit};`);
+            return `(tsc_closure){.env = _cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
           }
           const lambdaName = this.hoistArrow(a.expr, 'void', '_cb');
           return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;

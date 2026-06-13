@@ -415,7 +415,7 @@ class Context {
     if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
     if (this._usesGotoCleanup && this._gotoCleanupPreDecls) {
       for (const vname of this._gotoCleanupPreDecls.keys()) {
-        if (stmt.includes(`&${vname})`) || stmt.includes(`(${vname})`)) {
+        if (stmt.includes(`&${vname})`) || stmt.includes(`(${vname})`) || stmt.includes(`(${vname}_env)`)) {
           if (!this._throwsOwnedVars.includes(stmt)) {
             this._throwsOwnedVars.push(stmt);
           }
@@ -541,25 +541,22 @@ class Context {
   }
 
   _suppressCleanupFor(varName) {
+    const matchers = [
+      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
+    ];
+    const matches = (s) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       const level = this._blockCleanupStack[b];
       for (let i = level.list.length - 1; i >= 0; i--) {
-        const stmt = level.list[i];
-        if (stmt.includes(`&${varName})`) || stmt.includes(`(${varName})`) || stmt.includes(`(${varName},`)) {
-          level.list.splice(i, 1);
-        }
+        if (matches(level.list[i])) level.list.splice(i, 1);
       }
       level.set = new Set(level.list);
     }
     if (this._loopBodyCleanups) {
-      this._loopBodyCleanups = this._loopBodyCleanups.filter(
-        s => !s.includes(`&${varName})`) && !s.includes(`(${varName})`) && !s.includes(`(${varName},`)
-      );
+      this._loopBodyCleanups = this._loopBodyCleanups.filter(s => !matches(s));
     }
     if (this._throwsOwnedVars) {
-      this._throwsOwnedVars = this._throwsOwnedVars.filter(
-        s => !s.includes(`&${varName})`) && !s.includes(`(${varName})`) && !s.includes(`(${varName},`)
-      );
+      this._throwsOwnedVars = this._throwsOwnedVars.filter(s => !matches(s));
     }
   }
 
@@ -582,14 +579,18 @@ class Context {
   }
 
   _hasCleanupFor(varName) {
+    const matchers = [
+      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
+    ];
+    const matches = (s) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       for (const stmt of this._blockCleanupStack[b].list) {
-        if (stmt.includes(`&${varName})`) || stmt.includes(`(${varName})`) || stmt.includes(`(${varName},`)) return true;
+        if (matches(stmt)) return true;
       }
     }
     if (this._loopBodyCleanups) {
       for (const s of this._loopBodyCleanups) {
-        if (s.includes(`&${varName})`) || s.includes(`(${varName})`) || s.includes(`(${varName},`)) return true;
+        if (matches(s)) return true;
       }
     }
     return false;

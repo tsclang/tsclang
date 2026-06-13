@@ -517,11 +517,13 @@ export default {
         const closure = this.hoistClosure(node, '_lambda');
         if (closure) {
           if (closure.retainLines?.length) {
-            const I = ' '.repeat(this.indent * depth);
-            for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
-          }
-          lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} _lambda_env_${this.closureCount - 1} = ${closure.envInit};`);
-          return `(tsc_closure){.env = &_lambda_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
+          const I = ' '.repeat(this.indent * depth);
+          for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+        }
+        const envLocal = `_lambda_env_${this.closureCount - 1}`;
+        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envLocal} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(this.indent * depth)}*${envLocal} = (${closure.envName})${closure.envInit};`);
+        return `(tsc_closure){.env = ${envLocal}, .fn = (void*)${closure.fnName}}`;
         }
         const lambdaName = this.hoistArrow(node, 'void', '_lambda');
         return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;

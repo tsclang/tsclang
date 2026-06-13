@@ -16,10 +16,11 @@ int main(void) {
     TSC_INIT();
     const String prefix = STR_LIT("Hello");
     tsc_string_retain(prefix);
-    _closure_0_env greet_env = {.prefix = prefix};
-    tsc_closure greet = {.env = &greet_env, .fn = (void*)_closure_0_fn};
+    _closure_0_env *greet_env = tsc_malloc(sizeof(_closure_0_env));
+    *greet_env = (_closure_0_env){.prefix = prefix};
+    tsc_closure greet = {.env = greet_env, .fn = (void*)_closure_0_fn};
     printf("%s\n", ((String (*)(void *, String))greet.fn)(greet.env, STR_LIT("World")).data);
-    tsc_string_release(greet_env.prefix);
+    _closure_0_destroy(greet_env);
     tsc_string_release(prefix);
     return 0;
 }

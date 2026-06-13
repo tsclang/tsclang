@@ -4,6 +4,11 @@ typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 typedef struct { int32_t threshold; } _closure_0_env;
 
+static void _closure_0_destroy(void *_env) {
+    _closure_0_env *env = (_closure_0_env *)_env;
+    free(env);
+}
+
 static bool _closure_0_fn(_closure_0_env *env, int32_t x) {
     return x > env->threshold;
 }
@@ -14,8 +19,9 @@ static bool _closure_0_adapter(int32_t _p0) {
 }
 
 Array_i32 filterAbove_Array_i32_i32(Array_i32 items, int32_t threshold) {
-    _closure_0_env _cb_env_0 = {.threshold = threshold};
-    _tsc_cb_env_0 = &_cb_env_0;
+    _closure_0_env *_cb_env_0 = tsc_malloc(sizeof(_closure_0_env));
+    *_cb_env_0 = (_closure_0_env){.threshold = threshold};
+    _tsc_cb_env_0 = _cb_env_0;
     return tsc_array_filter_i32(items, _closure_0_adapter);
 }
 

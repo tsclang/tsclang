@@ -2,6 +2,11 @@
 
 typedef struct { double a; } _closure_0_env;
 
+static void _closure_0_destroy(void *_env) {
+    _closure_0_env *env = (_closure_0_env *)_env;
+    free(env);
+}
+
 static int32_t _closure_0_fn(_closure_0_env *env) {
     return env->a + 1;
 }
@@ -11,9 +16,11 @@ int main(void) {
     double result = 0.0;
     {
         double a = 10.0;
-        _closure_0_env f_env = {.a = a};
-        tsc_closure f = {.env = &f_env, .fn = (void*)_closure_0_fn};
+        _closure_0_env *f_env = tsc_malloc(sizeof(_closure_0_env));
+        *f_env = (_closure_0_env){.a = a};
+        tsc_closure f = {.env = f_env, .fn = (void*)_closure_0_fn};
         result = ((int32_t (*)(void *))f.fn)(f.env);
+        _closure_0_destroy(f_env);
     }
     printf("%g\n", (double)(result));
     return 0;

@@ -1,0 +1,9 @@
+// [R] Escaping closure: closure returned from function, env must outlive caller's stack frame
+function makeAdder(n: i32): (i32) => i32 {
+    return (x: i32): i32 => x + n;
+}
+
+const add5 = makeAdder(5);
+const add10 = makeAdder(10);
+console.log(add5(3));
+console.log(add10(3));

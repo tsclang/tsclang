@@ -1113,15 +1113,12 @@ export default {
               if (closure.retainLines?.length) {
                 for (const rl of closure.retainLines) p(rl);
               }
-              p(`${closure.envName} ${name}_env = ${closure.envInit};`);
-              p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
+              p(`${closure.envName} *${name}_env = tsc_malloc(sizeof(${closure.envName}));`);
+              p(`*${name}_env = (${closure.envName})${closure.envInit};`);
+              p(`tsc_closure ${name} = {.env = ${name}_env, .fn = (void*)${closure.fnName}};`);
               this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _closureParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
-                                  ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
-              if (closure.hasStringCapture) {
-                for (const nm of closure.capturedStringFields ?? []) {
-                  this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
-                }
-              }
+                                  closureDestroyFn: closure.destroyFnName });
+              this._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
               return;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
@@ -1181,15 +1178,12 @@ export default {
               if (closure.retainLines?.length) {
                 for (const rl of closure.retainLines) p(rl);
               }
-              p(`${closure.envName} ${name}_env = ${closure.envInit};`);
-              p(`tsc_closure ${name} = {.env = &${name}_env, .fn = (void*)${closure.fnName}};`);
+              p(`${closure.envName} *${name}_env = tsc_malloc(sizeof(${closure.envName}));`);
+              p(`*${name}_env = (${closure.envName})${closure.envInit};`);
+              p(`tsc_closure ${name} = {.env = ${name}_env, .fn = (void*)${closure.fnName}};`);
               this.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _arrowParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
-                                  ...(closure.hasStringCapture ? { closureDestroyFn: closure.destroyFnName } : {}) });
-              if (closure.hasStringCapture) {
-                for (const nm of closure.capturedStringFields ?? []) {
-                  this._registerCleanup(`tsc_string_release(${name}_env.${nm})`);
-                }
-              }
+                                  closureDestroyFn: closure.destroyFnName });
+              this._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
               return;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
@@ -1281,7 +1275,8 @@ export default {
               const initC = this.exprToC(init, lines, depth);
               p(`${this.typeDecl(callSym.returnType, name)} = ${initC};`);
               const _retFuncParams = callSym.returnType.params ? callSym.returnType.params.map(pt => this.resolveType(pt)) : undefined;
-              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}), ...(_retFuncParams ? { closureParamTypes: _retFuncParams } : {}) });
+              const _returnsClosure = !!callSym._returnsCapturingClosure;
+              this.define(name, { ctype: 'tsc_closure', ...(_returnsClosure ? { isClosure: true } : { funcPtr: true }), varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}), ...(_retFuncParams ? { closureParamTypes: _retFuncParams } : {}) });
               return;
             }
             if (init.kind === 'Index' && !ctype.endsWith(' *') && typeAnn?.name !== 'Ref') {
