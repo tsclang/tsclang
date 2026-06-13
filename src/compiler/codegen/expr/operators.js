@@ -164,6 +164,16 @@ export default {
       }
     }
 
+    // String concat chain (3+ operands): flatten and use tsc_string_concat_n
+    // to avoid leaking intermediate heap-allocated String temporaries.
+    // Must intercept before l/r computation to prevent duplicate exprToC calls.
+    if (node.op === '+' && this.isStringExpr(node.left)) {
+      const operands = this._flattenStringConcat(node);
+      if (operands.length >= 3) {
+        return this._stringConcatChain(operands, lines, depth);
+      }
+    }
+
     // Error: binary operations on unknown type (must narrow first via typeof)
     const _allBinaryOps = ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>'];
     if (_allBinaryOps.includes(node.op)) {
@@ -317,6 +327,55 @@ export default {
       if (sym?.ctype === 'String *') return `(*${cexpr})`;
     }
     return cexpr;
+  },
+
+  _flattenStringConcat(node) {
+    if (node.kind === 'Binary' && node.op === '+' && this.isStringExpr(node.left)) {
+      return [...this._flattenStringConcat(node.left), node.right];
+    }
+    return [node];
+  },
+
+  _stringConcatChain(operands, lines, depth) {
+    const I = ' '.repeat(this.indent * depth);
+    const parts = [];
+    const temps = [];
+
+    for (const operand of operands) {
+      const c = this.exprToC(operand, lines, depth);
+      const t = this.inferType(operand);
+
+      let part;
+      let needsTemp = false;
+
+      if (t === 'String *') {
+        part = this._derefStringPtr(operand, c);
+      } else if (t === 'String') {
+        part = this._derefStringPtr(operand, c);
+        if (this._isHeapStringInit(operand)) needsTemp = true;
+      } else {
+        const etIdent = this.cTypeToIdent(t);
+        part = `tsc_${etIdent}_to_string(${c})`;
+        needsTemp = true;
+      }
+
+      if (needsTemp) {
+        const tmp = `_tsc_cat_${this.tempCount++}`;
+        lines.push(`${I}String ${tmp} = ${part};`);
+        parts.push(tmp);
+        temps.push(tmp);
+      } else {
+        parts.push(part);
+      }
+    }
+
+    for (let i = temps.length - 1; i >= 0; i--) {
+      this._pushPostStmtCleanup(`${I}tsc_string_release(${temps[i]});`);
+    }
+
+    if (parts.length <= 1) return parts[0] || 'STR_LIT("")';
+    if (parts.length === 2) return `tsc_string_concat(${parts[0]}, ${parts[1]})`;
+    return `tsc_string_concat_n((String[]){ ${parts.join(', ')} }, ${parts.length})`;
   },
 
   // ----------------------------------------------------------------

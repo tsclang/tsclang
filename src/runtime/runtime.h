@@ -1227,6 +1227,20 @@ static inline String tsc_string_concat(String a, String b) {
     return _tsc_str_make(buf, len, len + 1);
 }
 
+/* Concatenate N strings → single heap allocation (avoids intermediate leaks) */
+static inline String tsc_string_concat_n(const String *parts, size_t n) {
+    size_t total = 0;
+    for (size_t i = 0; i < n; i++) total += parts[i].length;
+    char *buf = _tsc_str_malloc(total + 1);
+    size_t pos = 0;
+    for (size_t i = 0; i < n; i++) {
+        _tsc_str_copy_to(buf + pos, &parts[i], 0, parts[i].length);
+        pos += parts[i].length;
+    }
+    buf[total] = '\0';
+    return _tsc_str_make(buf, total, total + 1);
+}
+
 /* Format string → new heap String (like sprintf) */
 #ifdef __AVR__
 static size_t _tsc_format_impl(char *buf, const char *fmt, va_list ap) {

@@ -46,7 +46,7 @@ export default {
       return { kind: 'expr', t, c };
     });
 
-    // If all expressions are strings → use tsc_string_concat chain
+    // If all expressions are strings → use tsc_string_concat / tsc_string_concat_n
     const allStrings = compiled.every(p => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
     if (allStrings) {
       const pieces = [];
@@ -57,7 +57,8 @@ export default {
       }
       if (pieces.length === 0) return 'STR_LIT("")';
       if (pieces.length === 1) return pieces[0];
-      return pieces.reduce((acc, p) => `tsc_string_concat(${acc}, ${p})`);
+      if (pieces.length === 2) return `tsc_string_concat(${pieces[0]}, ${pieces[1]})`;
+      return `tsc_string_concat_n((String[]){ ${pieces.join(', ')} }, ${pieces.length})`;
     }
 
     // Mixed types → use tsc_string_format

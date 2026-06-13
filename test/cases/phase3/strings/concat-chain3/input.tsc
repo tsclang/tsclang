@@ -1,0 +1,5 @@
+const a: string = "hello";
+const b: string = " ";
+const c: string = "world";
+const d = a + b + c;
+console.log(d);
