@@ -1,0 +1,6 @@
+const base: i32 = 10;
+const sumBase = (n: i32): i32 => {
+    if (n <= 0) return base;
+    return n + sumBase(n - 1);
+};
+console.log(sumBase(5));

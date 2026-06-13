@@ -101,7 +101,7 @@ export default {
 
   // Walk an AST node and collect all Ident references that are free variables
   // (defined in outer scope, not in params or locally defined within the body).
-  _findFreeVars(body, paramNames) {
+  _findFreeVars(body, paramNames, selfName) {
     const params = new Set(paramNames);
     const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
     const captured = new Map(); // name → symInfo
@@ -112,6 +112,7 @@ export default {
       if (Array.isArray(n)) { n.forEach(x => walk(x, localDefs)); return; }
       if (n.kind === 'Ident') {
         const nm = n.name;
+        if (selfName && nm === selfName) return;
         if (!params.has(nm) && !localDefs.has(nm) && !builtins.has(nm) && !seen.has(nm)) {
           const sym = this.lookup(nm);
           if (sym) { seen.add(nm); captured.set(nm, sym); }
@@ -171,7 +172,7 @@ export default {
         }
       }
     } else {
-      captured = this._findFreeVars(arrowNode.body, paramNames);
+      captured = this._findFreeVars(arrowNode.body, paramNames, varName);
     }
     if (captured.size === 0) return null;
 

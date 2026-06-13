@@ -179,6 +179,16 @@ export default {
       calleeC = this.exprToC(callee, lines, depth);
     }
 
+    // Recursive self-call: direct static call (no function pointer indirection)
+    if (sym?._isRecursiveSelf && sym?._closureFnName && callee.kind === 'Ident') {
+      const argsC = this.argsToC(args, lines, depth);
+      this._releaseQuarantineBy(callee.name);
+      if (sym.isClosure) {
+        return `${sym._closureFnName}(env${argsC ? ', ' + argsC : ''})`;
+      }
+      return `${sym._closureFnName}(${argsC})`;
+    }
+
     // tsc_closure call: closure variable or func-ptr variable (not a regular function)
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = this.argsToC(args, lines, depth);

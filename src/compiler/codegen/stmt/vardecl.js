@@ -1108,6 +1108,9 @@ export default {
           const _closureParamCtypes = (typeAnn.params ?? []).map(p => this.resolveType(p));
           let initC;
           if (init?.kind === 'Arrow') {
+            // Pre-declare for recursion support (before hoistClosure compiles body)
+            const _predFnName = `_closure_${this.closureCount}_fn`;
+            this.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = this.hoistClosure(init, name);
             if (closure) {
               if (closure.retainLines?.length) {
@@ -1120,6 +1123,14 @@ export default {
                                   closureDestroyFn: closure.destroyFnName });
               this._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
               return;
+            }
+            // Non-capturing: update pre-declared symbol for lambda path
+            const _selfSym = this.lookup(name);
+            if (_selfSym) {
+              _selfSym.isClosure = false;
+              _selfSym.funcPtr = true;
+              const _predRet = init.returnType ? this.resolveType(init.returnType) : this.inferArrowReturn(init);
+              _selfSym._closureFnName = `_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet)}`;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);
@@ -1173,6 +1184,9 @@ export default {
               throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
             }
             const _arrowParamCtypes = (init.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *');
+            // Pre-declare for recursion support (before hoistClosure compiles body)
+            const _predFnName = `_closure_${this.closureCount}_fn`;
+            this.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = this.hoistClosure(init, name);
             if (closure) {
               if (closure.retainLines?.length) {
@@ -1185,6 +1199,14 @@ export default {
                                   closureDestroyFn: closure.destroyFnName });
               this._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
               return;
+            }
+            // Non-capturing: update pre-declared symbol for lambda path
+            const _selfSym2 = this.lookup(name);
+            if (_selfSym2) {
+              _selfSym2.isClosure = false;
+              _selfSym2.funcPtr = true;
+              const _predRet2 = init.returnType ? this.resolveType(init.returnType) : this.inferArrowReturn(init);
+              _selfSym2._closureFnName = `_lambda_${this.lambdaCount}_${this.cTypeToIdent(_predRet2)}`;
             }
             const lambdaName = this.hoistArrow(init, 'void', name);
             const lambdaRet = this.inferArrowReturn(init);
