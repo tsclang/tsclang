@@ -69,7 +69,7 @@ TSClang — компилятор TypeScript-подобного языка (ра�
 
 - CLI: `tsclang` (npm-пакет, `bin/index.js`)
 - Таргеты: desktop (libuv) и embedded (AVR, без heap-async)
-- Текущий статус: компилятор реализован (фазы 0–19), 1942 теста (16 failing — см. issues)
+- Текущий статус: компилятор реализован (фазы 0–19)
 
 ## Ключевые файлы
 
@@ -95,56 +95,6 @@ TSClang — компилятор TypeScript-подобного языка (ра�
 - Не добавлять фичи сверх запрошенного
 - Изменения в дизайне фиксировать в `spec/`, прогресс — в GitHub Issues
 - Код компилятора на JavaScript (Node.js, ESM)
-
-## Структура проекта
-
-```
-src/compiler/         — компилятор
-  lexer.js            — лексер
-  parser.js           — парсер
-  types.js            — вспомогательные типы и манглинг
-  codegen.js          — точка входа кодогенератора, класс Context
-  codegen/
-    top-level.js      — реэкспорт из top-level/ (ClassDecl, FuncDecl, Interface, Enum, TypeAlias)
-    top-level/        — 6 модулей: dispatch, func, class, program, decorators, types-alias
-    stmt.js           — тонкий диспетчер (visitStmtInMain)
-    stmt/             — 4 модуля: vardecl, control-flow, destruct, match
-    expr.js           — реэкспорт из expr/
-    expr/             — 4 модуля: dispatch, operators, assign, literals
-    calls/            — 8 модулей: call-dispatch, method-dispatch, console, stdlib,
-    │                    builtin, builtin-helpers, conversion, concurrency
-    types.js          — реэкспорт из types/
-    types/            — 3 модуля: resolve, infer, helpers
-    misc.js           — реэкспорт из misc/
-    misc/             — 4 модуля: emit-helpers, new-expr, closures, arrays
-    async.js          — реэкспорт из async/
-    async/            — 5 модулей: async-stmt, async-emit, generator, helpers, scan
-    generics.js       — монорфизация дженериков
-src/runtime/          — runtime.h (заголовочный файл для C-output)
-bin/index.js          — CLI (команда build)
-test/runner.js        — тест-раннер
-test/cases/           — тестовый корпус (phase0–phase19)
-  phase0/             — Core runtime (30 тестов)
-  phase1/             — Базовый парсинг (536 тестов)
-  phase2/             — Система типов (322 тестов)
-  phase3/             — Модель памяти (360 тестов)
-  phase4/             — Классы и интерфейсы (81 тестов)
-  phase5/             — Обработка ошибок (27 тестов)
-  phase6/             — Модули и платформы (48 тестов)
-  phase7/             — Async/await (81 тестов)
-  phase8/             — Конкурентность (44 тестов)
-  phase9/             — CLI и сборка (57 тестов)
-  phase10/            — Строки и кодировки (20 тестов)
-  phase11/            — Платформо-зависимый код (69 тестов)
-  phase12/            — Embedded runtime (119 тестов)
-  phase13/            — Декораторы (21 тестов)
-  phase14/            — Reactive (7 тестов)
-  phase15/            — Regex (10 тестов)
-  phase16/            — LSP (3 тестов)
-  phase17/            — Linter (12 тестов)
-  phase18/            — Оптимизатор (21 тестов)
-  phase19/            — IO/Net/WS (74 тестов)
-```
 
 ## Тесты
 
@@ -178,7 +128,3 @@ const result = codegen(ast, 'desktop');
 ```
 
 **Никогда не запускай `tsclang build` без `--outDir` из корня проекта** — артефакты (`.c`, `CMakeLists.txt`) попадут в корень и засорят его.
-
-## Текущий статус тестов
-
-- Все 20 фаз: 1942 теста, 1926 проходят, 16 падают (phase1: 8, phase10: 1, phase11: 7)
