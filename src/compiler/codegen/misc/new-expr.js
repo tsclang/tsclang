@@ -161,22 +161,23 @@ export default {
     // Known class with constructor
     const cls = this.classes.get(name);
     if (cls) {
+      const cname = cls._cname ?? name;
       // Heap class: new HeapClass() → malloc + constructor (auto-free on scope exit)
       if (cls._isHeap) {
         this._lastSuppressConst = true;
         const tmpName = `_heap_${this.tempCount++}`;
         this.includes.add('#include <stdlib.h>');
-        lines.push(`${name} *${tmpName} = (${name} *)tsc_malloc(sizeof(${name}));`);
+        lines.push(`${cname} *${tmpName} = (${cname} *)tsc_malloc(sizeof(${cname}));`);
         const hasCtor = cls.methods?.some(m => m.name === 'constructor');
         const ctorArgs = hasCtor ? node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ') : '';
-        lines.push(`*${tmpName} = ${name}_new(${ctorArgs});`);
+        lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
         return tmpName;
       }
       // Pool class: new PoolClass() → alloc from pool + null check
       if (cls._isPool) {
-        this._ensurePoolAlloc(name);
+        this._ensurePoolAlloc(cname);
         this._lastSuppressConst = true;
-        const allocResult = `${name}_alloc()`;
+        const allocResult = `${cname}_alloc()`;
         const tmpName = `_pool_${this.tempCount++}`;
         lines.push(`${cls._poolOptType} ${tmpName} = ${allocResult};`);
         if (!this._throwsCtx && !this._inTryBlock) {
@@ -200,7 +201,7 @@ export default {
         const hasCtor = cls.methods?.some(m => m.name === 'constructor');
         if (hasCtor && node.args?.length > 0) {
           const argsC = node.args.map(a => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
-          lines.push(`*${tmpName}.value = ${name}_new(${argsC});`);
+          lines.push(`*${tmpName}.value = ${cname}_new(${argsC});`);
         }
         return tmpName;
       }
@@ -209,9 +210,9 @@ export default {
       const allReadonly = cls.fields?.length > 0 &&
         cls.fields.every(f => f.modifiers?.includes('readonly'));
       if (!allReadonly) this._lastSuppressConst = true;
-      if (hasCtor) return `${name}_new(${argsC})`;
+      if (hasCtor) return `${cname}_new(${argsC})`;
       // Throws classes have a synthesized _new(String msg) function
-      if (cls._isThrowsClass) return `${name}_new(${argsC})`;
+      if (cls._isThrowsClass) return `${cname}_new(${argsC})`;
       // Class decorator inits: flag for injection after VarDecl emit
       if (cls._decoratorInits?.length) this._pendingDecoratorInits = cls._decoratorInits;
       // @readonly fields with initializers → designated initializer syntax
@@ -223,7 +224,7 @@ export default {
         return `{ ${parts.join(', ')} }`;
       }
       // In return context, compound literal syntax is required; in declarations, {0} works too
-      return this._inReturnContext ? `(${name}){0}` : `{0}`;
+      return this._inReturnContext ? `(${cname}){0}` : `{0}`;
     }
 
     // Unknown: zero-init struct

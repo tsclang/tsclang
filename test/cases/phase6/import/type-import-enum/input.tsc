@@ -1,0 +1,4 @@
+import { Color } from "./colors";
+export function toHex(c: Color): i32 {
+    return c;
+}

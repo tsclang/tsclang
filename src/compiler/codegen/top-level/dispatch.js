@@ -45,7 +45,13 @@ export default {
           for (const n of (names ?? [])) {
             const origName = typeof n === 'object' ? n.name : n;
             const exportName = typeof n === 'object' && n.alias ? n.alias : origName;
-            const entry = this.lookup(origName);
+            let entry = this.lookup(origName);
+            if (!entry) {
+              entry = this.classes.get(origName);
+              if (!entry && this._typeAliases?.has(origName)) {
+                entry = { _isTypeAlias: true, cType: this._typeAliases.get(origName) };
+              }
+            }
             if (entry) this._exports.set(exportName, entry);
           }
         }
@@ -63,7 +69,14 @@ export default {
         // Track exported symbol for bundle system
         const _exportedName = node.decl?.name;
         if (_exportedName) {
-          const _entry = this.lookup(_exportedName);
+          let _entry = this.lookup(_exportedName);
+          if (!_entry) {
+            // Types live in type tables, not scope
+            _entry = this.classes.get(_exportedName);
+            if (!_entry && this._typeAliases?.has(_exportedName)) {
+              _entry = { _isTypeAlias: true, cType: this._typeAliases.get(_exportedName) };
+            }
+          }
           if (_entry) this._exports.set(_exportedName, _entry);
         }
         break;

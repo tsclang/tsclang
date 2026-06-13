@@ -79,7 +79,14 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
         const renames = importRenames.get(resolvedPath);
         for (const [name, entry] of Object.entries(moduleExports)) {
           const localName = renames?.get(name) ?? name;
-          ctx.define(localName, entry);
+          if (entry._isTypeAlias) {
+            ctx._typeAliases.set(localName, entry.cType);
+          } else if (entry.isStruct || entry.isEnum || entry.isScalarAlias) {
+            // Type entry (class/interface/enum/struct) → register in type table
+            ctx.classes.set(localName, entry);
+          } else {
+            ctx.define(localName, entry);
+          }
         }
       }
     }

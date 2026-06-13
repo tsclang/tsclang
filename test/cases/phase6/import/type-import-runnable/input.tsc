@@ -1,0 +1,5 @@
+import { Vec3 } from "./vec";
+export function dot(a: Vec3, b: Vec3): f64 {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+console.log(dot(new Vec3(1, 2, 3), new Vec3(4, 5, 6)));

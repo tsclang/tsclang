@@ -1,0 +1,4 @@
+import { Point } from "./shapes";
+export function magnitude(p: Point): f64 {
+    return p.x * p.x + p.y * p.y;
+}

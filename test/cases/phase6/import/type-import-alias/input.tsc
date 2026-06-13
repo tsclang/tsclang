@@ -1,0 +1,4 @@
+import { UserId } from "./types";
+export function validate(id: UserId): i32 {
+    return id;
+}
