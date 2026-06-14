@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #7 #11 #12).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #36).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1943 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1953 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -380,7 +380,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1958 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
+**Total: ~1968 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -401,8 +401,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `2b4889e`
-- **GitHub Issues:** #1–#36. **All bugs closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13 (correctness). Open: #25–#31 (tech-debt refactoring), #36 (numeric auto-cast enhancement), #15–#20, #24, #32–#33 (investigation/enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `2380850`
+- **GitHub Issues:** #1–#36. **All bugs closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness/enhancement). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
@@ -482,6 +482,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **Integer literal range check (#12)** — `_checkLiteralFitsType(node, ctype)` in `literals.js`: compile error if literal overflows target integer type. Full range table for i8-i64, u8-u64. Uses `constVal()` (handles Unary minus). Called from `vardecl.js` before `literalToCTyped` when `typeAnn` is set. Spec: `03-numbers.md:178-199`.
 - **safe-arith strict rule (#11)** — Integer `+`, `-`, `*` = compile error when `safe-arith` enabled. Pattern mirrors `safe-div`: `operators.js` (binary ops) + `assign.js` (compound `+=`, `-=`, `*=`). Escape hatches: `Math.checkedAdd/Sub/Mul` via `__builtin_*_overflow` → returns `opt_T` (null on overflow). Type inference in `infer.js` returns `opt_<ident>`. GCC statement expression `({ ... })` used for inline checked arithmetic. Spec: `13-strict-mode.md` (new section, SIL3 preset).
 - **PROGMEM string sort on AVR (#7)** — `_tsc_cmp_string_asc` in `runtime.h`: `#ifdef __AVR__` branch uses `_tsc_str_get` byte-by-byte instead of `memcmp` (which reads SRAM, not flash). Same pattern as `_tsc_str_eq`. Cannot be tested without avr-gcc + simavr.
+- **Numeric auto-cast (#36)** — Three-mechanism system: (1) implicit narrowing = error; (2) explicit `as` = OK (blocked by `no-lossy-cast`); (3) safe functions = always OK. `_isSafeWidening(src, dst)` in `helpers.js` — algorithmic widening matrix (bit sizes + signedness), replaces old ad-hoc `illegalConversions` table (5 pairs). Rules: int→int widening OK if dst wider AND NOT signed→unsigned; int→float OK if bits ≤ mantissa (f32=24, f64=53); f32→f64 OK; size_t→i64/u64 special-cased OK. `constVal` + `literalToCTyped` parse `3.0` as integer `3` (zero-fraction floats). Float literal with fractional part to integer type = compile error. Widening check skips: Literal, Unary, Ternary, Binary, Index, Member (inferType returns `double` for expressions with number literals — not accurate enough for narrowing checks). Applied in `vardecl.js` (typed declarations) and `assign.js` (simple `=` assignments).
 
 ---
 
