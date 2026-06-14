@@ -9,12 +9,12 @@ static void _closure_0_destroy(void *_env) {
     free(env);
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env, int32_t acc, int32_t x) {
+static double _closure_0_fn(_closure_0_env *env, double acc, int32_t x) {
     return acc + x * env->factor;
 }
 
 static _closure_0_env *_tsc_cb_env_0;
-static int32_t _closure_0_adapter(int32_t _p0, int32_t _p1) {
+static double _closure_0_adapter(double _p0, int32_t _p1) {
     return _closure_0_fn(_tsc_cb_env_0, _p0, _p1);
 }
 

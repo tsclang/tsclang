@@ -86,7 +86,9 @@ export default {
     if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
       const _refHint = etC === 'String' ? 'String *' : etC;
       if (prop === 'reduce' || prop === 'reduceRight') {
-        this._lambdaParamHint = [etC, _refHint];
+        const initExpr = args[1]?.expr;
+        const accType = initExpr ? this.inferType(initExpr) : etC;
+        this._lambdaParamHint = [accType, _refHint];
       } else if (prop === 'sort') {
         this._lambdaParamHint = [_refHint, _refHint];
       } else {

@@ -2,7 +2,7 @@
 
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
-static double _lambda_0_f64(int32_t acc, int32_t x) {
+static double _lambda_0_f64(double acc, int32_t x) {
     return acc * 10 + x;
 }
 
