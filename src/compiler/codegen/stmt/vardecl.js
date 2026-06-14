@@ -1402,11 +1402,17 @@ export default {
                     throw this.error(`cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"`);
                   }
                 }
-                // Safe widening check for non-literal, non-binary expressions
+                // Safe widening check for non-literal expressions
                 const isNumLit = (init.kind === 'Literal' && init.litType === 'number')
                   || (init.kind === 'Unary' && init.op === '-'
                     && init.expr?.kind === 'Literal' && init.expr?.litType === 'number');
-                const skipWidening = new Set(['Binary', 'Unary', 'Ternary', 'Index', 'Member']);
+                // On float-default platforms, inferType returns double for expressions with
+                // number literals — skip Binary/Unary/Ternary to avoid false positives (#40).
+                // Index is now correct for all types. Member needs analysis (#41).
+                const _floatDefault = this._defaultNumber === 'f64' || this._defaultNumber === 'f32';
+                const skipWidening = _floatDefault
+                  ? new Set(['Binary', 'Unary', 'Ternary', 'Member'])
+                  : new Set(['Member']);
                 if (!isNumLit && !skipWidening.has(init.kind)) {
                   const si = this._numericTypeInfo(srcType);
                   const di = this._numericTypeInfo(ctype);

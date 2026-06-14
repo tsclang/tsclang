@@ -223,8 +223,8 @@ export default {
           const field = tupleDef2.fields[parseInt(node.index.value, 10)];
           if (field) return field.ctype.replace(' *', '');
         }
-        // Buffer/DataView indexing → uint8_t
-        if (objType === 'Buffer' || objType === 'DataView') return 'uint8_t';
+        // Buffer/DataView/String indexing → uint8_t
+        if (objType === 'Buffer' || objType === 'DataView' || objType === 'String') return 'uint8_t';
         // Slice_T / MutSlice_T indexing → element type
         if (objType?.startsWith('Slice_') || objType?.startsWith('MutSlice_')) {
           const etIdent = objType.startsWith('MutSlice_') ? objType.slice(9) : objType.slice(6);

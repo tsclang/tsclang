@@ -1,13 +1,13 @@
 #include "runtime.h"
 
-float add_f32_f32(float a, float b) {
+int16_t add_i16_i16(int16_t a, int16_t b) {
     return a + b;
 }
 
 int main(void) {
     TSC_INIT();
-    const float x = 1.5f;
-    const float y = 2.5f;
-    printf("%g\n", (double)add_f32_f32(x, y));
+    const int16_t x = 15;
+    const int16_t y = 25;
+    printf("%d\n", (int)add_i16_i16(x, y));
     return 0;
 }

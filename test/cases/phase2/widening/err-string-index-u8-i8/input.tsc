@@ -1,0 +1,1 @@
+let s: string = "A"; let b: i8 = s[0];
