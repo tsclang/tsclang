@@ -1,0 +1,4 @@
+class Foo { x: u8 = 0; }
+let f = new Foo();
+let b: u16 = f.x;
+console.log(b);

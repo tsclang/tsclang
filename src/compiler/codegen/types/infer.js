@@ -298,6 +298,43 @@ export default {
     }
   },
 
+  _effectiveType(node) {
+    if (!node) return 'double';
+    const dn = this._defaultNumber;
+    if (dn !== 'f64' && dn !== 'f32') return this.inferType(node);
+    switch (node.kind) {
+      case 'Literal': {
+        if (node.litType !== 'number') return this.inferType(node);
+        const v = node.value;
+        if (!v.includes('.') && !v.includes('e') && !v.includes('E')) {
+          return this._cap('bits') < 32 ? 'int16_t' : 'int32_t';
+        }
+        return 'double';
+      }
+      case 'Binary': {
+        if (node.op === '**') return 'double';
+        if (node.op === '>>>') return 'int32_t';
+        const numOps = ['+','-','*','/','%','&','|','^','<<','>>'];
+        if (!numOps.includes(node.op)) return this.inferType(node);
+        const lt = this._effectiveType(node.left);
+        const rt = this._effectiveType(node.right);
+        if (lt === 'String' || lt === 'String *' || rt === 'String' || rt === 'String *') return 'String';
+        if (lt === 'double' || rt === 'double') return 'double';
+        if (lt === 'float'  || rt === 'float')  return 'float';
+        return lt;
+      }
+      case 'Unary': {
+        if (node.op === '-' || node.op === '~') return this._effectiveType(node.expr);
+        return this.inferType(node);
+      }
+      case 'Ternary': {
+        return this._effectiveType(node.yes);
+      }
+      default:
+        return this.inferType(node);
+    }
+  },
+
   _inferCall(node) {
     if (node.callee.kind === 'OptChain') {
       const objType = this.inferType(node.callee.object);

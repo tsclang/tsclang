@@ -342,15 +342,8 @@ export default {
       const isNumLit = (node.right?.kind === 'Literal' && node.right?.litType === 'number')
         || (node.right?.kind === 'Unary' && node.right?.op === '-'
           && node.right?.expr?.kind === 'Literal' && node.right?.expr?.litType === 'number');
-      // On float-default platforms, inferType returns double for expressions with
-      // number literals — skip Binary/Unary/Ternary to avoid false positives (#40).
-      // Index is now correct for all types. Member needs analysis (#41).
-      const _floatDefault = this._defaultNumber === 'f64' || this._defaultNumber === 'f32';
-      const skipWidening = _floatDefault
-        ? new Set(['Binary', 'Unary', 'Ternary', 'Member'])
-        : new Set(['Member']);
-      if (!isNumLit && !skipWidening.has(node.right?.kind)) {
-        const rightType = this.inferType(node.right);
+      if (!isNumLit) {
+        const rightType = this._effectiveType(node.right);
         const si = this._numericTypeInfo(rightType);
         const di = this._numericTypeInfo(leftType);
         if (si && di && !this._isSafeWidening(rightType, leftType)) {

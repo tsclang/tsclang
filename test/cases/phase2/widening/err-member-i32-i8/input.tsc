@@ -1,0 +1,3 @@
+class Foo { x: i32 = 0; }
+let f = new Foo();
+let b: i8 = f.x;

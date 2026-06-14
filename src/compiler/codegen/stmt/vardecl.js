@@ -1406,18 +1406,12 @@ export default {
                 const isNumLit = (init.kind === 'Literal' && init.litType === 'number')
                   || (init.kind === 'Unary' && init.op === '-'
                     && init.expr?.kind === 'Literal' && init.expr?.litType === 'number');
-                // On float-default platforms, inferType returns double for expressions with
-                // number literals — skip Binary/Unary/Ternary to avoid false positives (#40).
-                // Index is now correct for all types. Member needs analysis (#41).
-                const _floatDefault = this._defaultNumber === 'f64' || this._defaultNumber === 'f32';
-                const skipWidening = _floatDefault
-                  ? new Set(['Binary', 'Unary', 'Ternary', 'Member'])
-                  : new Set(['Member']);
-                if (!isNumLit && !skipWidening.has(init.kind)) {
-                  const si = this._numericTypeInfo(srcType);
+                if (!isNumLit) {
+                  const srcTypeEff = this._effectiveType(init);
+                  const si = this._numericTypeInfo(srcTypeEff);
                   const di = this._numericTypeInfo(ctype);
-                  if (si && di && !this._isSafeWidening(srcType, ctype)) {
-                    const srcTs = this.ctypeToTsName(srcType);
+                  if (si && di && !this._isSafeWidening(srcTypeEff, ctype)) {
+                    const srcTs = this.ctypeToTsName(srcTypeEff);
                     const dstTs = this.ctypeToTsName(ctype);
                     throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
                   }
