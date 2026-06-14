@@ -888,7 +888,11 @@ export default {
           : '_elem';
         const adapterName = `${closure.closureName}_adapter`;
         this.addLambda(`static ${closure.ret} ${adapterName}(${adapterParams}) {`);
-        this.addLambda(`    return ${closure.fnName}(${envGlobal}, ${adapterArgs});`);
+        if (closure.ret === 'void') {
+          this.addLambda(`    ${closure.fnName}(${envGlobal}, ${adapterArgs});`);
+        } else {
+          this.addLambda(`    return ${closure.fnName}(${envGlobal}, ${adapterArgs});`);
+        }
         this.addLambda(`}`);
         this.addLambda('');
         this._lastCbRetType = closure.ret;

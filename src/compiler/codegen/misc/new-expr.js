@@ -277,8 +277,12 @@ export default {
       this.visitBlock(node.body, lines, 0);
     } else {
       const c = this.exprToC(node.body, lines, 0);
-      const bodySym = node.body.kind === 'Ident' ? this.lookup(node.body.name) : null;
-      lines.push(`return ${this._derefStrPtr(bodySym, c)};`);
+      if (ret === 'void') {
+        lines.push(`${c};`);
+      } else {
+        const bodySym = node.body.kind === 'Ident' ? this.lookup(node.body.name) : null;
+        lines.push(`return ${this._derefStrPtr(bodySym, c)};`);
+      }
     }
     this.popScope();
     this._inHoistedLambda = false;

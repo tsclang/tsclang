@@ -1,0 +1,5 @@
+function f(arr: i32[], factor: i32): void {
+    arr.forEach((x) => console.log(x * factor));
+}
+let a: i32[] = [10, 20, 30];
+f(a, 3);
