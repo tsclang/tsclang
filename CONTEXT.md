@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1980 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~2010 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -362,28 +362,28 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 | Phase | Tests | Topic |
 |-------|-------|-------|
-| 0 | 24 | Core runtime (console, Error) |
-| 1 | ~180 | Basic parsing, codegen |
-| 2 | ~320 | Type system (null, enum, generics, utility types) |
-| 3 | ~360 | Memory model (ownership, borrow, arrays, strings, sets) |
-| 4 | ~80 | Classes, interfaces, closures, match |
-| 5 | ~27 | Error handling (throws, try/catch, Result) |
-| 6 | ~48 | Modules (import/export, C interop, @platform) |
-| 7 | ~80 | Async/await (state machines, Promise) |
-| 8 | ~44 | Concurrency (threads, channels, Atomic) |
-| 9 | ~57 | CLI, build, strict mode |
+| 0 | 30 | Core runtime (console, Error) |
+| 1 | 546 | Basic parsing, codegen |
+| 2 | 356 | Type system (null, enum, generics, utility types, widening) |
+| 3 | 363 | Memory model (ownership, borrow, arrays, strings, sets) |
+| 4 | 85 | Classes, interfaces, closures, match |
+| 5 | 27 | Error handling (throws, try/catch, Result) |
+| 6 | 55 | Modules (import/export, C interop, @platform) |
+| 7 | 81 | Async/await (state machines, Promise) |
+| 8 | 44 | Concurrency (threads, channels, Atomic) |
+| 9 | 64 | CLI, build, strict mode |
 | 10 | 20 | Strings & encodings |
 | 11 | 69 | Embedded (pool, heap, stack_size, @struct) |
-| 12 | ~120 | Stdlib runtime |
+| 12 | 119 | Stdlib runtime |
 | 13 | 21 | Decorators |
 | 14 | 7 | Reactive |
 | 15 | 10 | Regex |
 | 16 | 3 | LSP |
-| 17 | 12 | Linter, retro platforms |
+| 17 | 15 | Linter, retro platforms, capabilities |
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1980 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
+**Total: ~2010 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
