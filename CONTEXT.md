@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #35).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (compact after #7 #11 #12).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1958 tests, **all pass with gcc**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1943 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -349,7 +349,7 @@ declare platform {
 
 ### Strict mode (`_strictRules`)
 
-Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all.
+Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all.
 
 ---
 
@@ -401,9 +401,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `90764c1`
-- **GitHub Issues:** #1–#35. **All closed.** Closed bugs: #1 (recursive type), #2 (cross-module types), #3 (closure env heap), #4 (recursive closures), #5 (closure type loss), #8 (string concat leak), #9 (non-const static init), #10 (module prefix), #14 (NULL check), #21 (for-of reassign), #22 (range inclusivity), #34 (test failures), #35 (gcc compilation failures heap/pool). Refactoring: #25–#31 (tech-debt).
-- **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All 1958 tests pass with gcc.
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `2b4889e`
+- **GitHub Issues:** #1–#36. **All bugs closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13 (correctness). Open: #25–#31 (tech-debt refactoring), #36 (numeric auto-cast enhancement), #15–#20, #24, #32–#33 (investigation/enhancement).
+- **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
@@ -479,6 +479,9 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `no-lossy-cast`, `no-dyna
 - **Recursive closures** — Closures (`const f = (n) => f(n-1)`) need pre-declaration before body compilation. `vardecl.js` pre-declares name with `_isRecursiveSelf: true` and predicted `_closureFnName` BEFORE calling `hoistClosure`/`hoistArrow`. Prediction: `_closure_${this.closureCount}_fn` for capturing path, `_lambda_${this.lambdaCount}_${retSuffix}` for non-capturing path. `_findFreeVars` (`closures.js`) excludes self name (3rd param `selfName`). `call-dispatch.js` checks `_isRecursiveSelf` before `tsc_closure` dispatch: emitting direct static call `_closure_N_fn(env, args)` (capturing) or `_lambda_N_ret(args)` (non-capturing) instead of indirect `fn.fn(env, args)`. Inside closure body, `env` is the first parameter name. Pattern mirrors `func.js:372` define-before-body for named functions.
 - **Closure type preservation** — Two call dispatch patterns: `isClosure:true` (capturing, passes `.env`: `((ret)(*)(void*,params)fn)(env, args)`) vs `funcPtr:true` (non-capturing, no `.env`: `((ret)(*)(params)fn)(args)`). Choice depends on whether the underlying C function expects `void*` first param. `func.js:395` sets `closureRetType` on function symbols for TypeFunc returns. `closures.js:181` sets `_returnsCapturingClosure` on enclosing function when hoisting a capturing closure in return context. `vardecl.js` Path C (line 1301) uses `_returnsCapturingClosure` to choose isClosure vs funcPtr. `infer.js:376` must check `!sym.funcName` — functions returning tsc_closure (funcName set) should return ctype, not closureRetType. Known limitations: chained calls `f()()` need temp-var mechanism; array-of-closures `arr[i]()` needs `.env` passing in non-Ident callee dispatch.
 - **Non-const static init splitting** — C requires static/global vars to have constant initializers. `dispatch.js` `needsStatic` block detects `Call` nodes in init AST (NOT `New` — `new Struct()` generates `{0}` which IS constant). When non-const: zero-init declaration at top level + runtime assignment. Library mode: assignment goes to `_libInitStmts` → emitted as `void <prefix>__init(void) { ... }`. Non-library: assignment goes to `mainStmts`. `compileTsc` collects `_initFn` from deps → passes as `depInitFns` to consuming module's codegen → injected after `TSC_INIT()` in main(). Each library `__init` calls its own deps' `__init` (transitive chain). Limitation: `new Arc<T>()` at top-level in library mode still generates non-constant static init (edge case).
+- **Integer literal range check (#12)** — `_checkLiteralFitsType(node, ctype)` in `literals.js`: compile error if literal overflows target integer type. Full range table for i8-i64, u8-u64. Uses `constVal()` (handles Unary minus). Called from `vardecl.js` before `literalToCTyped` when `typeAnn` is set. Spec: `03-numbers.md:178-199`.
+- **safe-arith strict rule (#11)** — Integer `+`, `-`, `*` = compile error when `safe-arith` enabled. Pattern mirrors `safe-div`: `operators.js` (binary ops) + `assign.js` (compound `+=`, `-=`, `*=`). Escape hatches: `Math.checkedAdd/Sub/Mul` via `__builtin_*_overflow` → returns `opt_T` (null on overflow). Type inference in `infer.js` returns `opt_<ident>`. GCC statement expression `({ ... })` used for inline checked arithmetic. Spec: `13-strict-mode.md` (new section, SIL3 preset).
+- **PROGMEM string sort on AVR (#7)** — `_tsc_cmp_string_asc` in `runtime.h`: `#ifdef __AVR__` branch uses `_tsc_str_get` byte-by-byte instead of `memcmp` (which reads SRAM, not flash). Same pattern as `_tsc_str_eq`. Cannot be tested without avr-gcc + simavr.
 
 ---
 
