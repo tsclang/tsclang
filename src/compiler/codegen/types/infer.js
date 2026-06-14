@@ -753,7 +753,7 @@ export default {
       if (prop === 'filter' || prop === 'concat' || prop === 'clone') return objType;
       if (prop === 'map' || prop === 'flatMap') {
         const cbArg = node.args?.[0]?.expr ?? node.args?.[0];
-        if (cbArg?.kind === 'Arrow' && cbArg.body?.kind !== 'Block') {
+        if (cbArg?.kind === 'Arrow') {
           const outCType = this.inferTypeWithParams(cbArg, etCType);
           let outIdent = this.cTypeToIdent(outCType);
           if (prop === 'flatMap' && outCType?.startsWith('Array_')) {
@@ -859,7 +859,19 @@ export default {
         this.define(p.name, { ctype: ct === 'String *' ? 'String' : ct });
       }
     }
-    const result = this.inferType(arrowNode.body) ?? 'double';
+    let result;
+    if (arrowNode.body?.kind !== 'Block') {
+      result = this.inferType(arrowNode.body) ?? 'double';
+    } else {
+      for (const stmt of (arrowNode.body.body ?? [])) {
+        if (stmt.kind === 'VarDecl' && stmt.init) {
+          const initCt = this.inferType(stmt.init);
+          if (initCt) this.define(stmt.name, { ctype: initCt === 'String *' ? 'String' : initCt });
+        }
+      }
+      const retExpr = this._scanReturnExpr(arrowNode.body);
+      result = retExpr ? (this.inferType(retExpr) ?? 'double') : 'void';
+    }
     if (hasParams) this.popScope();
     return result;
   },
