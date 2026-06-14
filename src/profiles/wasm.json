@@ -4,6 +4,7 @@
   "fpu": true,
   "bits": 32,
   "usize": "u32",
+  "defaultNumber": "f64",
   "unaligned_access": true,
   "os": false,
   "toolchain": "emcc"

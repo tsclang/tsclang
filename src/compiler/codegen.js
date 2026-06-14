@@ -17,6 +17,7 @@ const DESKTOP_CAPABILITIES = {
   fpu: true,
   bits: 64,
   usize: 'u64',
+  defaultNumber: 'f64',
   unaligned_access: true,
   os: true,
 };
@@ -228,7 +229,6 @@ class Context {
     this._optsAsync = null;
     this._optsRamSize = null;
     this._optsStackSize = null;
-    this._defaultNumber = 'f64';
 
     // Explicit user-defined main() — rename to __main and call from generated int main()
     this._hasExplicitMain = false;

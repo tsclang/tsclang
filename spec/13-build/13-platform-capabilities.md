@@ -88,15 +88,16 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 | Поле | Тип | Desktop default | Допустимые значения | Описание |
 |------|-----|----------------|--------------------|----------|
-| `fpu` | `boolean` | `true` | `true`, `false` | Есть ли FPU. `false` → `f32`/`f64` запрещены; `number` без integer `defaultNumber` → compile error с подсказкой. Warning "slow software float" при `fpu: true` + `bits <= 8`. |
-| `bits` | `u8` | `64` | `8`, `16`, `32`, `64` | Разрядность CPU. Влияет на defaultNumber auto-detect, warning про медленный float. |
+| `fpu` | `boolean` | `true` | `true`, `false` | Есть ли FPU. `false` → `f32`/`f64` типы и float-литералы запрещены; `defaultNumber` должен быть integer. |
+| `bits` | `u8` | `64` | `8`, `16`, `32`, `64` | Разрядность CPU. Влияет на printf formatting (`%ld` при `bits < 32`), размер указателей (через `usize`). |
 | `unaligned_access` | `boolean` | `true` | `true`, `false` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур вместо прямого cast. x86-64: `true`; ARM Cortex-M0, AVR, 6502: `false`. **[NOT YET IMPLEMENTED]** |
 
 ### Types
 
-| Поле | Тип | Desktop default | Допустимые значения | Описание |
-|------|-----|----------------|--------------------|----------|
-| `usize` | `string` | `"u64"` | `"u8"`, `"u16"`, `"u32"`, `"u64"` | Тип для `usize`. Явное поле, не выводится из `bits`. Покрывает краевые случаи (8086: 16-бит CPU с 20-битной адресацией). |
+| Поле | Тип | Обязательное | Допустимые значения | Описание |
+|------|-----|-------------|--------------------|----------|
+| `usize` | `string` | Да | `"u8"`, `"u16"`, `"u32"`, `"u64"` | Тип для `usize`. Явное поле, не выводится из `bits`. Покрывает краевые случаи (8086: 16-бит CPU с 20-битной адресацией). |
+| `defaultNumber` | `string` | Да | `"f64"`, `"f32"`, `"i8"`, `"i16"`, `"i32"`, `"u8"`, `"u16"`, `"u32"` | Тип для `number`. Если `fpu: false` — должен быть integer, иначе compile error. |
 
 ### Memory
 
@@ -145,7 +146,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 | Capability | Решение компилятора |
 |-----------|-------------------|
-| `fpu: false` | Запрещает `f32`/`f64` TypeRef. Если `defaultNumber` не integer → ошибка с точным указанием места и подсказкой |
+| `fpu: false` | Запрещает `f32`/`f64` TypeRef и float-литералы (с точкой или экспонентой). `defaultNumber` должен быть integer. |
 | `allocator: "static"` | `new` только с compile-time capacity → BSS. `Arc<T>`, `Weak<T>` → compile error |
 | `allocator: "heap"` | Все виды `new`, `Arc<T>`, `Weak<T>` разрешены |
 | `allocator: "heap"` + `heap_size` | Как heap, но compile-time проверка BSS + heap_size + stack ≤ ram_size |
@@ -382,18 +383,28 @@ void traverse_poll(Traverse_SM* sm) {
 2. Размер стека известен на compile-time: `N * sizeof(T)`
 3. Проверяет что BSS-потребление не превышает `ram_size`
 
-## defaultNumber auto-detect
+## defaultNumber
 
-| `fpu` | `bits` | `defaultNumber` задан? | Результат |
-|-------|--------|----------------------|-----------|
-| не задан (desktop) | любой | нет | `f64` |
-| `true` | любой | нет | `f64` (если `bits <= 8` → warning: "f64 on 8-bit target is slow") |
-| `true` | любой | `"f32"` | `f32` (если `bits <= 8` → warning) |
-| `false` | любой | нет | **Ошибка**: "no-fpu target requires `defaultNumber` to be an integer type" |
-| `false` | любой | `"i32"` / `"u32"` / др. integer | OK |
-| `false` | любой | `"f32"` / `"f64"` | **Ошибка**: "fpu: false conflicts with float defaultNumber" |
+`defaultNumber` — обязательное поле профиля платформы. Определяет тип для `number` и числовых литералов без явной аннотации.
 
-Warning про медленный float выводится из комбинации `fpu: true` + `bits <= 8`, без отдельного поля.
+Приоритет: `CLI --default-number` > `builds.<name>.defaultNumber` > `profile.defaultNumber` > `DESKTOP_CAPABILITIES` fallback.
+
+### Правила
+
+| `fpu` | `defaultNumber` | Результат |
+|-------|----------------|-----------|
+| `true` | `f64`, `f32`, или integer | OK |
+| `false` | integer (`i8`..`u32`) | OK |
+| `false` | `f32` или `f64` | **Compile error**: "fpu: false conflicts with float defaultNumber" |
+
+### Значения в стандартных профилях
+
+| Профиль | `defaultNumber` | Обоснование |
+|---------|----------------|-------------|
+| desktop, dos, wasm, wasm32 | `f64` | TS compat |
+| ps2 | `f32` | Single-precision FPU |
+| arm, genesis | `i32` | No FPU, 32-bit |
+| avr, avr-heap, avr-coop, nes, spectrum | `i16` | No FPU, 8-bit (`int` = 16-bit) |
 
 ## Ошибки компиляции — формат
 

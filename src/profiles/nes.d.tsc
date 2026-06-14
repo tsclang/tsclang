@@ -4,6 +4,7 @@ declare platform {
     fpu: false
     bits: 8
     usize: "u16"
+    defaultNumber: "i16"
     unaligned_access: false
     os: false
     posix: false

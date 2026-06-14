@@ -7,6 +7,7 @@ const VALID_FIELDS = {
   fpu:               'boolean',
   bits:              'number',
   usize:             'string',
+  defaultNumber:     'string',
   unaligned_access:  'boolean',
   os:                'boolean',
   posix:             'boolean',

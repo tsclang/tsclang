@@ -95,13 +95,8 @@ export default {
     this._stackSize = this._optsStackSize || null;
     this._funcStackInfo = new Map();
 
-    // Default number type: opts > auto-detect from capabilities
-    const _isEmb = this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
-    const _autoDefaultNumber = _isEmb ? 'f32' : 'f64';
-    this._defaultNumber = this._optsDefaultNumber || _autoDefaultNumber;
-    if (this._defaultNumber === 'f64' && _isEmb) {
-      this.warn(`Warning: 'f64' default-number on embedded target '${this._targetName}' may be slow; consider 'f32'`);
-    }
+    // Default number type: opts > profile capability > DESKTOP_CAPABILITIES fallback
+    this._defaultNumber = this._optsDefaultNumber || this._cap('defaultNumber');
 
     // Pre-scan: capability-based restrictions
     const noFloat = !this._cap('fpu');
@@ -112,6 +107,13 @@ export default {
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
         if (noFloat && n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
           throw this.error(`TypeError: float types (${n.name}) are not supported (fpu: false)`);
+        }
+        if (noFloat && n.kind === 'Literal' && n.litType === 'number') {
+          const v = n.value.replace(/_/g, '');
+          const isHex = /^0[xX]/.test(v);
+          if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
+            throw this.error(`TypeError: float literal ${n.value} is not supported (fpu: false)`);
+          }
         }
         if (noAsync && n.kind === 'FuncDecl' && n.async) {
           throw this.error(`TypeError: async functions are not supported (async: "none")`);

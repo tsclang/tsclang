@@ -89,22 +89,21 @@ const n64: i64 = n      // неявно — без потерь
   ```
   Никакого runtime overhead — только алиасы. `Uint8Array` и `u8[]` взаимозаменяемы.
 
-- Синоним: `number` = `f64` по умолчанию (совместимость с TypeScript-стилем)
-  - Переопределяется через `"defaultNumber"` в `tsc.package.json`
-  - На embedded-таргетах — **`number` автоматически = `f32`** без явного `defaultNumber`
+- Синоним: `number` = `defaultNumber` из профиля платформы (совместимость с TypeScript-стилем)
+  - `defaultNumber` — обязательное поле профиля (см. `13-platform-capabilities.md`)
+  - Переопределяется в проекте через `"defaultNumber"` в `builds.*` (override над профилем)
   ```typescript
   // Десктоп (defaultNumber = f64)
   const a = 1;           // number (f64, double) — целочисленный литерал без аннотации
   const b: number = 1;   // f64 (number = f64) — то же самое, явно
   const c: f32 = 1;      // f32 (явно)
 
-  // Embedded (defaultNumber автоматически = f32)
-  const a = 1;           // number (f32, float) — целочисленный литерал без аннотации
-  const b: number = 1;   // f32 (number = f32)
-  const c: f32 = 1;      // f32 (явно)
-  const d: f64 = 1;      // f64 + warning: f64 on 8-bit target is inefficient
+  // AVR/NES (defaultNumber = i16, no FPU)
+  const a = 1;           // number (i16, int16_t) — целочисленный литерал
+  const b: number = 1;   // i16 (number = i16)
+  const c: i32 = 1;      // i32 (явно)
+  const d = 1.0;         // error: float literal not supported (fpu: false)
   ```
-  Переопределить явно — можно: `{ "defaultNumber": "f64" }` в `tsc.package.json` *[NOT YET IMPLEMENTED]* (нестандартно, потребует подтверждения).
 
 - **Performance warnings на 8-bit таргетах (AVR)** *[NOT YET IMPLEMENTED]*
 

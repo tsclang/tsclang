@@ -4,6 +4,7 @@
   "fpu": false,
   "bits": 32,
   "usize": "u32",
+  "defaultNumber": "i32",
   "unaligned_access": false,
   "os": false,
   "toolchain": "arm-none-eabi-gcc"
