@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (reduce accumulator type inference, #46 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (expression-body void arrow fix, #45 closed).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~2018 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~2020 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -365,7 +365,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 0 | 30 | Core runtime (console, Error) |
 | 1 | 548 | Basic parsing, codegen |
 | 2 | 356 | Type system (null, enum, generics, utility types, widening) |
-| 3 | 369 | Memory model (ownership, borrow, arrays, strings, sets) |
+| 3 | 371 | Memory model (ownership, borrow, arrays, strings, sets) |
 | 4 | 85 | Classes, interfaces, closures, match |
 | 5 | 27 | Error handling (throws, try/catch, Result) |
 | 6 | 55 | Modules (import/export, C interop, @platform) |
@@ -383,7 +383,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~2018 tests, all pass with gcc.**
+**Total: ~2020 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -404,8 +404,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `2e5ccd6`
-- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #46 (reduce accumulator type inference). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement), #45 (expression-body void arrow).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `f66d6ed`
+- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
@@ -492,6 +492,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **Block-body map type inference (#6)** — `inferTypeWithParams` (`infer.js:852-875`) now handles block-body arrows via `_scanReturnExpr` (same as `inferArrowReturn` in `new-expr.js`). Removed `body?.kind !== 'Block'` restriction in `_inferMemberCall` (`infer.js:756`). Before fix: `.map(x => { return ... }).filter(...)` chains declared wrong type for `_chain_N` temp variable (source type instead of mapped type). 3 tests: phase1/chain/block-body-map-map, block-body-map-same-type, phase3/arrays/block-body-map-assign.
 - **Dynamic runtime array macros (#44)** — `helpers.js` has ~25 `_ensureArray*Macro(et, etC)` methods that emit C macros on demand for types NOT in runtime.h. Guard constants at top of `helpers.js`: `_RUNTIME_ET` (i32/f64/string), `_RUNTIME_MAP`, `_RUNTIME_FLATMAP`, `_RUNTIME_REDUCE`, `_RUNTIME_REDUCE_R`, `_RUNTIME_FLAT` (includes `Array_i32` for nested). Each method checks guards → if type is predefined, returns early; otherwise emits via `_emitArrayMacro(name, lines)` with `#ifndef` guard + `_emittedHelpers` dedup. `_ensure*` calls in `method-dispatch.js` for all array operations. `sort`/`toSorted`/`join`/`entries` NOT covered (need type-specific comparators/format strings/tuple structs). 4 tests: phase3/arrays/dyn-map-u8, dyn-filter-u8, dyn-foreach-u8, dyn-at-u8.
 - **Reduce accumulator type inference (#46)** — `method-dispatch.js:88-91`: `_lambdaParamHint` for reduce/reduceRight now computes accumulator type from initial value (`args[1].expr`) via `inferType`, not from element type. Without initial value → falls back to element type (matches TS spec). Lambda `acc` param + return type now match macro accumulator type. 1 new test + 3 existing updated.
+- **Expression-body void arrow (#45)** — Three locations fixed: (1) `hoistArrow` in `new-expr.js:278-285`: `if (ret === 'void')` emits `${c};` instead of `return ${c};`. (2) `hoistClosure` in `closures.js:270-277`: same pattern. (3) Adapter in `method-dispatch.js:891-895`: `if (closure.ret === 'void')` emits bare call instead of `return fn(...)`. Bug: `(x) => console.log(x)` generated `return printf(...)` in `void` function — C constraint violation (`-Wreturn-mismatch`). 2 new tests + 1 updated.
 
 ---
 
