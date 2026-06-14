@@ -1,0 +1,2 @@
+let arr: u8[] = [10, 20, 30];
+arr.forEach((x) => { console.log(x); });

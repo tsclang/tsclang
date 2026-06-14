@@ -1,4 +1,11 @@
 // helpers.js
+const _RUNTIME_ET = new Set(['i32', 'f64', 'string']);
+const _RUNTIME_MAP = new Set(['i32_i32', 'i32_f64', 'f64_f64', 'string_string']);
+const _RUNTIME_FLATMAP = new Set(['i32_i32', 'f64_f64', 'string_string']);
+const _RUNTIME_REDUCE = new Set(['i32_i32', 'i32_f64', 'i32_string', 'f64_string', 'string_string']);
+const _RUNTIME_REDUCE_R = new Set(['i32_i32', 'i32_f64']);
+const _RUNTIME_FLAT = new Set(['i32', 'f64', 'string', 'Array_i32']);
+
 export default {
   _cTypeBytes(ct) {
     const m = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
@@ -351,5 +358,491 @@ export default {
     const mapName = `TscMap_string_array_${etIdent}`;
     this.addTop(`typedef struct { String _keys[64]; ${arrName} _vals[64]; size_t size; } ${mapName};`);
     this.addTop('');
+  },
+
+  _emitArrayMacro(macroName, lines) {
+    if (this._emittedHelpers.has(macroName)) return;
+    this._emittedHelpers.add(macroName);
+    this.addTop(`#ifndef ${macroName}`);
+    for (const l of lines) this.addTop(l);
+    this.addTop('#endif');
+    this.addTop('');
+  },
+
+  _arrElem(etC) {
+    return etC === 'String' ? '&_a_.data[_i_]' : '_a_.data[_i_]';
+  },
+
+  _ensureArrayMapMacro(fromEt, toEt, fromCType, toCType) {
+    this._ensureArrayStruct(`Array_${toEt}`, toCType);
+    if (_RUNTIME_MAP.has(`${fromEt}_${toEt}`)) return;
+    const name = `tsc_array_map_${fromEt}_${toEt}`;
+    const elem = this._arrElem(fromCType);
+    this._ensureArrayStruct(`Array_${toEt}`, toCType);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, fn) ({ \\`,
+      `    Array_${fromEt} _a_ = (arr); \\`,
+      `    ${toCType} *_d_ = (${toCType}*)_tsc_xmalloc(_a_.length * sizeof(${toCType})); \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (fn)(${elem}); \\`,
+      `    (Array_${toEt}){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayFlatMapMacro(fromEt, toEt, fromCType, toCType) {
+    this._ensureArrayStruct(`Array_${toEt}`, toCType);
+    if (_RUNTIME_FLATMAP.has(`${fromEt}_${toEt}`)) return;
+    const name = `tsc_array_flat_map_${fromEt}_${toEt}`;
+    const elem = this._arrElem(fromCType);
+    this._ensureArrayStruct(`Array_${toEt}`, toCType);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, fn) ({ \\`,
+      `    Array_${fromEt} _a_ = (arr); \\`,
+      `    Array_${toEt} _r_ = {NULL, 0, 0}; \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \\`,
+      `        Array_${toEt} _chunk_ = (fn)(${elem}); \\`,
+      `        for (size_t _j_ = 0; _j_ < _chunk_.length; _j_++) { \\`,
+      `            if (_r_.length >= _r_.capacity) { \\`,
+      `                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \\`,
+      `                _r_.data = (${toCType}*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(${toCType})); _r_.capacity = _nc_; \\`,
+      `            } \\`,
+      `            _r_.data[_r_.length++] = _chunk_.data[_j_]; \\`,
+      `        } \\`,
+      `        if (_chunk_.capacity > 0) free(_chunk_.data); \\`,
+      `    } \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayFilterMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_filter_${et}`;
+    const elem = this._arrElem(etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, pred) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    Array_${et} _r_ = {NULL, 0, 0}; \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) { \\`,
+      `        if ((pred)(${elem})) { \\`,
+      `            if (_r_.length >= _r_.capacity) { \\`,
+      `                size_t _nc_ = _r_.capacity == 0 ? 8 : _r_.capacity * 2; \\`,
+      `                _r_.data = (${etC}*)_tsc_xrealloc(_r_.data, _nc_ * sizeof(${etC})); _r_.capacity = _nc_; \\`,
+      `            } \\`,
+      `            _r_.data[_r_.length++] = _a_.data[_i_]; \\`,
+      `        } \\`,
+      `    } \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayForeachMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_foreach_${et}`;
+    const elem = this._arrElem(etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, fn) do { \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) (fn)(${elem}); \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArrayReduceMacro(et, toEt, etC, toCType, isRight) {
+    const combos = isRight ? _RUNTIME_REDUCE_R : _RUNTIME_REDUCE;
+    if (combos.has(`${et}_${toEt}`)) return;
+    const op = isRight ? 'reduce_right' : 'reduce';
+    const name = `tsc_array_${op}_${et}_${toEt}`;
+    const elem = this._arrElem(etC);
+    const elemR = etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]';
+    const loop = isRight
+      ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) _acc_ = (fn)(_acc_, ${elemR});`
+      : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _acc_ = (fn)(_acc_, ${elem});`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, fn, init) ({ \\`,
+      `    Array_${et} _a_ = (arr); ${toCType} _acc_ = (init); \\`,
+      `    ${loop} \\`,
+      `    _acc_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayEveryMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_every_${et}`;
+    const elem = this._arrElem(etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, pred) ({ \\`,
+      `    Array_${et} _a_ = (arr); bool _r_ = true; \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length && _r_; _i_++) if (!(pred)(${elem})) _r_ = false; \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArraySomeMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_some_${et}`;
+    const elem = this._arrElem(etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, pred) ({ \\`,
+      `    Array_${et} _a_ = (arr); bool _r_ = false; \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length && !_r_; _i_++) if ((pred)(${elem})) _r_ = true; \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayFindMacro(et, etC, isLast) {
+    if (_RUNTIME_ET.has(et)) {
+      this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+      return;
+    }
+    const op = isLast ? 'find_last' : 'find';
+    const name = `tsc_array_${op}_${et}`;
+    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC);
+    const ref = isLast ? '&_a_.data[_i_ - 1]' : '&_a_.data[_i_]';
+    const loop = isLast
+      ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) if ((pred)(${e})) { _r_ = (opt_ref_${et}){true, ${ref}}; break; }`
+      : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if ((pred)(${e})) { _r_ = (opt_ref_${et}){true, ${ref}}; break; }`;
+    this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, pred) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    opt_ref_${et} _r_ = {false, NULL}; \\`,
+      `    ${loop} \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayFindIndexMacro(et, etC, isLast) {
+    if (_RUNTIME_ET.has(et)) return;
+    const op = isLast ? 'find_last_index' : 'find_index';
+    const name = `tsc_array_${op}_${et}`;
+    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC);
+    const loop = isLast
+      ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) if ((pred)(${e})) { _r_ = (ptrdiff_t)(_i_ - 1); break; }`
+      : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if ((pred)(${e})) { _r_ = (ptrdiff_t)_i_; break; }`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, pred) ({ \\`,
+      `    Array_${et} _a_ = (arr); ptrdiff_t _r_ = -1; \\`,
+      `    ${loop} \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayIncludesMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_includes_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, val) ({ \\`,
+      `    Array_${et} _a_ = (arr); ${etC} _v_ = (val); bool _f_ = false; \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length && !_f_; _i_++) if (_a_.data[_i_] == _v_) _f_ = true; \\`,
+      `    _f_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayIndexOfMacro(et, etC, isLast) {
+    if (_RUNTIME_ET.has(et)) return;
+    const op = isLast ? 'last_index_of' : 'index_of';
+    const name = `tsc_array_${op}_${et}`;
+    const loop = isLast
+      ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) if (_a_.data[_i_ - 1] == _v_) { _r_ = (ptrdiff_t)(_i_ - 1); break; }`
+      : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if (_a_.data[_i_] == _v_) { _r_ = (ptrdiff_t)_i_; break; }`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, val) ({ \\`,
+      `    Array_${et} _a_ = (arr); ${etC} _v_ = (val); ptrdiff_t _r_ = -1; \\`,
+      `    ${loop} \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayConcatMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_concat_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(a, b) ({ \\`,
+      `    Array_${et} _a_ = (a), _b_ = (b); \\`,
+      `    size_t _n_ = _a_.length + _b_.length; \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_n_ * sizeof(${etC})); \\`,
+      `    memcpy(_d_, _a_.data, _a_.length * sizeof(${etC})); \\`,
+      `    memcpy(_d_ + _a_.length, _b_.data, _b_.length * sizeof(${etC})); \\`,
+      `    (Array_${et}){ .data = _d_, .length = _n_, .capacity = _n_ }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArraySliceMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_slice_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, start, end_idx) ({ \\`,
+      `    Array_${et} _a_ = (arr); int32_t _s_ = (start), _e_ = (end_idx); \\`,
+      `    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_.length) _e_ = (int32_t)_a_.length; \\`,
+      `    size_t _n_ = (_s_ < _e_) ? (size_t)(_e_ - _s_) : 0; \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_n_ * sizeof(${etC})); \\`,
+      `    if (_n_) memcpy(_d_, _a_.data + _s_, _n_ * sizeof(${etC})); \\`,
+      `    (Array_${et}){ .data = _d_, .length = _n_, .capacity = _n_ }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayFlatMacro(et, etC) {
+    if (_RUNTIME_FLAT.has(et)) return;
+    const name = `tsc_array_flat_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_a_.length * sizeof(${etC})); \\`,
+      `    memcpy(_d_, _a_.data, _a_.length * sizeof(${etC})); \\`,
+      `    (Array_${et}){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayAtMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_at_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, idx) ({ \\`,
+      `    Array_${et} _a_ = (arr); int32_t _i_ = (idx); \\`,
+      `    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \\`,
+      `    _a_.data[(size_t)_i_]; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayWithMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_with_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, idx, val) ({ \\`,
+      `    Array_${et} _a_ = (arr); int32_t _i_ = (idx); ${etC} _v_ = (val); \\`,
+      `    if (_i_ < 0) _i_ = (int32_t)_a_.length + _i_; \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_a_.length * sizeof(${etC})); \\`,
+      `    memcpy(_d_, _a_.data, _a_.length * sizeof(${etC})); \\`,
+      `    _d_[(size_t)_i_] = _v_; \\`,
+      `    (Array_${et}){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayToReversedMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_to_reversed_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_a_.length * sizeof(${etC})); \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = _a_.data[_a_.length - 1 - _i_]; \\`,
+      `    (Array_${et}){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayToSplicedMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_to_spliced_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, start, del_cnt, ...) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_.length + _s_; \\`,
+      `    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_.length) _s_ = (int32_t)_a_.length; \\`,
+      `    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \\`,
+      `    if ((size_t)_dc_ > _a_.length - (size_t)_s_) _dc_ = (int32_t)(_a_.length - (size_t)_s_); \\`,
+      `    ${etC} _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(${etC}); \\`,
+      `    size_t _new_len_ = (size_t)_s_ + _ni_ + (_a_.length - (size_t)_s_ - (size_t)_dc_); \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_new_len_ * sizeof(${etC})); \\`,
+      `    memcpy(_d_, _a_.data, (size_t)_s_ * sizeof(${etC})); \\`,
+      `    memcpy(_d_ + _s_, _ins_, _ni_ * sizeof(${etC})); \\`,
+      `    memcpy(_d_ + _s_ + _ni_, _a_.data + _s_ + _dc_, (_a_.length - (size_t)_s_ - (size_t)_dc_) * sizeof(${etC})); \\`,
+      `    (Array_${et}){ .data = _d_, .length = _new_len_, .capacity = _new_len_ }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayKeysMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_keys_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    int32_t *_d_ = (int32_t*)_tsc_xmalloc(_a_.length * sizeof(int32_t)); \\`,
+      `    for (size_t _i_ = 0; _i_ < _a_.length; _i_++) _d_[_i_] = (int32_t)_i_; \\`,
+      `    (Array_i32){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayValuesMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_values_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) ({ \\`,
+      `    Array_${et} _a_ = (arr); \\`,
+      `    ${etC} *_d_ = (${etC}*)_tsc_xmalloc(_a_.length * sizeof(${etC})); \\`,
+      `    if (_a_.length) memcpy(_d_, _a_.data, _a_.length * sizeof(${etC})); \\`,
+      `    (Array_${et}){ .data = _d_, .length = _a_.length, .capacity = _a_.length }; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayReverseMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_reverse_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) do { \\`,
+      `    Array_${et} *_a_ = (arr); \\`,
+      `    for (size_t _l_ = 0, _r_ = _a_->length; _l_ < _r_; ) { \\`,
+      `        _r_--; ${etC} _t_ = _a_->data[_l_]; _a_->data[_l_++] = _a_->data[_r_]; _a_->data[_r_] = _t_; \\`,
+      `    } \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArrayFillMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_fill_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, val, start, end_idx) do { \\`,
+      `    Array_${et} *_a_ = (arr); ${etC} _v_ = (val); int32_t _s_ = (start), _e_ = (end_idx); \\`,
+      `    if (_s_ < 0) _s_ = 0; if (_e_ > (int32_t)_a_->length) _e_ = (int32_t)_a_->length; \\`,
+      `    for (int32_t _i_ = _s_; _i_ < _e_; _i_++) _a_->data[_i_] = _v_; \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArrayResizeMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_resize_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, new_len, def_val) do { \\`,
+      `    Array_${et} *_a_ = (arr); size_t _nl_ = (size_t)(new_len); ${etC} _dv_ = (def_val); \\`,
+      `    if (_nl_ > _a_->capacity) { \\`,
+      `        ${etC} *_nd_ = (${etC}*)_tsc_xmalloc(_nl_ * sizeof(${etC})); \\`,
+      `        if (_a_->length > 0) memcpy(_nd_, _a_->data, _a_->length * sizeof(${etC})); \\`,
+      `        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _nd_[_i_] = _dv_; \\`,
+      `        _a_->data = _nd_; _a_->capacity = _nl_; \\`,
+      `    } else if (_nl_ > _a_->length) { \\`,
+      `        for (size_t _i_ = _a_->length; _i_ < _nl_; _i_++) _a_->data[_i_] = _dv_; \\`,
+      `    } \\`,
+      `    _a_->length = _nl_; \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArrayReallocateMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_reallocate_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, new_cap) do { \\`,
+      `    Array_${et} *_a_ = (arr); size_t _nc_ = (size_t)(new_cap); \\`,
+      `    ${etC} *_nd_ = (${etC}*)_tsc_xmalloc(_nc_ * sizeof(${etC})); \\`,
+      `    size_t _cp_ = _a_->length < _nc_ ? _a_->length : _nc_; \\`,
+      `    if (_cp_ > 0) memcpy(_nd_, _a_->data, _cp_ * sizeof(${etC})); \\`,
+      `    _a_->data = _nd_; _a_->capacity = _nc_; \\`,
+      `    if (_a_->length > _nc_) _a_->length = _nc_; \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArraySpliceMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_splice_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, start, del_cnt, ...) ({ \\`,
+      `    Array_${et} *_a_ = (arr); \\`,
+      `    int32_t _s_ = (start); if (_s_ < 0) _s_ = (int32_t)_a_->length + _s_; \\`,
+      `    if (_s_ < 0) _s_ = 0; if ((size_t)_s_ > _a_->length) _s_ = (int32_t)_a_->length; \\`,
+      `    int32_t _dc_ = (del_cnt); if (_dc_ < 0) _dc_ = 0; \\`,
+      `    if ((size_t)_dc_ > _a_->length - (size_t)_s_) _dc_ = (int32_t)(_a_->length - (size_t)_s_); \\`,
+      `    ${etC} _ins_[] = {__VA_ARGS__}; size_t _ni_ = sizeof(_ins_) / sizeof(${etC}); \\`,
+      `    Array_${et} _r_ = {NULL, 0, 0}; \\`,
+      `    if (_dc_ > 0) { \\`,
+      `        _r_.data = (${etC}*)_tsc_xmalloc((size_t)_dc_ * sizeof(${etC})); \\`,
+      `        memcpy(_r_.data, _a_->data + _s_, (size_t)_dc_ * sizeof(${etC})); \\`,
+      `        _r_.length = (size_t)_dc_; _r_.capacity = (size_t)_dc_; \\`,
+      `    } \\`,
+      `    size_t _tail_ = _a_->length - (size_t)_s_ - (size_t)_dc_; \\`,
+      `    size_t _new_len_ = (size_t)_s_ + _ni_ + _tail_; \\`,
+      `    if (_new_len_ > _a_->capacity) { \\`,
+      `        size_t _nc_ = _new_len_ * 2; \\`,
+      `        _a_->data = (${etC}*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(${etC})); _a_->capacity = _nc_; \\`,
+      `    } \\`,
+      `    if (_ni_ != (size_t)_dc_) { \\`,
+      `        memmove(_a_->data + _s_ + _ni_, _a_->data + _s_ + _dc_, _tail_ * sizeof(${etC})); \\`,
+      `    } \\`,
+      `    memcpy(_a_->data + _s_, _ins_, _ni_ * sizeof(${etC})); \\`,
+      `    _a_->length = _new_len_; \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayShiftMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) {
+      this._ensureOptStruct(`opt_${et}`, etC);
+      return;
+    }
+    const name = `tsc_array_shift_${et}`;
+    this._ensureOptStruct(`opt_${et}`, etC);
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr) ({ \\`,
+      `    Array_${et} *_a_ = (arr); \\`,
+      `    opt_${et} _r_ = {false, 0}; \\`,
+      `    if (_a_->length > 0) { \\`,
+      `        _r_ = (opt_${et}){true, _a_->data[0]}; \\`,
+      `        memmove(_a_->data, _a_->data + 1, (_a_->length - 1) * sizeof(${etC})); \\`,
+      `        _a_->length--; \\`,
+      `    } \\`,
+      `    _r_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArrayUnshiftMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_unshift_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, val) do { \\`,
+      `    Array_${et} *_a_ = (arr); ${etC} _v_ = (val); \\`,
+      `    if (_a_->length >= _a_->capacity) { \\`,
+      `        size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; \\`,
+      `        _a_->data = (${etC}*)_tsc_xrealloc(_a_->data, _nc_ * sizeof(${etC})); _a_->capacity = _nc_; \\`,
+      `    } \\`,
+      `    memmove(_a_->data + 1, _a_->data, _a_->length * sizeof(${etC})); \\`,
+      `    _a_->data[0] = _v_; _a_->length++; \\`,
+      `} while(0)`,
+    ]);
+  },
+
+  _ensureArrayRemoveMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_remove_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, idx) ({ \\`,
+      `    Array_${et} *_a_ = (arr); size_t _i_ = (size_t)(idx); \\`,
+      `    ${etC} _v_ = _a_->data[_i_]; \\`,
+      `    memmove(_a_->data + _i_, _a_->data + _i_ + 1, (_a_->length - _i_ - 1) * sizeof(${etC})); \\`,
+      `    _a_->length--; _v_; \\`,
+      `})`,
+    ]);
+  },
+
+  _ensureArraySetMacro(et, etC) {
+    if (_RUNTIME_ET.has(et)) return;
+    const name = `tsc_array_set_${et}`;
+    this._emitArrayMacro(name, [
+      `#define ${name}(arr, src, offset) do { \\`,
+      `    Array_${et} *_d_ = (arr); Array_${et} _s_ = (src); size_t _off_ = (size_t)(offset); \\`,
+      `    for (size_t _i_ = 0; _i_ < _s_.length && _off_ + _i_ < _d_->length; _i_++) \\`,
+      `        _d_->data[_off_ + _i_] = _s_.data[_i_]; \\`,
+      `} while(0)`,
+    ]);
   }
 };

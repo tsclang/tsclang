@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (block-body map type inference fix, #6 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (dynamic runtime array macros, #44 closed).
 
 ---
 
@@ -365,7 +365,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 0 | 30 | Core runtime (console, Error) |
 | 1 | 546 | Basic parsing, codegen |
 | 2 | 356 | Type system (null, enum, generics, utility types, widening) |
-| 3 | 363 | Memory model (ownership, borrow, arrays, strings, sets) |
+| 3 | 368 | Memory model (ownership, borrow, arrays, strings, sets) |
 | 4 | 85 | Classes, interfaces, closures, match |
 | 5 | 27 | Error handling (throws, try/catch, Result) |
 | 6 | 55 | Modules (import/export, C interop, @platform) |
@@ -383,7 +383,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~2013 tests, all pass with gcc.**
+**Total: ~2017 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -404,8 +404,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `1233f2e`
-- **GitHub Issues:** #1–#43. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `f9e8949`
+- **GitHub Issues:** #1–#44. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
@@ -490,7 +490,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **`_isEmbedded()` eliminated (#38)** — Replaced 36 call sites with direct `_cap()` checks. Mapping: pointer sizes → `_ptrBytes()` from `_cap('usize')`; printf format → `_cap('bits') < 32`; OS features → `_cap('os') === false`; libuv/async features → `_cap('async') !== 'libuv'`; embedded-only (Tasks/HashMap) → `_cap('async') === 'libuv'` (inverse); @struct → `_cap('allocator') !== 'heap'`; stdlib → `_cap('os')`/`_cap('allocator')`. `_ptrBytes()` at `codegen.js:343`. Fixed AVR pointer size bug (2 bytes, not 4).
 - **Multiple variable declarations (#39)** — `let x = 1, y = 2` via `parseSingleDeclarator` helper + comma loop in `parseVarDecl` (`parser.js:588-640`). Returns `VarDecls` wrapper (`{ kind:'VarDecls', decls:[...], line }`) if >1 declarator, `VarDecl` if 1 (backward compat). `parseBlock`/`parseProgram` spread `VarDecls` into individual `VarDecl` nodes. For-loop init: same-type inline (`for (T x = 0, y = 10; ...)`), different-type hoisted before `for`. 7 tests in phase1.
 - **Block-body map type inference (#6)** — `inferTypeWithParams` (`infer.js:852-875`) now handles block-body arrows via `_scanReturnExpr` (same as `inferArrowReturn` in `new-expr.js`). Removed `body?.kind !== 'Block'` restriction in `_inferMemberCall` (`infer.js:756`). Before fix: `.map(x => { return ... }).filter(...)` chains declared wrong type for `_chain_N` temp variable (source type instead of mapped type). 3 tests: phase1/chain/block-body-map-map, block-body-map-same-type, phase3/arrays/block-body-map-assign.
-- **Runtime gap: `tsc_array_map_*` type combinations** — Runtime only defines 4 map macros: `i32_i32`, `i32_f64`, `f64_f64`, `string_string`. Other combinations (e.g. `i32_string`) produce C compile errors. This is a pre-existing limitation, not related to type inference. Affects both expression-body and block-body maps equally.
+- **Dynamic runtime array macros (#44)** — `helpers.js` has ~25 `_ensureArray*Macro(et, etC)` methods that emit C macros on demand for types NOT in runtime.h. Guard constants at top of `helpers.js`: `_RUNTIME_ET` (i32/f64/string), `_RUNTIME_MAP`, `_RUNTIME_FLATMAP`, `_RUNTIME_REDUCE`, `_RUNTIME_REDUCE_R`, `_RUNTIME_FLAT` (includes `Array_i32` for nested). Each method checks guards → if type is predefined, returns early; otherwise emits via `_emitArrayMacro(name, lines)` with `#ifndef` guard + `_emittedHelpers` dedup. `_ensure*` calls in `method-dispatch.js` for all array operations. `sort`/`toSorted`/`join`/`entries` NOT covered (need type-specific comparators/format strings/tuple structs). 4 tests: phase3/arrays/dyn-map-u8, dyn-filter-u8, dyn-foreach-u8, dyn-at-u8.
 
 ---
 

@@ -169,6 +169,7 @@ export default {
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const idxC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           this._lastArrayElemReturn = true;
+          this._ensureArrayRemoveMacro(et, etC);
           return `tsc_array_remove_${et}(&${objC}, ${idxC})`;
         }
         case 'view': {
@@ -206,14 +207,19 @@ export default {
           const fnC = args.length ? (cbFnName ?? argsC) : 'NULL';
           return `tsc_array_sort_${et}(&${objC}, ${fnC})`;
         }
-        case 'reverse':    return `tsc_array_reverse_${et}(&${objC})`;
+        case 'reverse': {
+          this._ensureArrayReverseMacro(et, etC);
+          return `tsc_array_reverse_${et}(&${objC})`;
+        }
         case 'fill': {
+          this._ensureArrayFillMacro(et, etC);
           const v     = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const start = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
           const end   = args[2] ? this.exprToC(args[2].expr, lines, depth) : `(int32_t)${objC}.length`;
           return `tsc_array_fill_${et}(&${objC}, ${v}, ${start}, ${end})`;
         }
         case 'resize': {
+          this._ensureArrayResizeMacro(et, etC);
           const nNode = args[0]?.expr;
           const nC    = nNode ? this.exprToC(nNode, lines, depth) : '0';
           const fillC = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
@@ -228,6 +234,7 @@ export default {
           return `tsc_array_resize_${et}(&${objC}, ${nC}, ${fillC})`;
         }
         case 'reallocate': {
+          this._ensureArrayReallocateMacro(et, etC);
           const capNode = args[0]?.expr;
           const capC = capNode ? this.exprToC(capNode, lines, depth) : '0';
           if (baseObject.kind === 'Ident') {
@@ -240,46 +247,73 @@ export default {
           }
           return `tsc_array_reallocate_${et}(&${objC}, ${capC})`;
         }
-        case 'filter':  return `tsc_array_filter_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
-        case 'forEach': return `tsc_array_foreach_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'filter': {
+          this._ensureArrayFilterMacro(et, etC);
+          return `tsc_array_filter_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
+        case 'forEach': {
+          this._ensureArrayForeachMacro(et, etC);
+          return `tsc_array_foreach_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
         case 'map': {
           const outET = cbFnName ? (this._lastCbRetType ? this.cTypeToIdent(this._lastCbRetType) : et) : lambdaOutET(argsC);
-          if (outET !== et) {
-            const outArrName = `Array_${outET}`;
-            const outElemCType = this._arrIdentToCType(outET);
-            this._ensureArrayStruct(outArrName, outElemCType);
-          }
+          const outElemCType = this._arrIdentToCType(outET);
+          this._ensureArrayMapMacro(et, outET, etC, outElemCType);
           return `tsc_array_map_${et}_${outET}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
         case 'reduce': {
           const initExpr = args[1]?.expr;
           const outET = initExpr ? this.cTypeToIdent(this.inferType(initExpr)) : et;
+          const outCType = initExpr ? this.inferType(initExpr) : etC;
+          this._ensureArrayReduceMacro(et, outET, etC, outCType, false);
           const reduceArgs = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
           return `tsc_array_reduce_${et}_${outET}(${arrObjC}, ${reduceArgs})`;
         }
         case 'reduceRight': {
           const initExpr2 = args[1]?.expr;
           const outET2 = initExpr2 ? this.cTypeToIdent(this.inferType(initExpr2)) : et;
+          const outCType2 = initExpr2 ? this.inferType(initExpr2) : etC;
+          this._ensureArrayReduceMacro(et, outET2, etC, outCType2, true);
           const reduceArgs2 = cbFnName ? `${cbFnName}${cbExtraArgs ? ', ' + cbExtraArgs : ''}` : argsC;
           return `tsc_array_reduce_right_${et}_${outET2}(${arrObjC}, ${reduceArgs2})`;
         }
-        case 'every':    return `tsc_array_every_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
-        case 'some':     return `tsc_array_some_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'every': {
+          this._ensureArrayEveryMacro(et, etC);
+          return `tsc_array_every_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
+        case 'some': {
+          this._ensureArraySomeMacro(et, etC);
+          return `tsc_array_some_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
         case 'find': {
-          this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+          this._ensureArrayFindMacro(et, etC, false);
           return `tsc_array_find_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
-        case 'findIndex': return `(int)tsc_array_find_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
-        case 'indexOf':  return `(int)tsc_array_index_of_${et}(${arrObjC}, ${argsC})`;
-        case 'includes': return `tsc_array_includes_${et}(${arrObjC}, ${argsC})`;
-        case 'concat':   return `tsc_array_concat_${et}(${arrObjC}, ${argsC})`;
+        case 'findIndex': {
+          this._ensureArrayFindIndexMacro(et, etC, false);
+          return `(int)tsc_array_find_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
+        case 'indexOf': {
+          this._ensureArrayIndexOfMacro(et, etC, false);
+          return `(int)tsc_array_index_of_${et}(${arrObjC}, ${argsC})`;
+        }
+        case 'includes': {
+          this._ensureArrayIncludesMacro(et, etC);
+          return `tsc_array_includes_${et}(${arrObjC}, ${argsC})`;
+        }
+        case 'concat': {
+          this._ensureArrayConcatMacro(et, etC);
+          return `tsc_array_concat_${et}(${arrObjC}, ${argsC})`;
+        }
         case 'set': {
+          this._ensureArraySetMacro(et, etC);
           const srcExpr = args[0]?.expr;
           const srcC = srcExpr ? this.exprToC(srcExpr, lines, depth) : '';
           const offsetC = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
           return `tsc_array_set_${et}(&${objC}, ${srcC}, ${offsetC})`;
         }
         case 'slice': {
+          this._ensureArraySliceMacro(et, etC);
           const s = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const e = args[1] ? this.exprToC(args[1].expr, lines, depth) : `(int32_t)${arrObjC}.length`;
           return `tsc_array_slice_${et}(${arrObjC}, ${s}, ${e})`;
@@ -288,22 +322,33 @@ export default {
           const sep = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT(",")';
           return `tsc_array_join_${et}(${arrObjC}, ${sep})`;
         }
-        case 'keys':    return `tsc_array_keys_${et}(${arrObjC})`;
-        case 'values':  return `tsc_array_values_${et}(${arrObjC})`;
+        case 'keys': {
+          this._ensureArrayKeysMacro(et, etC);
+          return `tsc_array_keys_${et}(${arrObjC})`;
+        }
+        case 'values': {
+          this._ensureArrayValuesMacro(et, etC);
+          return `tsc_array_values_${et}(${arrObjC})`;
+        }
         case 'entries': return `tsc_array_entries_${et}(${arrObjC})`;
-        case 'flat':    return `tsc_array_flat_${et}(${arrObjC})`;
+        case 'flat': {
+          this._ensureArrayFlatMacro(et, etC);
+          return `tsc_array_flat_${et}(${arrObjC})`;
+        }
         case 'shift': {
-          this._ensureOptStruct(`opt_${et}`, etC);
+          this._ensureArrayShiftMacro(et, etC);
           this._lastSuppressConst = true;
           return `tsc_array_shift_${et}(&${objC})`;
         }
         case 'unshift': {
+          this._ensureArrayUnshiftMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const uv = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
           return `tsc_array_unshift_${et}(&${objC}, ${uv})`;
         }
         case 'splice': {
+          this._ensureArraySpliceMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const spStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
@@ -313,34 +358,48 @@ export default {
           return `tsc_array_splice_${et}(&${objC}, ${spArgs})`;
         }
         case 'at': {
+          this._ensureArrayAtMacro(et, etC);
           const atIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           return `tsc_array_at_${et}(${arrObjC}, ${atIdx})`;
         }
         case 'with': {
+          this._ensureArrayWithMacro(et, etC);
           const wIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const wVal = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
           return `tsc_array_with_${et}(${arrObjC}, ${wIdx}, ${wVal})`;
         }
-        case 'lastIndexOf': return `(int)tsc_array_last_index_of_${et}(${arrObjC}, ${argsC})`;
+        case 'lastIndexOf': {
+          this._ensureArrayIndexOfMacro(et, etC, true);
+          return `(int)tsc_array_last_index_of_${et}(${arrObjC}, ${argsC})`;
+        }
         case 'findLast': {
-          this._ensureOptRefStruct(`opt_ref_${et}`, etC);
+          this._ensureArrayFindMacro(et, etC, true);
           return `tsc_array_find_last_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
-        case 'findLastIndex': return `(int)tsc_array_find_last_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        case 'findLastIndex': {
+          this._ensureArrayFindIndexMacro(et, etC, true);
+          return `(int)tsc_array_find_last_index_${et}(${arrObjC}, ${cbFnName ?? argsC})`;
+        }
         case 'flatMap': {
           let fmOutET = et;
           if (cbFnName && this._lastCbRetType) {
             const fmRet = this._lastCbRetType;
             fmOutET = fmRet.startsWith('Array_') ? fmRet.slice(6) : this.cTypeToIdent(fmRet);
           }
+          const fmOutCType = this._arrIdentToCType(fmOutET);
+          this._ensureArrayFlatMapMacro(et, fmOutET, etC, fmOutCType);
           return `tsc_array_flat_map_${et}_${fmOutET}(${arrObjC}, ${cbFnName ?? argsC})`;
         }
-        case 'toReversed': return `tsc_array_to_reversed_${et}(${arrObjC})`;
+        case 'toReversed': {
+          this._ensureArrayToReversedMacro(et, etC);
+          return `tsc_array_to_reversed_${et}(${arrObjC})`;
+        }
         case 'toSorted': {
           const tsCmp = args.length ? (cbFnName ?? argsC) : 'NULL';
           return tsCmp === 'NULL' ? `tsc_array_to_sorted_${et}(${arrObjC})` : `tsc_array_to_sorted_${et}(${arrObjC})`;
         }
         case 'toSpliced': {
+          this._ensureArrayToSplicedMacro(et, etC);
           const tsStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const tsDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
           const tsItems = argsForC.slice(2).map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
