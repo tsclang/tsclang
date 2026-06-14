@@ -301,15 +301,16 @@ export default {
   _effectiveType(node) {
     if (!node) return 'double';
     const dn = this._defaultNumber;
-    if (dn !== 'f64' && dn !== 'f32') return this.inferType(node);
+    const floatDefault = dn === 'f64' || dn === 'f32';
     switch (node.kind) {
       case 'Literal': {
         if (node.litType !== 'number') return this.inferType(node);
         const v = node.value;
         if (!v.includes('.') && !v.includes('e') && !v.includes('E')) {
-          return this._cap('bits') < 32 ? 'int16_t' : 'int32_t';
+          if (floatDefault) return this._cap('bits') < 32 ? 'int16_t' : 'int32_t';
+          return inferLiteralCType(node, dn);
         }
-        return 'double';
+        return dn === 'f32' ? 'float' : 'double';
       }
       case 'Binary': {
         if (node.op === '**') return 'double';
@@ -321,6 +322,13 @@ export default {
         if (lt === 'String' || lt === 'String *' || rt === 'String' || rt === 'String *') return 'String';
         if (lt === 'double' || rt === 'double') return 'double';
         if (lt === 'float'  || rt === 'float')  return 'float';
+        const si = this._numericTypeInfo(lt);
+        const di = this._numericTypeInfo(rt);
+        if (si && di && si.kind === 'int' && di.kind === 'int') {
+          if (di.bits > si.bits) return rt;
+          if (di.bits === si.bits && !di.signed) return rt;
+          return lt;
+        }
         return lt;
       }
       case 'Unary': {

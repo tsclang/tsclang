@@ -325,6 +325,22 @@ export default {
       }
     }
 
+    // Compound assignment widening check (#42)
+    const compoundBinOps = { '+=':'+', '-=':'-', '*=':'*', '/=':'/', '%=':'%',
+                             '&=':'&', '|=':'|', '^=':'^', '<<=':'<<', '>>=':'>>' };
+    const binOp = compoundBinOps[node.op];
+    if (binOp) {
+      const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right };
+      const resultType = this._effectiveType(binNode);
+      const si = this._numericTypeInfo(resultType);
+      const di = this._numericTypeInfo(leftType);
+      if (si && di && !this._isSafeWidening(resultType, leftType)) {
+        const srcTs = this.ctypeToTsName(resultType);
+        const dstTs = this.ctypeToTsName(leftType);
+        throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs} in '${node.op}': use "as ${dstTs}" or explicit assignment`);
+      }
+    }
+
     // Numeric type conversion check for simple assignment
     if (node.op === '=') {
       // Float literal with fractional part → integer type
