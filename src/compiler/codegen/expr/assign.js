@@ -325,6 +325,36 @@ export default {
       }
     }
 
+    // Numeric type conversion check for simple assignment
+    if (node.op === '=') {
+      // Float literal with fractional part → integer type
+      if (node.right?.kind === 'Literal' && node.right.litType === 'number') {
+        const fval = parseFloat(node.right.value.replace(/_/g, ''));
+        if (!Number.isInteger(fval)) {
+          const di = this._numericTypeInfo(leftType);
+          if (di && di.kind === 'int') {
+            const dstTs = this.ctypeToTsName(leftType);
+            throw this.error(`float literal ${node.right.value} assigned to integer type ${dstTs} — fractional part will be lost\nhint: use '${node.right.value} as ${dstTs}' for explicit truncation, or Math.trunc(${node.right.value})`);
+          }
+        }
+      }
+      // Safe widening check for non-literal, non-binary expressions
+      const isNumLit = (node.right?.kind === 'Literal' && node.right?.litType === 'number')
+        || (node.right?.kind === 'Unary' && node.right?.op === '-'
+          && node.right?.expr?.kind === 'Literal' && node.right?.expr?.litType === 'number');
+      const skipWidening = new Set(['Binary', 'Unary', 'Ternary', 'Index', 'Member']);
+      if (!isNumLit && !skipWidening.has(node.right?.kind)) {
+        const rightType = this.inferType(node.right);
+        const si = this._numericTypeInfo(rightType);
+        const di = this._numericTypeInfo(leftType);
+        if (si && di && !this._isSafeWidening(rightType, leftType)) {
+          const srcTs = this.ctypeToTsName(rightType);
+          const dstTs = this.ctypeToTsName(leftType);
+          throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
+        }
+      }
+    }
+
     return `${l} ${node.op} ${r}`;
   }
 };

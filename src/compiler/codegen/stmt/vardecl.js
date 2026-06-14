@@ -1356,6 +1356,17 @@ export default {
             }
             let initC;
             if (typeAnn) this._checkLiteralFitsType(init, ctype);
+            // Float literal with fractional part → integer type: error
+            if (typeAnn && init.kind === 'Literal' && init.litType === 'number') {
+              const fval = parseFloat(init.value.replace(/_/g, ''));
+              if (!Number.isInteger(fval)) {
+                const di = this._numericTypeInfo(ctype);
+                if (di && di.kind === 'int') {
+                  const dstTs = this.ctypeToTsName(ctype);
+                  throw this.error(`float literal ${init.value} assigned to integer type ${dstTs} — fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})`);
+                }
+              }
+            }
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);
             } else if (init.kind === 'Literal' && init.litType === 'string'
@@ -1391,19 +1402,21 @@ export default {
                     throw this.error(`cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"`);
                   }
                 }
-                const illegalConversions = [
-                  ['size_t',    'int32_t',  'usize', 'i32'],
-                  ['int32_t',   'float',    'i32',   'f32'],
-                  ['int64_t',   'double',   'i64',   'f64'],
-                  ['int64_t',   'uint32_t', 'i64',   'u32'],
-                  ['uint64_t',  'int64_t',  'u64',   'i64'],
-                ];
-                for (const [src, dst, srcTs, dstTs] of illegalConversions) {
-                  if (srcType === src && ctype === dst) {
+                // Safe widening check for non-literal, non-binary expressions
+                const isNumLit = (init.kind === 'Literal' && init.litType === 'number')
+                  || (init.kind === 'Unary' && init.op === '-'
+                    && init.expr?.kind === 'Literal' && init.expr?.litType === 'number');
+                const skipWidening = new Set(['Binary', 'Unary', 'Ternary', 'Index', 'Member']);
+                if (!isNumLit && !skipWidening.has(init.kind)) {
+                  const si = this._numericTypeInfo(srcType);
+                  const di = this._numericTypeInfo(ctype);
+                  if (si && di && !this._isSafeWidening(srcType, ctype)) {
+                    const srcTs = this.ctypeToTsName(srcType);
+                    const dstTs = this.ctypeToTsName(ctype);
                     throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
                   }
                 }
-                // Widening casts for non-binary expressions
+                // C-level widening cast for size_t → int64_t
                 if (ctype === 'int64_t' && srcType === 'size_t') {
                   initC = `(int64_t)${initC}`;
                 }
@@ -1621,7 +1634,11 @@ export default {
         // Store compile-time value for const variables with literal init (used for const-cast overflow checking)
         let constValue = undefined;
         if (varKind === 'const' && init?.kind === 'Literal' && init.litType === 'number') {
-          try { constValue = BigInt(init.value.replace(/_/g, '')); } catch(_) {}
+          const raw = init.value.replace(/_/g, '');
+          try { constValue = BigInt(raw); } catch(_) {
+            const fval = parseFloat(raw);
+            if (Number.isInteger(fval)) constValue = BigInt(fval);
+          }
         }
         const isStringRef = typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Ref' &&
                             typeAnn.typeArgs?.[0]?.name === 'string';

@@ -55,6 +55,37 @@ export default {
     return m[ctype] ?? ctype;
   },
 
+  _numericTypeInfo(ct) {
+    const m = {
+      'int8_t':   { bits: 8,  signed: true,  kind: 'int' },
+      'int16_t':  { bits: 16, signed: true,  kind: 'int' },
+      'int32_t':  { bits: 32, signed: true,  kind: 'int' },
+      'int64_t':  { bits: 64, signed: true,  kind: 'int' },
+      'uint8_t':  { bits: 8,  signed: false, kind: 'int' },
+      'uint16_t': { bits: 16, signed: false, kind: 'int' },
+      'uint32_t': { bits: 32, signed: false, kind: 'int' },
+      'uint64_t': { bits: 64, signed: false, kind: 'int' },
+      'float':    { bits: 32, signed: true,  kind: 'float', mantissa: 24 },
+      'double':   { bits: 64, signed: true,  kind: 'float', mantissa: 53 },
+      'size_t':   { bits: this._cTypeBytes('size_t') * 8, signed: false, kind: 'int' },
+    };
+    return m[ct] ?? null;
+  },
+
+  _isSafeWidening(src, dst) {
+    if (src === dst) return true;
+    if (src === 'size_t' && (dst === 'int64_t' || dst === 'uint64_t')) return true;
+    const si = this._numericTypeInfo(src);
+    const di = this._numericTypeInfo(dst);
+    if (!si || !di) return true;
+    if (si.kind === 'float' && di.kind === 'int') return false;
+    if (si.kind === 'float' && di.kind === 'float') return di.bits >= si.bits;
+    if (si.kind === 'int' && di.kind === 'float') return si.bits <= di.mantissa;
+    if (si.signed === di.signed) return di.bits >= si.bits;
+    if (!si.signed && di.signed) return di.bits > si.bits;
+    return false;
+  },
+
   // Map array element identifier back to C type (reverse of cTypeToIdent)
   _arrIdentToCType(ident) {
     const m = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',

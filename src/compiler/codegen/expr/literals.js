@@ -74,6 +74,11 @@ export default {
       if (v.includes('.') || v.includes('e') || v.includes('E')) return v;
       return v + '.0';
     }
+    // Integer types: normalize float-with-zero-fraction (e.g., "3.0" → "3")
+    if ((v.includes('.') || v.includes('e') || v.includes('E')) && !v.startsWith('0x') && !v.startsWith('0X')) {
+      const fval = parseFloat(v);
+      if (Number.isInteger(fval)) v = String(BigInt(fval));
+    }
     if (ctype === 'int64_t') return v + 'LL';
     if (ctype === 'uint64_t') {
       const n = BigInt(v);
@@ -115,7 +120,11 @@ export default {
   // Get compile-time constant value of a const-literal variable or literal node (BigInt or null)
   constVal(node) {
     if (node.kind === 'Literal' && node.litType === 'number') {
-      try { return BigInt(node.value.replace(/_/g, '')); } catch(_) { return null; }
+      const raw = node.value.replace(/_/g, '');
+      try { return BigInt(raw); } catch(_) {
+        const fval = parseFloat(raw);
+        return Number.isInteger(fval) ? BigInt(fval) : null;
+      }
     }
     if (node.kind === 'Unary' && node.op === '-') {
       const v = this.constVal(node.expr ?? node.operand);
