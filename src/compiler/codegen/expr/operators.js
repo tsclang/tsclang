@@ -270,6 +270,16 @@ export default {
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    if (node.op === '+' || node.op === '-' || node.op === '*') {
+      if (this._strictRules?.has('safe-arith')) {
+        const lt = this.inferType(node.left);
+        const rt = this.inferType(node.right);
+        const isInt = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
+        if (isInt) {
+          throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
+        }
+      }
+    }
     if (node.op === '/' || node.op === '%') {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);

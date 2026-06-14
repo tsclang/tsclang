@@ -283,6 +283,14 @@ export default {
     }
 
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    if (node.op === '+=' || node.op === '-=' || node.op === '*=') {
+      if (this._strictRules?.has('safe-arith')) {
+        const leftType = this.inferType(node.left);
+        if (intTypes.has(leftType)) {
+          throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
+        }
+      }
+    }
     if (node.op === '/=' || node.op === '%=') {
       const leftType = this.inferType(node.left);
       if (this._strictRules?.has('safe-div') && intTypes.has(leftType)) {

@@ -415,6 +415,12 @@ export default {
     if (obj.kind === 'Ident' && obj.name === 'Math') {
       if (prop === 'clz32' || prop === 'imul') return 'int32_t';
       if (prop === 'fround') return 'float';
+      if (prop === 'checkedAdd' || prop === 'checkedSub' || prop === 'checkedMul') {
+        const a0 = node.args?.[0]?.expr;
+        const a0t = a0 ? this.inferType(a0) : 'int32_t';
+        const argType = a0t === 'int64_t' || a0t === 'uint64_t' ? a0t : 'int32_t';
+        return `opt_${this.cTypeToIdent(argType)}`;
+      }
       if (prop === 'abs' || prop === 'min' || prop === 'max') {
         const a0 = node.args?.[0];
         if (a0?.spread) {

@@ -121,6 +121,32 @@ let f = a / b;  // a: f64, b: f64
 
 **Compound assignment:** `x /= y`, `x %= y` — тоже запрещены для integer типов.
 
+#### `safe-arith` — безопасная целочисленная арифметика
+
+Запрещает integer `+`, `-`, `*` без явной проверки или safe-обёртки. Цель — предотвратить silent overflow (undefined behavior для signed integer overflow в C).
+
+```typescript
+// ❌ error: integer arithmetic may overflow at runtime (safe-arith);
+//          use Math.checkedAdd/Sub/Mul or guard manually
+let q = x + y;
+let d = x - y;
+let p = x * y;
+
+// ✅ checked arithmetic functions (provided by runtime)
+let q = Math.checkedAdd(x, y) ?? 0;   // returns i32 | null — null on overflow
+let d = Math.checkedSub(x, y) ?? 0;
+let p = Math.checkedMul(x, y) ?? 0;
+
+// ✅ float arithmetic — ok (IEEE 754 wraps predictably)
+let f = a + b;  // a: f64, b: f64
+```
+
+**Обоснование:** Signed integer overflow — undefined behavior в C. Компилятор может удалить overflow-чеки при оптимизации. В safety-critical системах UB недопустимо.
+
+**Float исключение:** `+`, `-`, `*` для `f32`/`f64` не запрещается — IEEE 754 определяет результат overflow (`Infinity`, wrap-around для float).
+
+**Compound assignment:** `x += y`, `x -= y`, `x *= y` — тоже запрещены для integer типов.
+
 #### `no-lossy-cast` — запрет потерянного приведения типов
 
 Запрещает `as`-cast с потерей точности или диапазона.
@@ -343,7 +369,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 |-----|-----------|------------------------|
 | 1 | Базовая безопасность | Базовый TSClang (статическая типизация, ownership, нет UB) |
 | 2 | Повышенная безопасность | + `no-any`, `no-unsafe`, `no-native` |
-| 3 | Высокая безопасность | + `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `safe-div`, `no-lossy-cast`, `no-dynamic-alloc` |
+| 3 | Высокая безопасность | + `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `safe-div`, `safe-arith`, `no-lossy-cast`, `no-dynamic-alloc` |
 | 4 | Максимальная безопасность | + `const-params`, `no-gcc-extensions` (в разработке) + формальная верификация |
 
 Рекомендуемые пресеты:
@@ -353,7 +379,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 { "strict": ["no-any", "no-unsafe", "no-native"] }
 
 // SIL 3 — MISRA C compliance, no void*
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "safe-arith", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
 
 // SIL 4 — maximum strictness (when const-params and no-gcc-extensions are available)
 { "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort", "const-params", "no-gcc-extensions"] }
@@ -368,7 +394,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 { "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c"] }
 
 // SIL 3 embedded — максимальная строгость, нет void*
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "safe-arith", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
 
 // Desktop type safety — closures/interfaces/threads разрешены
 { "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "switch-default", "no-abort"] }
@@ -417,6 +443,7 @@ Strict rules проверяются **после** platform capability checks. �
 | `no-native` | `native \`...\`` | `(no-native)` |
 | `no-extern-c` | `extern "C" function` | `(no-extern-c)` |
 | `safe-div` | Integer `/` и `%` без guard | `(safe-div)` |
+| `safe-arith` | Integer `+`, `-`, `*` без safe-обёртки | `(safe-arith)` |
 | `no-lossy-cast` | Lossy `as` cast | `(no-lossy-cast)` |
 | `no-dynamic-alloc` | `new Array(runtimeN)`, `new Map()`, `new Set()` | `(no-dynamic-alloc)` |
 | `switch-default` | Отсутствие `default:` в switch | `(switch-default)` — auto-add |

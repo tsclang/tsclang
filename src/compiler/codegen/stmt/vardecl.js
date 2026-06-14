@@ -1355,6 +1355,7 @@ export default {
               }
             }
             let initC;
+            if (typeAnn) this._checkLiteralFitsType(init, ctype);
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = this.literalToCTyped(init, ctype);
             } else if (init.kind === 'Literal' && init.litType === 'string'

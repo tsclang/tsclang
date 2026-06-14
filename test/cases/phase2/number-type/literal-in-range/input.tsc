@@ -1,0 +1,9 @@
+const a: i8 = 127;
+const b: i8 = -128;
+const c: u8 = 255;
+const d: i16 = 32767;
+const e: u16 = 65535;
+const f: i32 = 2147483647;
+const g: u32 = 4294967295;
+const h: i64 = 9223372036854775807;
+console.log(a, b, c, d, e, f, g, h);

@@ -2769,8 +2769,16 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
     const String *sa = (const String *)a, *sb = (const String *)b;
     size_t min_len = sa->length < sb->length ? sa->length : sb->length;
+#ifdef __AVR__
+    for (size_t i = 0; i < min_len; i++) {
+        unsigned char ca = (unsigned char)_tsc_str_get(sa, i);
+        unsigned char cb = (unsigned char)_tsc_str_get(sb, i);
+        if (ca != cb) return (int)ca - (int)cb;
+    }
+#else
     int cmp = memcmp(sa->data, sb->data, min_len);
     if (cmp != 0) return cmp;
+#endif
     return (sa->length > sb->length) - (sa->length < sb->length);
 }
 

@@ -85,6 +85,30 @@ export default {
     return v;
   },
 
+  _checkLiteralFitsType(node, ctype) {
+    const INT_RANGES = {
+      'int8_t':   { min: -128n,                    max: 127n,                    ts: 'i8' },
+      'int16_t':  { min: -32768n,                  max: 32767n,                  ts: 'i16' },
+      'int32_t':  { min: -2147483648n,             max: 2147483647n,             ts: 'i32' },
+      'int64_t':  { min: -9223372036854775808n,    max: 9223372036854775807n,    ts: 'i64' },
+      'uint8_t':  { min: 0n,                       max: 255n,                    ts: 'u8' },
+      'uint16_t': { min: 0n,                       max: 65535n,                  ts: 'u16' },
+      'uint32_t': { min: 0n,                       max: 4294967295n,             ts: 'u32' },
+      'uint64_t': { min: 0n,                       max: 18446744073709551615n,   ts: 'u64' },
+    };
+    if (!(ctype in INT_RANGES)) return;
+    const isLit = node.kind === 'Literal' && node.litType === 'number';
+    const isNegLit = node.kind === 'Unary' && node.op === '-'
+      && node.expr?.kind === 'Literal' && node.expr.litType === 'number';
+    if (!isLit && !isNegLit) return;
+    const val = this.constVal(node);
+    if (val === null) return;
+    const r = INT_RANGES[ctype];
+    if (val < r.min || val > r.max) {
+      throw this.error(`literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})`, node);
+    }
+  },
+
   // ----------------------------------------------------------------
   // Binary
   // ----------------------------------------------------------------

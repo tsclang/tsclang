@@ -1,0 +1,4 @@
+let a: i32 = 2147483640;
+let b: i32 = 10;
+let q = Math.checkedAdd(a, b) ?? 0;
+console.log(q);
