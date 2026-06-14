@@ -64,6 +64,7 @@ export default {
 
     switch (node.kind) {
       case 'VarDecl': this._visitVarDecl(node, lines, depth); break;
+      case 'VarDecls': node.decls.forEach(d => this._visitVarDecl(d, lines, depth)); break;
       case 'VarDestructObj':
       case 'VarDestructArr': this._visitVarDestruct(node, lines, depth); break;
       case 'ExprStmt':

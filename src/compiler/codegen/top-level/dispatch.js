@@ -260,6 +260,7 @@ export default {
         break;
       }
       case 'ExtensionFunc': this.visitExtensionFunc(node); break;
+      case 'VarDecls': node.decls.forEach(d => this.visitTopLevel(d)); break;
       case 'DeclareConst':    this.visitDeclareConst(node); break;
       case 'DeclareFunction': this.visitDeclareFunction(node); break;
       case 'DeclareModule':   this.visitDeclareModule(node); break;

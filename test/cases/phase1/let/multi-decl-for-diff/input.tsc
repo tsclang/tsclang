@@ -1,0 +1,4 @@
+for (let x: i32 = 0, y: f64 = 1.5; x < 3; x++) {
+  console.log(x);
+  console.log(y);
+}

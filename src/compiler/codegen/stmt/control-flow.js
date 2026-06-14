@@ -382,7 +382,24 @@ export default {
         this._asyncContinueStack = null;
         let initC = '';
         if (node.init) {
-          if (node.init.kind === 'VarDecl') {
+          if (node.init.kind === 'VarDecls') {
+            const parts = node.init.decls.map(d => {
+              const ctype = d.typeAnn ? this.resolveType(d.typeAnn) : (d.init ? this.inferType(d.init) : 'int32_t');
+              const initExpr = d.init ? this.exprToC(d.init, lines, depth) : '0';
+              this.define(d.name, { ctype, varKind: d.varKind });
+              return { ctype, name: d.name, initExpr };
+            });
+            const allSameType = parts.every(pt => pt.ctype === parts[0].ctype);
+            if (allSameType) {
+              initC = `${parts[0].ctype} ` + parts.map(pt => `${pt.name} = ${pt.initExpr}`).join(', ');
+            } else {
+              const I = ' '.repeat(this.indent * depth);
+              for (const pt of parts) {
+                lines.push(`${I}${pt.ctype} ${pt.name} = ${pt.initExpr};`);
+              }
+              initC = '';
+            }
+          } else if (node.init.kind === 'VarDecl') {
             const { varKind, name, typeAnn, init } = node.init;
             const ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
             const initExpr = init ? this.exprToC(init, lines, depth) : '0';
