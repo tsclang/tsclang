@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (skipWidening eliminated, #40 #41 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-14 (C integer promotion + compound assignment widening, #42 #43 closed).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1976 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1980 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 
@@ -383,7 +383,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~1976 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
+**Total: ~1980 tests, all pass with gcc.** Phase 11 heap/pool gcc failures (#35) — all 25 fixed in `90764c1`.
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -404,8 +404,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `86d8b93`
-- **GitHub Issues:** #1–#41. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening — resolved). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `38b0a2e`
+- **GitHub Issues:** #1–#43. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14, #21–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion). Open: #25–#31 (tech-debt refactoring), #15–#20, #24, #32–#33 (investigation/enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
@@ -485,7 +485,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **Integer literal range check (#12)** — `_checkLiteralFitsType(node, ctype)` in `literals.js`: compile error if literal overflows target integer type. Full range table for i8-i64, u8-u64. Uses `constVal()` (handles Unary minus). Called from `vardecl.js` before `literalToCTyped` when `typeAnn` is set. Spec: `03-numbers.md:178-199`.
 - **safe-arith strict rule (#11)** — Integer `+`, `-`, `*` = compile error when `safe-arith` enabled. Pattern mirrors `safe-div`: `operators.js` (binary ops) + `assign.js` (compound `+=`, `-=`, `*=`). Escape hatches: `Math.checkedAdd/Sub/Mul` via `__builtin_*_overflow` → returns `opt_T` (null on overflow). Type inference in `infer.js` returns `opt_<ident>`. GCC statement expression `({ ... })` used for inline checked arithmetic. Spec: `13-strict-mode.md` (new section, SIL3 preset).
 - **PROGMEM string sort on AVR (#7)** — `_tsc_cmp_string_asc` in `runtime.h`: `#ifdef __AVR__` branch uses `_tsc_str_get` byte-by-byte instead of `memcmp` (which reads SRAM, not flash). Same pattern as `_tsc_str_eq`. Cannot be tested without avr-gcc + simavr.
-- **Numeric auto-cast (#36) + _effectiveType (#40)** — Three-mechanism system: (1) implicit narrowing = error; (2) explicit `as` = OK (blocked by `no-lossy-cast`); (3) safe functions = always OK. `_isSafeWidening(src, dst)` in `helpers.js` — algorithmic widening matrix. Widening check uses `_effectiveType(node)` (`infer.js`) instead of `inferType` — returns actual C type that codegen produces (integer literals → C `int` type, not `defaultNumber`). **`skipWidening` is fully eliminated** — all node kinds go through the widening check. `isNumLit` still catches standalone literals for separate overflow check. Applied in `vardecl.js` and `assign.js`.
+- **Numeric auto-cast (#36) + _effectiveType (#40) + C promotion (#42 #43)** — Three-mechanism narrowing system: (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening(src, dst)` in `helpers.js` — algorithmic widening matrix. Widening check uses `_effectiveType(node)` (`infer.js`) — returns actual C type with **C integer promotion rules** (wider type wins, same width → unsigned wins). Applied to: `vardecl.js` (typed declarations), `assign.js` (simple `=` **and compound** `+=`/`-=`/etc). `skipWidening` fully eliminated. `isNumLit` still catches standalone literals for separate overflow check.
 - **`defaultNumber` required (#37)** — All 12 profiles × 2 formats (24 files) must declare `defaultNumber`. Removed from `program.js`/`codegen.js` constructor auto-detect. Priority: CLI > builds > profile > DESKTOP_CAPABILITIES. `inferLiteralCType` (`types.js:93`) returns `PRIMITIVE_MAP[defaultNumber]` for ALL number literals — on integer-default platforms (avr/nes/spectrum), number literals are integers. fpu:false pre-scan (`program.js:106-125`) catches float TypeRef AND float literals (`.` or exponent); hex literals (`0xFF`) correctly skipped. 3 new tests in phase17.
 - **`_isEmbedded()` eliminated (#38)** — Replaced 36 call sites with direct `_cap()` checks. Mapping: pointer sizes → `_ptrBytes()` from `_cap('usize')`; printf format → `_cap('bits') < 32`; OS features → `_cap('os') === false`; libuv/async features → `_cap('async') !== 'libuv'`; embedded-only (Tasks/HashMap) → `_cap('async') === 'libuv'` (inverse); @struct → `_cap('allocator') !== 'heap'`; stdlib → `_cap('os')`/`_cap('allocator')`. `_ptrBytes()` at `codegen.js:343`. Fixed AVR pointer size bug (2 bytes, not 4).
 - **Multiple variable declarations (#39)** — `let x = 1, y = 2` via `parseSingleDeclarator` helper + comma loop in `parseVarDecl` (`parser.js:588-640`). Returns `VarDecls` wrapper (`{ kind:'VarDecls', decls:[...], line }`) if >1 declarator, `VarDecl` if 1 (backward compat). `parseBlock`/`parseProgram` spread `VarDecls` into individual `VarDecl` nodes. For-loop init: same-type inline (`for (T x = 0, y = 10; ...)`), different-type hoisted before `for`. 7 tests in phase1.
