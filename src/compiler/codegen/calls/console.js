@@ -9,7 +9,7 @@ export default {
       return `tsc_console_time_end(${label})`;
     }
     if (method === 'trace') {
-      if (this._isEmbedded() || this._isWasmBare()) {
+      if (this._cap('os') === false || this._isWasmBare()) {
         throw this.error(`"console.trace()" is not available on ${this._targetName} targets`);
       }
       const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -97,7 +97,7 @@ export default {
           return false;
         };
         if (hasTypedVar(expr)) {
-          if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+          if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
           else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
         } else {
           fmtParts.push('%g');
@@ -116,7 +116,7 @@ export default {
           fmtParts.push('%g');
           fmtArgs.push(`*${cexpr}`);
         } else if (derefType === 'int64_t') {
-          if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+          if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
             throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
           }
           fmtParts.push('%lld');
@@ -125,14 +125,14 @@ export default {
           fmtParts.push('%s');
           fmtArgs.push(`*${cexpr} ? "true" : "false"`);
         } else {
-          if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)*${cexpr}`); }
+          if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)*${cexpr}`); }
           else { fmtParts.push('%d'); fmtArgs.push(`*${cexpr}`); }
         }
         continue;
       }
 
       if (ctype === 'String') {
-        if (this._isEmbedded()) {
+        if (this._cap('allocator') !== 'heap') {
           if (fmtParts.length > 0) {
             fmtParts.push('');
             const flushFmt = '"' + fmtParts.join(' ') + '"';
@@ -177,13 +177,13 @@ export default {
         fmtParts.push('%g');
         fmtArgs.push(`(double)${cexpr}`);
       } else if (ctype === 'int64_t') {
-        if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+        if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
           throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
         }
         fmtParts.push('%lld');
         fmtArgs.push(`(long long)${cexpr}`);
       } else if (ctype === 'uint64_t') {
-        if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+        if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
           throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
         }
         fmtParts.push('%llu');
@@ -192,7 +192,7 @@ export default {
         fmtParts.push('%u');
         fmtArgs.push(`(unsigned)${cexpr}`);
       } else if (ctype === 'uint32_t') {
-        if (this._isEmbedded()) { fmtParts.push('%lu'); fmtArgs.push(`(unsigned long)${cexpr}`); }
+        if (this._cap('bits') < 32) { fmtParts.push('%lu'); fmtArgs.push(`(unsigned long)${cexpr}`); }
         else { fmtParts.push('%u'); fmtArgs.push(cexpr); }
       } else if (ctype === 'int8_t' || ctype === 'int16_t') {
         fmtParts.push('%d');
@@ -201,7 +201,7 @@ export default {
         fmtParts.push('%c');
         fmtArgs.push(cexpr);
       } else if (ctype === 'size_t') {
-        if (this._isEmbedded()) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
+        if (this._cap('bits') < 32) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
         else { fmtParts.push('%zu'); fmtArgs.push(cexpr); }
       } else {
         if (ctype.startsWith('opt_ref_')) {
@@ -218,7 +218,7 @@ export default {
             fmtParts.push('%g');
             fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1.0`);
           } else {
-            if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
+            if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
             else { fmtParts.push('%d'); fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`); }
           }
           continue;
@@ -258,11 +258,11 @@ export default {
               if (innerCType === 'double' || innerCType === 'float') valFmt = '%g';
               else if (innerCType === 'int64_t') valFmt = '%lld';
               else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') valFmt = '%u';
-              else if (this._isEmbedded()) valFmt = '%ld';
+              else if (this._cap('bits') < 32) valFmt = '%ld';
               else valFmt = '%d';
               const valCast = innerCType === 'int64_t' ? `(long long)${tmp}.value`
                 : (innerCType === 'uint8_t' || innerCType === 'uint16_t') ? `(unsigned)${tmp}.value`
-                : this._isEmbedded() ? `(long)${tmp}.value`
+                : this._cap('bits') < 32 ? `(long)${tmp}.value`
                 : `${tmp}.value`;
               if (fmtParts.length > 0) {
                 const prevFmt = '"' + fmtParts.join(' ') + ' "';
@@ -286,7 +286,7 @@ export default {
               fmtParts.push('%g');
               fmtArgs.push(`${valExpr}.value`);
             } else if (innerCType === 'int64_t') {
-              if (this._strictRules?.has('no-i64-print') || this._isEmbedded()) {
+              if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
                 throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
               }
               fmtParts.push('%lld');
@@ -295,7 +295,7 @@ export default {
               fmtParts.push('%u');
               fmtArgs.push(`(unsigned)${valExpr}.value`);
             } else {
-              if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
+              if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
               else { fmtParts.push('%d'); fmtArgs.push(`${valExpr}.value`); }
             }
           }
@@ -309,7 +309,7 @@ export default {
             fmtParts.push('%d');
             fmtArgs.push(`(int)${cexpr}`);
           } else {
-            if (this._isEmbedded()) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+            if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
             else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
           }
         }

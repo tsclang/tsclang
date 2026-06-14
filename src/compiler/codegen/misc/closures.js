@@ -64,7 +64,7 @@ export default {
     // Mixed types → use tsc_string_format
     let fmt = '';
     const fmtArgs = [];
-    const isEmb = this._isEmbedded();
+    const isEmb = this._cap('bits') < 32;
     for (const p of compiled) {
       if (p.kind === 'str') {
         fmt += p.value.replace(/%/g, '%%');

@@ -130,7 +130,7 @@ export function handleStdlibImport(ctx, node) {
   if (!mod) return false;
 
   if (mod.platformCheck === 'not-embedded-not-wasm') {
-    if (ctx._isEmbeddedOrRetro() || ctx._isWasmBare()) {
+    if (ctx._cap('os') === false || ctx._isWasmBare()) {
       throw ctx.error(`TypeError: '${node.source}' is not available on ${ctx._targetName} targets`);
     }
   } else if (mod.platformCheck === 'not-wasm') {
@@ -138,7 +138,7 @@ export function handleStdlibImport(ctx, node) {
       throw ctx.error(`TypeError: '${node.source}' is not available on wasm targets`);
     }
   } else if (mod.platformCheck === 'embedded-only') {
-    if (!ctx._isEmbeddedOrRetro()) {
+    if (ctx._cap('allocator') !== 'static') {
       throw ctx.error(`TypeError: '${node.source}' requires an embedded platform target`);
     }
     if (ctx._isWasmBare()) {

@@ -73,7 +73,7 @@
         callee.object.kind === 'Member' &&
         callee.object.object.kind === 'Ident' && callee.object.object.name === 'process' &&
         callee.object.prop === 'env') {
-      if (this._isEmbedded()) {
+      if (this._cap('os') === false) {
         throw this.error(`"process.env" is not available on embedded targets`);
       }
       this.includes.add('#include <stdlib.h>');
@@ -89,7 +89,7 @@
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'process' &&
         callee.prop === 'exit') {
-      if (this._isEmbedded()) {
+      if (this._cap('os') === false) {
         throw this.error(`"process.exit" is not available on embedded targets`);
       }
       this.includes.add('#include <stdlib.h>');

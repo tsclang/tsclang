@@ -697,7 +697,7 @@ export default {
     if (obj?.kind !== 'Ident') return null;
     if (obj.name !== 'Map' && obj.name !== 'Object') return null;
     if (args.length < 2) return null;
-    if (this._isEmbedded()) {
+    if (this._cap('allocator') !== 'heap') {
       throw this.error(`'${obj.name}.groupBy()' is not available on embedded targets`, node);
     }
     const arrExpr = args[0].expr;

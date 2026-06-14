@@ -339,11 +339,9 @@ class Context {
     const errType = errTypes?.[0];
     return errType === 'TscError' ? 'message' : '_base.message';
   }
-  _isEmbedded() {
-    return this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
-  }
-  _isEmbeddedOrRetro() {
-    return this._cap('allocator') !== 'heap' || this._cap('bits') < 64 || !this._cap('os');
+  _ptrBytes() {
+    const m = { u16: 2, u32: 4, u64: 8 };
+    return m[this._cap('usize')] ?? 4;
   }
   _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
   lookup(name) {

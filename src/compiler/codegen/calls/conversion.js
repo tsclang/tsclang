@@ -59,7 +59,7 @@
 
     // setTimeout / setInterval / clearTimeout
     if (callee.kind === 'Ident' && (callee.name === 'setTimeout' || callee.name === 'setInterval')) {
-      if (this._isEmbedded()) {
+      if (this._cap('async') !== 'libuv') {
         throw this.error(`"${callee.name}" is not available on embedded targets`, node);
       }
     }

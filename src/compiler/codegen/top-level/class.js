@@ -43,7 +43,7 @@ export default {
     // Process @embedded.* decorators
     const inlineDec = decorators?.find(d => d.name === 'struct');
     const poolDec   = decorators?.find(d => d.name === 'pool');
-    const isEmbedded = this._isEmbeddedOrRetro();
+    const isEmbedded = this._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
       throw this.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);

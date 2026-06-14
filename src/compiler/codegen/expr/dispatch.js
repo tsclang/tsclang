@@ -102,7 +102,7 @@ export default {
         }
         // process.stdin / process.stdout / process.stderr (std/io)
         if (this._stdIoImported && node.object.kind === 'Ident' && node.object.name === 'process') {
-          if (this._isEmbedded()) {
+          if (this._cap('os') === false) {
             throw this.error(`TypeError: 'process.${node.prop}' is not available on embedded targets`);
           }
           if (node.prop === 'stdin')  { this._lastSuppressConst = true; return 'tsc_stdin()'; }

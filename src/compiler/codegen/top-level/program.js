@@ -96,9 +96,10 @@ export default {
     this._funcStackInfo = new Map();
 
     // Default number type: opts > auto-detect from capabilities
-    const _autoDefaultNumber = this._isEmbedded() ? 'f32' : 'f64';
+    const _isEmb = this._cap('allocator') !== 'heap' || this._cap('bits') < 64;
+    const _autoDefaultNumber = _isEmb ? 'f32' : 'f64';
     this._defaultNumber = this._optsDefaultNumber || _autoDefaultNumber;
-    if (this._defaultNumber === 'f64' && this._isEmbedded()) {
+    if (this._defaultNumber === 'f64' && _isEmb) {
       this.warn(`Warning: 'f64' default-number on embedded target '${this._targetName}' may be slow; consider 'f32'`);
     }
 
@@ -225,7 +226,7 @@ export default {
       if (n?.kind === 'ClassDecl') {
         const fields = (n.members ?? []).filter(m => m.kind === 'Field');
         const hasStack = fields.some(f => f.name === 'stack');
-        if (hasStack && this._isEmbeddedOrRetro()) {
+        if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
         }
         const info = this._throwsClasses.get(n.name);

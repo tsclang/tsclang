@@ -305,7 +305,7 @@ export default {
 
         // new Tasks<N>() тЖТ Tasks_N typedef + cooperative scheduler support
         if (init?.kind === 'New' && init.name === 'Tasks') {
-          if (!this._isEmbedded()) {
+          if (this._cap('async') === 'libuv') {
             throw this.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
           }
           this.includes.add('#include "std/embedded.h"');
@@ -378,7 +378,7 @@ export default {
                        : (_n % 10 === 3 && _n % 100 !== 13) ? 'rd' : 'th';
             throw this.error(`RuntimeError: HashMap capacity exceeded: max ${_capViol.cap}, attempted to insert ${_n}${_sfx} entry`);
           }
-          if (!this._isEmbedded()) {
+          if (this._cap('async') === 'libuv') {
             throw this.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
           }
           this.includes.add('#include "std/embedded.h"');
@@ -530,7 +530,7 @@ export default {
 
         // new SecureRandom() тЖТ error on embedded targets
         if (init?.kind === 'New' && init.name === 'SecureRandom') {
-          if (this._isEmbedded()) {
+          if (this._cap('os') === false) {
             throw this.error(`"SecureRandom" is not available on embedded targets`);
           }
           if (!this._emittedTscSecureRandomDef) {

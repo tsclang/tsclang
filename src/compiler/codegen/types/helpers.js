@@ -2,14 +2,14 @@
 export default {
   _cTypeBytes(ct) {
     const m = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
-    if (ct === 'size_t') return this._isEmbedded() ? 4 : 8;
+    if (ct === 'size_t') return this._ptrBytes();
     return m[ct] ?? 4;
   },
 
   _stackSizeOf(ct) {
     if (!ct || ct === 'void') return 0;
-    if (ct.endsWith(' *')) return this._isEmbedded() ? 4 : 8;
-    if (ct.startsWith('opt_ref_')) return this._isEmbedded() ? 8 : 16;
+    if (ct.endsWith(' *')) return this._ptrBytes();
+    if (ct.startsWith('opt_ref_')) return this._ptrBytes() * 2;
     if (ct.startsWith('opt_')) {
       const inner = ct.slice(4);
       return this._stackSizeOf(inner) + 4;
@@ -27,7 +27,7 @@ export default {
       return cls.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
     }
     if (ct.startsWith('Array_') || ct.startsWith('TscMap_') || ct.startsWith('Map_') || ct.startsWith('Set_') || ct.startsWith('TscSet_')) {
-      return this._isEmbedded() ? 4 : 8;
+      return this._ptrBytes();
     }
     return this._cTypeBytes(ct);
   },
@@ -282,7 +282,7 @@ export default {
     const m = { 'int8_t': 'tsc_unknown_from_i32', 'int16_t': 'tsc_unknown_from_i32', 'int32_t': 'tsc_unknown_from_i32', 'int64_t': 'tsc_unknown_from_i64', 'uint8_t': 'tsc_unknown_from_i32', 'uint16_t': 'tsc_unknown_from_i32', 'uint32_t': 'tsc_unknown_from_i32', 'uint64_t': 'tsc_unknown_from_i64', 'float': 'tsc_unknown_from_f32', 'double': 'tsc_unknown_from_f64', 'bool': 'tsc_unknown_from_bool', 'String': 'tsc_unknown_from_string', 'char': 'tsc_unknown_from_char' };
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
-      if (this._isEmbedded()) {
+      if (this._cap('allocator') !== 'heap' || this._cap('bits') < 64) {
         throw this.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
       }
       const elemIdent = ctype.slice(6);
@@ -290,7 +290,7 @@ export default {
       this._ensureUnknownPackerArray(elemIdent, ctype, et);
       return `tsc_unknown_from_${ctype}`;
     }
-    if (this._isEmbedded()) {
+    if (this._cap('allocator') !== 'heap' || this._cap('bits') < 64) {
       throw this.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
     }
     if (this.classes.has(ctype)) {
