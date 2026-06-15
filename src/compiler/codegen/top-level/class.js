@@ -242,6 +242,9 @@ export default {
     // Constructor if present
     const ctor = methods.find(m => m.name === 'constructor');
     if (ctor) {
+      if (ctor.decorators?.length > 0) {
+        throw this.error('decorators on constructors are not supported', ctor);
+      }
       // Check that all fields are unconditionally assigned in the constructor
       if (fields.length > 0 && ctor.body) {
         const unconditional = new Set();
