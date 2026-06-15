@@ -102,6 +102,23 @@ tsclang explain <E001>            Show error code explanation
 | spectrum | z88dk/sccz80 | Z80, 48KB |
 | wasm | emcc (Emscripten) | `--emit wasm` |
 
+## Roadmap
+
+**Current goal: self-hosting** — rewrite the tsclang compiler in tsclang itself.
+
+### Self-hosting gaps (#47-#50)
+
+The language needs several features before the compiler can be self-hosted:
+
+- **String methods** (#47) — `charAt`, `substring`, `indexOf`, `split`, `charCodeAt`, `fromCharCode`, etc.
+- **File I/O** (#48) — `std/fs`: `readFile`, `writeFile`, `existsSync`
+- **CLI + process spawn** (#49) — `std/process`: `args()`, `exit()`, `spawn()`
+- **StringBuilder** (#50) — efficient string concatenation for codegen
+
+### IR pipeline — deferred
+
+An IR/SSA pipeline was prototyped (#27-#29) but is **not integrated** into the compiler. The existing AST→C codegen already supports all language features (ownership, borrow checker, async, generics). IR is an architectural improvement, not a release blocker. Decision: revisit **after** self-hosting. Spec retained as `[PLANNED]` in [spec/16-tooling/16-compiler.md](spec/16-tooling/16-compiler.md).
+
 ## License
 
 Apache-2.0

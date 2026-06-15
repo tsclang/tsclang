@@ -53,8 +53,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 ## Архитектурные конвенции
 - Каждый compiler pass — отдельный класс с чётким input/output
-- Passes общаются через data structures (annotated AST, IR), не через shared mutable state
-- IR — контракт между IRGenerator и IRCodegen
+- Passes общаются через data structures (annotated AST), не через shared mutable state
 
 ## Рефакторинг
 - Маленькие шаги — каждый коммит сохраняет тесты зелёными
@@ -63,7 +62,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 ## TODO-маркеры
 - Формат: `// TODO: [scope] description`
-- Пример: `// TODO: [ir] implement phi node codegen`
+- Пример: `// TODO: [codegen] implement phi node codegen`
 
 ## Отслеживание работы
 - GitHub Issues — единый трекер задач (вместо LOG.md)
