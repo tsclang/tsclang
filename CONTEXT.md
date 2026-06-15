@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (lock file renamed to tsc.package.lock, #18 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (watch mode tracks imported files, #19 closed).
 
 ---
 
@@ -372,7 +372,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 7 | 81 | Async/await (state machines, Promise) |
 | 8 | 44 | Concurrency (threads, channels, Atomic) |
 | 9 | 64 | CLI, build, strict mode |
-| 10 | 22 | Package manager (install, update, lock, cmake) |
+| 10 | 23 | Package manager (install, update, lock, cmake, watch) |
 | 11 | 69 | Embedded (pool, heap, stack_size, @struct) |
 | 12 | 119 | Stdlib runtime |
 | 13 | 22 | Decorators |
@@ -383,7 +383,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 | 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
 | 19 | 74 | IO/Net/WS |
 
-**Total: ~2025 tests, all pass with gcc.**
+**Total: ~2026 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -404,8 +404,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `c54ee7b`
-- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#18, #20–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference). Open: #25–#31 (tech-debt refactoring), #19, #23–#24, #32–#33 (investigation/enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `70b5ea4`
+- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference). Open: #25–#31 (tech-debt refactoring), #23–#24, #32–#33 (investigation/enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
@@ -493,6 +493,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **Dynamic runtime array macros (#44)** — `helpers.js` has ~25 `_ensureArray*Macro(et, etC)` methods that emit C macros on demand for types NOT in runtime.h. Guard constants at top of `helpers.js`: `_RUNTIME_ET` (i32/f64/string), `_RUNTIME_MAP`, `_RUNTIME_FLATMAP`, `_RUNTIME_REDUCE`, `_RUNTIME_REDUCE_R`, `_RUNTIME_FLAT` (includes `Array_i32` for nested). Each method checks guards → if type is predefined, returns early; otherwise emits via `_emitArrayMacro(name, lines)` with `#ifndef` guard + `_emittedHelpers` dedup. `_ensure*` calls in `method-dispatch.js` for all array operations. `sort`/`toSorted`/`join`/`entries` NOT covered (need type-specific comparators/format strings/tuple structs). 4 tests: phase3/arrays/dyn-map-u8, dyn-filter-u8, dyn-foreach-u8, dyn-at-u8.
 - **Reduce accumulator type inference (#46)** — `method-dispatch.js:88-91`: `_lambdaParamHint` for reduce/reduceRight now computes accumulator type from initial value (`args[1].expr`) via `inferType`, not from element type. Without initial value → falls back to element type (matches TS spec). Lambda `acc` param + return type now match macro accumulator type. 1 new test + 3 existing updated.
 - **Lock file (#18)** — `tsc.lock` renamed to `tsc.package.lock`, format changed from plain text to JSON (`{ version, packages: { name: { version, source? } } }`). Helpers in `bin/index.js`: `_readLock()`, `_writeLock()`, `_readManifest()`, `_checkLockStale()`. `install` without args syncs lock from `tsc.package.json` deps. `build` warns on stderr if lock is stale (added/removed/changed deps). 3 existing tests updated, 2 new tests (sync-from-manifest, warn-stale-lock).
+- **Watch mode imported files (#19)** — `compileTsc()` returns `_sourceFiles: [inputPath, ...Object.keys(importedModules)]`. Watch mode uses `syncWatches(files)` to add/remove `watchFile` listeners after each rebuild. `onFileChange` is a shared debounced callback. 1 new test (timing-based shell test in phase10/dev/watch-imports).
 - **Expression-body void arrow (#45)** — Three locations fixed: (1) `hoistArrow` in `new-expr.js:278-285`: `if (ret === 'void')` emits `${c};` instead of `return ${c};`. (2) `hoistClosure` in `closures.js:270-277`: same pattern. (3) Adapter in `method-dispatch.js:891-895`: `if (closure.ret === 'void')` emits bare call instead of `return fn(...)`. Bug: `(x) => console.log(x)` generated `return printf(...)` in `void` function — C constraint violation (`-Wreturn-mismatch`). 2 new tests + 1 updated.
 
 ---
