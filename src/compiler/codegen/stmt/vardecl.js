@@ -1232,6 +1232,16 @@ export default {
                                   ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } :
                                     sym.params ? { closureParamTypes: sym.params.map(pp => pp.typeAnn ? this.resolveType(pp.typeAnn) : 'void *') } : {}) });
               return;
+            } else if (sym?.ctype === 'tsc_closure' && sym?.closureRetType) {
+              if (this._strictRules?.has('no-closures')) {
+                throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+              }
+              p(`${this.varDecl(qualifier, 'tsc_closure', name)} = ${init.name};`);
+              this.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind,
+                                  closureRetType: sym.closureRetType,
+                                  ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } : {}),
+                                  ...(sym.isClosure ? { isClosure: true } : {}) });
+              return;
             }
             // Move semantics borrow check (before emit, but set _moved AFTER)
             { const initSym2 = this.lookup(init.name);

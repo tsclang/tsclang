@@ -1,0 +1,7 @@
+function makeGreeter(prefix: string): (name: string) => string {
+    return (name: string): string => prefix + name;
+}
+
+const g = makeGreeter("Hello, ");
+const g2 = g;
+console.log(g2("World"));
