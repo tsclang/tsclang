@@ -295,6 +295,14 @@ export default {
           : 'abort()';
         lines.push(`${I}int32_t ${tmp} = ${r};`);
         lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+        const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+        const minConst = minMap[lt];
+        if (minConst) {
+          const overflowPanic = this._strictRules?.has('no-abort')
+            ? '_tsc_on_panic("integer overflow")'
+            : 'abort()';
+          lines.push(`${I}if (${tmp} == -1 && ${l} == ${minConst}) { fprintf(stderr, "panic: integer overflow\\n"); ${overflowPanic}; }`);
+        }
         return `${l} ${op} ${tmp}`;
       }
     }
