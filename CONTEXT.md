@@ -50,15 +50,13 @@ input.tsc
 
 God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin pattern (modules export a function that adds methods to `Context.prototype`).
 
-**Refactoring Phase 1 (#25) — extracted state objects:**
-- `ScopeManager` (`codegen/scope-manager.js`) — scope stack, `define()`/`lookup()`. Context delegates via wrappers + `get scopes()` backward-compat getter.
-- `BorrowTracker` (`codegen/borrow-tracker.js`) — `_scopeBorrowStack`, `_scopeMutQuarantineStack`, `_scopeMutBorrowStack`, `trackRefBorrow`/`trackMutBorrow`/`trackMutQuarantine`/`releaseQuarantineBy`. Depends on ScopeManager. Context delegates via thin wrappers.
-- `OutputBuffer` (`codegen/output-buffer.js`) — `includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines` + `addTop()`/`addLambda()`. Context delegates via backward-compat getters.
+**Extracted state objects** (delegated from Context):
+- `ScopeManager` (`codegen/scope-manager.js`) — scope stack, `define()`/`lookup()`.
+- `BorrowTracker` (`codegen/borrow-tracker.js`) — Ref/Mut borrow tracking, quarantine, scope-exit cleanup.
+- `OutputBuffer` (`codegen/output-buffer.js`) — output sections (`includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines`), `addTop()`/`addLambda()`.
+- `TypeChecker` (`typechecker.js`) — type resolution + inference (resolveType, inferType, _effectiveType, etc.). **Proxy-based delegation**: forwards `this.X` to `this.ctx.X`. Context delegates via wrapper methods.
 
-**Refactoring Phase 2 (#26) — extracted TypeChecker:**
-- `TypeChecker` (`typechecker.js`) — type resolution + inference. Methods from `resolve.js` (resolveType, resolveTupleType, typeDecl) and `infer.js` (inferType, _effectiveType, _inferCall, _inferMemberCall, inferTypeWithParams). Uses **Proxy-based delegation**: TypeChecker holds `this.ctx` reference, Proxy forwards any `this.X` not found on TypeChecker to `this.ctx.X`. Zero code changes in moved methods. Context delegates via 8 wrapper methods. Type helpers (`cTypeToIdent`, `_arrIdentToCType`, `_mapSuffix`, etc.) and C emission helpers (`_ensureArrayStruct`, `_ensureOptStruct`, etc.) remain on Context.prototype via `types/helpers.js` mixin.
-
-**IR pipeline — DEFERRED:** Prototype existed (#27-#29: data structures, AST→IR translator, IR→C codegen) but was never integrated. Code removed. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Revisit post-self-hosting (#30, long-term).
+**IR pipeline — DEFERRED:** Prototype removed. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Revisit post-self-hosting (#30).
 
 ### Module map
 
@@ -80,49 +78,25 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 ### Key Context state (the `this.*` properties)
 
 **Symbol table & scope (delegated to ScopeManager):**
-- `this._scopeMgr` — `ScopeManager` instance. `this.scopes` getter returns `_scopeMgr.scopes`.
 - `this.classes` — `Map<name, { fields, methods, decorators, _isHeap, _isPool, ... }>`
 - `this.interfaces` — `Map<name, { methods }>`
 - `this._typeAliases` — `Map<name, TypeRef>`
-- `define(name, info)` — Context wrapper: auto-marks heap vars, then delegates to `_scopeMgr.define()`. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, _movedLine, _refBorrowCount, _mutQuarantined, ... }`
+- `define(name, info)` — auto-marks heap vars, delegates to `_scopeMgr`. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, ... }`
 
-**Borrow tracking (delegated to BorrowTracker):**
-- `this._borrowTracker` — `BorrowTracker` instance (depends on `_scopeMgr`).
-- `pushScope()`/`popScope()` — Context coordinates: calls both `_scopeMgr` + `_borrowTracker`.
-- `_trackRefBorrow(sym)` / `_trackMutBorrow(sym)` / `_trackMutQuarantine(sym)` — thin wrappers delegating to `_borrowTracker`.
-- `_checkBorrowsAcrossAwait(node)` — stays on Context (needs `this.error()`).
-- `_trackBorrowForRefReturn(callNode, resultName, mode)` — stays on Context (needs `this.lookup()`/`this.interfaces`).
+**Borrow tracking** — delegated to `BorrowTracker`. Context coordinates `pushScope()`/`popScope()` across both ScopeManager + BorrowTracker. `_checkBorrowsAcrossAwait` and `_trackBorrowForRefReturn` stay on Context (need `this.error()`/`this.interfaces`). See Section 5 for semantics.
 
-**Cleanup system:**
-- `this._blockCleanupStack` — `[{ list: [], set: Set }]` — per-block owned-var cleanups
-- `this._heapVarStack` — `[{ name, className }][]` — per-block heap vars for auto-free at scope exit
-- `this._loopCleanupStack` — `Array<Array>` — stack of loop-level cleanup arrays (for labeled break)
-- `this._usesGotoCleanup` — boolean, throws functions use `goto cleanup` pattern
-- `this._throwsOwnedVars` — owned vars needing cleanup in throws functions
-- `_emitFuncCleanup(lines, I)` — emits all pending cleanups (block + heap) before return/throw
-- `_emitHeapCleanup(lines, I)` — emits `if (ptr != NULL) { Xxx_destructor(ptr); tsc_free(ptr); }` for all non-moved heap vars
-- `_hasPendingCleanups()` / `_hasPendingHeapCleanups()` — check if any cleanups are pending
-- `_snapshotHeapMoved()` / `_restoreHeapMoved(snapshot)` — save/restore `_moved` flags around conditional blocks (prevents leak when throw/return inside if-block marks vars moved but other paths still need cleanup)
+**Cleanup system** — `_blockCleanupStack` (per-block), `_heapVarStack` (auto-free at scope), `_loopCleanupStack` (labeled break), `_usesGotoCleanup` (throws functions). `_emitFuncCleanup()` emits all pending before return/throw. `_snapshotHeapMoved`/`_restoreHeapMoved` for conditional paths. See Section 5 for semantics.
 
-**Lazy emission guards (prevent duplicate C typedefs):**
-- `this._emittedArrayStructs` — `Set<'Array_i32', ...>` — `_ensureArrayStruct(ident, elemC)`
-- `this._emittedOptStructs` — `Set<'opt_i32', ...>` — `_ensureOptStruct(name, innerCType)`
-- `this._emittedResultTypes` — `Set<'Result_i32_Error', ...>` — used by both `async-emit.js` and `func.js` (lazy per-function emission via `resolveType()`, not pre-scan)
-- `this._emittedTuples`, `_emittedMapStructs`, `_emittedChannelTypes`, etc.
-- Pattern: `_ensureXxx(name, ...)` checks Set, emits typedef if missing, adds to Set
+**Lazy emission guards** — `_emittedArrayStructs`/`_emittedOptStructs`/`_emittedResultTypes`/`_emittedTuples`/`_emittedMapStructs` Sets. Pattern: `_ensureXxx(name, ...)` checks Set → emit typedef → add to Set.
 
 **Capabilities & config:**
-- `this._capabilities` — `{ allocator: 'heap'|'static', async: 'libuv'|'state_machine'|'none', fpu: bool, bits: 8|16|32|64, usize: 'u16'|'u32'|'u64', defaultNumber: 'f64'|'f32'|'i32'|'i16', posix: bool, strtoll: bool, console_uart: bool, os: bool }`
+- `this._capabilities` — `{ allocator, async, fpu, bits, usize, defaultNumber, posix, strtoll, console_uart, os }`
 - `this._cap(key)` — capability lookup with DESKTOP_CAPABILITIES fallback
-- `this._ptrBytes()` — pointer size from `_cap('usize')`: `{u16:2, u32:4, u64:8}` (replaces old `_isEmbedded()`-based size guesses)
-- `this._strictRules` — `Set<string>` — strict mode rules (`no-any`, `safe-div`, `no-closures`, ...)
-- `this._defaultNumber` — from `_cap('defaultNumber')`. Priority: CLI `--default-number` > `builds.<name>.defaultNumber` > `profile.defaultNumber` > `DESKTOP_CAPABILITIES.defaultNumber` ('f64'). No auto-detect.
+- `this._ptrBytes()` — pointer size from `_cap('usize')`: `{u16:2, u32:4, u64:8}`
+- `this._strictRules` — `Set<string>` (`no-any`, `safe-div`, `no-closures`, ...)
+- `this._defaultNumber` — Priority: CLI > builds > profile > DESKTOP_CAPABILITIES ('f64')
 
-**Output buffers (delegated to OutputBuffer):**
-- `this._output` — `OutputBuffer` instance.
-- `this.includes` / `this.typedefs` / `this.topLevel` / `this.mainStmts` / `this.lambdaLines` — backward-compat getters return `_output.*`.
-- `addTop(line)` / `addLambda(line)` — delegate to `_output`. `addTop()` routes typedefs vs. topLevel.
-- `ctx.emit()` — final assembly: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`. Stays on Context (needs cross-cutting state).
+**Output buffers** — delegated to `OutputBuffer`. `ctx.emit()` assembles: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`.
 
 ### Common patterns
 
@@ -241,11 +215,9 @@ Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `arc
 
 ### Cleanup system
 
-- **Block cleanup:** owned vars (string, array, class) freed at scope exit via `_blockCleanupStack`.
-- **Loop cleanup:** `_loopCleanupStack` — break/continue emit cleanups for loop-local vars.
-- **goto cleanup (throws functions):** `_usesGotoCleanup` — all cleanup at single `_cleanup:` label. Owned vars NULL-init'd. O(N+M) not O(N*M).
-- **Auto-destructors:** classes with string fields get `ClassName_free(ClassName*)` auto-generated (releases strings, does NOT free struct itself — value types on stack).
-- **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit or before return (via `_emitHeapCleanup`). `_snapshotHeapMoved`/`_restoreHeapMoved` ensures conditional paths (throw inside if) don't leak.
+- **Block/loop/goto cleanup:** See Section 3 state vars. Owned vars freed at scope exit; throws functions use single `_cleanup:` label (O(N+M)).
+- **Auto-destructors:** Classes with string fields get `ClassName_free()` auto-generated (releases strings, does NOT free struct — value types on stack).
+- **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit.
 - **@pool classes:** `ClassName_drop(&ref, idx)` returns slot to pool.
 
 ### Arc/Weak (ARC, desktop only)
@@ -334,27 +306,11 @@ Single-header C library. `#include`d in every output. Key components:
 
 ### Platform capabilities (`src/profiles/*.d.tsc`)
 
-12 built-in profiles: `desktop`, `avr`, `avr-heap`, `avr-coop`, `arm`, `nes`, `spectrum`, `genesis`, `ps2`, `dos`, `wasm`, `wasm32`.
-
-```typescript
-declare platform {
-    bits: 32;               // 8 (AVR), 16 (NES), 32 (ARM), 64 (desktop)
-    fpu: false;             // hardware float support
-    allocator: "static";    // "heap" | "static" (was "none", merged)
-    async: "state_machine"; // "libuv" | "state_machine" | "none"
-    usize: "u16";           // size_t width
-    defaultNumber: "i16";   // "f64" | "f32" | "i32" | "i16" — C type for `number`
-    unaligned_access: false;
-    posix: false;           // POSIX API available
-    strtoll: false;         // strtoll() available
-    console_uart: true;     // UART console output
-    console_baud: 9600;
-}
-```
+12 built-in profiles: `desktop`, `avr`, `avr-heap`, `avr-coop`, `arm`, `nes`, `spectrum`, `genesis`, `ps2`, `dos`, `wasm`, `wasm32`. Capabilities: `bits`, `fpu`, `allocator` (heap|static), `async` (libuv|state_machine|none), `usize`, `defaultNumber`, `posix`, `strtoll`, `console_uart`, `console_baud`, `unaligned_access`, `os`. See Section 3 for `_cap()` usage.
 
 `defaultNumber` per profile: desktop/dos/wasm/wasm32=`f64`, ps2=`f32`, arm/genesis=`i32`, avr/avr-heap/avr-coop/nes/spectrum=`i16`. 8-bit platforms use `i16` because C `int` is 16-bit.
 
-`_cap(key)` looks up capabilities. `TSC_NO_POSIX`, `TSC_NO_STRTOLL`, `TSC_CONSOLE_UART`, `TSC_CONSOLE_BAUD` defines passed to gcc.
+`TSC_NO_POSIX`, `TSC_NO_STRTOLL`, `TSC_CONSOLE_UART`, `TSC_CONSOLE_BAUD` defines passed to gcc.
 
 ### Strict mode (`_strictRules`)
 
@@ -366,28 +322,18 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### All 20 phases DONE (0–19)
 
-| Phase | Tests | Topic |
-|-------|-------|-------|
-| 0 | 30 | Core runtime (console, Error) |
-| 1 | 548 | Basic parsing, codegen |
-| 2 | 356 | Type system (null, enum, generics, utility types, widening) |
-| 3 | 371 | Memory model (ownership, borrow, arrays, strings, sets) |
-| 4 | 85 | Classes, interfaces, closures, match |
-| 5 | 27 | Error handling (throws, try/catch, Result) |
-| 6 | 57 | Modules (import/export, C interop, @platform) |
-| 7 | 81 | Async/await (state machines, Promise) |
-| 8 | 44 | Concurrency (threads, channels, Atomic) |
-| 9 | 64 | CLI, build, strict mode |
-| 10 | 23 | Package manager (install, update, lock, cmake, watch) |
-| 11 | 69 | Embedded (pool, heap, stack_size, @struct) |
-| 12 | 119 | Stdlib runtime |
-| 13 | 22 | Decorators |
-| 14 | 7 | Reactive |
-| 15 | 10 | Regex |
-| 16 | 3 | LSP |
-| 17 | 15 | Linter, retro platforms, capabilities |
-| 18 | 21 | Optimizer, WASM, DTS, sourcemaps |
-| 19 | 74 | IO/Net/WS |
+| Phases | Topic | Tests |
+|--------|-------|-------|
+| 0 | Core runtime (console, Error, Math) | 30 |
+| 1 | Basic parsing, codegen, arithmetic, control flow | 548 |
+| 2 | Type system (null, enum, generics, utility types, widening) | 356 |
+| 3 | Memory model (ownership, borrow, arrays, strings, sets) | 371 |
+| 4–5 | Classes, interfaces, closures, match, error handling (throws, Result) | 112 |
+| 6–8 | Modules, async/await, concurrency (threads, channels, Atomic) | 182 |
+| 9–10 | CLI, build, strict mode, package manager | 87 |
+| 11 | Embedded (pool, heap, stack_size, @struct) | 69 |
+| 12 | Stdlib runtime (Math, JSON, Blob, Buffer, regex, reactive) | 119 |
+| 13–19 | Decorators, reactive, regex, LSP, linter, optimizer, WASM, IO/Net/WS | 152 |
 
 **Total: ~2026 tests, all pass with gcc.**
 
@@ -465,21 +411,17 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Codegen
 
-- **`_ensureXxx()` pattern** — ALWAYS use lazy guards. Never emit a typedef/struct without checking the Set first.
-- **`hoistClosure`** — lambdas lifted to file-scope. Captures → env struct. Trampoline adapter for capturing closures in array callbacks (static env ptr + adapter fn, NOT reentrant).
-- **`_postStmtCleanups`** — deferred cleanups after current statement (e.g., zero-out after move, temp release).
-- **`_expectedType`** — set in vardecl.js before compiling init expression. Array literals use it to determine element type when empty.
-- **`_narrowedVars`** — Set of var names narrowed inside `if (x != null)` / `if (x)`. Access uses unwrapped type.
-- **`_narrowedUnknownVars`** — Map<name, ctype> for `typeof x === "i32"` narrowing.
-- **Double-evaluation prevention** — complex expressions stored in temp vars before multi-use (`??`, `?.`, compound assigns, etc.).
-- **`goto cleanup`** threshold: `_emitFuncCleanup` triggers when `_usesGotoCleanup && owned vars >= 2`.
-- **String concat chain (3+ operands)** — `_flattenStringConcat` recursively flattens `+` chain in `operators.js`; `_stringConcatChain` emits `tsc_string_concat_n((String[]){ ... }, N)` via C99 compound literal. Complex operands get temp vars + `_pushPostStmtCleanup` release.
-- **Closure env always heap-allocated** — `hoistClosure` emits destroy function (`_closure_N_destroy`). Cleanup via `_registerCleanup(${destroyFn}(env))`. Functions returning capturing closures tracked via `_returnsCapturingClosure` flag.
-- **Recursive type detection** — `_resolvingTypes` Set tracks types being defined. If `resolveType` returns its own name → compile error ("use Ref/Arc/Mut for indirection").
-- **Cross-module type resolution** — Types are in type tables (`this.classes`, `this._typeAliases`), NOT in scope (`this.define`). Export/Import dispatch checks type tables. All declaration types get module-prefixed C names (`_cname` for types, `_cAlias` for consts, `funcName` for functions).
-- **Non-const static init splitting** — C requires constant initializers for static vars. `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`. Non-library: `mainStmts`.
-- **Numeric widening** — Three-mechanism system: (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening(src, dst)` in `helpers.js`. `_effectiveType(node)` returns actual C type with C integer promotion rules.
-- **`_cap()` replaces `_isEmbedded()`** — All platform checks go through `_cap(key)` with DESKTOP_CAPABILITIES fallback. `_ptrBytes()` from `_cap('usize')`. Printf format from `_cap('bits')`. No direct platform detection.
+- **`_ensureXxx()` pattern** — ALWAYS use lazy guards (Set check → emit → add). Never emit a typedef/struct without checking first.
+- **`_postStmtCleanups`** — deferred cleanups after current statement (zero-out after move, temp release). **`_expectedType`** — set in vardecl.js before init expr; empty array literals use it for element type.
+- **Narrowing** — `_narrowedVars` (Set, `if (x != null)` / `if (x)`), `_narrowedUnknownVars` (Map, `typeof x === "i32"`). Access uses unwrapped type.
+- **Double-evaluation prevention** — complex expressions in temp vars before multi-use (`??`, `?.`, compound assigns).
+- **`goto cleanup`** — triggers when `_usesGotoCleanup && owned vars >= 2`. String concat chain (3+) uses `_flattenStringConcat` → `tsc_string_concat_n` compound literal.
+- **Closures** — `hoistClosure` lifts lambdas to file-scope with env struct. Env always heap-allocated (`_closure_N_destroy`). `_returnsCapturingClosure` flag for functions returning capturing closures. Trampoline adapter for array callbacks (NOT reentrant).
+- **Recursive type detection** — `_resolvingTypes` Set. If `resolveType` returns its own name → compile error ("use Ref/Arc/Mut for indirection").
+- **Cross-module types** — In type tables (`this.classes`, `this._typeAliases`), NOT in scope. All declaration types get module-prefixed C names.
+- **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
+- **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with C integer promotion rules.
+- **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---
 
