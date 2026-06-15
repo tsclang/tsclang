@@ -7,5 +7,7 @@ int main(void) {
     printf("%s\n", tsc_date_to_time_string(d).data);
     printf("%s\n", tsc_date_to_iso_string(d).data);
     printf("%s\n", tsc_date_to_locale_date_string(d).data);
+    printf("%s\n", tsc_date_to_locale_time_string(d).data);
+    printf("%s\n", tsc_date_to_locale_string(d).data);
     return 0;
 }

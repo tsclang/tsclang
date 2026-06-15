@@ -133,6 +133,8 @@
           toDateString: 'tsc_date_to_date_string',
           toTimeString: 'tsc_date_to_time_string',
           toLocaleDateString: 'tsc_date_to_locale_date_string',
+          toLocaleTimeString: 'tsc_date_to_locale_time_string',
+          toLocaleString: 'tsc_date_to_locale_string',
         };
         const fn = nameMap[prop];
         if (fn) {

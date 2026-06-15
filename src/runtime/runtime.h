@@ -502,6 +502,22 @@ static inline String tsc_date_to_locale_date_string(Date d) {
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
+static inline String tsc_date_to_locale_time_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    char *buf = (char *)_tsc_xmalloc(16);
+    snprintf(buf, 16, "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
+}
+
+static inline String tsc_date_to_locale_string(Date d) {
+    time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
+    char *buf = (char *)_tsc_xmalloc(32);
+    snprintf(buf, 32, "%04d-%02d-%02d %02d:%02d:%02d",
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+             tm->tm_hour, tm->tm_min, tm->tm_sec);
+    return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
+}
+
 static inline String tsc_date_to_string(Date d) {
     time_t t = (time_t)(d.ms / 1000); struct tm *tm = gmtime(&t);
     static const char *days[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
