@@ -195,6 +195,47 @@ function _checkInput(cmd, inputPath) {
   }
 }
 
+const LOCK_FILE = 'tsc.package.lock';
+
+function _readLock() {
+  if (!existsSync(LOCK_FILE)) return { version: 1, packages: {} };
+  try {
+    const data = JSON.parse(readFileSync(LOCK_FILE, 'utf8'));
+    if (!data.packages || typeof data.packages !== 'object') data.packages = {};
+    return data;
+  } catch {
+    return { version: 1, packages: {} };
+  }
+}
+
+function _writeLock(lock) {
+  writeFileSync(LOCK_FILE, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+}
+
+function _readManifest() {
+  const p = join(process.cwd(), 'tsc.package.json');
+  if (!existsSync(p)) return null;
+  try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
+}
+
+function _checkLockStale() {
+  const manifest = _readManifest();
+  if (!manifest) return null;
+  const lock = _readLock();
+  const deps = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
+  const lockPkgs = lock.packages || {};
+  const added = [], removed = [], changed = [];
+  for (const [name, version] of Object.entries(deps)) {
+    if (!lockPkgs[name]) added.push(name);
+    else if (lockPkgs[name].version !== version) changed.push(name);
+  }
+  for (const name of Object.keys(lockPkgs)) {
+    if (!deps[name]) removed.push(name);
+  }
+  if (!added.length && !removed.length && !changed.length) return null;
+  return { added, removed, changed };
+}
+
 // ---------------------------------------------------------------------------
 // explain command
 // ---------------------------------------------------------------------------
@@ -902,8 +943,38 @@ if (command === 'install') {
   }
 
   if (!pkgArg) {
-    console.error('tsclang install: missing package name');
-    process.exit(1);
+    // Sync lock with tsc.package.json dependencies
+    const manifest = _readManifest();
+    if (!manifest) {
+      console.error('tsclang install: no tsc.package.json found in current directory');
+      process.exit(1);
+    }
+    const deps = productionFlag
+      ? (manifest.dependencies || {})
+      : { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
+    const lock = _readLock();
+    let installed = 0, updated = 0;
+    for (const [name, version] of Object.entries(deps)) {
+      if (!lock.packages[name]) {
+        lock.packages[name] = { version };
+        installed++;
+      } else if (lock.packages[name].version !== version) {
+        lock.packages[name].version = version;
+        updated++;
+      }
+    }
+    // Remove packages no longer in manifest
+    const removed = [];
+    for (const name of Object.keys(lock.packages)) {
+      if (!deps[name]) { delete lock.packages[name]; removed.push(name); }
+    }
+    _writeLock(lock);
+    const parts = [];
+    if (installed) parts.push(`${installed} installed`);
+    if (updated) parts.push(`${updated} updated`);
+    if (removed.length) parts.push(`${removed.length} removed`);
+    process.stdout.write(parts.length ? parts.join(', ') + '\n' : 'Already up to date\n');
+    process.exit(0);
   }
 
   // Install from local .tspkg archive
@@ -930,23 +1001,19 @@ if (command === 'install') {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content, 'utf8');
     }
-    const lockEntry = `${pkgName}@${pkgVersion}\n`;
-    let lockContent = lockEntry;
-    if (existsSync('tsc.lock')) {
-      const existing = readFileSync('tsc.lock', 'utf8');
-      lockContent = existing.includes(`${pkgName}@`) ? existing : existing + lockEntry;
-    }
-    writeFileSync('tsc.lock', lockContent, 'utf8');
+    const lock = _readLock();
+    lock.packages[pkgName] = { version: pkgVersion, source: 'local' };
+    _writeLock(lock);
     process.stdout.write(`Installed ${pkgName}@${pkgVersion}\n`);
     process.exit(0);
   }
 
   // Parse pkg@version or git+url
-  let pkgName, pkgVersion;
+  let pkgName, pkgVersion, pkgSource;
   if (pkgArg.startsWith('git+')) {
-    // git+https://github.com/example/mylib → mylib
     pkgName = pkgArg.split('/').pop().replace(/\.git$/, '');
     pkgVersion = 'git';
+    pkgSource = pkgArg;
   } else {
     const atIdx = pkgArg.lastIndexOf('@');
     if (atIdx > 0) {
@@ -956,23 +1023,16 @@ if (command === 'install') {
       pkgName = pkgArg;
       pkgVersion = 'latest';
     }
+    pkgSource = 'registry';
   }
 
   // Create tsc_packages/<pkg>/ stub
   mkdirSync(join('tsc_packages', pkgName), { recursive: true });
 
-  // Write tsc.lock
-  const lockEntry = `${pkgName}@${pkgVersion}\n`;
-  let lockContent = lockEntry;
-  if (existsSync('tsc.lock')) {
-    const existing = readFileSync('tsc.lock', 'utf8');
-    if (!existing.includes(`${pkgName}@`)) {
-      lockContent = existing + lockEntry;
-    } else {
-      lockContent = existing;
-    }
-  }
-  writeFileSync('tsc.lock', lockContent, 'utf8');
+  // Write lock
+  const lock = _readLock();
+  lock.packages[pkgName] = { version: pkgVersion, source: pkgSource };
+  _writeLock(lock);
 
   process.exit(0);
 }
@@ -983,21 +1043,13 @@ if (command === 'install') {
 if (command === 'update') {
   const pkgArg = args.find(a => !a.startsWith('--') && a !== 'update');
 
-  // Update tsc.lock with latest version for the package
-  const pkgName = pkgArg || 'all';
-  const pkgVersion = pkgArg ? 'latest' : 'all';
-  const lockEntry = pkgArg ? `${pkgName}@${pkgVersion}\n` : '';
-
   if (pkgArg) {
-    let lockContent = lockEntry;
-    if (existsSync('tsc.lock')) {
-      const existing = readFileSync('tsc.lock', 'utf8');
-      const lines = existing.split('\n').filter(l => l && !l.startsWith(`${pkgName}@`));
-      lockContent = [...lines, `${pkgName}@${pkgVersion}`].join('\n') + '\n';
-    }
-    writeFileSync('tsc.lock', lockContent, 'utf8');
+    const lock = _readLock();
+    lock.packages[pkgArg] = { version: 'latest', ...(lock.packages[pkgArg] || {}) };
+    lock.packages[pkgArg].version = 'latest';
+    _writeLock(lock);
   } else {
-    writeFileSync('tsc.lock', '', 'utf8');
+    _writeLock({ version: 1, packages: {} });
   }
 
   process.exit(0);
@@ -1278,6 +1330,17 @@ if (command === 'build') {
 
   const inputPath = resolve(inputFile);
   _checkInput('build', inputPath);
+
+  // Check lock file staleness
+  const _stale = _checkLockStale();
+  if (_stale) {
+    const parts = [];
+    if (_stale.added.length) parts.push(`added: ${_stale.added.join(', ')}`);
+    if (_stale.removed.length) parts.push(`removed: ${_stale.removed.join(', ')}`);
+    if (_stale.changed.length) parts.push(`changed: ${_stale.changed.join(', ')}`);
+    process.stderr.write(`tsclang build: warning: tsc.package.lock is out of date (${parts.join('; ')}). Run 'tsclang install' to sync.\n`);
+  }
+
   const buildOpts = {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
     target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,

@@ -1480,14 +1480,16 @@ input.tsc:1:
 
 - [R] устанавливает зависимость из npm-реестра
 - [R] устанавливает из git URL
-- [R] создаёт `tsc.lock`
-- [R] повторный install не меняет `tsc.lock` (reproducible)
+- [R] создаёт `tsc.package.lock`
+- [R] повторный install не меняет `tsc.package.lock` (reproducible)
 - [R] `--production` — не ставит devDependencies
+- [R] `install` без аргументов — синхронизация с `tsc.package.json`
+- [R] `build` предупреждает если `tsc.package.lock` устарел
 
 ### tsclang update
 
 - [R] обновляет зависимость до latest compatible
-- [R] обновляет `tsc.lock`
+- [R] обновляет `tsc.package.lock`
 
 ### tsclang dev
 

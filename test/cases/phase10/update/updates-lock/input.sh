@@ -1,2 +1,2 @@
 tsclang update mylib
-test -f tsc.lock && echo "lock-updated"
+test -f tsc.package.lock && echo "lock-updated"
