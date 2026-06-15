@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (watch mode tracks imported files, #19 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (TypeChecker extracted from Context, #26 closed).
 
 ---
 
@@ -53,6 +53,9 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 - `ScopeManager` (`codegen/scope-manager.js`) — scope stack, `define()`/`lookup()`. Context delegates via wrappers + `get scopes()` backward-compat getter.
 - `BorrowTracker` (`codegen/borrow-tracker.js`) — `_scopeBorrowStack`, `_scopeMutQuarantineStack`, `_scopeMutBorrowStack`, `trackRefBorrow`/`trackMutBorrow`/`trackMutQuarantine`/`releaseQuarantineBy`. Depends on ScopeManager. Context delegates via thin wrappers.
 - `OutputBuffer` (`codegen/output-buffer.js`) — `includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines` + `addTop()`/`addLambda()`. Context delegates via backward-compat getters.
+
+**Refactoring Phase 2 (#26) — extracted TypeChecker:**
+- `TypeChecker` (`typechecker.js`) — type resolution + inference. Methods from `resolve.js` (resolveType, resolveTupleType, typeDecl) and `infer.js` (inferType, _effectiveType, _inferCall, _inferMemberCall, inferTypeWithParams). Uses **Proxy-based delegation**: TypeChecker holds `this.ctx` reference, Proxy forwards any `this.X` not found on TypeChecker to `this.ctx.X`. Zero code changes in moved methods. Context delegates via 8 wrapper methods. Type helpers (`cTypeToIdent`, `_arrIdentToCType`, `_mapSuffix`, etc.) and C emission helpers (`_ensureArrayStruct`, `_ensureOptStruct`, etc.) remain on Context.prototype via `types/helpers.js` mixin.
 
 ### Module map
 
@@ -404,10 +407,11 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `70b5ea4`
-- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference). Open: #25–#31 (tech-debt refactoring), #23–#24, #32–#33 (investigation/enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `0a972c8`
+- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference), #24 (warning support in test runner), #25 (Phase 1 state extraction), #26 (Phase 2 TypeChecker separation). Open: #23 (investigation, blocked by #30), #27–#31 (tech-debt refactor), #32–#33 (enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
-- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects from Context (#25). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
+- **Refactoring Phase 2 (#26) — DONE:** Extracted TypeChecker (`0a972c8`). resolve.js + infer.js methods moved to `TypeChecker` class with Proxy delegation. Context: 827→843 lines (added delegation wrappers). types/index.js now only exports helpers.js. All tests pass.
+- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects (#25 ✅). Phase 2: TypeChecker separation (#26 ✅). Phase 3: IR data structures (#27). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
 ### Architectural decisions (2026-06-13)
