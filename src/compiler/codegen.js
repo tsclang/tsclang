@@ -8,6 +8,7 @@ import { TscError } from './error.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
+import { TypeChecker } from './typechecker.js';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -240,7 +241,22 @@ class Context {
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
     this._parse = _parse;
+
+    // Type checking: delegated to TypeChecker
+    this._typeChecker = new TypeChecker(this);
   }
+
+  // ----------------------------------------------------------------
+  // Type checking (delegated to TypeChecker)
+  // ----------------------------------------------------------------
+  resolveType(...a)       { return this._typeChecker.resolveType(...a); }
+  resolveTupleType(...a)  { return this._typeChecker.resolveTupleType(...a); }
+  typeDecl(...a)          { return this._typeChecker.typeDecl(...a); }
+  inferType(...a)         { return this._typeChecker.inferType(...a); }
+  _effectiveType(...a)    { return this._typeChecker._effectiveType(...a); }
+  _inferCall(...a)        { return this._typeChecker._inferCall(...a); }
+  _inferMemberCall(...a)  { return this._typeChecker._inferMemberCall(...a); }
+  inferTypeWithParams(...a) { return this._typeChecker.inferTypeWithParams(...a); }
 
   // ----------------------------------------------------------------
   // Scope helpers (delegated to ScopeManager)
