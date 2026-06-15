@@ -6,6 +6,7 @@ typedef struct { void *self; const Drawable_vtable *vtable; } Drawable;
 typedef struct { int _dummy; } Icon;
 
 static void Icon_draw(const Icon *self) {
+    (void)self;
 }
 
 static const Drawable_vtable _Icon_Drawable_vtable = {

@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Validator;
 
 static void Validator_check_inner(const Validator *self, String s) {
+    (void)self;
     String _tmp_0 = tsc_string_concat(STR_LIT("ok: "), s);
     printf("%s\n", _tmp_0.data);
     tsc_string_release(_tmp_0);

@@ -503,6 +503,8 @@ export default {
     let finalLines = lines;
     if (isIfaceMethod) {
       finalLines = [`${className} *self = (${className} *)_self;`, `(void)self;`, ...lines];
+    } else if (!isStatic && m.name !== 'new' && !lines.some(l => /\bself\b/.test(l))) {
+      finalLines = ['(void)self;', ...lines];
     }
 
     // Register method in class so call sites can resolve it

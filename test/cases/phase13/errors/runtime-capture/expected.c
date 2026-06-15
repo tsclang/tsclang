@@ -5,6 +5,7 @@ typedef struct { int _dummy; } Svc;
 static int32_t callCount = 0;
 
 static void Svc_run_inner(const Svc *self) {
+    (void)self;
     printf("run\n");
 }
 

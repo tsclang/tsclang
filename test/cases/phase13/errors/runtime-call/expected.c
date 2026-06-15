@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Calc;
 
 static int32_t Calc_sqrt_inner(const Calc *self, int32_t x) {
+    (void)self;
     return x;
 }
 

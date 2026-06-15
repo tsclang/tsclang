@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Foo;
 
 static void Foo_run_inner(const Foo *self) {
+    (void)self;
     printf("run\n");
 }
 

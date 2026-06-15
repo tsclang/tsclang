@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Calc;
 
 static void Calc_set_inner(const Calc *self, int32_t x) {
+    (void)self;
     printf("%d\n", x);
 }
 

@@ -7,10 +7,12 @@ typedef struct { int _dummy; } Dog;
 typedef struct { int _dummy; } Cat;
 
 static void Dog_speak(const Dog *self) {
+    (void)self;
     printf("woof\n");
 }
 
 static void Cat_speak(const Cat *self) {
+    (void)self;
     printf("meow\n");
 }
 

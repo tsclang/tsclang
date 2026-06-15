@@ -6,6 +6,7 @@ typedef struct { void *self; const Drawable_vtable *vtable; } Drawable;
 typedef struct { double radius; } Circle;
 
 static void Circle_draw(const Circle *self) {
+    (void)self;
     printf("circle\n");
 }
 

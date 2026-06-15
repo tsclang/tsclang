@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Svc;
 
 static void Svc_run_inner(const Svc *self) {
+    (void)self;
     printf("running\n");
 }
 

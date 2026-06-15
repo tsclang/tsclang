@@ -3,6 +3,7 @@
 typedef struct { int _dummy; } Foo;
 
 static void Foo_greet_inner(const Foo *self) {
+    (void)self;
     printf("hello\n");
 }
 
