@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (IR data structures defined, #27 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-15 (AST→IR translator, #28 closed).
 
 ---
 
@@ -59,6 +59,9 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 
 **Refactoring Phase 3 (#27) — IR data structures:**
 - `IRModule` / `IRFunction` / `IRBasicBlock` / `IRInstruction` (`src/compiler/ir/index.js`) — SSA-like high-level IR. 13 instruction ops: alloc, borrow, retain, release, call, assign, drop, return, branch, jump, throw, phi, await, yield. Factory methods on IRInstruction. Validation: blocks enforce single terminator. `freshName(hint)` for SSA names. `successors` derived from terminator. `toString()` produces spec-compatible textual format. Tests in `test/ir-test.js` (91 assertions). `throw` added beyond spec's 12 (needed for throws functions — П2, П6).
+
+**Refactoring Phase 4 (#28) — AST→IR translator:**
+- `IRGenerator` (`src/compiler/ir/generator.js`) — converts AST to IR. `generate(ast) → IRModule`. Supports: FuncDecl, VarDecl, Return, If, While, For, ExprStmt, Block. Expressions: Literal, Ident, Binary, Unary, Call, Member, Index, Assign, Ternary, Cast. **Memory-based SSA** (one name per variable, no renaming on assignment, no phi nodes). Compound expressions as strings (`"a_0 + b_0"`). Scope chain for shadowing. If/else merge detection. Void calls get dest=null. Tests in `test/ir-gen-test.js` (98 assertions). Not integrated into pipeline yet (#30).
 
 ### Module map
 
@@ -395,7 +398,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 | Feature | Status | Where |
 |---------|--------|-------|
-| IR / SSA (basic blocks, phi nodes) | Phase 3 done (#27). Data structures defined. AST→IR translator = #28 (next). | `src/compiler/ir/index.js`, `spec/16-tooling/` |
+| IR / SSA (basic blocks, phi nodes) | Phase 4 done (#28). Data structures + translator. IR→C codegen = #29 (next). | `src/compiler/ir/`, `spec/16-tooling/` |
 | Borrow elision for field access (M1) | Deferred to phase 18 | `const name = user.name` does ARC copy instead of pointer borrow |
 | Full Descriptor API (PropDesc, ParamDesc) | NOT YET | `spec/15-decorators/` |
 | `FnPtr<T>` (pure C fn pointer) | NOT YET | `spec/12-modules/` |
@@ -410,12 +413,13 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `ef41863`
-- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference), #24 (warning support in test runner), #25 (Phase 1 state extraction), #26 (Phase 2 TypeChecker separation), #27 (Phase 3 IR data structures). Open: #23 (investigation, blocked by #30), #28–#31 (tech-debt refactor), #32–#33 (enhancement).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `4c7c20e`
+- **GitHub Issues:** #1–#46. **All bugs and enhancements closed.** Closed: #1–#5, #8–#10, #14–#22, #34, #35 (bugs); #7, #11, #12, #13, #36 (correctness); #37 (defaultNumber required), #38 (`_isEmbedded()` eliminated), #39 (multiple var decls), #40 (`_effectiveType` — skipWidening eliminated), #41 (Member widening), #42 (compound assignment widening), #43 (C integer promotion), #6 (block-body map type inference), #44 (dynamic runtime array macros), #45 (expression-body void arrow), #46 (reduce accumulator type inference), #24 (warning support in test runner), #25 (Phase 1 state extraction), #26 (Phase 2 TypeChecker separation), #27 (Phase 3 IR data structures), #28 (Phase 4 AST→IR translator). Open: #23 (investigation, blocked by #30), #29–#31 (tech-debt refactor), #32–#33 (enhancement).
 - **Refactoring Phase 1 (#25) — DONE:** Extracted ScopeManager (`b4ab719`), BorrowTracker (`d710a0f`), OutputBuffer (`0069c13`). Context: 901→827 lines. TypeRegistry deferred (`_typeCache` doesn't exist, design needed). All tests pass.
 - **Refactoring Phase 2 (#26) — DONE:** Extracted TypeChecker (`0a972c8`). resolve.js + infer.js methods moved to `TypeChecker` class with Proxy delegation. Context: 827→843 lines (added delegation wrappers). types/index.js now only exports helpers.js. All tests pass.
 - **Refactoring Phase 3 (#27) — DONE:** IR data structures (`ef41863`). `src/compiler/ir/index.js` — IRModule, IRFunction, IRBasicBlock, IRInstruction. 13 instruction ops (12 spec + `throw`). 91 assertions in `test/ir-test.js`. Purely additive, no integration with codegen.
-- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects (#25 ✅). Phase 2: TypeChecker separation (#26 ✅). Phase 3: IR data structures (#27 ✅). Phase 4: AST to IR translator (#28). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
+- **Refactoring Phase 4 (#28) — DONE:** AST→IR translator (`4c7c20e`). `src/compiler/ir/generator.js` — IRGenerator. Supports FuncDecl, VarDecl, Return, If/While/For, ExprStmt, Block. Expressions: Literal, Ident, Binary, Unary, Call, Member, Index, Assign, Ternary, Cast. Memory-based SSA (no phi nodes). 98 assertions in `test/ir-gen-test.js`. Bugfix: IRInstruction constructor handles null opts.
+- **Refactoring plan:** 10 phases to extract IR/SSA pipeline. Phase 1: extract state objects (#25 ✅). Phase 2: TypeChecker separation (#26 ✅). Phase 3: IR data structures (#27 ✅). Phase 4: AST to IR translator (#28 ✅). Phase 5: IR to C codegen (#29). Phase 7 (ownership on IR) deferred. Old codegen deleted after switch-over.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`. All removed: `LOG.md`, `AGENTS_PLAN.md`, `AUDIT-PLAN.md`, `FUTURE.md`, `QNX.md`.
 
 ### Architectural decisions (2026-06-13)
