@@ -36,6 +36,7 @@ export class IRInstruction {
   constructor(op, fields, opts = {}) {
     this.op = op;
     Object.assign(this, fields);
+    if (!opts) opts = {};
     this.loc = opts.loc ?? null;
     this.ctype = opts.ctype ?? null;
   }
