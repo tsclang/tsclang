@@ -183,6 +183,18 @@ if (CMD_HELP[command] && (args.includes('--help') || args.includes('-h'))) {
   process.exit(0);
 }
 
+function _missingInput(cmd) {
+  process.stderr.write(`tsclang ${cmd}: missing input file\n\nUsage: tsclang ${cmd} <input.tsc> [options]\nRun 'tsclang ${cmd} --help' for details.\n`);
+  process.exit(1);
+}
+
+function _checkInput(cmd, inputPath) {
+  if (!existsSync(inputPath)) {
+    process.stderr.write(`tsclang ${cmd}: file not found: ${inputPath}\n`);
+    process.exit(1);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // explain command
 // ---------------------------------------------------------------------------
@@ -734,7 +746,7 @@ function reportErrors(e, filename) {
 if (command === 'emit-dts') {
   const inputFile = args[1];
   if (!inputFile) {
-    console.error('tsclang emit-dts: missing input file');
+    _missingInput('emit-dts');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -752,7 +764,7 @@ if (command === 'emit-dts') {
 if (command === 'format') {
   const inputFile = args[1];
   if (!inputFile) {
-    console.error('tsclang format: missing input file');
+    _missingInput('format');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -772,7 +784,7 @@ if (command === 'lint') {
   const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
   const inputFile  = args.find(a => !a.startsWith('--') && a !== 'lint');
   if (!inputFile) {
-    process.stderr.write('tsclang lint: missing input file\n');
+    _missingInput('lint');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -1056,7 +1068,7 @@ if (command === 'build-cmake') {
 if (command === 'build') {
   const inputFile = args[1];
   if (!inputFile) {
-    console.error('tsclang build: missing input file');
+    _missingInput('build');
     process.exit(1);
   }
 
@@ -1265,6 +1277,7 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
+  _checkInput('build', inputPath);
   const buildOpts = {
     maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
     target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,
@@ -1476,7 +1489,7 @@ if (command === 'build') {
 // ---------------------------------------------------------------------------
   const inputFile = args[1];
   if (!inputFile) {
-    console.error('tsclang run: missing input file');
+    _missingInput('run');
     process.exit(1);
   }
 
@@ -1491,6 +1504,7 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
+  _checkInput('run', inputPath);
   let c, warnings;
   try {
     ({ c, warnings } = compileTsc(inputPath));
@@ -1528,7 +1542,7 @@ if (command === 'build') {
 } else if (command === 'debug') {
   const inputFile = args[1];
   if (!inputFile) {
-    console.error('tsclang debug: missing input file');
+    _missingInput('debug');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
