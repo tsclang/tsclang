@@ -280,6 +280,16 @@ export default {
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
+      const platformDec = (m.decorators ?? []).find(d => d.name === 'platform');
+      if (platformDec) {
+        const allowed = (platformDec.args ?? []).map(a => a.value ?? a);
+        const target = this._targetName ?? 'desktop';
+        if (!allowed.includes(target)) {
+          if (!this._platformSkipped) this._platformSkipped = new Map();
+          this._platformSkipped.set(`${cname}.${m.name}`, allowed);
+          continue;
+        }
+      }
       const isStatic = m.modifiers.includes('static');
       const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {

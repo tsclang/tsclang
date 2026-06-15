@@ -1,0 +1,13 @@
+class Hal {
+    @platform("desktop")
+    deskOnly(): void {
+        console.log("desktop");
+    }
+    @platform("avr")
+    avrOnly(): void {
+        console.log("avr");
+    }
+    common(): void {
+        console.log("common");
+    }
+}

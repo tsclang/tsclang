@@ -1,0 +1,11 @@
+class Hal {
+    @platform("avr")
+    avrOnly(): void {
+        console.log("avr");
+    }
+    common(): void {
+        console.log("common");
+    }
+}
+const h = new Hal();
+h.avrOnly();
