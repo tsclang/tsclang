@@ -723,7 +723,7 @@ function compileTsc(inputPath, opts = {}) {
     _cacheSet(cacheKey, { c: result.c, exports: result.exports, _initFn: result._initFn ?? null });
   }
 
-  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, _initFn: result._initFn ?? null, lineMap };
+  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, _initFn: result._initFn ?? null, lineMap, _sourceFiles: [inputPath, ...Object.keys(importedModules)] };
 }
 
 // Build [tscLine, cLine] mapping by matching line numbers in #line directives or heuristically.
@@ -1353,10 +1353,14 @@ if (command === 'build') {
     _aliases: _pkgAliases,
   };
 
+  let _lastSourceFiles = [inputPath];
+
   function doBuild() {
     let c, warnings, lineMap;
     try {
-      ({ c, warnings, lineMap } = compileTsc(inputPath, buildOpts));
+      const _r = compileTsc(inputPath, buildOpts);
+      c = _r.c; warnings = _r.warnings; lineMap = _r.lineMap;
+      if (_r._sourceFiles) _lastSourceFiles = _r._sourceFiles;
     } catch (e) {
       reportErrors(e, basename(inputPath));
       return false;
@@ -1521,24 +1525,44 @@ if (command === 'build') {
 
   if (watchMode) {
     const ts = () => new Date().toLocaleTimeString();
-    process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
-    let ok = doBuild();
-    if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
-
     let debounceTimer = null;
-    watchFile(inputPath, { interval: 200 }, () => {
+    let watchedFiles = new Set();
+
+    function onFileChange() {
       if (debounceTimer) return;
       debounceTimer = setTimeout(() => {
         debounceTimer = null;
         process.stderr.write(`\n[${ts()}] Change detected — rebuilding...\n`);
-        ok = doBuild();
+        const ok = doBuild();
         if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
-        process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
+        syncWatches(_lastSourceFiles);
+        const n = watchedFiles.size;
+        process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
       }, 150);
-    });
+    }
+
+    function syncWatches(files) {
+      const newSet = new Set(files);
+      for (const f of watchedFiles) {
+        if (!newSet.has(f)) unwatchFile(f, onFileChange);
+      }
+      for (const f of newSet) {
+        if (!watchedFiles.has(f)) watchFile(f, { interval: 200 }, onFileChange);
+      }
+      watchedFiles = newSet;
+    }
+
+    process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
+    const ok = doBuild();
+    if (ok) {
+      process.stderr.write(`[${ts()}] Build succeeded\n`);
+      syncWatches(_lastSourceFiles);
+      const n = watchedFiles.size;
+      process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
+    }
 
     process.on('SIGINT', () => {
-      unwatchFile(inputPath);
+      for (const f of watchedFiles) unwatchFile(f, onFileChange);
       process.stderr.write(`\n[${ts()}] Watch stopped\n`);
       process.exit(0);
     });
