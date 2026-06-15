@@ -1,0 +1,5 @@
+class Foo { x: i32 = 0 }
+let f = new Foo()
+if (f) {
+    console.log("always")
+}

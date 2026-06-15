@@ -1,0 +1,4 @@
+let arr: Array<i32> = [1, 2, 3]
+if (arr) {
+    console.log("always")
+}

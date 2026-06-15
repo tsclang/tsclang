@@ -170,13 +170,14 @@ async function classifyTest(testDir) {
   const hasOut        = existsSync(join(testDir, 'expected.out'));
   const hasErr        = existsSync(join(testDir, 'expected.error'));
   const hasRuntimeErr = existsSync(join(testDir, 'expected.runtime-error'));
+  const hasWarning    = existsSync(join(testDir, 'expected.warning'));
 
   if (hasErr) return { kind: 'E', inputType };
 
   if (inputType === 'tsc') {
-    if (hasC && hasOut) return { kind: 'R', inputType };
-    if (hasC && hasRuntimeErr) return { kind: 'RE', inputType };
-    if (hasC)           return { kind: 'F', inputType };
+    if (hasC && hasOut) return { kind: 'R', inputType, hasWarning };
+    if (hasC && hasRuntimeErr) return { kind: 'RE', inputType, hasWarning };
+    if (hasC)           return { kind: 'F', inputType, hasWarning };
     return null; // tsc test with no expected files — skip
   }
 
@@ -358,9 +359,9 @@ async function runTest(testDir) {
   }
 }
 
-async function executeTest(testDir, { kind, inputType }, tmpBase) {
+async function executeTest(testDir, { kind, inputType, hasWarning }, tmpBase) {
   switch (inputType) {
-    case 'tsc':  return executeTscTest(testDir, kind, tmpBase);
+    case 'tsc':  return executeTscTest(testDir, kind, tmpBase, { hasWarning });
     case 'json': return executeJsonTest(testDir, kind, tmpBase);
     case 'sh':   return executeShTest(testDir, kind, tmpBase);
     default:     return { status: 'skip', testDir, reason: `unknown input type: ${inputType}` };
@@ -438,7 +439,7 @@ function readMeta(testDir) {
 // ---------------------------------------------------------------------------
 // .tsc tests — full compiler pipeline
 // ---------------------------------------------------------------------------
-async function executeTscTest(testDir, kind, tmpBase) {
+async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
   if (!checkTsclang()) {
     return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
   }
@@ -479,6 +480,12 @@ async function executeTscTest(testDir, kind, tmpBase) {
 
   const cCompareResult = await compareCOutput(testDir, generatedC);
   if (cCompareResult) return cCompareResult;
+
+  // Warning verification (for tests with expected.warning)
+  if (hasWarning) {
+    const warningResult = await checkErrorOutput(testDir, tscResult.stderr + tscResult.stdout, 'expected.warning');
+    if (warningResult.status !== 'pass') return warningResult;
+  }
 
   if (kind === 'F' || flagNoGcc) {
     if (flagNoGcc) return pass(testDir);
