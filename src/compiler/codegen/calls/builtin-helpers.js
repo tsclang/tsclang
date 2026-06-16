@@ -86,17 +86,6 @@ export default {
     if (prop === 'sign') {
       return `(${a0} > 0.0) - (${a0} < 0.0) + 0.0`;
     }
-    if (prop === 'checkedAdd' || prop === 'checkedSub' || prop === 'checkedMul') {
-      const builtin = prop === 'checkedAdd' ? '__builtin_add_overflow'
-                    : prop === 'checkedSub' ? '__builtin_sub_overflow'
-                    : '__builtin_mul_overflow';
-      const argType = a0t === 'int64_t' || a0t === 'uint64_t' ? a0t : 'int32_t';
-      const optIdent = this.cTypeToIdent(argType);
-      const optName = `opt_${optIdent}`;
-      this._ensureOptStruct(optName, argType);
-      const tmp = `_chk_${this.tempCount++}`;
-      return `({ ${argType} ${tmp}; ${builtin}((${argType})${a0}, (${argType})${a1}, &${tmp}) ? (${optName}){.has_value = false} : (${optName}){.has_value = true, .value = ${tmp}}; })`;
-    }
 
     this.includes.add('#include <math.h>');
     const map = {

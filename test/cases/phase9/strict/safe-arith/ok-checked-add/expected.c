@@ -1,13 +1,18 @@
 #include "runtime.h"
 
-typedef struct { bool has_value; int32_t value; } opt_i32;
-
 int main(void) {
     TSC_INIT();
     int32_t a = 2147483640;
     int32_t b = 10;
-    opt_i32 _tsc_opt_1 = ({ int32_t _chk_0; __builtin_add_overflow((int32_t)a, (int32_t)b, &_chk_0) ? (opt_i32){.has_value = false} : (opt_i32){.has_value = true, .value = _chk_0}; });
-    bool q = _tsc_opt_1.has_value ? _tsc_opt_1.value : 0;
-    printf("%s\n", (q) ? "true" : "false");
+    int32_t q = 0;
+    MathError _math_err_0 = {0};
+    int32_t _math_1;
+    if (__builtin_add_overflow((int32_t)(a), (int32_t)(b), &_math_1)) { _math_err_0.operation = "add"; goto _catch_0; }
+    q = _math_1;
+    goto _catch_end_0;
+    _catch_0:
+    q = 0;
+    _catch_end_0:;
+    printf("%d\n", q);
     return 0;
 }

@@ -1,4 +1,9 @@
 let a: i32 = 2147483640;
 let b: i32 = 10;
-let q = Math.checkedAdd(a, b) ?? 0;
+let q: i32;
+try {
+    q = a + b;
+} catch (e: MathError) {
+    q = 0;
+}
 console.log(q);
