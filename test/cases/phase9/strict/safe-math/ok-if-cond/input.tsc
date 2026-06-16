@@ -1,0 +1,11 @@
+let a: i32 = 2147483647;
+let b: i32 = 1;
+let msg: string = "safe";
+try {
+    if (a + b < 0) {
+        msg = "overflow detected";
+    }
+} catch (e: MathError) {
+    msg = "caught";
+}
+console.log(msg);

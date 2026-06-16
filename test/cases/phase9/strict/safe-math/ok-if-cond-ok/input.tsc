@@ -1,0 +1,11 @@
+let a: i32 = 100;
+let b: i32 = 200;
+let msg: string = "no";
+try {
+    if (a + b > 250) {
+        msg = "yes";
+    }
+} catch (e: MathError) {
+    msg = "error";
+}
+console.log(msg);

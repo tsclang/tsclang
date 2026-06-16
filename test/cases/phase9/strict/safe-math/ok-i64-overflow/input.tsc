@@ -1,0 +1,5 @@
+let a: i64 = 9223372036854775807;
+let b: i64 = 1;
+let z: i64;
+try { z = a + b; } catch (e: MathError) { z = 0; }
+console.log(z);

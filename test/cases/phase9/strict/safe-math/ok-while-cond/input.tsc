@@ -1,0 +1,11 @@
+let count: i32 = 0;
+let a: i32 = 3;
+try {
+    while (a - 1 > 0) {
+        a = a - 1;
+        count = count + 1;
+    }
+} catch (e: MathError) {
+    count = -1;
+}
+console.log(count);

@@ -409,16 +409,43 @@ export default {
             initC = this.exprToC(node.init.expr, lines, depth);
           }
         }
-        const testC = node.test ? this._truthyToC(node.test, lines, depth) : '';
-        const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
-        p(`for (${initC}; ${testC}; ${updC}) {`);
-        this._pushLoopCleanups();
-        this._loopDepth++;
-        this.visitStmtOrBlock(node.body, lines, depth + 1);
-        this._loopDepth--;
-        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
-        this._popLoopCleanups();
-        p('}');
+        if (this._inMathTry) {
+          p(`for (${initC};;) {`);
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          const IS = ' '.repeat(this.indent * (depth + 1));
+          if (node.test) {
+            const testLines = [];
+            const testC = this._truthyToC(node.test, testLines, depth + 1);
+            for (const tl of testLines) lines.push(tl);
+            lines.push(`${IS}if (!(${testC})) break;`);
+          }
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          if (node.update) {
+            const updLines = [];
+            const updC = this.exprToC(node.update, updLines, depth + 1);
+            if (updLines.length > 0) {
+              for (const ul of updLines) lines.push(ul);
+            } else if (updC) {
+              lines.push(`${IS}${updC};`);
+            }
+          }
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, IS);
+          this._popLoopCleanups();
+          p('}');
+        } else {
+          const testC = node.test ? this._truthyToC(node.test, lines, depth) : '';
+          const updC  = node.update ? this.exprToC(node.update, lines, depth) : '';
+          p(`for (${initC}; ${testC}; ${updC}) {`);
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+          this._popLoopCleanups();
+          p('}');
+        }
         this._asyncBreakStack = _savedAsyncBreak3;
         this._asyncContinueStack = _savedAsyncCont3;
         break;
@@ -783,15 +810,31 @@ export default {
         const _savedAsyncCont = this._asyncContinueStack;
         this._asyncBreakStack = null;
         this._asyncContinueStack = null;
-        const testC = this._truthyToC(node.test, lines, depth);
-        p(`while (${testC}) {`);
-        this._pushLoopCleanups();
-        this._loopDepth++;
-        this.visitStmtOrBlock(node.body, lines, depth + 1);
-        this._loopDepth--;
-        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
-        this._popLoopCleanups();
-        p('}');
+        if (this._inMathTry) {
+          p('while (1) {');
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          const condLines = [];
+          const testC = this._truthyToC(node.test, condLines, depth + 1);
+          for (const cl of condLines) lines.push(cl);
+          const IS = ' '.repeat(this.indent * (depth + 1));
+          lines.push(`${IS}if (!(${testC})) break;`);
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, IS);
+          this._popLoopCleanups();
+          p('}');
+        } else {
+          const testC = this._truthyToC(node.test, lines, depth);
+          p(`while (${testC}) {`);
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+          this._popLoopCleanups();
+          p('}');
+        }
         this._asyncBreakStack = _savedAsyncBreak;
         this._asyncContinueStack = _savedAsyncCont;
         break;
@@ -802,15 +845,31 @@ export default {
         const _savedAsyncCont2 = this._asyncContinueStack;
         this._asyncBreakStack = null;
         this._asyncContinueStack = null;
-        const testC = this._truthyToC(node.test, lines, depth);
-        p('do {');
-        this._pushLoopCleanups();
-        this._loopDepth++;
-        this.visitStmtOrBlock(node.body, lines, depth + 1);
-        this._loopDepth--;
-        this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
-        this._popLoopCleanups();
-        p(`} while (${testC});`);
+        if (this._inMathTry) {
+          p('do {');
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          const IS = ' '.repeat(this.indent * (depth + 1));
+          const condLines = [];
+          const testC = this._truthyToC(node.test, condLines, depth + 1);
+          for (const cl of condLines) lines.push(cl);
+          lines.push(`${IS}if (!(${testC})) break;`);
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, IS);
+          this._popLoopCleanups();
+          p('} while (1);');
+        } else {
+          const testC = this._truthyToC(node.test, lines, depth);
+          p('do {');
+          this._pushLoopCleanups();
+          this._loopDepth++;
+          this.visitStmtOrBlock(node.body, lines, depth + 1);
+          this._loopDepth--;
+          this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
+          this._popLoopCleanups();
+          p(`} while (${testC});`);
+        }
         this._asyncBreakStack = _savedAsyncBreak2;
         this._asyncContinueStack = _savedAsyncCont2;
         break;

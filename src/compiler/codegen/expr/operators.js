@@ -270,10 +270,19 @@ export default {
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    const _isIntOperand = (n, t) => {
+      if (intTypes.has(t)) return true;
+      if (t === undefined) return true;
+      if (t === 'double' || t === 'float') {
+        if (n?.kind === 'Literal' && n?.litType === 'number') return Number.isInteger(parseFloat(n.value));
+        if (n?.kind === 'Unary' && n?.op === '-' && n?.expr?.kind === 'Literal' && n?.expr?.litType === 'number') return Number.isInteger(parseFloat(n.expr.value));
+      }
+      return false;
+    };
     if (node.op === '+' || node.op === '-' || node.op === '*') {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);
-      const isInt = intTypes.has(lt) && intTypes.has(rt) || (lt === undefined && rt === undefined);
+      const isInt = _isIntOperand(node.left, lt) && _isIntOperand(node.right, rt);
       const hasSafeMath = this._strictRules?.has('safe-math');
 
       if (hasSafeMath && isInt) {
@@ -305,10 +314,11 @@ export default {
     if (node.op === '/' || node.op === '%') {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);
-      const isInt = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
+      const isIntSafeMath = _isIntOperand(node.left, lt) && _isIntOperand(node.right, rt);
+      const isIntDefault = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
       const hasSafeMath = this._strictRules?.has('safe-math');
 
-      if (hasSafeMath && isInt) {
+      if (hasSafeMath && isIntSafeMath) {
         if (this._inMathTry) {
           const opName = op === '/' ? 'div' : 'mod';
           const I = ' '.repeat(this.indent * depth);
@@ -324,7 +334,7 @@ export default {
         }
         throw this.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
       }
-      if (isInt && lines) {
+      if (isIntDefault && lines) {
         const I = ' '.repeat(this.indent * depth);
         const tmp = `_tsc_div_${this.tempCount++}`;
         const panicExpr = this._strictRules?.has('no-abort')
