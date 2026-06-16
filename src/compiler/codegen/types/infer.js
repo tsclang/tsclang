@@ -173,6 +173,7 @@ export default {
       case 'New': {
         if (node.name === 'Date') return 'Date';
         if (node.name === 'Error') return 'TscError';
+        if (node.name === 'MathError') return 'MathError';
         if (node.name === 'UDPSocket') return 'TscUdpSocket';
         if (node.name === 'WebSocketServer') return 'TscWebSocketServer';
         if (node.name === 'Array' || node.name === 'ReadonlyArray') {

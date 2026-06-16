@@ -1,0 +1,9 @@
+let a: f64 = 1e308;
+let b: f64 = 1e308;
+let z: f64;
+try {
+    z = a * b;
+} catch (e: MathError) {
+    z = -1.0;
+}
+console.log(z);

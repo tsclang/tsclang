@@ -967,6 +967,55 @@ export default {
           }
         }
 
+        // Check if any catch clause catches MathError
+        const hasMathCatch = (node.catches ?? []).some(c => c.typeAnn?.name === 'MathError');
+
+        if (hasMathCatch) {
+          const catchIdx = this.tempCount++;
+          const catchLabel = `_catch_${catchIdx}`;
+          const catchEndLabel = `_catch_end_${catchIdx}`;
+          const errVar = `_math_err_${catchIdx}`;
+
+          p(`MathError ${errVar} = {0};`);
+
+          const prevInMathTry = this._inMathTry;
+          const prevMathCatchLabel = this._mathCatchLabel;
+          const prevMathErrVar = this._mathErrVar;
+          this._inMathTry = true;
+          this._mathCatchLabel = catchLabel;
+          this._mathErrVar = errVar;
+
+          for (const s of tryStmts) {
+            this.visitStmt(s, lines, depth);
+          }
+
+          this._inMathTry = prevInMathTry;
+          this._mathCatchLabel = prevMathCatchLabel;
+          this._mathErrVar = prevMathErrVar;
+
+          p(`goto ${catchEndLabel};`);
+          p(`${catchLabel}:`);
+          for (const c of node.catches ?? []) {
+            if (c.typeAnn?.name === 'MathError') {
+              this.pushScope();
+              if (c.param) {
+                this.define(c.param, { ctype: 'MathError', _alias: errVar });
+              }
+              this.visitBlock(c.body, lines, depth);
+              this.popScope();
+              break;
+            }
+          }
+          p(`${catchEndLabel}:;`);
+
+          if (node.finally) {
+            this._inFinallyBlock = true;
+            this.visitBlock(node.finally, lines, depth);
+            this._inFinallyBlock = false;
+          }
+          break;
+        }
+
         // Check if try body contains a call to a throws function
         const _findThrowsFuncCall = (stmts) => {
           for (const s of stmts) {

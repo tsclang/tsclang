@@ -276,6 +276,11 @@ typedef struct TscError {
     String message;
 } TscError;
 
+typedef struct MathError {
+    String message;
+    const char* operation;
+} MathError;
+
 /* -------------------------------------------------------------------------
  * performance.now() — milliseconds since program start
  * _tsc_t0 is set in TSC_INIT() which the compiler inserts at top of main()

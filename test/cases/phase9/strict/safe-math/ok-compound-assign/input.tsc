@@ -1,0 +1,7 @@
+let z: i32 = 2147483640;
+try {
+    z += 10;
+} catch (e: MathError) {
+    z = 0;
+}
+console.log(z);

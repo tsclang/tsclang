@@ -284,6 +284,21 @@ export default {
 
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
     if (node.op === '+=' || node.op === '-=' || node.op === '*=') {
+      const hasSafeMath = this._strictRules?.has('safe-math');
+      if (hasSafeMath && intTypes.has(leftType)) {
+        if (this._inMathTry) {
+          const builtin = node.op === '+=' ? '__builtin_add_overflow'
+                        : node.op === '-=' ? '__builtin_sub_overflow'
+                        : '__builtin_mul_overflow';
+          const opName = node.op[0] === '+' ? 'add' : node.op[0] === '-' ? 'sub' : 'mul';
+          const tmp = `_math_${this.tempCount++}`;
+          const I = ' '.repeat(this.indent * depth);
+          lines.push(`${I}${leftType} ${tmp};`);
+          lines.push(`${I}if (${builtin}((${leftType})(${l}), (${leftType})(${r}), &${tmp})) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
+          return `${l} = ${tmp}`;
+        }
+        throw this.error(`unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+      }
       if (this._strictRules?.has('safe-arith')) {
         if (intTypes.has(leftType)) {
           throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
@@ -291,7 +306,23 @@ export default {
       }
     }
     if (node.op === '/=' || node.op === '%=') {
-      const leftType = this.inferType(node.left);
+      const hasSafeMath = this._strictRules?.has('safe-math');
+      if (hasSafeMath && intTypes.has(leftType)) {
+        if (this._inMathTry) {
+          const opName = node.op[0] === '/' ? 'div' : 'mod';
+          const I = ' '.repeat(this.indent * depth);
+          const divTmp = `_math_${this.tempCount++}`;
+          lines.push(`${I}int32_t ${divTmp} = ${r};`);
+          lines.push(`${I}if (${divTmp} == 0) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
+          const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+          const minConst = minMap[leftType];
+          if (minConst) {
+            lines.push(`${I}if (${divTmp} == -1 && ${l} == ${minConst}) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
+          }
+          return `${l} ${node.op} ${divTmp}`;
+        }
+        throw this.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+      }
       if (this._strictRules?.has('safe-div') && intTypes.has(leftType)) {
         throw this.error(`integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function`, node);
       }

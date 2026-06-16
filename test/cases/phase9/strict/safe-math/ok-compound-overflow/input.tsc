@@ -1,0 +1,10 @@
+let a: i32 = 2147483647;
+let b: i32 = 1;
+let c: i32 = 2;
+let z: i32;
+try {
+    z = (a + b) * c;
+} catch (e: MathError) {
+    z = -1;
+}
+console.log(z);

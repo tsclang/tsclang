@@ -1,0 +1,4 @@
+{
+  "kind": "[R]",
+  "strict": ["safe-math"]
+}
