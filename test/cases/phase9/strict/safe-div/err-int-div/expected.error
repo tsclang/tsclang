@@ -1,1 +1,1 @@
-integer division may panic at runtime (safe-div)
+unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'

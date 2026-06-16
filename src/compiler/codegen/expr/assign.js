@@ -299,11 +299,6 @@ export default {
         }
         throw this.error(`unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
       }
-      if (this._strictRules?.has('safe-arith')) {
-        if (intTypes.has(leftType)) {
-          throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
-        }
-      }
     }
     if (node.op === '/=' || node.op === '%=') {
       const hasSafeMath = this._strictRules?.has('safe-math');
@@ -322,9 +317,6 @@ export default {
           return `${l} ${node.op} ${divTmp}`;
         }
         throw this.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
-      }
-      if (this._strictRules?.has('safe-div') && intTypes.has(leftType)) {
-        throw this.error(`integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function`, node);
       }
       if (intTypes.has(leftType) && lines) {
         const I = ' '.repeat(this.indent * depth);

@@ -1,0 +1,11 @@
+let a: i32 = 3;
+let b: i32 = 2;
+let sum: i32 = 0;
+try {
+    for (let i = 0; i < a + b; i++) {
+        sum += i;
+    }
+} catch (e: MathError) {
+    sum = -1;
+}
+console.log(sum);

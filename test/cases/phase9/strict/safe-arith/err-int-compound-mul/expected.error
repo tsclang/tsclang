@@ -1,1 +1,1 @@
-integer arithmetic may overflow at runtime (safe-arith)
+unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'

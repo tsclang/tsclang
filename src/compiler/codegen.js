@@ -39,7 +39,14 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
   if (opts.defaultNumber) ctx._optsDefaultNumber = opts.defaultNumber;
   if (opts.allocator) ctx._optsAllocator = opts.allocator;
   if (opts.scheduler) ctx._optsAsync = opts.scheduler;
-  if (opts.strict) ctx._strictRules = new Set(opts.strict);
+  if (opts.strict) {
+    ctx._strictRules = new Set(opts.strict);
+    if (ctx._strictRules.has('safe-arith') || ctx._strictRules.has('safe-div')) {
+      ctx._strictRules.delete('safe-arith');
+      ctx._strictRules.delete('safe-div');
+      ctx._strictRules.add('safe-math');
+    }
+  }
   if (opts.ramSize) ctx._optsRamSize = opts.ramSize;
   if (opts.stackSize) ctx._optsStackSize = opts.stackSize;
   ctx._capabilities = opts.capabilities || DESKTOP_CAPABILITIES;

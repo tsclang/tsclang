@@ -275,7 +275,6 @@ export default {
       const rt = this.inferType(node.right);
       const isInt = intTypes.has(lt) && intTypes.has(rt) || (lt === undefined && rt === undefined);
       const hasSafeMath = this._strictRules?.has('safe-math');
-      const hasSafeArith = this._strictRules?.has('safe-arith');
 
       if (hasSafeMath && isInt) {
         if (this._inMathTry) {
@@ -292,9 +291,6 @@ export default {
           return tmp;
         }
         throw this.error(`unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
-      }
-      if (hasSafeArith && isInt) {
-        throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
       }
       const signedIntSet = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t']);
       const slt = this.inferType(node.left);
@@ -327,9 +323,6 @@ export default {
           return `${l} ${op} ${divTmp}`;
         }
         throw this.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
-      }
-      if (this._strictRules?.has('safe-div') && isInt) {
-        throw this.error(`integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function`, node);
       }
       if (isInt && lines) {
         const I = ' '.repeat(this.indent * depth);
