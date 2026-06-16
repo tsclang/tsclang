@@ -11,7 +11,7 @@ Result_void_IOError compute(void) {
 void caller(void) {
     Result_void_IOError _res_0 = compute();
     if (!_res_0.ok) { tsc_panic(_res_0.error._base.message); }
-    0;
+    ((void)0);
 }
 
 int main(void) {

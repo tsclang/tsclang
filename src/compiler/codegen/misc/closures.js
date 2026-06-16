@@ -32,6 +32,7 @@ export default {
       const toks = this._lex(p.src, this.filename);
       const { ast } = this._parse(toks);
       const exprNode = ast.body[0]?.expr ?? ast.body[0];
+      this._checkNoBareThrows(exprNode);
       let t = this.inferType(exprNode);
       let c = this.exprToC(exprNode, lines, depth);
       // TscBlob in template → tsc_blob_to_string

@@ -17,6 +17,8 @@ export default {
   },
 
   binaryToC(node, lines, depth) {
+    this._checkNoBareThrows(node.left);
+    this._checkNoBareThrows(node.right);
     // instanceof: obj instanceof TypeName
     if (node.op === 'instanceof') {
       const typeName = node.right.kind === 'Ident' ? node.right.name : null;
@@ -468,6 +470,7 @@ export default {
     const e = this.exprToC(node.expr, lines, depth);
     switch (node.op) {
       case '!':     return `!${e}`;
+      case '+':     return `+${e}`;
       case '-':     return `-${e}`;
       case '~': {
         const et = this.inferType(node.expr);

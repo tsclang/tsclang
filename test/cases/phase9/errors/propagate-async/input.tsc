@@ -1,0 +1,7 @@
+async function risky(): i32 throws IOError {
+    return 1;
+}
+
+async function caller(): i32 {
+    return risky()?;
+}

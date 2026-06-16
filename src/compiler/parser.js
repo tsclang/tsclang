@@ -1347,6 +1347,7 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   function parseUnary() {
     if (cur().type === TK.BANG)  { pos++; return { kind: 'Unary', op: '!',     expr: parseUnary() }; }
+    if (cur().type === TK.PLUS)  { pos++; return { kind: 'Unary', op: '+',     expr: parseUnary() }; }
     if (cur().type === TK.MINUS) { pos++; return { kind: 'Unary', op: '-',     expr: parseUnary() }; }
     if (cur().type === TK.TILDE) { pos++; return { kind: 'Unary', op: '~',     expr: parseUnary() }; }
     if (cur().type === TK.PLUS2) { pos++; return { kind: 'Unary', op: '++pre', expr: parseUnary() }; }
@@ -1432,6 +1433,31 @@ export function parse(tokens, filename = '<input>', src = null) {
     return result;
   }
 
+  function _isTernaryQuest() {
+    let depth = 0;
+    let questDepth = 0;
+    let i = pos + 1;
+    while (i < tokens.length) {
+      const t = tokens[i].type;
+      if (t === TK.EOF || t === TK.SEMI || t === TK.RBRACE) break;
+      if (t === TK.LPAREN || t === TK.LBRACK || t === TK.LBRACE) { depth++; }
+      else if (t === TK.RPAREN || t === TK.RBRACK || t === TK.RBRACE) {
+        if (depth === 0) break;
+        depth--;
+      }
+      else if (depth === 0) {
+        if (t === TK.COMMA) break;
+        if (t === TK.QUEST) questDepth++;
+        else if (t === TK.COLON) {
+          if (questDepth === 0) return true;
+          questDepth--;
+        }
+      }
+      i++;
+    }
+    return false;
+  }
+
   function parsePostfix() {
     let expr = parsePrimary();
     while (true) {
@@ -1483,18 +1509,15 @@ export function parse(tokens, filename = '<input>', src = null) {
       } else if (cur().type === TK.QUEST) {
         const next = peek();
         const isLineBreak = next && cur().line < next.line;
-        const _propFollows = new Set([
-          TK.SEMI, TK.RBRACE, TK.EOF, TK.RPAREN, TK.RBRACKET, TK.COMMA,
-          TK.PLUS, TK.MINUS, TK.STAR, TK.SLASH, TK.PERCENT,
-          TK.LT, TK.GT, TK.LTE, TK.GTE, TK.EQEQ, TK.BANGEQ, TK.EQEQEQ, TK.BANGEQEQ,
-          TK.AMP2, TK.PIPE2, TK.QUEST2,
-          TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.SLASHEQ, TK.PERCENTEQ,
-          TK.COLON,
-        ]);
-        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak || _propFollows.has(next.type)) {
+        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak) {
           eat(TK.QUEST);
           expr = { kind: 'Propagate', expr };
-        } else break;
+        } else if (_isTernaryQuest()) {
+          break;
+        } else {
+          eat(TK.QUEST);
+          expr = { kind: 'Propagate', expr };
+        }
       } else if (cur().type === TK.PLUS2) {
         eat(TK.PLUS2); expr = { kind: 'Unary', op: '++post', expr };
       } else if (cur().type === TK.MINUS2) {

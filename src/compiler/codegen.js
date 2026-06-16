@@ -391,6 +391,57 @@ class Context {
     return this._scopeMgr.lookup(name);
   }
 
+  _checkNoBareThrows(expr) {
+    if (!expr) return;
+    switch (expr.kind) {
+      case 'Call': {
+        if (expr.callee?.kind === 'Ident') {
+          const sym = this.lookup(expr.callee.name);
+          if (sym?._isThrowsFunc) {
+            throw this.error(
+              `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', or assign to a variable first`,
+              expr
+            );
+          }
+        }
+        for (const arg of expr.args ?? []) {
+          this._checkNoBareThrows(arg.expr ?? arg);
+        }
+        break;
+      }
+      case 'Binary':
+        this._checkNoBareThrows(expr.left);
+        this._checkNoBareThrows(expr.right);
+        break;
+      case 'Member':
+      case 'OptChain':
+        this._checkNoBareThrows(expr.object);
+        break;
+      case 'Index':
+        this._checkNoBareThrows(expr.object);
+        this._checkNoBareThrows(expr.index);
+        break;
+      case 'ArrayLit':
+        for (const el of expr.elements ?? []) this._checkNoBareThrows(el);
+        break;
+      case 'Unary':
+        this._checkNoBareThrows(expr.expr);
+        break;
+      case 'Ternary':
+        this._checkNoBareThrows(expr.cond);
+        this._checkNoBareThrows(expr.yes);
+        this._checkNoBareThrows(expr.no);
+        break;
+      case 'Assign':
+        this._checkNoBareThrows(expr.right);
+        break;
+      case 'NonNull':
+      case 'Propagate':
+        break;
+      default: break;
+    }
+  }
+
   // Throw a positioned TscError.
   // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
   // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }

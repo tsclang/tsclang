@@ -82,6 +82,7 @@ export default {
       }
 
       case 'Member': {
+        this._checkNoBareThrows(node.object);
         // Namespace import: X.Foo → resolve Foo from namespace
         if (node.object.kind === 'Ident') {
           const nsSym = this.lookup(node.object.name);
@@ -399,6 +400,7 @@ export default {
       }
 
       case 'ArrayLit': {
+        for (const el of node.elems ?? []) this._checkNoBareThrows(el.expr ?? el);
         const elems = node.elems.filter(e => !e.spread);
         let elemType;
         if (this._expectedType?.startsWith('Array_')) {
@@ -679,6 +681,9 @@ export default {
         return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
       }
       case 'NonNull': {
+        if (this._inAsyncFunc) {
+          throw this.error(`TypeError: '!' error handling is not supported in async functions; use try/catch on await`);
+        }
         const innerExpr = node.expr;
         const callee = innerExpr?.callee;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
@@ -688,12 +693,15 @@ export default {
           const callC = this.exprToC(innerExpr, lines, depth);
           lines.push(`${I}${calleeSym._resultType} ${resName} = ${callC};`);
           lines.push(`${I}if (!${resName}.ok) { tsc_panic(${this._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
-          if (calleeSym._resultIsVoid) return '0';
+          if (calleeSym._resultIsVoid) return '((void)0)';
           return `${resName}.value`;
         }
         return this.exprToC(innerExpr, lines, depth);
       }
       case 'Propagate': {
+        if (this._inAsyncFunc) {
+          throw this.error(`TypeError: '?' error propagation is not supported in async functions; use try/catch on await`);
+        }
         const innerExpr = node.expr;
         const callee = innerExpr?.callee;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
@@ -721,7 +729,7 @@ export default {
         } else {
           lines.push(`${I}if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${_wrappedErr}}; }`);
         }
-        if (calleeSym._resultIsVoid) return '0';
+        if (calleeSym._resultIsVoid) return '((void)0)';
         return `${resName}.value`;
       }
       case 'OptChain': {

@@ -1,0 +1,8 @@
+function risky(): i32 throws IOError {
+    return 1;
+}
+
+function caller(): void {
+    const arr = [risky()];
+    console.log(arr[0]);
+}

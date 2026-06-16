@@ -274,7 +274,7 @@ export default {
       case 'Ternary': return this.inferType(node.yes);
       case 'Unary': {
         if (node.op === '!') return 'bool';
-        if (node.op === '-' || node.op === '~') return this.inferType(node.expr);
+        if (node.op === '-' || node.op === '+' || node.op === '~') return this.inferType(node.expr);
         if (node.op === '*') {
           // Dereference: type of *ptr is the pointee type
           const ptrType = this.inferType(node.expr);
@@ -333,7 +333,7 @@ export default {
         return lt;
       }
       case 'Unary': {
-        if (node.op === '-' || node.op === '~') return this._effectiveType(node.expr);
+        if (node.op === '-' || node.op === '+' || node.op === '~') return this._effectiveType(node.expr);
         return this.inferType(node);
       }
       case 'Ternary': {

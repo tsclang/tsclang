@@ -1,0 +1,5 @@
+const a: i32 = 1;
+const b: i32 = 2;
+const c: i32 = 3;
+const x: i32 = a < b ? b < c ? -1 : 0 : 1;
+console.log(x);
