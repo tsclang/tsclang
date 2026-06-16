@@ -109,6 +109,9 @@ function process(path: string): Response throws IOError | NetworkError {
 
 ## Оператор `?` — propagate
 
+> **Происхождение:** Rust `?` (не существует в TS). В TS `?` — только тернарный оператор и optional chaining (`?.`).
+> В TSClang `?` — postfix-оператор error propagation: вызывает функцию, и при ошибке немедленно возвращает её из текущей функции.
+
 `expr?` — если функция вернула ошибку, немедленно вернуть её из текущей функции. Текущая функция обязана иметь совместимый `throws`:
 
 ```typescript
@@ -129,6 +132,15 @@ function main(): void {
 ```
 
 ## Оператор `!` — unwrap или panic
+
+> **Происхождение:** синтаксис заимствован из TS non-null assertion (`x!`), но **семантика изменена** (П3 — лучше чем аналоги).
+> В TS `x!` — compile-time no-op: убирает `null`/`undefined` из типа, в runtime ничего не происходит.
+> В TSClang `x!` — runtime unwrap-or-panic: если Result содержит ошибку, вызывает `tsc_panic()`.
+> Это ближе к Rust `.unwrap()`, чем к TS `!`.
+>
+> **Почему не как в TS:** TSClang throws-функции возвращают `Result<T, E>`, а не `T | null`.
+> TS non-null assertion неприменима к Result — нужен именно unwrap.
+> Синтаксис `!` переиспользован для эргономики (привычный glyph) и краткости.
 
 `expr!` — если функция вернула ошибку, вызвать `abort()` (runtime panic). Не требует `throws` у текущей функции:
 

@@ -213,4 +213,5 @@ const sub = sliceChars(s, 1, 3)  // codepoints 1..2 ✅
 - **`@embedded.*` аннотации** — для ISR, inline, no-heap
 - **Platform profiles** — условная компиляция без препроцессора
 - **Extension methods** — добавление методов к чужим типам без inheritance
-- **`?` propagate** — сокращение для return-on-error
+- **`?` propagate** — сокращение для return-on-error (Rust `?`, не существует в TS)
+- **`!` unwrap** — runtime unwrap-or-panic для Result (синтаксис из TS non-null assertion, но семантика как Rust `.unwrap()`)
