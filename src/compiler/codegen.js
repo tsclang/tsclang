@@ -421,6 +421,10 @@ class Context {
         this._checkNoBareThrows(expr.object);
         this._checkNoBareThrows(expr.index);
         break;
+      case 'RangeIndex':
+        this._checkNoBareThrows(expr.start);
+        this._checkNoBareThrows(expr.end);
+        break;
       case 'ArrayLit':
         for (const el of expr.elements ?? []) this._checkNoBareThrows(el);
         break;
@@ -440,6 +444,9 @@ class Context {
         break;
       case 'Assign':
         this._checkNoBareThrows(expr.right);
+        break;
+      case 'Cast':
+        this._checkNoBareThrows(expr.expr);
         break;
       case 'NonNull':
       case 'Propagate':

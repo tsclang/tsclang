@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~2072 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~1745 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
@@ -335,7 +335,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 | 12 | Stdlib runtime (Math, JSON, Blob, Buffer, regex, reactive) | 119 |
 | 13–19 | Decorators, reactive, regex, LSP, linter, optimizer, WASM, IO/Net/WS | 152 |
 
-**Total: ~2072 tests, all pass with gcc.**
+**Total: ~1745 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -429,7 +429,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
   - **Union throws wrapping** (`func.js` + `control-flow.js:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
   - **Bare throws call compile error** (`control-flow.js` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
   - **Union error panic** (`codegen.js:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.js (`!`), console.js, codegen.js (main).
-  - **`!`/`?` in expression context** (`dispatch.js:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.js:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.js`): recursive check for bare throws calls in binary/array/member/template/argument/index/ternary/unary contexts → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
+  - **`!`/`?` in expression context** (`dispatch.js:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.js:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.js`): recursive check for bare throws calls in binary/array/member/template/argument/index/ternary/unary/cast/range contexts + New args → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---

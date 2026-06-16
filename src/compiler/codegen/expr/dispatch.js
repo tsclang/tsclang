@@ -549,6 +549,7 @@ export default {
       }
 
       case 'Cast': {
+        this._checkNoBareThrows(node.expr);
         // as Volatile<T> → (volatile T *)expr; hex literals get U suffix
         if (node.castType.kind === 'TypeRef' && node.castType.name === 'Volatile') {
           const inner = this.resolveType(node.castType.typeArgs?.[0]);

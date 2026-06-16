@@ -1,0 +1,11 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+
+function risky(): i32 throws IOError {
+    return 42;
+}
+
+function run(): void {
+    const x = risky() as i32;
+}

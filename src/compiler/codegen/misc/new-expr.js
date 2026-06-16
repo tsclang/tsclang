@@ -2,6 +2,7 @@
 export default {
   newToC(node, lines, depth) {
     const { name, args } = node;
+    for (const a of args ?? []) this._checkNoBareThrows(a.expr ?? a);
     const argsC = this.argsToC(args, lines, depth);
 
     // new Error("msg") → (TscError){ .message = STR_LIT("msg") }
