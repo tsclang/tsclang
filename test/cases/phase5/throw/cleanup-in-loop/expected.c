@@ -19,7 +19,7 @@ void process(void) {
         Result_i32_Err _res_0 = mayFail_i32(i - 1);
         if (_res_0.ok) {
             int32_t r = _res_0.value;
-            total = total + r;
+            total = (int32_t)((uint32_t)total + (uint32_t)r);
         } else {
             (void)_res_0.error;
             total = total + 100;

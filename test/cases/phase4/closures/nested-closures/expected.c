@@ -17,11 +17,11 @@ static void _closure_1_destroy(void *_env) {
 }
 
 static void _closure_1_fn(_closure_1_env *env) {
-    env->c->count += 10;
+    env->c->count = (int32_t)((uint32_t)env->c->count + (uint32_t)10);
 }
 
 static void _closure_0_fn(_closure_0_env *env) {
-    env->c->count += 1;
+    env->c->count = (int32_t)((uint32_t)env->c->count + (uint32_t)1);
     _closure_1_env *inner_env = tsc_malloc(sizeof(_closure_1_env));
     *inner_env = (_closure_1_env){.c = env->c};
     tsc_closure inner = {.env = inner_env, .fn = (void*)_closure_1_fn};

@@ -14,7 +14,7 @@ case_1:
             self->_state = 2;
             return (limited_result){self->_value, false};
         case 2:
-            self->i += 1;
+            self->i = (int32_t)((uint32_t)self->i + (uint32_t)1);
             self->_state = 1;
             goto case_1;
     }

@@ -31,7 +31,7 @@ int32_t _tsc_main(void) {
     }
         opt_ref_Slot s = _pool_1;
         s.value->id = i;
-        count = count + s.value->id;
+        count = (int32_t)((uint32_t)count + (uint32_t)s.value->id);
         goto _catch_end_0;
         _catch_0:
         count = count + 100;

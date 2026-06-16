@@ -34,7 +34,7 @@ Result_i32_TscError makeSum(void) {
     }
     opt_ref_Item b = _pool_1;
     b.value->id = 2;
-    return (Result_i32_TscError){.ok = true, .value = a.value->id + b.value->id};
+    return (Result_i32_TscError){.ok = true, .value = (int32_t)((uint32_t)a.value->id + (uint32_t)b.value->id)};
     Item_drop(b);
     Item_drop(a);
 }

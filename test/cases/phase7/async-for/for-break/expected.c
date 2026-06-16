@@ -12,7 +12,7 @@ static void sumFor_poll(sumFor_state *self) {
 case_1:
         case 1:
             if (!(i < 100)) { goto for_1_end; }
-            total = total + i;
+            total = (int32_t)((uint32_t)total + (uint32_t)i);
             if (i >= self->n) goto for_1_end;
 for_1_cont:
             i = i + 1;

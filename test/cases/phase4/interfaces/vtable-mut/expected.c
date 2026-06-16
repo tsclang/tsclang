@@ -6,7 +6,7 @@ typedef struct { void *self; const Counter_vtable *vtable; } Counter;
 typedef struct { int32_t value; } SimpleCounter;
 
 static void SimpleCounter_increment(SimpleCounter *self) {
-    self->value += 1;
+    self->value = (int32_t)((uint32_t)self->value + (uint32_t)1);
 }
 
 static int32_t SimpleCounter_get(const SimpleCounter *self) {

@@ -10,7 +10,7 @@ static void Svc_run_inner(const Svc *self) {
 }
 
 static void Svc_run(const Svc *self) {
-    callCount += 1;
+    callCount = (int32_t)((uint32_t)callCount + (uint32_t)1);
     Svc_run_inner(self);
 }
 

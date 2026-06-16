@@ -10,7 +10,7 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static double _closure_0_fn(_closure_0_env *env, double acc, int32_t x) {
-    return acc + x * env->factor;
+    return acc + (int32_t)((uint32_t)x * (uint32_t)env->factor);
 }
 
 static _closure_0_env *_tsc_cb_env_0;

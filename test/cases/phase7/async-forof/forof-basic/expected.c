@@ -19,7 +19,7 @@ case_1:
         case 1:
             if (!(self->_forof_idx_0 < self->arr.length)) { goto forof_1_end; }
             const int32_t x = self->arr.data[self->_forof_idx_0];
-            total = total + x;
+            total = (int32_t)((uint32_t)total + (uint32_t)x);
 forof_1_cont:
             self->_forof_idx_0++;
             if (!(self->_forof_idx_0 < self->arr.length)) { goto forof_1_end; }

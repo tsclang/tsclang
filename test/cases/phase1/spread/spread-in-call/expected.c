@@ -3,7 +3,7 @@
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 int32_t sum_i32_i32_i32(int32_t a, int32_t b, int32_t c) {
-    return a + b + c;
+    return (int32_t)((uint32_t)(int32_t)((uint32_t)a + (uint32_t)b) + (uint32_t)c);
 }
 
 int main(void) {

@@ -10,7 +10,7 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static void _closure_0_fn(_closure_0_env *env, int32_t x) {
-    printf("%d\n", x * env->factor);
+    printf("%d\n", (int32_t)((uint32_t)x * (uint32_t)env->factor));
 }
 
 static _closure_0_env *_tsc_cb_env_0;

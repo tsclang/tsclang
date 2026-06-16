@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 static int32_t _lambda_0_i32(int32_t x) {
-    return x * x;
+    return (int32_t)((uint32_t)x * (uint32_t)x);
 }
 
 int main(void) {

@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 int32_t calc_i32_i32_i32(int32_t x, int32_t y, int32_t z) {
-    return x + y + z;
+    return (int32_t)((uint32_t)(int32_t)((uint32_t)x + (uint32_t)y) + (uint32_t)z);
 }
 
 int main(void) {

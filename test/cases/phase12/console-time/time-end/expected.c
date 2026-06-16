@@ -5,7 +5,7 @@ int main(void) {
     tsc_console_time(STR_LIT("op"));
     int32_t x = 0;
     for (int32_t i = 0; i < 1000; i++) {
-        x = x + i;
+        x = (int32_t)((uint32_t)x + (uint32_t)i);
     }
     tsc_console_time_end(STR_LIT("op"));
     printf("%d\n", x);

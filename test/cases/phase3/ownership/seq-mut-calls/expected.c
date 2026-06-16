@@ -3,7 +3,7 @@
 typedef struct { int32_t value; } Box;
 
 void bump_mut_Box(Box *m) {
-    m->value += 1;
+    m->value = (int32_t)((uint32_t)m->value + (uint32_t)1);
 }
 
 int main(void) {

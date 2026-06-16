@@ -3,7 +3,7 @@
 typedef struct { tsc_closure *data; size_t length; size_t capacity; } Array_tsc_closure;
 
 int32_t square_i32(int32_t x) {
-    return x * x;
+    return (int32_t)((uint32_t)x * (uint32_t)x);
 }
 
 int main(void) {

@@ -12,7 +12,7 @@ int main(void) {
             if (j == 2) {
                 goto outer_continue;
             }
-            sum += 1;
+            sum = (int32_t)((uint32_t)sum + (uint32_t)1);
         }
         outer_continue:;
     }

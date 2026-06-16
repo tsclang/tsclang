@@ -43,7 +43,7 @@ Result_i32_TscError _tsc_main(void) {
         return (Result_i32_TscError){.ok = false, .error = _res_2.error};
     }
     const opt_ref_Slot b = _res_2.value;
-    return (Result_i32_TscError){.ok = true, .value = a.value->id + b.value->id};
+    return (Result_i32_TscError){.ok = true, .value = (int32_t)((uint32_t)a.value->id + (uint32_t)b.value->id)};
     Slot_drop(b);
     Slot_drop(a);
 }

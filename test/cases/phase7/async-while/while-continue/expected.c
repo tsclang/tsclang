@@ -14,7 +14,7 @@ case_1:
             if (!(i < self->max)) { goto while_1_end; }
             i = i + 1;
             if (fmod(i, 2) == 0) goto case_1;
-            total = total + i;
+            total = (int32_t)((uint32_t)total + (uint32_t)i);
             self->_state = 1;
             goto case_1;
 while_1_end:

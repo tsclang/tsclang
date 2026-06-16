@@ -11,7 +11,7 @@ static vec_Vec3 vec_Vec3_new(double x, double y, double z) {
 }
 
 double dot_Vec3_Vec3(vec_Vec3 a, vec_Vec3 b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+    return (int32_t)((uint32_t)(int32_t)((uint32_t)(int32_t)((uint32_t)a.x * (uint32_t)b.x) + (uint32_t)(int32_t)((uint32_t)a.y * (uint32_t)b.y)) + (uint32_t)(int32_t)((uint32_t)a.z * (uint32_t)b.z));
 }
 
 int main(void) {

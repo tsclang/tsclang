@@ -4,7 +4,7 @@ int main(void) {
     TSC_INIT();
     const int32_t a = 2;
     const int32_t b = 3;
-    String msg = tsc_string_format("%d + %d = %d", a, b, a + b);
+    String msg = tsc_string_format("%d + %d = %d", a, b, (int32_t)((uint32_t)a + (uint32_t)b));
     printf("%s\n", msg.data);
     tsc_string_release(msg);
     return 0;

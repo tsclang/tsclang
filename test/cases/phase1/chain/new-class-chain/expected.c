@@ -11,7 +11,7 @@ static Pair Pair_new(int32_t a, int32_t b) {
 }
 
 static int32_t Pair_sum(const Pair *self) {
-    return self->a + self->b;
+    return (int32_t)((uint32_t)self->a + (uint32_t)self->b);
 }
 
 static Wrapper Wrapper_new(int32_t x, int32_t y) {

@@ -3,7 +3,7 @@
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
 static int32_t _lambda_0_i32(int32_t a, int32_t b) {
-    return b - a;
+    return (int32_t)((uint32_t)b - (uint32_t)a);
 }
 
 int main(void) {

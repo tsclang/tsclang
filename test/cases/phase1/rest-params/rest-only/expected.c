@@ -3,7 +3,7 @@
 int32_t sum(int32_t *args, int32_t args_count) {
     int32_t total = 0;
     for (int32_t i = 0; i < args_count; i++) {
-        total = total + args[i];
+        total = (int32_t)((uint32_t)total + (uint32_t)args[i]);
     }
     return total;
 }

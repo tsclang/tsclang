@@ -279,6 +279,15 @@ export default {
           throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
         }
       }
+      const signedIntSet = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t']);
+      const slt = this.inferType(node.left);
+      const srt = this.inferType(node.right);
+      if (signedIntSet.has(slt) && signedIntSet.has(srt)) {
+        const typeRank = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
+        const resultType = typeRank[slt] >= typeRank[srt] ? slt : srt;
+        const uType = resultType.replace('int', 'uint');
+        return `(${resultType})((${uType})${l} ${op} (${uType})${r})`;
+      }
     }
     if (node.op === '/' || node.op === '%') {
       const lt = this.inferType(node.left);

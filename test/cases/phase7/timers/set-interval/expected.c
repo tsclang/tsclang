@@ -4,7 +4,7 @@ typedef struct { int32_t count; } _closure_0_env;
 static _closure_0_env _closure_0_captured;
 
 static void _closure_0_fn(void) {
-    _closure_0_captured.count += 1;
+    _closure_0_captured.count = (int32_t)((uint32_t)_closure_0_captured.count + (uint32_t)1);
 }
 
 int main(void) {

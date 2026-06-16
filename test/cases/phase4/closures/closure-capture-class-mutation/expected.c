@@ -10,7 +10,7 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static void _closure_0_fn(_closure_0_env *env) {
-    env->c->count += 1;
+    env->c->count = (int32_t)((uint32_t)env->c->count + (uint32_t)1);
 }
 
 int main(void) {

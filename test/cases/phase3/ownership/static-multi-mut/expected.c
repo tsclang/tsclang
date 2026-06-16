@@ -5,7 +5,7 @@ typedef struct { int32_t count; } Counter;
 static Counter ctr = {0};
 
 void inc_mut_Counter(Counter *c) {
-    c->count += 1;
+    c->count = (int32_t)((uint32_t)c->count + (uint32_t)1);
 }
 
 int main(void) {

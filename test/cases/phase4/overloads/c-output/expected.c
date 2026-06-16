@@ -5,7 +5,7 @@ void foo_i32(int32_t x) {
 }
 
 void foo_i32_i32(int32_t x, int32_t y) {
-    printf("%d\n", x + y);
+    printf("%d\n", (int32_t)((uint32_t)x + (uint32_t)y));
 }
 
 int main(void) {

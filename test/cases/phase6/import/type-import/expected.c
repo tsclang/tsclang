@@ -10,7 +10,7 @@ static shapes_Point shapes_Point_new(double x, double y) {
 }
 
 double magnitude_Point(shapes_Point p) {
-    return p.x * p.x + p.y * p.y;
+    return (int32_t)((uint32_t)(int32_t)((uint32_t)p.x * (uint32_t)p.x) + (uint32_t)(int32_t)((uint32_t)p.y * (uint32_t)p.y));
 }
 
 int main(void) {

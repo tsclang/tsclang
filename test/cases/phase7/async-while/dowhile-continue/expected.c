@@ -13,7 +13,7 @@ case_1:
         case 1:
             i = i + 1;
             if (fmod(i, 2) == 0) goto dowhile_1_cont;
-            total = total + i;
+            total = (int32_t)((uint32_t)total + (uint32_t)i);
 dowhile_1_cont:
             if (i < 5) {
                 self->_state = 1;

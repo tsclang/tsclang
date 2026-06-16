@@ -5,7 +5,7 @@ typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 int32_t sumPair(int32_t *_arr) {
     int32_t a = _arr[0];
     int32_t b = _arr[1];
-    return a + b;
+    return (int32_t)((uint32_t)a + (uint32_t)b);
 }
 
 int main(void) {

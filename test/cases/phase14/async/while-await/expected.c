@@ -34,7 +34,7 @@ case_1:
             tick_poll(&self->_await_0);
             if (!self->_await_0._done) return;
             int32_t v = self->_await_0._result;
-            self->count = self->count + v;
+            self->count = (int32_t)((uint32_t)self->count + (uint32_t)v);
             self->_state = 1;
             goto case_1;
 while_1_end:

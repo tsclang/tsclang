@@ -3,7 +3,7 @@
 int32_t multiply_i32(int32_t factor, int32_t *nums, int32_t nums_count) {
     int32_t result = 0;
     for (int32_t i = 0; i < nums_count; i++) {
-        result = result + factor * nums[i];
+        result = (int32_t)((uint32_t)result + (uint32_t)(int32_t)((uint32_t)factor * (uint32_t)nums[i]));
     }
     return result;
 }

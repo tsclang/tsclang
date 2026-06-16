@@ -10,7 +10,7 @@ static _closure_0_env _closure_0_captured;
 static void _closure_0_fn(void) {
     tsc_signal_get_i32(_closure_0_captured.a);
     tsc_signal_get_i32(_closure_0_captured.b);
-    calls += 1;
+    calls = (int32_t)((uint32_t)calls + (uint32_t)1);
 }
 
 static void _batch_0_fn(void) {

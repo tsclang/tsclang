@@ -10,7 +10,7 @@ static Point Point_new(int32_t x, int32_t y) {
 }
 
 int32_t _ext_Point_manhattanDistance(Point _self) {
-    return _self.x + _self.y;
+    return (int32_t)((uint32_t)_self.x + (uint32_t)_self.y);
 }
 
 int main(void) {

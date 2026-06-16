@@ -18,7 +18,7 @@ Result_i32_Err process_i32(int32_t count) {
         Result_i32_Err _res_0 = step_i32(i);
         if (!_res_0.ok) { return (Result_i32_Err){.ok = false, .error = _res_0.error}; }
         int32_t val = _res_0.value;
-        result += val;
+        result = (int32_t)((uint32_t)result + (uint32_t)val);
     }
     return (Result_i32_Err){.ok = true, .value = result};
 }

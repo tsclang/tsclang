@@ -8,7 +8,7 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static int32_t _closure_0_fn(_closure_0_env *env, int32_t x) {
-    return env->base + x;
+    return (int32_t)((uint32_t)env->base + (uint32_t)x);
 }
 
 int main(void) {

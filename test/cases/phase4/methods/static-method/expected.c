@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 static int32_t MathUtils_add(int32_t a, int32_t b) {
-    return a + b;
+    return (int32_t)((uint32_t)a + (uint32_t)b);
 }
 
 int main(void) {

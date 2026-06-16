@@ -3,7 +3,7 @@
 int32_t join_i32(int32_t sep, int32_t *nums, int32_t nums_count) {
     int32_t result = 0;
     for (int32_t i = 0; i < nums_count; i++) {
-        result = result + nums[i] + sep;
+        result = (int32_t)((uint32_t)(int32_t)((uint32_t)result + (uint32_t)nums[i]) + (uint32_t)sep);
     }
     return result;
 }

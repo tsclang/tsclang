@@ -14,7 +14,7 @@ int main(void) {
             }
             tsc_string_release(t);
         }
-        total = total + i;
+        total = (int32_t)((uint32_t)total + (uint32_t)i);
         tsc_string_release(s);
     }
     outer_break:;

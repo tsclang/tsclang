@@ -3,7 +3,7 @@
 typedef struct { int32_t value; } Counter;
 
 void increment_mut_Counter(Counter *c) {
-    c->value += 1;
+    c->value = (int32_t)((uint32_t)c->value + (uint32_t)1);
 }
 
 int32_t read_ref_Counter(const Counter *c) {

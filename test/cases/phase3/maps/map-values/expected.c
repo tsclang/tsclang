@@ -9,6 +9,6 @@ int main(void) {
     tsc_map_set_string_i32(&m, STR_LIT("b"), 20);
     Array_i32 vals = tsc_map_values_string_i32(&m);
     printf("%zu\n", vals.length);
-    printf("%d\n", vals.data[0] + vals.data[1]);
+    printf("%d\n", (int32_t)((uint32_t)vals.data[0] + (uint32_t)vals.data[1]));
     return 0;
 }

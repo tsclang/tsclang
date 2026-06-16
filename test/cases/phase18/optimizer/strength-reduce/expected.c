@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 int32_t f_i32(int32_t x) {
-    return x + x;
+    return (int32_t)((uint32_t)x + (uint32_t)x);
 }
 
 int32_t g_i32(int32_t x) {

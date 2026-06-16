@@ -17,10 +17,10 @@ int main(void) {
                 tsc_string_release(s);
                 goto outer_break;
             }
-            sum = sum + v;
+            sum = (int32_t)((uint32_t)sum + (uint32_t)v);
             tsc_string_release(t);
         }
-        sum = sum + i;
+        sum = (int32_t)((uint32_t)sum + (uint32_t)i);
         tsc_string_release(s);
     }
     outer_break:;

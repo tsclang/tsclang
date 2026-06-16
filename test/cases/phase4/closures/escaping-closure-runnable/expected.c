@@ -8,7 +8,7 @@ static void _closure_0_destroy(void *_env) {
 }
 
 static int32_t _closure_0_fn(_closure_0_env *env, int32_t x) {
-    return x + env->n;
+    return (int32_t)((uint32_t)x + (uint32_t)env->n);
 }
 
 tsc_closure makeAdder_i32(int32_t n) {

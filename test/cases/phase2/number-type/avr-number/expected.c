@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 int16_t add_i16_i16(int16_t a, int16_t b) {
-    return a + b;
+    return (int16_t)((uint16_t)a + (uint16_t)b);
 }
 
 int main(void) {

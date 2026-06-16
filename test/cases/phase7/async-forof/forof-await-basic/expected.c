@@ -39,7 +39,7 @@ case_1:
             processItem_poll(&self->_await_0);
             if (!self->_await_0._done) return;
             int32_t v = self->_await_0._result;
-            self->total = self->total + v;
+            self->total = (int32_t)((uint32_t)self->total + (uint32_t)v);
 forof_1_cont:
             self->_forof_idx_0++;
             if (!(self->_forof_idx_0 < self->arr.length)) { goto forof_1_end; }

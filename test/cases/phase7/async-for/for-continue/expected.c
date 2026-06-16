@@ -13,7 +13,7 @@ case_1:
         case 1:
             if (!(i < self->max)) { goto for_1_end; }
             if (fmod(i, 2) == 0) goto for_1_cont;
-            total = total + i;
+            total = (int32_t)((uint32_t)total + (uint32_t)i);
 for_1_cont:
             i = i + 1;
             if (!(i < self->max)) { goto for_1_end; }
