@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (safe-math try/catch, #55-#58 fixed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (safe-math literal fix + loop restructure, #58).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~2026 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~2034 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
@@ -355,7 +355,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `2fccf47`
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `ad8ccef`
 - **GitHub Issues:** All bugs and enhancements #1–#54, #56 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #55 (safe-arith false positive for mixed int+float).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
@@ -423,6 +423,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 - **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with C integer promotion rules.
 - **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-arith` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
 - **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `safe-arith`/`safe-div` are deprecated aliases. `Math.checkedAdd/Sub/Mul` removed — use try/catch.
+  - **`_isIntOperand` helper** (`operators.js`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
+  - **Loop restructure in `_inMathTry`** (`control-flow.js`): While/DoWhile/For loops restructure to `while(1) { checked_cond; if (!cond) break; body; }` so checked arithmetic conditions are re-evaluated each iteration (not hoisted before loop). For-loop update emitted as statement at end of body.
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---
