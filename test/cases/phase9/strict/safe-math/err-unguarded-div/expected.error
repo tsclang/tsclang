@@ -1,0 +1,1 @@
+unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'

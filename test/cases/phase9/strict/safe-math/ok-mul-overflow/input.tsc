@@ -1,0 +1,5 @@
+let a: i32 = 100000;
+let b: i32 = 100000;
+let z: i32;
+try { z = a * b; } catch (e: MathError) { z = -1; }
+console.log(z);

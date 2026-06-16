@@ -1,0 +1,5 @@
+let a: i8 = 127;
+let b: i8 = 1;
+let z: i8;
+try { z = a + b; } catch (e: MathError) { z = 0; }
+console.log(z);

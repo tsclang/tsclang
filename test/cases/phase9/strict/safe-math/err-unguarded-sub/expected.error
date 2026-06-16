@@ -1,0 +1,1 @@
+unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'
