@@ -273,24 +273,25 @@
     p(`${resultType} ${resName} = ${callC};`);
 
     if (this._throwsCtx) {
+      const _wrappedErr = this._wrapErrForCaller(this._throwsCtx, `${resName}.error`, calleeSym);
       if (this._usesGotoCleanup) {
         const _hasBlock = this._hasPendingCleanups();
         if (_hasBlock) {
           p(`if (!${resName}.ok) {`);
           this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
-          p(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);
+          p(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
           p(`    goto cleanup;`);
           p(`}`);
         } else {
-          p(`if (!${resName}.ok) { _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; goto cleanup; }`);
+          p(`if (!${resName}.ok) { _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; goto cleanup; }`);
         }
       } else if (this._hasPendingCleanups()) {
         p(`if (!${resName}.ok) {`);
         this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
-        p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error};`);
+        p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
         p(`}`);
       } else {
-        p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+        p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; }`);
       }
     } else {
       if (isProp) {

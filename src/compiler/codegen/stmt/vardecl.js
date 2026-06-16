@@ -1345,11 +1345,11 @@ export default {
                 p(`if (!${resName}.ok) {`);
                 if (this._usesGotoCleanup) {
                   this._emitFuncCleanup(lines, I + '    ');
-                  p(`    _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+                  p(`    _result = (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, calleeSym)}};`);
                   p(`    goto cleanup;`);
                 } else {
                   this._emitFuncCleanup(lines, I + '    ');
-                  p(`    return (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+                  p(`    return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, calleeSym)}};`);
                 }
                 p(`}`);
                 const valueType = calleeSym._resultValueType ?? 'int32_t';

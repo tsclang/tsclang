@@ -565,7 +565,14 @@ export default {
       }
       if (this._funcMathThrow) {
         lines.push(`${this._funcMathThrow.throwLabel}:`);
-        lines.push(`    _result = (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+        if (throwsCtx.throwsNames.length > 1) {
+          const _idx = throwsCtx.throwsNames.indexOf('MathError');
+          const _unionName = `_ErrUnion_${throwsCtx.errKey}`;
+          lines.push(`    ${_unionName} _math_union = {.tag = _Err_MathError, ._${_idx} = ${this._funcMathThrow.errVar}};`);
+          lines.push(`    _result = (${throwsCtx.resultType}){.ok = false, .error = _math_union};`);
+        } else {
+          lines.push(`    _result = (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+        }
         lines.push('    goto cleanup;');
       }
       lines.push('cleanup:');
@@ -597,7 +604,14 @@ export default {
       }
       if (this._funcMathThrow) {
         lines.push(`${this._funcMathThrow.throwLabel}:`);
-        lines.push(`    return (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+        if (throwsCtx.throwsNames.length > 1) {
+          const _idx = throwsCtx.throwsNames.indexOf('MathError');
+          const _unionName = `_ErrUnion_${throwsCtx.errKey}`;
+          lines.push(`    ${_unionName} _math_union = {.tag = _Err_MathError, ._${_idx} = ${this._funcMathThrow.errVar}};`);
+          lines.push(`    return (${throwsCtx.resultType}){.ok = false, .error = _math_union};`);
+        } else {
+          lines.push(`    return (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+        }
       }
     }
     this.popScope();

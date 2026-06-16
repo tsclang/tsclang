@@ -12,6 +12,17 @@ export default {
     }
   },
 
+  _wrapErrForCaller(ctx, errExpr, calleeSym) {
+    if (ctx.throwsNames.length <= 1) return errExpr;
+    const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
+    if (calleeErrTypes.length > 1) return errExpr;
+    const errType = calleeErrTypes[0];
+    if (!errType) return errExpr;
+    const idx = ctx.throwsNames.indexOf(errType);
+    if (idx === -1) return errExpr;
+    return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
+  },
+
   _visitControlFlow(node, lines, depth) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
@@ -34,11 +45,11 @@ export default {
               p(`    goto ${this._mathCatchLabel};`);
             } else if (this._usesGotoCleanup) {
               this._emitFuncCleanup(lines, I + '    ');
-              p(`    _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+              p(`    _result = (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
               p(`    goto cleanup;`);
             } else {
               this._emitFuncCleanup(lines, I + '    ');
-              p(`    return (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
+              p(`    return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
             }
             p(`}`);
             this._flushPostStmtCleanups(lines);
@@ -122,10 +133,10 @@ export default {
               p(`if (!${resName}.ok) { ${this._mathErrVar} = ${resName}.error; goto ${this._mathCatchLabel}; }`);
             } else if (this._usesGotoCleanup) {
               this._emitFuncCleanup(lines, I);
-              p(`if (!${resName}.ok) { _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error}; goto cleanup; }`);
+              p(`if (!${resName}.ok) { _result = (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}}; goto cleanup; }`);
             } else {
               this._emitFuncCleanup(lines, I);
-              p(`if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+              p(`if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}}; }`);
             }
             if (sym._resultIsVoid) {
               if (this._usesGotoCleanup) {
