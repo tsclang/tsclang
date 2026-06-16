@@ -1,0 +1,4 @@
+let a: i32 = 42;
+let b: f64 = 3.14;
+let c = a + b;
+console.log(c);

@@ -274,7 +274,7 @@ export default {
       if (this._strictRules?.has('safe-arith')) {
         const lt = this.inferType(node.left);
         const rt = this.inferType(node.right);
-        const isInt = intTypes.has(lt) || intTypes.has(rt) || (lt === undefined && rt === undefined);
+        const isInt = intTypes.has(lt) && intTypes.has(rt) || (lt === undefined && rt === undefined);
         if (isInt) {
           throw this.error(`integer arithmetic may overflow at runtime (safe-arith); use Math.checkedAdd/Sub/Mul or guard manually`, node);
         }
