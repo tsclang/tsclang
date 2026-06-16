@@ -424,6 +424,12 @@ class Context {
       case 'ArrayLit':
         for (const el of expr.elements ?? []) this._checkNoBareThrows(el);
         break;
+      case 'ObjLit':
+        for (const p of expr.props ?? []) {
+          if (p.value) this._checkNoBareThrows(p.value);
+          if (p.expr) this._checkNoBareThrows(p.expr);
+        }
+        break;
       case 'Unary':
         this._checkNoBareThrows(expr.expr);
         break;

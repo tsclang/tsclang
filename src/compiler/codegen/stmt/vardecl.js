@@ -810,6 +810,9 @@ export default {
         }
         // ObjLit with named fields and no type annotation тЖТ defer as individual consts (expanded at destructuring)
         if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every(p => !p.spread && !p.computed)) {
+          for (const p of init.props) {
+            if (p.value) this._checkNoBareThrows(p.value);
+          }
           const anonName = `_anon_${this._anonStructCount++}`;
           const fields = init.props.map(p => {
             const ft = this.inferType(p.value);

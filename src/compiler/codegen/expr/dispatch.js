@@ -469,6 +469,10 @@ export default {
       }
 
       case 'ObjLit': {
+        for (const p of node.props ?? []) {
+          if (p.value) this._checkNoBareThrows(p.value);
+          if (p.expr) this._checkNoBareThrows(p.expr);
+        }
         if (node.props.length === 0) {
           throw this.error(`empty object literal is forbidden; use a typed variable or Map<K, V>`, node);
         }
@@ -681,13 +685,13 @@ export default {
         return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
       }
       case 'NonNull': {
-        if (this._inAsyncFunc) {
-          throw this.error(`TypeError: '!' error handling is not supported in async functions; use try/catch on await`);
-        }
         const innerExpr = node.expr;
         const callee = innerExpr?.callee;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
         if (calleeSym?._isThrowsFunc) {
+          if (this._inAsyncFunc) {
+            throw this.error(`TypeError: '!' error handling is not supported in async functions; use try/catch on await`);
+          }
           const I = ' '.repeat(this.indent * depth);
           const resName = `_res_${this.tempCount++}`;
           const callC = this.exprToC(innerExpr, lines, depth);

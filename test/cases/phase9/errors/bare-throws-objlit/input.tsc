@@ -1,0 +1,8 @@
+function risky(): i32 throws IOError {
+    return 1;
+}
+
+function caller(): void {
+    const obj = { val: risky() };
+    console.log(obj.val);
+}

@@ -1,0 +1,8 @@
+async function getValue(): Promise<i32> {
+    return 42;
+}
+
+async function caller(): Promise<i32> {
+    const v = await getValue();
+    return v!;
+}

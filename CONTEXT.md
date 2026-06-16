@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~2059 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~2061 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
@@ -329,13 +329,13 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 | 2 | Type system (null, enum, generics, utility types, widening) | 360 |
 | 3 | Memory model (ownership, borrow, arrays, strings, sets) | 371 |
 | 4–5 | Classes, interfaces, closures, match, error handling (throws, Result) | 118 |
-| 6–8 | Modules, async/await, concurrency (threads, channels, Atomic) | 182 |
-| 9–10 | CLI, build, strict mode, package manager | 133 |
+| 6–8 | Modules, async/await, concurrency (threads, channels, Atomic) | 183 |
+| 9–10 | CLI, build, strict mode, package manager | 134 |
 | 11 | Embedded (pool, heap, stack_size, @struct) | 69 |
 | 12 | Stdlib runtime (Math, JSON, Blob, Buffer, regex, reactive) | 119 |
 | 13–19 | Decorators, reactive, regex, LSP, linter, optimizer, WASM, IO/Net/WS | 152 |
 
-**Total: ~2059 tests, all pass with gcc.**
+**Total: ~2061 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
