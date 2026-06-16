@@ -1,0 +1,11 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+
+function risky(a: i32, b: i32): i32 throws MathError | IOError {
+    return a + b;
+}
+
+function caller(): void {
+    console.log(risky(1, 2));
+}

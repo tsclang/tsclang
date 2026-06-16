@@ -9,19 +9,34 @@ Result_void_Err mayFail(void) {
     return (Result_void_Err){.ok = false, .error = Err_new(STR_LIT("fail"))};
 }
 
-void process(void) {
-    String a = STR_LIT("outer");
+Result_void_Err process(void) {
+    Result_void_Err _result = {0};
+    String a = {0};
+    a = STR_LIT("outer");
     {
         String b = STR_LIT("inner");
-        mayFail();
+        Result_void_Err _res_0 = mayFail();
+        if (!_res_0.ok) {
+            tsc_string_release(b);
+            _result = (Result_void_Err){.ok = false, .error = _res_0.error};
+            goto cleanup;
+        }
         tsc_string_release(b);
     }
     printf("%s\n", a.data);
-    tsc_string_release(a);
+        _result = (Result_void_Err){.ok = true};
+        goto cleanup;
+    cleanup:
+        tsc_string_release(a);
+        return _result;
 }
 
 int main(void) {
     TSC_INIT();
-    process();
+    Result_void_Err _res_1 = process();
+    if (!_res_1.ok) {
+        Err e = _res_1.error;
+        printf("%s\n", e._base.message.data);
+    }
     return 0;
 }

@@ -360,7 +360,27 @@ class Context {
   _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
   _errMsgField(errTypes) {
     const errType = errTypes?.[0];
-    return errType === 'TscError' ? 'message' : '_base.message';
+    return this._msgFieldFor(errType);
+  }
+  _msgFieldFor(errType) {
+    return (errType === 'TscError' || errType === 'MathError') ? 'message' : '_base.message';
+  }
+  _panicMsgExpr(resExpr, errTypes) {
+    if (!errTypes || errTypes.length <= 1) {
+      return `${resExpr}.error.${this._msgFieldFor(errTypes?.[0])}`;
+    }
+    const key = errTypes.join('_');
+    const unionName = `_ErrUnion_${key}`;
+    const helperName = `_tsc_panic_msg_${key}`;
+    if (!this._panicHelpers) this._panicHelpers = new Set();
+    if (!this._panicHelpers.has(key)) {
+      this._panicHelpers.add(key);
+      const cases = errTypes.map((et, i) =>
+        `    case _Err_${et}: return e._${i}.${this._msgFieldFor(et)};`
+      );
+      this.addTop(`static String ${helperName}(${unionName} e) {\n    switch (e.tag) {\n${cases.join('\n')}\n    }\n    return STR_LIT("unknown error");\n}`);
+    }
+    return `${helperName}(${resExpr}.error)`;
   }
   _ptrBytes() {
     const m = { u16: 2, u32: 4, u64: 8 };
@@ -744,6 +764,11 @@ class Context {
 
     // Full emit: includes → typedefs → lambdas → topLevel → main
     const parts = [];
+    // Pre-generate main's panic message expression (may addTop helper functions)
+    let _mainPanicMsg = null;
+    if (this._hasExplicitMain && this._explicitMainThrows) {
+      _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes);
+    }
     if (this._asyncName === 'libuv') parts.push('#define TSC_SCHEDULER_LIBUV');
     parts.push(...[...this.includes].sort());
     parts.push('');
@@ -800,8 +825,8 @@ class Context {
         if (this._explicitMainThrows) {
           const unwrap = `_unwrap_main`;
           parts.push(`${this.ind()}${this._explicitMainResultType} ${unwrap} = _tsc_main();`);
-          const msgField = this._errMsgField(this._explicitMainErrTypes);
-          parts.push(`${this.ind()}if (!${unwrap}.ok) { tsc_panic(${unwrap}.error.${msgField}); }`);
+          const panicMsg = _mainPanicMsg;
+          parts.push(`${this.ind()}if (!${unwrap}.ok) { tsc_panic(${panicMsg}); }`);
           if (this._explicitMainRetType === 'void') {
             parts.push(`${this.ind()}return 0;`);
           } else {

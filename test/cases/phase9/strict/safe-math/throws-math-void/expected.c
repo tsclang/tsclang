@@ -15,6 +15,15 @@ Result_void_MathError compute_i32_i32(int32_t a, int32_t b) {
 
 int main(void) {
     TSC_INIT();
-    compute_i32_i32(1, 2);
+    MathError _math_err_1 = {0};
+    Result_void_MathError _res_2 = compute_i32_i32(1, 2);
+    if (!_res_2.ok) {
+        _math_err_1 = _res_2.error;
+        goto _catch_1;
+    }
+    goto _catch_end_1;
+    _catch_1:
+    printf("overflow\n");
+    _catch_end_1:;
     return 0;
 }

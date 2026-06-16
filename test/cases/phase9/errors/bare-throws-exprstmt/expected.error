@@ -1,0 +1,1 @@
+TypeError: Call to throws function 'risky()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function

@@ -3,4 +3,8 @@ function compute(a: i32, b: i32): void throws MathError {
     console.log(z);
 }
 
-compute(1, 2);
+try {
+    compute(1, 2);
+} catch (e: MathError) {
+    console.log("overflow");
+}

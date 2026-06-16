@@ -2,7 +2,7 @@ class Err { message: string; }
 function mayFail(): void throws Err {
     throw new Err("fail");
 }
-function process(): void {
+function process(): void throws Err {
     let a: string = "outer";
     {
         let b: string = "inner";

@@ -44,7 +44,7 @@ export default {
           unwrapRes = `_unwrap_${this.tempCount++}`;
           const callC = this.exprToC(expr, lines, depth);
           lines.push(`${I}${calleeSym._resultType} ${unwrapRes} = ${callC};`);
-          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${unwrapRes}.error.${this._errMsgField(calleeSym._resultErrTypes)}); }`);
+          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${this._panicMsgExpr(unwrapRes, calleeSym._resultErrTypes)}); }`);
           ctype = calleeSym._resultValueType ?? 'int32_t';
         }
       }

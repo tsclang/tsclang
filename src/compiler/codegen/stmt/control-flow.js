@@ -30,8 +30,8 @@ export default {
     switch (node.kind) {
       case 'ExprStmt': {
         const expr = node.expr;
-        // Auto-propagate calls to throws functions inside a throws function
-        if (this._throwsCtx && expr.kind === 'Call') {
+        // Auto-propagate calls to throws functions inside a throws function or math try/catch
+        if ((this._throwsCtx || this._inMathTry) && expr.kind === 'Call') {
           const callee = expr.callee;
           const sym = callee.kind === 'Ident' ? this.lookup(callee.name) : null;
           if (sym?._isThrowsFunc) {
@@ -43,17 +43,28 @@ export default {
             if (this._inMathTry && sym._resultErrTypes?.length === 1 && sym._resultErrTypes[0] === 'MathError') {
               p(`    ${this._mathErrVar} = ${resName}.error;`);
               p(`    goto ${this._mathCatchLabel};`);
-            } else if (this._usesGotoCleanup) {
+            } else if (ctx?._usesGotoCleanup ?? this._usesGotoCleanup) {
               this._emitFuncCleanup(lines, I + '    ');
               p(`    _result = (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
               p(`    goto cleanup;`);
-            } else {
+            } else if (ctx) {
               this._emitFuncCleanup(lines, I + '    ');
               p(`    return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
+            } else {
+              p(`    /* unhandled throws error in non-throwing context */`);
             }
             p(`}`);
             this._flushPostStmtCleanups(lines);
             break;
+          }
+        }
+        if (!this._throwsCtx && !this._inMathTry && expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
+          const sym = this.lookup(expr.callee.name);
+          if (sym?._isThrowsFunc) {
+            throw this.error(
+              `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function`,
+              node
+            );
           }
         }
         const c = this.exprToC(node.expr, lines, depth);
