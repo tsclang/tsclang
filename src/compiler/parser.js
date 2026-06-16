@@ -1483,7 +1483,15 @@ export function parse(tokens, filename = '<input>', src = null) {
       } else if (cur().type === TK.QUEST) {
         const next = peek();
         const isLineBreak = next && cur().line < next.line;
-        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak) {
+        const _propFollows = new Set([
+          TK.SEMI, TK.RBRACE, TK.EOF, TK.RPAREN, TK.RBRACKET, TK.COMMA,
+          TK.PLUS, TK.MINUS, TK.STAR, TK.SLASH, TK.PERCENT,
+          TK.LT, TK.GT, TK.LTE, TK.GTE, TK.EQEQ, TK.BANGEQ, TK.EQEQEQ, TK.BANGEQEQ,
+          TK.AMP2, TK.PIPE2, TK.QUEST2,
+          TK.EQ, TK.PLUSEQ, TK.MINUSEQ, TK.STAREQ, TK.SLASHEQ, TK.PERCENTEQ,
+          TK.COLON,
+        ]);
+        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak || _propFollows.has(next.type)) {
           eat(TK.QUEST);
           expr = { kind: 'Propagate', expr };
         } else break;

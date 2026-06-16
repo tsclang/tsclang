@@ -1,0 +1,11 @@
+function risky(): i32 throws MathError {
+    return 1 + 2;
+}
+
+function foo(x: i32): void {
+    console.log(x);
+}
+
+function caller(): void {
+    foo(risky());
+}

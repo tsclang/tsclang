@@ -1,0 +1,11 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+
+function inner(): i32 throws IOError {
+    return 42;
+}
+
+function outer(): i32 throws IOError {
+    return inner()? + 1;
+}

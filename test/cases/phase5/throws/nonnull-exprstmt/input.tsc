@@ -1,0 +1,11 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+
+function compute(): void throws IOError {
+    console.log(" computing");
+}
+
+function caller(): void {
+    compute()!;
+}

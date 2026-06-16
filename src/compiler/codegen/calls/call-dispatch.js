@@ -110,6 +110,19 @@ export default {
     const _r3 = this._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
     const _r4 = this._dispatchConversion(node, lines, depth); if (_r4 !== null) return _r4;
 
+    // Check for bare throws calls as arguments (must use ! or ?)
+    for (const a of args) {
+      if (a.expr?.kind === 'Call' && a.expr.callee?.kind === 'Ident') {
+        const argSym = this.lookup(a.expr.callee.name);
+        if (argSym?._isThrowsFunc) {
+          throw this.error(
+            `TypeError: Call to throws function '${a.expr.callee.name}()' requires error handling: use '?', '!', or assign to a variable first`,
+            a.expr
+          );
+        }
+      }
+    }
+
     // Generic function call: monomorphize
     if (callee.kind === 'Ident' && this._genericFuncs?.has(callee.name)) {
       return this.callGeneric(callee.name, node.typeArgs ?? [], args, lines, depth);

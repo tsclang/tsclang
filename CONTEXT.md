@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (bare throws call + union panic fix, #59).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (`!`/`?` in expression context, #60).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~2044 tests, **all pass**)
+- **Tests:** `node test/runner.js phaseN` (20 phases, ~2051 tests, **all pass**)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
@@ -325,17 +325,17 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 | Phases | Topic | Tests |
 |--------|-------|-------|
 | 0 | Core runtime (console, Error, Math) | 30 |
-| 1 | Basic parsing, codegen, arithmetic, control flow | 548 |
-| 2 | Type system (null, enum, generics, utility types, widening) | 356 |
+| 1 | Basic parsing, codegen, arithmetic, control flow | 552 |
+| 2 | Type system (null, enum, generics, utility types, widening) | 360 |
 | 3 | Memory model (ownership, borrow, arrays, strings, sets) | 371 |
-| 4–5 | Classes, interfaces, closures, match, error handling (throws, Result) | 112 |
+| 4–5 | Classes, interfaces, closures, match, error handling (throws, Result) | 137 |
 | 6–8 | Modules, async/await, concurrency (threads, channels, Atomic) | 182 |
-| 9–10 | CLI, build, strict mode, package manager | 87 |
+| 9–10 | CLI, build, strict mode, package manager | 129 |
 | 11 | Embedded (pool, heap, stack_size, @struct) | 69 |
 | 12 | Stdlib runtime (Math, JSON, Blob, Buffer, regex, reactive) | 119 |
 | 13–19 | Decorators, reactive, regex, LSP, linter, optimizer, WASM, IO/Net/WS | 152 |
 
-**Total: ~2044 tests, all pass with gcc.**
+**Total: ~2051 tests, all pass with gcc.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -355,8 +355,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ### Project state & tracking
 
-- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `f6717a8`
-- **GitHub Issues:** All bugs and enhancements #1–#59 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 (NaN/Infinity support).
+- **Branch:** `develop` on `https://github.com/tsclang/tsclang.git` — HEAD: `869d2eb`
+- **GitHub Issues:** All bugs and enhancements #1–#60 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 (NaN/Infinity support).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
 - **Next goal: Self-hosting.** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50).
@@ -429,6 +429,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
   - **Union throws wrapping** (`func.js` + `control-flow.js:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
   - **Bare throws call compile error** (`control-flow.js` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
   - **Union error panic** (`codegen.js:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.js (`!`), console.js, codegen.js (main).
+  - **`!`/`?` in expression context** (`dispatch.js:681-730`): NonNull (`!`) and Propagate (`?`) work not only in VarDecl but also inside expressions (`risky()! + 1`, `foo(inner()?)`, `compute()!;`). NonNull: emits Result temp + `tsc_panic` on error, returns `.value`. Propagate: emits Result temp + error propagation (goto cleanup / direct return), returns `.value`. Parser (`parser.js:1483`): `?` treated as postfix propagate when followed by binary operators, closing delimiters, or commas (not just statement terminators). Bare throws call as argument = compile error (`call-dispatch.js`).
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---

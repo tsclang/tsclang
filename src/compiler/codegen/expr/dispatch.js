@@ -678,8 +678,52 @@ export default {
         }
         return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
       }
-      case 'NonNull':  return this.exprToC(node.expr, lines, depth);
-      case 'Propagate': return this.exprToC(node.expr, lines, depth);
+      case 'NonNull': {
+        const innerExpr = node.expr;
+        const callee = innerExpr?.callee;
+        const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
+        if (calleeSym?._isThrowsFunc) {
+          const I = ' '.repeat(this.indent * depth);
+          const resName = `_res_${this.tempCount++}`;
+          const callC = this.exprToC(innerExpr, lines, depth);
+          lines.push(`${I}${calleeSym._resultType} ${resName} = ${callC};`);
+          lines.push(`${I}if (!${resName}.ok) { tsc_panic(${this._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
+          if (calleeSym._resultIsVoid) return '0';
+          return `${resName}.value`;
+        }
+        return this.exprToC(innerExpr, lines, depth);
+      }
+      case 'Propagate': {
+        const innerExpr = node.expr;
+        const callee = innerExpr?.callee;
+        const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
+        if (!calleeSym?._isThrowsFunc) {
+          const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
+          throw this.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+        }
+        if (!this._throwsCtx) {
+          const fnName = this.currentFuncName ?? '<function>';
+          throw this.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
+        }
+        const ctx = this._throwsCtx;
+        const I = ' '.repeat(this.indent * depth);
+        const resName = `_res_${this.tempCount++}`;
+        const callC = this.exprToC(innerExpr, lines, depth);
+        lines.push(`${I}${calleeSym._resultType} ${resName} = ${callC};`);
+        const _wrappedErr = this._wrapErrForCaller(ctx, `${resName}.error`, calleeSym);
+        if (this._usesGotoCleanup) {
+          lines.push(`${I}if (!${resName}.ok) { _result = (${ctx.resultType}){.ok = false, .error = ${_wrappedErr}}; goto cleanup; }`);
+        } else if (this._hasPendingCleanups()) {
+          lines.push(`${I}if (!${resName}.ok) {`);
+          this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
+          lines.push(`${I}    return (${ctx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
+          lines.push(`${I}}`);
+        } else {
+          lines.push(`${I}if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${_wrappedErr}}; }`);
+        }
+        if (calleeSym._resultIsVoid) return '0';
+        return `${resName}.value`;
+      }
       case 'OptChain': {
         const objType = this.inferType(node.object);
         if (objType?.startsWith('opt_')) {
