@@ -1,0 +1,4 @@
+function run(): void {
+    const s = "hello";
+    const x = -s;
+}

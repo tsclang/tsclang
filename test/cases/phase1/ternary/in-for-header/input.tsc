@@ -1,0 +1,5 @@
+let sum: i32 = 0;
+for (let i: i32 = true ? 0 : 5; i < 10; i++) {
+    sum += i;
+}
+console.log(sum);

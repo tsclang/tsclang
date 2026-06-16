@@ -112,6 +112,19 @@ function process(path: string): Response throws IOError | NetworkError {
 > **Происхождение:** Rust `?` (не существует в TS). В TS `?` — только тернарный оператор и optional chaining (`?.`).
 > В TSClang `?` — postfix-оператор error propagation: вызывает функцию, и при ошибке немедленно возвращает её из текущей функции.
 
+> **Disambiguation `?` (propagate) vs `? :` (ternary):**
+> TSClang — единственный язык с одновременно postfix `?` (propagate) и `? :` (ternary).
+> Правило разрешения неоднозначности — **whitespace-based**, O(1):
+>
+> | Условие | Значение |
+> |---------|----------|
+> | **tight** — нет пробела между предыдущим токеном и `?` (`risky()?`) | propagate |
+> | **closed** — следующий токен `)`, `]`, `,`, `;`, EOF (`foo(risky()?)`) | propagate |
+> | иначе | ternary (`cond ? a : b`) |
+>
+> Это соответствует конвенциям Rust (tight `?`) и TS (spaced `? :`).
+> `?.` (optional chaining) — отдельный токен лексера (QUESTDOT), не конфликтует.
+
 `expr?` — если функция вернула ошибку, немедленно вернуть её из текущей функции. Текущая функция обязана иметь совместимый `throws`:
 
 ```typescript

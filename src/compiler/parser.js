@@ -1433,31 +1433,6 @@ export function parse(tokens, filename = '<input>', src = null) {
     return result;
   }
 
-  function _isTernaryQuest() {
-    let depth = 0;
-    let questDepth = 0;
-    let i = pos + 1;
-    while (i < tokens.length) {
-      const t = tokens[i].type;
-      if (t === TK.EOF || t === TK.SEMI || t === TK.RBRACE) break;
-      if (t === TK.LPAREN || t === TK.LBRACK || t === TK.LBRACE) { depth++; }
-      else if (t === TK.RPAREN || t === TK.RBRACK || t === TK.RBRACE) {
-        if (depth === 0) break;
-        depth--;
-      }
-      else if (depth === 0) {
-        if (t === TK.COMMA) break;
-        if (t === TK.QUEST) questDepth++;
-        else if (t === TK.COLON) {
-          if (questDepth === 0) return true;
-          questDepth--;
-        }
-      }
-      i++;
-    }
-    return false;
-  }
-
   function parsePostfix() {
     let expr = parsePrimary();
     while (true) {
@@ -1507,16 +1482,15 @@ export function parse(tokens, filename = '<input>', src = null) {
         eat(TK.BANG);
         expr = { kind: 'NonNull', expr };
       } else if (cur().type === TK.QUEST) {
+        const prev = tokens[pos - 1];
         const next = peek();
-        const isLineBreak = next && cur().line < next.line;
-        if (next.type === TK.SEMI || next.type === TK.RBRACE || next.type === TK.EOF || isLineBreak) {
+        const isTight = prev && prev.line === cur().line && prev.endCol === cur().col;
+        const isClosed = next && [TK.SEMI, TK.RPAREN, TK.RBRACKET, TK.COMMA, TK.EOF].includes(next.type);
+        if (isTight || isClosed) {
           eat(TK.QUEST);
           expr = { kind: 'Propagate', expr };
-        } else if (_isTernaryQuest()) {
-          break;
         } else {
-          eat(TK.QUEST);
-          expr = { kind: 'Propagate', expr };
+          break;
         }
       } else if (cur().type === TK.PLUS2) {
         eat(TK.PLUS2); expr = { kind: 'Unary', op: '++post', expr };

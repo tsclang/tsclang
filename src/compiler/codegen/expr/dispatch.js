@@ -73,6 +73,9 @@ export default {
       case 'Unary':  return this.unaryToC(node, lines, depth);
       case 'Assign': return this.assignToC(node, lines, depth);
       case 'Ternary': {
+        this._checkNoBareThrows(node.cond);
+        this._checkNoBareThrows(node.yes);
+        this._checkNoBareThrows(node.no);
         const c = this._truthyToC(node.cond, lines, depth);
         const yRaw = this.exprToC(node.yes, lines, depth);
         const n = this.exprToC(node.no, lines, depth);
@@ -267,6 +270,7 @@ export default {
       }
 
       case 'Index': {
+        this._checkNoBareThrows(node.index);
         if (node.object.kind === 'Ident') {
           const _idxQSym = this.lookup(node.object.name);
           if (_idxQSym?._mutQuarantined) {
@@ -353,6 +357,8 @@ export default {
       }
 
       case 'RangeIndex': {
+        this._checkNoBareThrows(node.start);
+        this._checkNoBareThrows(node.end);
         const obj = this.exprToC(node.object, lines, depth);
         const objType2 = this.inferType(node.object);
         if (node.object.kind === 'Ident' && objType2 !== 'String') {

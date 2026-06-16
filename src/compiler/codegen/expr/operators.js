@@ -449,6 +449,7 @@ export default {
   // Unary
   // ----------------------------------------------------------------
   unaryToC(node, lines, depth) {
+    this._checkNoBareThrows(node.expr);
     if (node.op === '&' || node.op === '*') {
       if (node.op === '*') {
         const sym = node.expr.kind === 'Ident' ? this.lookup(node.expr.name) : null;
@@ -470,17 +471,21 @@ export default {
     const e = this.exprToC(node.expr, lines, depth);
     switch (node.op) {
       case '!':     return `!${e}`;
-      case '+':     return `+${e}`;
-      case '-':     return `-${e}`;
+      case '+':
+      case '-':
       case '~': {
         const et = this.inferType(node.expr);
         const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
         if (!NUMERIC.has(et)) {
           const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
-          throw this.error(`TypeError: bitwise op '~' not applicable to '${tsName(et)}'`, node);
+          const label = node.op === '~' ? `bitwise op '~'` : `unary '${node.op}'`;
+          throw this.error(`TypeError: ${label} not applicable to '${tsName(et)}'`, node);
         }
-        if (this._hasFloatVar(node.expr)) return `(${et})(~((int32_t)(${e})))`;
-        return `~${e}`;
+        if (node.op === '~') {
+          if (this._hasFloatVar(node.expr)) return `(${et})(~((int32_t)(${e})))`;
+          return `~${e}`;
+        }
+        return `${node.op}${e}`;
       }
       case '++pre': return `++${e}`;
       case '--pre': return `--${e}`;

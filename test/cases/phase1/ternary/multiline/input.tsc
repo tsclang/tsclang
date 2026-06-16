@@ -1,0 +1,5 @@
+function run(flag: boolean): i32 {
+    const x: i32 = flag ?
+        1 : 0;
+    return x;
+}

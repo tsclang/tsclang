@@ -1,0 +1,16 @@
+class IOError extends Error {
+    constructor(msg: string) { super(msg); }
+}
+
+class Container {
+    value: i32;
+    constructor(v: i32) { this.value = v; }
+}
+
+function getData(): Container throws IOError {
+    return new Container(42);
+}
+
+function run(): i32 throws IOError {
+    return getData()? .value;
+}

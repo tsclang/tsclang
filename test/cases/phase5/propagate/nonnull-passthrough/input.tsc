@@ -1,0 +1,7 @@
+function safe(): i32 {
+    return 42;
+}
+
+function run(): i32 {
+    return safe()!;
+}
