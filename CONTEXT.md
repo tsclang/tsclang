@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (defined wrap for signed integer arithmetic, #51-#56 fixed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (safe-math try/catch, #55-#58 fixed).
 
 ---
 
@@ -314,7 +314,7 @@ Single-header C library. `#include`d in every output. Key components:
 
 ### Strict mode (`_strictRules`)
 
-Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all.
+Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all. `safe-arith` and `safe-div` are deprecated aliases for `safe-math`.
 
 ---
 
@@ -422,6 +422,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-div`, `safe-arith`, `no-lossy-c
 - **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
 - **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with C integer promotion rules.
 - **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-arith` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
+- **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `safe-arith`/`safe-div` are deprecated aliases. `Math.checkedAdd/Sub/Mul` removed — use try/catch.
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---
