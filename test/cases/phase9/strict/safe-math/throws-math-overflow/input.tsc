@@ -1,0 +1,12 @@
+function add(a: i32, b: i32): i32 throws MathError {
+    return a + b;
+}
+
+let z: i32 = 0;
+let r = add(2147483647, 1);
+if (!r.ok) {
+    z = -1;
+} else {
+    z = r.value;
+}
+console.log(z);

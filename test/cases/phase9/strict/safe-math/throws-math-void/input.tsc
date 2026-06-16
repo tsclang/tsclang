@@ -1,0 +1,6 @@
+function compute(a: i32, b: i32): void throws MathError {
+    let z: i32 = a + b;
+    console.log(z);
+}
+
+compute(1, 2);

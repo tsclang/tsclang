@@ -434,7 +434,8 @@ export default {
   },
 
   emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx = null, isNever = false) {
-    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever };
+    const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever,
+      inMathTry: this._inMathTry, mathCatchLabel: this._mathCatchLabel, mathErrVar: this._mathErrVar };
     this.inFunction = true;
     this.currentFuncName = funcName;
     this.currentFuncReturnType = retType;
@@ -443,6 +444,19 @@ export default {
     const lines = [];
     this._currentFuncLines = lines;
     this._funcDepth = 0;
+
+    // Set up function-level math-try for throws MathError + safe-math
+    const _throwsMathError = throwsCtx?.throwsNames?.includes('MathError') && this._strictRules?.has('safe-math');
+    this._funcMathThrow = null;
+    if (_throwsMathError) {
+      const _mathErrVar = `_func_math_err`;
+      const _mathThrowLabel = `_func_math_throw`;
+      lines.push(`MathError ${_mathErrVar} = {0};`);
+      this._inMathTry = true;
+      this._mathCatchLabel = _mathThrowLabel;
+      this._mathErrVar = _mathErrVar;
+      this._funcMathThrow = { errVar: _mathErrVar, throwLabel: _mathThrowLabel };
+    }
 
     this.pushScope();
     // For constructors: declare 'self' as value; for instance methods: as pointer
@@ -549,6 +563,11 @@ export default {
           lines.push('    goto cleanup;');
         }
       }
+      if (this._funcMathThrow) {
+        lines.push(`${this._funcMathThrow.throwLabel}:`);
+        lines.push(`    _result = (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+        lines.push('    goto cleanup;');
+      }
       lines.push('cleanup:');
       if (_scalarRest) lines.push('    va_end(_va_args);');
       for (let i = this._throwsOwnedVars.length - 1; i >= 0; i--) {
@@ -576,6 +595,10 @@ export default {
           lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
         }
       }
+      if (this._funcMathThrow) {
+        lines.push(`${this._funcMathThrow.throwLabel}:`);
+        lines.push(`    return (${throwsCtx.resultType}){.ok = false, .error = ${this._funcMathThrow.errVar}};`);
+      }
     }
     this.popScope();
 
@@ -584,6 +607,10 @@ export default {
     this.currentFuncReturnType = saved.retType;
     this._throwsCtx = saved.throwsCtx;
     this._currentFuncIsNever = saved.isNever;
+    this._inMathTry = saved.inMathTry;
+    this._mathCatchLabel = saved.mathCatchLabel;
+    this._mathErrVar = saved.mathErrVar;
+    this._funcMathThrow = null;
     return lines;
   },
 

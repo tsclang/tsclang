@@ -29,7 +29,10 @@ export default {
             const callC = this.exprToC(expr, lines, depth);
             p(`${sym._resultType} ${resName} = ${callC};`);
             p(`if (!${resName}.ok) {`);
-            if (this._usesGotoCleanup) {
+            if (this._inMathTry && sym._resultErrTypes?.length === 1 && sym._resultErrTypes[0] === 'MathError') {
+              p(`    ${this._mathErrVar} = ${resName}.error;`);
+              p(`    goto ${this._mathCatchLabel};`);
+            } else if (this._usesGotoCleanup) {
               this._emitFuncCleanup(lines, I + '    ');
               p(`    _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error};`);
               p(`    goto cleanup;`);
@@ -106,6 +109,42 @@ export default {
           this._ensureUnknownStruct();
           return `${packer}(${valC})`;
         };
+        // Auto-propagate: return throwsFunc() inside a throws function
+        if (this._throwsCtx && node.value?.kind === 'Call') {
+          const callee = node.value.callee;
+          const sym = callee?.kind === 'Ident' ? this.lookup(callee.name) : null;
+          if (sym?._isThrowsFunc) {
+            const ctx = this._throwsCtx;
+            const resName = `_res_${this.tempCount++}`;
+            const callC = this.exprToC(node.value, lines, depth);
+            p(`${sym._resultType} ${resName} = ${callC};`);
+            if (this._inMathTry && sym._resultErrTypes?.length === 1 && sym._resultErrTypes[0] === 'MathError') {
+              p(`if (!${resName}.ok) { ${this._mathErrVar} = ${resName}.error; goto ${this._mathCatchLabel}; }`);
+            } else if (this._usesGotoCleanup) {
+              this._emitFuncCleanup(lines, I);
+              p(`if (!${resName}.ok) { _result = (${ctx.resultType}){.ok = false, .error = ${resName}.error}; goto cleanup; }`);
+            } else {
+              this._emitFuncCleanup(lines, I);
+              p(`if (!${resName}.ok) { return (${ctx.resultType}){.ok = false, .error = ${resName}.error}; }`);
+            }
+            if (sym._resultIsVoid) {
+              if (this._usesGotoCleanup) {
+                p(`_result = (${ctx.resultType}){.ok = true};`);
+                p(`goto cleanup;`);
+              } else {
+                p(`return (${ctx.resultType}){.ok = true};`);
+              }
+            } else {
+              if (this._usesGotoCleanup) {
+                p(`_result = (${ctx.resultType}){.ok = true, .value = ${resName}.value};`);
+                p(`goto cleanup;`);
+              } else {
+                p(`return (${ctx.resultType}){.ok = true, .value = ${resName}.value};`);
+              }
+            }
+            break;
+          }
+        }
         // goto cleanup pattern for throws functions with owned vars
         if (this._usesGotoCleanup) {
           const ctx = this._throwsCtx;
