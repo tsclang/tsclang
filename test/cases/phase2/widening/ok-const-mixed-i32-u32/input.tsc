@@ -1,0 +1,2 @@
+const a: i32 = 1; const b: u32 = 2; const x: f64 = a + b;
+console.log(x);

@@ -250,32 +250,46 @@ let f = d + e;         // i64 (i64 шире i32)
 
 let g: u32 = 1;
 let h: i32 = 2;
-let i = g + h;         // u32 (та же ширина, unsigned выигрывает)
+let i = g + h;         // ❌ error: cannot mix u32 and i32 (same-width mixed signed/unsigned banned)
 ```
 
 **Banned mixed pairs для `let`-переменных:**
 
-Некоторые комбинации signed+unsigned запрещены для `let`-переменных, потому что C promotion дал бы неожиданный unsigned результат:
+Все same-width mixed signed+unsigned комбинации запрещены для `let`-переменных. В TS нет unsigned — `number + number = number`. C silent conversion signed→unsigned нарушает ожидания TS-разработчика (П2, П3).
+
+**Same-width mixed (signed/unsigned mismatch):**
+
+| Комбинация | Проблема | Решение |
+|------------|----------|---------|
+| `i8 + u8` | C: результат `u8`, `-1` → `255` | Compile error: use `as` |
+| `i16 + u16` | C: результат `u16`, `-1` → `65535` | Compile error: use `as` |
+| `i32 + u32` | C: результат `u32`, `-1` → `4294967295` | Compile error: use `as` |
+| `i64 + u64` | C: результат `u64`, `-1` → `1.8e19` | Compile error: use `as` |
+
+**Cross-width mixed (unexpected unsigned result in C):**
 
 | Комбинация | Проблема | Решение |
 |------------|----------|---------|
 | `i64 + u32` | C: результат `u64` (неожиданно unsigned) | Compile error: use `as` |
 | `u32 + i64` | C: результат `u64` | Compile error: use `as` |
-| `u64 + i64` | C: результат `u64` (signed потерян) | Compile error: use `as` |
-| `i64 + u64` | C: результат `u64` | Compile error: use `as` |
 
 ```typescript
-let a: i64 = 1;
+let a: i32 = 1;
 let b: u32 = 2;
-let c = a + b;            // ❌ error: cannot add i64 and u32: no implicit widening for let variables, use "as"
-let c = (a + (b as i64)); // ✅ явный cast
+let c = a + b;            // ❌ error: cannot mix i32 and u32: signed/unsigned mismatch, use "as" to specify type
+let c = a + (b as i32);   // ✅ явный cast
+
+let d: i64 = 1;
+let e: u32 = 2;
+let f = d + e;            // ❌ error: cannot add i64 and u32: no implicit widening for let variables, use "as"
+let f = d + (e as i64);   // ✅ явный cast
 
 // const/literals exempt — compile-time analysis:
-const x: i64 = 1;
+const x: i32 = 1;
 const y: u32 = 2;
 const z = x + y;           // ✅ — оба const, значения известны
 ```
 
-> **Обоснование:** C integer promotion для mixed signed+unsigned — известный источник багов. TSClang требует явный `as` для опасных комбинаций `let`-переменных. `const`/литералы exempt, потому что компилятор проверяет значения на этапе компиляции.
+> **Обоснование:** C integer promotion для mixed signed+unsigned — известный источник багов. `-1` молча становится `4294967295`. TSClang требует явный `as` для всех same-width mixed комбинаций `let`-переменных. `const`/литералы exempt, потому что компилятор проверяет значения на этапе компиляции.
 
 ## Конвертация типов

@@ -151,8 +151,13 @@ export default {
     if (arithOps.includes(node.op)) {
       const lt = this.inferType(node.left);
       const rt = this.inferType(node.right);
-      const mixedPairs = [['int64_t','uint32_t'],['uint32_t','int64_t'],
-                          ['uint64_t','int64_t'],['int64_t','uint64_t']];
+      const mixedPairs = [
+        ['int8_t','uint8_t'],   ['uint8_t','int8_t'],
+        ['int16_t','uint16_t'], ['uint16_t','int16_t'],
+        ['int32_t','uint32_t'], ['uint32_t','int32_t'],
+        ['int64_t','uint64_t'], ['uint64_t','int64_t'],
+        ['int64_t','uint32_t'], ['uint32_t','int64_t'],
+      ];
       for (const [a, b] of mixedPairs) {
         if (lt === a && rt === b) {
           // Only error if either operand is a let/var variable (not const/literal)
@@ -160,7 +165,12 @@ export default {
           const rightIsLet = node.right.kind === 'Ident' && this.lookup(node.right.name)?.varKind === 'let';
           if (leftIsLet || rightIsLet) {
             const [tsA, tsB] = [a,b].map(t => this.ctypeToTsName(t));
-            throw this.error(`cannot add ${tsA} and ${tsB}: no implicit widening for let variables, use "as"`, node);
+            const widthA = a.match(/\d+/)?.[0];
+            const widthB = b.match(/\d+/)?.[0];
+            const reason = widthA === widthB
+              ? `cannot mix ${tsA} and ${tsB}: signed/unsigned mismatch, use "as" to specify type`
+              : `cannot add ${tsA} and ${tsB}: no implicit widening for let variables, use "as"`;
+            throw this.error(reason, node);
           }
         }
       }

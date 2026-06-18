@@ -1,0 +1,10 @@
+#include "runtime.h"
+
+int main(void) {
+    TSC_INIT();
+    const int32_t a = 1;
+    const uint32_t b = 2U;
+    const double x = (double)(a + (int32_t)b);
+    printf("%g\n", (double)(x));
+    return 0;
+}

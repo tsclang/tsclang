@@ -1,0 +1,2 @@
+let a: i32 = 1; let b: u32 = 2; let x: i32 = a + (b as i32);
+console.log(x);
