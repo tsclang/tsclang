@@ -6,7 +6,7 @@
 
 ```json
 {
-  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
+  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
 }
 ```
 
@@ -92,60 +92,78 @@ declare function memcmp(a: Ref<u8>, b: Ref<u8>, n: usize): i32;
 
 **Обоснование:** `extern "C"` обходит name mangling — типы параметров не проверяются на call site. `.d.tsc` декларации обеспечивают тот же C interop, но с проверкой типов.
 
-#### `safe-div` — безопасное деление
+#### `safe-div` — безопасное деление (alias для `safe-math`)
 
-Запрещает integer `/` и `%` без явной проверки или safe-обёртки.
+Legacy-имя для [`safe-math`](#safe-math). При активации нормализуется в `safe-math`. См. полный механизм ниже.
+
+#### `safe-arith` — безопасная арифметика (alias для `safe-math`)
+
+Legacy-имя для [`safe-math`](#safe-math). При активации нормализуется в `safe-math`. См. полный механизм ниже.
+
+#### `safe-math` — безопасная целочисленная арифметика (runtime)
+
+> `safe-arith` и `safe-div` — legacy-алиасы. Все три имени нормализуются в `safe-math` при активации.
+
+Запрещает unguarded integer `+`, `-`, `*`, `/`, `%` — требует обёртки в `try/catch (e: MathError)` или объявление `throws MathError`. Внутри guarded context арифметика компилируется в **checked operations**, которые при overflow бросают `MathError`.
 
 ```typescript
-// ❌ error: integer division may panic at runtime (safe-div);
-//          guard with 'if (y != 0)' or use a safe division function
-let q = x / y;
-let r = x % y;
+// ❌ error: unguarded integer arithmetic in safe-math mode;
+//          wrap in try/catch or declare 'throws MathError'
+let q = x + y;
+let d = x / y;
 
-// ✅ explicit guard — ok
-if (y != 0) {
-    let q = x / y;
+// ✅ try/catch — checked ops, MathError при overflow
+let result: i32;
+try {
+    result = x + y;     // __builtin_add_overflow под капотом
+} catch (e: MathError) {
+    console.log("overflow in:", e.operation);   // "add", "sub", "mul", "div", "mod"
+    result = 0;
 }
 
-// ✅ safe division functions (provided by runtime)
-let q = Math.divTrunc(x, y);   // returns i32 | null — null if divisor is 0
-let q = Math.divTrunc(x, y) ?? 0;  // with default
+// ✅ throws MathError — propagation
+function safeAdd(a: i32, b: i32): i32 throws MathError {
+    return a + b;       // overflow → MathError, propagation через Result-struct
+}
 
-// ✅ float division — ok (IEEE 754, no panic)
-let f = a / b;  // a: f64, b: f64
+// ✅ float arithmetic — ok (IEEE 754, не проверяется)
+let f = a + b;          // a: f64, b: f64 — safe-math не применяется
 ```
 
-**Обоснование:** Integer division by zero → runtime panic (`abort()`). В safety-critical системах panic недопустим — все краевые случаи должны быть обработаны явно.
+**Как это работает под капотом:**
 
-**Float исключение:** `/` для `f32`/`f64` не запрещается — IEEE 754 определяет результат деления на ноль (`Infinity`, `-Infinity`), panic не происходит.
+Integer `+`, `-`, `*` внутри `try`/`throws MathError` → GCC/Clang builtins:
 
-**Compound assignment:** `x /= y`, `x %= y` — тоже запрещены для integer типов.
+```c
+int32_t _math_N;
+if (__builtin_add_overflow((int32_t)a, (int32_t)b, &_math_N)) {
+    _math_err.operation = "add";
+    goto _catch_N;     // или _func_math_throw для throws MathError
+}
+```
 
-#### `safe-arith` — безопасная целочисленная арифметика
+Integer `/`, `%` → manual guards:
 
-Запрещает integer `+`, `-`, `*` без явной проверки или safe-обёртки. Цель — предотвратить silent overflow (undefined behavior для signed integer overflow в C).
+```c
+int32_t _math_N = b;
+if (_math_N == 0) { _math_err.operation = "div"; goto _catch_N; }
+if (_math_N == -1 && a == INT32_MIN) { _math_err.operation = "div"; goto _catch_N; }
+a / _math_N;
+```
+
+**`MathError` struct:**
 
 ```typescript
-// ❌ error: integer arithmetic may overflow at runtime (safe-arith);
-//          use Math.checkedAdd/Sub/Mul or guard manually
-let q = x + y;
-let d = x - y;
-let p = x * y;
-
-// ✅ checked arithmetic functions (provided by runtime)
-let q = Math.checkedAdd(x, y) ?? 0;   // returns i32 | null — null on overflow
-let d = Math.checkedSub(x, y) ?? 0;
-let p = Math.checkedMul(x, y) ?? 0;
-
-// ✅ float arithmetic — ok (IEEE 754 wraps predictably)
-let f = a + b;  // a: f64, b: f64
+class MathError extends Error {
+    operation: string   // "add" | "sub" | "mul" | "div" | "mod"
+}
 ```
 
-**Обоснование:** Signed integer overflow — undefined behavior в C. Компилятор может удалить overflow-чеки при оптимизации. В safety-critical системах UB недопустимо.
+**Float исключение:** `+`, `-`, `*`, `/`, `%` для `f32`/`f64` не проверяются — IEEE 754 определяет результат overflow (`Infinity`, wrap-around), panic/throw не происходит.
 
-**Float исключение:** `+`, `-`, `*` для `f32`/`f64` не запрещается — IEEE 754 определяет результат overflow (`Infinity`, wrap-around для float).
+**Compound assignment:** `+=`, `-=`, `*=`, `/=`, `%=` — тоже требуют guarded context для integer типов.
 
-**Compound assignment:** `x += y`, `x -= y`, `x *= y` — тоже запрещены для integer типов.
+**Обоснование:** Signed integer overflow — undefined behavior в C. Компилятор может удалить overflow-чеки при оптимизации. safe-math делает overflow **детектируемым и обрабатываемым** через типобезопасный `MathError`, а не silent wrap или crash.
 
 #### `no-lossy-cast` — запрет потерянного приведения типов
 
@@ -369,7 +387,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 |-----|-----------|------------------------|
 | 1 | Базовая безопасность | Базовый TSClang (статическая типизация, ownership, нет UB) |
 | 2 | Повышенная безопасность | + `no-any`, `no-unsafe`, `no-native` |
-| 3 | Высокая безопасность | + `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `safe-div`, `safe-arith`, `no-lossy-cast`, `no-dynamic-alloc` |
+| 3 | Высокая безопасность | + `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc` |
 | 4 | Максимальная безопасность | + `const-params`, `no-gcc-extensions` (в разработке) + формальная верификация |
 
 Рекомендуемые пресеты:
@@ -379,10 +397,10 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 { "strict": ["no-any", "no-unsafe", "no-native"] }
 
 // SIL 3 — MISRA C compliance, no void*
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "safe-arith", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
 
 // SIL 4 — maximum strictness (when const-params and no-gcc-extensions are available)
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort", "const-params", "no-gcc-extensions"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort", "const-params", "no-gcc-extensions"] }
 ```
 
 ### Взаимодействие правил
@@ -394,10 +412,10 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 { "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c"] }
 
 // SIL 3 embedded — максимальная строгость, нет void*
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "safe-arith", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
 
 // Desktop type safety — closures/interfaces/threads разрешены
-{ "strict": ["no-any", "no-unsafe", "no-native", "safe-div", "no-lossy-cast", "switch-default", "no-abort"] }
+{ "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "switch-default", "no-abort"] }
 ```
 
 ### Error messages
@@ -410,7 +428,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 ```
 file.tsc:5:10: error: "any" is forbidden in strict mode (no-any); use a concrete type
 file.tsc:8:4:  error: unsafe blocks are forbidden in strict mode (no-unsafe)
-file.tsc:12:8: error: integer division may panic at runtime (safe-div); guard with 'if (y != 0)' or use a safe division function
+file.tsc:12:8: error: unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'
 file.tsc:15:6: error: lossy cast from i64 to i32 is forbidden (no-lossy-cast); use Math.saturatingCast() or Math.checkedCast()
 file.tsc:20:14: error: dynamic allocation with runtime size is forbidden (no-dynamic-alloc); use fixed-size array or compile-time constant
 file.tsc:25:2: error: closures are forbidden in strict mode (no-closures); use named functions or inline the logic
@@ -425,7 +443,7 @@ file.tsc:40:8: error: Array.sort() with comparator is forbidden in strict mode (
 
 ```bash
 tsclang build src/main.tsc --strict
-# эквивалентно "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-div", "no-lossy-cast", "no-dynamic-alloc"]
+# эквивалентно "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-math", "no-lossy-cast", "no-dynamic-alloc"]
 ```
 
 Флаг комбинируется с `"strict"` из `tsc.package.json` — CLI **добавляет** правила к конфигу, не заменяет.
@@ -442,8 +460,9 @@ Strict rules проверяются **после** platform capability checks. �
 | `no-unsafe` | `unsafe {}` блоки | `(no-unsafe)` |
 | `no-native` | `native \`...\`` | `(no-native)` |
 | `no-extern-c` | `extern "C" function` | `(no-extern-c)` |
-| `safe-div` | Integer `/` и `%` без guard | `(safe-div)` |
-| `safe-arith` | Integer `+`, `-`, `*` без safe-обёртки | `(safe-arith)` |
+| `safe-math` | Integer `+`, `-`, `*`, `/`, `%` без `try/catch` или `throws MathError` | `(safe-math)` |
+| `safe-arith` | Alias для `safe-math` | `(safe-math)` |
+| `safe-div` | Alias для `safe-math` | `(safe-math)` |
 | `no-lossy-cast` | Lossy `as` cast | `(no-lossy-cast)` |
 | `no-dynamic-alloc` | `new Array(runtimeN)`, `new Map()`, `new Set()` | `(no-dynamic-alloc)` |
 | `switch-default` | Отсутствие `default:` в switch | `(switch-default)` — auto-add |

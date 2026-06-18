@@ -53,3 +53,29 @@ s = null;            // compile error: string is non-nullable
 let w: Weak<Foo>;
 w = null;            // OK — pointer type
 ```
+
+### Множественное объявление
+
+В одном `let`/`const` можно объявить несколько переменных через запятую. Каждый declarator независимо имеет type annotation и/или initializer:
+
+```typescript
+let a = 1, b = 2, c = 3;              // три переменные без type annotation
+let x: i32 = 1, y: string = "hi";     // разные типы
+let p = 1, q: f64, r = "three";       // смешанный: с типом и без, с init и без
+const PI = 3.14, E = 2.71;            // const тоже поддерживается
+```
+
+**Правила:**
+- Каждый declarатор независим: может иметь или не иметь type annotation и initializer
+- `let`/`const`/`var` applies ко всем declarators в группе
+- Decorators apply только к первому declarator
+- Destructuring (`let {a, b} = obj`) не поддерживает comma — только один pattern
+
+```typescript
+// ❌ destructuring + comma — не поддерживается
+let {a, b} = obj, c = 5;             // error
+
+// ✅ раздельно
+let {a, b} = obj;
+let c = 5;
+```

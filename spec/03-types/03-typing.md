@@ -105,6 +105,18 @@
   - Widening **с потерей точности** — всегда требует явный `as` (независимо от `const`/`let`):
     - `i32` → `f32`, `i64` → `f32`, `i64` → `f64`, `u64` → `f64`
   - Narrowing (`f64` → `i32` и т.д.) — всегда требует `as`
+
+  - **Compound assignments** (`+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) применяют те же widening rules: результат бинарной операции должен safely widening'ся к типу LHS. Иначе — compile error:
+    ```typescript
+    let x: i32 = 1;
+    let y: f64 = 2.5;
+    x += y;             // ❌ error: cannot implicitly convert f64 to i32 in '+=': use "as i32" or explicit assignment
+    x += y as i32;      // ✅ явный cast
+
+    let a: i32 = 1;
+    let b: i16 = 2;
+    a += b;             // ✅ i16 → i32 safe widening
+    ```
 - **Оператор `as`** — явное приведение типа, три случая:
   ```typescript
   // 1. Числовые типы — C-cast, может быть lossy

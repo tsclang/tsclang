@@ -197,4 +197,85 @@ if (x < (100500 as i32)) ...    // ok — as снимает overflow check (пр
 
 **Правило**: `as T` снимает overflow check — программист берёт ответственность на себя. Без `as` — compile error при выходе за диапазон `defaultNumber`.
 
+### Поведение integer overflow
+
+TSClang определяет поведение integer overflow явно — никаких UB (undefined behavior) как в C.
+
+**Default mode (без strict rules):**
+
+| Операция | Типы | Поведение при overflow |
+|----------|------|------------------------|
+| `+`, `-`, `*` | signed (`i8`..`i64`) | **Defined wrap** через unsigned cast: `(int32_t)((uint32_t)a + (uint32_t)b)`. Two's complement, предсказуемо на всех платформах |
+| `+`, `-`, `*` | unsigned (`u8`..`u64`) | Native C wrap (defined by C standard) |
+| `/`, `%` | любые integer | **Runtime abort** при делении на ноль или `INT_MIN / -1` (trap на x86) |
+| `+`, `-`, `*`, `/`, `%` | `f32`, `f64` | IEEE 754 (`Infinity`, wrap-around) — без panic |
+
+```c
+// Generated C for signed i32: a + b
+(int32_t)((uint32_t)a + (uint32_t)b)   // defined wrap, no UB
+
+// Generated C for i32: a / b
+int32_t _tsc_div_N = b;
+if (_tsc_div_N == 0) { fprintf(stderr, "panic: division by zero\n"); abort(); }
+if (_tsc_div_N == -1 && a == INT32_MIN) { fprintf(stderr, "panic: integer overflow\n"); abort(); }
+a / _tsc_div_N;
+```
+
+> **Почему unsigned cast для signed:** В C signed integer overflow — UB. Компилятор может удалить overflow-чеки при оптимизации. Cast через unsigned делает поведение определённым (unsigned wrap defined by C standard §6.2.5), сохраняя two's-complement семантику.
+
+> **`INT_MIN / -1`:** На x86 эта операция вызывает hardware exception (SIGFPE / #DE). TSClang генерирует runtime guard, который вызывает `abort()` с понятным сообщением. Guard добавляется только для `i32`/`i64` (для `i8`/`i16` C promotion делает overflow менее вероятным).
+
+> **`no-abort` strict rule:** Если включен `no-abort`, `abort()` заменяется на `_tsc_on_panic(msg)` — пользовательский обработчик (см. [Strict Mode](../13-build/13-strict-mode.md#no-abort)).
+
+**safe-math mode** (strict rule `safe-math`): см. [Strict Mode — safe-math](../13-build/13-strict-mode.md#safe-math).
+
+### Binary type inference и integer promotion
+
+TSClang **не использует** полные C integer promotion rules. Вместо этого применяется упрощённый алгоритм (usual arithmetic conversions):
+
+1. Если хотя бы один операнд `f64` → результат `f64`
+2. Если хотя бы один операнд `f32` → результат `f32`
+3. Для двух integer: **более широкий тип выигрывает**
+4. При равной ширине: **unsigned выигрывает**
+5. Иначе: тип левого операнда
+
+```typescript
+let a: i32 = 1;
+let b: i32 = 2;
+let c = a + b;         // i32 (оба i32)
+
+let d: i32 = 1;
+let e: i64 = 2;
+let f = d + e;         // i64 (i64 шире i32)
+
+let g: u32 = 1;
+let h: i32 = 2;
+let i = g + h;         // u32 (та же ширина, unsigned выигрывает)
+```
+
+**Banned mixed pairs для `let`-переменных:**
+
+Некоторые комбинации signed+unsigned запрещены для `let`-переменных, потому что C promotion дал бы неожиданный unsigned результат:
+
+| Комбинация | Проблема | Решение |
+|------------|----------|---------|
+| `i64 + u32` | C: результат `u64` (неожиданно unsigned) | Compile error: use `as` |
+| `u32 + i64` | C: результат `u64` | Compile error: use `as` |
+| `u64 + i64` | C: результат `u64` (signed потерян) | Compile error: use `as` |
+| `i64 + u64` | C: результат `u64` | Compile error: use `as` |
+
+```typescript
+let a: i64 = 1;
+let b: u32 = 2;
+let c = a + b;            // ❌ error: cannot add i64 and u32: no implicit widening for let variables, use "as"
+let c = (a + (b as i64)); // ✅ явный cast
+
+// const/literals exempt — compile-time analysis:
+const x: i64 = 1;
+const y: u32 = 2;
+const z = x + y;           // ✅ — оба const, значения известны
+```
+
+> **Обоснование:** C integer promotion для mixed signed+unsigned — известный источник багов. TSClang требует явный `as` для опасных комбинаций `let`-переменных. `const`/литералы exempt, потому что компилятор проверяет значения на этапе компиляции.
+
 ## Конвертация типов

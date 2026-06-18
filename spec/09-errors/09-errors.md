@@ -125,6 +125,15 @@ function process(path: string): Response throws IOError | NetworkError {
 > Это соответствует конвенциям Rust (tight `?`) и TS (spaced `? :`).
 > `?.` (optional chaining) — отдельный токен лексера (QUESTDOT), не конфликтует.
 
+> **В expression context:** Оба оператора (`?`, `!`) работают внутри более крупных выражений. Result type unwrappится, и значение flows в surrounding expression:
+> ```typescript
+> const len = readFile(path)?.length;     // propagate, then .length on String
+> const msg = "size=" + readFile(path)!.length;  // unwrap, concat
+> arr[getIndex()?]                          // propagate from index expression
+> foo(risky()?)                             // propagate from argument
+> ```
+> См. также: [Bare throws detection](#bare-throws-detection) — вызов throws-функции без `?`/`!` в expression = error.
+
 `expr?` — если функция вернула ошибку, немедленно вернуть её из текущей функции. Текущая функция обязана иметь совместимый `throws`:
 
 ```typescript
@@ -163,6 +172,35 @@ function main(): void {
     console.log(content);
 }
 ```
+
+## Bare throws detection
+
+Вызов throws-функции **без `?`, `!` или assignment** в expression context — ошибка компилятора. Result-struct не может быть молча проигнорирован:
+
+```typescript
+function risky(): i32 throws IOError { ... }
+
+// ❌ error: Call to throws function 'risky()' requires error handling: use '?', '!', or assign to a variable first
+const x = risky() + 1;           // bare call in binary expression
+arr[risky()];                    // bare call in index
+foo(risky());                    // bare call in argument
+const s = `${risky()}`;          // bare call in template
+const obj = { v: risky() };      // bare call in object literal
+const arr = [risky()];           // bare call in array literal
+new Foo(risky());                // bare call in constructor args
+
+// ✅ assign first — manual Result handling (allowed)
+const result = risky();          // no error — programmer handles Result explicitly
+if (result.ok) { ... }
+
+// ✅ use ? or !
+const x = risky()! + 1;         // unwrap
+const x = risky()? + 1;         // propagate (if enclosing function throws)
+```
+
+> **Почему assignment allowed:** `let x = risky()` без `!`/`?` намеренно разрешено — программист может хотеть manual Result handling (проверить `.ok`, извлечь `.error` и т.д.). Проверка срабатывает только когда Result используется в expression (где Result-struct дал бы некорректный C).
+
+> **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new. См. `_checkNoBareThrows` в `codegen.js`.
 
 ## C-output
 
@@ -259,6 +297,36 @@ Bar_free(&b);
 - `?` запрещён в функции без `throws` — ошибка компилятора
 - Исключения нельзя бросать через C interop границы — функции, объявленные как `extern "C"`, не могут содержать `throws`
 - `finally` не может содержать `throw` или `return` — ошибка компилятора (неопределённое поведение)
+
+### `?` и `!` в async функциях
+
+Async функции используют другую модель обработки ошибок (try/catch на `await`). Операторы `?` и `!` имеют ограничения:
+
+| Оператор | Условие | Поведение |
+|----------|---------|-----------|
+| `?` (propagate) | всегда в async | **Ошибка компилятора** — используйте `try/catch` на `await` |
+| `!` (unwrap) на throws-func | в async | **Ошибка компилятора** — используйте `try/catch` на `await` |
+| `!` (non-null assertion) на non-throws | в async | ✅ Разрешён — не связан с error handling |
+
+```typescript
+async function loadConfig(path: string): Promise<Config> throws IOError {
+    // ❌ error: '?' error propagation is not supported in async functions; use try/catch on await
+    const data = readFile(path)?;
+
+    // ❌ error: '!' error handling is not supported in async functions; use try/catch on await
+    const data = readFile(path)!;
+
+    // ✅ try/catch
+    try {
+        const data = readFile(path);
+        return parseConfig(data);
+    } catch (e: IOError) {
+        return defaultConfig;
+    }
+}
+```
+
+> **Почему `?`/`!` запрещены в async:** Async state machine не может напрямую propagate через `goto cleanup` — ошибки пробрасываются через event loop. `try/catch` компилируется в ветки state machine, что корректно работает с async model.
 
 ### Result-структуры и стек на embedded
 
