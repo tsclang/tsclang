@@ -23,7 +23,7 @@ const DESKTOP_CAPABILITIES = {
 };
 
 const VALID_STRICT_RULES = new Set([
-  'no-any', 'no-unsafe', 'no-native', 'no-extern-c', 'safe-div',
+  'no-any', 'no-unsafe', 'no-native', 'no-extern-c', 'safe-math',
   'no-lossy-cast', 'no-dynamic-alloc', 'no-closures', 'no-sort',
   'no-threads', 'no-interfaces', 'no-abort', 'no-i64-print', 'switch-default',
 ]);
@@ -139,7 +139,7 @@ OPTIONS:
   --debug                  Compile with debug info
   --sourcemap              Generate source map
   --all-errors             Show all errors (no limit)
-  --strict <rules>         Comma-separated strict rules (no-any,no-unsafe,no-native,no-extern-c,safe-div,no-lossy-cast,no-dynamic-alloc)
+  --strict <rules>         Comma-separated strict rules (no-any,no-unsafe,no-native,no-extern-c,safe-math,no-lossy-cast,no-dynamic-alloc)
   --watch, -w              Rebuild on file change
   --no-cache               Bypass compilation cache`,
   run: `tsclang run — Compile and run

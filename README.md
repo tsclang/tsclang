@@ -44,7 +44,7 @@ TSClang supports a **strict mode** with granular rules that make generated C cod
 ```json
 {
   "strict": [
-    "no-any", "no-unsafe", "no-native", "safe-div",
+    "no-any", "no-unsafe", "no-native", "safe-math",
     "no-lossy-cast", "no-dynamic-alloc",
     "no-closures", "no-interfaces", "no-threads", "no-sort",
     "switch-default", "no-abort"
@@ -57,7 +57,7 @@ TSClang supports a **strict mode** with granular rules that make generated C cod
 | `no-any` | No `void*` / dynamic types |
 | `no-unsafe` | No unsafe blocks |
 | `no-native` | No inline C injection |
-| `safe-div` | No integer division without guard |
+| `safe-math` | No unguarded integer arithmetic (requires try/catch or throws MathError) |
 | `no-lossy-cast` | No lossy type casts |
 | `no-dynamic-alloc` | No `malloc`/`realloc` with runtime size |
 | `no-closures` | No `void*` in function pointers |

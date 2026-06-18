@@ -3,5 +3,5 @@
   "version": "1.0.0",
   "main": "input.tsc",
   "type": "executable",
-  "strict": ["safe-div"]
+  "strict": ["safe-math"]
 }

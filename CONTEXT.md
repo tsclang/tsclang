@@ -93,7 +93,7 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 - `this._capabilities` — `{ allocator, async, fpu, bits, usize, defaultNumber, posix, strtoll, console_uart, os }`
 - `this._cap(key)` — capability lookup with DESKTOP_CAPABILITIES fallback
 - `this._ptrBytes()` — pointer size from `_cap('usize')`: `{u16:2, u32:4, u64:8}`
-- `this._strictRules` — `Set<string>` (`no-any`, `safe-div`, `no-closures`, ...)
+- `this._strictRules` — `Set<string>` (`no-any`, `safe-math`, `no-closures`, ...)
 - `this._defaultNumber` — Priority: CLI > builds > profile > DESKTOP_CAPABILITIES ('f64')
 
 **Output buffers** — delegated to `OutputBuffer`. `ctx.emit()` assembles: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`.
@@ -314,7 +314,7 @@ Single-header C library. `#include`d in every output. Key components:
 
 ### Strict mode (`_strictRules`)
 
-Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all. `safe-arith` and `safe-div` are deprecated aliases for `safe-math`.
+Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all.
 
 ---
 
@@ -421,8 +421,8 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 - **Cross-module types** — In type tables (`this.classes`, `this._typeAliases`), NOT in scope. All declaration types get module-prefixed C names.
 - **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
 - **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with C integer promotion rules.
-- **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-arith` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
-- **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` or a `throws MathError` function → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `safe-arith`/`safe-div` are deprecated aliases. `Math.checkedAdd/Sub/Mul` removed — use try/catch.
+- **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-math` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
+- **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` or a `throws MathError` function → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `Math.checkedAdd/Sub/Mul` removed — use try/catch.
   - **`_isIntOperand` helper** (`operators.js`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
   - **Loop restructure in `_inMathTry`** (`control-flow.js`): While/DoWhile/For loops restructure to `while(1) { checked_cond; if (!cond) break; body; }` so checked arithmetic conditions are re-evaluated each iteration (not hoisted before loop). For-loop update emitted as statement at end of body.
   - **`throws MathError` on functions** (`func.js:emitFuncBody`): Function declares `throws MathError` + `safe-math` → body treated as `_inMathTry` context with `_func_math_throw` label. Overflow → `goto _func_math_throw` → error Result return. Auto-propagation: `return inner()` / `inner();` in throws function → Result checked, error propagated via `_mathCatchLabel`. Supports void/non-void, goto cleanup (owned vars).

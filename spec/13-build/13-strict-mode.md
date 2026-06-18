@@ -92,17 +92,7 @@ declare function memcmp(a: Ref<u8>, b: Ref<u8>, n: usize): i32;
 
 **Обоснование:** `extern "C"` обходит name mangling — типы параметров не проверяются на call site. `.d.tsc` декларации обеспечивают тот же C interop, но с проверкой типов.
 
-#### `safe-div` — безопасное деление (alias для `safe-math`)
-
-Legacy-имя для [`safe-math`](#safe-math). При активации нормализуется в `safe-math`. См. полный механизм ниже.
-
-#### `safe-arith` — безопасная арифметика (alias для `safe-math`)
-
-Legacy-имя для [`safe-math`](#safe-math). При активации нормализуется в `safe-math`. См. полный механизм ниже.
-
 #### `safe-math` — безопасная целочисленная арифметика (runtime)
-
-> `safe-arith` и `safe-div` — legacy-алиасы. Все три имени нормализуются в `safe-math` при активации.
 
 Запрещает unguarded integer `+`, `-`, `*`, `/`, `%` — требует обёртки в `try/catch (e: MathError)` или объявление `throws MathError`. Внутри guarded context арифметика компилируется в **checked operations**, которые при overflow бросают `MathError`.
 
@@ -461,8 +451,6 @@ Strict rules проверяются **после** platform capability checks. �
 | `no-native` | `native \`...\`` | `(no-native)` |
 | `no-extern-c` | `extern "C" function` | `(no-extern-c)` |
 | `safe-math` | Integer `+`, `-`, `*`, `/`, `%` без `try/catch` или `throws MathError` | `(safe-math)` |
-| `safe-arith` | Alias для `safe-math` | `(safe-math)` |
-| `safe-div` | Alias для `safe-math` | `(safe-math)` |
 | `no-lossy-cast` | Lossy `as` cast | `(no-lossy-cast)` |
 | `no-dynamic-alloc` | `new Array(runtimeN)`, `new Map()`, `new Set()` | `(no-dynamic-alloc)` |
 | `switch-default` | Отсутствие `default:` в switch | `(switch-default)` — auto-add |
