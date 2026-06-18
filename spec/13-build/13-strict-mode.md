@@ -174,7 +174,7 @@ class MathError extends Error {
 
 ```typescript
 // ❌ error: lossy cast from i64 to i32 is forbidden (no-lossy-cast);
-//          use Math.saturatingCast() or Math.checkedCast()
+//          remove 'no-lossy-cast' from strict rules or use a safe widening path
 let x: i64 = 42;
 let y = x as i32;
 
@@ -185,10 +185,6 @@ let i = f as i32;
 // ✅ safe widening — ok (no data loss)
 let a: i32 = 42;
 let b = a as i64;    // i32 → i64 — safe
-
-// ✅ explicit safe cast functions
-let y = Math.saturatingCast<i32>(x);    // clamps to i32 range
-let y = Math.checkedCast<i32>(x);       // returns i32 | null — null if doesn't fit
 ```
 
 **Safe casts (не запрещаются):**
@@ -419,7 +415,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 file.tsc:5:10: error: "any" is forbidden in strict mode (no-any); use a concrete type
 file.tsc:8:4:  error: unsafe blocks are forbidden in strict mode (no-unsafe)
 file.tsc:12:8: error: unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'
-file.tsc:15:6: error: lossy cast from i64 to i32 is forbidden (no-lossy-cast); use Math.saturatingCast() or Math.checkedCast()
+file.tsc:15:6: error: lossy cast from i64 to i32 is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path
 file.tsc:20:14: error: dynamic allocation with runtime size is forbidden (no-dynamic-alloc); use fixed-size array or compile-time constant
 file.tsc:25:2: error: closures are forbidden in strict mode (no-closures); use named functions or inline the logic
 file.tsc:30:1: error: interfaces with methods are forbidden in strict mode (no-interfaces)
