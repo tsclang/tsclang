@@ -43,16 +43,16 @@ const flagNoGcc   = args.includes('--no-gcc');
 if (flagHelp) {
   console.log(`Usage: node test/runner.js [filter] [options]
 
-  filter        substring match against test path (e.g. "phase1", "let/bool")
+  filter        substring match against test path (e.g. "03-types", "let/bool")
   --verbose     print full diff on failure
   --fail-fast   stop after first failure
   --no-gcc      skip gcc compile/run steps (C-compare only)
   --help        show this message
 
 Examples:
-  node test/runner.js phase1
+  node test/runner.js 03-types
   node test/runner.js let/bool-false --verbose
-  node test/runner.js phase9 --no-gcc
+  node test/runner.js 13-build --no-gcc
 `);
   process.exit(0);
 }

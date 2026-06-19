@@ -104,7 +104,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 ```bash
 npm test                        # все тесты
-node test/runner.js phase3      # только phase3
+node test/runner.js 04-ownership  # только 04-ownership
 node test/runner.js --no-gcc    # только C-compare, без компиляции
 node test/runner.js --verbose   # показывать diff при провале
 ```
