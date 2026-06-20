@@ -157,7 +157,7 @@ input.tsc:1:
 - [R] `>>>=`
 - [R] `&&=`
 - [R] `||=`
-- [R] `??=` (для nullable — в Phase 2)
+- [R] `??=` (для nullable — см. 03-types)
 
 ### Операторы — сравнение
 
@@ -203,8 +203,8 @@ input.tsc:1:
 
 - [R] `if (0)` — falsy
 - [R] `if (1)` — truthy
-- [R] `if ("")` — falsy (Phase 3, строки)
-- [R] `if ("x")` — truthy (Phase 3)
+- [R] `if ("")` — falsy (08-collections, строки)
+- [R] `if ("x")` — truthy (08-collections)
 - [R] `if (false)` — falsy
 - [R] `if (true)` — truthy
 
@@ -318,11 +318,11 @@ input.tsc:1:
 - [R] массив функций: `const fns: ((i32) => i32)[]`
 - [F] C-output: function pointer
 
-### Spread примитивов (Phase 1)
+### Spread примитивов (02-syntax)
 
 - [R] spread массива примитивов в вызове функции: `f(...arr)`
 - [R] spread в литерале массива примитивов: `[...a, ...b]`
-- [E] spread сложных типов без ownership → ошибка (ждать Phase 3)
+- [E] spread сложных типов без ownership → ошибка (см. 08-collections)
 
 ---
 
@@ -761,7 +761,7 @@ input.tsc:1:
 - [E] move из Mut → ошибка
 - [E] Mut<T> из Arc<T> → ошибка
 - [E] Ref<T> нельзя вернуть если переживёт owner → ошибка
-- [E] Ref не может пережить `await` → ошибка (Phase 7)
+- [E] Ref не может пережить `await` → ошибка (10-async)
 - [E] Ref в глобальной переменной → ошибка
 
 ### Arc<T> / Weak<T>
@@ -786,7 +786,7 @@ input.tsc:1:
 - [R] переименование: `const { name: n } = user`
 - [E] переименование в зарезервированное имя типа → ошибка
 - [R] `const [first, ...rest] = arr`
-- [R] деструктуризация с дефолтами (только в Phase 2+)
+- [R] деструктуризация с дефолтами (только в 03-types+)
 
 ### Spread
 

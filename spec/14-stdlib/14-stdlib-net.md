@@ -84,15 +84,15 @@ typedef struct { int32_t port; }                                   TscHttpServer
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| fetch-get | `test/cases/phase19/net/fetch-get` | ✓ проходит |
-| fetch-post | `test/cases/phase19/net/fetch-post` | ✓ проходит |
-| response-props | `test/cases/phase19/net/response-props` | ✓ проходит |
-| request-props | `test/cases/phase19/net/request-props` | ✓ проходит |
-| http-server | `test/cases/phase19/net/http-server` | ✓ проходит |
-| server-routes | `test/cases/phase19/net/server-routes` | ✓ проходит |
-| tcp-connect | `test/cases/phase19/net/tcp-connect` | ✓ проходит |
-| tcp-server | `test/cases/phase19/net/tcp-server` | ✓ проходит |
-| socket-write | `test/cases/phase19/net/socket-write` | ✓ проходит |
-| socket-readline | `test/cases/phase19/net/socket-readline` | ✓ проходит |
-| udp-socket | `test/cases/phase19/net/udp-socket` | ✓ проходит |
-| err-net-embedded | `test/cases/phase19/net/err-net-embedded` | ✓ проходит |
+| fetch-get | `test/cases/14-stdlib/net/fetch-get` | ✓ проходит |
+| fetch-post | `test/cases/14-stdlib/net/fetch-post` | ✓ проходит |
+| response-props | `test/cases/14-stdlib/net/response-props` | ✓ проходит |
+| request-props | `test/cases/14-stdlib/net/request-props` | ✓ проходит |
+| http-server | `test/cases/14-stdlib/net/http-server` | ✓ проходит |
+| server-routes | `test/cases/14-stdlib/net/server-routes` | ✓ проходит |
+| tcp-connect | `test/cases/14-stdlib/net/tcp-connect` | ✓ проходит |
+| tcp-server | `test/cases/14-stdlib/net/tcp-server` | ✓ проходит |
+| socket-write | `test/cases/14-stdlib/net/socket-write` | ✓ проходит |
+| socket-readline | `test/cases/14-stdlib/net/socket-readline` | ✓ проходит |
+| udp-socket | `test/cases/14-stdlib/net/udp-socket` | ✓ проходит |
+| err-net-embedded | `test/cases/14-stdlib/net/err-net-embedded` | ✓ проходит |

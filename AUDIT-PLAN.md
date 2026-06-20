@@ -72,11 +72,11 @@
 |---|--------|-----------------|--------|---------|-------------|
 | L-1 | Лексика | `'hello'` → TK.CHAR — вводит в заблуждение | **RESOLVED** | Code smell | Переименовано TK.CHAR → TK.SQUOTE. litType='char' в AST не тронут |
 | L-2 | Лексика | `**=` и `*=` делят TK.STAREQ | **RESOLVED** | Code smell | Добавлен TK.STARSTAREQ для `**=` |
-| L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест phase6/import/import-rename проходит |
+| L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест 12-modules/import/import-rename проходит |
 | L-4 | Лексика | Legacy octal не задокументирован | **RESOLVED** | Спец неполон | Добавлена заметка в spec/03-types/03-numbers.md |
 | T-1 | Типы | `?.` property access — no null-safety check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` OptChain: `has_value` guard для opt_T objects. `infer.js` OptChain: возвращает `opt_<fieldType>`. 3 теста: chain-field-null/value/i32 |
 | T-2 | Типы | `as` non-null assertion: no runtime null-check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` Cast: `opt_T as T` → `has_value ? .value : (fprintf+abort)`. 1 тест: as-nonnull-value |
-| T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **RESOLVED** | Impl неполон → fixed | `_truthyToC()` method: string→`.length>0`, opt_string→`has_value && .value.length>0`, opt_i32→`has_value && .value!=0`, opt_class→`has_value`. + narrowing via truthiness. 14 тестов в phase2/truthy/ |
+| T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **RESOLVED** | Impl неполон → fixed | `_truthyToC()` method: string→`.length>0`, opt_string→`has_value && .value.length>0`, opt_i32→`has_value && .value!=0`, opt_class→`has_value`. + narrowing via truthiness. 14 тестов в 03-types/truthy/ |
 | T-4 | Типы | String literal union rodata: simple array vs designated initializers | **RESOLVED** | Cosmetic | `types-alias.js:61` — `{ "a", "b" }` вместо `{ [Dir_a] = "a" }`. Функционально эквивалентно. Designated initializers — C99, но и простой init работает |
 | T-5 | Типы | Null representation for class types: inline vs pointer | **DEFERRED** | Spec vs impl | Отложено: overhead на embedded для больших классов, но нет текущих тестов с opt_Class на AVR. Решить при embedded-оптимизации (книга Блок 10/23). |
 | T-6 | Типы | Truthy for class/array/Set/Map: always truthy | **RESOLVED** | Spec warning → impl | `_truthyToC()` emits `this.warn("condition is always true")` + returns `1` для class/array/Map/Set. Тесты пока невозможны — раннер не поддерживает warning-verification. |
@@ -126,8 +126,8 @@
 | 90 | Channel thread safety | **RESOLVED** | `runtime.h:3018-3079` — mutex + condvar, thread-safe MPMC. |
 | 91 | Recursive type alias infinite struct | **NEEDS INVESTIGATION** | `types-alias.js` — нет обнаружения циклов. `type A = { next: A }` может дать бесконечный struct. |
 | 92 | Type exports invisible across modules | **NEEDS INVESTIGATION** | Type-only imports парсятся (`parser.js:512-513`), но взаимодействие с type resolution через границы модулей не проверено. |
-| 93 | Import renaming misparse | **RESOLVED** | parser.js:536-541 — `import { X as Y }` полностью поддерживается. Codegen (codegen.js:55-57) обрабатывает alias. Тест phase6/import/import-rename проходит. |
-| 94 | Division by zero no guard | **RESOLVED** | `operators.js:257-274`, `assign.js:206-216` — integer `/` и `%` emit runtime guard: `fprintf(stderr, "panic: division by zero\n"); abort();`. Float → IEEE 754 Infinity/NaN. Тест `phase2/err-div-zero`. |
+| 93 | Import renaming misparse | **RESOLVED** | parser.js:536-541 — `import { X as Y }` полностью поддерживается. Codegen (codegen.js:55-57) обрабатывает alias. Тест 12-modules/import/import-rename проходит. |
+| 94 | Division by zero no guard | **RESOLVED** | `operators.js:257-274`, `assign.js:206-216` — integer `/` и `%` emit runtime guard: `fprintf(stderr, "panic: division by zero\n"); abort();`. Float → IEEE 754 Infinity/NaN. Тест `03-types/err-div-zero`. |
 | H-1 | async+for-of wrong C | **RESOLVED** | `async-stmt.js:306-348` — полная реализация async for-await-of. |
 | H-2 | async+closure env lost | **RESOLVED** | `async-emit.js:56-92` — free variables промотируются в state struct fields. |
 | H-3 | Nested closures dangling pointer | **NEEDS INVESTIGATION** | `vardecl.js:1081-1083` — env на стеке. Если closure escaping scope → dangling pointer. |

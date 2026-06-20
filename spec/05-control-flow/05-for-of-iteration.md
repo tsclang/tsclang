@@ -728,4 +728,4 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 1. `runtime.h`: PROGMEM-aware codepoints/graphemes + `_tsc_str_alloc` вместо malloc
 2. `parser.js`: `[Symbol.iterator]` special token → `isIterator: true`
 3. `class.js`: поиск метода с `isIterator: true` при `implements Iterable<T>`
-4. Тесты: phase12 string/graphemes, phase12 string/codepoints
+4. Тесты: 14-stdlib string/graphemes, 14-stdlib string/codepoints

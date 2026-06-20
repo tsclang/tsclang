@@ -109,12 +109,12 @@ void tsc_avr_interrupt_disable(void) { cli(); }
 
 | Тест | Файл | Статус |
 |------|------|--------|
-| sleep | `test/cases/phase19/avr/sleep` | ✓ проходит |
-| watchdog-reset | `test/cases/phase19/avr/watchdog-reset` | ✓ проходит |
-| adc-read | `test/cases/phase19/avr/adc-read` | ✓ проходит |
-| pwm-duty | `test/cases/phase19/avr/pwm-duty` | ✓ проходит |
-| gpio-digital | `test/cases/phase19/avr/gpio-digital` | ✓ проходит |
-| serial-begin | `test/cases/phase19/avr/serial-begin` | ✓ проходит |
-| delay | `test/cases/phase19/avr/delay` | ✓ проходит |
-| interrupts | `test/cases/phase19/avr/interrupts` | ✓ проходит |
-| analog-write | `test/cases/phase19/avr/analog-write` | ✓ проходит |
+| sleep | `test/cases/14-stdlib/avr/sleep` | ✓ проходит |
+| watchdog-reset | `test/cases/14-stdlib/avr/watchdog-reset` | ✓ проходит |
+| adc-read | `test/cases/14-stdlib/avr/adc-read` | ✓ проходит |
+| pwm-duty | `test/cases/14-stdlib/avr/pwm-duty` | ✓ проходит |
+| gpio-digital | `test/cases/14-stdlib/avr/gpio-digital` | ✓ проходит |
+| serial-begin | `test/cases/14-stdlib/avr/serial-begin` | ✓ проходит |
+| delay | `test/cases/14-stdlib/avr/delay` | ✓ проходит |
+| interrupts | `test/cases/14-stdlib/avr/interrupts` | ✓ проходит |
+| analog-write | `test/cases/14-stdlib/avr/analog-write` | ✓ проходит |
