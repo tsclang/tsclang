@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-17 (whitespace-based `?` disambiguation, Gap F/G fixes).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-20 (test refactoring phase→spec, epic issues #72-#80).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
-- **Tests:** `node test/runner.js phaseN` (20 phases, ~1745 tests, **all pass**)
+- **Tests:** `node test/runner.js 03-types` (15 spec-based dirs, **1749 tests**, all pass)
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
@@ -420,7 +420,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 - **Recursive type detection** — `_resolvingTypes` Set. If `resolveType` returns its own name → compile error ("use Ref/Arc/Mut for indirection").
 - **Cross-module types** — In type tables (`this.classes`, `this._typeAliases`), NOT in scope. All declaration types get module-prefixed C names.
 - **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
-- **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with C integer promotion rules.
+- **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with simplified usual arithmetic conversions (not full C promotion). All same-width mixed signed+unsigned pairs banned for `let` variables (`i8+u8`, `i16+u16`, `i32+u32`, `i64+u64`) — require explicit `as`. Cross-width `i64+u32` also banned. `const`/literals exempt.
 - **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-math` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
 - **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` or a `throws MathError` function → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `Math.checkedAdd/Sub/Mul` removed — use try/catch.
   - **`_isIntOperand` helper** (`operators.js`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
@@ -451,14 +451,14 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 | Fix cleanup/memory leak | `codegen.js` (_blockCleanupStack), `stmt/control-flow.js`, `stmt/vardecl.js` |
 | Fix async codegen | `async/scan.js` (state collection), `async/async-stmt.js` (emit), `async/async-emit.js` (poll fn) |
 | Fix string ownership | `stmt/vardecl.js`, `expr/assign.js`, `calls/call-dispatch.js`, `calls/method-dispatch.js`, `top-level/func.js` |
-| Add a test | `test/cases/<phase>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
-| Run tests | `node test/runner.js phaseN` (NEVER without args — timeout risk) |
+| Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
+| Run tests | `node test/runner.js 03-types` (filter by spec section or feature name) |
 | Compile manually | `node bin/index.js build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure
 
 ```
-test/cases/phaseN/feature/name/
+test/cases/<NN-section>/feature/name/
   input.tsc            # input source
   expected.c           # expected C output ([F] fragment or [R] runnable)
   expected.out         # expected stdout ([R] only)
@@ -466,6 +466,8 @@ test/cases/phaseN/feature/name/
   expected.runtime-error  # expected runtime panic ([RE])
   meta.json            # { kind: "[F]"|"[R]"|"[E]"|"[RE]", target/profile, ... }
 ```
+
+Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`. See `spec/INDEX.md` for full table.
 
 ### Test kinds
 - `[F]` fragment — compare C output only (no compilation)

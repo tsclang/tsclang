@@ -305,239 +305,47 @@
 
 ---
 
-## Фазы реализации
+## Структура тестов
 
-### Навигация фаза → разделы spec
+Тесты организованы по разделам спецификации: `test/cases/<NN-section>/<feature>/<name>/`.
 
-Подробный маппинг: [PHASES.md](./PHASES.md).
+Запуск: `node test/runner.js 03-types` (фильтр по разделу или фиче).
 
-| Фаза | Разделы spec |
-|------|----------------|
-| 0  | [01-intro](./01-intro/), [14-stdlib](./14-stdlib/) (Error, Globals) |
-| 1  | [02-syntax](./02-syntax/), [03-types](./03-types/) (примитивы) |
-| 2  | [03-types](./03-types/) (null, enum, type aliases, tuples, utility types) |
-| 3  | [04-ownership](./04-ownership/), [03-types](./03-types/) (строки), [08-collections](./08-collections/) |
-| 4  | [07-classes](./07-classes/), [05-control-flow](./05-control-flow/) (match), [06-functions](./06-functions/) (closures) |
-| 5  | [09-errors](./09-errors/) |
-| 6  | [12-modules](./12-modules/) |
-| 7  | [10-async](./10-async/) |
-| 8  | [11-concurrency](./11-concurrency/), [13-build](./13-build/) (@struct, @pool) |
-| 9  | [13-build](./13-build/) (CLI, tsc.package.json) |
-| 10 | [13-build](./13-build/) (pipeline, зависимости, версионирование) |
-| 11 | [13-build](./13-build/) (dev/lint/format, Platform Profile) |
-| 12 | [14-stdlib](./14-stdlib/) |
-| 13 | [15-decorators](./15-decorators/) |
-| 14 | [14-stdlib](./14-stdlib/) (std/reactive) |
-| 15 | [14-stdlib](./14-stdlib/) (std/regex) |
-| 16 | [16-tooling](./16-tooling/) (LSP) |
-| 17 | [16-tooling](./16-tooling/) (Linter) |
-| 18 | [16-tooling](./16-tooling/) (Оптимизатор) |
-| 19 | [14-stdlib](./14-stdlib/) (IO/Net/WS) |
+| Раздел | Тестов | Что покрывает |
+|--------|--------|---------------|
+| `02-syntax` | 124 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, spread, truthy |
+| `03-types` | 395 | Числа, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
+| `04-ownership` | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
+| `05-control-flow` | 49 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue |
+| `06-functions` | 61 | Функции, стрелочные, default params, rest params, closures, overloads, extensions |
+| `07-classes` | 44 | Классы, методы, наследование, instanceof, интерфейсы, field modifiers |
+| `08-collections` | 231 | Массивы, Map, Set, строки, string methods, objects, slices |
+| `09-errors` | 41 | throws, try/catch/finally, propagate (?), unwrap (!), bare-throws detection, cleanup |
+| `10-async` | 82 | async/await, Promise, generators, AbortSignal, AsyncMutex, timers, state machines |
+| `11-concurrency` | 44 | Threads, Atomic, AtomicArray, channels, select, ISR, Volatile, Readonly |
+| `12-modules` | 26 | import/export, entry point, declaration merging |
+| `13-build` | 164 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct |
+| `14-stdlib` | 302 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
+| `15-decorators` | 22 | decorator function, factories, before/after, order, async methods |
+| `16-tooling` | 44 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
+| `book` | 4 | Примеры из документации |
 
-### Фаза 0 — Core runtime
+**Всего: 1749 тестов.**
 
-Минимальная инфраструктура для тестирования компилятора с первых шагов.
+## Roadmap
 
-- `console.log` и базовый I/O — хардкод в компиляторе
-- Заглушки базовых типов (без ownership, для отладки кодогенерации)
-- Базовый `Error` — хардкод (нужен в фазе 5, не ждём stdlib)
+Roadmap реализации отслеживается в GitHub Issues:
 
-### Фаза 1 — Базовый парсинг и кодогенерация
+| Epic | Фаза | Что |
+|------|------|-----|
+| [#72](https://github.com/tsclang/tsclang/issues/72) | 12 — Stdlib | Buffer methods, std/* gaps |
+| [#73](https://github.com/tsclang/tsclang/issues/73) | 13 — Decorators | Descriptor API, comptime types |
+| [#74](https://github.com/tsclang/tsclang/issues/74) | 14 — Reactive | Signal/effect/computed API |
+| [#75](https://github.com/tsclang/tsclang/issues/75) | 15 — Regex | NFA engine, PCRE bridge |
+| [#76](https://github.com/tsclang/tsclang/issues/76) | 16 — LSP | Diagnostics, full protocol |
+| [#77](https://github.com/tsclang/tsclang/issues/77) | 17 — Linter | More rules, auto-fix |
+| [#78](https://github.com/tsclang/tsclang/issues/78) | 18 — Optimizer | Borrow elision, more passes |
+| [#79](https://github.com/tsclang/tsclang/issues/79) | 19 — IO/Net/WS | Full networking library |
+| [#80](https://github.com/tsclang/tsclang/issues/80) | Meta | Spec completeness audit |
 
-Компилятор транслирует простой процедурный код в C.
-
-- Лексер и парсер
-- Переменные (`let`, `const`), операторы, выражения
-- Примитивные типы (`i8`–`i64`, `u8`–`u64`, `f32`, `f64`, `bool`, `usize`)
-- Функции (без перегрузки)
-- Управляющие конструкции (`if`/`else`, `while`, `switch`)
-- Базовая кодогенерация C
-
-> `for-of` — в фазе 3: нуждается в массивах и строках (heap owners).
-> `match` — в фазе 4: нуждается в move-семантике и exhaustiveness check.
-
-### Фаза 2 — Система типов
-
-Компилятор понимает типы, генерирует корректные C-структуры.
-
-- Type inference
-- `null` / `T | null`
-- Type aliases (`type`, `interface` без методов)
-- Enum, Generics (монорфизация, без ownership-aware bounds)
-- Числовые автокасты, оператор `as`
-- String Literal Union (compile-time → C enum + rodata)
-- Utility Types (Partial, Required, Readonly, NonNullable, Pick, Omit, Record, ReturnType, Parameters, Awaited)
-- Tuples (`[A, B, C]`, labeled, readonly, optional, rest)
-
-### Фаза 3 — Модель памяти
-
-Borrow checker работает; C-output безопасен по памяти. Строки и массивы
-реализованы полноценно — они heap-allocated owners. `for-of` реализован
-поверх `Iterable<T>`.
-
-- Строки (`string` — UTF-8, heap owner)
-- Массивы (heap owner)
-- Ownership: T (owned), `Ref<T>`, `Mut<T>`, move семантика
-- Borrow checker
-- Cleanup / goto pattern в C-output
-- `Arc<T>`, `Weak<T>` (ARC)
-- Деструктуризация с ownership
-- `Iterable<T>` протокол (`iter(): mut () => T | null`)
-- `for-of` → while-цикл через `Iterable<T>`
-- Generics апгрейд: монорфизация из фазы 2 расширяется для корректной обработки move-семантики при T = owned type (string, массив, класс)
-- `@static let` — borrow checker rules (multiple `Mut<T>` allowed; std/threads exception)
-
-### Фаза 4 — Объектная модель
-
-Полноценная объектная система поверх ownership.
-
-- Классы (методы, `mut`, `readonly`)
-- Замыкания (включая `Ref<T>`/`Mut<T>`/move-захват)
-- `match` с exhaustiveness checking и move семантикой
-- Перегрузка функций (name mangling)
-- Extension methods (явный импорт, zero overhead)
-- `instanceof` (номинальная проверка для классов)
-
-### Фаза 5 — Обработка ошибок
-
-Зависит от фазы 3: корректный cleanup при throw требует знания owned переменных.
-
-- `throws` / `try` / `catch` / `finally`
-- Оператор `?` (propagate) и `!` (assert non-null)
-- Result-struct C-output
-
-### Фаза 6 — Модульная система
-
-- `import` / `export`
-- Entry point
-- C interop: `extern "C"`, `.d.tsc`, `native`, `unsafe`
-
-### Фаза 7 — Async/Await
-
-Зависит от фаз 3–6: state machine должна корректно дропать owned переменные,
-cleanup при throw внутри async; `async main` нуждается в entry point из фазы 6.
-
-- State machine кодогенерация
-- `Promise<T>`, комбинаторы (`all`, `race`, `any`, `allSettled`)
-- `AbortSignal`
-- `AsyncMutex` (FIFO-очередь для async-координации)
-- `async main` / event loop integration
-- Stack safety анализ на embedded
-- `async function*` + `for await` (async generators, только heap-платформы)
-- `@static function*` (единственный экземпляр в BSS)
-- `@stack(name, N)` (статический стек для async-рекурсии)
-- Кооперативная многозадачность через генераторы (общий паттерн)
-
-### Фаза 8 — Threads и низкоуровневая конкурентность
-
-`select` работает поверх async; `channel` — bridge между event loop и threads.
-
-- `std/threads`: `Thread<T>`, `channel<T>`, `select`
-- `Atomic<T>`, `AtomicArray<T>`, `Readonly<T>`
-- `@embedded.isr`, `Volatile<T>`, `std/sync`, Embedded-аннотации (embedded)
-- `@struct` (value type без heap/vtable)
-- `@pool(N)` (статический пул слотов в BSS)
-
-### Фаза 9 — CLI core + tsc.package.json
-
-> Фазы 9–14 требуют готового компилятора (фазы 1–8 завершены).
-
-Можно создать проект и скомпилировать его без единой зависимости.
-
-- `tsclang init` — создание проекта, генерация `tsc.package.json`
-- Чтение и валидация `tsc.package.json` (поля, targets, platform profile)
-- `tsclang build` (базовый — только локальный код, без зависимостей)
-- `tsclang run` (базовый)
-
-### Фаза 10 — Package manager + pipeline сборки
-
-Полноценная сборка проекта с зависимостями.
-
-- `tsclang install` — резолюция и установка зависимостей
-- `tsclang update`
-- Источники: npm-реестр, git, zip, URL
-- Semver резолюция конфликтов
-- CMake интеграция
-- Build profiles (debug / release / embedded)
-- Platform profiles (AVR, Cortex, desktop)
-
-### Фаза 11 — Расширенный CLI
-
-- `tsclang dev` (watch mode, пересборка при изменениях)
-- `tsclang lint` (заглушка: только синтаксические ошибки и базовые предупреждения)
-- `tsclang lint -fix` / `tsclang format` (базовое форматирование)
-- Pinned toolchain (avr-gcc, кросс-компиляция)
-- Прочие продвинутые флаги
-
-> Полноценный rule-based линтер — в фазе 17.
-
-### Фаза 12 — Стандартная библиотека
-
-Строится поверх всего предыдущего. Включает `std/embedded` с `HashMap<K,V,N>`, `StaticMap`, `Tasks<N>`. Детали определяются по ходу реализации.
-
-### Фаза 13 — Декораторы
-
-- Decorator pass (после парсинга, до typecheck)
-- `decorator function` синтаксис; фабрики; перегрузки по месту применения
-- Модель выполнения: `before()` / `after()`; захват переменных
-- Встроенные comptime-типы: `TypeRef`, `TypeSet`, `FuncRef`, `FieldRef`
-- Descriptor API: `ClassDesc` (`addField`, `addMethod`), `MethodDesc`, `PropDesc`, `ParamDesc`, `FunctionDesc`, `SelfRef`, `MetaStore`
-- `ctx.self.field<T>(name)` — compile-time доступ к полям экземпляра
-- `ctx.args` / `ctx.result` — доступ к параметрам и результату
-- Встроенные декораторы: `@static`, `@readonly`, `@override`, `@abstract`, `@deprecated`
-- Порядок применения (снизу вверх), comptime-метаданные (`meta`)
-- Async-методы: state machine wrap, AbortSignal проброс
-- Дженерики в декораторах: generic constraints
-- Декоратор и платформа: ограничения на `heap: false`
-- Кодогенерация: цепочка wrapper-функций, именование, C-output
-
-### Фаза 14 — Reactive
-
-- `Signal<T>`, `effect`, `computed` — реактивный граф зависимостей
-
-### Фаза 15 — Regex
-
-- NFA-движок для регулярных выражений
-- PCRE через опциональный `@tsc/pcre`
-
-### Фаза 16 — LSP
-
-- Language Server Protocol (JSON-RPC 2.0 на stdin/stdout)
-- Методы: `initialize`, `textDocument/hover`, `textDocument/completion`, `textDocument/definition`
-- `textDocument/publishDiagnostics` при ошибках парсинга
-
-### Фаза 17 — Линтер и форматтер
-
-- **Линтер** (`tsclang lint`): AST-обход через `walkAst(node, visitor)`, правила:
-  - `no-unreachable` — код после `return`/`throw` в блоке → предупреждение
-  - `prefer-const` — `let` без переприсваивания → предлагает `const`
-  - `no-unused-var` — объявленная переменная без обращений → предупреждение
-- **Авто-исправление** (`tsclang lint --fix`): патч исходника по номеру строки (`let` → `const`)
-- **Форматтер** (`tsclang format`): нормализация пробелов и отступов (identity для корректного кода)
-
-### Фаза 18 — AST Optimizer
-
-Оптимизации на уровне AST до codegen. Активируется флагом `--opt` (или `#[profile(opt: true)]`).
-
-| Оптимизация | Пример | Результат |
-|-------------|--------|-----------|
-| Constant folding | `2 + 3` | `5` |
-| Constant propagation | `const K = 10; K * 2` | `20` |
-| Dead branch elimination | `if (false) { ... }` | удалить ветку |
-| Unused const elimination | `const x = 5;` (не используется) | удалить |
-| Strength reduction | `x * 2` → `x + x` | (опц., если нет сдвига) |
-| Borrow elision (field access) | `const name = user.name` (String field) | `const String *name = &user.name` (borrow вместо ARC copy) |
-
-**Borrow elision для field access** — открытый дизайн-вопрос. Сейчас `const name = user.name` где `name: string` создаёт ARC copy (`tsc_string_clone`). Оптимизатор может заменить это на pointer borrow (`&user.name`), но это требует lifetime analysis — borrow не должен пережить owner. Возможные варианты: (а) pointer borrow + lifetime guard, (б) copy-on-write с defer, или (в) оставить как есть. Финальное решение отложено до реализации phase 18.
-
-Реализация: `src/compiler/optimizer.js` — рекурсивный `foldExpr(node)` и `deadCode(stmts)`.
-Вызывается из `compileTsc()` после парсинга, до codegen, если `--opt` передан.
-
-### Фаза 19 — IO/Net/WS
-
-Стандартная библиотека для I/O, сети и WebSocket.
-
-- **std/io** — базовые I/O абстракции: `Reader`, `Writer`
-- **std/fs** — файловая система: read, write, stat, watch
-- **std/net** — `fetch` (глобальный); HTTP сервер; TCP/UDP сокеты
-- **std/ws** — WebSocket клиент и сервер
+Фазы 0–11 (core compiler, types, ownership, errors, modules, async, concurrency, CLI, package manager) — полностью реализованы.
