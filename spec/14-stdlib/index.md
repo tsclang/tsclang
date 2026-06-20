@@ -1,4 +1,4 @@
-# Phase 15: Regex
+# Regex
 
 ## Файлы
 

@@ -177,7 +177,7 @@ Safe для rodata строк (литералы): `tsc_string_retain` на rodat
 
 - else-if chains не поддерживают unknown narrowing — используйте отдельные `if`
 - `typeof x === "number"` → type_id по defaultNumber (4=f64 на desktop, 3=f32 на embedded); i32/i64 не матчятся — используйте конкретный тип
-- `any` вне `declare`/`unsafe` → compile-time error (Phase 3 lock-down)
+- `any` вне `declare`/`unsafe` → compile-time error
 - Embedded: unknown поддерживает только `{i32,i64,f32,f64,boolean,string}` — Array/Class → error
 - `unknown[]` элементы: auto-pack при push/literal, per-element drop при free
 

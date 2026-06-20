@@ -24,7 +24,7 @@
 | [16-tooling](./16-tooling/) | Компилятор, IR, LSP, Linter, Оптимизатор |
 | [17-migration](./17-migration/) | Migration guide: TypeScript → TSClang |
 
-Маппинг тестовых фаз → разделы: [PHASES.md](./PHASES.md).
+Тесты организованы по разделам спецификации (см. ниже «Структура тестов»).
 
 ---
 

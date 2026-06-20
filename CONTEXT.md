@@ -320,29 +320,36 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ## 8. Current State
 
-### All 20 phases DONE (0–19)
+### Tests: 1749 (spec-based structure)
 
-| Phases | Topic | Tests |
-|--------|-------|-------|
-| 0 | Core runtime (console, Error, Math) | 30 |
-| 1 | Basic parsing, codegen, arithmetic, control flow | 555 |
-| 2 | Type system (null, enum, generics, utility types, widening) | 360 |
-| 3 | Memory model (ownership, borrow, arrays, strings, sets) | 371 |
-| 4–5 | Classes, interfaces, closures, match, error handling (throws, Result) | 118 |
-| 6–8 | Modules, async/await, concurrency (threads, channels, Atomic) | 183 |
-| 9–10 | CLI, build, strict mode, package manager | 134 |
-| 11 | Embedded (pool, heap, stack_size, @struct) | 69 |
-| 12 | Stdlib runtime (Math, JSON, Blob, Buffer, regex, reactive) | 119 |
-| 13–19 | Decorators, reactive, regex, LSP, linter, optimizer, WASM, IO/Net/WS | 152 |
+Tests organized by spec section (`test/cases/<NN-section>/`):
 
-**Total: ~1745 tests, all pass with gcc.**
+| Section | Tests | Topic |
+|---------|-------|-------|
+| 02-syntax | 124 | Arithmetic, assign, bitwise, comparison, logical, variables, formatting |
+| 03-types | 395 | Numbers, enum, type aliases, tuples, utility types, null/optional, widening |
+| 04-ownership | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
+| 05-control-flow | 49 | if/else, while, switch, ternary, for-of, match |
+| 06-functions | 61 | Functions, arrows, default/rest params, closures, overloads, extensions |
+| 07-classes | 44 | Classes, methods, inheritance, instanceof, interfaces |
+| 08-collections | 231 | Arrays, Map, Set, strings, objects, slices |
+| 09-errors | 41 | throws, try/catch/finally, ?/!, bare-throws, cleanup |
+| 10-async | 82 | async/await, Promise, generators, AbortSignal, timers |
+| 11-concurrency | 44 | Threads, Atomic, channels, ISR, Volatile |
+| 12-modules | 26 | import/export, entry point |
+| 13-build | 164 | CLI, build, strict mode, CMake, C interop, @platform |
+| 14-stdlib | 302 | console, Math, Date, JSON, std/* (net, ws, fs, hal, reactive, regex) |
+| 15-decorators | 22 | Decorator function, factories, before/after |
+| 16-tooling | 44 | LSP, linter, formatter, optimizer, wasm, capabilities |
+
+**Total: 1749 tests, all pass (`--no-gcc`).**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
 | Feature | Status | Where |
 |---------|--------|-------|
 | IR / SSA pipeline | Deferred (post-self-hosting). Prototype removed. Spec retained as `[PLANNED]`. | `spec/16-tooling/16-compiler.md` |
-| Borrow elision for field access (M1) | Deferred to phase 18 | `const name = user.name` does ARC copy instead of pointer borrow |
+| Borrow elision for field access (M1) | Deferred (#78) | `const name = user.name` does ARC copy instead of pointer borrow |
 | Full Descriptor API (PropDesc, ParamDesc) | NOT YET | `spec/15-decorators/` |
 | `FnPtr<T>` (pure C fn pointer) | NOT YET | `spec/12-modules/` |
 | Auto-constructor generation | NOT YET | `spec/07-classes/` |
