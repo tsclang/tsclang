@@ -414,7 +414,7 @@ export default {
     return cBase != null;
   },
 
-  emitVtableConstant(className, ifaceName, classNode = null) {
+  emitVtableConstant(className: any, ifaceName: any, classNode: any = null) {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
     const ifaceMethods = ifaceDef.filter((m: any) => m.kind === 'MethodSig');
@@ -422,7 +422,7 @@ export default {
     // Verify all interface methods are implemented
     const classDef = this.classes.get(className);
     for (const im of ifaceMethods) {
-      const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
+      const methodExists = classDef?.methods?.some((mm: any) => mm.name === im.name);
       if (!methodExists) {
         throw this.error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
       }
