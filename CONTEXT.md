@@ -1,20 +1,20 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-7 done, #83-#89 closed. ZERO .js files remain).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration complete, #81-#90 closed. 6/8 strict options enabled).
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration Stages 1-7 done (#81). ZERO .js files remain. All 74 project files are .ts. 53 files have @ts-nocheck (Stage 8 removes them).
+- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete (#81-#90). ZERO .js files. All 74 project files are .ts. 6/8 strict options enabled. 54 files have @ts-nocheck (#91 removes them).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1749 tests**, all pass)
-- **Build:** `npm run typecheck` (tsc --noEmit), `npm run build` (tsc → dist/), `npx tsx` for dev
+- **Build:** `npm run typecheck` (tsc --noEmit, 6 strict options), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
-- **Next goal:** JS→TS Stage 8 (strict mode, remove @ts-nocheck), then self-hosting.
+- **Next goal:** #57 (NaN/Infinity), then self-hosting.
 
 ---
 
