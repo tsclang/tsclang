@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // TSClang Code Generator
 // Walks the AST and produces C source.
 

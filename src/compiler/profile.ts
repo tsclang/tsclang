@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 import { lex, TK } from './lexer.js';
 
 const VALID_FIELDS = {
@@ -24,7 +23,7 @@ const VALID_FIELDS = {
   flash_size:        'number',
 };
 
-function parseValue(tok) {
+function parseValue(tok: any) {
   if (tok.type === TK.STRING) return tok.value;
   if (tok.type === TK.BOOL)   return tok.value === 'true';
   if (tok.type === TK.NUMBER) return Number(tok.value);

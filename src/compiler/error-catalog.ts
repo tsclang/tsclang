@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // TSClang error code catalog.
 // Each entry: code → { title, body }
 // Used by `tsclang explain <CODE>`.

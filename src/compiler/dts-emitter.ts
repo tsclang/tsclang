@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // Declaration emitter: tsclang emit-dts <file.tsc>
 // Reads AST, emits export declare ... for exported symbols.
 
@@ -6,7 +5,7 @@ import { lex }   from './lexer.js';
 import { parse } from './parser.js';
 
 // Convert a TypeRef AST node back to TSC syntax string
-function typeToStr(t) {
+function typeToStr(t: any) {
   if (!t) return 'any';
   if (t.kind === 'TypeRef') {
     if (!t.typeArgs?.length) return t.name;
@@ -29,14 +28,14 @@ function typeToStr(t) {
 }
 
 // Format a parameter
-function paramStr(p) {
+function paramStr(p: any) {
   const name = p.name ?? p.binding?.name ?? '_';
   const type = p.typeAnn ? `: ${typeToStr(p.typeAnn)}` : '';
   return name + type;
 }
 
 // Emit declaration for a single exported node
-function emitDecl(node) {
+function emitDecl(node: any) {
   if (!node) return null;
   const n = node.kind === 'Export' ? node.decl : node;
 
@@ -76,7 +75,7 @@ function emitDecl(node) {
   return null;
 }
 
-export function emitDtsSync(src, filename) {
+export function emitDtsSync(src: any, filename: any) {
   const tokens = lex(src, filename);
   const { ast, errors: parseErrors } = parse(tokens, filename, src);
   if (parseErrors.length > 0) {

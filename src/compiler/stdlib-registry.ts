@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 export const LANGUAGE_BUILTINS = new Set([
   'true', 'false', 'null', 'undefined',
   'console', 'Math', 'performance', 'Date', 'JSON', 'process', 'Object',

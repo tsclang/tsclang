@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // Compilation pipeline: TSC source → C string
 // Extracted from bin/index.ts for reuse by test runner and other tools.
 

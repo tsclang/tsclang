@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // TSClang Parser
 // Produces an AST from a token stream.
 

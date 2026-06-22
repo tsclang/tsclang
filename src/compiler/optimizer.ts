@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // AST optimizer — activated by --optimize flag
 // Strategy:
 //   Phase 1: fold constant binary/unary expressions everywhere (bottom-up)

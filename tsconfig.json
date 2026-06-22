@@ -9,7 +9,7 @@
     "rootDir": ".",
     "allowJs": true,
     "checkJs": false,
-    "strict": false, "noImplicitAny": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,

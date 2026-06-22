@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // TSClang diagnostic / error reporting module.
 // Provides TscError (typed error with source position) and renderDiagnostic().
 
@@ -46,7 +45,7 @@ export class TscError extends Error {
 // ---------------------------------------------------------------------------
 const TAB_WIDTH = 4;
 
-function expandTabs(s) {
+function expandTabs(s: any) {
   let result = '', vcol = 0;
   for (const ch of s) {
     if (ch === '\t') {
@@ -63,7 +62,7 @@ function expandTabs(s) {
 
 // Visual column of a 1-based source column, accounting for tab expansion.
 // Returns the number of display characters before that column.
-function visualPosition(rawLine, col1based) {
+function visualPosition(rawLine: any, col1based: any) {
   const sliceLen = Math.max(0, col1based - 1);
   return expandTabs(rawLine.slice(0, sliceLen)).length;
 }
@@ -75,7 +74,7 @@ function visualPosition(rawLine, col1based) {
 //   color        — override color flag (default: from colors.js _enabled)
 //   contextLines — source lines of context around each span (default 1)
 // ---------------------------------------------------------------------------
-export function renderDiagnostic(diag, opts: any = {}) {
+export function renderDiagnostic(diag: any, opts: any = {}) {
   const contextLines = opts.contextLines ?? 1;
 
   // Resolve color: explicit opts.color overrides module-level _enabled
@@ -126,14 +125,14 @@ export function renderDiagnostic(diag, opts: any = {}) {
     const pad        = ' '.repeat(gw);
 
     // Gutter helpers
-    const lineGutter  = (num)     => C.cyan(String(num).padStart(gw)) + C.cyan(' | ');
+    const lineGutter  = (num: any)     => C.cyan(String(num).padStart(gw)) + C.cyan(' | ');
     const blankGutter = ()        => C.cyan(pad + '  |');
-    const gutterRow = (spaces, marks, labelStr) =>
+    const gutterRow = (spaces: any, marks: any, labelStr: any) =>
       C.cyan(pad + '  | ') + spaces + marks + labelStr;
 
     // Build span index: lineNum → [spanInfo, ...]
     const spansByLine = new Map();
-    const addSpan = (line, sp) => {
+    const addSpan = (line: any, sp: any) => {
       if (!spansByLine.has(line)) spansByLine.set(line, []);
       spansByLine.get(line).push(sp);
     };

@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 8: types being added progressively
 // TSClang Lexer
 // Converts source text into a flat token array.
 
