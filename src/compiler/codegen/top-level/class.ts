@@ -447,7 +447,7 @@ export default {
     return result;
   },
 
-  _ensureClassFree(className) {
+  _ensureClassFree(className: any) {
     const cls = this.classes.get(className);
     if (!cls || cls._classFreeEmitted) return;
     const stringFields = this._getStringFields(className);
