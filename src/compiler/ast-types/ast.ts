@@ -729,4 +729,4 @@ export interface ObjPattern {
 // Convenience aliases
 // ---------------------------------------------------------------------------
 
-export type ASTNode = Stmt | Expression | TypeAnn | MatchPattern;
+export type ASTNode = Stmt | Expression | TypeAnn | MatchPattern | ArrayPattern | ObjPattern;
