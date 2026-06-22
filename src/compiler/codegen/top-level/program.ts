@@ -227,13 +227,13 @@ export default {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
         const fields = (n.members ?? []).filter((m) => m.kind === 'Field');
-        const hasStack = fields.some((f) => f.name === 'stack');
+        const hasStack = fields.some((f: any) => f.name === 'stack');
         if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
         }
         const info = this._throwsClasses.get(n.name);
         if (info) {
-          info.hasMessage = fields.some((f) => f.name === 'message');
+          info.hasMessage = fields.some((f: any) => f.name === 'message');
           info.hasStack = hasStack;
         }
       }
@@ -359,7 +359,7 @@ export default {
                 _signalVarNames.add(sd.name);
               }
             }
-            const arrowParams = new Set((arrow.params ?? []).map((p) => p.name));
+            const arrowParams = new Set((arrow.params ?? []).map((p: any) => p.name));
             const _collectArrow = (nd: any) => {
               if (!nd || typeof nd !== 'object') return;
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
@@ -380,7 +380,7 @@ export default {
       try {
         this.visitTopLevel(node);
       } catch (e) {
-        if (e?.isTscError) {
+        if ((e as any)?.isTscError) {
           this._errors.push(e);
           if (this._errors.length >= this._maxErrors) break;
         } else {
