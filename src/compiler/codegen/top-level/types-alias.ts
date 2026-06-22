@@ -1,7 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // types-alias.js
 export default {
-  visitInterface(node) {
+  visitInterface(node: any) {
     const { name, members } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`interface name "${name}" must start with uppercase (PascalCase)`, node);
@@ -9,8 +8,8 @@ export default {
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     this.interfaces.set(name, members);
 
-    const props = members.filter(m => m.kind === 'PropSig');
-    const methods = members.filter(m => m.kind === 'MethodSig');
+    const props = members.filter((m: any) => m.kind === 'PropSig');
+    const methods = members.filter((m: any) => m.kind === 'MethodSig');
 
     // Pure struct interface (no methods) → emit typedef struct
     if (methods.length === 0 && props.length > 0) {
@@ -43,9 +42,9 @@ export default {
     }
 
     // vtable typedef (single-line)
-    const vtableFields = methods.map(m => {
+    const vtableFields = methods.map((m: any) => {
       const ret = m.returnType ? this.resolveType(m.returnType) : 'void';
-      const params = m.params.map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+      const params = m.params.map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
       return `${ret} (*${m.name})(void *self${params ? ', ' + params : ''});`;
     });
     this.addTop(`typedef struct { ${vtableFields.join(' ')} } ${cname}_vtable;`);
@@ -58,7 +57,7 @@ export default {
   // ----------------------------------------------------------------
   // Enums
   // ----------------------------------------------------------------
-  visitTypeAlias(node) {
+  visitTypeAlias(node: any) {
     const { name, typeAnn } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`type alias name "${name}" must start with uppercase (PascalCase)`, node);
@@ -68,18 +67,18 @@ export default {
     // → typedef enum + static const char* values[]
     if (this.isStringLiteralUnion(typeAnn)) {
       const members = this.getStringLiteralMembers(typeAnn);
-      const enumVals = members.map(v => `${cname}_${v}`).join(', ');
+      const enumVals = members.map((v: any) => `${cname}_${v}`).join(', ');
       this.addTop(`typedef enum { ${enumVals} } ${cname};`);
-      const strVals = members.map(v => `"${v}"`).join(', ');
+      const strVals = members.map((v: any) => `"${v}"`).join(', ');
       this.addTop(`static const char *${cname}_values[] = { ${strVals} };`);
       this.addTop('');
       this.classes.set(name, { isEnum: true, _cname: cname, isStringLiteralUnion: true, members });
     } else if (typeAnn?.kind === 'TypeObject') {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
-      const hasMethod = typeAnn.fields.some(f => f.isMethod);
+      const hasMethod = typeAnn.fields.some((f: any) => f.isMethod);
       if (hasMethod) throw this.error(`"type" alias cannot contain methods; use "interface" instead`);
       this._resolvingTypes.add(name);
-      const fields = typeAnn.fields.map(f => {
+      const fields = typeAnn.fields.map((f: any) => {
         const ct = this.resolveType(f.typeAnn);
         if (ct === name) {
           this._resolvingTypes.delete(name);
@@ -103,12 +102,12 @@ export default {
         if (fields) {
           const pickedNames = this.getStringLiteralMembers(utArgs[1]);
           for (const pn of pickedNames) {
-            if (!fields.some(f => f.name === pn))
+            if (!fields.some((f: any) => f.name === pn))
               throw this.error(`field "${pn}" does not exist in ${baseTypeName}`);
           }
           // Multi-pick: "name" | "age" → both picked
-          const picked = fields.filter(f => pickedNames.length > 0 ? pickedNames.includes(f.name) : true);
-          const fieldDecls = picked.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
+          const picked = fields.filter((f: any) => pickedNames.length > 0 ? pickedNames.includes(f.name) : true);
+          const fieldDecls = picked.map((f: any) => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
           this.classes.set(name, { isStruct: true, _cname: cname, fields: picked });
         }
@@ -118,11 +117,11 @@ export default {
         if (fields) {
           const omitNames = this.getStringLiteralMembers(utArgs[1]);
           for (const on of omitNames) {
-            if (!fields.some(f => f.name === on))
+            if (!fields.some((f: any) => f.name === on))
               throw this.error(`field "${on}" does not exist in ${baseTypeName}`);
           }
-          const kept = fields.filter(f => !omitNames.includes(f.name));
-          const fieldDecls = kept.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
+          const kept = fields.filter((f: any) => !omitNames.includes(f.name));
+          const fieldDecls = kept.map((f: any) => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
           this.classes.set(name, { isStruct: true, _cname: cname, fields: kept });
         }
@@ -130,7 +129,7 @@ export default {
         const baseTypeName = utArgs[0].name;
         const fields = this.getStructFields(baseTypeName);
         if (fields) {
-          const fieldDecls = fields.flatMap(f => {
+          const fieldDecls = fields.flatMap((f: any) => {
             const ct = this.resolveType(f.typeAnn);
             return [`bool has_${f.name};`, `${ct} ${f.name};`];
           }).join(' ');
@@ -141,7 +140,7 @@ export default {
         const baseTypeName = utArgs[0].name;
         const fields = this.getStructFields(baseTypeName);
         if (fields) {
-          const fieldDecls = fields.map(f => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
+          const fieldDecls = fields.map((f: any) => `${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
           this.classes.set(name, { isStruct: true, _cname: cname, isMutable: true, fields });
         }
@@ -149,7 +148,7 @@ export default {
         const baseTypeName = utArgs[0].name;
         const fields = this.getStructFields(baseTypeName);
         if (fields) {
-          const fieldDecls = fields.map(f => `const ${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
+          const fieldDecls = fields.map((f: any) => `const ${this.resolveType(f.typeAnn)} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
           this.classes.set(name, { isStruct: true, _cname: cname, fields });
         }
@@ -157,7 +156,7 @@ export default {
         // NonNullable<T | null> → T (transparent alias, strips opt_)
         let inner = utArgs[0];
         if (inner.kind === 'TypeUnion') {
-          const nonNull = inner.types.filter(t => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined')));
+          const nonNull = inner.types.filter((t: any) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined')));
           if (nonNull.length === 1) inner = nonNull[0];
         }
         // Resolve without triggering lazy opt typedef emission
@@ -179,19 +178,19 @@ export default {
         if (this.isStringLiteralUnion(keyTypeNode)) {
           // Record<"x"|"y", f64> → struct { double x; double y; }
           const keys = this.getStringLiteralMembers(keyTypeNode);
-          const fieldDecls = keys.map(k => `${valCtype} ${k};`).join(' ');
+          const fieldDecls = keys.map((k: any) => `${valCtype} ${k};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
-          this.classes.set(name, { isStruct: true, _cname: cname, fields: keys.map(k => ({ name: k, typeAnn: valTypeNode })) });
+          this.classes.set(name, { isStruct: true, _cname: cname, fields: keys.map((k: any) => ({ name: k, typeAnn: valTypeNode })) });
         } else {
           const keyCtype = this.resolveType(keyTypeNode);
           const keyEnumDef = this.classes.get(keyCtype);
           if (keyEnumDef?.isEnum && !keyEnumDef?.isStringLiteralUnion) {
             // Record<EnumType, V> → struct with enum member names as fields
             const rawMembers = keyEnumDef.members ?? [];
-            const memberNames = rawMembers.map(m => typeof m === 'string' ? m : m.name);
-            const fieldDecls = memberNames.map(m => `${valCtype} ${m};`).join(' ');
+            const memberNames = rawMembers.map((m: any) => typeof m === 'string' ? m : m.name);
+            const fieldDecls = memberNames.map((m: any) => `${valCtype} ${m};`).join(' ');
             this.addTop(`typedef struct { ${fieldDecls} } ${cname};`);
-            this.classes.set(name, { isStruct: true, _cname: cname, fields: memberNames.map(m => ({ name: m, typeAnn: valTypeNode })) });
+            this.classes.set(name, { isStruct: true, _cname: cname, fields: memberNames.map((m: any) => ({ name: m, typeAnn: valTypeNode })) });
           } else if (keyCtype === 'String' || keyCtype === 'string' || keyTypeNode.name === 'string') {
             // Record<string, V> → TscMap alias
             const k = this.cTypeToIdent(keyCtype);
@@ -224,10 +223,10 @@ export default {
         if (arg.kind === 'TypeTypeof') {
           const sym = this.lookup(arg.name);
           if (sym?.params) {
-            const params = sym.params.filter(p => !p.rest);
+            const params = sym.params.filter((p: any) => !p.rest);
             const tupleNode = {
               kind: 'TypeTuple',
-              elements: params.map(p => ({ typeAnn: p.typeAnn ?? { kind: 'TypeRef', name: 'i32', typeArgs: [] }, label: p.name, rest: false, optional: false })),
+              elements: params.map((p: any) => ({ typeAnn: p.typeAnn ?? { kind: 'TypeRef', name: 'i32', typeArgs: [] }, label: p.name, rest: false, optional: false })),
               readonly: false
             };
             const tupleName = this.resolveTupleType(tupleNode);
@@ -248,10 +247,10 @@ export default {
       const targetTypeName = typeAnn.target?.name;
       const fields = targetTypeName ? this.getStructFields(targetTypeName) : null;
       if (fields && fields.length > 0) {
-        const fieldNames = fields.map(f => f.name);
-        const enumVals = fieldNames.map(v => `${cname}_${v}`).join(', ');
+        const fieldNames = fields.map((f: any) => f.name);
+        const enumVals = fieldNames.map((v: any) => `${cname}_${v}`).join(', ');
         this.addTop(`typedef enum { ${enumVals} } ${cname};`);
-        const strVals = fieldNames.map(v => `"${v}"`).join(', ');
+        const strVals = fieldNames.map((v: any) => `"${v}"`).join(', ');
         this.addTop(`static const char *${cname}_values[] = { ${strVals} };`);
         this.addTop('');
         this.classes.set(name, { isEnum: true, _cname: cname, isStringLiteralUnion: true, isKeyOf: true, members: fieldNames });
@@ -267,13 +266,13 @@ export default {
     } else if (typeAnn?.kind === 'TypeUnion') {
       // Mixed union (non-string) → error if any member is a string literal
       const allMembers = this.flattenUnion(typeAnn);
-      const hasString = allMembers.some(t => t.kind === 'TypeLiteral' && t.litKind === 'string');
-      const hasNonString = allMembers.some(t => !(t.kind === 'TypeLiteral' && t.litKind === 'string'));
+      const hasString = allMembers.some((t: any) => t.kind === 'TypeLiteral' && t.litKind === 'string');
+      const hasNonString = allMembers.some((t: any) => !(t.kind === 'TypeLiteral' && t.litKind === 'string'));
       if (hasString && hasNonString) {
         throw this.error(`string literal union cannot be mixed with non-string types`);
       }
       // For nullable unions (T | null), compute opt name without emitting typedef yet
-      const nonNullLeaves = allMembers.filter(t => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
+      const nonNullLeaves = allMembers.filter((t: any) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
                                                   && !(t.kind === 'TypeLiteral' && t.value === 'null'));
       if (allMembers.length !== nonNullLeaves.length && nonNullLeaves.length === 1) {
         const inner = this.resolveType(nonNullLeaves[0]);
@@ -289,36 +288,36 @@ export default {
   },
 
   // Get struct-like field definitions for a named type (interface or struct alias)
-  getStructFields(typeName) {
+  getStructFields(typeName: any) {
     const cls = this.classes.get(typeName);
     if (cls?.isStruct && cls.fields) return cls.fields;
     const iface = this.interfaces.get(typeName);
-    if (iface) return iface.filter(m => m.kind === 'PropSig');
+    if (iface) return iface.filter((m: any) => m.kind === 'PropSig');
     return null;
   },
 
   // Flatten nested TypeUnion into array of leaf types
-  flattenUnion(typeAnn) {
-    if (typeAnn.kind === 'TypeUnion') return typeAnn.types.flatMap(t => this.flattenUnion(t));
+  flattenUnion(typeAnn: any) {
+    if (typeAnn.kind === 'TypeUnion') return typeAnn.types.flatMap((t: any) => this.flattenUnion(t));
     return [typeAnn];
   },
 
   // Check if a type annotation is a pure string literal union (handles nested TypeUnions)
-  isStringLiteralUnion(typeAnn) {
+  isStringLiteralUnion(typeAnn: any) {
     if (!typeAnn) return false;
     if (typeAnn.kind === 'TypeLiteral' && typeAnn.litKind === 'string') return true;
     if (typeAnn.kind === 'TypeUnion') {
-      return typeAnn.types.every(t => this.isStringLiteralUnion(t));
+      return typeAnn.types.every((t: any) => this.isStringLiteralUnion(t));
     }
     return false;
   },
 
   // Extract string literal values from a string literal union type (handles nested TypeUnions)
-  getStringLiteralMembers(typeAnn) {
+  getStringLiteralMembers(typeAnn: any) {
     if (!typeAnn) return [];
     if (typeAnn.kind === 'TypeLiteral' && typeAnn.litKind === 'string') return [typeAnn.value];
     if (typeAnn.kind === 'TypeUnion') {
-      return typeAnn.types.flatMap(t => this.getStringLiteralMembers(t));
+      return typeAnn.types.flatMap((t: any) => this.getStringLiteralMembers(t));
     }
     return [];
   },

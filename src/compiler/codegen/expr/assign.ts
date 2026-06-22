@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // assign.js
 export default {
   // Assignment
-  assignToC(node, lines, depth) {
+  assignToC(node: any, lines: any, depth: any) {
     // Generator .next() assignment: r = g.next() → r = genFn_next(&g, args);
     if (node.right?.kind === 'Call' && node.right.callee?.kind === 'Member'
         && node.right.callee.prop === 'next') {
@@ -29,7 +28,7 @@ export default {
       const objSym = this.lookup(node.left.object.name);
       if (objSym?.ctype) {
         const classDef = this.classes.get(objSym.ctype);
-        const field = classDef?.fields?.find(f => f.name === node.left.prop);
+        const field = classDef?.fields?.find((f: any) => f.name === node.left.prop);
         if (field?.modifiers?.includes('readonly')) {
           const thisSym = this.lookup('this') ?? this.lookup('self');
           const inCtor = this.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
@@ -345,7 +344,7 @@ export default {
       const rightType = this.inferType(node.right);
       const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
       if (!NUMERIC.has(leftType) || !NUMERIC.has(rightType)) {
-        const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+        const tsName = (t: any) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
         throw this.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(leftType)}' and '${tsName(rightType)}'`, node);
       }
       const leftIsFloat = leftType === 'double' || leftType === 'float';

@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // scan.js
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
-  _scanAsyncBody(params, body) {
+  _scanAsyncBody(params: any, body: any) {
     const paramFields = [];
     const bodyFields = [];
     const inlined = new Map();     // name → C literal string
@@ -22,7 +21,7 @@ export default {
       if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); preScanTypes.set(p.name, ct); }
     }
 
-    const walk = (stmts) => {
+    const walk = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -39,7 +38,7 @@ export default {
           if (!seen.has(threadVar)) { seen.add(threadVar); bodyFields.push({ name: threadVar, ctype: 'tsc_thread_t' }); }
           spawnInfos.push({ userVar: s.name, threadVar, envType, fnName, envVar, freeVars: fvArr });
           for (const fv of fvArr) {
-            if (!paramFields.some(f => f.name === fv.name) && !extraPollParams.some(f => f.name === fv.name)) {
+            if (!paramFields.some((f: any) => f.name === fv.name) && !extraPollParams.some((f: any) => f.name === fv.name)) {
               extraPollParams.push({ name: fv.name, ctype: fv.ctype });
             }
           }
@@ -133,14 +132,14 @@ export default {
     walk(body?.kind === 'Block' ? body.body : []);
 
     if (bodyFields.length > 0) {
-      const localVarNames = new Set(bodyFields.map(f => f.name));
+      const localVarNames = new Set(bodyFields.map((f) => f.name));
       const needsPromotion = this._livenessScan(body, localVarNames);
       const safeLocal = new Set([
         'int32_t', 'int64_t', 'int8_t', 'int16_t',
         'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
         'float', 'double', 'size_t', 'bool', 'int', 'void',
       ]);
-      const filtered = bodyFields.filter(f =>
+      const filtered = bodyFields.filter((f) =>
         needsPromotion.has(f.name) || !safeLocal.has(f.ctype) || f.name.startsWith('_forof_idx_')
       );
       if (filtered.length < bodyFields.length) {
@@ -157,7 +156,7 @@ export default {
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
   },
 
-  _scanExprIdents(node, touch) {
+  _scanExprIdents(node: any, touch: any) {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'Ident') { touch(node.name); return; }
     if (node.kind === 'Literal' || node.kind === 'RawC') return;
@@ -175,11 +174,11 @@ export default {
     }
   },
 
-  _livenessScan(body, localVarNames) {
+  _livenessScan(body: any, localVarNames: any) {
     const segs = new Map();
     let seg = 0;
 
-    const touch = (name) => {
+    const touch = (name: any) => {
       if (!localVarNames.has(name)) return;
       const info = segs.get(name);
       if (info) {
@@ -192,7 +191,7 @@ export default {
 
     const scanExpr = (node) => this._scanExprIdents(node, touch);
 
-    const walk = (stmts) => {
+    const walk = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -284,11 +283,11 @@ export default {
     return needsPromotion;
   },
 
-  _genLivenessScan(body, localVarNames) {
+  _genLivenessScan(body: any, localVarNames: any) {
     const segs = new Map();
     let seg = 0;
 
-    const touch = (name) => {
+    const touch = (name: any) => {
       if (!localVarNames.has(name)) return;
       const info = segs.get(name);
       if (info) {
@@ -301,7 +300,7 @@ export default {
 
     const scanExpr = (node) => this._scanExprIdents(node, touch);
 
-    const walk = (stmts) => {
+    const walk = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -381,12 +380,12 @@ export default {
   },
 
   // Collect await sub-state field descriptors for the struct
-  _collectAwaitStates(body) {
+  _collectAwaitStates(body: any) {
     const result = [];
     let awaitIdx = 0;
     let genIdx = 0;
 
-    const walk = (stmts) => {
+    const walk = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
         const ae = s.kind === 'VarDecl' && s.init?.kind === 'Await' ? s.init
@@ -446,7 +445,7 @@ export default {
     if (arr.length > 0 && arr[arr.length - 1] !== '') arr.push('');
   },
 
-  _emitStructMultiline(name, fields) {
+  _emitStructMultiline(name: any, fields: any) {
     this._topBlank();
     this.topLevel.push('typedef struct {');
     // First line: state/result/done header fields (up to bool _done)
@@ -462,12 +461,12 @@ export default {
     this.topLevel.push(`} ${name};`);
   },
 
-  _emitStructCompact(name, fields) {
+  _emitStructCompact(name: any, fields: any) {
     this._topBlank();
     this.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
   },
 
-  _emitTopFn(sig, bodyLines) {
+  _emitTopFn(sig: any, bodyLines: any) {
     this._topBlank();
     this.topLevel.push(`${sig} {`);
     for (const l of bodyLines) this.topLevel.push(l);

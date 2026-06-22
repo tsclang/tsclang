@@ -1,7 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // class.js
 export default {
-  visitClassDecl(node) {
+  visitClassDecl(node: any) {
     const { name, superClass, members, decorators, typeParams } = node;
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     // Generic class: store as template
@@ -23,7 +22,7 @@ export default {
 
     // @readonly on methods is invalid
     for (const m of (node.members ?? [])) {
-      if (m.kind === 'Method' && (m.decorators ?? []).some(d => d.name === 'readonly')) {
+      if (m.kind === 'Method' && (m.decorators ?? []).some((d: any) => d.name === 'readonly')) {
         throw this.error(`"@readonly" can only be applied to properties`, m);
       }
     }
@@ -42,8 +41,8 @@ export default {
     }
 
     // Process @embedded.* decorators
-    const inlineDec = decorators?.find(d => d.name === 'struct');
-    const poolDec   = decorators?.find(d => d.name === 'pool');
+    const inlineDec = decorators?.find((d) => d.name === 'struct');
+    const poolDec   = decorators?.find((d) => d.name === 'pool');
     const isEmbedded = this._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
@@ -58,7 +57,7 @@ export default {
     }
 
     // @heap: only valid on allocator: "heap"
-    const heapDec = decorators?.find(d => d.name === 'heap');
+    const heapDec = decorators?.find((d) => d.name === 'heap');
     if (heapDec && this._allocatorName === 'static') {
       throw this.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
     }
@@ -72,15 +71,15 @@ export default {
       throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {
-      const badMethods = members.filter(m => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
+      const badMethods = members.filter((m) => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
       if (badMethods.length > 0) {
         throw this.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
       }
     }
 
     // Process @packed and @align decorators
-    const packedDec = decorators?.find(d => d.name === 'packed');
-    const alignDec  = decorators?.find(d => d.name === 'align');
+    const packedDec = decorators?.find((d) => d.name === 'packed');
+    const alignDec  = decorators?.find((d) => d.name === 'align');
     if (packedDec && alignDec) {
       throw this.error('@packed and @align cannot be used together');
     }
@@ -96,8 +95,8 @@ export default {
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
 
-    const allFields_ = members.filter(m => m.kind === 'Field');
-    const methods = members.filter(m => m.kind === 'Method');
+    const allFields_ = members.filter((m) => m.kind === 'Field');
+    const methods = members.filter((m) => m.kind === 'Method');
     const seen = new Set();
     for (const m of [...allFields_, ...methods]) {
       const n = typeof m.name === 'string' ? m.name : null;
@@ -116,7 +115,7 @@ export default {
       // Always treat as if extending Error (TscError _base)
       effectiveSuperClass = 'Error';
       // Remove 'message' field — it's replaced by _base.message via TscError
-      fields = allFields_.filter(f => f.name !== 'message');
+      fields = allFields_.filter((f) => f.name !== 'message');
     }
 
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
@@ -147,16 +146,16 @@ export default {
     const arcInfo = this._arcClasses?.get(name);
 
     // All-static class with no fields → skip struct unless class name used as a type
-    const _allStatic = methods.length > 0 && methods.every(m => m.modifiers.includes('static'));
+    const _allStatic = methods.length > 0 && methods.every((m) => m.modifiers.includes('static'));
     const _hasUserFields = fields.length > 0 || cBase;
     const _usedAsType = !_allStatic || _hasUserFields || (() => {
       const scanType = (node) => {
         if (!node || typeof node !== 'object') return false;
         if (Array.isArray(node)) return node.some(scanType);
         if (node.kind === 'TypeRef' && node.name === name) return true;
-        return Object.values(node).some(v => v && typeof v === 'object' ? scanType(v) : false);
+        return Object.values(node).some((v) => v && typeof v === 'object' ? scanType(v) : false);
       };
-      return methods.some(m => scanType(m.returnType) || (m.params ?? []).some(p => scanType(p.typeAnn)));
+      return methods.some((m) => scanType(m.returnType) || (m.params ?? []).some((p) => scanType(p.typeAnn)));
     })();
 
     if (_usedAsType) {
@@ -171,7 +170,7 @@ export default {
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
           throw this.error(`"never" cannot be used as a field type`);
         }
-        const isReadonly = (f.decorators ?? []).some(d => d.name === 'readonly');
+        const isReadonly = (f.decorators ?? []).some((d) => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         const constPfx = isReadonly ? 'const ' : '';
         if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);
@@ -188,7 +187,7 @@ export default {
           ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
-        const isSelfRef = fields.some(f => {
+        const isSelfRef = fields.some((f) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -199,7 +198,7 @@ export default {
           this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
-        const isSelfRef = fields.some(f => {
+        const isSelfRef = fields.some((f) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -241,7 +240,7 @@ export default {
     }
 
     // Constructor if present
-    const ctor = methods.find(m => m.name === 'constructor');
+    const ctor = methods.find((m) => m.name === 'constructor');
     if (ctor) {
       if (ctor.decorators?.length > 0) {
         throw this.error('decorators on constructors are not supported', ctor);
@@ -272,18 +271,18 @@ export default {
     const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
     const classInfo_ = this.classes.get(cname);
     if (classInfo_?._iterableElemType) {
-      const iterMethod_ = methods.find(m => m.name === 'iter' || m.isIterator);
+      const iterMethod_ = methods.find((m) => m.name === 'iter' || m.isIterator);
       if (iterMethod_) this._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
     }
 
     // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
-    const explicitImplements = (node.implements_ ?? []).filter(i => _ifaceName2(i) !== 'Iterable');
+    const explicitImplements = (node.implements_ ?? []).filter((i) => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
-      const platformDec = (m.decorators ?? []).find(d => d.name === 'platform');
+      const platformDec = (m.decorators ?? []).find((d) => d.name === 'platform');
       if (platformDec) {
-        const allowed = (platformDec.args ?? []).map(a => a.value ?? a);
+        const allowed = (platformDec.args ?? []).map((a) => a.value ?? a);
         const target = this._targetName ?? 'desktop';
         if (!allowed.includes(target)) {
           if (!this._platformSkipped) this._platformSkipped = new Map();
@@ -292,7 +291,7 @@ export default {
         }
       }
       const isStatic = m.modifiers.includes('static');
-      const mDecs = (m.decorators ?? []).filter(d => this._decoratorFns?.has(d.name));
+      const mDecs = (m.decorators ?? []).filter((d) => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
         this._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
       } else {
@@ -418,7 +417,7 @@ export default {
   emitVtableConstant(className, ifaceName, classNode = null) {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
-    const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    const ifaceMethods = ifaceDef.filter((m) => m.kind === 'MethodSig');
     if (ifaceMethods.length === 0) return;
     // Verify all interface methods are implemented
     const classDef = this.classes.get(className);
@@ -429,10 +428,10 @@ export default {
       }
     }
     const vtableName = `${className}_${ifaceName}_vtable`;
-    const entries = ifaceMethods.map(m => {
+    const entries = ifaceMethods.map((m) => {
       return `    .${m.name} = ${className}_${m.name}`;
     }).join(',\n');
-    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map(m => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
+    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map((m) => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
     this.addTop('');
   },
 

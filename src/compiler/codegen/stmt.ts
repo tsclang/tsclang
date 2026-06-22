@@ -1,7 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // stmt.js
 export default {
-  visitBlock(block, lines, depth) {
+  visitBlock(block: any, lines: any, depth: any) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars = [];
@@ -50,7 +49,7 @@ export default {
     this.popScope();
   },
 
-  visitStmtInMain(node) {
+  visitStmtInMain(node: any) {
     const lines = [];
     if (this._debugLines && node?.line) {
       this.mainStmts.push(`#line ${node.line} "${this.filename}"`);
@@ -59,13 +58,13 @@ export default {
     for (const l of lines) this.mainStmts.push(l);
   },
 
-  visitStmt(node, lines, depth) {
+  visitStmt(node: any, lines: any, depth: any) {
     this._currentNode = node;
     if (!node) return;
 
     switch (node.kind) {
       case 'VarDecl': this._visitVarDecl(node, lines, depth); break;
-      case 'VarDecls': node.decls.forEach(d => this._visitVarDecl(d, lines, depth)); break;
+      case 'VarDecls': node.decls.forEach((d) => this._visitVarDecl(d, lines, depth)); break;
       case 'VarDestructObj':
       case 'VarDestructArr': this._visitVarDestruct(node, lines, depth); break;
       case 'ExprStmt':
@@ -99,7 +98,7 @@ export default {
     }
   },
 
-  visitStmtOrBlock(node, lines, depth) {
+  visitStmtOrBlock(node: any, lines: any, depth: any) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
   },

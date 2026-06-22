@@ -1,10 +1,9 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 export default {
-  emitMatchVarDecl(node, lines, depth) {
+  emitMatchVarDecl(node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
     const { discriminant, cases, hasParens } = init;
     const I = ' '.repeat(this.indent * depth);
-    const p = (s) => lines.push(I + s);
+    const p = (s: any) => lines.push(I + s);
 
     // Determine discriminant C expression and type
     const discC = this.exprToC(discriminant, lines, depth);
@@ -24,7 +23,7 @@ export default {
 
     // For enum discriminants: check exhaustiveness
     if (isEnum) {
-      const allValues = (enumDef.members ?? []).map(m => m.name);
+      const allValues = (enumDef.members ?? []).map((m) => m.name);
       const coveredEnumCases = new Set();
       let hasWild = false;
       for (const c of cases) {
@@ -32,9 +31,9 @@ export default {
         if (c.pattern.kind === 'MatchEnum') coveredEnumCases.add(c.pattern.caseName);
       }
       if (!hasWild) {
-        const missing = allValues.filter(v => !coveredEnumCases.has(v));
+        const missing = allValues.filter((v) => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map(v => `'${v}'`).join(', ')}`);
+          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v) => `'${v}'`).join(', ')}`);
         }
       }
     }
@@ -109,9 +108,9 @@ export default {
   // -----------------------------------------------------------------------
   // Result-based TryCatch emission
   // -----------------------------------------------------------------------
-  _emitTryCatchResult(node, tryStmts, callStmt, lines, depth) {
+  _emitTryCatchResult(node: any, tryStmts: any, callStmt: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
-    const p = (s) => lines.push(I + s);
+    const p = (s: any) => lines.push(I + s);
     const II = ' '.repeat(this.indent * (depth + 1));
 
     // Require explicit type annotation in catch clauses
@@ -179,7 +178,7 @@ export default {
     }
   },
 
-  _emitCatchBodies(catches, resName, calleeSym, lines, depth) {
+  _emitCatchBodies(catches: any, resName: any, calleeSym: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const II = ' '.repeat(this.indent * (depth + 1));
     const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
@@ -241,10 +240,10 @@ export default {
   // -----------------------------------------------------------------------
   // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
   // -----------------------------------------------------------------------
-  emitPropagateVarDecl(node, lines, depth) {
+  emitPropagateVarDecl(node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
     const I = ' '.repeat(this.indent * depth);
-    const p = (s) => lines.push(I + s);
+    const p = (s: any) => lines.push(I + s);
 
     const isProp = init.kind === 'Propagate';
     const innerExpr = init.expr; // the inner Call (or other) expression
@@ -311,14 +310,14 @@ export default {
 
   // Generate field binding declarations for patterns that destructure (MatchClass, MatchObjLit)
   // Returns array of C declaration strings, or empty array if no bindings needed
-  _matchPatternBindings(pattern, discC, discType) {
+  _matchPatternBindings(pattern: any, discC: any, discType: any) {
     if (pattern.kind === 'MatchClass') {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const className = pattern.className;
       const ifaceDef = this.interfaces?.get(discType) ?? null;
       const classDef = this.classes.get(className);
-      return fields.map(f => {
+      return fields.map((f) => {
         const fieldDef = classDef?.fields?.find(fd => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = ifaceDef
@@ -332,7 +331,7 @@ export default {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const structDef = this.classes.get(discType);
-      return fields.map(f => {
+      return fields.map((f) => {
         const fieldDef = structDef?.fields?.find(fd => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = `${discC}.${f}`;
@@ -344,7 +343,7 @@ export default {
   },
 
   // Generate a C condition expression for a match pattern
-  _matchPatternCond(pattern, discC, discType, enumDef) {
+  _matchPatternCond(pattern: any, discC: any, discType: any, enumDef: any) {
     switch (pattern.kind) {
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
@@ -361,13 +360,13 @@ export default {
       case 'MatchIdent': {
         // Bare identifier: check if it's a known enum value or treat as wildcard
         if (enumDef) {
-          const allValues = enumDef.values?.map(v => typeof v === 'string' ? v : v.name) ?? [];
+          const allValues = enumDef.values?.map((v) => typeof v === 'string' ? v : v.name) ?? [];
           if (allValues.includes(pattern.name)) return `${discC} == ${discType}_${pattern.name}`;
         }
         return null; // treat as wildcard
       }
       case 'MatchOr': {
-        const parts = pattern.patterns.map(p => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
+        const parts = pattern.patterns.map((p) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
         return parts.join(' || ');
       }
       case 'MatchClass': {
@@ -383,7 +382,7 @@ export default {
       case 'MatchObjLit': {
         // Object literal pattern: check discriminator fields
         if (pattern.discriminators.length === 0) return null;
-        const conds = pattern.discriminators.map(d => {
+        const conds = pattern.discriminators.map((d) => {
           if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${d.value}"))`;
           return `${discC}.${d.key} == ${d.value}`;
         });
@@ -406,7 +405,7 @@ export default {
   },
 
   // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
-  emitSelectVarDecl(node, lines, depth) {
+  emitSelectVarDecl(node: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const { name, varKind, init } = node;
     const objArg = init.args?.[0]?.expr;
@@ -435,14 +434,14 @@ export default {
     }
 
     // Emit typedef
-    const fieldDecls = [`int32_t _arm`, ...fields.map(f => `${f.ctype} ${f.key}`)].join('; ');
+    const fieldDecls = [`int32_t _arm`, ...fields.map((f) => `${f.ctype} ${f.key}`)].join('; ');
     this.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
 
     // Register struct type so inferType works for field access
     this.classes.set(structName, {
       fields: [
         { name: '_arm', ctype: 'int32_t' },
-        ...fields.map(f => ({ name: f.key, ctype: f.ctype })),
+        ...fields.map((f) => ({ name: f.key, ctype: f.ctype })),
       ],
     });
 

@@ -1,7 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // program.js
 export default {
-  visitProgram(ast) {
+  visitProgram(ast: any) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
     this._fromEntriesConsumed = new Map();
     for (const node of ast.body) {
@@ -18,7 +17,7 @@ export default {
 
     // Pre-scan: find Arc<T> and Weak<T> usage to know which classes need _refcount/_weakcount
     this._arcClasses = new Map();
-    const _scanArc = (n) => {
+    const _scanArc = (n: any) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_scanArc); return; }
       if (n.kind === 'New' && (n.name === 'Arc' || n.name === 'Weak')) {
@@ -31,7 +30,7 @@ export default {
         }
       }
       if (n.kind === 'VarDecl') {
-        const _checkTypeAnn = (ta) => {
+        const _checkTypeAnn = (ta: any) => {
           if (!ta) return;
           if (ta.kind === 'TypeRef' && (ta.name === 'Arc' || ta.name === 'Weak')) {
             const tArg = ta.typeArgs?.[0];
@@ -103,7 +102,7 @@ export default {
     const noFloat = !this._cap('fpu');
     const noAsync = this._cap('async') === 'none';
     if (noFloat || noAsync) {
-      const _walkForRestrictions = (n) => {
+      const _walkForRestrictions = (n: any) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
         if (noFloat && n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
@@ -128,7 +127,7 @@ export default {
 
     // Pre-scan: wasm bare restrictions
     if (this._isWasmBare()) {
-      const _walkWasm = (n) => {
+      const _walkWasm = (n: any) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
         if (n.kind === 'FuncDecl' && n.async) {
@@ -145,9 +144,9 @@ export default {
     if (this._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames
       const callGraph = new Map();
-      const _collectCalls = (nd, result) => {
+      const _collectCalls = (nd: any, result: any) => {
         if (!nd || typeof nd !== 'object') return;
-        if (Array.isArray(nd)) { nd.forEach(x => _collectCalls(x, result)); return; }
+        if (Array.isArray(nd)) { nd.forEach((x: any) => _collectCalls(x, result)); return; }
         if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') result.add(nd.callee.name);
         // Don't recurse into nested function bodies
         if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
@@ -167,7 +166,7 @@ export default {
       const visited = new Set();
       const inStack = new Map(); // funcName → index in path
       const path = [];
-      const _dfs = (fn) => {
+      const _dfs = (fn: any) => {
         if (inStack.has(fn)) {
           const cycleStart = inStack.get(fn);
           const cycle = path.slice(cycleStart);
@@ -196,7 +195,7 @@ export default {
     this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
     const _throwsUnions = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
-    const _flattenThrowsNames = (throwsTypes) => {
+    const _flattenThrowsNames = (throwsTypes: any) => {
       const names = [];
       for (const t of throwsTypes ?? []) {
         if (t.kind === 'TypeRef') names.push(t.name);
@@ -206,7 +205,7 @@ export default {
       }
       return names;
     };
-    const _collectThrows = (throwsTypes) => {
+    const _collectThrows = (throwsTypes: any) => {
       if (!throwsTypes?.length) return;
       const names = _flattenThrowsNames(throwsTypes);
       for (const n of names) {
@@ -227,21 +226,21 @@ export default {
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
-        const fields = (n.members ?? []).filter(m => m.kind === 'Field');
-        const hasStack = fields.some(f => f.name === 'stack');
+        const fields = (n.members ?? []).filter((m) => m.kind === 'Field');
+        const hasStack = fields.some((f) => f.name === 'stack');
         if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
         }
         const info = this._throwsClasses.get(n.name);
         if (info) {
-          info.hasMessage = fields.some(f => f.name === 'message');
+          info.hasMessage = fields.some((f) => f.name === 'message');
           info.hasStack = hasStack;
         }
       }
     }
     // Determine needsNew: walk AST for throw new X() nodes
     const _thrownClasses = new Set();
-    const _walkThrows = (n) => {
+    const _walkThrows = (n: any) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_walkThrows); return; }
       if (n.kind === 'Throw' && n.value?.kind === 'New') _thrownClasses.add(n.value.name);
@@ -252,7 +251,7 @@ export default {
     for (const node of ast.body) _walkThrows(node);
     // For each union: if any member thrown → all get needsNew
     for (const union of _throwsUnions) {
-      if (union.some(name => _thrownClasses.has(name))) {
+      if (union.some((name: any) => _thrownClasses.has(name))) {
         for (const name of union) {
           const info = this._throwsClasses.get(name);
           if (info) info.needsNew = true;
@@ -265,7 +264,7 @@ export default {
     this._decoratorNames = new Set(); // all names used with @
     this._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
     {
-      const scanDecs = (decs) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
+      const scanDecs = (decs: any) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl') {
@@ -320,9 +319,9 @@ export default {
         }
         // Collect idents from body, skipping shadowed param names
         // Also skip nested function bodies (they have their own scopes)
-        const _collect = (nd, outerLocals) => {
+        const _collect = (nd: any, outerLocals: any) => {
           if (!nd || typeof nd !== 'object') return;
-          if (Array.isArray(nd)) { nd.forEach(x => _collect(x, outerLocals)); return; }
+          if (Array.isArray(nd)) { nd.forEach((x: any) => _collect(x, outerLocals)); return; }
           if (nd.kind === 'Ident') {
             if (!outerLocals.has(nd.name)) this._funcRefVars.add(nd.name);
             return;
@@ -360,8 +359,8 @@ export default {
                 _signalVarNames.add(sd.name);
               }
             }
-            const arrowParams = new Set((arrow.params ?? []).map(p => p.name));
-            const _collectArrow = (nd) => {
+            const arrowParams = new Set((arrow.params ?? []).map((p) => p.name));
+            const _collectArrow = (nd: any) => {
               if (!nd || typeof nd !== 'object') return;
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
               if (nd.kind === 'Ident' && !arrowParams.has(nd.name) && !_signalVarNames.has(nd.name)) {
@@ -390,7 +389,7 @@ export default {
       }
     }
     if (this._errors.length > 0) {
-      const bag = new Error('compilation failed');
+      const bag: any = new Error('compilation failed');
       bag.isTscErrorBag = true;
       bag.errors = this._errors;
       throw bag;
@@ -399,7 +398,7 @@ export default {
     if (this._stackSize != null && this._funcStackInfo.size > 0) {
       const _worstCase = new Map();
       const _visiting = new Set();
-      const _computeWorst = (astName, path) => {
+      const _computeWorst = (astName: any, path: any) => {
         if (_worstCase.has(astName)) return _worstCase.get(astName);
         const info = this._funcStackInfo.get(astName);
         if (!info) return 0;

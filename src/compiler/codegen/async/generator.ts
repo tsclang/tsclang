@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // generator.js
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
-  emitGeneratorFunc(node) {
+  emitGeneratorFunc(node: any) {
     this._initAsync();
     const { name, params, returnType, body, throwsTypes } = node;
 
@@ -32,7 +31,7 @@ export default {
     // Scan let vars (promoted to struct)
     const letFields = [];
     const seenLets = new Set();
-    const walkLets = (stmts) => {
+    const walkLets = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl' && s.varKind === 'let' && !seenLets.has(s.name)) {
@@ -49,14 +48,14 @@ export default {
     walkLets(body?.kind === 'Block' ? body.body : []);
 
     if (letFields.length > 0) {
-      const localVarNames = new Set(letFields.map(f => f.name));
+      const localVarNames = new Set(letFields.map((f: any) => f.name));
       const needsPromotion = this._genLivenessScan(body, localVarNames);
       const safeLocal = new Set([
         'int32_t', 'int64_t', 'int8_t', 'int16_t',
         'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
         'float', 'double', 'size_t', 'bool', 'int', 'void',
       ]);
-      const filtered = letFields.filter(f =>
+      const filtered = letFields.filter((f: any) =>
         needsPromotion.has(f.name) || !safeLocal.has(f.ctype)
       );
       if (filtered.length < letFields.length) {
@@ -134,14 +133,14 @@ export default {
     if (!body) return;
 
     // Build next function signature
-    const paramStrs = (params || []).map(p => {
+    const paramStrs = (params || []).map((p: any) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return `${ct} ${p.name}`;
     });
     const fnSig = `static ${resultType} ${nextFn}(${stateType} *self${paramStrs.length ? ', ' + paramStrs.join(', ') : ''})`;
 
     // Set up generator self context (let vars promoted)
-    const genPromoted = new Set(letFields.map(f => f.name));
+    const genPromoted = new Set(letFields.map((f: any) => f.name));
     this._selfCtx = { promoted: genPromoted, inlined: new Map(), stringFields, classFreeFields, hasCleanup };
 
     const nextLines = this._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
@@ -151,7 +150,7 @@ export default {
     this._emitTopFn(fnSig, nextLines);
 
     // @static generator: emit static instance in BSS
-    const _hasStaticDecGen = (node.decorators ?? []).some(d =>
+    const _hasStaticDecGen = (node.decorators ?? []).some((d: any) =>
       d.name === 'static');
     if (_hasStaticDecGen) {
       this.topLevel.push('');
@@ -159,7 +158,7 @@ export default {
     }
   },
 
-  _buildGenNext(body, yieldType, resultType, hasThrows, resultCt) {
+  _buildGenNext(body: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any) {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines = [];
     const ctx = { caseNum: 0, loopLabels: [], needTerminal: true };
@@ -206,13 +205,13 @@ export default {
     return lines;
   },
 
-  _emitGenStmtList(stmts, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal) {
+  _emitGenStmtList(stmts: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
     for (const s of stmts || []) {
       this._emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
     }
   },
 
-  _emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal) {
+  _emitGenStmt(s, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
     if (!s) return;
 
     // Unwrap ExprStmt(Yield(...))
@@ -322,7 +321,7 @@ export default {
     this._emitGenRegStmt(s, lines, I);
   },
 
-  _emitGenRegStmt(stmt, lines, I) {
+  _emitGenRegStmt(stmt: any, lines: any, I: any) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { varKind, name, typeAnn, init } = stmt;

@@ -1,6 +1,5 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 export default {
-  consoleCall(method, args, lines, depth) {
+  consoleCall(method: any, args: any, lines: any, depth: any) {
     if (method === 'time') {
       const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
       return `tsc_console_time(${label})`;
@@ -51,7 +50,7 @@ export default {
       }
 
       if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
-        const flattenConcat = (n) => {
+        const flattenConcat = (n: any) => {
           if (n.kind === 'Binary' && n.op === '+' && this.isStringExpr(n)) {
             return [...flattenConcat(n.left), ...flattenConcat(n.right)];
           }
@@ -88,7 +87,7 @@ export default {
       const cexpr = unwrapRes ? `${unwrapRes}.value` : this.exprToC(expr, lines, depth);
 
       if (expr.kind === 'Binary' && ['&','|','^','<<','>>','>>>'].includes(expr.op)) {
-        const hasTypedVar = (n) => {
+        const hasTypedVar = (n: any) => {
           if (!n) return false;
           if (n.kind === 'Ident') {
             const s = this.lookup(n.name);
