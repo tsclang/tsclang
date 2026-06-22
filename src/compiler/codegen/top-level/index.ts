@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 import program from './program.js';
 import dispatch from './dispatch.js';
 import class_ from './class.js';

@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 import vardecl      from './vardecl.js';
 import destruct     from './destruct.js';
 import controlFlow  from './control-flow.js';

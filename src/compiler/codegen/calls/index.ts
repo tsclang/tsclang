@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 import callDispatch    from './call-dispatch.js';
 import methodDispatch  from './method-dispatch.js';
 import consoleMixin    from './console.js';

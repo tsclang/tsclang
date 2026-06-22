@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 import helpers from './helpers.js';
 import scan from './scan.js';
 import asyncEmit from './async-emit.js';
