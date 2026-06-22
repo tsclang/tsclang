@@ -367,7 +367,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 - **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 (NaN/Infinity support).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
-- **Next goal: Self-hosting.** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50).
+- **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). Deferred until #57 (NaN/Infinity) is done.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`.
 
 ### Architectural decisions
