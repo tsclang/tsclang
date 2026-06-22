@@ -1,13 +1,13 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-7 done, #83-#89 closed. ZERO .ts files remain).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-7 done, #83-#89 closed. ZERO .js files remain).
 
 ---
 
 ## 1. TL;DR
 
-**TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.ts ESM.
-- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration Stages 1-7 done (#81). ZERO .ts files remain. All 74 project files are .ts. 53 files have @ts-nocheck (Stage 8 removes them).
+**TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
+- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration Stages 1-7 done (#81). ZERO .js files remain. All 74 project files are .ts. 53 files have @ts-nocheck (Stage 8 removes them).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1749 tests**, all pass)
