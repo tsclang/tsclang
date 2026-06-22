@@ -7,21 +7,34 @@ import { isColorEnabled, makeColors } from './colors.js';
 // TscError
 // ---------------------------------------------------------------------------
 export class TscError extends Error {
-  constructor(message, opts = {}) {
+  isTscError: boolean;
+  filename: string;
+  line: number | null;
+  col: number | null;
+  endCol: number | null;
+  src: string | null;
+  label: string | null;
+  spans: any[];
+  help: string[];
+  notes: string[];
+  code: string | null;
+  kind: string;
+
+  constructor(message: string, opts: any = {}) {
     super(message);
     this.name       = 'TscError';
     this.isTscError = true;
     this.filename   = opts.filename ?? '<unknown>';
-    this.line       = opts.line    ?? null;   // 1-based
-    this.col        = opts.col     ?? null;   // 1-based
-    this.endCol     = opts.endCol  ?? null;   // exclusive end col
-    this.src        = opts.src     ?? null;   // full source text
-    this.label      = opts.label   ?? null;   // text after primary ^ caret
-    this.spans      = opts.spans   ?? [];     // secondary spans (see below)
-    this.help       = opts.help    ?? [];     // string[] → "= help:" lines
-    this.notes      = opts.notes   ?? [];     // string[] → "= note:" lines
-    this.code       = opts.code    ?? null;   // 'E001' etc.
-    this.kind       = opts.kind    ?? 'error'; // 'error' | 'warning'
+    this.line       = opts.line    ?? null;
+    this.col        = opts.col     ?? null;
+    this.endCol     = opts.endCol  ?? null;
+    this.src        = opts.src     ?? null;
+    this.label      = opts.label   ?? null;
+    this.spans      = opts.spans   ?? [];
+    this.help       = opts.help    ?? [];
+    this.notes      = opts.notes   ?? [];
+    this.code       = opts.code    ?? null;
+    this.kind       = opts.kind    ?? 'error';
   }
 }
 // Secondary span shape:
@@ -61,7 +74,7 @@ function visualPosition(rawLine, col1based) {
 //   color        — override color flag (default: from colors.js _enabled)
 //   contextLines — source lines of context around each span (default 1)
 // ---------------------------------------------------------------------------
-export function renderDiagnostic(diag, opts = {}) {
+export function renderDiagnostic(diag, opts: any = {}) {
   const contextLines = opts.contextLines ?? 1;
 
   // Resolve color: explicit opts.color overrides module-level _enabled
@@ -104,7 +117,7 @@ export function renderDiagnostic(diag, opts = {}) {
         if (ln >= 1 && ln <= srcLines.length) showSet.add(ln);
       }
     }
-    const showLines = [...showSet].sort((a, b) => a - b);
+    const showLines = [...showSet].sort((a: number, b: number) => a - b);
 
     // gutterWidth from max line number shown (tip 1: consistent | alignment)
     const maxLine    = showLines[showLines.length - 1] ?? diag.line;
@@ -156,7 +169,7 @@ export function renderDiagnostic(diag, opts = {}) {
       }
 
       // Source line — already stripped of \r; remove any stray \n too (tip 3)
-      const rawLine  = srcLines[ln - 1] ?? '';
+      const rawLine  = srcLines[(ln as number) - 1] ?? '';
       const expanded = expandTabs(rawLine);
       out.push(lineGutter(ln) + expanded);
 

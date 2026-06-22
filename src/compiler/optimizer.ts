@@ -42,11 +42,11 @@ function innerDecl(s) {
 // Phase 1: fold constant expressions (bottom-up, in-place clone)
 // ---------------------------------------------------------------------------
 
-function foldExpr(node) {
+function foldExpr(node: any) {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(foldExpr);
 
-  const out = {};
+  const out: any = {};
   for (const k of Object.keys(node)) {
     out[k] = k === 'parent' ? node[k] : foldExpr(node[k]);
   }
@@ -140,7 +140,7 @@ function substInExpr(node, constMap) {
   if (node.kind === 'Ident' && constMap.has(node.name)) {
     return { ...constMap.get(node.name) };
   }
-  const out = {};
+  const out: any = {};
   for (const k of Object.keys(node)) {
     out[k] = k === 'parent' ? node[k] : substInExpr(node[k], constMap);
   }
@@ -308,7 +308,7 @@ function optimizeNode(node) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-export function optimize(ast) {
+export function optimize(ast: any) {
   let body = optimizeBody(ast.body);
   body = body.map(optimizeNode);
   return { ...ast, body };
