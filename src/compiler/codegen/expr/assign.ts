@@ -310,7 +310,7 @@ export default {
           lines.push(`${I}int32_t ${divTmp} = ${r};`);
           lines.push(`${I}if (${divTmp} == 0) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
           const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
-          const minConst = minMap[leftType];
+          const minConst = (minMap as Record<string, string>)[leftType];
           if (minConst) {
             lines.push(`${I}if (${divTmp} == -1 && ${l} == ${minConst}) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
           }
@@ -327,7 +327,7 @@ export default {
         lines.push(`${I}int32_t ${tmp} = ${r};`);
         lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
         const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
-        const minConst = minMap[leftType];
+        const minConst = (minMap as Record<string, string>)[leftType];
         if (minConst) {
           const overflowPanic = this._strictRules?.has('no-abort')
             ? '_tsc_on_panic("integer overflow")'
@@ -358,7 +358,7 @@ export default {
     // Compound assignment widening check (#42)
     const compoundBinOps = { '+=':'+', '-=':'-', '*=':'*', '/=':'/', '%=':'%',
                              '&=':'&', '|=':'|', '^=':'^', '<<=':'<<', '>>=':'>>' };
-    const binOp = compoundBinOps[node.op];
+    const binOp = (compoundBinOps as Record<string, string>)[node.op];
     if (binOp) {
       const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right };
       const resultType = this._effectiveType(binNode);
