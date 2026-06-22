@@ -1,4 +1,3 @@
-// @ts-nocheck — #95: cascading type errors, needs manual annotation
 export default {
   _dispatchConversion(node: any, lines: any, depth: any) {
     const { callee, args } = node;
@@ -92,7 +91,7 @@ export default {
           this._topBlank();
           this.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
           this.topLevel.push(`static ${envType} ${prefix}_captured;`);
-          const closureLines = [];
+          const closureLines: any[] = [];
           this.pushScope();
           for (const v of freeVars) {
             this.define(v.name, { ctype: v.ctype, _cAlias: `${prefix}_captured.${v.name}`, varKind: 'let' });
@@ -271,7 +270,7 @@ export default {
                               'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                               'f32':'float','f64':'double' };
       if (typeName in primitiveMap) {
-        const ctype = primitiveMap[typeName];
+        const ctype = (primitiveMap as Record<string, string>)[typeName];
         const ident = this.cTypeToIdent(ctype);
         if (callee.prop === 'parse') {
           const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';

@@ -1,4 +1,3 @@
-// @ts-nocheck — #95: cascading type errors, needs manual annotation
 import { mangleParams } from '../types.js';
 // generics.js
 export default {
@@ -48,7 +47,7 @@ export default {
     const nonThisParams = tmpl.params.filter((p: any) => p.name !== 'this' && p.name !== 'self' && p.typeAnn);
     const suffix = nonThisParams.length > 0
       ? nonThisParams.map((p: any) => this.cTypeToIdent(this.resolveType(this.substType(p.typeAnn, subst)))).join('_')
-      : tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+      : tmpl.typeParams.map((tp: any) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
     const monoName = `${name}_${suffix}`;
 
     // Emit monomorphized function if not already done
@@ -60,7 +59,7 @@ export default {
     // Generate call args, casting ObjLit args to expected param struct types
     const resolvedParamTypes = nonThisParams.map((p: any) =>
       this.resolveType(this.substType(p.typeAnn, subst)));
-    const argsC = args.map((a, i) => {
+    const argsC = args.map((a: any, i: any) => {
       const expectedType = resolvedParamTypes[i];
       if (a.expr?.kind === 'ObjLit' && expectedType) {
         const structDef = this.classes.get(expectedType);
@@ -78,7 +77,7 @@ export default {
 
   // Create a virtual anonymous struct for field lookup (not emitted to C output)
   // Used internally by callGeneric to resolve utility types like Pick<T, K>
-  inferObjLitType(node) {
+  inferObjLitType(node: any) {
     const fields = node.props
       .filter((p: any) => !p.spread && !p.computed)
       .map((p: any) => ({ name: p.key, ctype: this.inferType(p.value) }));
@@ -96,7 +95,7 @@ export default {
   },
 
   // Substitute type params in a type annotation
-  substType(typeNode, subst) {
+  substType(typeNode: any, subst: any) {
     if (!typeNode) return typeNode;
     if (typeNode.kind === 'TypeRef') {
       if (subst.has(typeNode.name)) {
@@ -112,10 +111,10 @@ export default {
   },
 
   // Substitute type params in an AST node
-  substNode(node, subst) {
+  substNode(node: any, subst: any) {
     if (!node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((n: any) => this.substNode(n, subst));
-    const result = {};
+    const result: any = {};
     for (const [k, v] of Object.entries(node)) {
       if (k === 'typeAnn' || k === 'returnType' || k === 'castType') {
         result[k] = this.substType(v, subst);
@@ -128,7 +127,7 @@ export default {
     return result;
   },
 
-  emitMonoFunc(tmpl, monoName, subst) {
+  emitMonoFunc(tmpl: any, monoName: any, subst: any) {
     // Create a copy of the function with substituted type params
     const monoParams = tmpl.params.map((p: any) => ({
       ...p,
@@ -151,7 +150,7 @@ export default {
     this.visitFuncDecl(monoNode, true);
   },
 
-  emitMonoClass(tmpl, monoName, subst) {
+  emitMonoClass(tmpl: any, monoName: any, subst: any) {
     const fields  = tmpl.members.filter((m: any) => m.kind === 'Field');
     const methods = tmpl.members.filter((m: any) => m.kind === 'Method');
 

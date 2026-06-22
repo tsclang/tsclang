@@ -1,7 +1,6 @@
-// @ts-nocheck — #95: needs manual type annotation (cascading errors)
 // emit-helpers.js
 export default {
-  _emitIterableImpl(className, iterMethod, elemCType) {
+  _emitIterableImpl(className: any, iterMethod: any, elemCType: any) {
     const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
 
     // Find pre-return VarDecl stmts and the returned arrow
@@ -36,7 +35,7 @@ export default {
     const factoryLines = [];
     for (const s of preStmts) {
       if (s.kind !== 'VarDecl') continue;
-      const tmpLines = [];
+      const tmpLines: any[] = [];
       const initC = s.init ? this.exprToC(s.init, tmpLines, 1) : '0';
       const ct = s.typeAnn ? this.resolveType(s.typeAnn)
                            : (s.init ? this.inferType(s.init) : null) ?? 'int32_t';
@@ -63,7 +62,7 @@ export default {
     this._iterNextOptType = optType;
     this._iterNextIsComplex = _isComplex;
 
-    const nextBodyLines = [];
+    const nextBodyLines: any[] = [];
     if (returnedArrow.body?.kind === 'Block') {
       this.visitBlock(returnedArrow.body, nextBodyLines, 0);
     } else {
@@ -97,7 +96,7 @@ export default {
   },
 
   // Emit `typedef struct {...} Promise_T;` once per type
-  _emitPromiseTypedef(promiseType, innerType) {
+  _emitPromiseTypedef(promiseType: any, innerType: any) {
     if (this._emittedPromiseTypes.has(promiseType)) return;
     this._emittedPromiseTypes.add(promiseType);
     this._topBlank();
@@ -106,7 +105,7 @@ export default {
 
   // Emit a spawn block: generate env struct, fn, and call site code
   // Returns the C variable name of the thread handle
-  _emitSpawnBlock(varName, body, throwsTypes, lines, depth) {
+  _emitSpawnBlock(varName: any, body: any, throwsTypes: any, lines: any, depth: any) {
     if (this._strictRules?.has('no-threads')) {
       throw this.error('threads are forbidden in strict mode (no-threads)', body);
     }
@@ -116,7 +115,7 @@ export default {
 
     // Collect variables that are WRITTEN in the spawn body (to detect mutable capture)
     const writtenVars = new Set();
-    const findWrites = (stmts) => {
+    const findWrites = (stmts: any) => {
       for (const s of stmts ?? []) {
         if (s.kind === 'ExprStmt' && s.expr?.kind === 'Assign') {
           const lhs = s.expr.left;
@@ -133,7 +132,7 @@ export default {
     // Validate captures
     const _sendSafeTypes = new Set(['int8_t','int16_t','int32_t','int64_t',
       'uint8_t','uint16_t','uint32_t','uint64_t','float','double','bool','size_t','String']);
-    const _checkSend = (ctype, seen = new Set()) => {
+    const _checkSend = (ctype: any, seen: any = new Set()) => {
       if (_sendSafeTypes.has(ctype) || ctype.startsWith('Atomic') || ctype.startsWith('Readonly')) return true;
       if (ctype.startsWith('Array_') || ctype.startsWith('TscSet_') || ctype.startsWith('Map_') ||
           ctype.startsWith('TscMap_') || ctype.startsWith('opt_')) return false;
@@ -221,13 +220,13 @@ export default {
           const errC = this.exprToC(s.value);
           fnLines.push(`    env->result = (${resultType}){.ok = false, .error = ${errC}};`);
         } else {
-          const sl = [];
+          const sl: any[] = [];
           this.visitStmt(s, sl, 1);
           for (const l of sl) fnLines.push(l);
         }
       }
     } else {
-      const bodyLines2 = [];
+      const bodyLines2: any[] = [];
       this.visitBlock(body.kind === 'Block' ? body : { kind: 'Block', body: bodyStmts }, bodyLines2, 1);
       for (const l of bodyLines2) fnLines.push(l);
       fnLines.push(`    free(env);`);
@@ -251,11 +250,11 @@ export default {
   },
 
   // Collect free (outer-scope) variables referenced in a lambda body
-  _collectFreeVars(lambda) {
-    const paramNames = new Set((lambda.params || []).map(p => p.name));
-    const free = [];
+  _collectFreeVars(lambda: any) {
+    const paramNames = new Set((lambda.params || []).map((p: any) => p.name));
+    const free: any[] = [];
     const seen = new Set(paramNames);
-    const walkE = (e) => {
+    const walkE = (e: any) => {
       if (!e) return;
       if (e.kind === 'Ident' && !seen.has(e.name)) {
         const sym = this.lookup(e.name);
@@ -270,7 +269,7 @@ export default {
       if (e.elems) for (const a of (e.elems || [])) walkE(a?.expr);
       if (e.props) for (const p of (e.props || [])) walkE(p?.value);
     };
-    const walkS = (s) => {
+    const walkS = (s: any) => {
       if (!s) return;
       if (s.kind === 'ExprStmt') walkE(s.expr);
       if (s.kind === 'VarDecl') walkE(s.init);
@@ -283,7 +282,7 @@ export default {
     return free;
   },
 
-  _avrSleepModeToC(node) {
+  _avrSleepModeToC(node: any) {
     // SleepMode.Idle → SLEEP_MODE_IDLE, etc.
     if (node.kind === 'Member' && node.object.kind === 'Ident' && node.object.name === 'SleepMode') {
       const map = {
@@ -291,7 +290,7 @@ export default {
         PowerDown: 'SLEEP_MODE_PWR_DOWN', PowerSave: 'SLEEP_MODE_PWR_SAVE',
         Standby: 'SLEEP_MODE_STANDBY', ExtStandby: 'SLEEP_MODE_EXT_STANDBY',
       };
-      return map[node.prop] ?? `SLEEP_MODE_${node.prop.toUpperCase()}`;
+      return (map as Record<string, string>)[node.prop] ?? `SLEEP_MODE_${node.prop.toUpperCase()}`;
     }
     return this.exprToC(node, [], 0);
   },

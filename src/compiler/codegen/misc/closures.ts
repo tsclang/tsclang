@@ -1,4 +1,3 @@
-// @ts-nocheck — #95: cascading type errors, needs manual annotation
 // closures.js
 
 const SIMPLE_CTYPES = new Set([
@@ -258,7 +257,7 @@ export default {
       const p = arrowNode.params[i];
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
-      const symInfo = { ctype: ct };
+      const symInfo: any = { ctype: ct };
       if (ct === 'String *') {
         symInfo.isPointer = true;
         symInfo.isRefParam = true;
@@ -266,7 +265,7 @@ export default {
       }
       this.define(p.name, symInfo);
     }
-    const bodyLines = [];
+    const bodyLines: any[] = [];
     if (arrowNode.body.kind === 'Block') {
       this.visitBlock(arrowNode.body, bodyLines, 0);
     } else {
