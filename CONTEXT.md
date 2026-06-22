@@ -41,7 +41,7 @@ input.tsc
 
 **Generics:** Monomorphization in `generics.js`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
 
-**Module bundling:** `bin/index.js` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
+**Module bundling:** `bin/index.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
 
 ---
 
@@ -454,7 +454,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Add a new builtin (console, Math, etc.) | `stdlib-registry.js` (LANGUAGE_BUILTINS), `calls/builtin.js` |
 | Add a new type annotation | `types/resolve.js` (TSC→C), `types/infer.js` (inference) |
 | Add a new decorator | `top-level/decorators.js` (codegen), `parser.js` (parse) |
-| Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `bin/index.js` (loadProfile) |
+| Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `bin/index.ts` (loadProfile) |
 | Add a new strict rule | `codegen.js` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
 | Fix borrow checker error | `codegen.js` (scope/borrow core), `stmt/vardecl.js`, `expr/assign.js`, `calls/*.js` |
 | Fix cleanup/memory leak | `codegen.js` (_blockCleanupStack), `stmt/control-flow.js`, `stmt/vardecl.js` |
@@ -462,7 +462,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Fix string ownership | `stmt/vardecl.js`, `expr/assign.js`, `calls/call-dispatch.js`, `calls/method-dispatch.js`, `top-level/func.js` |
 | Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
 | Run tests | `node test/runner.js 03-types` (filter by spec section or feature name) |
-| Compile manually | `node bin/index.js build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
+| Compile manually | `node bin/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure
 

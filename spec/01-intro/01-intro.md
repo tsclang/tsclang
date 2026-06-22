@@ -117,7 +117,7 @@ cd out && cmake --build . && ./hello
 git clone <repo-url> tsclang
 cd tsclang
 npm install
-node bin/index.js --version
+node bin/index.ts --version
 ```
 
 ### Установка через npm (roadmap)

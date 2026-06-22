@@ -145,7 +145,7 @@
 | 14 | import type ignored | **RESOLVED** | `parser.js:512-513` — `import type { X }` парсится и помечается `typeOnly: true`. |
 | 95 | String sort AVR PROGMEM | **NEEDS INVESTIGATION** | `runtime.h` — `toSorted` на AVR может обращаться к PROGMEM строкам как к обычным. |
 | 96 | String concat temp leak | **NEEDS INVESTIGATION** | `runtime.h` — конкатенация через `+` может утекать временные значения. |
-| 97 | Non-const init library mode | **NEEDS INVESTIGATION** | `bin/index.js` — неконстантная инициализация в library mode. |
+| 97 | Non-const init library mode | **NEEDS INVESTIGATION** | `bin/index.ts` — неконстантная инициализация в library mode. |
 | 98 | Names not module-prefixed | **NEEDS INVESTIGATION** | `top-level.js` — имена внутри модуля не получают prefix. |
 | 99 | i32 overflow unchecked | **NEEDS INVESTIGATION** | `expr/binary.js` — переполнение i32 не проверяется. |
 | 100 | i8=128 no range check | **NEEDS INVESTIGATION** | `vardecl.js` — `i8 = 128` не проверяется на диапазон. |
@@ -160,9 +160,9 @@
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
 | 106 | Decorator wrapper `(void)` | **NEEDS INVESTIGATION** | `decorators.js` — wrapper должна использовать `(void)` для неиспользуемых параметров. |
-| 107 | Install lock file stale | **NEEDS INVESTIGATION** | `bin/index.js` — `tsc.lock` может быть устаревшим. |
-| 108 | Watch doesn't monitor imports | **NEEDS INVESTIGATION** | `bin/index.js` — `--watch` не отслеживает изменения в импортированных файлах. |
-| 109 | Missing input file poor error | **NEEDS INVESTIGATION** | `bin/index.js` — нет входного файла — неинформативное сообщение. |
+| 107 | Install lock file stale | **NEEDS INVESTIGATION** | `bin/index.ts` — `tsc.lock` может быть устаревшим. |
+| 108 | Watch doesn't monitor imports | **NEEDS INVESTIGATION** | `bin/index.ts` — `--watch` не отслеживает изменения в импортированных файлах. |
+| 109 | Missing input file poor error | **NEEDS INVESTIGATION** | `bin/index.ts` — нет входного файла — неинформативное сообщение. |
 
 ### Spec↔impl расхождения (верифицированные)
 
@@ -208,7 +208,7 @@
 | 01-2 | `let mut` — mutable variable | **RESOLVED**: `mut` — modifier методов | Книга напишет правильно |
 | ~~01-3~~ | ~~Алиасы `b`, `r`, `l`~~ | ~~Исключено~~ | — |
 | ~~01-4~~ | ~~`tsclang init --declaration`~~ | ~~Исключено~~ | — |
-| 01-5 | `--emit hex` для AVR | **RESOLVED** | bin/index.js:1306-1338 | Полная реализация: avr-gcc → .elf → avr-objcopy → .hex. Help text обновлён: `--emit <c|binary|hex|wasm>` |
+| 01-5 | `--emit hex` для AVR | **RESOLVED** | bin/index.ts:1306-1338 | Полная реализация: avr-gcc → .elf → avr-objcopy → .hex. Help text обновлён: `--emit <c|binary|hex|wasm>` |
 | ~~01-6~~ | ~~`tsclang build --clean`~~ | ~~Исключено~~ | — |
 | 01-7 | `lint --fix` = форматтер | **RESOLVED**: let→const auto-fix | Книга напишет правильно |
 | ~~01-8~~ | ~~`tsclang lsp --port 7777`~~ | ~~Исключено~~ | — |

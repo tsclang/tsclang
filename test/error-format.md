@@ -153,7 +153,7 @@ function visualCol(srcLine, col1based) {
 
 Оба конца спана (`col`, `endCol`) вычисляются через `visualCol()` — каретка не съедет.
 
-### `bin/index.js` изменения
+### `bin/index.ts` изменения
 
 ```js
 import { setColorEnabled } from '../src/compiler/colors.js';

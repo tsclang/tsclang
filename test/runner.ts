@@ -576,7 +576,7 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
 // ---------------------------------------------------------------------------
 async function executeJsonTest(testDir, kind) {
   if (!checkTsclang()) {
-    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
+    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.ts missing)' };
   }
 
   const inputJson = join(testDir, 'input.json');
@@ -611,7 +611,7 @@ async function executeJsonTest(testDir, kind) {
 // ---------------------------------------------------------------------------
 async function executeShTest(testDir, kind, tmpBase) {
   if (!checkTsclang()) {
-    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
+    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.ts missing)' };
   }
 
   const script = await readFile(join(testDir, 'input.sh'), 'utf8');
