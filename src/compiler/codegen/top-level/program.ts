@@ -165,7 +165,7 @@ export default {
       // Detect cycles via DFS
       const visited = new Set();
       const inStack = new Map(); // funcName → index in path
-      const path = [];
+      const path: any[] = [];
       const _dfs = (fn: any) => {
         if (inStack.has(fn)) {
           const cycleStart = inStack.get(fn);
