@@ -4,12 +4,14 @@
 // Three test kinds: [R] run, [F] fragment (C-compare only), [E] compiler error
 
 import { readdir, readFile, mkdir, rm, copyFile } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { spawn, spawnSync } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { parsePlatformDecl } from '../src/compiler/profile.js';
+import { compileTsc } from '../src/compiler/compile.js';
+import { renderDiagnostic } from '../src/compiler/error.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -436,54 +438,90 @@ function readMeta(testDir) {
   } catch { return { flags: [], profile: null }; }
 }
 
+// Convert meta.json + flags.txt to codegen opts (bypasses CLI flag parsing)
+function metaToOpts(testDir) {
+  const opts = {};
+  const metaPath = join(testDir, 'meta.json');
+  let meta = {};
+  if (existsSync(metaPath)) {
+    try { meta = JSON.parse(readFileSync(metaPath, 'utf8')); } catch {}
+  }
+
+  // Also read tsc.package.json (some tests specify config here)
+  const pkgPath = join(testDir, 'tsc.package.json');
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      if (pkg.strict && !meta.strict) meta.strict = Array.isArray(pkg.strict) ? pkg.strict : [pkg.strict];
+    } catch {}
+  }
+
+  // Profile-based capabilities
+  if (meta.profile) {
+    const prof = loadProfile(meta.profile);
+    if (prof) {
+      opts.target = prof.target || meta.profile;
+      if (prof.allocator) opts.allocator = prof.allocator;
+      if (prof.async) opts.scheduler = prof.async;
+      if (prof.defaultNumber) opts.defaultNumber = prof.defaultNumber;
+      opts.capabilities = prof;
+    }
+  }
+
+  // Direct meta overrides
+  if (meta.target) opts.target = meta.target;
+  if (meta.defaultNumber) opts.defaultNumber = meta.defaultNumber;
+  if (meta.allocator) opts.allocator = meta.allocator;
+  if (meta.scheduler) opts.scheduler = meta.scheduler;
+  if (meta.ramSize) opts.ramSize = meta.ramSize;
+  if (meta.stackSize) opts.stackSize = meta.stackSize;
+  if (meta.optimize) opts.optimize = true;
+  if (meta.debug) opts.debugLines = true;
+  if (meta.strict) opts.strict = Array.isArray(meta.strict) ? meta.strict : [meta.strict];
+
+  return opts;
+}
+
 // ---------------------------------------------------------------------------
 // .tsc tests — full compiler pipeline
 // ---------------------------------------------------------------------------
 async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
-  if (!checkTsclang()) {
-    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.js missing)' };
-  }
-
   const inputSrc = join(testDir, 'input.tsc');
+  const opts = metaToOpts(testDir);
 
-  // Step 1: Run tsclang
-  const { flags: metaFlags, profile: metaProfile, profTarget } = readMeta(testDir);
-  const extraFlags = [
-    ...(existsSync(join(testDir, 'flags.txt'))
-      ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
-      : []),
-    ...metaFlags,
-  ];
-  const tscResult = await run(
-    process.execPath,
-    [TSCLANG_BIN, 'build', inputSrc, '--emit', 'c', '--outDir', tmpBase, ...extraFlags],
-  );
+  // Step 1: Compile directly (no subprocess)
+  let result, stderr = '';
+  try {
+    result = compileTsc(inputSrc, opts);
+  } catch (e) {
+    if (e?.isTscErrorBag) {
+      stderr = e.errors.map(err => renderDiagnostic(err, { contextLines: 1 })).join('\n');
+      stderr += '\naborting due to ' + e.errors.length + ' error' + (e.errors.length > 1 ? 's' : '') + '\n';
+    } else {
+      stderr = e?.message || String(e);
+    }
+    if (kind === 'E') {
+      return checkErrorOutput(testDir, stderr);
+    }
+    return fail(testDir, 'tsclang', `Compiler error: ${stderr}`, stderr);
+  }
 
   if (kind === 'E') {
-    if (tscResult.code === 0) {
-      return fail(testDir, 'compiler-exit', 'Expected compiler error but exited 0', tscResult.stdout || tscResult.stderr);
-    }
-    return checkErrorOutput(testDir, tscResult.stderr + tscResult.stdout);
+    return fail(testDir, 'compiler-exit', 'Expected compiler error but compilation succeeded', '');
   }
 
-  if (tscResult.code !== 0) {
-    return fail(testDir, 'tsclang', `tsclang exited ${tscResult.code}`, tscResult.stderr || tscResult.stdout);
-  }
-
-  // Step 2: Compare C output
+  // Write C output
   const stem = basename(inputSrc, extname(inputSrc));
   const generatedC = join(tmpBase, stem + '.c');
-
-  if (!existsSync(generatedC)) {
-    return fail(testDir, 'c-output', `Expected C file not found: ${generatedC}`, `tsclang stdout: ${tscResult.stdout}`);
-  }
+  writeFileSync(generatedC, result.c);
 
   const cCompareResult = await compareCOutput(testDir, generatedC);
   if (cCompareResult) return cCompareResult;
 
   // Warning verification (for tests with expected.warning)
   if (hasWarning) {
-    const warningResult = await checkErrorOutput(testDir, tscResult.stderr + tscResult.stdout, 'expected.warning');
+    const warningText = (result.warnings || []).map(w => renderDiagnostic(w, { contextLines: 1 })).join('\n');
+    const warningResult = await checkErrorOutput(testDir, warningText, 'expected.warning');
     if (warningResult.status !== 'pass') return warningResult;
   }
 
