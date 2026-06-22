@@ -1,13 +1,13 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stage 1 done, #83 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-2 done, #83/#84 closed).
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string). JS→TS migration in progress (#81, Stages 1-8 = #83-#90). Stage 1 (infrastructure) done.
+- **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string). JS→TS migration in progress (#81, Stages 1-8 = #83-#90). Stages 1-2 done: infrastructure + type definitions (`src/compiler/ast-types/`).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
 - **Tests:** `node test/runner.js 03-types` (15 spec-based dirs, **1749 tests**, all pass)
@@ -446,6 +446,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 
 | I need to... | Look at... |
 |--------------|-----------|
+| Add a new AST node type | `ast-types/ast.ts` (add interface + union member) |
 | Add a new statement type | `stmt/index.js` (dispatch), then specific file in `stmt/` |
 | Add a new expression type | `expr/dispatch.js` (exprToC switch), then `expr/*.js` |
 | Add a new method on arrays/Map/Set | `calls/stdlib.js` (dispatch + emit), `types/infer.js` (return type), `runtime.h` (C macro) |
