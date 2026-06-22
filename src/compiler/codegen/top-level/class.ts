@@ -319,7 +319,7 @@ export default {
     }
   },
 
-  _emitPoolClass(name, poolDec, node) {
+  _emitPoolClass(name: any, poolDec: any, node: any) {
     const poolSize = parseInt(poolDec.args[0].value);
     const poolVar  = `_${name.toLowerCase()}_pool`;
     const maskVar  = `_${name.toLowerCase()}_pool_mask`;
@@ -382,7 +382,7 @@ export default {
     this.addTop('');
   },
 
-  _markHeapClass(name, node) {
+  _markHeapClass(name: any, node: any) {
     const cls = this.classes.get(name);
     if (cls) {
       cls._heapClassName = name;
@@ -391,7 +391,7 @@ export default {
     }
   },
 
-  _ensureHeapDestructor(className) {
+  _ensureHeapDestructor(className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isHeap || cls._heapDestructorEmitted) return;
     cls._heapDestructorEmitted = true;
@@ -410,7 +410,7 @@ export default {
     this.addTop('');
   },
 
-  _classHasInheritance(cBase) {
+  _classHasInheritance(cBase: any) {
     return cBase != null;
   },
 
@@ -435,7 +435,7 @@ export default {
     this.addTop('');
   },
 
-  _getStringFields(className) {
+  _getStringFields(className: any) {
     const cls = this.classes.get(className);
     if (!cls?.fields) return [];
     const result = [];
