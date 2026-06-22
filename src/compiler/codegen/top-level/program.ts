@@ -193,7 +193,7 @@ export default {
     // Pre-scan: collect all classes used in throws clauses → _throwsClasses
     // Also collect union groups for _new determination
     this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
-    const _throwsUnions = []; // each element = array of class names from one throws clause
+    const _throwsUnions: any[] = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
     const _flattenThrowsNames = (throwsTypes: any) => {
       const names = [];
