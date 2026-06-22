@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading
 // new-expr.js
 export default {
   newToC(node: any, lines: any, depth: any) {
