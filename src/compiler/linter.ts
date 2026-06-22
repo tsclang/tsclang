@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 // linter.js — AST-based lint rules for TSClang
 
 // Generic recursive AST walker

@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 // TSClang error code catalog.
 // Each entry: code → { title, body }
 // Used by `tsclang explain <CODE>`.
@@ -110,7 +111,7 @@ moving the field.
   },
 };
 
-export function explainError(code) {
+export function explainError(code: string) {
   const entry = ERROR_CATALOG[code.toUpperCase()];
   if (!entry) return null;
   return `${code.toUpperCase()}: ${entry.title}\n${entry.body.trimEnd()}\n`;

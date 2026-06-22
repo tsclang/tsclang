@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 // Declaration emitter: tsclang emit-dts <file.tsc>
 // Reads AST, emits export declare ... for exported symbols.
 

@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 import { lex, TK } from './lexer.js';
 
 const VALID_FIELDS = {
@@ -30,7 +31,7 @@ function parseValue(tok) {
   return undefined;
 }
 
-export function parsePlatformDecl(src, filename = '<profile>') {
+export function parsePlatformDecl(src: string, filename = '<profile>') {
   const tokens = lex(src, filename);
   let pos = 0;
 

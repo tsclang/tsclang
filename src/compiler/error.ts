@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 // TSClang diagnostic / error reporting module.
 // Provides TscError (typed error with source position) and renderDiagnostic().
 

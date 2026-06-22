@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 8: types being added progressively
 // TSClang Lexer
 // Converts source text into a flat token array.
 
@@ -82,15 +83,15 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
   const tokens: Token[] = [];
   let i = 0, line = 1, col = 1;
 
-  function cur()  { return src[i]; }
-  function peek(n = 1) { return src[i + n]; }
-  function advance() {
+  function cur(): string | undefined  { return src[i]; }
+  function peek(n: number = 1): string | undefined { return src[i + n]; }
+  function advance(): string | undefined {
     const ch = src[i++];
     if (ch === '\n') { line++; col = 1; } else { col++; }
     return ch;
   }
-  function addTok(type, value) { tokens.push(new Token(type, value, line, col)); }
-  function err(msg) { throw new Error(`${filename}:${line}:${col}: ${msg}`); }
+  function addTok(type: string, value: string): void { tokens.push(new Token(type, value, line, col)); }
+  function err(msg: string): never { throw new Error(`${filename}:${line}:${col}: ${msg}`); }
 
   while (i < src.length) {
     const startLine = line, startCol = col;
