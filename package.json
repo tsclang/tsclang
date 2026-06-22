@@ -42,7 +42,13 @@
     "tsclang"
   ],
   "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "node test/runner.js",
     "test:v": "node test/runner.js --verbose"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }
