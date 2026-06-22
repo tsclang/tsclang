@@ -505,22 +505,22 @@ input.tsc:3:5  TypeError: function `traverse()` is recursive and stack usage can
 ## Текущий хардкод (для замены)
 
 ```
-codegen.js:9     EMBEDDED_TARGETS = {avr, arm, stm32}
-codegen.js:10    ALL_EMBEDDED_TARGETS = {avr, arm, stm32, nes, genesis, ps1, spectrum}
-program.js:106   _retroTargets = [nes, genesis, ps1, ps2, dos, spectrum]
-program.js:112   _noFloatTargets = [nes, genesis, ps1, spectrum]
-program.js:119   _noHeapTargets = [nes, genesis, ps1, spectrum]
-program.js:99    _autoDefaultNumber = _isEmbedded() ? 'f32' : 'f64'
-resolve.js:14    usize → uint16_t для nes/spectrum (хардкод)
+codegen.ts:9     EMBEDDED_TARGETS = {avr, arm, stm32}
+codegen.ts:10    ALL_EMBEDDED_TARGETS = {avr, arm, stm32, nes, genesis, ps1, spectrum}
+program.ts:106   _retroTargets = [nes, genesis, ps1, ps2, dos, spectrum]
+program.ts:112   _noFloatTargets = [nes, genesis, ps1, spectrum]
+program.ts:119   _noHeapTargets = [nes, genesis, ps1, spectrum]
+program.ts:99    _autoDefaultNumber = _isEmbedded() ? 'f32' : 'f64'
+resolve.ts:14    usize → uint16_t для nes/spectrum (хардкод)
 ```
 
 ## Этапы реализации
 
 1. ~~Обновить `13-build.md`~~ — DONE (устаревшие поля заменены, примеры обновлены)
 2. ~~Обновить все ~90 `meta.json` тестов~~ — DONE (72 мигрировано на `profile`, 20 используют legacy)
-3. ~~Обновить компилятор~~ — DONE (capabilities + fallback в codegen.js, program.js, resolve.js)
+3. ~~Обновить компилятор~~ — DONE (capabilities + fallback в codegen.ts, program.ts, resolve.ts)
 4. ~~Обновить CLI~~ — DONE (`--platform`, `--build`, `node_modules` → `tsc_packages`)
 5. ~~Создать встроенные профили~~ — DONE (`src/profiles/` — 12 JSON-профилей)
 6. ~~Добавить тесты на новые ошибки~~ — DONE (fpu:false + float, Arc+static, async:none + async function)
-7. ~~Удалить fallback-хардкод~~ — DONE (capabilities всегда передаются, хардкод удалён из codegen.js, program.js, resolve.js)
+7. ~~Удалить fallback-хардкод~~ — DONE (capabilities всегда передаются, хардкод удалён из codegen.ts, program.ts, resolve.ts)
 8. ~~Превратить JSON-профили в profile-пакеты~~ — DONE (`index.d.tsc` для всех 12 профилей; `include/` и `toolchain.cmake` отложены до реализации runtime)

@@ -74,10 +74,10 @@
 | L-2 | Лексика | `**=` и `*=` делят TK.STAREQ | **RESOLVED** | Code smell | Добавлен TK.STARSTAREQ для `**=` |
 | L-3 | Лексика | `import { X as Y }` не работает | **ALREADY RESOLVED** | Устаревшая находка | Parser+codegen уже поддерживают. Тест 12-modules/import/import-rename проходит |
 | L-4 | Лексика | Legacy octal не задокументирован | **RESOLVED** | Спец неполон | Добавлена заметка в spec/03-types/03-numbers.md |
-| T-1 | Типы | `?.` property access — no null-safety check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` OptChain: `has_value` guard для opt_T objects. `infer.js` OptChain: возвращает `opt_<fieldType>`. 3 теста: chain-field-null/value/i32 |
-| T-2 | Типы | `as` non-null assertion: no runtime null-check | **RESOLVED** | Impl неполон → fixed | `dispatch.js` Cast: `opt_T as T` → `has_value ? .value : (fprintf+abort)`. 1 тест: as-nonnull-value |
+| T-1 | Типы | `?.` property access — no null-safety check | **RESOLVED** | Impl неполон → fixed | `dispatch.ts` OptChain: `has_value` guard для opt_T objects. `infer.ts` OptChain: возвращает `opt_<fieldType>`. 3 теста: chain-field-null/value/i32 |
+| T-2 | Типы | `as` non-null assertion: no runtime null-check | **RESOLVED** | Impl неполон → fixed | `dispatch.ts` Cast: `opt_T as T` → `has_value ? .value : (fprintf+abort)`. 1 тест: as-nonnull-value |
 | T-3 | Типы | `if (opt_T_var)` truthiness: no explicit handler | **RESOLVED** | Impl неполон → fixed | `_truthyToC()` method: string→`.length>0`, opt_string→`has_value && .value.length>0`, opt_i32→`has_value && .value!=0`, opt_class→`has_value`. + narrowing via truthiness. 14 тестов в 03-types/truthy/ |
-| T-4 | Типы | String literal union rodata: simple array vs designated initializers | **RESOLVED** | Cosmetic | `types-alias.js:61` — `{ "a", "b" }` вместо `{ [Dir_a] = "a" }`. Функционально эквивалентно. Designated initializers — C99, но и простой init работает |
+| T-4 | Типы | String literal union rodata: simple array vs designated initializers | **RESOLVED** | Cosmetic | `types-alias.ts:61` — `{ "a", "b" }` вместо `{ [Dir_a] = "a" }`. Функционально эквивалентно. Designated initializers — C99, но и простой init работает |
 | T-5 | Типы | Null representation for class types: inline vs pointer | **DEFERRED** | Spec vs impl | Отложено: overhead на embedded для больших классов, но нет текущих тестов с opt_Class на AVR. Решить при embedded-оптимизации (книга Блок 10/23). |
 | T-6 | Типы | Truthy for class/array/Set/Map: always truthy | **RESOLVED** | Spec warning → impl | `_truthyToC()` emits `this.warn("condition is always true")` + returns `1` для class/array/Map/Set. Тесты пока невозможны — раннер не поддерживает warning-verification. |
 
@@ -89,8 +89,8 @@
 
 | # | Что закрыто | Когда | Как |
 |---|-------------|-------|-----|
-| R-1 | defaultNumber: `number` → f64/f32/auto-detect | 2026-05-27 | `types.js`, `resolve.js`, `helpers.js` — параметризовано; CLI `--default-number`; auto-detect desktop→f64, avr→f32 |
-| R-2 | `#[target(avr)]`, `#[profile(...)]`, `#[allocator(none)]` | 2026-05-27 | Удалены из parser.js → syntax error с help; заменены CLI flags / meta.json / tsc.package.json |
+| R-1 | defaultNumber: `number` → f64/f32/auto-detect | 2026-05-27 | `types.ts`, `resolve.ts`, `helpers.ts` — параметризовано; CLI `--default-number`; auto-detect desktop→f64, avr→f32 |
+| R-2 | `#[target(avr)]`, `#[profile(...)]`, `#[allocator(none)]` | 2026-05-27 | Удалены из parser.ts → syntax error с help; заменены CLI flags / meta.json / tsc.package.json |
 | R-3 | `#[isr(...)]` → `@embedded.isr(...)` | 2026-05-27 | Декоратор с async check; 2 теста мигрированы |
 | R-4 | Wasm bare + emscripten targets | 2026-05-27 | `wasm` (bare, restricted) + `wasm32` (emscripten = desktop); `runtime_wasm.h`; ограничения в dispatch/console/program |
 | R-5 | `// @ts-ignore-perf` | 2026-05-27 | Удалён из spec и impl |
@@ -109,31 +109,31 @@
 
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
-| 65 | Async function arguments silently zeroed | **RESOLVED** | `async-emit.js:82` — params включены в state struct. Присваиваются перед первым poll. |
-| 66 | Array of optional types stores values wrong | **RESOLVED** | `helpers.js` — `_wrapOptValue()` + `_isOptType()` + `_ensureOptArrayMacros()`. Array literal: `(opt_T){true, val}`. Push: extra parens for macro comma. Pop: skip double-wrap. Free: dynamic macro. Console.log: `isOptArrayIndex` check. 3 new tests. |
-| 67 | Tuple destructuring ignores type annotation | **RESOLVED** | `destruct.js:115` — извлечён `typeAnn`, при fallback используется `resolveType(typeAnn)` для определения tuple struct. +2 теста: destruct-typeann, destruct-typeann-f64 |
-| 89 | Map string keys use-after-free | **MITIGATED** | `vardecl.js:258` — компилятор ограничивает ключи compile-time string literals. Runtime UAF невозможна на практике. `runtime.h:575-579` — shallow copy без retain, но только для литералов. |
+| 65 | Async function arguments silently zeroed | **RESOLVED** | `async-emit.ts:82` — params включены в state struct. Присваиваются перед первым poll. |
+| 66 | Array of optional types stores values wrong | **RESOLVED** | `helpers.ts` — `_wrapOptValue()` + `_isOptType()` + `_ensureOptArrayMacros()`. Array literal: `(opt_T){true, val}`. Push: extra parens for macro comma. Pop: skip double-wrap. Free: dynamic macro. Console.log: `isOptArrayIndex` check. 3 new tests. |
+| 67 | Tuple destructuring ignores type annotation | **RESOLVED** | `destruct.ts:115` — извлечён `typeAnn`, при fallback используется `resolveType(typeAnn)` для определения tuple struct. +2 теста: destruct-typeann, destruct-typeann-f64 |
+| 89 | Map string keys use-after-free | **MITIGATED** | `vardecl.ts:258` — компилятор ограничивает ключи compile-time string literals. Runtime UAF невозможна на практике. `runtime.h:575-579` — shallow copy без retain, но только для литералов. |
 
 ### Высокие (incorrect code generation / type safety)
 
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
-| 35 | Async arrow parse | **RESOLVED** | `parser.js:1781-1831` — полный парсинг arrow functions включая `async`. |
-| 37 | Math.random linker error | **RESOLVED** | `builtin-helpers.js:107` — `random: 'tsc_math_random()'`. Runtime предоставляет функцию. |
+| 35 | Async arrow parse | **RESOLVED** | `parser.ts:1781-1831` — полный парсинг arrow functions включая `async`. |
+| 37 | Math.random linker error | **RESOLVED** | `builtin-helpers.ts:107` — `random: 'tsc_math_random()'`. Runtime предоставляет функцию. |
 | 38 | URL encode/decode missing | **RESOLVED** | Реализовано через `import { url } from "std/string"`: `url.encode()`/`url.decode()`/`url.encodeComponent()`/`url.decodeComponent()` → `std/url.h`. JS глобальные функции намеренно не поддерживаются — namespace API вместо них. |
-| 55 | Async generators Promise wrapping | **RESOLVED** | `func.js:126-134`, `async-stmt.js:306-348` — корректная обработка async generators. |
+| 55 | Async generators Promise wrapping | **RESOLVED** | `func.ts:126-134`, `async-stmt.ts:306-348` — корректная обработка async generators. |
 | 58 | Regex literals missing | **RESOLVED (by design)** | Regex через `new Regex("pattern")` конструктор. Lexer не имеет REGEX token — осознанное решение. |
 | 90 | Channel thread safety | **RESOLVED** | `runtime.h:3018-3079` — mutex + condvar, thread-safe MPMC. |
-| 91 | Recursive type alias infinite struct | **NEEDS INVESTIGATION** | `types-alias.js` — нет обнаружения циклов. `type A = { next: A }` может дать бесконечный struct. |
-| 92 | Type exports invisible across modules | **NEEDS INVESTIGATION** | Type-only imports парсятся (`parser.js:512-513`), но взаимодействие с type resolution через границы модулей не проверено. |
-| 93 | Import renaming misparse | **RESOLVED** | parser.js:536-541 — `import { X as Y }` полностью поддерживается. Codegen (codegen.js:55-57) обрабатывает alias. Тест 12-modules/import/import-rename проходит. |
-| 94 | Division by zero no guard | **RESOLVED** | `operators.js:257-274`, `assign.js:206-216` — integer `/` и `%` emit runtime guard: `fprintf(stderr, "panic: division by zero\n"); abort();`. Float → IEEE 754 Infinity/NaN. Тест `03-types/err-div-zero`. |
-| H-1 | async+for-of wrong C | **RESOLVED** | `async-stmt.js:306-348` — полная реализация async for-await-of. |
-| H-2 | async+closure env lost | **RESOLVED** | `async-emit.js:56-92` — free variables промотируются в state struct fields. |
-| H-3 | Nested closures dangling pointer | **NEEDS INVESTIGATION** | `vardecl.js:1081-1083` — env на стеке. Если closure escaping scope → dangling pointer. |
+| 91 | Recursive type alias infinite struct | **NEEDS INVESTIGATION** | `types-alias.ts` — нет обнаружения циклов. `type A = { next: A }` может дать бесконечный struct. |
+| 92 | Type exports invisible across modules | **NEEDS INVESTIGATION** | Type-only imports парсятся (`parser.ts:512-513`), но взаимодействие с type resolution через границы модулей не проверено. |
+| 93 | Import renaming misparse | **RESOLVED** | parser.ts:536-541 — `import { X as Y }` полностью поддерживается. Codegen (codegen.ts:55-57) обрабатывает alias. Тест 12-modules/import/import-rename проходит. |
+| 94 | Division by zero no guard | **RESOLVED** | `operators.ts:257-274`, `assign.ts:206-216` — integer `/` и `%` emit runtime guard: `fprintf(stderr, "panic: division by zero\n"); abort();`. Float → IEEE 754 Infinity/NaN. Тест `03-types/err-div-zero`. |
+| H-1 | async+for-of wrong C | **RESOLVED** | `async-stmt.ts:306-348` — полная реализация async for-await-of. |
+| H-2 | async+closure env lost | **RESOLVED** | `async-emit.ts:56-92` — free variables промотируются в state struct fields. |
+| H-3 | Nested closures dangling pointer | **NEEDS INVESTIGATION** | `vardecl.ts:1081-1083` — env на стеке. Если closure escaping scope → dangling pointer. |
 | H-4 | Recursive closures undeclared | **NEEDS INVESTIGATION** | Нет forward-reference механизма для self-referencing closures. |
-| H-5 | String comparison struct UB | **RESOLVED** | `operators.js:227-232` — String equality использует `tsc_string_eq()`. |
-| H-6 | objPattern in for-of unhandled | **RESOLVED** | `VarDestructObj` реализован — `destruct.js:5`, `stmt.js:42`. Map entries с array destructuring + object destructuring работают. |
+| H-5 | String comparison struct UB | **RESOLVED** | `operators.ts:227-232` — String equality использует `tsc_string_eq()`. |
+| H-6 | objPattern in for-of unhandled | **RESOLVED** | `VarDestructObj` реализован — `destruct.ts:5`, `stmt.ts:42`. Map entries с array destructuring + object destructuring работают. |
 | H-7 | Closure type loss on assignment | **NEEDS INVESTIGATION** | Нужно проверить теряется ли тип при присвоении closure переменной. |
 | H-8 | Array method chaining defaults to i32 | **NEEDS INVESTIGATION** | Нужно проверить теряет ли `.map().filter()` тип элемента. |
 
@@ -142,24 +142,24 @@
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
 | 1 | Date.toLocaleTimeString missing | **PARTIALLY RESOLVED** | `toLocaleDateString` реализован. `toLocaleTimeString` — НЕТ (только `toTimeString`). |
-| 14 | import type ignored | **RESOLVED** | `parser.js:512-513` — `import type { X }` парсится и помечается `typeOnly: true`. |
+| 14 | import type ignored | **RESOLVED** | `parser.ts:512-513` — `import type { X }` парсится и помечается `typeOnly: true`. |
 | 95 | String sort AVR PROGMEM | **NEEDS INVESTIGATION** | `runtime.h` — `toSorted` на AVR может обращаться к PROGMEM строкам как к обычным. |
 | 96 | String concat temp leak | **NEEDS INVESTIGATION** | `runtime.h` — конкатенация через `+` может утекать временные значения. |
 | 97 | Non-const init library mode | **NEEDS INVESTIGATION** | `bin/index.ts` — неконстантная инициализация в library mode. |
-| 98 | Names not module-prefixed | **NEEDS INVESTIGATION** | `top-level.js` — имена внутри модуля не получают prefix. |
-| 99 | i32 overflow unchecked | **NEEDS INVESTIGATION** | `expr/binary.js` — переполнение i32 не проверяется. |
-| 100 | i8=128 no range check | **NEEDS INVESTIGATION** | `vardecl.js` — `i8 = 128` не проверяется на диапазон. |
-| 101 | f64→i32 truncation | **NEEDS INVESTIGATION** | `vardecl.js` — `let x: i32 = 3.14` — нет проверки на потерю точности. |
+| 98 | Names not module-prefixed | **NEEDS INVESTIGATION** | `top-level.ts` — имена внутри модуля не получают prefix. |
+| 99 | i32 overflow unchecked | **NEEDS INVESTIGATION** | `expr/binary.ts` — переполнение i32 не проверяется. |
+| 100 | i8=128 no range check | **NEEDS INVESTIGATION** | `vardecl.ts` — `i8 = 128` не проверяется на диапазон. |
+| 101 | f64→i32 truncation | **NEEDS INVESTIGATION** | `vardecl.ts` — `let x: i32 = 3.14` — нет проверки на потерю точности. |
 | 102 | Large array OOM no NULL check | **NEEDS INVESTIGATION** | `runtime.h` — `new Array(N)` с большим N — нет NULL check после malloc. |
 | 103 | `*_to_string` static buffers not reentrant | **RESOLVED** | `runtime.h` — static buffers заменены на malloc+ARC (desktop) и `_tsc_str_make` с ring buffer pool (embedded). Тест `toString-reentrant` добавлен. |
-| 104 | Decorator on constructor silently dropped | **NEEDS INVESTIGATION** | `decorators.js` — декоратор на конструкторе silently игнорируется. |
-| 105 | @platform on class methods ignored | **NEEDS INVESTIGATION** | `decorators.js` — `@platform` на методах класса игнорируется. |
+| 104 | Decorator on constructor silently dropped | **NEEDS INVESTIGATION** | `decorators.ts` — декоратор на конструкторе silently игнорируется. |
+| 105 | @platform on class methods ignored | **NEEDS INVESTIGATION** | `decorators.ts` — `@platform` на методах класса игнорируется. |
 
 ### Низкие (cosmetic / edge cases / documentation)
 
 | # | Описание | Статус | Доказательство |
 |---|----------|--------|----------------|
-| 106 | Decorator wrapper `(void)` | **NEEDS INVESTIGATION** | `decorators.js` — wrapper должна использовать `(void)` для неиспользуемых параметров. |
+| 106 | Decorator wrapper `(void)` | **NEEDS INVESTIGATION** | `decorators.ts` — wrapper должна использовать `(void)` для неиспользуемых параметров. |
 | 107 | Install lock file stale | **NEEDS INVESTIGATION** | `bin/index.ts` — `tsc.lock` может быть устаревшим. |
 | 108 | Watch doesn't monitor imports | **NEEDS INVESTIGATION** | `bin/index.ts` — `--watch` не отслеживает изменения в импортированных файлах. |
 | 109 | Missing input file poor error | **NEEDS INVESTIGATION** | `bin/index.ts` — нет входного файла — неинформативное сообщение. |
@@ -173,7 +173,7 @@
 | S-3 | — | `structuredClone` реализован, не описан | **RESOLVED** | Теперь описан: `03-types.md:1782,1788,1789` |
 | S-4 | `instanceof`/`in` в precedence table | Оба на уровне 6 | **RESOLVED** | Реализовано корректно |
 | S-5 | Promise.race/.any/.allSettled | Все 4 combinator реализованы | **RESOLVED** | SPEC нужно обновить — описать |
-| S-6 | 5 Atomic methods | Все 9 методов реализованы (load/store/fetchAdd/fetchSub/fetchOr/fetchAnd/fetchXor/swap/compareExchange) | **RESOLVED** | `concurrency.js:44-94`, `infer.js:564-572`. Метод `exchange` называется `swap` (Rust convention). |
+| S-6 | 5 Atomic methods | Все 9 методов реализованы (load/store/fetchAdd/fetchSub/fetchOr/fetchAnd/fetchXor/swap/compareExchange) | **RESOLVED** | `concurrency.ts:44-94`, `infer.ts:564-572`. Метод `exchange` называется `swap` (Rust convention). |
 
 ### Статистика верифицированных находок (обновлено 2026-06-09)
 
@@ -222,10 +222,10 @@
 
 | # | Утверждение doc | Spec/Impl на самом деле | Статус |
 |---|----------------|------------------------|--------|
-| 02-1 | ASI как в JavaScript | `eatSemi()` = optional, не ASI. parser.js:66 | **RESOLVED** |
-| 02-2 | Одинарные/двойные кавычки эквивалентны | lexer.js:159-164: single=CHAR, double=STRING | **RESOLVED** |
-| 02-3 | `?T` суффикс типа | Только `prop?: Type`. parser.js:783,883,914 | **RESOLVED** |
-| 02-4 | Closure capture = Ref<T> | Default = 'move'. closures.js:131 | **RESOLVED** |
+| 02-1 | ASI как в JavaScript | `eatSemi()` = optional, не ASI. parser.ts:66 | **RESOLVED** |
+| 02-2 | Одинарные/двойные кавычки эквивалентны | lexer.ts:159-164: single=CHAR, double=STRING | **RESOLVED** |
+| 02-3 | `?T` суффикс типа | Только `prop?: Type`. parser.ts:783,883,914 | **RESOLVED** |
+| 02-4 | Closure capture = Ref<T> | Default = 'move'. closures.ts:131 | **RESOLVED** |
 | 02-5 | for-of переприсвоение примитивов ok | Spec: "всегда ошибка". Impl: `let` даёт mutable binding | **NEEDS INVESTIGATION** |
 | 02-6 | Диапазон `a..b` включительно | Spec: "a вкл., b не вкл.". Impl: `>=`/`<=` | **NEEDS INVESTIGATION** |
 | 02-27 | `lint -fix` syntax | RESOLVED: correct = `--fix` | **RESOLVED** |
@@ -240,9 +240,9 @@
 | # | Утверждение doc | Spec/Impl на самом деле | Статус |
 |---|----------------|------------------------|--------|
 | 03-1 | for-of итерирует по графемам | Bytes по умолчанию; `.graphemes()`/`.codePoints()` явно | **RESOLVED** |
-| 03-2 | `string\|null` → `String*` | `opt_string` struct с `has_value`. helpers.js:114 | **RESOLVED** |
+| 03-2 | `string\|null` → `String*` | `opt_string` struct с `has_value`. helpers.ts:114 | **RESOLVED** |
 | 03-3 | `charCodeAt` возвращает `u8` | Тип `uint32_t`, значение 0-255 | **RESOLVED** |
-| 03-4 | Нет `undefined` | `undefined` = синоним `null`. resolve.js:10 | **RESOLVED** |
+| 03-4 | Нет `undefined` | `undefined` = синоним `null`. resolve.ts:10 | **RESOLVED** |
 | 03-5 | `.parse` только для 3 типов | Все 10 числовых типов имеют `.parse()` | **RESOLVED** |
 | 03-6 | `Set.delete` возвращает `bool` | Реализация исправлена: Set.delete и Map.delete теперь возвращают `bool` | **RESOLVED** |
 | 03-7 | `groupBy` — instance method | Static: `Map.groupBy`, `Object.groupBy` | **RESOLVED** |
@@ -277,8 +277,8 @@
 
 | # | Утверждение doc | Spec/Impl на самом деле | Статус |
 |---|----------------|------------------------|--------|
-| 06-1 | `throws` выводится автоматически | Явное объявление обязательно. func.js:223 | **RESOLVED** |
-| 06-2 | `Error.stack` — встроенное поле | User-defined, auto-generated. class.js:195 | **RESOLVED** |
+| 06-1 | `throws` выводится автоматически | Явное объявление обязательно. func.ts:223 | **RESOLVED** |
+| 06-2 | `Error.stack` — встроенное поле | User-defined, auto-generated. class.ts:195 | **RESOLVED** |
 | 06-3 | C naming: `_Result_`, `_kind` | `Result_<value>_<error>`, tagged union | **RESOLVED** |
 
 ~~Исключено: 06-4..06-6 (фабрикация C-output)~~
@@ -289,7 +289,7 @@
 
 | # | Утверждение doc | Spec/Impl на самом деле | Статус |
 |---|----------------|------------------------|--------|
-| 07-1 | `_state`: платформозависимый | Всегда `int32_t`. async-emit.js:78 | **RESOLVED** |
+| 07-1 | `_state`: платформозависимый | Всегда `int32_t`. async-emit.ts:78 | **RESOLVED** |
 | 07-2 | Poll возвращает `bool` | Poll возвращает `void` | **RESOLVED** |
 | 07-3 | Channel = SPSC single object | MPMC с mutex+condvar. runtime.h:3018 | **RESOLVED** |
 | 07-4 | `select` — async | `select` — sync, non-blocking | **RESOLVED** |
@@ -366,8 +366,8 @@
 
 **Закрыто верификацией (2026-06-07):**
 - ~~URL encode/decode missing (#38)~~ — RESOLVED, реализовано через `import { url } from "std/string"`: `url.encode()`/`url.decode()`/`url.encodeComponent()`/`url.decodeComponent()`
-- ~~Division by zero no guard (#94)~~ — RESOLVED, integer `/` и `%` emit runtime guard (`operators.js:257-274`, `assign.js:206-216`)
-- ~~5 Atomic methods missing (S-6)~~ — RESOLVED, все 9 методов реализованы: `concurrency.js:44-94`, метод `exchange` называется `swap`
+- ~~Division by zero no guard (#94)~~ — RESOLVED, integer `/` и `%` emit runtime guard (`operators.ts:257-274`, `assign.ts:206-216`)
+- ~~5 Atomic methods missing (S-6)~~ — RESOLVED, все 9 методов реализованы: `concurrency.ts:44-94`, метод `exchange` называется `swap`
 - ~~atob/btoa не в spec (S-1)~~ — RESOLVED, spec уже описан: `14-stdlib.md:1028-1032`, impl полный
 
 ### Подлежат исследованию (29 штук)

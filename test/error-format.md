@@ -47,7 +47,7 @@ error[E012]: use of moved value: "o"
 
 ## Архитектура
 
-### `src/compiler/colors.js` (новый файл)
+### `src/compiler/colors.ts` (новый файл)
 
 ```js
 let _enabled = process.stderr.isTTY
@@ -156,7 +156,7 @@ function visualCol(srcLine, col1based) {
 ### `bin/index.ts` изменения
 
 ```js
-import { setColorEnabled } from '../src/compiler/colors.js';
+import { setColorEnabled } from '../src/compiler/colors.ts';
 
 // До любого вывода:
 if (args.includes('--no-color')) setColorEnabled(false);

@@ -411,7 +411,7 @@ class Server {
 - Примитив → copy
 - `Atomic<T>` / `AtomicArray<T>` / `Readonly<T>` → retain/release автоматически
 
-> **Реализовано:** Все правила выше проверяются в `_emitSpawnBlock()` (emit-helpers.js). Рекурсивная Send-проверка обходит поля класса; Array/Set/Map/opt-типы отвергаются как не-Send. Разрешённые типы: примитивы, string, Atomic, Readonly.
+> **Реализовано:** Все правила выше проверяются в `_emitSpawnBlock()` (emit-helpers.ts). Рекурсивная Send-проверка обходит поля класса; Array/Set/Map/opt-типы отвергаются как не-Send. Разрешённые типы: примитивы, string, Atomic, Readonly.
 
 **Рекурсивная Send-проверка owned типов:**
 

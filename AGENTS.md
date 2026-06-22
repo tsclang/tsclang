@@ -31,7 +31,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 **Покрытие тестами не экономить.** Лучше 50 тестов на все комбинации типов, чем потом ловить баг на платформе, которой нет под рукой. Positive + negative (error) + edge cases + разные defaultNumber/платформы.
 
-**Запуск тестов по фазам.** Полное тестирование запускать по частям, большие фазы бить пополам. Не запускать `node test/runner.js` без аргументов — риск таймаута.
+**Запуск тестов по фазам.** Полное тестирование запускать по частям, большие фазы бить пополам. Не запускать `npx tsx test/runner.ts` без аргументов — риск таймаута.
 
 ### П6 — Не обходить баги — чинить
 Если новая фича или изменение ломает существующее поведение — это блокер. Нельзя писать тесты, которые намеренно избегают сломанного пути. Если код валиден в TS — он должен работать. Не работает — чини, не обходи. Разбить на минимальные шаги, каждый с тестами и коммитом. Если шаг раскрывается в рефакторинг — остановиться, создать issue (лейбл `investigation`), и добавить error test (compile error вместо тихого бага). Не молча обходить.
@@ -103,9 +103,9 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 ```bash
 npm test                          # все тесты (tsx)
-node test/runner.js 04-ownership  # только 04-ownership
-node test/runner.js --no-gcc      # только C-compare, без компиляции
-node test/runner.js --verbose     # показывать diff при провале
+npx tsx test/runner.ts 04-ownership  # только 04-ownership
+npx tsx test/runner.ts --no-gcc      # только C-compare, без компиляции
+npx tsx test/runner.ts --verbose     # показывать diff при провале
 npm run typecheck                 # проверить типы (tsc --noEmit)
 npm run build                     # собрать в dist/ (tsc)
 ```
@@ -127,7 +127,7 @@ node bin/index.ts build input.tsc --outDir .tsclang-tmp/
 Или используй программный API вместо CLI:
 
 ```js
-import { codegen } from './src/compiler/codegen.js';
+import { codegen } from './src/compiler/codegen.ts';
 const result = codegen(ast, 'desktop');
 // result.c — C-код как строка
 ```

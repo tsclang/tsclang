@@ -1,13 +1,13 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-7 done, #83-#89 closed. ZERO .js files remain).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-7 done, #83-#89 closed. ZERO .ts files remain).
 
 ---
 
 ## 1. TL;DR
 
-**TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration Stages 1-7 done (#81). ZERO .js files remain. All 74 project files are .ts. 53 files have @ts-nocheck (Stage 8 removes them).
+**TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.ts ESM.
+- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration Stages 1-7 done (#81). ZERO .ts files remain. All 74 project files are .ts. 53 files have @ts-nocheck (Stage 8 removes them).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1749 tests**, all pass)
@@ -22,24 +22,24 @@
 
 ```
 input.tsc
-  → lexer.js        (lex → tokens)
-  → parser.js       (parse → AST, returns { ast, errors } with recovery)
-  → [optimizer.js]  (optional: --opt, AST-level: const fold, dead branch, strength reduce)
-  → codegen.js      (codegen(ast, filename, src, opts) → { c, warnings, exports })
+  → lexer.ts        (lex → tokens)
+  → parser.ts       (parse → AST, returns { ast, errors } with recovery)
+  → [optimizer.ts]  (optional: --opt, AST-level: const fold, dead branch, strength reduce)
+  → codegen.ts      (codegen(ast, filename, src, opts) → { c, warnings, exports })
       └─ Context class walks AST → emits C string
   → runtime.h       (prepended to output, provides all C types/macros)
   → output.c        (→ gcc/avr-gcc/emcc → binary/hex/wasm)
 ```
 
 **Key entry points:**
-- `codegen()` in `codegen.js:26` — creates `Context`, calls `visitProgram(ast)`, returns `ctx.emit()`
-- `Context.visitProgram(ast)` in `top-level/program.js` — dispatches top-level nodes
-- `visitStmtInMain(node)` in `stmt.js` — thin dispatcher for statements
-- `exprToC(node)` in `expr/dispatch.js` — main expression → C string converter
+- `codegen()` in `codegen.ts:26` — creates `Context`, calls `visitProgram(ast)`, returns `ctx.emit()`
+- `Context.visitProgram(ast)` in `top-level/program.ts` — dispatches top-level nodes
+- `visitStmtInMain(node)` in `stmt.ts` — thin dispatcher for statements
+- `exprToC(node)` in `expr/dispatch.ts` — main expression → C string converter
 
-**Pre-scan phase:** Before codegen of function bodies, compiler pre-scans top-level declarations to populate `this.classes`, `this.interfaces`, `this._typeAliases`, function signatures (for overloads), and platform capability checks. (Note: Result type emission is now **lazy** per-function via `_emittedResultTypes` Set in `func.js`, not pre-scanned.)
+**Pre-scan phase:** Before codegen of function bodies, compiler pre-scans top-level declarations to populate `this.classes`, `this.interfaces`, `this._typeAliases`, function signatures (for overloads), and platform capability checks. (Note: Result type emission is now **lazy** per-function via `_emittedResultTypes` Set in `func.ts`, not pre-scanned.)
 
-**Generics:** Monomorphization in `generics.js`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
+**Generics:** Monomorphization in `generics.ts`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
 
 **Module bundling:** `bin/index.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
 
@@ -47,15 +47,15 @@ input.tsc
 
 ## 3. Codegen Architecture
 
-### Context class (`codegen.js:109`)
+### Context class (`codegen.ts:109`)
 
 God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin pattern (modules export a function that adds methods to `Context.prototype`).
 
 **Extracted state objects** (delegated from Context):
-- `ScopeManager` (`codegen/scope-manager.js`) — scope stack, `define()`/`lookup()`.
-- `BorrowTracker` (`codegen/borrow-tracker.js`) — Ref/Mut borrow tracking, quarantine, scope-exit cleanup.
-- `OutputBuffer` (`codegen/output-buffer.js`) — output sections (`includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines`), `addTop()`/`addLambda()`.
-- `TypeChecker` (`typechecker.js`) — type resolution + inference (resolveType, inferType, _effectiveType, etc.). **Proxy-based delegation**: forwards `this.X` to `this.ctx.X`. Context delegates via wrapper methods.
+- `ScopeManager` (`codegen/scope-manager.ts`) — scope stack, `define()`/`lookup()`.
+- `BorrowTracker` (`codegen/borrow-tracker.ts`) — Ref/Mut borrow tracking, quarantine, scope-exit cleanup.
+- `OutputBuffer` (`codegen/output-buffer.ts`) — output sections (`includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines`), `addTop()`/`addLambda()`.
+- `TypeChecker` (`typechecker.ts`) — type resolution + inference (resolveType, inferType, _effectiveType, etc.). **Proxy-based delegation**: forwards `this.X` to `this.ctx.X`. Context delegates via wrapper methods.
 
 **IR pipeline — DEFERRED:** Prototype removed. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Revisit post-self-hosting (#30).
 
@@ -63,18 +63,18 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 
 | Directory | Files | Responsibility |
 |-----------|-------|----------------|
-| `codegen.js` | 1 | `codegen()` entry, `Context` class, cleanup core, `emit()` assembly |
-| `codegen/scope-manager.js` | 1 | **ScopeManager** — scope stack, `define()`/`lookup()`/`pushScope()`/`popScope()` |
-| `codegen/borrow-tracker.js` | 1 | **BorrowTracker** — Ref/Mut borrow tracking, quarantine, scope-exit cleanup |
-| `codegen/output-buffer.js` | 1 | **OutputBuffer** — output sections, `addTop()` smart routing, `addLambda()` |
-| `top-level/` | 6 | `dispatch.js` (entry), `program.js` (visitProgram, pre-scan), `func.js`, `class.js`, `types-alias.js`, `decorators.js` |
-| `stmt/` | 4 | `index.js`→`stmt.js` (visitStmtInMain dispatcher), `vardecl.js` (let/const), `control-flow.js` (if/while/for/switch/try-catch/break/continue), `destruct.js`, `match.js` |
-| `expr/` | 4 | `index.js`→`dispatch.js` (exprToC), `operators.js`, `assign.js`, `literals.js` |
-| `calls/` | 8 | `call-dispatch.js` (function calls), `method-dispatch.js` (method calls, chains), `console.js`, `stdlib.js` (Map/Set/array methods), `builtin.js`, `builtin-helpers.js`, `conversion.js` (parseInt/toString), `concurrency.js` (Atomic/channel/spawn) |
-| `types/` | 3 | `resolve.js` (TSC type → C type), `infer.js` (expression type inference), `helpers.js` (`_ensure*Struct`, `_wrapOptValue`, mangle helpers) |
-| `misc/` | 4 | `index.js`, `arrays.js` (array literals), `closures.js` (lambda hoisting, capture), `new-expr.js` (new X()), `emit-helpers.js` (spawn, Thread) |
-| `async/` | 5 | `index.js`, `async-stmt.js` (emit async statements), `async-emit.js` (state machine poll fn), `generator.js`, `scan.js` (collect await states, liveness), `helpers.js` |
-| `types.js` | 1 | `PRIMITIVE_MAP`, `toCType`, `mangleType`, `fmtSpec`, `inferLiteralCType` |
+| `codegen.ts` | 1 | `codegen()` entry, `Context` class, cleanup core, `emit()` assembly |
+| `codegen/scope-manager.ts` | 1 | **ScopeManager** — scope stack, `define()`/`lookup()`/`pushScope()`/`popScope()` |
+| `codegen/borrow-tracker.ts` | 1 | **BorrowTracker** — Ref/Mut borrow tracking, quarantine, scope-exit cleanup |
+| `codegen/output-buffer.ts` | 1 | **OutputBuffer** — output sections, `addTop()` smart routing, `addLambda()` |
+| `top-level/` | 6 | `dispatch.ts` (entry), `program.ts` (visitProgram, pre-scan), `func.ts`, `class.ts`, `types-alias.ts`, `decorators.ts` |
+| `stmt/` | 4 | `index.ts`→`stmt.ts` (visitStmtInMain dispatcher), `vardecl.ts` (let/const), `control-flow.ts` (if/while/for/switch/try-catch/break/continue), `destruct.ts`, `match.ts` |
+| `expr/` | 4 | `index.ts`→`dispatch.ts` (exprToC), `operators.ts`, `assign.ts`, `literals.ts` |
+| `calls/` | 8 | `call-dispatch.ts` (function calls), `method-dispatch.ts` (method calls, chains), `console.ts`, `stdlib.ts` (Map/Set/array methods), `builtin.ts`, `builtin-helpers.ts`, `conversion.ts` (parseInt/toString), `concurrency.ts` (Atomic/channel/spawn) |
+| `types/` | 3 | `resolve.ts` (TSC type → C type), `infer.ts` (expression type inference), `helpers.ts` (`_ensure*Struct`, `_wrapOptValue`, mangle helpers) |
+| `misc/` | 4 | `index.ts`, `arrays.ts` (array literals), `closures.ts` (lambda hoisting, capture), `new-expr.ts` (new X()), `emit-helpers.ts` (spawn, Thread) |
+| `async/` | 5 | `index.ts`, `async-stmt.ts` (emit async statements), `async-emit.ts` (state machine poll fn), `generator.ts`, `scan.ts` (collect await states, liveness), `helpers.ts` |
+| `types.ts` | 1 | `PRIMITIVE_MAP`, `toCType`, `mangleType`, `fmtSpec`, `inferLiteralCType` |
 
 ### Key Context state (the `this.*` properties)
 
@@ -114,7 +114,7 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 
 ## 4. Type System → C Mapping
 
-### Primitive types (`types.js: PRIMITIVE_MAP`)
+### Primitive types (`types.ts: PRIMITIVE_MAP`)
 
 | TSC type | C type | printf fmt | Notes |
 |----------|--------|------------|-------|
@@ -171,7 +171,7 @@ typedef struct {
 | `@struct` class | `T value` (no vtable, no methods) | pure value type |
 | `unknown` | `tsc_unknown { uint32_t type_id; vtable* vtable; uint8_t buffer[24]; }` | type-tagged container |
 
-### Name mangling (`types.js: mangleType`)
+### Name mangling (`types.ts: mangleType`)
 
 ```
 foo(i32, string)     → foo_i32_string
@@ -252,7 +252,7 @@ opt_T asyncFunc_poll_N(asyncFunc_frame_N* self) {
 }
 ```
 
-- `_collectAwaitStates(node)` in `scan.js` — walks AST, finds await points, collects states + live vars.
+- `_collectAwaitStates(node)` in `scan.ts` — walks AST, finds await points, collects states + live vars.
 - `_livenessScan()` — only vars crossing await boundary get promoted to struct. Primitives in `safeLocal` whitelist stay on C stack.
 - `_emitAsyncStmt` / `_emitAsyncWhile` / `_emitAsyncFor` / `_emitAsyncForOf` / `_emitAsyncDoWhile` — emit state machine code.
 - Async `switch` → transformed to `if/else if` (conflicts with outer state machine `switch(self->_state)`).
@@ -260,7 +260,7 @@ opt_T asyncFunc_poll_N(asyncFunc_frame_N* self) {
 
 ### Promise
 
-- `Promise<T>` struct with `.then`/`.catch`/`.finally` — dispatch in `method-dispatch.js`.
+- `Promise<T>` struct with `.then`/`.catch`/`.finally` — dispatch in `method-dispatch.ts`.
 - `Promise.all` / `race` / `any` / `allSettled` — combinators.
 - Desktop: event loop via libuv. Embedded: cooperative scheduler (`@static async function*`).
 
@@ -420,7 +420,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 ### Codegen
 
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards (Set check → emit → add). Never emit a typedef/struct without checking first.
-- **`_postStmtCleanups`** — deferred cleanups after current statement (zero-out after move, temp release). **`_expectedType`** — set in vardecl.js before init expr; empty array literals use it for element type.
+- **`_postStmtCleanups`** — deferred cleanups after current statement (zero-out after move, temp release). **`_expectedType`** — set in vardecl.ts before init expr; empty array literals use it for element type.
 - **Narrowing** — `_narrowedVars` (Set, `if (x != null)` / `if (x)`), `_narrowedUnknownVars` (Map, `typeof x === "i32"`). Access uses unwrapped type.
 - **Double-evaluation prevention** — complex expressions in temp vars before multi-use (`??`, `?.`, compound assigns).
 - **`goto cleanup`** — triggers when `_usesGotoCleanup && owned vars >= 2`. String concat chain (3+) uses `_flattenStringConcat` → `tsc_string_concat_n` compound literal.
@@ -429,15 +429,15 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 - **Cross-module types** — In type tables (`this.classes`, `this._typeAliases`), NOT in scope. All declaration types get module-prefixed C names.
 - **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
 - **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with simplified usual arithmetic conversions (not full C promotion). All same-width mixed signed+unsigned pairs banned for `let` variables (`i8+u8`, `i16+u16`, `i32+u32`, `i64+u64`) — require explicit `as`. Cross-width `i64+u32` also banned. `const`/literals exempt.
-- **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-math` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.js`/`assign.js`.
+- **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-math` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.ts`/`assign.ts`.
 - **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` or a `throws MathError` function → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `Math.checkedAdd/Sub/Mul` removed — use try/catch.
-  - **`_isIntOperand` helper** (`operators.js`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
-  - **Loop restructure in `_inMathTry`** (`control-flow.js`): While/DoWhile/For loops restructure to `while(1) { checked_cond; if (!cond) break; body; }` so checked arithmetic conditions are re-evaluated each iteration (not hoisted before loop). For-loop update emitted as statement at end of body.
-  - **`throws MathError` on functions** (`func.js:emitFuncBody`): Function declares `throws MathError` + `safe-math` → body treated as `_inMathTry` context with `_func_math_throw` label. Overflow → `goto _func_math_throw` → error Result return. Auto-propagation: `return inner()` / `inner();` in throws function → Result checked, error propagated via `_mathCatchLabel`. Supports void/non-void, goto cleanup (owned vars).
-  - **Union throws wrapping** (`func.js` + `control-flow.js:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
-  - **Bare throws call compile error** (`control-flow.js` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
-  - **Union error panic** (`codegen.js:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.js (`!`), console.js, codegen.js (main).
-  - **`!`/`?` in expression context** (`dispatch.js:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.js:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.js`): recursive check for bare throws calls in binary/array/member/template/argument/index/ternary/unary/cast/range contexts + New args → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
+  - **`_isIntOperand` helper** (`operators.ts`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
+  - **Loop restructure in `_inMathTry`** (`control-flow.ts`): While/DoWhile/For loops restructure to `while(1) { checked_cond; if (!cond) break; body; }` so checked arithmetic conditions are re-evaluated each iteration (not hoisted before loop). For-loop update emitted as statement at end of body.
+  - **`throws MathError` on functions** (`func.ts:emitFuncBody`): Function declares `throws MathError` + `safe-math` → body treated as `_inMathTry` context with `_func_math_throw` label. Overflow → `goto _func_math_throw` → error Result return. Auto-propagation: `return inner()` / `inner();` in throws function → Result checked, error propagated via `_mathCatchLabel`. Supports void/non-void, goto cleanup (owned vars).
+  - **Union throws wrapping** (`func.ts` + `control-flow.ts:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
+  - **Bare throws call compile error** (`control-flow.ts` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
+  - **Union error panic** (`codegen.ts:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.ts (`!`), console.ts, codegen.ts (main).
+  - **`!`/`?` in expression context** (`dispatch.ts:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.ts:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.ts`): recursive check for bare throws calls in binary/array/member/template/argument/index/ternary/unary/cast/range contexts + New args → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
 
 ---
@@ -447,21 +447,21 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | I need to... | Look at... |
 |--------------|-----------|
 | Add a new AST node type | `ast-types/ast.ts` (add interface + union member) |
-| Add a new statement type | `stmt/index.js` (dispatch), then specific file in `stmt/` |
-| Add a new expression type | `expr/dispatch.js` (exprToC switch), then `expr/*.js` |
-| Add a new method on arrays/Map/Set | `calls/stdlib.js` (dispatch + emit), `types/infer.js` (return type), `runtime.h` (C macro) |
-| Add a new stdlib module | `stdlib-registry.js` (register), `calls/call-dispatch.js` (dispatch) |
-| Add a new builtin (console, Math, etc.) | `stdlib-registry.js` (LANGUAGE_BUILTINS), `calls/builtin.js` |
-| Add a new type annotation | `types/resolve.js` (TSC→C), `types/infer.js` (inference) |
-| Add a new decorator | `top-level/decorators.js` (codegen), `parser.js` (parse) |
+| Add a new statement type | `stmt/index.ts` (dispatch), then specific file in `stmt/` |
+| Add a new expression type | `expr/dispatch.ts` (exprToC switch), then `expr/*.ts` |
+| Add a new method on arrays/Map/Set | `calls/stdlib.ts` (dispatch + emit), `types/infer.ts` (return type), `runtime.h` (C macro) |
+| Add a new stdlib module | `stdlib-registry.ts` (register), `calls/call-dispatch.ts` (dispatch) |
+| Add a new builtin (console, Math, etc.) | `stdlib-registry.ts` (LANGUAGE_BUILTINS), `calls/builtin.ts` |
+| Add a new type annotation | `types/resolve.ts` (TSC→C), `types/infer.ts` (inference) |
+| Add a new decorator | `top-level/decorators.ts` (codegen), `parser.ts` (parse) |
 | Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `bin/index.ts` (loadProfile) |
-| Add a new strict rule | `codegen.js` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
-| Fix borrow checker error | `codegen.js` (scope/borrow core), `stmt/vardecl.js`, `expr/assign.js`, `calls/*.js` |
-| Fix cleanup/memory leak | `codegen.js` (_blockCleanupStack), `stmt/control-flow.js`, `stmt/vardecl.js` |
-| Fix async codegen | `async/scan.js` (state collection), `async/async-stmt.js` (emit), `async/async-emit.js` (poll fn) |
-| Fix string ownership | `stmt/vardecl.js`, `expr/assign.js`, `calls/call-dispatch.js`, `calls/method-dispatch.js`, `top-level/func.js` |
+| Add a new strict rule | `codegen.ts` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
+| Fix borrow checker error | `codegen.ts` (scope/borrow core), `stmt/vardecl.ts`, `expr/assign.ts`, `calls/*.ts` |
+| Fix cleanup/memory leak | `codegen.ts` (_blockCleanupStack), `stmt/control-flow.ts`, `stmt/vardecl.ts` |
+| Fix async codegen | `async/scan.ts` (state collection), `async/async-stmt.ts` (emit), `async/async-emit.ts` (poll fn) |
+| Fix string ownership | `stmt/vardecl.ts`, `expr/assign.ts`, `calls/call-dispatch.ts`, `calls/method-dispatch.ts`, `top-level/func.ts` |
 | Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
-| Run tests | `node test/runner.js 03-types` (filter by spec section or feature name) |
+| Run tests | `node test/runner.ts 03-types` (filter by spec section or feature name) |
 | Compile manually | `node bin/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure

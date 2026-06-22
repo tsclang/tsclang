@@ -465,7 +465,7 @@ typedef struct { Array_i32 *arr; } _closure_3_env;
 typedef struct { double x; String s; User *u; Array_i32 *arr; } _closure_4_env;
 ```
 
-Логика (`closures.js`, `_isComplexCtype`):
+Логика (`closures.ts`, `_isComplexCtype`):
 - `SIMPLE_CTYPES` (intXX_t, double, float, bool, String, etc.) → value field
 - Всё остальное (class, Array_T, tuple) → pointer field
 - Pointer types (`T *`) → pointer field (для nested closures)

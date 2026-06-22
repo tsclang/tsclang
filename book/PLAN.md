@@ -88,7 +88,7 @@ console.log(s2)
 ### Запуск тестов
 
 ```bash
-node test/runner.js book
+npx tsx test/runner.ts book
 ```
 
 ### Арбитраж при конфликтах

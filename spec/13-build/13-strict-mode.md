@@ -293,7 +293,7 @@ if (_tsc_div_0 == 0) { _tsc_on_panic("division by zero"); }
 ```
 
 **Затронутые конструкции:**
-- Integer division by zero guard (`operators.js`, `assign.js`)
+- Integer division by zero guard (`operators.ts`, `assign.ts`)
 
 **Обоснование:** `abort()` — неконтролируемое завершение. В safety-critical системах все аварийные ситуации должны обрабатываться через определённый обработчик (MISRA C:2012 Rule 20.11).
 

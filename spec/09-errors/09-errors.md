@@ -200,7 +200,7 @@ const x = risky()? + 1;         // propagate (if enclosing function throws)
 
 > **Почему assignment allowed:** `let x = risky()` без `!`/`?` намеренно разрешено — программист может хотеть manual Result handling (проверить `.ok`, извлечь `.error` и т.д.). Проверка срабатывает только когда Result используется в expression (где Result-struct дал бы некорректный C).
 
-> **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new. См. `_checkNoBareThrows` в `codegen.js`.
+> **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new. См. `_checkNoBareThrows` в `codegen.ts`.
 
 ## C-output
 

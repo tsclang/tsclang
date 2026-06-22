@@ -73,7 +73,7 @@
 - Приоритет: доминирует над другими spec-файлами при конфликте
 
 ### for-of: реализация Steps 1–4 — 2026-06-02
-- Step 1 (Fast Path): `_isSimpleCType()` — complex types → `T *item = &arr.data[i]`; `match.js:346` range exclusive upper bound
+- Step 1 (Fast Path): `_isSimpleCType()` — complex types → `T *item = &arr.data[i]`; `match.ts:346` range exclusive upper bound
 - Step 2 (Borrow check): `_trackRefBorrow` во всех 7 for-of путях; тесты `borrow-push-error`, `borrow-after-loop-ok`
 - Step 3 (Protocol Path P2): `iter_opt_${elemIdent}` для complex types с `T *value`
 - Step 4 (Embedded + [Symbol.iterator]): `TscCodePointIter._progmem`, `_tsc_iter_getc()`, parser `isIterator: true`

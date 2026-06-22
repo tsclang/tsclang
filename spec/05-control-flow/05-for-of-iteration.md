@@ -43,7 +43,7 @@ typedef struct { bool has_value; User *value; } opt_User;
 typedef struct { bool has_value; String value; } opt_string;
 ```
 
-Генерацией занимается компилятор в процессе мономорфизации дженериков (emit-helpers.js).
+Генерацией занимается компилятор в процессе мономорфизации дженериков (emit-helpers.ts).
 
 ### Q6: Кто владеет итератором и как работает очистка
 
@@ -190,7 +190,7 @@ for (const [k, v] of Object.entries(obj)) { ... } // ✅
 
 ## 4. Fast Path — Array\<T\>, Set\<T\>, Map\<K,V\>
 
-Текущий код: `control-flow.js:675-679` — всегда struct copy (баг для complex types).
+Текущий код: `control-flow.ts:675-679` — всегда struct copy (баг для complex types).
 
 ### 4.1 Примитивы в Array\<T\> — Copy (РЕШЕНО)
 
@@ -698,18 +698,18 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 
 | Файл | Строка | Баг | Исправление |
 |------|--------|-----|-------------|
-| `control-flow.js` | 675-679 | Struct copy для всех типов | Pointer для complex types (class, nested array) в Fast Path |
-| `control-flow.js` | 385 | `qual` = `'const '` или `''` — нет `' '` для let | Аккуратная генерация const/mut pointer для complex types |
-| `match.js` | 346 | Range `<=` (inclusive end) | `<` (exclusive end) |
+| `control-flow.ts` | 675-679 | Struct copy для всех типов | Pointer для complex types (class, nested array) в Fast Path |
+| `control-flow.ts` | 385 | `qual` = `'const '` или `''` — нет `' '` для let | Аккуратная генерация const/mut pointer для complex types |
+| `match.ts` | 346 | Range `<=` (inclusive end) | `<` (exclusive end) |
 
 ---
 
 ## 9. План реализации
 
 **Step 1: For-of Fast Path fix**
-1. `control-flow.js`: struct copy → pointer для complex types (class, nested array) в Fast Path
-2. `control-flow.js:385`: переписать qual логику — для complex types генерировать `const T*` / `T*`
-3. `match.js:346`: range `<=` → `<`
+1. `control-flow.ts`: struct copy → pointer для complex types (class, nested array) в Fast Path
+2. `control-flow.ts:385`: переписать qual логику — для complex types генерировать `const T*` / `T*`
+3. `match.ts:346`: range `<=` → `<`
 4. Тесты: pointer-семантика для классов и вложенных массивов
 
 **Step 2: Borrow check для итерации**
@@ -719,13 +719,13 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 4. Тесты: mutate-source-push-error, mutate-source-index-assign-error
 
 **Step 3: Protocol Path P2**
-1. `emit-helpers.js`: генерация `opt_T` — primitive → `T value` (copy), String → `String value` (ARC copy + retain), complex → `T *value` (borrow pointer)
-2. `emit-helpers.js`: `next()` body — для complex types pointer на value
-3. `control-flow.js`: Protocol Path desugaring — complex types `T *item = elem.value`
+1. `emit-helpers.ts`: генерация `opt_T` — primitive → `T value` (copy), String → `String value` (ARC copy + retain), complex → `T *value` (borrow pointer)
+2. `emit-helpers.ts`: `next()` body — для complex types pointer на value
+3. `control-flow.ts`: Protocol Path desugaring — complex types `T *item = elem.value`
 4. Тесты: iterable/linked-list-class (complex type, P2 pointer)
 
 **Step 4: Embedded fixes + [Symbol.iterator]**
 1. `runtime.h`: PROGMEM-aware codepoints/graphemes + `_tsc_str_alloc` вместо malloc
-2. `parser.js`: `[Symbol.iterator]` special token → `isIterator: true`
-3. `class.js`: поиск метода с `isIterator: true` при `implements Iterable<T>`
+2. `parser.ts`: `[Symbol.iterator]` special token → `isIterator: true`
+3. `class.ts`: поиск метода с `isIterator: true` при `implements Iterable<T>`
 4. Тесты: 14-stdlib string/graphemes, 14-stdlib string/codepoints
