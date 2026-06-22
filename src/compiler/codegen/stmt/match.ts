@@ -366,7 +366,7 @@ export default {
         return null; // treat as wildcard
       }
       case 'MatchOr': {
-        const parts = pattern.patterns.map((p) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
+        const parts = pattern.patterns.map((p: any) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
         return parts.join(' || ');
       }
       case 'MatchClass': {
