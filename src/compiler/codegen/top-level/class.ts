@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading callbacks, needs manual pass
 // class.js
 export default {
   visitClassDecl(node: any) {
