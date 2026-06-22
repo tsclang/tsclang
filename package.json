@@ -21,9 +21,7 @@
   },
   "files": [
     "bin/",
-    "src/compiler/",
-    "src/lsp/",
-    "src/runtime/",
+    "src/",
     "README.md",
     "LICENSE"
   ],
