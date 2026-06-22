@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // helpers.js
 export default {
   _initAsync() {
@@ -9,7 +8,7 @@ export default {
   // C result type for async _result field.
   // Returns null for Promise<void> (no _result field).
   // Returns 'int' for void (placeholder).
-  _asyncRetType(rt) {
+  _asyncRetType(rt: any) {
     if (!rt) return 'int';
     if (rt.kind === 'TypeRef') {
       if (rt.name === 'Promise') {
@@ -24,13 +23,13 @@ export default {
 
   // ─── Inlinable const detection ────────────────────────────────────────────
 
-  _isInlinableConst(init) {
+  _isInlinableConst(init: any) {
     if (!init) return false;
     if (init.kind === 'Literal') return init.litType === 'number' || init.litType === 'boolean';
     return init.kind === 'Num' || init.kind === 'Bool';
   },
 
-  _constLiteralC(init) {
+  _constLiteralC(init: any) {
     if (init.kind === 'Literal') {
       if (init.litType === 'number') return String(init.value);
       if (init.litType === 'boolean') return init.value === 'true' || init.value === true ? 'true' : 'false';
@@ -42,7 +41,7 @@ export default {
 
   // ─── Await info ───────────────────────────────────────────────────────────
 
-  _awaitInfoOf(awaitNode) {
+  _awaitInfoOf(awaitNode: any) {
     const expr = awaitNode.expr;
     if (!expr) return null;
 
@@ -127,7 +126,7 @@ export default {
           (this._preScanTypes?.get(expr.callee.object.name) === '__fs_namespace__' ? { _isFsNamespace: true } : null);
         if (_fsSym3?._isFsNamespace) {
           const _fp = expr.callee.prop;
-          const _fsAsync = (initFn, pollFn, stateType, resultCType) =>
+          const _fsAsync = (initFn: any, pollFn: any, stateType: any, resultCType: any) =>
             ({ kind: `fs-${_fp}`, stateType, pollFn, initFn, resultCType, args: expr.args });
           if (_fp === 'readFile')     return _fsAsync('tsc_fs_read_async',    'tsc_fs_read_poll',    'TscFsReadAwaitable',    'String');
           if (_fp === 'readFileBytes') return _fsAsync('tsc_fs_read_bytes_async', 'tsc_fs_read_bytes_poll', 'TscFsReadBytesAwaitable', 'Array_u8');

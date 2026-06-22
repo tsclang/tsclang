@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 7: formatter, types added in Stage 8
 // TSClang formatter: normalizes whitespace and indentation
 // Uses a simple token-based printer (not full AST pretty-printer)
 
@@ -12,7 +11,7 @@
  *   - Spaces around operators
  *   - No extra spaces inside parentheses
  */
-export function format(src) {
+export function format(src: any) {
   const lines = src.split('\n');
   const result = [];
 
@@ -58,14 +57,14 @@ export function format(src) {
   return result.join('\n') + '\n';
 }
 
-function formatLine(line, indent) {
+function formatLine(line: any, indent: any) {
   const prefix = '    '.repeat(indent);
   // Normalize spaces inside the line
   const normalized = normalizeSpaces(line);
   return prefix + normalized;
 }
 
-function normalizeSpaces(line) {
+function normalizeSpaces(line: any) {
   // Preserve string literals and comments unchanged
   // Simple heuristic: collapse multiple spaces to one (except inside strings/comments)
   let out = '';

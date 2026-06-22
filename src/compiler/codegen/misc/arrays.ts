@@ -1,7 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // arrays.js
 export default {
-  arrayLitToC(node, _elemType, lines, depth) {
+  arrayLitToC(node: any, _elemType: any, lines: any, depth: any) {
     const result = [];
     for (const e of node.elems) {
       if (e.spread) {
@@ -34,7 +33,7 @@ export default {
   },
 
   // Count the static size of an ArrayLit (expanding spread if possible)
-  arrayLitSize(node) {
+  arrayLitSize(node: any) {
     let count = 0;
     for (const e of node.elems) {
       if (e.spread) {
@@ -49,7 +48,7 @@ export default {
   },
 
   // Returns true if the expression will produce a heap-allocated String
-  _isHeapStringInit(node) {
+  _isHeapStringInit(node: any) {
     if (!node) return false;
     if (node.kind === 'Binary' && node.op === '+') {
       const lt = this.inferType(node.left);
@@ -57,7 +56,7 @@ export default {
       return lt === 'String' || rt === 'String';
     }
     if (node.kind === 'TemplateLit') {
-      return node.parts.some(p => p.kind === 'expr');
+      return node.parts.some((p: any) => p.kind === 'expr');
     }
     if (node.kind === 'Call') {
       if (node.callee.kind === 'Ident' && node.callee.name === 'String') return true;
@@ -69,7 +68,7 @@ export default {
           const funcName = sym.funcName ?? node.callee.name;
           if (this._heapStringFuncs?.has(funcName)) return true;
           // Check overloads
-          if (sym.overloads?.some(o => this._heapStringFuncs?.has(o.funcName))) return true;
+          if (sym.overloads?.some((o: any) => this._heapStringFuncs?.has(o.funcName))) return true;
         }
       }
       if (node.callee.kind === 'Member') {

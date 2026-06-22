@@ -1,6 +1,5 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 export default {
-  _dispatchBuiltin(node, lines, depth) {
+  _dispatchBuiltin(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
       return this.consoleCall(callee.prop, args, lines, depth);
@@ -137,7 +136,7 @@ export default {
           toLocaleTimeString: 'tsc_date_to_locale_time_string',
           toLocaleString: 'tsc_date_to_locale_string',
         };
-        const fn = nameMap[prop];
+        const fn = (nameMap as Record<string, string>)[prop];
         if (fn) {
           const isSetter = prop.startsWith('set');
           if (isSetter) {

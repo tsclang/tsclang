@@ -1,9 +1,8 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 export default {
-  mathCall(prop, args, lines, depth) {
+  mathCall(prop: any, args: any, lines: any, depth: any) {
     const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
-    const isFloat = (t) => t === 'double' || t === 'float';
+    const isFloat = (t: any) => t === 'double' || t === 'float';
     const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const a1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
     const a2 = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
@@ -28,7 +27,7 @@ export default {
       }
       const isMin = prop === 'min';
       const op = isMin ? '<' : '>';
-      const hasSpread = args.some(a => a.spread);
+      const hasSpread = args.some((a: any) => a.spread);
       if (hasSpread) {
         if (args.length > 1) {
           throw this.error(`Math.${prop}/max does not support mixed spread and non-spread arguments`);
@@ -43,7 +42,7 @@ export default {
         if (!etIdent || !(etIdent in NUMERIC_ET)) {
           throw this.error(`Math.${prop}(...arr) requires a numeric array, got ${etIdent || 'non-array'} elements`);
         }
-        const etCType = NUMERIC_ET[etIdent];
+        const etCType = (NUMERIC_ET as Record<string, string>)[etIdent];
         const arrC = this.exprToC(arrExpr, lines, depth);
         const I = ' '.repeat(this.indent * depth);
         const vname = `_${prop}_${this.tempCount++}`;
@@ -57,8 +56,8 @@ export default {
         lines.push(`${I}}`);
         return vname;
       }
-      const hasFloat = args.some(a => isFloat(this.inferType(a.expr)));
-      const allC = args.map(a => this.exprToC(a.expr, lines, depth));
+      const hasFloat = args.some((a: any) => isFloat(this.inferType(a.expr)));
+      const allC = args.map((a: any) => this.exprToC(a.expr, lines, depth));
       const resType = hasFloat ? 'double' : a0t;
       if (args.length === 1) return allC[0];
       if (args.length === 2) {
@@ -107,10 +106,10 @@ export default {
       fround: `(float)(${a0})`,
       random: `tsc_math_random()`,
     };
-    return map[prop] ?? `/* Math.${prop} */(${a0})`;
+    return (map as Record<string, string>)[prop] ?? `/* Math.${prop} */(${a0})`;
   },
 
-  jsonCall(prop, typeArgs, args, lines, depth) {
+  jsonCall(prop: any, typeArgs: any, args: any, lines: any, depth: any) {
     if (prop === 'stringify') {
       const arg0 = args[0]?.expr;
       const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
@@ -131,7 +130,7 @@ export default {
     return `/* JSON.${prop} */0`;
   },
 
-  labelUsed(node, label, kind) {
+  labelUsed(node: any, label: any, kind: any) {
     if (!node || typeof node !== 'object') return false;
     if (node.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && node.label === label) return true;
     if (node.kind === 'Labeled' && node.label === label) return false;
@@ -145,7 +144,7 @@ export default {
     return false;
   },
 
-  isBareLiteralNumber(expr) {
+  isBareLiteralNumber(expr: any) {
     if (expr.kind === 'Literal' && expr.litType === 'number' &&
         !expr.value.includes('.') && !expr.value.includes('e') && !expr.value.includes('E') &&
         !expr.value.startsWith('0x') && !expr.value.startsWith('0b') && !expr.value.startsWith('0o') &&
@@ -156,7 +155,7 @@ export default {
     return false;
   },
 
-  bareNumberValue(expr) {
+  bareNumberValue(expr: any) {
     if (expr.kind === 'Literal') {
       return expr.value + '.0';
     }

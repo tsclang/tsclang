@@ -1,19 +1,18 @@
-// @ts-nocheck — Stage 7: LSP server, types added in Stage 8
 // TSClang LSP server (Language Server Protocol over stdio)
 // Handles: initialize, textDocument/didOpen, hover, completion, definition
 
-function sendMsg(obj) {
+function sendMsg(obj: any) {
   const json = JSON.stringify(obj);
   const len  = Buffer.byteLength(json, 'utf8');
   process.stdout.write(`Content-Length: ${len}\r\n\r\n${json}`);
 }
 
-function respond(id, result) { sendMsg({ jsonrpc: '2.0', id, result }); }
+function respond(id: any, result: any) { sendMsg({ jsonrpc: '2.0', id, result }); }
 
 const docs = new Map(); // uri → { text, symbols }
 
 // Scan text for symbols (name → {type, line, col, kind})
-function buildSymbols(text) {
+function buildSymbols(text: any) {
   const symbols = new Map();
   const lines = text.split('\n');
   for (let li = 0; li < lines.length; li++) {
@@ -32,7 +31,7 @@ function buildSymbols(text) {
   return symbols;
 }
 
-function wordAt(text, line, character) {
+function wordAt(text: any, line: any, character: any) {
   const lineStr = text.split('\n')[line] ?? '';
   let start = character;
   while (start > 0 && /\w/.test(lineStr[start - 1])) start--;
@@ -41,7 +40,7 @@ function wordAt(text, line, character) {
   return lineStr.slice(start, end);
 }
 
-function contextAt(text, line, character) {
+function contextAt(text: any, line: any, character: any) {
   const lineStr = text.split('\n')[line] ?? '';
   const before  = lineStr.slice(0, character);
   const m = before.match(/Math\.(\w*)$/);
@@ -69,7 +68,7 @@ const KEYWORD_COMPLETIONS = [
   'class', 'new', 'true', 'false', 'null', 'import', 'export',
 ].map(label => ({ label, kind: 14 }));
 
-function handleMsg(msg) {
+function handleMsg(msg: any) {
   const { id, method, params } = msg;
 
   if (method === 'initialize') {
@@ -158,7 +157,7 @@ function handleMsg(msg) {
 export function startLsp() {
   let buf = Buffer.alloc(0);
   process.stdin.on('data', chunk => {
-    buf = Buffer.concat([buf, chunk]);
+    buf = Buffer.concat([buf, chunk as Buffer]);
     while (true) {
       const sep = buf.indexOf('\r\n\r\n');
       if (sep === -1) break;
