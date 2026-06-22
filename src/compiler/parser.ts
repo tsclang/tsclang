@@ -91,7 +91,7 @@ export function parse(tokens, filename = '<input>', src = null) {
   // -------------------------------------------------------------------------
   // Type annotation  e.g. : i32 | null, : string[], : Map<K,V>
   // -------------------------------------------------------------------------
-  function parseTypeAnnotation() {
+  function parseTypeAnnotation(): any {
     return parseTypeUnion();
   }
 
@@ -134,7 +134,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         let t = { kind: 'TypeFunc', params: paramTypes, ret };
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
-          t = { kind: 'TypeArray', element: t };
+          t = { kind: 'TypeArray', element: t } as any;
         }
         return t;
       } else {
@@ -144,7 +144,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         eat(TK.RPAREN);
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
-          t = { kind: 'TypeArray', element: t };
+          t = { kind: 'TypeArray', element: t } as any;
         }
         return t;
       }
@@ -226,7 +226,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         // Array suffix: [T1, T2][]
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
-          t = { kind: 'TypeArray', element: t };
+          t = { kind: 'TypeArray', element: t } as any;
         }
         return t;
       }
@@ -295,13 +295,13 @@ export function parse(tokens, filename = '<input>', src = null) {
       eat(TK.LBRACK);
       const sizeTok = eat(TK.NUMBER);
       eat(TK.RBRACK);
-      return { kind: 'TypeFixedArray', element: t, size: parseInt(sizeTok.value, 10) };
+      return { kind: 'TypeFixedArray', element: t, size: parseInt(sizeTok.value, 10) } as any;
     }
 
     // Array suffix: T[]
     while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
       eat(TK.LBRACK); eat(TK.RBRACK);
-      t = { kind: 'TypeArray', element: t };
+      t = { kind: 'TypeArray', element: t } as any;
     }
 
     return t;
@@ -387,7 +387,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (t.type === TK.IDENT && t.value === 'decorator' && pos + 1 < tokens.length && tokens[pos + 1]?.value === 'function') {
       pos++; // eat 'decorator'
       const decl = parseFunctionDecl(decorators);
-      decl.isDecorator = true;
+      (decl as any).isDecorator = true;
       return decl;
     }
     if (t.type === TK.IDENT && t.value === 'extension') return parseExtensionFunc();
@@ -593,7 +593,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     // const enum Foo { ... }
     if (kind === 'const' && cur().type === TK.IDENT && cur().value === 'enum') {
       const node = parseEnum();
-      node.isConst = true;
+      (node as any).isConst = true;
       return node;
     }
     // Destructuring
@@ -1391,7 +1391,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       eat(TK.RPAREN);
     }
-    let result = { kind: 'New', name, typeArgs, args, arraySize, line: newTok.line, col: newTok.col };
+    let result: any = { kind: 'New', name, typeArgs, args, arraySize, line: newTok.line, col: newTok.col };
     while (true) {
       if (cur().type === TK.DOT) {
         eat(TK.DOT);
@@ -1433,8 +1433,8 @@ export function parse(tokens, filename = '<input>', src = null) {
     return result;
   }
 
-  function parsePostfix() {
-    let expr = parsePrimary();
+  function parsePostfix(): any {
+    let expr: any = parsePrimary();
     while (true) {
       if (cur().type === TK.DOT) {
         eat(TK.DOT);
@@ -1485,7 +1485,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         const prev = tokens[pos - 1];
         const next = peek();
         const isTight = prev && prev.line === cur().line && prev.endCol === cur().col;
-        const isClosed = next && [TK.SEMI, TK.RPAREN, TK.RBRACKET, TK.COMMA, TK.EOF].includes(next.type);
+        const isClosed = next && [TK.SEMI, TK.RPAREN, TK.RBRACK, TK.COMMA, TK.EOF].includes(next.type);
         if (isTight || isClosed) {
           eat(TK.QUEST);
           expr = { kind: 'Propagate', expr };
@@ -1722,7 +1722,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     err('Expected arrow function after capture list');
   }
 
-  function parsePrimary() {
+  function parsePrimary(): any {
     const t = cur();
 
     // Match expression
