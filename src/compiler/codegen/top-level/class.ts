@@ -115,7 +115,7 @@ export default {
       // Always treat as if extending Error (TscError _base)
       effectiveSuperClass = 'Error';
       // Remove 'message' field — it's replaced by _base.message via TscError
-      fields = allFields_.f$2((f: any) => f.name !== 'message');
+      fields = allFields_.filter((f) => f.name !== 'message');
     }
 
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
@@ -153,9 +153,9 @@ export default {
         if (!node || typeof node !== 'object') return false;
         if (Array.isArray(node)) return node.some(scanType);
         if (node.kind === 'TypeRef' && node.name === name) return true;
-        return Object.values(node).v$2((v: any) => v && typeof v === 'object' ? scanType(v) : false);
+        return Object.values(node).some((v) => v && typeof v === 'object' ? scanType(v) : false);
       };
-      return methods.some((m: any) => scanType(m.returnType) || (m.params ?? []).p$2((p: any) => scanType(p.typeAnn)));
+      return methods.some((m: any) => scanType(m.returnType) || (m.params ?? []).some((p) => scanType(p.typeAnn)));
     })();
 
     if (_usedAsType) {
@@ -170,7 +170,7 @@ export default {
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
           throw this.error(`"never" cannot be used as a field type`);
         }
-        const isReadonly = (f.decorators ?? []).d$2((d: any) => d.name === 'readonly');
+        const isReadonly = (f.decorators ?? []).some((d) => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         const constPfx = isReadonly ? 'const ' : '';
         if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);
@@ -187,7 +187,7 @@ export default {
           ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
-        const isSelfRef = fields.f$2((f: any) => {
+        const isSelfRef = fields.some((f) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -198,7 +198,7 @@ export default {
           this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
-        const isSelfRef = fields.f$2((f: any) => {
+        const isSelfRef = fields.some((f) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -276,7 +276,7 @@ export default {
     }
 
     // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
-    const explicitImplements = (node.implements_ ?? []).i$2((i: any) => _ifaceName2(i) !== 'Iterable');
+    const explicitImplements = (node.implements_ ?? []).filter((i) => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
