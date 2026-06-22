@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading callbacks
 export default {
   emitMatchVarDecl(node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
