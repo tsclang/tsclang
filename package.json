@@ -41,8 +41,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsx test/runner.js",
-    "test:v": "tsx test/runner.js --verbose"
+    "test": "tsx test/runner.ts",
+    "test:v": "tsx test/runner.ts --verbose"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

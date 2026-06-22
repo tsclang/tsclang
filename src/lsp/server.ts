@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 7: LSP server, types added in Stage 8
 // TSClang LSP server (Language Server Protocol over stdio)
 // Handles: initialize, textDocument/didOpen, hover, completion, definition
 

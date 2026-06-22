@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 7: formatter, types added in Stage 8
 // TSClang formatter: normalizes whitespace and indentation
 // Uses a simple token-based printer (not full AST pretty-printer)
 

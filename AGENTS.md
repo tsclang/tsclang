@@ -102,7 +102,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 ## Тесты и сборка
 
 ```bash
-npm test                          # все тесты
+npm test                          # все тесты (tsx)
 node test/runner.js 04-ownership  # только 04-ownership
 node test/runner.js --no-gcc      # только C-compare, без компиляции
 node test/runner.js --verbose     # показывать diff при провале

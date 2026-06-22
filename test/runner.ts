@@ -16,7 +16,7 @@ import { renderDiagnostic } from '../src/compiler/error.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DOC_DIR = join(ROOT, 'test', 'cases');
-const TSCLANG_BIN = join(ROOT, 'bin', 'index.js');
+const TSCLANG_BIN = join(ROOT, 'bin', 'index.ts');
 const TSX_LOADER = pathToFileURL(join(ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href;
 const RUNTIME_INC = join(ROOT, 'src', 'runtime');
 

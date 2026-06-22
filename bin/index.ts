@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck — Stage 7: CLI entry point, types added in Stage 8
 // TSClang CLI entry point
 
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync, watchFile, unwatchFile } from 'fs';
