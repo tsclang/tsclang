@@ -77,7 +77,7 @@ export default {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && !n.typeParams?.length) classDecls[n.name] = n;
       }
-      for (const [name, n] of Object.entries(classDecls)) {
+      for (const [name, n] of Object.entries(classDecls) as [string, any][]) {
         if (!n.superClass) continue;
         const parent = classDecls[n.superClass];
         if (parent?.superClass) {
@@ -226,7 +226,7 @@ export default {
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
-        const fields = (n.members ?? []).filter((m) => m.kind === 'Field');
+        const fields = (n.members ?? []).filter((m: any) => m.kind === 'Field');
         const hasStack = fields.some((f: any) => f.name === 'stack');
         if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
