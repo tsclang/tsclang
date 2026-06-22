@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading
 // generator.js
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────

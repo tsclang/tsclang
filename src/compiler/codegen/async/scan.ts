@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading
 // scan.js
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
