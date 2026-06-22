@@ -489,6 +489,7 @@ function metaToOpts(testDir) {
 async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
   const inputSrc = join(testDir, 'input.tsc');
   const opts = metaToOpts(testDir);
+  const profTarget = opts.target || null;
 
   // Step 1: Compile directly (no subprocess)
   let result, stderr = '';
@@ -542,9 +543,11 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
     if (!await checkAvrGcc()) return { status: 'skip', testDir, reason: 'avr-gcc not found (install avr-libc)' };
     const elfFile = join(tmpBase, 'test_avr.elf');
     const hexFile = join(tmpBase, 'test_avr.hex');
-    const defines = metaFlags.filter((_, i) => metaFlags[i - 1]?.startsWith('-D')).length > 0
-      ? metaFlags.filter((f, i) => f.startsWith('-D'))
-      : ['-DTSC_NO_POSIX', '-DTSC_NO_STRTOLL', '-DTSC_CONSOLE_UART', '-DTSC_CONSOLE_BAUD=9600'];
+    const flagsFromFile = existsSync(join(testDir, 'flags.txt'))
+      ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
+      : [];
+    const dFlags = flagsFromFile.filter((f: string) => f.startsWith('-D'));
+    const defines = dFlags.length > 0 ? dFlags : ['-DTSC_NO_POSIX', '-DTSC_NO_STRTOLL', '-DTSC_CONSOLE_UART', '-DTSC_CONSOLE_BAUD=9600'];
     const avrResult = await avrGccCompile(generatedC, elfFile, defines);
     if (avrResult.code !== 0) return fail(testDir, 'avr-gcc', 'C does not compile with avr-gcc', avrResult.stderr);
     const objcopyResult = await avrObjcopy(elfFile, hexFile);
