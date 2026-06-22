@@ -41,8 +41,8 @@ export default {
     }
 
     // Process @embedded.* decorators
-    const inlineDec = decorators?.find((d) => d.name === 'struct');
-    const poolDec   = decorators?.find((d) => d.name === 'pool');
+    const inlineDec = decorators?.find((d: any) => d.name === 'struct');
+    const poolDec   = decorators?.find((d: any) => d.name === 'pool');
     const isEmbedded = this._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
@@ -57,7 +57,7 @@ export default {
     }
 
     // @heap: only valid on allocator: "heap"
-    const heapDec = decorators?.find((d) => d.name === 'heap');
+    const heapDec = decorators?.find((d: any) => d.name === 'heap');
     if (heapDec && this._allocatorName === 'static') {
       throw this.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
     }
@@ -78,8 +78,8 @@ export default {
     }
 
     // Process @packed and @align decorators
-    const packedDec = decorators?.find((d) => d.name === 'packed');
-    const alignDec  = decorators?.find((d) => d.name === 'align');
+    const packedDec = decorators?.find((d: any) => d.name === 'packed');
+    const alignDec  = decorators?.find((d: any) => d.name === 'align');
     if (packedDec && alignDec) {
       throw this.error('@packed and @align cannot be used together');
     }
@@ -280,9 +280,9 @@ export default {
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
-      const platformDec = (m.decorators ?? []).find((d) => d.name === 'platform');
+      const platformDec = (m.decorators ?? []).find((d: any) => d.name === 'platform');
       if (platformDec) {
-        const allowed = (platformDec.args ?? []).map((a) => a.value ?? a);
+        const allowed = (platformDec.args ?? []).map((a: any) => a.value ?? a);
         const target = this._targetName ?? 'desktop';
         if (!allowed.includes(target)) {
           if (!this._platformSkipped) this._platformSkipped = new Map();
@@ -291,7 +291,7 @@ export default {
         }
       }
       const isStatic = m.modifiers.includes('static');
-      const mDecs = (m.decorators ?? []).filter((d) => this._decoratorFns?.has(d.name));
+      const mDecs = (m.decorators ?? []).filter((d: any) => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
         this._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
       } else {
