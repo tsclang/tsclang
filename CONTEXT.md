@@ -1,19 +1,20 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-20 (test refactoring phase→spec, epic issues #72-#80).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stage 1 done, #83 closed).
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string)
+- **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string). JS→TS migration in progress (#81, Stages 1-8 = #83-#90). Stage 1 (infrastructure) done.
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
 - **Tests:** `node test/runner.js 03-types` (15 spec-based dirs, **1749 tests**, all pass)
+- **Build:** `npm run typecheck` (tsc --noEmit), `npm run build` (tsc → dist/), `npx tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
-- **Next goal:** Self-hosting — rewrite compiler in tsclang. IR pipeline deferred (post-self-hosting).
+- **Next goal:** JS→TS migration (#81), then self-hosting. IR pipeline deferred (post-self-hosting).
 
 ---
 
