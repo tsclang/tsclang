@@ -82,9 +82,9 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
   const tokens: Token[] = [];
   let i = 0, line = 1, col = 1;
 
-  function cur(): string | undefined  { return src[i]; }
-  function peek(n: number = 1): string | undefined { return src[i + n]; }
-  function advance(): string | undefined {
+  function cur(): string  { return src[i]; }
+  function peek(n: number = 1): string { return src[i + n]; }
+  function advance(): string {
     const ch = src[i++];
     if (ch === '\n') { line++; col = 1; } else { col++; }
     return ch;

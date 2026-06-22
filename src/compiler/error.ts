@@ -117,7 +117,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
         if (ln >= 1 && ln <= srcLines.length) showSet.add(ln);
       }
     }
-    const showLines = [...showSet].sort((a: number, b: number) => a - b);
+    const showLines = [...showSet].sort((a: any, b: any) => a - b);
 
     // gutterWidth from max line number shown (tip 1: consistent | alignment)
     const maxLine    = showLines[showLines.length - 1] ?? diag.line;

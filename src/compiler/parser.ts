@@ -359,7 +359,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         const s = parseStmt();
         if (s.kind === 'VarDecls') s.decls.forEach((d: any) => body.push(d));
         else body.push(s);
-      } catch (e) {
+      } catch (e: any) {
         if (e.isTscError) {
           errors.push(e);
           const beforePos = pos;
