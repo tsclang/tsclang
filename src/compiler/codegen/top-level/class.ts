@@ -187,7 +187,7 @@ export default {
           ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
-        const isSelfRef = fields.some((f) => {
+        const isSelfRef = fields.some((f: any) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -198,7 +198,7 @@ export default {
           this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
-        const isSelfRef = fields.some((f) => {
+        const isSelfRef = fields.some((f: any) => {
           const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
@@ -268,7 +268,7 @@ export default {
     }
 
     // Emit Iterable<T> impl before methods (iter() will be skipped below)
-    const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
+    const _ifaceName2 = (iface: any) => typeof iface === 'string' ? iface : iface.name;
     const classInfo_ = this.classes.get(cname);
     if (classInfo_?._iterableElemType) {
       const iterMethod_ = methods.find((m: any) => m.name === 'iter' || m.isIterator);
@@ -276,7 +276,7 @@ export default {
     }
 
     // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
-    const explicitImplements = (node.implements_ ?? []).filter((i) => _ifaceName2(i) !== 'Iterable');
+    const explicitImplements = (node.implements_ ?? []).filter((i: any) => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
