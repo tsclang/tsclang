@@ -8,13 +8,13 @@ let _enabled = !!(
   && process.env.TERM !== 'dumb'
 );
 
-export const setColorEnabled = (b) => { _enabled = b; };
-export const isColorEnabled  = ()  => _enabled;
+export const setColorEnabled = (b: boolean): void => { _enabled = b; };
+export const isColorEnabled  = (): boolean => _enabled;
 
 // style(...ansiCodes)(str) — wraps str in ANSI escape; passes through when disabled.
 // Multiple codes are combined: style(1, 31) → '\x1b[1;31m...\x1b[0m' (bold red)
-const style = (...codes) => (s) =>
-  _enabled ? `\x1b[${codes.join(';')}m${s}\x1b[0m` : s;
+const style = (...codes: number[]): ((s: string) => string) =>
+  (s: string) => _enabled ? `\x1b[${codes.join(';')}m${s}\x1b[0m` : s;
 
 export const bold    = style(1);         // bold white — message text
 export const boldRed = style(1, 31);     // bold red   — error label, primary ^
@@ -23,11 +23,20 @@ export const green   = style(1, 32);     // bold green — = help:
 export const cyan    = style(36);        // cyan       -- -->, |, line numbers, = note:
 export const dim     = style(2);         // dim        — ... gap markers
 
+export interface ColorSet {
+  bold: (s: string) => string;
+  boldRed: (s: string) => string;
+  yellow: (s: string) => string;
+  green: (s: string) => string;
+  cyan: (s: string) => string;
+  dim: (s: string) => string;
+}
+
 // makeColors(enabled) — returns a frozen set of color functions with a fixed
 // enabled state. Useful for renderDiagnostic's opts.color override.
-export function makeColors(enabled) {
-  const mk = (...codes) => (s) =>
-    enabled ? `\x1b[${codes.join(';')}m${s}\x1b[0m` : s;
+export function makeColors(enabled: boolean): ColorSet {
+  const mk = (...codes: number[]): ((s: string) => string) =>
+    (s: string) => enabled ? `\x1b[${codes.join(';')}m${s}\x1b[0m` : s;
   return {
     bold:    mk(1),
     boldRed: mk(1, 31),

@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { spawn, spawnSync } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl } from '../src/compiler/profile.js';
 import { compileTsc } from '../src/compiler/compile.js';
 import { renderDiagnostic } from '../src/compiler/error.js';
@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DOC_DIR = join(ROOT, 'test', 'cases');
 const TSCLANG_BIN = join(ROOT, 'bin', 'index.js');
+const TSX_LOADER = pathToFileURL(join(ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href;
 const RUNTIME_INC = join(ROOT, 'src', 'runtime');
 
 // ---------------------------------------------------------------------------
@@ -582,7 +583,7 @@ async function executeJsonTest(testDir, kind) {
 
   const tscResult = await run(
     process.execPath,
-    [TSCLANG_BIN, 'validate-config', inputJson],
+    ['--import', TSX_LOADER, TSCLANG_BIN, 'validate-config', inputJson],
   );
 
   if (kind === 'E') {
@@ -636,7 +637,7 @@ async function executeShTest(testDir, kind, tmpBase) {
     ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`
     : patchedScript;
 
-  const result = await runShell(finalScript, { cwd: tmpBase });
+  const result = await runShell(finalScript, { cwd: tmpBase, env: { ...process.env, NODE_OPTIONS: `--import ${TSX_LOADER}` } });
 
   if (kind === 'E') {
     if (result.code === 0) {
