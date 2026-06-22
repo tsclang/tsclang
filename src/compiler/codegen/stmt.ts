@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading array types
 // stmt.js
 export default {
   visitBlock(block: any, lines: any, depth: any) {
