@@ -99,16 +99,18 @@ TSClang — серьёзный продакшн-проект, не учебны�
 - **Любое изменение поведения → обновить `spec/`** в том же коммите. Не откладывать «потом». Что считать изменением поведения: новый синтаксис, изменённая семантика, новые ошибки компилятора, новые strict rules, изменённый runtime behavior. Что НЕ считать: внутренний рефакторинг, фиксы багов без изменения документированного поведения, оптимизации производительности.
 - Прогресс — в GitHub Issues
 
-## Тесты
+## Тесты и сборка
 
 ```bash
-npm test                        # все тесты
+npm test                          # все тесты
 node test/runner.js 04-ownership  # только 04-ownership
-node test/runner.js --no-gcc    # только C-compare, без компиляции
-node test/runner.js --verbose   # показывать diff при провале
+node test/runner.js --no-gcc      # только C-compare, без компиляции
+node test/runner.js --verbose     # показывать diff при провале
+npm run typecheck                 # проверить типы (tsc --noEmit)
+npm run build                     # собрать в dist/ (tsc)
 ```
 
-Каждый тест: `test/cases/<phase>/<feature>/<name>/`
+Каждый тест: `test/cases/<NN-section>/<feature>/<name>/`
 - `input.tsc` — входной код
 - `expected.c` — ожидаемый C-output ([F] fragment или [R] runnable)
 - `expected.out` — ожидаемый stdout при запуске ([R] only)
