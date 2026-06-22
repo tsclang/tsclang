@@ -3,6 +3,7 @@ node_modules/
 .tsclang-tmp/
 .tsclang-tmp2/
 dist/
+*.tsbuildinfo
 *.c
 !src/**/*.c
 !test/**/*.c
