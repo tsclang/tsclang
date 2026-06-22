@@ -72,7 +72,7 @@ export default {
 
     // Pre-scan: detect inheritance chains > 1 level
     {
-      const classDecls = {};
+      const classDecls: any = {};
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && !n.typeParams?.length) classDecls[n.name] = n;

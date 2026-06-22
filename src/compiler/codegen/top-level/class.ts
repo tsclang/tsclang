@@ -349,7 +349,7 @@ export default {
     }
   },
 
-  _ensurePoolAlloc(className) {
+  _ensurePoolAlloc(className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isPool || cls._poolAllocEmitted) return;
     cls._poolAllocEmitted = true;
@@ -369,7 +369,7 @@ export default {
     this.addTop('');
   },
 
-  _ensurePoolDrop(className) {
+  _ensurePoolDrop(className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isPool || cls._poolDropEmitted) return;
     this._ensurePoolAlloc(className); // drop requires alloc
