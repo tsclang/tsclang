@@ -1,3 +1,4 @@
+// @ts-nocheck — #97: cascading
 export default {
   consoleCall(method: any, args: any, lines: any, depth: any) {
     if (method === 'time') {
