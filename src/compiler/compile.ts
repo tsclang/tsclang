@@ -125,7 +125,7 @@ export function resolvePackageImport(pkgName, fromDir) {
 // Compile TSC → C string (recursive for local imports)
 // ---------------------------------------------------------------------------
 
-export function compileTsc(inputPath, opts = {}) {
+export function compileTsc(inputPath: string, opts: any = {}) {
   const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
   const tokens   = lex(src, filename);
