@@ -1,10 +1,10 @@
 // linter.js — AST-based lint rules for TSClang
 
 // Generic recursive AST walker
-function walkAst(node, visitor) {
+function walkAst(node: any, visitor) {
   if (!node || typeof node !== 'object') return;
   visitor(node);
-  for (const val of Object.values(node)) {
+  for (const val of Object.values(node) as any[]) {
     if (Array.isArray(val)) {
       for (const item of val) walkAst(item, visitor);
     } else if (val && typeof val === 'object' && val.kind) {
@@ -118,7 +118,7 @@ function checkPreferConst(ast) {
           node.expr?.kind === 'Ident') {
         assigned.add(node.expr.name);
       }
-      for (const val of Object.values(node)) {
+      for (const val of Object.values(node) as any[]) {
         if (Array.isArray(val)) for (const item of val) collectAssignments(item);
         else if (val && typeof val === 'object' && val.kind) collectAssignments(val);
       }
@@ -193,7 +193,7 @@ function checkNoUnusedVar(ast) {
         if (node.init) collectUsages(node.init, node.line);
         return;
       }
-      for (const val of Object.values(node)) {
+      for (const val of Object.values(node) as any[]) {
         if (Array.isArray(val)) for (const item of val) collectUsages(item, declLine);
         else if (val && typeof val === 'object' && val.kind) collectUsages(val, declLine);
       }

@@ -1,13 +1,13 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-2 done, #83/#84 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-22 (JS→TS migration Stages 1-4 done, #83-#86 closed).
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.js → parser.js → codegen.js → C string). JS→TS migration in progress (#81, Stages 1-8 = #83-#90). Stages 1-2 done: infrastructure + type definitions (`src/compiler/ast-types/`).
+- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.js → C string). JS→TS migration in progress (#81, Stages 1-8 = #83-#90). Stages 1-4 done: infrastructure + type defs + 11 leaf modules + parser. Remaining: codegen core + mixins (Stages 5-6), bin/test (Stage 7), strict mode (Stage 8).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.js` (`tsclang build|run|init|lint|...`)
 - **Tests:** `node test/runner.js 03-types` (15 spec-based dirs, **1749 tests**, all pass)
