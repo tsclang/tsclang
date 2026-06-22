@@ -71,7 +71,7 @@ export default {
       throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {
-      const badMethods = members.filter(((m: any)) => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
+      const badMethods = members.filter((m: any) => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
       if (badMethods.length > 0) {
         throw this.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
       }
@@ -95,8 +95,8 @@ export default {
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
 
-    const allFields_ = members.filter(((m: any)) => m.kind === 'Field');
-    const methods = members.filter(((m: any)) => m.kind === 'Method');
+    const allFields_ = members.filter((m: any) => m.kind === 'Field');
+    const methods = members.filter((m: any) => m.kind === 'Method');
     const seen = new Set();
     for (const m of [...allFields_, ...methods]) {
       const n = typeof m.name === 'string' ? m.name : null;
@@ -146,7 +146,7 @@ export default {
     const arcInfo = this._arcClasses?.get(name);
 
     // All-static class with no fields → skip struct unless class name used as a type
-    const _allStatic = methods.length > 0 && methods.every(((m: any)) => m.modifiers.includes('static'));
+    const _allStatic = methods.length > 0 && methods.every((m: any) => m.modifiers.includes('static'));
     const _hasUserFields = fields.length > 0 || cBase;
     const _usedAsType = !_allStatic || _hasUserFields || (() => {
       const scanType = (node) => {
@@ -155,7 +155,7 @@ export default {
         if (node.kind === 'TypeRef' && node.name === name) return true;
         return Object.values(node).some((v) => v && typeof v === 'object' ? scanType(v) : false);
       };
-      return methods.some(((m: any)) => scanType(m.returnType) || (m.params ?? []).some((p) => scanType(p.typeAnn)));
+      return methods.some((m: any) => scanType(m.returnType) || (m.params ?? []).some((p) => scanType(p.typeAnn)));
     })();
 
     if (_usedAsType) {
@@ -240,7 +240,7 @@ export default {
     }
 
     // Constructor if present
-    const ctor = methods.find(((m: any)) => m.name === 'constructor');
+    const ctor = methods.find((m: any) => m.name === 'constructor');
     if (ctor) {
       if (ctor.decorators?.length > 0) {
         throw this.error('decorators on constructors are not supported', ctor);
@@ -271,7 +271,7 @@ export default {
     const _ifaceName2 = (iface) => typeof iface === 'string' ? iface : iface.name;
     const classInfo_ = this.classes.get(cname);
     if (classInfo_?._iterableElemType) {
-      const iterMethod_ = methods.find(((m: any)) => m.name === 'iter' || m.isIterator);
+      const iterMethod_ = methods.find((m: any) => m.name === 'iter' || m.isIterator);
       if (iterMethod_) this._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
     }
 
@@ -417,7 +417,7 @@ export default {
   emitVtableConstant(className, ifaceName, classNode = null) {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
-    const ifaceMethods = ifaceDef.filter(((m: any)) => m.kind === 'MethodSig');
+    const ifaceMethods = ifaceDef.filter((m: any) => m.kind === 'MethodSig');
     if (ifaceMethods.length === 0) return;
     // Verify all interface methods are implemented
     const classDef = this.classes.get(className);
@@ -428,10 +428,10 @@ export default {
       }
     }
     const vtableName = `${className}_${ifaceName}_vtable`;
-    const entries = ifaceMethods.map(((m: any)) => {
+    const entries = ifaceMethods.map((m: any) => {
       return `    .${m.name} = ${className}_${m.name}`;
     }).join(',\n');
-    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map(((m: any)) => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
+    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map((m: any) => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
     this.addTop('');
   },
 
