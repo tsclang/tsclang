@@ -111,7 +111,7 @@ moving the field.
 };
 
 export function explainError(code: string) {
-  const entry = ERROR_CATALOG[code.toUpperCase()];
+  const entry = (ERROR_CATALOG as Record<string, { title: string; body: string }>)[code.toUpperCase()];
   if (!entry) return null;
   return `${code.toUpperCase()}: ${entry.title}\n${entry.body.trimEnd()}\n`;
 }

@@ -5,7 +5,7 @@ import { lex }   from './lexer.js';
 import { parse } from './parser.js';
 
 // Convert a TypeRef AST node back to TSC syntax string
-function typeToStr(t: any) {
+function typeToStr(t: any): any {
   if (!t) return 'any';
   if (t.kind === 'TypeRef') {
     if (!t.typeArgs?.length) return t.name;
@@ -15,12 +15,12 @@ function typeToStr(t: any) {
   if (t.kind === 'TypeIntersection') return t.types.map(typeToStr).join(' & ');
   if (t.kind === 'ArrayType') return `${typeToStr(t.element)}[]`;
   if (t.kind === 'TypeLiteral' || t.kind === 'TypeObject') {
-    const fields = (t.members ?? t.fields ?? []).map(m => `${m.name}: ${typeToStr(m.typeAnn)}`).join('; ');
+    const fields = (t.members ?? t.fields ?? []).map((m: any) => `${m.name}: ${typeToStr(m.typeAnn)}`).join('; ');
     return `{ ${fields} }`;
   }
   if (t.kind === 'TupleType') return `[${(t.elements ?? []).map(typeToStr).join(', ')}]`;
   if (t.kind === 'FunctionType') {
-    const params = (t.params ?? []).map(p => `${p.name}: ${typeToStr(p.typeAnn)}`).join(', ');
+    const params = (t.params ?? []).map((p: any) => `${p.name}: ${typeToStr(p.typeAnn)}`).join(', ');
     return `(${params}) => ${typeToStr(t.returnType)}`;
   }
   if (t.kind === 'OptionalType') return `${typeToStr(t.inner)}?`;

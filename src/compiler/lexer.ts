@@ -269,7 +269,7 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
       '~': TK.TILDE,  '?': TK.QUEST,
       '#': TK.HASH,   '@': TK.AT,
     };
-    if (singleMap[ch]) { tokens.push(new Token(singleMap[ch], ch, startLine, startCol)); continue; }
+    if ((singleMap as Record<string,string>)[ch]) { tokens.push(new Token((singleMap as Record<string,string>)[ch], ch, startLine, startCol)); continue; }
 
     err(`Unexpected character: ${JSON.stringify(ch)}`);
   }

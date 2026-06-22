@@ -62,14 +62,14 @@ export function parsePlatformDecl(src: string, filename = '<profile>') {
           }
           advance();
 
-          if (!VALID_FIELDS[key]) {
+          if (!(VALID_FIELDS as Record<string, string>)[key]) {
             throw new Error(`${filename}: unknown capability field '${key}'`);
           }
-          const expected = VALID_FIELDS[key];
+          const expected = (VALID_FIELDS as Record<string, string>)[key];
           if (typeof val !== expected) {
             throw new Error(`${filename}: field '${key}' expects ${expected}, got ${typeof val}`);
           }
-          caps[key] = val;
+          (caps as Record<string, any>)[key] = val;
         }
 
         if (cur().type === TK.RBRACE) advance();
