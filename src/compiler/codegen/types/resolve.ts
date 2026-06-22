@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
 // resolve.js
 export default {
-  resolveType(typeNode) {
+  resolveType(typeNode: any) {
     if (!typeNode) return 'void';
     if (typeof typeNode === 'string') return toCType(typeNode);
 
@@ -99,7 +98,7 @@ export default {
         if (baseDef?.fields) {
           const structKey = `_partial_${this.cTypeToIdent(baseType)}`;
           if (!this.classes.has(structKey)) {
-            const fieldDecls = baseDef.fields.flatMap(f => {
+            const fieldDecls = baseDef.fields.flatMap((f: any) => {
               const fname = f.name ?? f;
               const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
               return [`bool has_${fname};`, `${ftype} ${fname};`];
@@ -118,11 +117,11 @@ export default {
         if (baseDef?.fields) {
           const keyNames = this.getStringLiteralMembers(typeArgs[1]);
           const picked = name === 'Pick'
-            ? baseDef.fields.filter(f => keyNames.length === 0 || keyNames.includes(f.name ?? f))
-            : baseDef.fields.filter(f => !keyNames.includes(f.name ?? f));
+            ? baseDef.fields.filter((f: any) => keyNames.length === 0 || keyNames.includes(f.name ?? f))
+            : baseDef.fields.filter((f: any) => !keyNames.includes(f.name ?? f));
           const structKey = `_${name.toLowerCase()}_${keyNames.join('_')}`;
           if (!this.classes.has(structKey)) {
-            const fieldDecls = picked.map(f => {
+            const fieldDecls = picked.map((f: any) => {
               const fname = f.name ?? f;
               const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
               return `${ftype} ${fname};`;
@@ -160,7 +159,7 @@ export default {
           const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
           gSubst.set(tmpl.typeParams[i].name, ct);
         }
-        const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(gSubst.get(tp.name) ?? 'void')).join('_');
+        const suffix = tmpl.typeParams.map((tp: any) => this.cTypeToIdent(gSubst.get(tp.name) ?? 'void')).join('_');
         const monoName = `${name}_${suffix}`;
         if (!this._emittedGenericClasses.has(monoName)) {
           this._emittedGenericClasses.add(monoName);
@@ -201,7 +200,7 @@ export default {
 
     if (typeNode.kind === 'TypeObject') {
       // Inline struct type — return 'struct { ... }' (anonymous)
-      const fields = typeNode.fields.map(f => {
+      const fields = typeNode.fields.map((f: any) => {
         const ct = this.resolveType(f.typeAnn);
         return `${ct} ${f.name}`;
       }).join('; ');
@@ -215,7 +214,7 @@ export default {
     if (typeNode.kind === 'TypeUnion') {
       // T | null → opt_T
       const allLeaves = this.flattenUnion(typeNode);
-      const nonNull = allLeaves.filter(t => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
+      const nonNull = allLeaves.filter((t: any) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
                                           && !(t.kind === 'TypeLiteral' && t.value === 'null'));
       const hasNull = allLeaves.length !== nonNull.length;
       if (hasNull && nonNull.length === 1) {
@@ -248,7 +247,7 @@ export default {
   },
 
   // Build tuple struct name and emit typedef if needed
-  resolveTupleType(typeNode, namedAs = null) {
+  resolveTupleType(typeNode: any, namedAs = null) {
     const { elements, readonly } = typeNode;
 
     // Build struct fields
@@ -282,8 +281,8 @@ export default {
       structName = namedAs;
     } else {
       const elNames = elements
-        .filter(e => !e.rest)
-        .map(e => this.cTypeToIdent(this.resolveType(e.typeAnn)));
+        .filter((e: any) => !e.rest)
+        .map((e: any) => this.cTypeToIdent(this.resolveType(e.typeAnn)));
       const prefix = readonly ? 'readonly_tuple' : 'tuple';
       structName = `${prefix}_${elNames.join('_')}`;
     }
@@ -292,7 +291,7 @@ export default {
 
     if (!this._emittedTuples.has(structName)) {
       this._emittedTuples.add(structName);
-      const fieldDecls = fields.map(f => {
+      const fieldDecls = fields.map((f: any) => {
         const ct = f.ctype.endsWith(' *') ? f.ctype.trimEnd() : f.ctype;
         return `${f.const ? 'const ' : ''}${ct}${ct.endsWith('*') ? '' : ' '}${f.name};`;
       }).join(' ');
@@ -306,7 +305,7 @@ export default {
 
   // Generate a full C declarator: handles function pointer types correctly
   // e.g. typeDecl({kind:'TypeFunc', params:[i32], ret:i32}, 'f') → 'int32_t (*f)(int32_t)'
-  typeDecl(typeNode, name) {
+  typeDecl(typeNode: any, name: any) {
     if (!typeNode) return `void *${name ? ' ' + name : ''}`;
     if (typeNode.kind === 'TypeFunc') {
       return `tsc_closure${name ? ' ' + name : ''}`;

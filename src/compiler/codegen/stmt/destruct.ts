@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 export default {
-  _visitVarDestruct(node, lines, depth) {
+  _visitVarDestruct(node: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
-    const p = (s) => lines.push(I + s);
+    const p = (s: any) => lines.push(I + s);
     if (node.kind === 'VarDestructObj') {
         const { varKind, pattern, typeAnn, init } = node;
         const qual = varKind === 'const' ? 'const ' : '';
@@ -14,7 +13,7 @@ export default {
           const _dSym = this.lookup(init.name);
           if (_dSym?.deferredAnon && this._deferredAnons?.has(init.name)) {
             const _dAnon = this._deferredAnons.get(init.name);
-            const propMap2 = new Map((_dAnon.init.props ?? []).map(pr => [pr.key, pr.value]));
+            const propMap2 = new Map((_dAnon.init.props ?? []).map((pr: any) => [pr.key, pr.value]));
             for (const { name: fname } of _dAnon.fields) {
               const propVal2 = propMap2.get(fname);
               const propC2 = propVal2 ? this.exprToC(propVal2, lines, depth) : '0';
@@ -38,7 +37,7 @@ export default {
 
         // ObjLit init: expand props directly as _obj_field variables (no anonymous struct)
         if (init.kind === 'ObjLit') {
-          const propMap = new Map((init.props ?? []).map(pr => [pr.key, pr.value]));
+          const propMap = new Map((init.props ?? []).map((pr: any) => [pr.key, pr.value]));
           // First pass: emit temp vars for each prop
           for (const { name } of pattern) {
             const propVal = propMap.get(name);
@@ -66,7 +65,7 @@ export default {
           const srcName = init.name;
           const stringFields = [];
           for (const { name, alias } of pattern) {
-            const field = structDef.fields.find(f => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const field = structDef.fields.find((f: any) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
             if (fieldCType === 'String') {
               p(`tsc_string_retain(${srcName}.${name});`);
@@ -90,7 +89,7 @@ export default {
         if (init.kind === 'Ident' && structDef?.fields) {
           const srcName = init.name;
           for (const { name, alias } of pattern) {
-            const field = structDef.fields.find(f => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const field = structDef.fields.find((f: any) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
             p(`${qual}${fieldCType} *${alias} = &${srcName}.${name};`);
             this.define(alias, { ctype: `${fieldCType} *`, varKind, isPointer: true, derefType: fieldCType });

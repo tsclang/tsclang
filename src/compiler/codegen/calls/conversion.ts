@@ -1,6 +1,6 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck — #95: cascading type errors, needs manual annotation
 export default {
-  _dispatchConversion(node, lines, depth) {
+  _dispatchConversion(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       // variable.toString() where variable is a string-literal-union type
@@ -88,7 +88,7 @@ export default {
           const closureIdx = this.lambdaCount++;
           const prefix = `_closure_${closureIdx}`;
           const envType = `${prefix}_env`;
-          const fieldDecls = freeVars.map(v => `${v.ctype} ${v.name};`);
+          const fieldDecls = freeVars.map((v: any) => `${v.ctype} ${v.name};`);
           this._topBlank();
           this.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
           this.topLevel.push(`static ${envType} ${prefix}_captured;`);
@@ -105,7 +105,7 @@ export default {
           this.topLevel.push('}');
           if (lines !== undefined) {
             const I = ' '.repeat(this.indent * depth);
-            const inits = freeVars.map(v => `.${v.name} = ${v.name}`).join(', ');
+            const inits = freeVars.map((v: any) => `.${v.name} = ${v.name}`).join(', ');
             lines.push(`${I}${prefix}_captured = (${envType}){ ${inits} };`);
           }
           const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
@@ -139,7 +139,7 @@ export default {
     // parseFloat / tryParseFloat / parseInt / tryParseInt / Number
     // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number.
     // Supports 0x/0b/0o prefixes (runtime handles them; JS parseFloat/parseInt don't, so we check manually).
-    const _setOptIsNullHint = (argNode) => {
+    const _setOptIsNullHint = (argNode: any) => {
       if (argNode?.kind === 'Literal' && argNode.litType === 'string') {
         const s = argNode.value;
         if (/^0x[0-9a-fA-F]+$/i.test(s) || /^0b[01]+$/i.test(s) || /^0o[0-7]+$/i.test(s)) {
@@ -158,8 +158,8 @@ export default {
         const argExpr = args[0]?.expr;
         const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
           : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
-        if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every(e => e?.expr?.kind === 'Literal')) {
-          const bytes = _decLitArr.elems.map(e => parseInt(e.expr.value));
+        if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every((e: any) => e?.expr?.kind === 'Literal')) {
+          const bytes = _decLitArr.elems.map((e: any) => parseInt(e.expr.value));
           let i = 0;
           while (i < bytes.length) {
             const b = bytes[i];

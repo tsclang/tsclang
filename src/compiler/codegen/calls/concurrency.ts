@@ -1,4 +1,3 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 const ORDERING_MAP = {
   'LoadOrdering.Acquire': 'memory_order_acquire',
   'LoadOrdering.SeqCst': 'memory_order_seq_cst',
@@ -12,7 +11,7 @@ const ORDERING_MAP = {
 };
 
 export default {
-  _dispatchConcurrency(node, lines, depth) {
+  _dispatchConcurrency(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       const objName2 = callee.object?.kind === 'Ident' ? callee.object.name : null;
@@ -22,12 +21,12 @@ export default {
         const isPtr = atomicSym._isArcAtomic;
         const ref = isPtr ? `${objName2}->value` : `${objName2}.value`;
 
-        const resolveOrdering = (argNode, op) => {
+        const resolveOrdering = (argNode: any, op: any) => {
           if (!argNode) return null;
           const expr = argNode.expr ?? argNode;
           if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
             const key = `${expr.object.name}.${expr.prop}`;
-            if (ORDERING_MAP[key]) return ORDERING_MAP[key];
+            if ((ORDERING_MAP as Record<string, string>)[key]) return (ORDERING_MAP as Record<string, string>)[key];
           }
           if (expr.kind === 'Literal' && expr.litType === 'string') {
             const validStore = ['release', 'seq_cst'];
@@ -110,7 +109,7 @@ export default {
           const expr = argNode.expr ?? argNode;
           if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
             const key = `${expr.object.name}.${expr.prop}`;
-            if (ORDERING_MAP[key]) return ORDERING_MAP[key];
+            if ((ORDERING_MAP as Record<string, string>)[key]) return (ORDERING_MAP as Record<string, string>)[key];
           }
           return this.exprToC(expr, lines, depth);
         };

@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck — #95: cascading type errors, needs manual annotation
 // closures.js
 
 const SIMPLE_CTYPES = new Set([
@@ -8,7 +8,7 @@ const SIMPLE_CTYPES = new Set([
   'String', 'void *', 'tsc_unknown',
 ]);
 
-function _isComplexCtype(ct) {
+function _isComplexCtype(ct: any) {
   if (!ct) return false;
   if (SIMPLE_CTYPES.has(ct)) return false;
   if (ct.endsWith(' *')) return false;
@@ -17,17 +17,17 @@ function _isComplexCtype(ct) {
 }
 
 export default {
-  _templateToC(node, lines, depth) {
+  _templateToC(node: any, lines: any, depth: any) {
     const parts = node.parts; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
-    const hasSubs = parts.some(p => p.kind === 'expr');
+    const hasSubs = parts.some((p: any) => p.kind === 'expr');
     if (!hasSubs) {
       // Plain string, no substitutions
-      const text = parts.map(p => p.value ?? '').join('');
+      const text = parts.map((p: any) => p.value ?? '').join('');
       return `STR_LIT("${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
     }
 
     // Parse and compile each expression part
-    const compiled = parts.map(p => {
+    const compiled = parts.map((p: any) => {
       if (p.kind === 'str') return { kind: 'str', value: p.value };
       // Re-parse the expression source
       const toks = this._lex(p.src, this.filename);
@@ -49,7 +49,7 @@ export default {
     });
 
     // If all expressions are strings → use tsc_string_concat / tsc_string_concat_n
-    const allStrings = compiled.every(p => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
+    const allStrings = compiled.every((p: any) => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
     if (allStrings) {
       const pieces = [];
       for (const p of compiled) {
@@ -103,15 +103,15 @@ export default {
 
   // Walk an AST node and collect all Ident references that are free variables
   // (defined in outer scope, not in params or locally defined within the body).
-  _findFreeVars(body, paramNames, selfName) {
+  _findFreeVars(body: any, paramNames: any, selfName: any) {
     const params = new Set(paramNames);
     const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
     const captured = new Map(); // name → symInfo
     const seen = new Set();
 
-    const walk = (n, localDefs) => {
+    const walk = (n: any, localDefs: any) => {
       if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) { n.forEach(x => walk(x, localDefs)); return; }
+      if (Array.isArray(n)) { n.forEach((x: any) => walk(x, localDefs)); return; }
       if (n.kind === 'Ident') {
         const nm = n.name;
         if (selfName && nm === selfName) return;
@@ -148,8 +148,8 @@ export default {
 
   // Generate closure structs and fn for an Arrow, returning closure metadata.
   // Returns null if no captures (use regular hoistArrow).
-  hoistClosure(arrowNode, varName) {
-    const paramNames = (arrowNode.params ?? []).map(p => p.name);
+  hoistClosure(arrowNode: any, varName: any) {
+    const paramNames = (arrowNode.params ?? []).map((p: any) => p.name);
     let captured;
     let explicitCaptures = null;
     if (arrowNode.captures?.length > 0) {
@@ -195,7 +195,7 @@ export default {
     const capturedStringFields = [];
     for (const [nm, sym] of captured) {
       const ct = sym.ctype ?? 'void *';
-      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
       if (capInfo) {
         if (capInfo.mode === 'ref') {
           const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
@@ -240,7 +240,7 @@ export default {
 
     this.pushScope();
     for (const [nm, sym] of captured) {
-      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         const ct = sym.ctype ?? 'void *';
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
@@ -293,7 +293,7 @@ export default {
     }
     const envInit = '{' + [...captured.entries()].map(([nm, sym]) => {
       const src = sym._closureEnvVar ? `env->${nm}` : nm;
-      const capInfo = explicitCaptures?.find(c => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         if (sym.ctype?.endsWith(' *')) return `.${nm} = ${nm}`;
         return `.${nm} = &${nm}`;
@@ -306,7 +306,7 @@ export default {
     }).join(', ') + '}';
 
     const captureModes = explicitCaptures
-      ? new Map(explicitCaptures.map(c => [c.name, c.mode]))
+      ? new Map(explicitCaptures.map((c: any) => [c.name, c.mode]))
       : null;
 
     return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,

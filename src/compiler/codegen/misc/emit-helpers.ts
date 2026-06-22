@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck — #95: needs manual type annotation (cascading errors)
 // emit-helpers.js
 export default {
   _emitIterableImpl(className, iterMethod, elemCType) {

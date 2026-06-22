@@ -1,8 +1,7 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // dispatch.js
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
-  visitTopLevel(node) {
+  visitTopLevel(node: any) {
     if (!node) return;
     switch (node.kind) {
       case 'Import':
@@ -91,13 +90,13 @@ export default {
         // Collect signatures; implementation FuncDecl will emit them
         { const _sigs = this._pendingOverloads.get(node.name) ?? [];
           // Check for duplicate/ambiguous signature
-          const newSig = (node.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
-          const dupSig = _sigs.find(s => {
-            const sig = (s.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+          const newSig = (node.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+          const dupSig = _sigs.find((s: any) => {
+            const sig = (s.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
             return sig === newSig;
           });
           if (dupSig) {
-            const paramDesc = (node.params ?? []).map(p => `${p.name}: ${p.typeAnn?.name ?? '?'}`).join(', ');
+            const paramDesc = (node.params ?? []).map((p: any) => `${p.name}: ${p.typeAnn?.name ?? '?'}`).join(', ');
             throw this.error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
           }
           _sigs.push(node);
@@ -125,7 +124,7 @@ export default {
         }
 
         // @static decorator: emit as compile-time static backing (BSS-friendly)
-        const staticDec = (node.decorators ?? []).find(d => d.name === 'static');
+        const staticDec = (node.decorators ?? []).find((d: any) => d.name === 'static');
         if (staticDec && node.init?.kind === 'New' && node.init.name === 'Array') {
           const capArg = node.init.args?.[0];
           if (capArg) {
@@ -153,7 +152,7 @@ export default {
               throw this.error(`TypeError: Static BSS usage (${this._bssUsage} bytes) exceeds ram_size (${this._ramSize} bytes)`);
             }
           }
-          const initLines = [];
+          const initLines: any[] = [];
           this.visitStmt(node, initLines, 0);
           // Rewrite the emitted line to be static
           for (const line of initLines) {
@@ -168,7 +167,7 @@ export default {
           const capArg = node.init.args?.[0];
           if (capArg) {
             const capC = this.exprToC(capArg.expr, [], 0);
-            const [kt, vt] = (node.init.typeArgs ?? []).map(t => this.resolveType(t));
+            const [kt, vt] = (node.init.typeArgs ?? []).map((t: any) => this.resolveType(t));
             const k = kt ?? 'int32_t';
             const v = vt ?? 'int32_t';
             const kId = this.cTypeToIdent(k);
@@ -203,7 +202,7 @@ export default {
           // Detect non-constant initializer — C requires static globals to have
           // constant initializers. Split: zero-init declaration + runtime assignment.
           // Use AST inspection (not exprToC) to avoid codegen side effects.
-          const _hasCallNode = (nd) => {
+          const _hasCallNode = (nd: any): any => {
             if (!nd || typeof nd !== 'object') return false;
             if (Array.isArray(nd)) return nd.some(_hasCallNode);
             if (nd.kind === 'Call') return true;
@@ -216,7 +215,7 @@ export default {
           if (node.init && _hasCallNode(node.init)) {
             const _savedInit = node.init;
             node.init = null;
-            const varLines = [];
+            const varLines: any[] = [];
             this.visitStmt(node, varLines, 0);
             node.init = _savedInit;
             for (const line of varLines) {
@@ -234,7 +233,7 @@ export default {
               this.mainStmts.push(_splitInit);
             }
           } else {
-            const varLines = [];
+            const varLines: any[] = [];
             this.visitStmt(node, varLines, 0);
             for (const line of varLines) {
               const trimmed = line.trim();
@@ -261,7 +260,7 @@ export default {
         break;
       }
       case 'ExtensionFunc': this.visitExtensionFunc(node); break;
-      case 'VarDecls': node.decls.forEach(d => this.visitTopLevel(d)); break;
+      case 'VarDecls': node.decls.forEach((d: any) => this.visitTopLevel(d)); break;
       case 'DeclareConst':    this.visitDeclareConst(node); break;
       case 'DeclareFunction': this.visitDeclareFunction(node); break;
       case 'DeclareModule':   this.visitDeclareModule(node); break;
@@ -272,11 +271,11 @@ export default {
     }
   },
 
-  visitDeclareModule(node) {
+  visitDeclareModule(node: any) {
     this._declaredModules.set(node.moduleName, node.body);
   },
 
-  visitDeclareConst(node) {
+  visitDeclareConst(node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, typeAnn, init } = node;
@@ -289,12 +288,12 @@ export default {
     this._inDeclare = prevDeclare;
   },
 
-  visitDeclareFunction(node) {
+  visitDeclareFunction(node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, params, returnType } = node;
     const retC = returnType ? this.resolveType(returnType) : 'void';
-    const paramParts = (params ?? []).map(p => {
+    const paramParts = (params ?? []).map((p: any) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
