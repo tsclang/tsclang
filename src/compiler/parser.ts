@@ -4,9 +4,9 @@
 import { TK, KEYWORDS } from './lexer.js';
 import { TscError } from './error.js';
 
-export function parse(tokens, filename = '<input>', src = null) {
+export function parse(tokens: any, filename: string = '<input>', src: string | null = null) {
   let pos = 0;
-  const errors = [];
+  const errors: any[] = [];
 
   const STMT_KEYWORDS = new Set([
     'let', 'const', 'var', 'function', 'async', 'class', 'interface', 'enum',
@@ -37,7 +37,7 @@ export function parse(tokens, filename = '<input>', src = null) {
   function peek(n = 1) { return tokens[pos + n]; }
   function done() { return cur().type === TK.EOF; }
 
-  function err(msg, tok = cur()) {
+  function err(msg: any, tok = cur()) {
     throw new TscError(msg, {
       filename,
       line:   tok.line,
@@ -47,7 +47,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     });
   }
 
-  function eat(type, value = null) {
+  function eat(type: string, value: string | null = null) {
     const t = cur();
     if (t.type !== type) err(`Expected ${type}${value ? ' "' + value + '"' : ''}, got ${t.type} "${t.value}"`);
     if (value !== null && t.value !== value) err(`Expected "${value}", got "${t.value}"`);
@@ -55,7 +55,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return t;
   }
 
-  function tryEat(type, value = null) {
+  function tryEat(type: string, value: string | null = null) {
     const t = cur();
     if (t.type !== type) return null;
     if (value !== null && t.value !== value) return null;
@@ -65,7 +65,7 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   function eatSemi() { tryEat(TK.SEMI); } // optional semicolons
 
-  function checkThrowsTypes(types) {
+  function checkThrowsTypes(types: any) {
     for (const t of types) {
       if (t.kind === 'TypeRef' && t.name === 'never') err('"never" cannot be used in "throws"');
     }
@@ -95,7 +95,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return parseTypeUnion();
   }
 
-  function parseTypeUnion() {
+  function parseTypeUnion(): any {
     let t = parseTypeSingle();
     while (cur().type === TK.PIPE) {
       eat(TK.PIPE);
@@ -105,7 +105,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return t;
   }
 
-  function parseTypeSingle() {
+  function parseTypeSingle(): any {
     // Parenthesized type or function type: (T1, T2) => R or ((T) => R)[]
     if (cur().type === TK.LPAREN) {
       // Lookahead: scan for matching ')' and check if followed by '=>'
@@ -357,7 +357,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       }
       try {
         const s = parseStmt();
-        if (s.kind === 'VarDecls') s.decls.forEach(d => body.push(d));
+        if (s.kind === 'VarDecls') s.decls.forEach((d: any) => body.push(d));
         else body.push(s);
       } catch (e) {
         if (e.isTscError) {
@@ -373,7 +373,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Program', body };
   }
 
-  function parseStmt(preConsumedDecorators = []) {
+  function parseStmt(preConsumedDecorators: any[] = []) {
     const decorators = preConsumedDecorators.length > 0 ? preConsumedDecorators : parseDecorators();
 
     const t = cur();
@@ -386,7 +386,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (t.type === TK.IDENT && t.value === 'function')  return parseFunctionDecl(decorators);
     if (t.type === TK.IDENT && t.value === 'decorator' && pos + 1 < tokens.length && tokens[pos + 1]?.value === 'function') {
       pos++; // eat 'decorator'
-      const decl = parseFunctionDecl(decorators);
+      const decl: any = parseFunctionDecl(decorators);
       (decl as any).isDecorator = true;
       return decl;
     }
@@ -433,7 +433,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (t.type === TK.IDENT && !KEYWORDS.has(t.value) && peek().type === TK.COLON) {
       const label = eat(TK.IDENT).value;
       eat(TK.COLON);
-      const body = parseStmt();
+      const body: any = parseStmt();
       return { kind: 'Labeled', label, body };
     }
 
@@ -508,7 +508,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         if (cur().type === TK.STRING)      val = eat(TK.STRING).value;
         else if (cur().type === TK.BOOL)   val = eat(TK.BOOL).value === 'true';
         else if (cur().type === TK.NUMBER) val = Number(eat(TK.NUMBER).value);
-        if (val !== null) fields[key] = val;
+        if (val !== null) (fields as Record<string, any>)[key] = val;
       }
       eat(TK.RBRACE);
       return { kind: 'DeclarePlatform', fields };
@@ -550,11 +550,11 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Import', names, source, namespace, typeOnly: isTypeOnly };
   }
 
-  function parseExport(preConsumedDecorators = []) {
+  function parseExport(preConsumedDecorators: any[] = []) {
     eat(TK.IDENT, 'export');
     if (cur().type === TK.IDENT && cur().value === 'default') {
       eat(TK.IDENT);
-      const decl = parseStmt();
+      const decl: any = parseStmt();
       return { kind: 'Export', default: true, decl };
     }
     // export { X, Y } from "./module"  OR  export { X, Y }
@@ -583,11 +583,11 @@ export function parse(tokens, filename = '<input>', src = null) {
     }
     const innerDecs = parseDecorators();
     const allDecs = [...preConsumedDecorators, ...innerDecs];
-    const decl = parseStmt(allDecs);
+    const decl: any = parseStmt(allDecs);
     return { kind: 'Export', default: false, decl };
   }
 
-  function parseVarDecl(kind, decorators = []) {
+  function parseVarDecl(kind: string, decorators: any[] = []) {
     const startLine = cur().line;
     eat(TK.IDENT, kind);
     // const enum Foo { ... }
@@ -625,7 +625,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'VarDecls', decls, line: startLine };
   }
 
-  function parseSingleDeclarator(kind, decorators, line) {
+  function parseSingleDeclarator(kind: any, decorators: any, line: any) {
     const name = eat(TK.IDENT).value;
     let typeAnn = null;
     let optionalVar = false;
@@ -675,7 +675,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return elems;
   }
 
-  function parseFunctionDecl(decorators = []) {
+  function parseFunctionDecl(decorators: any[] = []) {
     let generator = false;
     eat(TK.IDENT, 'function');
     if (tryEat(TK.STAR)) generator = true;
@@ -741,7 +741,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'ExtensionFunc', name, thisType, params, returnType, body };
   }
 
-  function parseAsyncDecl(decorators = []) {
+  function parseAsyncDecl(decorators: any[] = []) {
     eat(TK.IDENT, 'async');
     let generator = false;
     eat(TK.IDENT, 'function');
@@ -763,7 +763,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'FuncDecl', name, params, returnType, throwsTypes, body, async: true, generator, decorators };
   }
 
-  function isSideEffectFree(node) {
+  function isSideEffectFree(node: any): boolean {
     if (!node) return true;
     if (node.kind === 'Literal') return true;
     if (node.kind === 'Ident') return true;
@@ -808,7 +808,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         eat(TK.RBRACK);
         let typeAnn = null;
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
-        params.push({ name: '_arr', destructArr: pattern, typeAnn, rest: false, optional: false, defaultVal: null });
+        params.push({ name: '_arr', destructArr: pattern, typeAnn, rest: false, optional: false, defaultVal: null as any });
         if (cur().type !== TK.RPAREN) tryEat(TK.COMMA);
         continue;
       }
@@ -836,7 +836,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return params;
   }
 
-  function parseClassDecl(decorators = []) {
+  function parseClassDecl(decorators: any[] = []) {
     eat(TK.IDENT, 'class');
     const name = eat(TK.IDENT).value;
     // Type parameters: class Foo<T>
@@ -1011,7 +1011,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Return', value };
   }
 
-  function parseIf() {
+  function parseIf(): any {
     eat(TK.IDENT, 'if');
     eat(TK.LPAREN);
     const test = parseExpr();
@@ -1025,7 +1025,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'If', test, consequent, alternate };
   }
 
-  function parseStmtOrBlock() {
+  function parseStmtOrBlock(): any {
     if (cur().type === TK.LBRACE) return parseBlock();
     return parseStmt();
   }
@@ -1146,7 +1146,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'TryCatch', body, catches, finally: finally_ };
   }
 
-  function parseSwitch() {
+  function parseSwitch(): any {
     const swTok = eat(TK.IDENT, 'switch');
     eat(TK.LPAREN);
     const discriminant = parseExpr();
@@ -1185,7 +1185,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (cur().type === TK.TEMPLATE) {
         const tmpl = cur();
         pos++;
-        node = { kind: 'Native', content: null, templateParts: tmpl.parts };
+        node = { kind: 'Native', content: null as any, templateParts: tmpl.parts };
       } else {
         const content = eat(TK.STRING).value;
         node = { kind: 'Native', content };
@@ -1199,7 +1199,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       const tmpl = cur();
       pos++;
       eatSemi();
-      return { kind: 'Native', content: null, templateParts: tmpl.parts };
+      return { kind: 'Native', content: null as any, templateParts: tmpl.parts };
     }
     // native "..." verbatim string
     const content = eat(TK.STRING).value;
@@ -1226,12 +1226,12 @@ export function parse(tokens, filename = '<input>', src = null) {
     return { kind: 'Spawn', throwsTypes, body };
   }
 
-  function parseBlock() {
+  function parseBlock(): any {
     eat(TK.LBRACE);
     const stmts = [];
     while (cur().type !== TK.RBRACE && !done()) {
         const s = parseStmt();
-        if (s.kind === 'VarDecls') s.decls.forEach(d => stmts.push(d));
+        if (s.kind === 'VarDecls') s.decls.forEach((d: any) => stmts.push(d));
         else stmts.push(s);
       }
     eat(TK.RBRACE);
@@ -1241,9 +1241,9 @@ export function parse(tokens, filename = '<input>', src = null) {
   // -------------------------------------------------------------------------
   // Expressions (Pratt parser)
   // -------------------------------------------------------------------------
-  function parseExpr() { return parseAssign(); }
+  function parseExpr(): any { return parseAssign(); }
 
-  function parseAssign() {
+  function parseAssign(): any {
     const left = parseTernary();
     const op = cur().value;
     const assignOps = [
@@ -1266,7 +1266,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return left;
   }
 
-  function parseTernary() {
+  function parseTernary(): any {
     const cond = parseOr();
     if (cur().type === TK.QUEST) {
       eat(TK.QUEST);
@@ -1291,17 +1291,17 @@ export function parse(tokens, filename = '<input>', src = null) {
     [[TK.STAR, TK.SLASH, TK.PERCENT], 'left'],
   ];
 
-  function parseBinary(level) {
+  function parseBinary(level: any) {
     if (level >= binaryLevels.length) return parsePow();
     const [ops] = binaryLevels[level];
-    let left = parseBinary(level + 1);
+    let left: any = parseBinary(level + 1);
     while (ops.includes(cur().type) ||
            (cur().type === TK.IDENT && (cur().value === 'instanceof' || cur().value === 'in') && level === 6)) {
       const op = cur().value;
       const isNullish = op === '??';
       const isLogic = op === '||' || op === '&&';
       if (isNullish || isLogic) {
-        const checkMixed = (node) => {
+        const checkMixed = (node: any) => {
           if (node.kind !== 'Binary') return;
           if (node._paren) return;
           const nodeIsNullish = node.op === '??';
@@ -1316,7 +1316,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       const right = parseBinary(level + 1);
       left = { kind: 'Binary', op, left, right };
       if (isNullish || isLogic) {
-        const checkMixedRight = (node) => {
+        const checkMixedRight = (node: any) => {
           if (node.kind !== 'Binary') return;
           if (node._paren) return;
           const nodeIsNullish = node.op === '??';
@@ -1333,19 +1333,19 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   // ** is right-associative, higher precedence than unary... actually lower than unary in JS
   // x ** y === x ** y, -x ** y is a SyntaxError in JS but we allow it as -(x**y)
-  function parsePow() {
+  function parsePow(): any {
     const base = parseUnary();
     if (cur().type === TK.STARSTAR) {
       pos++;
-      const exp = parsePow(); // right-associative
+      const exp: any = parsePow(); // right-associative
       return { kind: 'Binary', op: '**', left: base, right: exp };
     }
     return base;
   }
 
-  function parseOr() { return parseBinary(0); }
+  function parseOr(): any { return parseBinary(0); }
 
-  function parseUnary() {
+  function parseUnary(): any {
     if (cur().type === TK.BANG)  { pos++; return { kind: 'Unary', op: '!',     expr: parseUnary() }; }
     if (cur().type === TK.PLUS)  { pos++; return { kind: 'Unary', op: '+',     expr: parseUnary() }; }
     if (cur().type === TK.MINUS) { pos++; return { kind: 'Unary', op: '-',     expr: parseUnary() }; }
@@ -1359,7 +1359,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     if (cur().type === TK.IDENT && cur().value === 'yield') {
       pos++;
       const delegate = tryEat(TK.STAR) !== null;
-      const value = (cur().type !== TK.SEMI && cur().type !== TK.RBRACE && !done()) ? parseExpr() : null;
+      const value: any = (cur().type !== TK.SEMI && cur().type !== TK.RBRACE && !done()) ? parseExpr() : null;
       return { kind: 'Yield', delegate, value };
     }
     if (cur().type === TK.IDENT && cur().value === 'drop') { pos++; return { kind: 'Drop', expr: parseUnary() }; }
@@ -1536,7 +1536,7 @@ export function parse(tokens, filename = '<input>', src = null) {
 
   function parseMatchPattern() {
     // Parse a single (possibly OR-combined) match pattern
-    const parseSinglePattern = () => {
+    const parseSinglePattern = (): any => {
       const t = cur();
       // Wildcard
       if (t.type === TK.IDENT && t.value === '_') { pos++; return { kind: 'MatchWild' }; }
@@ -1692,7 +1692,7 @@ export function parse(tokens, filename = '<input>', src = null) {
     return captures;
   }
 
-  function parseParenOrArrowWithCaptures(captures) {
+  function parseParenOrArrowWithCaptures(captures: any) {
     const savedPos = pos;
     try {
       eat(TK.LPAREN);
@@ -1752,7 +1752,7 @@ export function parse(tokens, filename = '<input>', src = null) {
         const name = eat(TK.IDENT).value;
         eat(TK.ARROW);
         const body = cur().type === TK.LBRACE ? parseBlock() : parseExpr();
-        return { kind: 'Arrow', captures, params: [{ name, typeAnn: null, rest: false, optional: false, defaultVal: null }], body };
+        return { kind: 'Arrow', captures, params: [{ name, typeAnn: null, rest: false, optional: false, defaultVal: null as any }], body };
       }
       err('Expected function parameters after capture list');
     }
@@ -1829,7 +1829,7 @@ export function parse(tokens, filename = '<input>', src = null) {
       if (cur().type === TK.ARROW) {
         eat(TK.ARROW);
         const body = cur().type === TK.LBRACE ? parseBlock() : parseExpr();
-        return { kind: 'Arrow', params: [{ name: t.value, typeAnn: null, rest: false, optional: false, defaultVal: null }], body };
+        return { kind: 'Arrow', params: [{ name: t.value, typeAnn: null, rest: false, optional: false, defaultVal: null as any }], body };
       }
       return { kind: 'Ident', name: t.value, line: t.line, col: t.col, endCol: t.endCol };
     }

@@ -17,23 +17,23 @@ const CACHE_DIR = join(ROOT, '.tsclang-cache');
 // Incremental compilation cache
 // ---------------------------------------------------------------------------
 
-export function _cacheKey(src, modulePrefix, depKeys) {
-  const depStr = depKeys.map(([p, k]) => `${p}:${k}`).sort().join('\n');
+export function _cacheKey(src: any, modulePrefix: any, depKeys: any) {
+  const depStr = depKeys.map(([p, k]: [string, string]) => `${p}:${k}`).sort().join('\n');
   return createHash('sha256').update(`${src}\n${modulePrefix}\n${depStr}`).digest('hex').slice(0, 24);
 }
 
-export function _cacheGet(key) {
+export function _cacheGet(key: any) {
   const p = join(CACHE_DIR, key + '.json');
   if (!existsSync(p)) return null;
   try {
-    const reviver = (_, v) => v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v;
+    const reviver = (_: any, v: any) => v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v;
     return JSON.parse(readFileSync(p, 'utf8'), reviver);
   } catch { return null; }
 }
 
-export function _cacheSet(key, data) {
+export function _cacheSet(key: any, data: any) {
   mkdirSync(CACHE_DIR, { recursive: true });
-  const replacer = (_, v) => typeof v === 'bigint' ? { __bigint: v.toString() } : v;
+  const replacer = (_: any, v: any) => typeof v === 'bigint' ? { __bigint: v.toString() } : v;
   writeFileSync(join(CACHE_DIR, key + '.json'), JSON.stringify(data, replacer), 'utf8');
 }
 
@@ -41,7 +41,7 @@ export function _cacheSet(key, data) {
 // Path resolution
 // ---------------------------------------------------------------------------
 
-export function findPackageJson(startDir) {
+export function findPackageJson(startDir: any) {
   let dir = startDir;
   while (true) {
     const candidate = join(dir, 'tsc.package.json');
@@ -52,7 +52,7 @@ export function findPackageJson(startDir) {
   }
 }
 
-export function loadPathAliases(inputPath) {
+export function loadPathAliases(inputPath: any) {
   const pkgPath = findPackageJson(dirname(inputPath));
   if (!pkgPath) return null;
   try {
@@ -64,7 +64,7 @@ export function loadPathAliases(inputPath) {
   return null;
 }
 
-export function resolveAlias(source, aliases) {
+export function resolveAlias(source: any, aliases: any) {
   if (!aliases) return source;
   const { paths, pkgDir } = aliases;
   for (const [pattern, targets] of Object.entries(paths)) {
@@ -85,7 +85,7 @@ export function resolveAlias(source, aliases) {
   return source;
 }
 
-export function resolveLocalImport(baseDir, source) {
+export function resolveLocalImport(baseDir: any, source: any) {
   for (const candidate of [
     resolve(baseDir, source + '.tsc'),
     resolve(baseDir, source, 'index.tsc'),
@@ -95,7 +95,7 @@ export function resolveLocalImport(baseDir, source) {
   return null;
 }
 
-export function resolvePackageImport(pkgName, fromDir) {
+export function resolvePackageImport(pkgName: any, fromDir: any) {
   let dir = fromDir;
   while (true) {
     const pkgDir = join(dir, 'tsc_packages', pkgName);
@@ -185,7 +185,7 @@ export function compileTsc(inputPath: string, opts: any = {}) {
     const depPrefix = isPackageImport
       ? source.replace(/[^a-zA-Z0-9]/g, '_').replace(/^_+/, '') + '_'
       : basename(depPath, extname(depPath)).replace(/[^a-zA-Z0-9]/g, '_') + '_';
-    const depResult = compileTsc(depPath, {
+    const depResult: any = compileTsc(depPath, {
       ...opts,
       libraryMode: true,
       modulePrefix: depPrefix,
@@ -209,10 +209,10 @@ export function compileTsc(inputPath: string, opts: any = {}) {
     const cached = _cacheGet(cacheKey);
     if (cached) {
       process.stdout.write('cache-hit-identical\n');
-      const cachedC = depCParts.length > 0
+      const cachedC: any = depCParts.length > 0
         ? (depCParts.join('\n').trimEnd() + '\n\n' + cached.c)
         : cached.c;
-      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
+      return { c: cachedC, warnings: [] as any[], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
     }
   }
 
@@ -244,7 +244,7 @@ export function compileTsc(inputPath: string, opts: any = {}) {
 // Source map helper
 // ---------------------------------------------------------------------------
 
-export function _buildLineMap(tscSrc, cSrc) {
+export function _buildLineMap(tscSrc: any, cSrc: any) {
   const tscLines = tscSrc.split('\n');
   const cLines   = cSrc.split('\n');
 

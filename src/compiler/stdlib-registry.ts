@@ -18,8 +18,8 @@ export const STDLIB_MODULES = {
       decodeURIComponent: { func: 'tsc_url_decode_component', include: 'std/url.h',    returns: 'String' },
       encodeURI:          { func: 'tsc_url_encode',           include: 'std/url.h',    returns: 'String' },
       decodeURI:          { func: 'tsc_url_decode',           include: 'std/url.h',    returns: 'String' },
-      decodeUtf8:         { func: 'tsc_decode_utf8',          include: null,           returns: 'String', special: '_stdStringDecodeUtf8' },
-      encodeUtf8:         { func: 'tsc_encode_utf8',          include: null,           returns: 'Array_u8', special: '_stdStringEncodeUtf8' },
+      decodeUtf8:         { func: 'tsc_decode_utf8',          include: null as any,           returns: 'String', special: '_stdStringDecodeUtf8' },
+      encodeUtf8:         { func: 'tsc_encode_utf8',          include: null as any,           returns: 'Array_u8', special: '_stdStringEncodeUtf8' },
       Regex:              { special: '_stdStringRegex' },
     },
   },
@@ -118,15 +118,15 @@ const _AVR_RETURN_TYPES = {
   digitalRead: 'bool', serialAvailable: 'bool', serialRead: 'uint8_t',
 };
 
-export function resolveImportName(source, rawName) {
-  const mod = STDLIB_MODULES[source];
+export function resolveImportName(source: any, rawName: any) {
+  const mod = (STDLIB_MODULES as Record<string, any>)[source];
   if (!mod?.exports) return null;
   const name = typeof rawName === 'object' ? rawName.name : rawName;
   return mod.exports[name] ?? null;
 }
 
-export function handleStdlibImport(ctx, node) {
-  const mod = STDLIB_MODULES[node.source];
+export function handleStdlibImport(ctx: any, node: any) {
+  const mod = (STDLIB_MODULES as Record<string, any>)[node.source];
   if (!mod) return false;
 
   if (mod.platformCheck === 'not-embedded-not-wasm') {
@@ -184,15 +184,15 @@ export function handleStdlibImport(ctx, node) {
 }
 
 export const STDLIB_HANDLERS = {
-  _handleStdAvr(node) {
+  _handleStdAvr(node: any) {
     const names = node.names ?? [];
     for (const n of names) {
       const name = typeof n === 'object' ? n.name : n;
       if (name === 'SleepMode') { this._avrSleepModeImported = true; continue; }
-      if (_AVR_FUNC_MAP[name]) {
-        const _rt = _AVR_RETURN_TYPES[name];
+      if ((_AVR_FUNC_MAP as Record<string, string>)[name]) {
+        const _rt = (_AVR_RETURN_TYPES as Record<string, string>)[name];
         this.define(name, {
-          ctype: _rt ?? 'void', funcName: _AVR_FUNC_MAP[name], varKind: 'const',
+          ctype: _rt ?? 'void', funcName: (_AVR_FUNC_MAP as Record<string, string>)[name], varKind: 'const',
           _suppressVoidWarning: !!_rt,
         });
       } else {
@@ -201,7 +201,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdFs(node) {
+  _handleStdFs(node: any) {
     if (node.namespace && node.names.length > 0) {
       this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
@@ -210,7 +210,7 @@ export const STDLIB_HANDLERS = {
                { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
   },
 
-  _handleStdIo(node) {
+  _handleStdIo(node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'Reader') {
@@ -244,19 +244,19 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdReactive(node) {
+  _handleStdReactive(node: any) {
     this._reactiveClosureCount = 0;
     this._capturedSignalMap = new Map();
   },
 
-  _handleStdNet(node) {
+  _handleStdNet(node: any) {
     this.classes.set('TscResponse', {
       isStruct: true,
       fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
     });
   },
 
-  _handleStdLibc(node) {
+  _handleStdLibc(node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
@@ -264,7 +264,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdStack(node) {
+  _handleStdStack(node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'push') {

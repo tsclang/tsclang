@@ -1,7 +1,7 @@
 // linter.js — AST-based lint rules for TSClang
 
 // Generic recursive AST walker
-function walkAst(node: any, visitor) {
+function walkAst(node: any, visitor: any) {
   if (!node || typeof node !== 'object') return;
   visitor(node);
   for (const val of Object.values(node) as any[]) {
@@ -14,7 +14,7 @@ function walkAst(node: any, visitor) {
 }
 
 // Walk only the immediate statements of a Block (one level deep)
-function blockBody(node) {
+function blockBody(node: any) {
   if (!node) return [];
   if (node.kind === 'Block') return node.body || [];
   if (Array.isArray(node)) return node;
@@ -24,11 +24,11 @@ function blockBody(node) {
 // ─── Rules ────────────────────────────────────────────────────────────────────
 
 // no-unreachable: code after return/throw/break/continue in the same block
-function checkNoUnreachable(ast) {
-  const results = [];
+function checkNoUnreachable(ast: any) {
+  const results: any[] = [];
   const TERMINATORS = new Set(['Return', 'Throw', 'Break', 'Continue']);
 
-  const checkBlock = (stmts) => {
+  const checkBlock = (stmts: any) => {
     for (let i = 0; i < stmts.length; i++) {
       const s = stmts[i];
       if (!s) continue;
@@ -60,7 +60,7 @@ function checkNoUnreachable(ast) {
     }
   };
 
-  walkAst(ast, node => {
+  walkAst(ast, (node: any) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
       checkBlock(blockBody(node.body));
     }
@@ -73,15 +73,15 @@ function checkNoUnreachable(ast) {
 }
 
 // prefer-const: let that is never reassigned after declaration
-function checkPreferConst(ast) {
-  const results = [];
+function checkPreferConst(ast: any) {
+  const results: any[] = [];
 
   // For each function scope, collect lets and assignments
-  const analyzeScope = (params, stmts, scopeName) => {
-    const lets = []; // { name, line, col }
+  const analyzeScope = (params: any, stmts: any, scopeName: any) => {
+    const lets: any[] = []; // { name, line, col }
     const assigned = new Set(); // names that are reassigned
 
-    const collectLets = (stmts) => {
+    const collectLets = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl' && s.varKind === 'let') {
@@ -102,7 +102,7 @@ function checkPreferConst(ast) {
       }
     };
 
-    const collectAssignments = (node) => {
+    const collectAssignments = (node: any) => {
       if (!node || typeof node !== 'object') return;
       // Assign: x = ..., x += ..., x -= ...
       if (node.kind === 'Assign' && node.target?.kind === 'Ident') {
@@ -135,7 +135,7 @@ function checkPreferConst(ast) {
   };
 
   // Analyze each function independently
-  walkAst(ast, node => {
+  walkAst(ast, (node: any) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
       analyzeScope(node.params || [], blockBody(node.body), node.name);
     }
@@ -147,15 +147,15 @@ function checkPreferConst(ast) {
 }
 
 // no-unused-var: let/const declared but never referenced elsewhere
-function checkNoUnusedVar(ast) {
-  const results = [];
+function checkNoUnusedVar(ast: any) {
+  const results: any[] = [];
 
-  const analyzeScope = (stmts, paramNames = new Set()) => {
-    const declared = []; // { name, line, col }
+  const analyzeScope = (stmts: any, paramNames = new Set()) => {
+    const declared: any[] = []; // { name, line, col }
     const usedNames = new Set();
     const paramNamesLocal = new Set(paramNames);
 
-    const collectDecls = (stmts) => {
+    const collectDecls = (stmts: any) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl') {
@@ -180,7 +180,7 @@ function checkNoUnusedVar(ast) {
       }
     };
 
-    const collectUsages = (node, declLine) => {
+    const collectUsages = (node: any, declLine: any) => {
       if (!node || typeof node !== 'object') return;
       // An Ident that is NOT the LHS of a VarDecl at its declaration line
       if (node.kind === 'Ident') {
@@ -213,9 +213,9 @@ function checkNoUnusedVar(ast) {
   analyzeScope(ast.body || []);
 
   // Each function's scope
-  walkAst(ast, node => {
+  walkAst(ast, (node: any) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
-      const params = new Set((node.params || []).map(p => p.name).filter(Boolean));
+      const params = new Set((node.params || []).map((p: any) => p.name).filter(Boolean));
       analyzeScope(blockBody(node.body), params);
     }
   });
@@ -231,10 +231,10 @@ const RULES = {
   'no-unused-var':  { severity: 'warning', check: checkNoUnusedVar   },
 };
 
-export function lint(ast, { rules = Object.keys(RULES) } = {}) {
+export function lint(ast: any, { rules = Object.keys(RULES) } = {}) {
   const diagnostics = [];
   for (const name of rules) {
-    const rule = RULES[name];
+    const rule = (RULES as Record<string, any>)[name];
     if (!rule) continue;
     for (const d of rule.check(ast)) {
       diagnostics.push({ rule: name, severity: rule.severity, ...d });
@@ -243,7 +243,7 @@ export function lint(ast, { rules = Object.keys(RULES) } = {}) {
   return diagnostics.sort((a, b) => (a.line || 0) - (b.line || 0));
 }
 
-export function applyFixes(src, diagnostics) {
+export function applyFixes(src: any, diagnostics: any) {
   const lines = src.split('\n');
   for (const d of diagnostics) {
     if (!d.fixable || !d.fixLine) continue;

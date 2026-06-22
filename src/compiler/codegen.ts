@@ -252,14 +252,14 @@ class Context {
   // ----------------------------------------------------------------
   // Type checking (delegated to TypeChecker)
   // ----------------------------------------------------------------
-  resolveType(...a)       { return this._typeChecker.resolveType(...a); }
-  resolveTupleType(...a)  { return this._typeChecker.resolveTupleType(...a); }
-  typeDecl(...a)          { return this._typeChecker.typeDecl(...a); }
-  inferType(...a)         { return this._typeChecker.inferType(...a); }
-  _effectiveType(...a)    { return this._typeChecker._effectiveType(...a); }
-  _inferCall(...a)        { return this._typeChecker._inferCall(...a); }
-  _inferMemberCall(...a)  { return this._typeChecker._inferMemberCall(...a); }
-  inferTypeWithParams(...a) { return this._typeChecker.inferTypeWithParams(...a); }
+  resolveType(...a: any[])       { return this._typeChecker.resolveType(...a); }
+  resolveTupleType(...a: any[])  { return this._typeChecker.resolveTupleType(...a); }
+  typeDecl(...a: any[])          { return this._typeChecker.typeDecl(...a); }
+  inferType(...a: any[])         { return this._typeChecker.inferType(...a); }
+  _effectiveType(...a: any[])    { return this._typeChecker._effectiveType(...a); }
+  _inferCall(...a: any[])        { return this._typeChecker._inferCall(...a); }
+  _inferMemberCall(...a: any[])  { return this._typeChecker._inferMemberCall(...a); }
+  inferTypeWithParams(...a: any[]) { return this._typeChecker.inferTypeWithParams(...a); }
 
   // ----------------------------------------------------------------
   // Scope helpers (delegated to ScopeManager)
@@ -286,14 +286,14 @@ class Context {
     const scope = this._scopeMgr.popScope();
     this._borrowTracker.onScopeExit(scope);
   }
-  _trackRefBorrow(sym) { this._borrowTracker.trackRefBorrow(sym); }
-  _trackMutBorrow(sym) { this._borrowTracker.trackMutBorrow(sym); }
-  _trackMutQuarantine(sym, closureVarName = null) { this._borrowTracker.trackMutQuarantine(sym, closureVarName); }
-  _releaseQuarantineBy(closureVarName) { this._borrowTracker.releaseQuarantineBy(closureVarName); }
-  _derefStrPtr(sym, cexpr) {
+  _trackRefBorrow(sym: any) { this._borrowTracker.trackRefBorrow(sym); }
+  _trackMutBorrow(sym: any) { this._borrowTracker.trackMutBorrow(sym); }
+  _trackMutQuarantine(sym: any, closureVarName: any = null) { this._borrowTracker.trackMutQuarantine(sym, closureVarName); }
+  _releaseQuarantineBy(closureVarName: any) { this._borrowTracker.releaseQuarantineBy(closureVarName); }
+  _derefStrPtr(sym: any, cexpr: any) {
     return sym?.ctype === 'String *' ? `(*${cexpr})` : cexpr;
   }
-  _checkBorrowsAcrossAwait(awaitNode) {
+  _checkBorrowsAcrossAwait(awaitNode: any) {
     for (const scopeLevel of this.scopes) {
       for (const [sname, sym] of scopeLevel) {
         if (sym._mutQuarantined) {
@@ -311,7 +311,7 @@ class Context {
       }
     }
   }
-  _trackBorrowForRefReturn(callNode, resultName, mode) {
+  _trackBorrowForRefReturn(callNode: any, resultName: any, mode: any) {
     if (!callNode?.args?.length) return;
     const callee = callNode.callee;
     if (!callee || callee.kind !== 'Ident') return;
@@ -338,7 +338,7 @@ class Context {
       }
     }
   }
-  define(name, info) {
+  define(name: any, info: any) {
     // Auto-mark heap pointer vars (ctype is "ClassName *" where ClassName is @heap)
     if (info?.ctype?.endsWith(' *') && !info._isHeap && !info._isPointer) {
       const clsName = info.ctype.slice(0, -2);
@@ -353,15 +353,15 @@ class Context {
     }
     this._scopeMgr.define(name, info);
   }
-  _cap(key) { return this._capabilities[key] ?? DESKTOP_CAPABILITIES[key]; }
-  _errMsgField(errTypes) {
+  _cap(key: any) { return (this._capabilities as Record<string, any>)[key] ?? (DESKTOP_CAPABILITIES as Record<string, any>)[key]; }
+  _errMsgField(errTypes: any) {
     const errType = errTypes?.[0];
     return this._msgFieldFor(errType);
   }
-  _msgFieldFor(errType) {
+  _msgFieldFor(errType: any) {
     return (errType === 'TscError' || errType === 'MathError') ? 'message' : '_base.message';
   }
-  _panicMsgExpr(resExpr, errTypes) {
+  _panicMsgExpr(resExpr: any, errTypes: any) {
     if (!errTypes || errTypes.length <= 1) {
       return `${resExpr}.error.${this._msgFieldFor(errTypes?.[0])}`;
     }
@@ -371,7 +371,7 @@ class Context {
     if (!this._panicHelpers) this._panicHelpers = new Set();
     if (!this._panicHelpers.has(key)) {
       this._panicHelpers.add(key);
-      const cases = errTypes.map((et, i) =>
+      const cases = errTypes.map((et: any, i: any) =>
         `    case _Err_${et}: return e._${i}.${this._msgFieldFor(et)};`
       );
       this.addTop(`static String ${helperName}(${unionName} e) {\n    switch (e.tag) {\n${cases.join('\n')}\n    }\n    return STR_LIT("unknown error");\n}`);
@@ -380,14 +380,14 @@ class Context {
   }
   _ptrBytes() {
     const m = { u16: 2, u32: 4, u64: 8 };
-    return m[this._cap('usize')] ?? 4;
+    return (m as Record<string, number>)[this._cap('usize')] ?? 4;
   }
   _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
-  lookup(name) {
+  lookup(name: any) {
     return this._scopeMgr.lookup(name);
   }
 
-  _checkNoBareThrows(expr) {
+  _checkNoBareThrows(expr: any) {
     if (!expr) return;
     switch (expr.kind) {
       case 'Call': {
@@ -492,7 +492,7 @@ class Context {
   }
 
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
-  _registerCleanup(stmt) {
+  _registerCleanup(stmt: any) {
     if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
     if (this._usesGotoCleanup && this._gotoCleanupPreDecls) {
       for (const vname of this._gotoCleanupPreDecls.keys()) {
@@ -523,26 +523,26 @@ class Context {
     }
   }
 
-  _pushPostStmtCleanup(line) {
+  _pushPostStmtCleanup(line: any) {
     if (!this._postStmtCleanups) this._postStmtCleanups = [];
     this._postStmtCleanups.push(line);
   }
 
-  _flushPostStmtCleanups(lines) {
+  _flushPostStmtCleanups(lines: any) {
     if (this._postStmtCleanups?.length) {
       for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
       this._postStmtCleanups = [];
     }
   }
 
-  _genNextCall(sym, objC) {
+  _genNextCall(sym: any, objC: any) {
     const gi = sym._gi;
     const nextArgs = [].concat(sym._genArgs || []);
     const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
     return { gi, callExpr: `${gi.nextFn}(${callArgs})` };
   }
 
-  _markPoolVarMoved(node) {
+  _markPoolVarMoved(node: any) {
     if (node?.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype?.startsWith('opt_ref_')) {
@@ -553,7 +553,7 @@ class Context {
     }
   }
 
-  _checkMoved(sym, node, name) {
+  _checkMoved(sym: any, node: any, name: any) {
     if (sym?._closureEnvVar) return;
     if (sym?._moved) {
       const ms = sym._movedSourceNode;
@@ -565,7 +565,7 @@ class Context {
     }
   }
 
-  _checkFieldMoved(sym, prop, node, objName) {
+  _checkFieldMoved(sym: any, prop: any, node: any, objName: any) {
     if (sym?._movedFields?.has(prop)) {
       const ms = sym._movedFieldSourceNode?.[prop];
       throw this.error(`use of moved value: '${objName}.${prop}'`, node, {
@@ -603,7 +603,7 @@ class Context {
     return false;
   }
 
-  _emitHeapCleanup(lines, I) {
+  _emitHeapCleanup(lines: any, I: any) {
     if (!this._heapVarStack) return;
     for (let s = this._heapVarStack.length - 1; s >= 0; s--) {
       const vars = this._heapVarStack[s];
@@ -621,11 +621,11 @@ class Context {
     }
   }
 
-  _suppressCleanupFor(varName) {
+  _suppressCleanupFor(varName: any) {
     const matchers = [
       `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
     ];
-    const matches = (s) => matchers.some(m => s.includes(m));
+    const matches = (s: any) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       const level = this._blockCleanupStack[b];
       for (let i = level.list.length - 1; i >= 0; i--) {
@@ -634,10 +634,10 @@ class Context {
       level.set = new Set(level.list);
     }
     if (this._loopBodyCleanups) {
-      this._loopBodyCleanups = this._loopBodyCleanups.filter(s => !matches(s));
+      this._loopBodyCleanups = this._loopBodyCleanups.filter((s: any) => !matches(s));
     }
     if (this._throwsOwnedVars) {
-      this._throwsOwnedVars = this._throwsOwnedVars.filter(s => !matches(s));
+      this._throwsOwnedVars = this._throwsOwnedVars.filter((s: any) => !matches(s));
     }
   }
 
@@ -653,17 +653,17 @@ class Context {
     return snapshot;
   }
 
-  _restoreHeapMoved(snapshot) {
+  _restoreHeapMoved(snapshot: any) {
     for (const [sym, moved] of snapshot) {
       sym._moved = moved;
     }
   }
 
-  _hasCleanupFor(varName) {
+  _hasCleanupFor(varName: any) {
     const matchers = [
       `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
     ];
-    const matches = (s) => matchers.some(m => s.includes(m));
+    const matches = (s: any) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       for (const stmt of this._blockCleanupStack[b].list) {
         if (matches(stmt)) return true;
@@ -678,7 +678,7 @@ class Context {
   }
 
   _pushLoopCleanups() {
-    const arr = [];
+    const arr: any[] = [];
     this._loopCleanupStack.push(arr);
     this._loopBodyCleanups = arr;
   }
@@ -690,7 +690,7 @@ class Context {
       : null;
   }
 
-  _emitAllLoopCleanups(lines, indent) {
+  _emitAllLoopCleanups(lines: any, indent: any) {
     for (let l = this._loopCleanupStack.length - 1; l >= 0; l--) {
       const arr = this._loopCleanupStack[l];
       for (let i = arr.length - 1; i >= 0; i--) {
@@ -699,14 +699,14 @@ class Context {
     }
   }
 
-  _emitLoopBodyCleanups(lines, indent) {
+  _emitLoopBodyCleanups(lines: any, indent: any) {
     if (!this._loopBodyCleanups?.length) return;
     for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
       lines.push(`${indent}${this._loopBodyCleanups[i]};`);
     }
   }
 
-  _emitPoolDrops(lines, I) {
+  _emitPoolDrops(lines: any, I: any) {
     if (!this._poolVarStack?.length) return;
     for (let p = this._poolVarStack.length - 1; p >= 0; p--) {
       const poolVars = this._poolVarStack[p];
@@ -724,7 +724,7 @@ class Context {
     }
   }
 
-  _emitHeapDrops(lines, I) {
+  _emitHeapDrops(lines: any, I: any) {
     if (!this._heapVarStack?.length) return;
     for (let p = this._heapVarStack.length - 1; p >= 0; p--) {
       const heapVars = this._heapVarStack[p];
@@ -742,7 +742,7 @@ class Context {
     }
   }
 
-  _emitFuncCleanup(lines, I) {
+  _emitFuncCleanup(lines: any, I: any) {
     if (this._usesGotoCleanup) {
       if (this._loopBodyCleanups?.length) {
         for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
@@ -774,10 +774,10 @@ class Context {
   }
 
   _snapshotCleanups() {
-    return this._blockCleanupStack.map(l => ({ list: [...l.list], set: new Set(l.set) }));
+    return this._blockCleanupStack.map((l: any) => ({ list: [...l.list], set: new Set(l.set) }));
   }
 
-  _restoreCleanups(snapshot) {
+  _restoreCleanups(snapshot: any) {
     for (let i = 0; i < this._blockCleanupStack.length; i++) {
       this._blockCleanupStack[i].list = snapshot[i].list;
       this._blockCleanupStack[i].set = snapshot[i].set;
@@ -791,7 +791,7 @@ class Context {
 
   emit() {
     // Trim trailing blanks then push section with trailing blank separator
-    const _pushSection = (arr, parts) => {
+    const _pushSection = (arr: any, parts: any) => {
       const trimmed = [...arr];
       while (trimmed.length && trimmed[trimmed.length - 1] === '') trimmed.pop();
       if (trimmed.length === 0) return;
@@ -801,7 +801,7 @@ class Context {
 
     // Library mode: emit typedefs + lambdas + topLevel + __init (no includes, no main)
     if (this._libraryMode) {
-      const parts = [];
+      const parts: any[] = [];
       _pushSection(this.typedefs, parts);
       _pushSection(this.lambdaLines, parts);
       _pushSection(this.topLevel, parts);
@@ -823,7 +823,7 @@ class Context {
     }
 
     // Full emit: includes → typedefs → lambdas → topLevel → main
-    const parts = [];
+    const parts: any[] = [];
     // Pre-generate main's panic message expression (may addTop helper functions)
     let _mainPanicMsg = null;
     if (this._hasExplicitMain && this._explicitMainThrows) {
@@ -847,7 +847,7 @@ class Context {
       if (this._useArgcArgv) {
         parts.push(`${this.ind()}Array_string _argv = tsc_make_argv(argc, argv);`);
       }
-      parts.push(...this.mainStmts.map(s => s.startsWith('#') ? s : this.ind() + s));
+      parts.push(...this.mainStmts.map((s: string) => s.startsWith('#') ? s : this.ind() + s));
       // Cooperative scheduler loop for @static tasks
       if (this._staticTasks?.length) {
         const I = this.ind();
@@ -857,7 +857,7 @@ class Context {
           parts.push(`${I}    ${t.pollFn}(&_${t.name}_instance);`);
           parts.push(`${I}}`);
         } else {
-          const cond = this._staticTasks.map(t => `!_${t.name}_instance._done`).join(' || ');
+          const cond = this._staticTasks.map((t: any) => `!_${t.name}_instance._done`).join(' || ');
           parts.push(`${I}while (${cond}) {`);
           for (const t of this._staticTasks) {
             parts.push(`${I}    if (!_${t.name}_instance._done) ${t.pollFn}(&_${t.name}_instance);`);
@@ -906,8 +906,8 @@ class Context {
     return parts.join('\n') + '\n';
   }
 
-  addTop(line) { this._output.addTop(line); }
-  addLambda(line) { this._output.addLambda(line); }
+  addTop(line: string) { this._output.addTop(line); }
+  addLambda(line: string) { this._output.addLambda(line); }
 
 }
 

@@ -9,32 +9,32 @@
 // Helpers
 // ---------------------------------------------------------------------------
 
-function numLit(value) {
+function numLit(value: any) {
   return { kind: 'Literal', litType: 'number', value: String(value) };
 }
 
-function boolLit(value) {
+function boolLit(value: any) {
   return { kind: 'Literal', litType: 'bool', value: value ? 'true' : 'false' };
 }
 
-function isNumLit(node) {
+function isNumLit(node: any) {
   return node?.kind === 'Literal' && node.litType === 'number';
 }
 
-function isBoolLit(node) {
+function isBoolLit(node: any) {
   return node?.kind === 'Literal' && node.litType === 'bool';
 }
 
-function isLit(node) {
+function isLit(node: any) {
   return node?.kind === 'Literal';
 }
 
-function isPowerOf2(n) {
+function isPowerOf2(n: any) {
   return n > 0 && (n & (n - 1)) === 0;
 }
 
 // Unwrap Export wrapper → inner decl
-function innerDecl(s) {
+function innerDecl(s: any) {
   return s?.kind === 'Export' ? s.decl : s;
 }
 
@@ -42,7 +42,7 @@ function innerDecl(s) {
 // Phase 1: fold constant expressions (bottom-up, in-place clone)
 // ---------------------------------------------------------------------------
 
-function foldExpr(node: any) {
+function foldExpr(node: any): any {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(foldExpr);
 
@@ -112,8 +112,8 @@ function foldExpr(node: any) {
 }
 
 // Apply foldExpr to every VarDecl init in a stmt list (non-recursive into functions).
-function foldInits(stmts) {
-  return stmts.map(s => {
+function foldInits(stmts: any) {
+  return stmts.map((s: any) => {
     const decl = innerDecl(s);
     if (decl?.kind === 'VarDecl' && decl.init) {
       const newInit = foldExpr(decl.init);
@@ -134,9 +134,9 @@ function foldInits(stmts) {
 // Phase 2: propagate const literals into OTHER const initializers only
 // ---------------------------------------------------------------------------
 
-function substInExpr(node, constMap) {
+function substInExpr(node: any, constMap: any): any {
   if (!node || typeof node !== 'object') return node;
-  if (Array.isArray(node)) return node.map(n => substInExpr(n, constMap));
+  if (Array.isArray(node)) return node.map((n: any) => substInExpr(n, constMap));
   if (node.kind === 'Ident' && constMap.has(node.name)) {
     return { ...constMap.get(node.name) };
   }
@@ -147,9 +147,9 @@ function substInExpr(node, constMap) {
   return out;
 }
 
-function propagateConstToConst(stmts) {
+function propagateConstToConst(stmts: any) {
   const constMap = new Map(); // name → Literal (only literal-valued consts)
-  return stmts.map(s => {
+  return stmts.map((s: any) => {
     const decl = innerDecl(s);
     if (decl?.kind === 'VarDecl' && decl.varKind === 'const' && decl.init) {
       // Substitute previously known consts into this init, then fold
@@ -166,7 +166,7 @@ function propagateConstToConst(stmts) {
 // Phase 3: eliminate consts with zero refs outside their own init
 // ---------------------------------------------------------------------------
 
-function countIdents(node, counts) {
+function countIdents(node: any, counts: any) {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) { node.forEach(n => countIdents(n, counts)); return; }
   if (node.kind === 'Ident') {
@@ -178,7 +178,7 @@ function countIdents(node, counts) {
   }
 }
 
-function eliminateUnusedConsts(stmts) {
+function eliminateUnusedConsts(stmts: any) {
   // Count refs in: non-VarDecl stmts + VarDecl inits of non-const decls
   const refs = new Map();
   for (const s of stmts) {
@@ -198,7 +198,7 @@ function eliminateUnusedConsts(stmts) {
     }
   }
 
-  return stmts.filter(s => {
+  return stmts.filter((s: any) => {
     const decl = innerDecl(s);
     if (decl?.kind === 'VarDecl' && decl.varKind === 'const' && isLit(decl.init)) {
       return (refs.get(decl.name) ?? 0) > 0;
@@ -211,7 +211,7 @@ function eliminateUnusedConsts(stmts) {
 // Phase 4: dead branch elimination
 // ---------------------------------------------------------------------------
 
-function deadBranches(stmts) {
+function deadBranches(stmts: any): any {
   const out = [];
   for (const s of stmts) {
     if (s?.kind === 'If') {
@@ -220,7 +220,7 @@ function deadBranches(stmts) {
         if (test.value === 'false') {
           // Dropped; check alternate
           if (s.alternate) {
-            const alt = s.alternate?.kind === 'Block'
+            const alt: any = s.alternate?.kind === 'Block'
               ? deadBranches(s.alternate.body)
               : deadBranches([s.alternate]);
             out.push(...alt);
@@ -228,7 +228,7 @@ function deadBranches(stmts) {
           continue;
         } else {
           // Keep consequent body only
-          const body = s.consequent?.kind === 'Block'
+          const body: any = s.consequent?.kind === 'Block'
             ? deadBranches(s.consequent.body)
             : deadBranches([s.consequent]);
           out.push(...body);
@@ -257,7 +257,7 @@ function deadBranches(stmts) {
       continue;
     }
     if (s?.kind === 'While' || s?.kind === 'For') {
-      const body = s.body?.kind === 'Block'
+      const body: any = s.body?.kind === 'Block'
         ? { ...s.body, body: deadBranches(s.body.body) }
         : s.body;
       out.push({ ...s, body });
@@ -274,7 +274,7 @@ function deadBranches(stmts) {
 // Apply all four phases to a function/method body's statement list
 // ---------------------------------------------------------------------------
 
-function optimizeBody(stmts) {
+function optimizeBody(stmts: any) {
   let s = foldInits(stmts);
   s = propagateConstToConst(s);
   s = eliminateUnusedConsts(s);
@@ -283,7 +283,7 @@ function optimizeBody(stmts) {
 }
 
 // Recursively apply to function/class bodies
-function optimizeNode(node) {
+function optimizeNode(node: any): any {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(optimizeNode);
 
@@ -292,7 +292,7 @@ function optimizeNode(node) {
   }
 
   if (node.kind === 'ClassDecl') {
-    const members = (node.members ?? []).map(m => {
+    const members = (node.members ?? []).map((m: any) => {
       if (m.kind === 'Method' && m.body?.kind === 'Block') {
         return { ...m, body: { ...m.body, body: optimizeBody(m.body.body).map(optimizeNode) } };
       }

@@ -101,7 +101,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
   // ── 3–4. Source snippet ───────────────────────────────────────────────────
   if (diag.src && diag.line) {
     // Split source into lines. strip \r so rawLine is clean for display.
-    const srcLines = diag.src.split('\n').map(l => l.replace(/\r$/, ''));
+    const srcLines = diag.src.split('\n').map((l: string) => l.replace(/\r$/, ''));
 
     // Collect anchor lines (primary + all secondary spans)
     const anchors = new Set([diag.line]);
@@ -164,7 +164,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
     let prevLn = null;
     for (const ln of showLines) {
       // Gap marker — only when lines are not consecutive (tip from plan)
-      if (prevLn !== null && ln > prevLn + 1) {
+      if (prevLn !== null && (ln as number) > (prevLn as number) + 1) {
         out.push(C.cyan(pad + '  | ') + C.dim('...'));
       }
 
