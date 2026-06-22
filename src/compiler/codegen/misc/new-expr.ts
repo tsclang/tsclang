@@ -259,7 +259,7 @@ export default {
         paramStrs.push(ct === 'String *' ? `${ct} _unused_${i}` : `${ct} _unused_${i}`);
       }
     }
-    const lines = [];
+    const lines: any[] = [];
     this.pushScope();
     this._inHoistedLambda = true;
     for (let i = 0; i < (node.params ?? []).length; i++) {
