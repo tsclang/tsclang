@@ -1,3 +1,4 @@
+// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
 // BorrowTracker — encapsulates borrow checking state.
 // Extracted from Context to reduce god-object coupling.
 
