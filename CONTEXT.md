@@ -461,8 +461,8 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Fix async codegen | `async/scan.ts` (state collection), `async/async-stmt.ts` (emit), `async/async-emit.ts` (poll fn) |
 | Fix string ownership | `stmt/vardecl.ts`, `expr/assign.ts`, `calls/call-dispatch.ts`, `calls/method-dispatch.ts`, `top-level/func.ts` |
 | Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
-| Run tests | `node test/runner.ts 03-types` (filter by spec section or feature name) |
-| Compile manually | `node bin/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
+| Run tests | `npx tsx test/runner.ts 03-types` (filter by spec section or feature name) |
+| Compile manually | `npx tsx bin/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure
 
