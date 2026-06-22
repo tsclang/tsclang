@@ -28,7 +28,7 @@ const DESKTOP_CAPABILITIES = {
 // opts.libraryMode — emit without #include and main() (for bundled deps)
 // opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
 // opts.sourceToPath    — { [importSource]: resolvedPath } for namespace import lookup
-export function codegen(ast, filename = 'input', src = null, opts = {}) {
+export function codegen(ast: any, filename: string = 'input', src: string | null = null, opts: any = {}) {
   const ctx = new Context(filename, src, opts);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
@@ -111,7 +111,8 @@ export function codegen(ast, filename = 'input', src = null, opts = {}) {
 
 // ============================================================
 class Context {
-  constructor(filename, src = null, opts = {}) {
+  [key: string]: any;  // Stage 5: allows gradual mixin migration; removed in Stage 8 (strict)
+  constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
@@ -453,7 +454,7 @@ class Context {
   // Throw a positioned TscError.
   // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
   // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }
-  error(msg, node, opts = {}) {
+  error(msg: string, node: any, opts: any = {}) {
     const n = node ?? this._currentNode;
     const legacy = Array.isArray(opts);
     throw new TscError(msg, {
@@ -472,7 +473,7 @@ class Context {
 
   // Collect a warning diagnostic (does not throw).
   // opts — same shape as error(): string[] (legacy notes) or { label, spans, help, notes, code }
-  warn(msg, node, opts = {}) {
+  warn(msg: string, node: any, opts: any = {}) {
     const n = node ?? this._currentNode;
     const legacy = Array.isArray(opts);
     this._warnings.push(new TscError(msg, {

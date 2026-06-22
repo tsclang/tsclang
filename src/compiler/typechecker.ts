@@ -2,7 +2,9 @@ import resolve from './codegen/types/resolve.js';
 import infer from './codegen/types/infer.js';
 
 export class TypeChecker {
-  constructor(ctx) {
+  ctx: any;
+
+  constructor(ctx: any) {
     this.ctx = ctx;
 
     return new Proxy(this, {
