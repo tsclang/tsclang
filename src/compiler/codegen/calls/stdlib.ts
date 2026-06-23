@@ -26,7 +26,7 @@ export default {
     if (_r !== null) return _r;
     _r = this._dispatchStdHashMap(node, lines, depth);
     if (_r !== null) return _r;
-    _r = this._dispatchStdSet(node: any, lines: any, depth: any);
+    _r = this._dispatchStdSet(node, lines, depth);
     if (_r !== null) return _r;
     _r = this._dispatchStdTasks(node, lines, depth);
     if (_r !== null) return _r;
