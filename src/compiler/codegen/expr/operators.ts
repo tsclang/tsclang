@@ -1,7 +1,7 @@
 // operators.js
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
-  binaryWidened(node, targetCtype, lines, depth) {
+  binaryWidened(node: any, targetCtype: any, lines: any, depth: any) {
     const widenOperand = (operand: any): any => {
       if (operand.kind === 'Literal' && operand.litType === 'number') {
         return this.literalToCTyped(operand, targetCtype);
@@ -16,7 +16,7 @@ export default {
     return `${lC} ${node.op} ${rC}`;
   },
 
-  binaryToC(node, lines, depth) {
+  binaryToC(node: any, lines: any, depth: any) {
     this._checkNoBareThrows(node.left);
     this._checkNoBareThrows(node.right);
     // instanceof: obj instanceof TypeName
@@ -56,7 +56,7 @@ export default {
 
     // Optional type comparisons: opt_T != null → opt.has_value, opt_T == null → !opt.has_value
     if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
-      const isNull = (n) => n.kind === 'Literal' && n.litType === 'null';
+      const isNull = (n: any) => n.kind === 'Literal' && n.litType === 'null';
       const optSide = isNull(node.right) ? node.left : isNull(node.left) ? node.right : null;
       if (optSide) {
         const optType = this.inferType(optSide);
@@ -69,7 +69,7 @@ export default {
 
     // Pool opt_ref null check: p != null → p.has_value, p == null → !p.has_value
     if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
-      const _isNullLit = (n) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+      const _isNullLit = (n: any) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
       const _nullSide = _isNullLit(node.right) ? 'right' : _isNullLit(node.left) ? 'left' : null;
       if (_nullSide) {
         const _other = _nullSide === 'right' ? node.left : node.right;
@@ -134,7 +134,7 @@ export default {
     }
 
     // Wrap sub-expressions in parens when needed for precedence
-    const needsParens = (child, parentOp, isRight) => {
+    const needsParens = (child: any, parentOp: any, isRight: any) => {
       if (child.kind !== 'Binary') return child.kind === 'Assign';
       const prec = { '**':13, '*':12, '/':12, '%':12, '+':11, '-':11,
         '<<':10, '>>':10, '>>>':10, '<':9, '>':9, '<=':9, '>=':9,
@@ -246,7 +246,7 @@ export default {
       const rt = this.inferType(node.right);
       const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
       if (!NUMERIC.has(lt) || !NUMERIC.has(rt)) {
-        const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+        const tsName = (t: any) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
         throw this.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(lt)}' and '${tsName(rt)}'`, node);
       }
       const needsCast = this._hasFloatVar(node.left) || this._hasFloatVar(node.right);
@@ -282,7 +282,7 @@ export default {
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
-    const _isIntOperand = (n, t) => {
+    const _isIntOperand = (n: any, t: any) => {
       if (intTypes.has(t)) return true;
       if (t === undefined) return true;
       if (t === 'double' || t === 'float') {
@@ -368,7 +368,7 @@ export default {
     return `${l} ${op} ${r}`;
   },
 
-  _hasFloatVar(node) {
+  _hasFloatVar(node: any) {
     if (!node) return false;
     if (node.kind === 'Literal') return false;
     if (node.kind === 'Ident') {
@@ -381,7 +381,7 @@ export default {
     return t === 'double' || t === 'float';
   },
 
-  isStringExpr(node) {
+  isStringExpr(node: any) {
     if (node.kind === 'Literal' && (node.litType === 'string' || node.litType === 'char')) return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
@@ -398,7 +398,7 @@ export default {
     return false;
   },
 
-  _derefStringPtr(node, cexpr) {
+  _derefStringPtr(node: any, cexpr: any) {
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype === 'String *') return `(*${cexpr})`;
@@ -406,14 +406,14 @@ export default {
     return cexpr;
   },
 
-  _flattenStringConcat(node) {
+  _flattenStringConcat(node: any) {
     if (node.kind === 'Binary' && node.op === '+' && this.isStringExpr(node.left)) {
       return [...this._flattenStringConcat(node.left), node.right];
     }
     return [node];
   },
 
-  _stringConcatChain(operands, lines, depth) {
+  _stringConcatChain(operands: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const parts: any[] = [];
     const temps: any[] = [];
@@ -458,7 +458,7 @@ export default {
   // ----------------------------------------------------------------
   // Unary
   // ----------------------------------------------------------------
-  unaryToC(node, lines, depth) {
+  unaryToC(node: any, lines: any, depth: any) {
     this._checkNoBareThrows(node.expr);
     if (node.op === '&' || node.op === '*') {
       if (node.op === '*') {
@@ -487,7 +487,7 @@ export default {
         const et = this.inferType(node.expr);
         const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
         if (!NUMERIC.has(et)) {
-          const tsName = (t) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+          const tsName = (t: any) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
           const label = node.op === '~' ? `bitwise op '~'` : `unary '${node.op}'`;
           throw this.error(`TypeError: ${label} not applicable to '${tsName(et)}'`, node);
         }

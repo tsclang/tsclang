@@ -9,7 +9,7 @@
     "rootDir": ".",
     "allowJs": true,
     "checkJs": false,
-    "strict": false, "strictNullChecks": true, "strictFunctionTypes": true, "strictBindCallApply": true, "alwaysStrict": true, "useUnknownInCatchVariables": true, 
+    "strict": false, "noImplicitAny": true, "strictNullChecks": true, "strictFunctionTypes": true, "strictBindCallApply": true, "alwaysStrict": true, "useUnknownInCatchVariables": true, 
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,

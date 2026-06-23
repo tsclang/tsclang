@@ -368,7 +368,7 @@ export default {
         const start = node.start ? this.exprToC(node.start, lines, depth) : null;
         const end   = node.end   ? this.exprToC(node.end,   lines, depth) : null;
         // Compute length as literal if both bounds are numeric literals
-        const litLen = (startNode, endNode) => {
+        const litLen = (startNode: any, endNode: any) => {
           if (startNode && endNode &&
               startNode.kind === 'Literal' && startNode.litType === 'number' &&
               endNode.kind === 'Literal' && endNode.litType === 'number') {
@@ -421,7 +421,7 @@ export default {
             return t === 'String *' ? 'String' : t;
           });
           if (elemTypes.some((t: any) => t !== elemTypes[0])) {
-            const tsName = (ct) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct);
+            const tsName = (ct: any) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct: any);
             const unique = [...new Set(elemTypes.map(tsName))];
             throw this.error(`mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]`, node);
           }
@@ -632,7 +632,7 @@ export default {
             ['size_t','int32_t'],['size_t','int16_t'],['size_t','int8_t'],
           ];
           if (LOSSY.some(([s,t]) => srcType === s && ct === t)) {
-            const tsName = (c) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
+            const tsName = (c: any) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
             throw this.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
           }
         }

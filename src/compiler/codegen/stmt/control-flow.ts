@@ -1,5 +1,5 @@
 export default {
-  _emitRetainIfNeeded(valC, valNode, p) {
+  _emitRetainIfNeeded(valC: any, valNode: any, p: any) {
     if (valNode.kind === 'Ident') {
       const sym = this.lookup(valNode.name);
       if (sym?.isArc) {
@@ -12,7 +12,7 @@ export default {
     }
   },
 
-  _wrapErrForCaller(ctx, errExpr, calleeSym) {
+  _wrapErrForCaller(ctx: any, errExpr: any, calleeSym: any) {
     if (ctx.throwsNames.length <= 1) return errExpr;
     const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
     if (calleeErrTypes.length > 1) return errExpr;
@@ -23,10 +23,10 @@ export default {
     return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
   },
 
-  _visitControlFlow(node, lines, depth) {
+  _visitControlFlow(node: any, lines: any, depth: any) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
-    const p = (s) => lines.push(I + s);
+    const p = (s: any) => lines.push(I + s);
     switch (node.kind) {
       case 'ExprStmt': {
         const expr = node.expr;
@@ -124,7 +124,7 @@ export default {
         }
         // Unknown return: auto-wrap primitive in tsc_unknown_from_XXX
         const _isUnknownReturn = this.currentFuncReturnType === 'tsc_unknown';
-        const _wrapUnknownReturn = (valC, valNode) => {
+        const _wrapUnknownReturn = (valC: any, valNode: any) => {
           if (!_isUnknownReturn) return valC;
           const valType = this.inferType(valNode);
           const packer = this._unknownPackerFor(valType);
@@ -253,7 +253,7 @@ export default {
 
       case 'If': {
         // Detect narrowing: if (x != null) тЖТ narrow x to x.value inside block
-        const isNullLit = (n) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+        const isNullLit = (n: any) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
         let narrowVar: any = null;
         let upgradeReleaseVar: any = null;
         if (node.test.kind === 'Binary' && (node.test.op === '!=' || node.test.op === '!==')) {
@@ -282,7 +282,7 @@ export default {
         let unknownNarrowCtype: any = null;
         let unknownNarrowInElse = false;
         if (node.test.kind === 'Binary' && (node.test.op === '===' || node.test.op === '!==')) {
-          const _checkUnknownNarrow = (typeofSide, nameSide) => {
+          const _checkUnknownNarrow = (typeofSide: any, nameSide: any) => {
             if (typeofSide.kind === 'Typeof' && typeofSide.expr.kind === 'Ident' &&
                 nameSide.kind === 'Literal' && nameSide.litType === 'string') {
               const sym = this.lookup(typeofSide.expr.name);
@@ -1364,7 +1364,7 @@ export default {
     'char', 'String', 'tsc_unknown',
   ]),
 
-  _validateSwitchFallthrough(node) {
+  _validateSwitchFallthrough(node: any) {
     if (this.inferType(node.discriminant) === 'double' || this.inferType(node.discriminant) === 'float') {
       throw this.error(`cannot switch on type 'f64'`, node);
     }
@@ -1384,7 +1384,7 @@ export default {
     }
   },
 
-  _isSimpleCType(ct) {
+  _isSimpleCType(ct: any) {
     return this._SIMPLE_C_TYPES.has(ct);
   },
 };

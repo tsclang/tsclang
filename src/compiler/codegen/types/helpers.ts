@@ -7,13 +7,13 @@ const _RUNTIME_REDUCE_R = new Set(['i32_i32', 'i32_f64']);
 const _RUNTIME_FLAT = new Set(['i32', 'f64', 'string', 'Array_i32']);
 
 export default {
-  _cTypeBytes(ct) {
+  _cTypeBytes(ct: any) {
     const m = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
     if (ct === 'size_t') return this._ptrBytes();
     return m[ct] ?? 4;
   },
 
-  _stackSizeOf(ct) {
+  _stackSizeOf(ct: any) {
     if (!ct || ct === 'void') return 0;
     if (ct.endsWith(' *')) return this._ptrBytes();
     if (ct.startsWith('opt_ref_')) return this._ptrBytes() * 2;
@@ -39,7 +39,7 @@ export default {
     return this._cTypeBytes(ct);
   },
 
-  cTypeToIdent(ctype) {
+  cTypeToIdent(ctype: any) {
     // Map C type to a valid identifier suffix
     const m = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
@@ -52,7 +52,7 @@ export default {
     return m[ctype] ?? ctype.replace(/[^a-zA-Z0-9]/g, '_');
   },
 
-  ctypeToTsName(ctype) {
+  ctypeToTsName(ctype: any) {
     const m = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
@@ -62,7 +62,7 @@ export default {
     return m[ctype] ?? ctype;
   },
 
-  _numericTypeInfo(ct) {
+  _numericTypeInfo(ct: any) {
     const m = {
       'int8_t':   { bits: 8,  signed: true,  kind: 'int' },
       'int16_t':  { bits: 16, signed: true,  kind: 'int' },
@@ -79,7 +79,7 @@ export default {
     return m[ct] ?? null;
   },
 
-  _isSafeWidening(src, dst) {
+  _isSafeWidening(src: any, dst: any) {
     if (src === dst) return true;
     if (src === 'size_t' && (dst === 'int64_t' || dst === 'uint64_t')) return true;
     const si = this._numericTypeInfo(src);
@@ -94,7 +94,7 @@ export default {
   },
 
   // Map array element identifier back to C type (reverse of cTypeToIdent)
-  _arrIdentToCType(ident) {
+  _arrIdentToCType(ident: any) {
     const m = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                 'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                 'f32':'float','f64':'double','bool':'bool','string':'String',
@@ -103,7 +103,7 @@ export default {
   },
 
   // Returns map suffix if ctype is Map_* or TscMap_*, otherwise null
-  _mapSuffix(ctype) {
+  _mapSuffix(ctype: any) {
     if (!ctype) return null;
     if (ctype.startsWith('TscMap_')) return ctype.slice(7);
     if (ctype.startsWith('Map_')) return ctype.slice(4);
@@ -111,13 +111,13 @@ export default {
   },
 
   // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32 via TSC_MAP_DECL.
-  _ensureMapStruct(suffix) {
+  _ensureMapStruct(suffix: any) {
     this._emittedMapStructs.add(suffix);
   },
 
   // Emit MapEntry_K_V and Array_MapEntry_K_V struct typedefs (idempotent)
   _ensureMapEntry(suffix, kCType, vCType) {
-    if (!this._emittedMapEntries.has(suffix)) {
+    if (!this._emittedMapEntries.has(suffix: any)) {
       this._emittedMapEntries.add(suffix);
       const entryName = `MapEntry_${suffix}`;
       const arrName = `Array_${entryName}`;
@@ -190,7 +190,7 @@ export default {
   _ensureOptArrayMacros(elemIdent, arrName, et) {
     this._ensureArrayFreeMacro(elemIdent, arrName, et);
     this._ensureArrayPushMacro(elemIdent, arrName, et);
-    this._ensureArrayPopMacro(elemIdent, arrName, et);
+    this._ensureArrayPopMacro(elemIdent: any, arrName: any, et: any);
   },
 
   _ensureArrayPopMacro(elemIdent, arrName, et) {
@@ -377,7 +377,7 @@ export default {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_MAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_map_${fromEt}_${toEt}`;
-    const elem = this._arrElem(fromCType);
+    const elem = this._arrElem(fromCType: any);
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     this._emitArrayMacro(name, [
       `#define ${name}(arr, fn) ({ \\`,
@@ -393,7 +393,7 @@ export default {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_FLATMAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_flat_map_${fromEt}_${toEt}`;
-    const elem = this._arrElem(fromCType);
+    const elem = this._arrElem(fromCType: any);
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     this._emitArrayMacro(name, [
       `#define ${name}(arr, fn) ({ \\`,
@@ -521,7 +521,7 @@ export default {
     if (_RUNTIME_ET.has(et)) return;
     const op = isLast ? 'find_last_index' : 'find_index';
     const name = `tsc_array_${op}_${et}`;
-    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC);
+    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC: any);
     const loop = isLast
       ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) if ((pred)(${e})) { _r_ = (ptrdiff_t)(_i_ - 1); break; }`
       : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if ((pred)(${e})) { _r_ = (ptrdiff_t)_i_; break; }`;

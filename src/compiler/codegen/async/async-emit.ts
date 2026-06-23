@@ -1,7 +1,7 @@
 // async-emit.js
 export default {
   // ─── emitAsyncFunc ────────────────────────────────────────────────────────
-  emitAsyncFunc(node) {
+  emitAsyncFunc(node: any) {
     this._initAsync();
     const { name, params, returnType, body } = node;
 

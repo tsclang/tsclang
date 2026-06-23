@@ -1,6 +1,6 @@
 // async-stmt.js
 export default {
-  _emitAsyncStmt(s, lines, ctx, I) {
+  _emitAsyncStmt(s, lines: any, ctx: any, I: any) {
     if (!s) return;
 
     // ── spawn VarDecl: emit call site using pre-emitted env/fn ──
@@ -408,7 +408,7 @@ export default {
   },
 
   // Emit a regular statement (non-VarDecl, non-Return, non-Await) in async context
-  _emitAsyncRegStmt(stmt, lines, I) {
+  _emitAsyncRegStmt(stmt: any, lines: any, I: any) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { name, init } = stmt;
@@ -476,7 +476,7 @@ export default {
     }
   },
 
-  _emitAsyncSwitch(node, lines, ctx, I) {
+  _emitAsyncSwitch(node: any, lines: any, ctx: any, I: any) {
     this._validateSwitchFallthrough(node);
     const discC = this._selfE(node.discriminant);
     const discType = this.inferType(node.discriminant);
@@ -562,7 +562,7 @@ export default {
   },
 
   // Evaluate an expression with the current _selfCtx substitution
-  _selfE(expr) {
+  _selfE(expr: any) {
     if (!expr) return '0';
     const r = this.exprToC(expr, [], 0);
     return r;

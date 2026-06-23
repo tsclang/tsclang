@@ -1,5 +1,5 @@
 export default {
-  callToC(node, lines, depth) {
+  callToC(node: any, lines: any, depth: any) {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
@@ -65,7 +65,7 @@ export default {
     if (callee.kind === 'Ident') {
       const sym = this.lookup(callee.name);
       if (sym?._isStackMacro) {
-        const strArg = (i) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
+        const strArg = (i: any) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
         if (sym._isStackMacro === 'push') {
           const sName = strArg(0);
           const val = this.exprToC(args[1].expr, lines, depth);
@@ -575,7 +575,7 @@ export default {
     return `${calleeC}(${argsC})`;
   },
 
-  _dispatchArrayStatic(node, lines, depth) {
+  _dispatchArrayStatic(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -621,7 +621,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchObjectStatic(node, lines, depth) {
+  _dispatchObjectStatic(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -694,7 +694,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchGroupBy(node, lines, depth) {
+  _dispatchGroupBy(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;

@@ -1,7 +1,7 @@
 import { inferLiteralCType } from '../../types.js';
 // infer.js
 export default {
-  inferType(node) {
+  inferType(node: any) {
     if (!node) return 'double';
     switch (node.kind) {
       case 'Literal':  return inferLiteralCType(node, this._defaultNumber);
@@ -237,7 +237,7 @@ export default {
         // Pointer to Array_T * → element type
         const _ptrArr = objType?.match(/^(?:const )?Array_(\w+) \*$/);
         if (_ptrArr) {
-          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
                             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
                             f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
           return primMap[_ptrArr[1]] ?? _ptrArr[1];
@@ -245,7 +245,7 @@ export default {
         // Array_ref_T → T * (ref array element is a pointer)
         if (objType?.startsWith('Array_ref_')) {
           const innerIdent = objType.slice(10);
-          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
                             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
                             f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
           const innerCType = primMap[innerIdent] ?? innerIdent;
@@ -254,10 +254,10 @@ export default {
         // Array_T → T (array element type)
         if (objType?.startsWith('Array_')) {
           const etIdent = objType.slice(6);
-          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
                             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
                             f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
-          return primMap[etIdent] ?? etIdent;
+          return (primMap as Record<string, string>)[etIdent] ?? etIdent;
         }
         // T * → T  (pointer element type)
         if (objType.endsWith(' *')) return objType.slice(0, -2);
@@ -299,7 +299,7 @@ export default {
     }
   },
 
-  _effectiveType(node) {
+  _effectiveType(node: any) {
     if (!node) return 'double';
     const dn = this._defaultNumber;
     const floatDefault = dn === 'f64' || dn === 'f32';
@@ -344,7 +344,7 @@ export default {
     }
   },
 
-  _inferCall(node) {
+  _inferCall(node: any) {
     if (node.callee.kind === 'OptChain') {
       const objType = this.inferType(node.callee.object);
       if (objType?.startsWith('opt_') && node.callee.prop === 'toString') return 'opt_string';
@@ -425,7 +425,7 @@ export default {
     return 'int32_t';
   },
 
-  _inferMemberCall(node) {
+  _inferMemberCall(node: any) {
     const obj = node.callee.object;
     const prop = node.callee.prop;
     if (obj.kind === 'Ident') {
@@ -465,11 +465,11 @@ export default {
         const a0 = node.args?.[0];
         if (a0?.spread) {
           const arrType = this.inferType(a0.expr);
-          const primMap = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
             f32:'float', f64:'double', bool:'bool', usize:'size_t' };
           const etIdent = arrType?.startsWith('Array_') ? arrType.slice(6) : null;
-          if (etIdent && primMap[etIdent]) return primMap[etIdent];
+          if (etIdent && (primMap as Record<string, string>)[etIdent]) return (primMap as Record<string, string>)[etIdent];
         }
         const a0t = a0 ? this.inferType(a0.expr) : 'int32_t';
         if (a0t !== 'double' && a0t !== 'float') return 'int32_t';
@@ -545,8 +545,8 @@ export default {
         if (prop === 'fill') return 'void';
       }
       if (_bSym?._isDataView || _bSym?.ctype === 'DataView') {
-        const dvGetTypes = { getU8:'uint8_t', getI8:'int8_t', getU16:'uint16_t', getI16:'int16_t', getU32:'uint32_t', getI32:'int32_t', getU64:'uint64_t', getI64:'int64_t', getF32:'float', getF64:'double', getU16LE:'uint16_t', getU32LE:'uint32_t', getF64LE:'double' };
-        if (dvGetTypes[prop]) return dvGetTypes[prop];
+        const dvGetTypes: Record<string, any> = { getU8:'uint8_t', getI8:'int8_t', getU16:'uint16_t', getI16:'int16_t', getU32:'uint32_t', getI32:'int32_t', getU64:'uint64_t', getI64:'int64_t', getF32:'float', getF64:'double', getU16LE:'uint16_t', getU32LE:'uint32_t', getF64LE:'double' };
+        if ((dvGetTypes as Record<string, string>)[prop]) return (dvGetTypes as Record<string, string>)[prop];
         if (prop.startsWith('set')) return 'void';
         if (prop === 'byteLength' || prop === 'byteOffset') return 'size_t';
       }
@@ -778,7 +778,7 @@ export default {
       }
     }
     if (objType === 'String' || objType === 'String *') {
-      const _sret = {
+      const _sret: Record<string, any> = {
         toLowerCase: 'String', toUpperCase: 'String', trim: 'String',
         trimStart: 'String', trimEnd: 'String', repeat: 'String',
         replace: 'String', replaceAll: 'String', padStart: 'String', padEnd: 'String',
@@ -793,7 +793,7 @@ export default {
         matchAll: 'Array_Array_string',
         length: 'size_t',
       };
-      if (Object.hasOwn(_sret, prop)) return _sret[prop];
+      if (Object.hasOwn(_sret, prop)) return (_sret as Record<string, string>)[prop];
     }
     if (node.callee.prop === 'fromValue' && obj.kind === 'Ident') {
       const ed = this.classes.get(obj.name);
@@ -820,11 +820,11 @@ export default {
         return 'String';
       }
     }
-    const primitiveMap2 = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
+    const primitiveMap2: Record<string, any> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                              'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                              'f32':'float','f64':'double' };
     if (obj.kind === 'Ident' && obj.name in primitiveMap2) {
-      const cT = primitiveMap2[obj.name];
+      const cT = (primitiveMap2 as Record<string, string>)[obj.name];
       const etId = this.cTypeToIdent(cT);
       if (node.callee.prop === 'parse') return cT;
       if (node.callee.prop === 'tryParse') return `opt_${etId}`;
@@ -844,7 +844,7 @@ export default {
     return null;
   },
 
-  inferTypeWithParams(arrowNode, paramCType) {
+  inferTypeWithParams(arrowNode: any, paramCType: any) {
     const hasParams = arrowNode.params?.length > 0;
     if (hasParams) {
       this.pushScope();

@@ -155,12 +155,12 @@ if (CMD_HELP[command] && (args.includes('--help') || args.includes('-h'))) {
   process.exit(0);
 }
 
-function _missingInput(cmd) {
+function _missingInput(cmd: any) {
   process.stderr.write(`tsclang ${cmd}: missing input file\n\nUsage: tsclang ${cmd} <input.tsc> [options]\nRun 'tsclang ${cmd} --help' for details.\n`);
   process.exit(1);
 }
 
-function _checkInput(cmd, inputPath) {
+function _checkInput(cmd: any, inputPath: any) {
   if (!existsSync(inputPath)) {
     process.stderr.write(`tsclang ${cmd}: file not found: ${inputPath}\n`);
     process.exit(1);
@@ -180,7 +180,7 @@ function _readLock() {
   }
 }
 
-function _writeLock(lock) {
+function _writeLock(lock: any) {
   writeFileSync(LOCK_FILE, JSON.stringify(lock, null, 2) + '\n', 'utf8');
 }
 
@@ -230,14 +230,14 @@ if (command === 'explain') {
 // ---------------------------------------------------------------------------
 // Semver helpers (used by validate-config and install)
 // ---------------------------------------------------------------------------
-function semverParse(v) {
+function semverParse(v: any) {
   const [maj, min, pat] = v.split('.').map(Number);
   return [maj || 0, min || 0, pat || 0];
 }
 function semverCmp([a0, a1, a2]: number[], [b0, b1, b2]: number[]) {
   return (a0 - b0) || (a1 - b1) || (a2 - b2);
 }
-function semverSatisfies(v, range) {
+function semverSatisfies(v: any, range: any) {
   const sv = semverParse(v);
   const m = range.match(/^(\^|~|>=|>|<=|<|=)?(.+)$/);
   if (!m) return false;
@@ -270,7 +270,7 @@ const MOCK_PKG_DEPS = {
   'pkgB@2.0.0': { 'shared-dep': '^2.0.0' },
 };
 
-function resolveRange(pkg, range) {
+function resolveRange(pkg: any, range: any) {
   const entry = MOCK_REGISTRY[pkg];
   const versions = entry?.versions ?? (Array.isArray(entry) ? entry : null);
   if (!versions) return range.replace(/^[^\d]*/, ''); // fallback: strip operator
@@ -280,7 +280,7 @@ function resolveRange(pkg, range) {
 }
 
 // Detect if two ranges are compatible (simple: same major for ^ ranges)
-function rangesCompatible(r1, r2) {
+function rangesCompatible(r1: any, r2: any) {
   const m1 = r1.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
   const m2 = r2.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
   if (!m1 || !m2) return true;
@@ -486,7 +486,7 @@ if (command === 'init') {
 
 // ---------------------------------------------------------------------------
 // Shared: compile TSC → C string (recursive for local imports)
-function reportErrors(e, filename) {
+function reportErrors(e, filename: any) {
   const errors = e?.isTscErrorBag ? e.errors
                : e?.isTscError    ? [e]
                : null;
@@ -633,7 +633,7 @@ if (command === 'publish') {
 
   // Collect .tsc files and tsc.package.json
   const files = {};
-  const collectFiles = (dir, base = '') => {
+  const collectFiles = (dir: any, base = '') => {
     for (const entry of readdirSync(dir)) {
       if (entry === 'tsc_packages' || entry.startsWith('.')) continue;
       const full = join(dir, entry);
@@ -885,7 +885,7 @@ if (command === 'build') {
   // Profile loading: --platform <name> or --build <name> (reads builds.*.profile from tsc.package.json)
   const PROFILES_DIR = join(ROOT, 'src', 'profiles');
 
-  function loadProfile(name) {
+  function loadProfile(name: any) {
     // 1. Built-in profiles from src/profiles/
     const dtsPath = join(PROFILES_DIR, name + '.d.tsc');
     const jsonPath = join(PROFILES_DIR, name + '.json');
@@ -926,7 +926,7 @@ if (command === 'build') {
   let _buildCfg: any = null;
   let _pkgStrict: any = null;
 
-  function _validateStrictRules(rules, source) {
+  function _validateStrictRules(rules: any, source: any) {
     if (!Array.isArray(rules)) {
       process.stderr.write(`ConfigError: 'strict' in ${source} must be an array of strings\n`);
       process.exit(1);
@@ -1041,7 +1041,7 @@ if (command === 'build') {
     }
   }
 
-  function capabilityDefines(caps) {
+  function capabilityDefines(caps: any) {
     if (!caps) return [];
     const defs: any[] = [];
     if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
@@ -1266,7 +1266,7 @@ if (command === 'build') {
       }, 150);
     }
 
-    function syncWatches(files) {
+    function syncWatches(files: any) {
       const newSet = new Set(files);
       for (const f of watchedFiles) {
         if (!newSet.has(f)) unwatchFile(f as string, onFileChange as any);

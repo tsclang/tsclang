@@ -1,7 +1,7 @@
 import { mangleParams } from '../../types.js';
 // func.js
 export default {
-  visitEnum(node) {
+  visitEnum(node: any) {
     const { name, members, isConst } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
@@ -64,7 +64,7 @@ export default {
   // ----------------------------------------------------------------
   // Global variables
   // ----------------------------------------------------------------
-  visitGlobalVar(node) {
+  visitGlobalVar(node: any) {
     const { varKind, name, typeAnn, init } = node;
     const isConst = varKind === 'const';
     const ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
@@ -82,7 +82,7 @@ export default {
   // ----------------------------------------------------------------
   // Functions
   // ----------------------------------------------------------------
-  visitFuncDecl(node, isTopLevel = false, isExported = false) {
+  visitFuncDecl(node: any, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
@@ -121,7 +121,7 @@ export default {
       if (node.async) throw this.error(`TypeError: Cannot use 'async' with @isr on '${name}'`);
       const vectorArg = isrDecorator.args?.[0];
       const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
-      const bodyHasThrow = (stmts) => (stmts ?? []).some((s: any) => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
+      const bodyHasThrow = (stmts: any) => (stmts ?? []).some((s: any) => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
       if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @isr handlers`);
       const funcLines: any[] = [];
       this.pushScope();
@@ -433,7 +433,7 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(funcName, body, params, retType, className = null, isMoveMethod = false, isMut = false, throwsCtx: any = null, isNever = false) {
+  emitFuncBody(funcName: any, body: any, params: any, retType: any, className = null, isMoveMethod = false, isMut = false, throwsCtx: any = null, isNever = false) {
     const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever,
       inMathTry: this._inMathTry, mathCatchLabel: this._mathCatchLabel, mathErrVar: this._mathErrVar };
     this.inFunction = true;
@@ -628,7 +628,7 @@ export default {
     return lines;
   },
 
-  visitExtensionFunc(node) {
+  visitExtensionFunc(node: any) {
     const { name, thisType, params, returnType, body } = node;
     const thisCType = this.resolveType(thisType);
     const thisIdent = this.cTypeToIdent(thisCType);

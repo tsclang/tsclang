@@ -1,5 +1,5 @@
 export default {
-  _dispatchStdLib(node, lines, depth) {
+  _dispatchStdLib(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     let _r;
     _r = this._dispatchStdIo(node, lines, depth);
@@ -35,7 +35,7 @@ export default {
     return null;
   },
 
-  _dispatchStdIo(node, lines, depth) {
+  _dispatchStdIo(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (this._stdIoImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _ioSym = this.lookup(callee.object.name);
@@ -56,7 +56,7 @@ export default {
     return null;
   },
 
-  _dispatchStdHal(node, lines, depth) {
+  _dispatchStdHal(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (this._stdHalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _halClass = callee.object.name;
@@ -126,7 +126,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBlob(node, lines, depth) {
+  _dispatchStdBlob(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _blobSym = this.lookup(callee.object.name);
@@ -166,7 +166,7 @@ export default {
     return null;
   },
 
-  _dispatchStdUrl(node, lines, depth) {
+  _dispatchStdUrl(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // URL / URLSearchParams method calls
     if (this._stdUrlImported && callee.kind === 'Member') {
@@ -214,7 +214,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSignal(node, lines, depth) {
+  _dispatchStdSignal(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Signal methods: signal.get(), signal.set(val)
     if (this._stdReactiveImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
