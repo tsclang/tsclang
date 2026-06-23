@@ -648,7 +648,7 @@ export default {
       if (prop === 'entries') return `tsc_map_entries_${mapSuffix}(&${objC})`;
     }
 
-    const numMethods = {
+    const numMethods: Record<string, any> = {
       toFixed: () => {
         const objType = this.inferType(baseObject);
         if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')

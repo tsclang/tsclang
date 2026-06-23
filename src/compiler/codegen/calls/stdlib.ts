@@ -611,7 +611,7 @@ export default {
         if (objArg?.kind === 'ObjLit') {
           const props = {};
           for (const p of (objArg.props ?? [])) {
-            props[p.key] = p.value ? this.exprToC(p.value, lines, depth) : '0';
+            (props as Record<string, any>)[p.key] = p.value ? this.exprToC(p.value, lines, depth) : '0';
           }
           _temporalSuppressConst();
           if ('days' in props && !('hours' in props) && !('minutes' in props)) {
