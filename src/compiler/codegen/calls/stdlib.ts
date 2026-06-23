@@ -794,7 +794,7 @@ export default {
     return `(void)0`;
   },
 
-  _dispatchStdHashMap(node, lines, depth) {
+  _dispatchStdHashMap(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // HashMap method calls: m.set(), m.get(), m.has(), m.delete()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
