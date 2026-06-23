@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// @ts-nocheck — Stage 7: CLI entry point, types added in Stage 8
 // TSClang CLI entry point
 
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync, watchFile, unwatchFile } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync, readdirSync, statSync, watchFile, unwatchFile, unlinkSync } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
@@ -197,7 +196,7 @@ function _checkLockStale() {
   const lock = _readLock();
   const deps = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
   const lockPkgs = lock.packages || {};
-  const added = [], removed = [], changed = [];
+  const added: any[] = [], removed: any[] = [], changed: any[] = [];
   for (const [name, version] of Object.entries(deps)) {
     if (!lockPkgs[name]) added.push(name);
     else if (lockPkgs[name].version !== version) changed.push(name);
@@ -235,7 +234,7 @@ function semverParse(v) {
   const [maj, min, pat] = v.split('.').map(Number);
   return [maj || 0, min || 0, pat || 0];
 }
-function semverCmp([a0, a1, a2], [b0, b1, b2]) {
+function semverCmp([a0, a1, a2]: number[], [b0, b1, b2]: number[]) {
   return (a0 - b0) || (a1 - b1) || (a2 - b2);
 }
 function semverSatisfies(v, range) {
@@ -305,7 +304,7 @@ if (command === 'validate-config') {
   let raw;
   try {
     raw = readFileSync(resolve(jsonFile), 'utf8');
-  } catch (e) {
+  } catch (e: any) {
     process.stderr.write(`tsclang: cannot read '${jsonFile}': ${e.message}\n`);
     process.exit(1);
   }
@@ -313,7 +312,7 @@ if (command === 'validate-config') {
   let config;
   try {
     config = JSON.parse(raw);
-  } catch (e) {
+  } catch (e: any) {
     process.stderr.write(`ConfigError: tsc.package.json: invalid JSON: ${e.message}\n`);
     process.exit(1);
   }
@@ -413,9 +412,9 @@ if (command === 'validate-config') {
   if (config.builds) {
     // For single embedded builds, print target details; otherwise list build names
     const buildEntries = Object.entries(config.builds);
-    const embeddedBuilds = buildEntries.filter(([, b]) => b?.target && !['desktop', 'x86_64-linux', 'x86_64-windows'].includes(b.target));
+    const embeddedBuilds = buildEntries.filter(([, b]: any) => b?.target && !['desktop', 'x86_64-linux', 'x86_64-windows'].includes(b.target));
     if (embeddedBuilds.length === 1 && buildEntries.length === 1) {
-      const [, b] = embeddedBuilds[0];
+      const [, b]: [any, any] = embeddedBuilds[0];
       let line = `target: ${b.target}`;
       if (b.mcu) line += ` mcu=${b.mcu}`;
       if (b.freq != null) line += ` freq=${b.freq}`;
@@ -567,7 +566,7 @@ if (command === 'lint') {
       throw { isTscErrorBag: true, errors: bag };
     }
     ast = parsedAst;
-  } catch (e) {
+  } catch (e: any) {
     reportErrors(e, filename);
     process.exit(1);
   }
@@ -622,7 +621,7 @@ if (command === 'publish') {
     process.exit(1);
   }
   let pkg;
-  try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch (e) {
+  try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch (e: any) {
     process.stderr.write(`tsclang publish: invalid tsc.package.json: ${e.message}\n`);
     process.exit(1);
   }
@@ -711,7 +710,7 @@ if (command === 'install') {
       process.exit(1);
     }
     let archive;
-    try { archive = JSON.parse(readFileSync(archivePath, 'utf8')); } catch (e) {
+    try { archive = JSON.parse(readFileSync(archivePath, 'utf8')); } catch (e: any) {
       process.stderr.write(`tsclang install: invalid .tspkg file: ${e.message}\n`);
       process.exit(1);
     }
@@ -725,7 +724,7 @@ if (command === 'install') {
     for (const [rel, content] of Object.entries(files)) {
       const dest = join(pkgDir, rel);
       mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, content, 'utf8');
+      writeFileSync(dest, content as string, 'utf8');
     }
     const lock = _readLock();
     lock.packages[pkgName] = { version: pkgVersion, source: 'local' };
@@ -737,7 +736,7 @@ if (command === 'install') {
   // Parse pkg@version or git+url
   let pkgName, pkgVersion, pkgSource;
   if (pkgArg.startsWith('git+')) {
-    pkgName = pkgArg.split('/').pop().replace(/\.git$/, '');
+    pkgName = pkgArg.split('/').pop()!.replace(/\.git$/, '');
     pkgVersion = 'git';
     pkgSource = pkgArg;
   } else {
@@ -794,7 +793,7 @@ if (command === 'build-cmake') {
   let pkg;
   try {
     pkg = JSON.parse(readFileSync(resolve(pkgFile), 'utf8'));
-  } catch (e) {
+  } catch (e: any) {
     process.stderr.write(`tsclang build-cmake: cannot read '${pkgFile}': ${e.message}\n`);
     process.exit(1);
   }
@@ -853,14 +852,14 @@ if (command === 'build') {
   const emitIdx   = args.indexOf('--emit');
   let emit       = emitIdx !== -1 ? args[emitIdx + 1] : 'c';
   const outIdx    = args.indexOf('--outDir');
-  const outDir    = outIdx !== -1 ? args[outIdx + 1] : '.';
+  let outDir     = outIdx !== -1 ? args[outIdx + 1] : '.';
   const allErrors  = args.includes('--all-errors');
   const debugLines = args.includes('--debug');
   const noCache    = args.includes('--no-cache');
   const sourcemap  = args.includes('--sourcemap');
   const watchMode  = args.includes('--watch') || args.includes('-w');
   const optIdx    = args.indexOf('--optimize');
-  const optimize  = optIdx !== -1 ? args[optIdx + 1] : null;
+  let optimize   = optIdx !== -1 ? args[optIdx + 1] : null;
   if (optimize && !/^O[0-3sz]$/.test(optimize)) {
     process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use O0, O1, O2, O3, Os, Oz\n`);
     process.exit(1);
@@ -869,7 +868,7 @@ if (command === 'build') {
   const _validNumberTypes = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64']);
   const _flagVal = (name: any): any => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : null; };
   const _targetFlag       = _flagVal('--target');
-  const _defaultNumberFlag = _flagVal('--default-number');
+  let _defaultNumberFlag = _flagVal('--default-number');
   const _allocatorFlag    = _flagVal('--allocator');
   const _asyncFlag        = _flagVal('--async');
   const _strictFlag       = _flagVal('--strict');
@@ -979,7 +978,7 @@ if (command === 'build') {
       if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
       if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
       if (pkg.strict) _pkgStrict = _validateStrictRules(pkg.strict, 'tsc.package.json');
-    } catch (e) {
+    } catch (e: any) {
       process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
       process.exit(1);
     }
@@ -1087,7 +1086,7 @@ if (command === 'build') {
       const _r = compileTsc(inputPath, buildOpts);
       c = _r.c; warnings = _r.warnings; lineMap = _r.lineMap;
       if (_r._sourceFiles) _lastSourceFiles = _r._sourceFiles;
-    } catch (e) {
+    } catch (e: any) {
       reportErrors(e, basename(inputPath));
       return false;
     }
@@ -1270,10 +1269,10 @@ if (command === 'build') {
     function syncWatches(files) {
       const newSet = new Set(files);
       for (const f of watchedFiles) {
-        if (!newSet.has(f)) unwatchFile(f, onFileChange);
+        if (!newSet.has(f)) unwatchFile(f as string, onFileChange as any);
       }
       for (const f of newSet) {
-        if (!watchedFiles.has(f)) watchFile(f, { interval: 200 }, onFileChange);
+        if (!watchedFiles.has(f)) watchFile(f as string, { interval: 200 }, onFileChange as any);
       }
       watchedFiles = newSet;
     }
@@ -1288,7 +1287,7 @@ if (command === 'build') {
     }
 
     process.on('SIGINT', () => {
-      for (const f of watchedFiles) unwatchFile(f, onFileChange);
+      for (const f of watchedFiles) unwatchFile(f as string, onFileChange as any);
       process.stderr.write(`\n[${ts()}] Watch stopped\n`);
       process.exit(0);
     });
@@ -1321,7 +1320,7 @@ if (command === 'build') {
   let c, warnings;
   try {
     ({ c, warnings } = compileTsc(inputPath));
-  } catch (e) {
+  } catch (e: any) {
     reportErrors(e, basename(inputPath));
     process.exit(1);
   }

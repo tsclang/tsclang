@@ -23,7 +23,7 @@ export default {
         if (hasNextMethod) {
           const tmpName = `_chain_${this.tempCount++}`;
           lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
-          const chainDef = { ctype: resultType, varKind: 'const' };
+          const chainDef: any = { ctype: resultType, varKind: 'const' };
           if (resultType.startsWith('Array_')) {
             const chainElemIdent = resultType.slice(6);
             chainDef.elemType = chainElemIdent;
