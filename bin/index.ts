@@ -91,7 +91,7 @@ if (!command || command === '--help' || command === '-h') {
   process.exit(command ? 0 : 1);
 }
 
-const CMD_HELP = {
+const CMD_HELP: Record<string, string> = {
   build: `tsclang build — Compile .tsc to C or binary
 
 USAGE:
@@ -256,7 +256,7 @@ function semverSatisfies(v: any, range: any) {
 }
 
 // Mock registry of known packages for dependency resolution tests
-const MOCK_REGISTRY = {
+const MOCK_REGISTRY: Record<string, any> = {
   lib:          { versions: ['1.0.0', '1.0.5', '1.2.3', '2.0.0'], description: 'Core utility library' },
   pkgA:         { versions: ['1.0.0', '1.1.0'],                    description: 'Package A with shared deps' },
   pkgB:         { versions: ['2.0.0'],                             description: 'Package B' },
@@ -264,7 +264,7 @@ const MOCK_REGISTRY = {
   mylib:        { versions: ['1.0.0'],                             description: 'Sample math library' },
 };
 // Transitive deps: "pkg@version" → { dep: range }
-const MOCK_PKG_DEPS = {
+const MOCK_PKG_DEPS: Record<string, any> = {
   'pkgA@1.0.0': { 'shared-dep': '^1.0.0' },
   'pkgA@1.1.0': { 'shared-dep': '^1.0.0' },
   'pkgB@2.0.0': { 'shared-dep': '^2.0.0' },
