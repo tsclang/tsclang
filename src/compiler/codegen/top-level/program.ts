@@ -196,7 +196,7 @@ export default {
     const _throwsUnions: any[] = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
     const _flattenThrowsNames = (throwsTypes: any) => {
-      const names = [];
+      const names: any[] = [];
       for (const t of throwsTypes ?? []) {
         if (t.kind === 'TypeRef') names.push(t.name);
         else if (t.kind === 'TypeUnion') {

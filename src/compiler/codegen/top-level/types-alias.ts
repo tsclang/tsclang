@@ -14,7 +14,7 @@ export default {
     // Pure struct interface (no methods) → emit typedef struct
     if (methods.length === 0 && props.length > 0) {
       this._resolvingTypes.add(name);
-      const fieldParts = [];
+      const fieldParts: any[] = [];
       for (const f of props) {
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         if (ct === name) {
