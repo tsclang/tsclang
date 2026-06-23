@@ -212,7 +212,7 @@ function eliminateUnusedConsts(stmts: any) {
 // ---------------------------------------------------------------------------
 
 function deadBranches(stmts: any): any {
-  const out = [];
+  const out: any[] = [];
   for (const s of stmts) {
     if (s?.kind === 'If') {
       const test = foldExpr(s.test);
