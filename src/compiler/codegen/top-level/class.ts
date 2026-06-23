@@ -29,7 +29,7 @@ export default {
 
     // Collect extra fields from class decorators (@sealed → target._field = val)
     const _classDecoratorFields: any[] = [];   // extra fields to add to struct
-    const _classDecoratorInits  = [];   // statements to run after new ClassName()
+    const _classDecoratorInits: any[] = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
       if (['struct', 'pool', 'heap', 'packed', 'align'].includes(d.name)) continue;
       const decFn = this._decoratorFns?.get(d.name);

@@ -23,7 +23,7 @@ export default {
     }
 
     const fmtParts: any[] = [];
-    const fmtArgs  = [];
+    const fmtArgs: any[] = [];
     let needSpace = false;
 
     for (const arg of args) {
