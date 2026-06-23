@@ -700,7 +700,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     let returnType = null;
     if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
     // throws annotation
-    let throwsTypes = [];
+    let throwsTypes: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
       if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
@@ -750,7 +750,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const params = parseParams();
     let returnType = null;
     if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
-    let throwsTypes = [];
+    let throwsTypes: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
       if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
@@ -907,7 +907,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         const params = parseParams();
         let returnType = null;
         if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
-        let throwsTypes = [];
+        let throwsTypes: any[] = [];
         if (cur().type === TK.IDENT && cur().value === 'throws') {
           eat(TK.IDENT);
           if (cur().type !== TK.LBRACE && cur().type !== TK.SEMI) {
@@ -1215,7 +1215,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseSpawn() {
     eat(TK.IDENT, 'spawn');
-    let throwsTypes = [];
+    let throwsTypes: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
       eat(TK.IDENT);
       throwsTypes.push(parseTypeAnnotation());
@@ -1376,7 +1376,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       while (cur().type !== TK.GT) { typeArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
       eat(TK.GT);
     }
-    let args = [];
+    let args: any[] = [];
     let arraySize = null;
     if (cur().type === TK.LBRACK) {
       eat(TK.LBRACK);
@@ -1801,7 +1801,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // spawn { ... } / spawn throws T { ... } used as expression
     if (t.type === TK.IDENT && t.value === 'spawn') {
       eat(TK.IDENT, 'spawn');
-      let throwsTypes2 = [];
+      let throwsTypes2: any[] = [];
       if (cur().type === TK.IDENT && cur().value === 'throws') {
         eat(TK.IDENT);
         throwsTypes2.push(parseTypeAnnotation());
