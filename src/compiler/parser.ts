@@ -186,7 +186,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         eat(TK.LBRACK);
         const elements: any[] = [];
         while (cur().type !== TK.RBRACK) {
-          let label = null;
+          let label: any = null;
           let rest = false;
           let optional = false;
           if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
@@ -317,7 +317,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       let name = eat(TK.IDENT).value;
       // dotted decorators: @some.name etc.
       while (cur().type === TK.DOT) { eat(TK.DOT); name += '.' + eat(TK.IDENT).value; }
-      let args = null;
+      let args: any = null;
       if (cur().type === TK.LPAREN) {
         eat(TK.LPAREN);
         args = [];
@@ -451,7 +451,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       const name = eat(TK.IDENT).value;
       eat(TK.COLON);
       const typeAnn = parseTypeAnnotation();
-      let init = null;
+      let init: any = null;
       if (tryEat(TK.EQ)) init = parseExpr();
       eatSemi();
       return { kind: 'DeclareConst', name, typeAnn, init };
@@ -460,7 +460,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       eat(TK.IDENT, 'function');
       const name = eat(TK.IDENT).value;
       const params = parseParams();
-      let returnType = null;
+      let returnType: any = null;
       if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
       eatSemi();
       return { kind: 'DeclareFunction', name, params, returnType };
@@ -476,7 +476,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
           eat(TK.IDENT, 'function');
           const name = eat(TK.IDENT).value;
           const params = parseParams();
-          let returnType = null;
+          let returnType: any = null;
           if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
           eatSemi();
           body.push({ kind: 'DeclareFunction', name, params, returnType });
@@ -504,7 +504,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         if (cur().type !== TK.IDENT) { pos++; continue; }
         const key = eat(TK.IDENT).value;
         if (!tryEat(TK.COLON)) continue;
-        let val = null;
+        let val: any = null;
         if (cur().type === TK.STRING)      val = eat(TK.STRING).value;
         else if (cur().type === TK.BOOL)   val = eat(TK.BOOL).value === 'true';
         else if (cur().type === TK.NUMBER) val = Number(eat(TK.NUMBER).value);
@@ -573,7 +573,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         tryEat(TK.COMMA);
       }
       eat(TK.RBRACE);
-      let source = null;
+      let source: any = null;
       if (cur().type === TK.IDENT && cur().value === 'from') {
         eat(TK.IDENT, 'from');
         source = eat(TK.STRING).value;
@@ -599,7 +599,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // Destructuring
     if (cur().type === TK.LBRACE) {
       const pattern = parseObjectPattern();
-      let typeAnn = null;
+      let typeAnn: any = null;
       if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
@@ -608,7 +608,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     }
     if (cur().type === TK.LBRACK) {
       const pattern = parseArrayPattern();
-      let typeAnn = null;
+      let typeAnn: any = null;
       if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
@@ -627,7 +627,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseSingleDeclarator(kind: any, decorators: any, line: any) {
     const name = eat(TK.IDENT).value;
-    let typeAnn = null;
+    let typeAnn: any = null;
     let optionalVar = false;
     if (cur().type === TK.QUEST && peek().type === TK.COLON) {
       eat(TK.QUEST);
@@ -637,7 +637,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (optionalVar && typeAnn) {
       typeAnn = { kind: 'TypeUnion', types: [typeAnn, { kind: 'TypeRef', name: 'null', typeArgs: [] }] };
     }
-    let init = null;
+    let init: any = null;
     if (tryEat(TK.EQ)) init = parseExpr();
     if (optionalVar && !init) init = { kind: 'Literal', litType: 'null', value: 'null' };
     return { kind: 'VarDecl', varKind: kind, name, typeAnn, init, decorators, line };
@@ -686,7 +686,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       eat(TK.LT);
       while (cur().type !== TK.GT) {
         const tpName = eat(TK.IDENT).value;
-        let constraint = null;
+        let constraint: any = null;
         if (cur().type === TK.IDENT && cur().value === 'implements') {
           eat(TK.IDENT);
           constraint = parseTypeAnnotation();
@@ -697,7 +697,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       eat(TK.GT);
     }
     const params = parseParams();
-    let returnType = null;
+    let returnType: any = null;
     if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
     // throws annotation
     let throwsTypes: any[] = [];
@@ -728,14 +728,14 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (tryEat(TK.COMMA)) {
       while (cur().type !== TK.RPAREN) {
         const pname = eat(TK.IDENT).value;
-        let typeAnn = null;
+        let typeAnn: any = null;
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
         params.push({ name: pname, typeAnn });
         tryEat(TK.COMMA);
       }
     }
     eat(TK.RPAREN);
-    let returnType = null;
+    let returnType: any = null;
     if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
     const body = parseBlock();
     return { kind: 'ExtensionFunc', name, thisType, params, returnType, body };
@@ -748,7 +748,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (tryEat(TK.STAR)) generator = true;
     const name = eat(TK.IDENT).value;
     const params = parseParams();
-    let returnType = null;
+    let returnType: any = null;
     if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
     let throwsTypes: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'throws') {
@@ -806,7 +806,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
           if (cur().type !== TK.RBRACK) eat(TK.COMMA);
         }
         eat(TK.RBRACK);
-        let typeAnn = null;
+        let typeAnn: any = null;
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
         params.push({ name: '_arr', destructArr: pattern, typeAnn, rest: false, optional: false, defaultVal: null as any });
         if (cur().type !== TK.RPAREN) tryEat(TK.COMMA);
@@ -814,11 +814,11 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       }
 
       const name = eat(TK.IDENT).value;
-      let typeAnn = null;
+      let typeAnn: any = null;
       let optional = false;
       if (cur().type === TK.QUEST) { eat(TK.QUEST); optional = true; }
       if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
-      let defaultVal = null;
+      let defaultVal: any = null;
       if (tryEat(TK.EQ)) defaultVal = parseExpr();
       params.push({ name, typeAnn, rest, optional, defaultVal });
       if (cur().type !== TK.RPAREN) tryEat(TK.COMMA);
@@ -849,7 +849,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       }
       eat(TK.GT);
     }
-    let superClass = null;
+    let superClass: any = null;
     if (cur().type === TK.IDENT && cur().value === 'extends') {
       eat(TK.IDENT); superClass = eat(TK.IDENT).value;
     }
@@ -905,7 +905,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
           eat(TK.GT);
         }
         const params = parseParams();
-        let returnType = null;
+        let returnType: any = null;
         if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
         let throwsTypes: any[] = [];
         if (cur().type === TK.IDENT && cur().value === 'throws') {
@@ -916,7 +916,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
             checkThrowsTypes(throwsTypes);
           }
         }
-        let body = null;
+        let body: any = null;
         if (cur().type === TK.LBRACE) body = parseBlock();
         else eatSemi();
         members.push({ kind: 'Method', name: memberName, modifiers, params, returnType, throwsTypes, body, generator, decorators: memberDecorators, isIterator });
@@ -925,7 +925,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         let typeAnn = null, optional = false;
         if (cur().type === TK.QUEST) { eat(TK.QUEST); optional = true; }
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
-        let init = null;
+        let init: any = null;
         if (tryEat(TK.EQ)) init = parseExpr();
         eatSemi();
         members.push({ kind: 'Field', name: memberName, modifiers, typeAnn, optional, init, decorators: memberDecorators });
@@ -979,7 +979,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const members: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const mname = eat(TK.IDENT).value;
-      let value = null;
+      let value: any = null;
       if (tryEat(TK.EQ)) value = parseExpr();
       members.push({ name: mname, value });
       tryEat(TK.COMMA);
@@ -1005,7 +1005,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseReturn() {
     eat(TK.IDENT, 'return');
-    let value = null;
+    let value: any = null;
     if (cur().type !== TK.SEMI && cur().type !== TK.RBRACE && !done()) value = parseExpr();
     eatSemi();
     return { kind: 'Return', value };
@@ -1017,7 +1017,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const test = parseExpr();
     eat(TK.RPAREN);
     const consequent = parseStmtOrBlock();
-    let alternate = null;
+    let alternate: any = null;
     if (cur().type === TK.IDENT && cur().value === 'else') {
       eat(TK.IDENT);
       alternate = parseStmtOrBlock();
@@ -1064,7 +1064,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         binding = { kind: 'ObjPattern', props: parseObjectPattern() };
       } else {
         const name = eat(TK.IDENT).value;
-        let typeAnn = null;
+        let typeAnn: any = null;
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
         binding = { kind: 'Ident', name, typeAnn };
       }
@@ -1076,7 +1076,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     }
 
     // Classic for
-    let init = null;
+    let init: any = null;
     if (cur().type !== TK.SEMI) {
       if (cur().type === TK.IDENT && ['let','const','var'].includes(cur().value)) {
         init = parseVarDecl(cur().value); // parseVarDecl eats the keyword itself
@@ -1086,11 +1086,11 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       }
     } else eatSemi();
 
-    let test = null;
+    let test: any = null;
     if (cur().type !== TK.SEMI) test = parseExpr();
     eatSemi();
 
-    let update = null;
+    let update: any = null;
     if (cur().type !== TK.RPAREN) update = parseExpr();
     eat(TK.RPAREN);
 
@@ -1139,7 +1139,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       }
       catches.push({ param, typeAnn, body: parseBlock() });
     }
-    let finally_ = null;
+    let finally_: any = null;
     if (cur().type === TK.IDENT && cur().value === 'finally') {
       eat(TK.IDENT); finally_ = parseBlock();
     }
@@ -1377,7 +1377,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       eat(TK.GT);
     }
     let args: any[] = [];
-    let arraySize = null;
+    let arraySize: any = null;
     if (cur().type === TK.LBRACK) {
       eat(TK.LBRACK);
       arraySize = parseExpr();
@@ -1704,13 +1704,13 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         let typeAnn = null, optional = false;
         if (cur().type === TK.QUEST) { eat(TK.QUEST); optional = true; }
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
-        let defaultVal = null;
+        let defaultVal: any = null;
         if (tryEat(TK.EQ)) defaultVal = parseExpr();
         params.push({ name, typeAnn, rest, optional, defaultVal });
         if (cur().type !== TK.RPAREN) eat(TK.COMMA);
       }
       eat(TK.RPAREN);
-      let retType = null;
+      let retType: any = null;
       if (tryEat(TK.COLON)) retType = parseTypeAnnotation();
       if (cur().type === TK.ARROW) {
         eat(TK.ARROW);
@@ -1816,7 +1816,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       pos++;
       const exprFnName = (cur().type === TK.IDENT) ? eat(TK.IDENT).value : null;
       const exprParams = parseParams();
-      let exprRetType = null;
+      let exprRetType: any = null;
       if (tryEat(TK.COLON)) exprRetType = parseTypeAnnotation();
       const exprBody = parseBlock();
       return { kind: 'FuncExpr', name: exprFnName, params: exprParams, returnType: exprRetType, body: exprBody };
@@ -1850,13 +1850,13 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         let typeAnn = null, optional = false;
         if (cur().type === TK.QUEST) { eat(TK.QUEST); optional = true; }
         if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
-        let defaultVal = null;
+        let defaultVal: any = null;
         if (tryEat(TK.EQ)) defaultVal = parseExpr();
         params.push({ name, typeAnn, rest, optional, defaultVal });
         if (cur().type !== TK.RPAREN) eat(TK.COMMA);
       }
       eat(TK.RPAREN);
-      let retType = null;
+      let retType: any = null;
       if (tryEat(TK.COLON)) retType = parseTypeAnnotation();
       if (cur().type === TK.ARROW) {
         eat(TK.ARROW);
