@@ -353,7 +353,7 @@ export default {
     return null;
   },
 
-  _dispatchStdWs(node, lines, depth) {
+  _dispatchStdWs(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // WebSocket methods: ws.send(), ws.close(), ws.onMessage(), ws.onClose(), ws.sendBytes()
     if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -428,7 +428,7 @@ export default {
     return null;
   },
 
-  _dispatchStdNet(node, lines, depth) {
+  _dispatchStdNet(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // std/net: net.listen(port, handler) / net.connect handled via async
     if (this._stdNetImported && callee.kind === 'Member' &&
@@ -527,7 +527,7 @@ export default {
     return null;
   },
 
-  _dispatchStdFs(node, lines, depth) {
+  _dispatchStdFs(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // fs namespace: fs.watch(), fs.readFileSync(), fs.writeFileSync(), etc.
     if (this._stdFsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -565,7 +565,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTemporal(node, lines, depth) {
+  _dispatchStdTemporal(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Temporal static methods: PlainDate.from(), Instant.now(), etc.
     if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -648,7 +648,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBuffer(node, lines, depth) {
+  _dispatchStdBuffer(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Buffer method calls: buf.fill(), buf.slice()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -674,7 +674,7 @@ export default {
     return null;
   },
 
-  _dispatchStdDataView(node, lines, depth) {
+  _dispatchStdDataView(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _dvSym = this.lookup(callee.object.name);
@@ -728,12 +728,12 @@ export default {
     return null;
   },
 
-  _dvOp(_dvName, base, I, dir, type, le, args, lines, depth, _dvSym) {
+  _dvOp(_dvName: any, base: any, I: any, dir: any, type: any, le: any, args: any, lines: any, depth: any, _dvSym: any) {
     const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const ptr = `(${base} + ${_dvIdx})`;
     const sz = ({ U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 } as Record<string, number>)[type];
-    const cType: Record<string, any> = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
-    const castCType: Record<string, any> = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
+    const cType = ({ U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' } as Record<string, string>)[type];
+    const castCType: Record<string, any> = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' } as Record<string, string>)[type];
 
     // Bounds check
     if (_dvSym?._dvCap != null) {
