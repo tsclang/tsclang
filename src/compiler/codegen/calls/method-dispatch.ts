@@ -456,7 +456,7 @@ export default {
 
     const _isStrPtr = sym?.ctype === 'String *';
     const strObjC = _isStrPtr ? `(*${objC})` : objC;
-    const strMethods = {
+    const strMethods: Record<string, any> = {
       length:     () => `${_isStrPtr ? objC + '->' : objC + '.'}length`,
       slice:      () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
       indexOf:      () => `(int)tsc_string_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,

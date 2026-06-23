@@ -273,7 +273,7 @@ export default {
 
     // Check if callee has a rest param вЂ” if so, bundle variadic args into a temp array
     const symParams = sym?.params;
-    const restIdx = symParams ? symParams.findIndex(p => p.rest) : -1;
+    const restIdx = symParams ? symParams.findIndex((p: any) => p.rest) : -1;
     if (restIdx >= 0) {
       const restParam = symParams[restIdx];
       let et = 'int32_t';
