@@ -8,7 +8,7 @@ const _RUNTIME_FLAT = new Set(['i32', 'f64', 'string', 'Array_i32']);
 
 export default {
   _cTypeBytes(ct: any) {
-    const m = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
+    const m: Record<string, any> = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
     if (ct === 'size_t') return this._ptrBytes();
     return m[ct] ?? 4;
   },
@@ -41,7 +41,7 @@ export default {
 
   cTypeToIdent(ctype: any) {
     // Map C type to a valid identifier suffix
-    const m = {
+    const m: Record<string, any> = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
       'float': 'f32', 'double': 'f64',
@@ -53,7 +53,7 @@ export default {
   },
 
   ctypeToTsName(ctype: any) {
-    const m = {
+    const m: Record<string, any> = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
       'float': 'f32', 'double': 'f64', 'bool': 'boolean',
@@ -63,7 +63,7 @@ export default {
   },
 
   _numericTypeInfo(ct: any) {
-    const m = {
+    const m: Record<string, any> = {
       'int8_t':   { bits: 8,  signed: true,  kind: 'int' },
       'int16_t':  { bits: 16, signed: true,  kind: 'int' },
       'int32_t':  { bits: 32, signed: true,  kind: 'int' },
@@ -95,7 +95,7 @@ export default {
 
   // Map array element identifier back to C type (reverse of cTypeToIdent)
   _arrIdentToCType(ident: any) {
-    const m = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
+    const m: Record<string, any> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                 'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                 'f32':'float','f64':'double','bool':'bool','string':'String',
                 'usize':'size_t','char':'char' };
@@ -275,13 +275,13 @@ export default {
 
   _tsNameToTypeId(tsName: any) {
     if (tsName === 'number') return this._tsNameToTypeId(this._defaultNumber);
-    const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
+    const m: Record<string, any> = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
     return m[tsName] ?? 0;
   },
 
   _tsNameToCType(tsName: any) {
     if (tsName === 'number') return this._tsNameToCType(this._defaultNumber);
-    const m = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
+    const m: Record<string, any> = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
     return m[tsName] ?? 'int32_t';
   },
 
