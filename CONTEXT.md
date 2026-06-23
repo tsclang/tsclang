@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-23 (JS→TS migration complete, 7/8 strict options, ZERO @ts-nocheck, ZERO .js files).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (JS-compatible number formatting via `tsc_format_double()`, NaN/Infinity codegen #57 closed, audit #100).
 
 ---
 
@@ -14,7 +14,7 @@
 - **Build:** `npm run typecheck` (tsc --noEmit, 7 strict options), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
-- **Next goal:** #57 (NaN/Infinity), then self-hosting.
+- **Next goal:** Self-hosting (#47–#50 gaps: string methods, file I/O, CLI args, StringBuilder). Then #99 (strict mode completion).
 
 ---
 
@@ -118,14 +118,14 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 
 | TSC type | C type | printf fmt | Notes |
 |----------|--------|------------|-------|
-| `number` | `double` | `%g` | resolves to `defaultNumber` C type per profile (f64/f32/i32/i16) |
+| `number` | `double` | `tsc_format_double` | resolves to `defaultNumber` C type per profile (f64/f32/i32/i16) |
 | `i8` | `int8_t` | `%d` | |
 | `i16` | `int16_t` | `%d` | |
 | `i32` | `int32_t` | `%d` desktop, `%ld`+(long) when `_cap('bits') < 32` | AVR `int`=16bit! |
 | `i64` | `int64_t` | `%lld` | no-i64-print strict rule on embedded |
 | `u8`–`u64` | `uint8_t`–`uint64_t` | `%u`/`%lu`/`%llu` | |
-| `f32` | `float` | `%g` | |
-| `f64` | `double` | `%g` | |
+| `f32` | `float` | `tsc_format_double` | |
+| `f64` | `double` | `tsc_format_double` | |
 | `boolean` | `bool` | `%d` (0/1) | TSC name = `boolean`, NOT `bool` |
 | `usize` | `size_t` | `%zu` desktop, `%u`+cast when `_cap('bits') < 32` | platform-dependent (u16/u32/u64) |
 | `isize` | `ptrdiff_t` | `%td` | |
@@ -301,6 +301,8 @@ Single-header C library. `#include`d in every output. Key components:
 | `tsc_channel_*` | SPSC ring buffer channel |
 | `_tsc_console_init` | UART init on embedded (`#ifdef TSC_CONSOLE_UART`) |
 | `tsc_throw` / `tsc_panic` | Error reporting (no setjmp) |
+| `tsc_format_double` | JS-compatible shortest round-trip f64 formatting (NaN→"NaN", Infinity→"Infinity", incremental precision 1-17 with strtod round-trip check) |
+| `tsc_dtoa` | Rotating 8-buffer helper for inline use in printf args (codegen uses `%s` + `tsc_dtoa(val)`) |
 
 **Platform headers:** `runtime_nes.h`, `runtime_wasm.h`, etc. — subset for constrained platforms.
 **Std runtime headers:** `src/runtime/std/*.h` — `fs.h`, `net.h`, `ws.h`, `io.h`, `regex.h`, `base64.h`, `reactive.h`, `temporal.h`, `url.h`, `blob.h`, `embedded.h`, `hal.h`, `avr.h`.
@@ -364,15 +366,15 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 ### Project state & tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 (NaN/Infinity support).
+- **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 **closed** (NaN/Infinity + `tsc_format_double`), #72–#80 #82 #91 (self-hosting epics), #99 (strict mode: `noImplicitThis` + `strictPropertyInitialization` + `strict: true`), #100 (audit tracking).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
-- **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). Deferred until #57 (NaN/Infinity) is done.
+- **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`.
 
 ### Architectural decisions
 
-- **Compiler language: JS, not TS.** Port to TS rejected — huge effort, no user value. JSDoc annotations on critical files for IDE support. Long-term goal: self-host in `.tsc`.
+- **Compiler language: TypeScript.** JS→TS migration complete (7/8 strict options, ZERO @ts-nocheck). Long-term goal: self-host in `.tsc`.
 - **IR/SSA: deferred.** Existing codegen supports all language features. IR is architectural improvement, not release blocker. Prototype removed, spec retained as `[PLANNED]`. Revisit post-self-hosting.
 - **Bug fix priority before refactoring:** All bugs fixed before refactoring started (П6 — can't refactor safely with red tests).
 
@@ -384,7 +386,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 
 - **`int` != `int32_t` on AVR!** AVR `int` = 16-bit. Codegen uses `%ld` + `(long)` for i32, `%lu` + `(unsigned long)` for u32 on embedded.
 - **`%lld` unsupported** on avr-libc → `no-i64-print` strict rule auto-enabled. Manual digit conversion in `tsc_i64_to_string`.
-- **`%g` needs `-lprintf_flt`** linker flag on AVR.
+- **`%g` needs `-lprintf_flt`** linker flag on AVR — no longer used for float output. `tsc_format_double()` uses `snprintf("%.Ng")` internally (N=1..17), which works without `-lprintf_flt` on avr-libc.
 - **`%zu` unsupported** → `%u` + `(unsigned)` cast.
 - **`static char` buffers = NOT reentrant** → replaced with malloc+ARC (desktop) / ring buffer pool (embedded).
 - **PROGMEM strings** — `STR_LIT()` macro, `pgm_read_byte` for access. `tsc_print_str()` for PROGMEM-aware output.

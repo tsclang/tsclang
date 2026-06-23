@@ -12,7 +12,7 @@ int main(void) {
         printf("%d\n", strong->value);
         tsc_arc_release(strong);
     } else {
-        printf("%g\n", -1.0);
+        printf("%s\n", tsc_dtoa(-1.0));
     }
     tsc_weak_release(w);
     tsc_arc_release(d);

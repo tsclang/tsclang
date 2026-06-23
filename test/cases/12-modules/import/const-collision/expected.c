@@ -6,7 +6,7 @@ static const double b_MAX = 200.0;
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(a_MAX));
-    printf("%g\n", (double)(b_MAX));
+    printf("%s\n", tsc_dtoa((double)(a_MAX)));
+    printf("%s\n", tsc_dtoa((double)(b_MAX)));
     return 0;
 }

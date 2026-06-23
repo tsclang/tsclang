@@ -13,6 +13,6 @@ void dep___init(void) {
 int main(void) {
     TSC_INIT();
     dep___init();
-    printf("%g\n", (double)(dep_result));
+    printf("%s\n", tsc_dtoa((double)(dep_result)));
     return 0;
 }

@@ -5,6 +5,6 @@ extern double sin(double x);
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(sin(0.0)));
+    printf("%s\n", tsc_dtoa((double)(sin(0.0))));
     return 0;
 }

@@ -21,9 +21,9 @@ int main(void) {
     *fn_env = (_closure_0_env){.arr = &arr};
     tsc_closure fn = {.env = fn_env, .fn = (void*)_closure_0_fn};
     ((void (*)(void *))fn.fn)(fn.env);
-    printf("%g\n", (double)(arr.data[0]));
-    printf("%g\n", (double)(arr.data[1]));
-    printf("%g\n", (double)(arr.data[2]));
+    printf("%s\n", tsc_dtoa((double)(arr.data[0])));
+    printf("%s\n", tsc_dtoa((double)(arr.data[1])));
+    printf("%s\n", tsc_dtoa((double)(arr.data[2])));
     _closure_0_destroy(fn_env);
     return 0;
 }

@@ -7,6 +7,6 @@ double getValue(void) {
 int main(void) {
     TSC_INIT();
     const double x = getValue();
-    printf("%g\n", (double)(x));
+    printf("%s\n", tsc_dtoa((double)(x)));
     return 0;
 }

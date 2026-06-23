@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", -42.0);
-    printf("%g\n", (double)(-3.14));
+    printf("%s\n", tsc_dtoa(-42.0));
+    printf("%s\n", tsc_dtoa((double)(-3.14)));
     return 0;
 }

@@ -2,6 +2,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(1 << 3));
+    printf("%s\n", tsc_dtoa((double)(1 << 3)));
     return 0;
 }

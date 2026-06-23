@@ -146,6 +146,7 @@ export default {
 
   isBareLiteralNumber(expr: any) {
     if (expr.kind === 'Literal' && expr.litType === 'number' &&
+        expr.value !== 'NaN' && expr.value !== 'Infinity' &&
         !expr.value.includes('.') && !expr.value.includes('e') && !expr.value.includes('E') &&
         !expr.value.startsWith('0x') && !expr.value.startsWith('0b') && !expr.value.startsWith('0o') &&
         !expr.value.startsWith('0X') && !expr.value.startsWith('0B') && !expr.value.startsWith('0O')) {

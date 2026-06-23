@@ -16,8 +16,8 @@
  *   u16/u8          → printf("%u\n", (unsigned)v)
  *   i64             → printf("%lld\n", (long long)v)
  *   u64             → printf("%llu\n", (unsigned long long)v)
- *   f64             → printf("%g\n", v)
- *   f32             → printf("%g\n", (double)v)
+ *   f64             → tsc_dtoa(v) → printf("%s\n", ...)
+ *   f32             → tsc_dtoa((double)v) → printf("%s\n", ...)
  *   bool            → printf("%s\n", v ? "true" : "false")
  *   char            → printf("%c\n", v)
  *   size_t          → printf("%u\n", (unsigned)v)
@@ -1207,16 +1207,63 @@ static inline String tsc_u64_to_string(uint64_t v) {
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 32);
 #endif
 }
+/* JS-compatible double formatting (P2 - TS compat).
+ * NaN -> "NaN", Infinity -> "Infinity", -Infinity -> "-Infinity".
+ * Integers without decimal: 1.0 -> "1".
+ * Shortest round-trip via incremental precision.
+ * Exponent without padding: 1e-7 (not 1e-07). */
+static inline int tsc_format_double(char *buf, size_t sz, double v) {
+    if (isnan(v)) { size_t n = 3; if (sz <= n) n = sz - 1; memcpy(buf, "NaN", n); buf[n] = '\0'; return (int)n; }
+    if (isinf(v)) {
+        if (v < 0) { size_t n = 9; if (sz <= n) n = sz - 1; memcpy(buf, "-Infinity", n); buf[n] = '\0'; return (int)n; }
+        else       { size_t n = 8; if (sz <= n) n = sz - 1; memcpy(buf, "Infinity", n); buf[n] = '\0'; return (int)n; }
+    }
+    if (v == 0) { buf[0] = '0'; buf[1] = '\0'; return 1; }
+    if (v == (double)(long long)v && fabs(v) < 1e15)
+        return snprintf(buf, sz, "%lld", (long long)v);
+    int n = snprintf(buf, sz, "%.17g", v);
+    for (int prec = 1; prec < 17; prec++) {
+        n = snprintf(buf, sz, "%.*g", prec, v);
+        double parsed = strtod(buf, NULL);
+        if (parsed == v) break;
+    }
+    char *e = strchr(buf, 'e');
+    if (!e) e = strchr(buf, 'E');
+    if (e) {
+        char *sign_ptr = (e[1] == '+' || e[1] == '-') ? &e[1] : NULL;
+        char *digits = sign_ptr ? sign_ptr + 1 : e + 1;
+        char *first_nonzero = digits;
+        while (*first_nonzero == '0' && *(first_nonzero + 1) != '\0') first_nonzero++;
+        if (first_nonzero != digits) {
+            if (sign_ptr) memmove(sign_ptr + 1, first_nonzero, strlen(first_nonzero) + 1);
+            else          memmove(e + 1, first_nonzero, strlen(first_nonzero) + 1);
+            n = (int)strlen(buf);
+        }
+    }
+    return n;
+}
+
 static inline String tsc_f64_to_string(double v) {
 #ifdef TSC_EMBEDDED
     char tmp[32];
-    int n = sprintf(tmp, "%g", v);
+    int n = tsc_format_double(tmp, 32, v);
     return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 #else
     char *buf = (char *)_tsc_xmalloc(64);
-    int n = snprintf(buf, 64, "%g", v);
+    int n = tsc_format_double(buf, 64, v);
     return _tsc_str_make(buf, (size_t)(n > 0 ? n : 0), 64);
 #endif
+}
+
+/* Returns pointer to static buffer with JS-formatted double.
+ * Uses 8 rotating buffers so multiple calls in one printf work correctly. */
+static inline const char *tsc_dtoa(double v) {
+    static char _bufs[8][32];
+    static int _idx = 0;
+    char *buf = _bufs[_idx & 7];
+    _idx++;
+    tsc_format_double(buf, 32, v);
+    return buf;
 }
 
 /* string.lastIndexOf(sub): returns last position of sub, or -1 */
@@ -1310,7 +1357,7 @@ static size_t _tsc_format_impl(char *buf, const char *fmt, va_list ap) {
             if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
             len += (size_t)n; p++;
         } else if (*p == 'g') {
-            int n = sprintf(tmp, "%g", va_arg(ap, double));
+            int n = tsc_format_double(tmp, sizeof(tmp), va_arg(ap, double));
             if (buf) { memcpy(buf, tmp, (size_t)n); buf += n; }
             len += (size_t)n; p++;
         } else if (*p == 's') {
@@ -2337,14 +2384,14 @@ static int _tsc_cmp_f64_asc(const void *a, const void *b) {
     String _jr_; \
     if (_a_.length == 0) { char *_b_ = (char*)_tsc_xmalloc(1); _b_[0] = '\0'; _jr_ = _tsc_str_make(_b_, 0, 1); } \
     else { \
-        char _buf_[32]; int _len_ = snprintf(_buf_, sizeof(_buf_), "%g", _a_.data[0]); \
+        char _buf_[32]; int _len_ = tsc_format_double(_buf_, sizeof(_buf_), _a_.data[0]); \
         size_t _total_ = (size_t)_len_; \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) _total_ += _sep_.length + 32; \
         char *_out_ = (char*)_tsc_xmalloc(_total_ + 1); \
-        int _w_ = snprintf(_out_, _total_ + 1, "%g", _a_.data[0]); \
+        int _w_ = tsc_format_double(_out_, _total_ + 1, _a_.data[0]); \
         for (size_t _i_ = 1; _i_ < _a_.length; _i_++) { \
             memcpy(_out_ + _w_, _sep_.data, _sep_.length); _w_ += (int)_sep_.length; \
-            _w_ += snprintf(_out_ + _w_, _total_ + 1 - _w_, "%g", _a_.data[_i_]); \
+            _w_ += tsc_format_double(_out_ + _w_, _total_ + 1 - (size_t)_w_, _a_.data[_i_]); \
         } \
         _jr_ = _tsc_str_make(_out_, (size_t)_w_, (size_t)_w_ + 1); \
     } \

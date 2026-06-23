@@ -79,8 +79,8 @@ export default {
 
       if (this.isBareLiteralNumber(expr)) {
         const v = this.bareNumberValue(expr);
-        fmtParts.push('%g');
-        fmtArgs.push(v);
+        fmtParts.push('%s');
+        fmtArgs.push(`tsc_dtoa(${v})`);
         continue;
       }
 
@@ -100,8 +100,8 @@ export default {
           if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
           else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
         } else {
-          fmtParts.push('%g');
-          fmtArgs.push(`(double)(${cexpr})`);
+          fmtParts.push('%s');
+          fmtArgs.push(`tsc_dtoa((double)(${cexpr}))`);
         }
         continue;
       }
@@ -113,8 +113,8 @@ export default {
           fmtParts.push('%s');
           fmtArgs.push(`${cexpr}->data`);
         } else if (derefType === 'double' || derefType === 'float') {
-          fmtParts.push('%g');
-          fmtArgs.push(`*${cexpr}`);
+          fmtParts.push('%s');
+          fmtArgs.push(`tsc_dtoa(*${cexpr})`);
         } else if (derefType === 'int64_t') {
           if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
             throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
@@ -171,11 +171,11 @@ export default {
                             expr.kind === 'Binary' || expr.kind === 'Ternary' || expr.kind === 'Assign';
         fmtArgs.push(`${needsParens ? `(${cexpr})` : cexpr} ? "true" : "false"`);
       } else if (ctype === 'double') {
-        fmtParts.push('%g');
-        fmtArgs.push(`(double)(${cexpr})`);
+        fmtParts.push('%s');
+        fmtArgs.push(`tsc_dtoa((double)(${cexpr}))`);
       } else if (ctype === 'float') {
-        fmtParts.push('%g');
-        fmtArgs.push(`(double)${cexpr}`);
+        fmtParts.push('%s');
+        fmtArgs.push(`tsc_dtoa((double)${cexpr})`);
       } else if (ctype === 'int64_t') {
         if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
           throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
@@ -215,8 +215,8 @@ export default {
             fmtParts.push('%s');
             fmtArgs.push(`${cexpr}.has_value ? ${cexpr}.value->data : "null"`);
           } else if (innerCType === 'double' || innerCType === 'float') {
-            fmtParts.push('%g');
-            fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1.0`);
+            fmtParts.push('%s');
+            fmtArgs.push(`${cexpr}.has_value ? tsc_dtoa((double)(*${cexpr}.value)) : "null"`);
           } else {
             if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
             else { fmtParts.push('%d'); fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`); }
@@ -255,15 +255,12 @@ export default {
               const tmp = `_v_${this.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               let valFmt;
-              if (innerCType === 'double' || innerCType === 'float') valFmt = '%g';
-              else if (innerCType === 'int64_t') valFmt = '%lld';
-              else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') valFmt = '%u';
-              else if (this._cap('bits') < 32) valFmt = '%ld';
-              else valFmt = '%d';
-              const valCast = innerCType === 'int64_t' ? `(long long)${tmp}.value`
-                : (innerCType === 'uint8_t' || innerCType === 'uint16_t') ? `(unsigned)${tmp}.value`
-                : this._cap('bits') < 32 ? `(long)${tmp}.value`
-                : `${tmp}.value`;
+              let valCast;
+              if (innerCType === 'double' || innerCType === 'float') { valFmt = '%s'; valCast = `tsc_dtoa((double)${tmp}.value)`; }
+              else if (innerCType === 'int64_t') { valFmt = '%lld'; valCast = `(long long)${tmp}.value`; }
+              else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') { valFmt = '%u'; valCast = `(unsigned)${tmp}.value`; }
+              else if (this._cap('bits') < 32) { valFmt = '%ld'; valCast = `(long)${tmp}.value`; }
+              else { valFmt = '%d'; valCast = `${tmp}.value`; }
               if (fmtParts.length > 0) {
                 const prevFmt = '"' + fmtParts.join(' ') + ' "';
                 if (fmtArgs.length === 0) lines.push(isErr ? `fprintf(stderr, ${prevFmt});` : `printf(${prevFmt});`);
@@ -283,8 +280,8 @@ export default {
               valExpr = tmp;
             }
             if (innerCType === 'double' || innerCType === 'float') {
-              fmtParts.push('%g');
-              fmtArgs.push(`${valExpr}.value`);
+              fmtParts.push('%s');
+              fmtArgs.push(`tsc_dtoa((double)(${valExpr}.value))`);
             } else if (innerCType === 'int64_t') {
               if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
                 throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);

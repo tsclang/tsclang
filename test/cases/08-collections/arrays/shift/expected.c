@@ -8,7 +8,7 @@ int main(void) {
     double _arr_data_0[] = {1, 2, 3};
     Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     opt_f64 first = tsc_array_shift_f64(&arr);
-    printf("%g\n", first.value);
+    printf("%s\n", tsc_dtoa((double)(first.value)));
     printf("%zu\n", arr.length);
     return 0;
 }

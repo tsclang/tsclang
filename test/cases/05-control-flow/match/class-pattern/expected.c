@@ -38,6 +38,6 @@ int main(void) {
         a = w * h;
     }
     else { a = 0.0; }
-    printf("%g\n", (double)(a));
+    printf("%s\n", tsc_dtoa((double)(a)));
     return 0;
 }

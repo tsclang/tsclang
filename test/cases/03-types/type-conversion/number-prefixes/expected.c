@@ -7,8 +7,8 @@ int main(void) {
     opt_f64 a = tsc_try_parse_f64(STR_LIT("3.14"));
     opt_f64 b = tsc_try_parse_f64(STR_LIT("0xFF"));
     opt_f64 c = tsc_try_parse_f64(STR_LIT("abc"));
-    printf("%g\n", a.value);
-    printf("%g\n", b.value);
+    printf("%s\n", tsc_dtoa((double)(a.value)));
+    printf("%s\n", tsc_dtoa((double)(b.value)));
     printf("%s\n", c.has_value ? "some" : "null");
     return 0;
 }

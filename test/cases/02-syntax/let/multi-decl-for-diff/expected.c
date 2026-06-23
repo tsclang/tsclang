@@ -6,7 +6,7 @@ int main(void) {
     double y = 1.5;
     for (; x < 3; x++) {
         printf("%d\n", x);
-        printf("%g\n", (double)(y));
+        printf("%s\n", tsc_dtoa((double)(y)));
     }
     return 0;
 }

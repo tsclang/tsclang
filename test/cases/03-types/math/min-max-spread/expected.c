@@ -28,12 +28,12 @@ int main(void) {
     for (size_t _i_7 = 1; _i_7 < arr_f64.length; _i_7++) {
         if (arr_f64.data[_i_7] < _min_6) _min_6 = arr_f64.data[_i_7];
     }
-    printf("%g\n", (double)(_min_6));
+    printf("%s\n", tsc_dtoa((double)(_min_6)));
     if (arr_f64.length == 0) { fprintf(stderr, "Math.max: empty array\n"); exit(1); }
     double _max_8 = arr_f64.data[0];
     for (size_t _i_9 = 1; _i_9 < arr_f64.length; _i_9++) {
         if (arr_f64.data[_i_9] > _max_8) _max_8 = arr_f64.data[_i_9];
     }
-    printf("%g\n", (double)(_max_8));
+    printf("%s\n", tsc_dtoa((double)(_max_8)));
     return 0;
 }

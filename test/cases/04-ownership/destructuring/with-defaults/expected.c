@@ -6,7 +6,7 @@ int main(void) {
     const double _obj_y = 0;
     const double x = _obj_x;
     const double y = (_obj_y != 0) ? _obj_y : 5;
-    printf("%g\n", (double)(x));
-    printf("%g\n", (double)(y));
+    printf("%s\n", tsc_dtoa((double)(x)));
+    printf("%s\n", tsc_dtoa((double)(y)));
     return 0;
 }

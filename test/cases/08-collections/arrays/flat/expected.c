@@ -8,6 +8,6 @@ int main(void) {
     const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     const Array_f64 flat = tsc_array_flat_f64(arr);
     printf("%zu\n", flat.length);
-    printf("%g\n", (double)(flat.data[0]));
+    printf("%s\n", tsc_dtoa((double)(flat.data[0])));
     return 0;
 }

@@ -3,7 +3,7 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(M_PI));
-    printf("%g\n", (double)(M_E));
+    printf("%s\n", tsc_dtoa((double)(M_PI)));
+    printf("%s\n", tsc_dtoa((double)(M_E)));
     return 0;
 }

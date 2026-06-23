@@ -8,6 +8,6 @@ typedef struct { double X; double Y; double Z; } P3;
 int main(void) {
     TSC_INIT();
     P3 p = { .X = 1.0, .Y = 2.0, .Z = 3.0 };
-    printf("%g\n", (double)(p.Z));
+    printf("%s\n", tsc_dtoa((double)(p.Z)));
     return 0;
 }

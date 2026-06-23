@@ -14,6 +14,6 @@ int main(void) {
         case Color_Blue: val = 3; break;
         default: break;
     }
-    printf("%g\n", (double)(val));
+    printf("%s\n", tsc_dtoa((double)(val)));
     return 0;
 }

@@ -81,8 +81,8 @@ export default {
         } else if (t === 'uint64_t') {
           if (isEmb) { const s = `_tsf_${this.tempCount++}`; lines.push(`${' '.repeat(this.indent * depth)}String ${s} = tsc_u64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
           else { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
-        } else if (t === 'double')   { fmt += '%g'; fmtArgs.push(c); }
-        else if (t === 'float')    { fmt += '%g'; fmtArgs.push(`(double)${c}`); }
+        } else if (t === 'double')   { fmt += '%s'; fmtArgs.push(`tsc_dtoa(${c})`); }
+        else if (t === 'float')    { fmt += '%s'; fmtArgs.push(`tsc_dtoa((double)${c})`); }
         else if (t === 'bool')     { fmt += '%s'; fmtArgs.push(`(${c}) ? "true" : "false"`); }
         else if (t === 'String') {
           if (isEmb) { fmt += '%s'; fmtArgs.push(`_tsc_str_to_ram(${c}).data`); }

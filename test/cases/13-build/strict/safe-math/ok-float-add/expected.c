@@ -5,6 +5,6 @@ int main(void) {
     double a = 1.5;
     double b = 2.5;
     double q = a + b;
-    printf("%g\n", (double)(q));
+    printf("%s\n", tsc_dtoa((double)(q)));
     return 0;
 }

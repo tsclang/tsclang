@@ -11,6 +11,6 @@ int main(void) {
     _catch_0:
     z = -1.0;
     _catch_end_0:;
-    printf("%g\n", (double)(z));
+    printf("%s\n", tsc_dtoa((double)(z)));
     return 0;
 }

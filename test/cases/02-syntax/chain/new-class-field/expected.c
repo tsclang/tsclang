@@ -11,6 +11,6 @@ static Point Point_new(double x, double y) {
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(Point_new(1.0, 2.0).x));
+    printf("%s\n", tsc_dtoa((double)(Point_new(1.0, 2.0).x)));
     return 0;
 }

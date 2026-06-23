@@ -41,7 +41,7 @@ int main(void) {
     int32_t x = 42;
     tsc_unknown y = tsc_unknown_from_i32(x);
     if (y.type_id == 1) {
-        printf("%g\n", (double)(tsc_unknown_get_i32(&y) + 1));
+        printf("%s\n", tsc_dtoa((double)(tsc_unknown_get_i32(&y) + 1)));
     }
     tsc_unknown_drop(&y);
     return 0;

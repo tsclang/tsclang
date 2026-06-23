@@ -6,7 +6,7 @@ int main(void) {
     TSC_INIT();
     opt_i32 x = {true, 5};
     if (x.has_value) {
-        printf("%g\n", (double)(x.value + 1));
+        printf("%s\n", tsc_dtoa((double)(x.value + 1)));
     }
     return 0;
 }

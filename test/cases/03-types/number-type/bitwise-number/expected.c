@@ -8,10 +8,10 @@ int main(void) {
     double c = (double)(((int32_t)(x)) ^ ((int32_t)(1)));
     double d = (double)(((int32_t)(x)) << ((int32_t)(1)));
     double e = (double)(((int32_t)(x)) >> ((int32_t)(1)));
-    printf("%g\n", (double)(a));
-    printf("%g\n", (double)(b));
-    printf("%g\n", (double)(c));
-    printf("%g\n", (double)(d));
-    printf("%g\n", (double)(e));
+    printf("%s\n", tsc_dtoa((double)(a)));
+    printf("%s\n", tsc_dtoa((double)(b)));
+    printf("%s\n", tsc_dtoa((double)(c)));
+    printf("%s\n", tsc_dtoa((double)(d)));
+    printf("%s\n", tsc_dtoa((double)(e)));
     return 0;
 }

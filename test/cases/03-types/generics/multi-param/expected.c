@@ -1,7 +1,7 @@
 #include "runtime.h"
 
 String makePair_i32_f64(int32_t a, double b) {
-    return tsc_string_format("%d,%g", a, b);
+    return tsc_string_format("%d,%s", a, tsc_dtoa(b));
 }
 
 String makePair_string_i32(String a, int32_t b) {

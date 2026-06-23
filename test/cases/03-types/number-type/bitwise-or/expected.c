@@ -6,7 +6,7 @@ int main(void) {
     double y = 3.0;
     double a = (double)(((int32_t)(x)) | ((int32_t)(y)));
     double b = (double)(((int32_t)(x)) | ((int32_t)(8)));
-    printf("%g\n", (double)(a));
-    printf("%g\n", (double)(b));
+    printf("%s\n", tsc_dtoa((double)(a)));
+    printf("%s\n", tsc_dtoa((double)(b)));
     return 0;
 }

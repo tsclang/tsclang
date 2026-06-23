@@ -9,7 +9,7 @@ int main(void) {
     if (!n.has_value) {
         printf("null\n");
     } else {
-        printf("%g\n", n.value);
+        printf("%s\n", tsc_dtoa((double)(n.value)));
     }
     tsc_string_release(s);
     return 0;

@@ -40,7 +40,7 @@ int main(void) {
     TSC_INIT();
     tsc_unknown x = tsc_unknown_from_f64(42);
     const double val = tsc_unknown_get_f64(&x);
-    printf("%g\n", (double)(val));
+    printf("%s\n", tsc_dtoa((double)(val)));
     tsc_unknown_drop(&x);
     return 0;
 }

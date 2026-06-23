@@ -29,7 +29,7 @@ int main(void) {
     TSC_INIT();
     Pair_i32_f64 p = Pair_i32_f64_new(1, 2.5);
     Pair_f64_i32 s = Pair_i32_f64_swap(&p);
-    printf("%g\n", (double)(s.first));
+    printf("%s\n", tsc_dtoa((double)(s.first)));
     printf("%d\n", s.second);
     return 0;
 }

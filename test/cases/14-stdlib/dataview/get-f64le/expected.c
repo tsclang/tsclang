@@ -12,6 +12,6 @@ int main(void) {
     memcpy((void*)(dv.data + dv.byte_offset + 0), &_dv_1, 8);
     (void)0;
     double _dv_2 = {0}; memcpy(&_dv_2, (dv.data + dv.byte_offset + 0), 8);
-    printf("%g\n", (double)((double)_dv_2));
+    printf("%s\n", tsc_dtoa((double)((double)_dv_2)));
     return 0;
 }

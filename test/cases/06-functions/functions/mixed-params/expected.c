@@ -6,6 +6,6 @@ double mix_i32_f64(int32_t a, double b) {
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(mix_i32_f64(2, 3.5)));
+    printf("%s\n", tsc_dtoa((double)(mix_i32_f64(2, 3.5))));
     return 0;
 }

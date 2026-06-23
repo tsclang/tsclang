@@ -7,6 +7,6 @@ double f(void) {
 int main(void) {
     TSC_INIT();
     double x = (double)(((int32_t)(f())) & ((int32_t)(3)));
-    printf("%g\n", (double)(x));
+    printf("%s\n", tsc_dtoa((double)(x)));
     return 0;
 }

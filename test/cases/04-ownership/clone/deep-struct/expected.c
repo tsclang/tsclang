@@ -8,7 +8,7 @@ int main(void) {
     Shape s = { .center = { .x = 1.0, .y = 2.0 }, .radius = 5.0 };
     Shape s2 = (Shape)(s);
     s2.radius = 10.0;
-    printf("%g\n", (double)(s.radius));
-    printf("%g\n", (double)(s2.radius));
+    printf("%s\n", tsc_dtoa((double)(s.radius)));
+    printf("%s\n", tsc_dtoa((double)(s2.radius)));
     return 0;
 }

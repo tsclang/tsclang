@@ -50,8 +50,8 @@ int main(void) {
     tsc_unknown x = tsc_unknown_from_Point(p);
     if (x.type_id == 8) {
         Point obj = *tsc_unknown_get_Point(&x);
-        printf("%g\n", (double)(obj.x));
-        printf("%g\n", (double)(obj.y));
+        printf("%s\n", tsc_dtoa((double)(obj.x)));
+        printf("%s\n", tsc_dtoa((double)(obj.y)));
     }
     tsc_unknown_drop(&x);
     return 0;

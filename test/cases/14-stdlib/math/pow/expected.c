@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(pow(2.0, 10.0)));
+    printf("%s\n", tsc_dtoa((double)(pow(2.0, 10.0))));
     return 0;
 }

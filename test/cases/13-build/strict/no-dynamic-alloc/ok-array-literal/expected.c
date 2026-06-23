@@ -6,6 +6,6 @@ int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3};
     Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
-    printf("%g\n", (double)(arr.data[0]));
+    printf("%s\n", tsc_dtoa((double)(arr.data[0])));
     return 0;
 }

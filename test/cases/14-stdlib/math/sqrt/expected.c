@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(sqrt(9.0)));
+    printf("%s\n", tsc_dtoa((double)(sqrt(9.0))));
     return 0;
 }

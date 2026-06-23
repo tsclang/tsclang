@@ -301,9 +301,9 @@ const x = NaN;           // f64 (NAN in C)
 const y = Infinity;      // f64 (INFINITY in C)
 const z = -Infinity;     // f64 (-INFINITY in C)
 
-console.log(NaN);        // "nan"
-console.log(Infinity);   // "inf"
-console.log(-Infinity);  // "-inf"
+console.log(NaN);        // "NaN"
+console.log(Infinity);   // "Infinity"
+console.log(-Infinity);  // "-Infinity"
 
 NaN === NaN;             // false (IEEE 754)
 NaN !== NaN;             // true
@@ -318,14 +318,27 @@ Infinity > 1e308;        // true
 - `Infinity` → `INFINITY`
 - `-Infinity` → `-INFINITY`
 
-**`Number` static properties** (планируется):
+**Number output formatting:** All `f64`/`f32` values printed via `console.log()`, string interpolation, or `Array.join()` use `tsc_format_double()` — a JS-compatible shortest round-trip formatter. This matches JavaScript's `Number.prototype.toString()` behavior exactly:
+
+```typescript
+console.log(3.14);              // "3.14"
+console.log(Math.PI);           // "3.141592653589793"
+console.log(0.1 + 0.2);         // "0.30000000000000004"
+console.log(1.0);               // "1"
+console.log(NaN);               // "NaN"
+console.log(Infinity);          // "Infinity"
+```
+
+> **Note:** `f32` values are promoted to `f64` before formatting, so `let x: f32 = 3.14; console.log(x);` prints `"3.140000104904175"` (the shortest f64 representation of the f32 value). This matches the behavior of reading an f32 through an f64 lens.
+
+**`Number` static properties** `[NOT YET]`:
 - `Number.NaN` → `NAN`
 - `Number.POSITIVE_INFINITY` → `INFINITY`
 - `Number.NEGATIVE_INFINITY` → `-INFINITY`
 - `Number.isNaN(x)` — strict NaN check
 - `Number.isFinite(x)` — strict finite check
 
-**Global functions** (планируется):
+**Global functions** `[NOT YET]`:
 - `isNaN(x)` — coerces to number first (JS semantics)
 - `isFinite(x)` — coerces to number first (JS semantics)
 

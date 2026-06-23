@@ -22,6 +22,6 @@ int main(void) {
         result = ((int32_t (*)(void *))f.fn)(f.env);
         _closure_0_destroy(f_env);
     }
-    printf("%g\n", (double)(result));
+    printf("%s\n", tsc_dtoa((double)(result)));
     return 0;
 }

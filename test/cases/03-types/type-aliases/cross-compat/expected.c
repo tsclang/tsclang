@@ -7,6 +7,6 @@ int main(void) {
     TSC_INIT();
     Pt1 a = { .x = 1.0, .y = 2.0 };
     Pt2 b = *(Pt2 *)&a;
-    printf("%g\n", (double)(b.x));
+    printf("%s\n", tsc_dtoa((double)(b.x)));
     return 0;
 }

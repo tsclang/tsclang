@@ -16,8 +16,8 @@ int main(void) {
     Signal_i32 x = tsc_signal_create_i32(5);
     _closure_0_captured = (_closure_0_env){ .x = &x };
     Signal_f64 doubled = tsc_computed_f64(_closure_0_fn);
-    printf("%g\n", (double)(tsc_signal_get_f64(&doubled)));
+    printf("%s\n", tsc_dtoa((double)(tsc_signal_get_f64(&doubled))));
     tsc_signal_set_i32(&x, 10);
-    printf("%g\n", (double)(tsc_signal_get_f64(&doubled)));
+    printf("%s\n", tsc_dtoa((double)(tsc_signal_get_f64(&doubled))));
     return 0;
 }

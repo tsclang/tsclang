@@ -38,7 +38,7 @@ static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && sel
 
 void inspect_unknown(tsc_unknown val) {
     if (val.type_id == 1) {
-        printf("%g\n", (double)(tsc_unknown_get_i32(&val) + 1));
+        printf("%s\n", tsc_dtoa((double)(tsc_unknown_get_i32(&val) + 1)));
     }
 }
 

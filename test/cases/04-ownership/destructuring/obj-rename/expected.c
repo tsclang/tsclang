@@ -9,7 +9,7 @@ int main(void) {
     p.y = 2.0;
     const double *a = &p.x;
     const double *b = &p.y;
-    printf("%g\n", *a);
-    printf("%g\n", *b);
+    printf("%s\n", tsc_dtoa(*a));
+    printf("%s\n", tsc_dtoa(*b));
     return 0;
 }

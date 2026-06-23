@@ -20,8 +20,8 @@ int main(void) {
     uint8_t _lit_0[] = {1, 2, 3, 4, 5};
     Array_u8 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     Array_f64 doubled = tsc_array_map_u8_f64(arr, _lambda_0_f64);
-    printf("%g\n", (double)(doubled.data[0]));
-    printf("%g\n", (double)(doubled.data[4]));
+    printf("%s\n", tsc_dtoa((double)(doubled.data[0])));
+    printf("%s\n", tsc_dtoa((double)(doubled.data[4])));
     tsc_array_free_f64(&doubled);
     return 0;
 }

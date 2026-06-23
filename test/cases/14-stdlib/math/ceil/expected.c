@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(ceil(3.2)));
+    printf("%s\n", tsc_dtoa((double)(ceil(3.2))));
     return 0;
 }

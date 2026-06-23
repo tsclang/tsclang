@@ -3,11 +3,11 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(floor(2.7)));
-    printf("%g\n", (double)(ceil(2.1)));
-    printf("%g\n", (double)(round(2.5)));
-    printf("%g\n", (double)(round(2.4)));
-    printf("%g\n", (double)(trunc(2.9)));
-    printf("%g\n", (double)(trunc(-2.9)));
+    printf("%s\n", tsc_dtoa((double)(floor(2.7))));
+    printf("%s\n", tsc_dtoa((double)(ceil(2.1))));
+    printf("%s\n", tsc_dtoa((double)(round(2.5))));
+    printf("%s\n", tsc_dtoa((double)(round(2.4))));
+    printf("%s\n", tsc_dtoa((double)(trunc(2.9))));
+    printf("%s\n", tsc_dtoa((double)(trunc(-2.9))));
     return 0;
 }

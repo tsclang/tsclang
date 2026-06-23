@@ -3,6 +3,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(hypot(3.0, 4.0)));
+    printf("%s\n", tsc_dtoa((double)(hypot(3.0, 4.0))));
     return 0;
 }

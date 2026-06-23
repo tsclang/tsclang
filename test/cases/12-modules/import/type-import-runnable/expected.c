@@ -16,6 +16,6 @@ double dot_Vec3_Vec3(vec_Vec3 a, vec_Vec3 b) {
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(dot_Vec3_Vec3(vec_Vec3_new(1, 2, 3), vec_Vec3_new(4, 5, 6))));
+    printf("%s\n", tsc_dtoa((double)(dot_Vec3_Vec3(vec_Vec3_new(1, 2, 3), vec_Vec3_new(4, 5, 6)))));
     return 0;
 }

@@ -7,6 +7,6 @@ int main(void) {
     double _arr_data_0[] = {3, 1, 2};
     Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     tsc_array_sort_f64(&arr, NULL);
-    printf("%g\n", (double)(arr.data[0]));
+    printf("%s\n", tsc_dtoa((double)(arr.data[0])));
     return 0;
 }

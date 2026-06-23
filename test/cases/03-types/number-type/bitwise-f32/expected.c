@@ -5,6 +5,6 @@ int main(void) {
     float x = 5.0f;
     float y = 3.0f;
     float a = (float)(((int32_t)(x)) & ((int32_t)(y)));
-    printf("%g\n", (double)a);
+    printf("%s\n", tsc_dtoa((double)a));
     return 0;
 }

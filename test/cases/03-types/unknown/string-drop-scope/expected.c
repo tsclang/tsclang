@@ -45,6 +45,6 @@ int main(void) {
         }
         tsc_unknown_drop(&x);
     }
-    printf("%g\n", 99.0);
+    printf("%s\n", tsc_dtoa(99.0));
     return 0;
 }

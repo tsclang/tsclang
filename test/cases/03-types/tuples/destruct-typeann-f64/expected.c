@@ -11,7 +11,7 @@ int main(void) {
     TSC_INIT();
     const double x = getPair()._0;
     const bool y = getPair()._1;
-    printf("%g\n", (double)(x));
+    printf("%s\n", tsc_dtoa((double)(x)));
     printf("%s\n", (y) ? "true" : "false");
     return 0;
 }

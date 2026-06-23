@@ -44,7 +44,7 @@ int main(void) {
         printf("not array\n");
     } else {
         if (y.type_id == 1) {
-            printf("%g\n", (double)(tsc_unknown_get_i32(&y) + 1));
+            printf("%s\n", tsc_dtoa((double)(tsc_unknown_get_i32(&y) + 1)));
         }
     }
     tsc_unknown_drop(&y);

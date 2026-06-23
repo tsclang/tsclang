@@ -17,6 +17,6 @@ int main(void) {
     uint8_t _lit_0[] = {1, 2, 3, 4, 5};
     Array_u8 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     const double sum = tsc_array_reduce_u8_f64(arr, _lambda_0_f64, 0);
-    printf("%g\n", (double)(sum));
+    printf("%s\n", tsc_dtoa((double)(sum)));
     return 0;
 }

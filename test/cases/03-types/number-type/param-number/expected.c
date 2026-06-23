@@ -8,6 +8,6 @@ int main(void) {
     TSC_INIT();
     const double x = 1.5;
     const double y = 2.5;
-    printf("%g\n", (double)(add_f64_f64(x, y)));
+    printf("%s\n", tsc_dtoa((double)(add_f64_f64(x, y))));
     return 0;
 }

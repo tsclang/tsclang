@@ -2,6 +2,6 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(0b1010 | 0b0101));
+    printf("%s\n", tsc_dtoa((double)(0b1010 | 0b0101)));
     return 0;
 }

@@ -40,9 +40,9 @@ int main(void) {
     TSC_INIT();
     tsc_unknown x = tsc_unknown_from_f64(42);
     if (x.type_id != 1) {
-        printf("%g\n", 99.0);
+        printf("%s\n", tsc_dtoa(99.0));
     } else {
-        printf("%g\n", (double)(tsc_unknown_get_i32(&x) + 1));
+        printf("%s\n", tsc_dtoa((double)(tsc_unknown_get_i32(&x) + 1)));
     }
     tsc_unknown_drop(&x);
     return 0;

@@ -4,6 +4,6 @@
 int main(void) {
     TSC_INIT();
     const float x = (float)(1.5);
-    printf("%g\n", (double)x);
+    printf("%s\n", tsc_dtoa((double)x));
     return 0;
 }

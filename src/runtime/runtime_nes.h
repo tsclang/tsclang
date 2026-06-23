@@ -175,9 +175,8 @@ static inline String tsc_i64_to_string(int64_t v) {
 }
 static inline String tsc_f64_to_string(double v) {
     char tmp[32];
-    sprintf(tmp, "%g", v);
-    size_t n = strlen(tmp);
-    return _tsc_str_make(tmp, n, n + 1);
+    int n = tsc_format_double(tmp, sizeof(tmp), v);
+    return _tsc_str_make(tmp, (size_t)n, (size_t)n + 1);
 }
 
 /* -------------------------------------------------------------------------

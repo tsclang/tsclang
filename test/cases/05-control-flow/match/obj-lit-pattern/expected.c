@@ -17,6 +17,6 @@ int main(void) {
         area = a * b;
     }
     else { area = 0.0; }
-    printf("%g\n", (double)(area));
+    printf("%s\n", tsc_dtoa((double)(area)));
     return 0;
 }

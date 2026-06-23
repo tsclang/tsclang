@@ -5,6 +5,6 @@ int main(void) {
     int32_t a = 42;
     double b = 3.14;
     double c = a + b;
-    printf("%g\n", (double)(c));
+    printf("%s\n", tsc_dtoa((double)(c)));
     return 0;
 }

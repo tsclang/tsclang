@@ -3,7 +3,7 @@
 
 int main(void) {
     TSC_INIT();
-    printf("%g\n", (double)(round(3.6)));
-    printf("%g\n", (double)(round(3.4)));
+    printf("%s\n", tsc_dtoa((double)(round(3.6))));
+    printf("%s\n", tsc_dtoa((double)(round(3.4))));
     return 0;
 }

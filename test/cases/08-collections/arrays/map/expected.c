@@ -12,9 +12,9 @@ int main(void) {
     int32_t _lit_0[] = {1, 2, 3};
     const Array_i32 arr = {.data = _lit_0, .length = 3, .capacity = 3};
     Array_f64 doubled = tsc_array_map_i32_f64(arr, _lambda_0_f64);
-    printf("%g\n", (double)(doubled.data[0]));
-    printf("%g\n", (double)(doubled.data[1]));
-    printf("%g\n", (double)(doubled.data[2]));
+    printf("%s\n", tsc_dtoa((double)(doubled.data[0])));
+    printf("%s\n", tsc_dtoa((double)(doubled.data[1])));
+    printf("%s\n", tsc_dtoa((double)(doubled.data[2])));
     tsc_array_free_f64(&doubled);
     return 0;
 }

@@ -8,9 +8,9 @@ int main(void) {
     double b = (double)(((int32_t)(x * 2)) | ((int32_t)(y)));
     double c = (double)(((int32_t)(x + 1)) & ((int32_t)(y - 1)));
     double d = (double)(((int32_t)(x - 3)) ^ ((int32_t)(y + 2)));
-    printf("%g\n", (double)(a));
-    printf("%g\n", (double)(b));
-    printf("%g\n", (double)(c));
-    printf("%g\n", (double)(d));
+    printf("%s\n", tsc_dtoa((double)(a)));
+    printf("%s\n", tsc_dtoa((double)(b)));
+    printf("%s\n", tsc_dtoa((double)(c)));
+    printf("%s\n", tsc_dtoa((double)(d)));
     return 0;
 }
