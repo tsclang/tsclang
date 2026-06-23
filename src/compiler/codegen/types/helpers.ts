@@ -1,4 +1,3 @@
-// @ts-nocheck
 // helpers.js
 const _RUNTIME_ET = new Set(['i32', 'f64', 'string']);
 const _RUNTIME_MAP = new Set(['i32_i32', 'i32_f64', 'f64_f64', 'string_string']);
@@ -24,15 +23,15 @@ export default {
     }
     if (ct.startsWith('tuple_')) {
       const def = this.classes.get(ct);
-      if (def?.fields) return def.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+      if (def?.fields) return def.fields.reduce((s: any, f: any) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
       return 4;
     }
     const cls = this.classes.get(ct);
     if (cls?.isStruct && cls.fields) {
-      return cls.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+      return cls.fields.reduce((s: any, f: any) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
     }
     if (cls?.isTuple && cls.fields) {
-      return cls.fields.reduce((s, f) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
+      return cls.fields.reduce((s: any, f: any) => s + this._stackSizeOf(this.resolveType(f.typeAnn)), 0);
     }
     if (ct.startsWith('Array_') || ct.startsWith('TscMap_') || ct.startsWith('Map_') || ct.startsWith('Set_') || ct.startsWith('TscSet_')) {
       return this._ptrBytes();

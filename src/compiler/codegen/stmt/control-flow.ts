@@ -1,4 +1,3 @@
-// @ts-nocheck
 export default {
   _emitRetainIfNeeded(valC, valNode, p) {
     if (valNode.kind === 'Ident') {
@@ -255,8 +254,8 @@ export default {
       case 'If': {
         // Detect narrowing: if (x != null) тЖТ narrow x to x.value inside block
         const isNullLit = (n) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
-        let narrowVar = null;
-        let upgradeReleaseVar = null;
+        let narrowVar: any = null;
+        let upgradeReleaseVar: any = null;
         if (node.test.kind === 'Binary' && (node.test.op === '!=' || node.test.op === '!==')) {
           const nullSide = isNullLit(node.test.right) ? 'right' : isNullLit(node.test.left) ? 'left' : null;
           if (nullSide) {
@@ -279,8 +278,8 @@ export default {
           }
         }
         // Detect unknown narrowing: typeof x === "typename" → narrow x inside if-block
-        let unknownNarrowVar = null;
-        let unknownNarrowCtype = null;
+        let unknownNarrowVar: any = null;
+        let unknownNarrowCtype: any = null;
         let unknownNarrowInElse = false;
         if (node.test.kind === 'Binary' && (node.test.op === '===' || node.test.op === '!==')) {
           const _checkUnknownNarrow = (typeofSide, nameSide) => {
@@ -445,15 +444,15 @@ export default {
         let initC = '';
         if (node.init) {
           if (node.init.kind === 'VarDecls') {
-            const parts = node.init.decls.map(d => {
+            const parts = node.init.decls.map((d: any) => {
               const ctype = d.typeAnn ? this.resolveType(d.typeAnn) : (d.init ? this.inferType(d.init) : 'int32_t');
               const initExpr = d.init ? this.exprToC(d.init, lines, depth) : '0';
               this.define(d.name, { ctype, varKind: d.varKind });
               return { ctype, name: d.name, initExpr };
             });
-            const allSameType = parts.every(pt => pt.ctype === parts[0].ctype);
+            const allSameType = parts.every((pt: any) => pt.ctype === parts[0].ctype);
             if (allSameType) {
-              initC = `${parts[0].ctype} ` + parts.map(pt => `${pt.name} = ${pt.initExpr}`).join(', ');
+              initC = `${parts[0].ctype} ` + parts.map((pt: any) => `${pt.name} = ${pt.initExpr}`).join(', ');
             } else {
               const I = ' '.repeat(this.indent * depth);
               for (const pt of parts) {
@@ -477,14 +476,14 @@ export default {
           this._loopDepth++;
           const IS = ' '.repeat(this.indent * (depth + 1));
           if (node.test) {
-            const testLines = [];
+            const testLines: any[] = [];
             const testC = this._truthyToC(node.test, testLines, depth + 1);
             for (const tl of testLines) lines.push(tl);
             lines.push(`${IS}if (!(${testC})) break;`);
           }
           this.visitStmtOrBlock(node.body, lines, depth + 1);
           if (node.update) {
-            const updLines = [];
+            const updLines: any[] = [];
             const updC = this.exprToC(node.update, updLines, depth + 1);
             if (updLines.length > 0) {
               for (const ul of updLines) lines.push(ul);
@@ -876,7 +875,7 @@ export default {
           p('while (1) {');
           this._pushLoopCleanups();
           this._loopDepth++;
-          const condLines = [];
+          const condLines: any[] = [];
           const testC = this._truthyToC(node.test, condLines, depth + 1);
           for (const cl of condLines) lines.push(cl);
           const IS = ' '.repeat(this.indent * (depth + 1));
@@ -913,7 +912,7 @@ export default {
           this._loopDepth++;
           this.visitStmtOrBlock(node.body, lines, depth + 1);
           const IS = ' '.repeat(this.indent * (depth + 1));
-          const condLines = [];
+          const condLines: any[] = [];
           const testC = this._truthyToC(node.test, condLines, depth + 1);
           for (const cl of condLines) lines.push(cl);
           lines.push(`${IS}if (!(${testC})) break;`);
@@ -986,7 +985,7 @@ export default {
           p(headerLine);
           this._pushLoopCleanups();
           this._loopDepth++;
-          const bodyLines = [];
+          const bodyLines: any[] = [];
           this.visitStmtOrBlock(inner.body, bodyLines, depth + 1);
           for (const bl of bodyLines) lines.push(bl);
           this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
@@ -1089,7 +1088,7 @@ export default {
         }
 
         // Check if any catch clause catches MathError
-        const hasMathCatch = (node.catches ?? []).some(c => c.typeAnn?.name === 'MathError');
+        const hasMathCatch = (node.catches ?? []).some((c: any) => c.typeAnn?.name === 'MathError');
 
         if (hasMathCatch) {
           const catchIdx = this.tempCount++;
@@ -1138,7 +1137,7 @@ export default {
         }
 
         // Check if try body contains a call to a throws function
-        const _findThrowsFuncCall = (stmts) => {
+        const _findThrowsFuncCall = (stmts: any): any => {
           for (const s of stmts) {
             if (s.kind === 'ExprStmt' && s.expr?.kind === 'Call') {
               const callee = s.expr.callee;
@@ -1159,7 +1158,7 @@ export default {
           // New Result-based pattern
           this._emitTryCatchResult(node, tryStmts, throwsFuncCallStmt, lines, depth);
         } else {
-          const _hasPoolNew = (stmts) => {
+          const _hasPoolNew = (stmts: any): any => {
             for (const s of stmts) {
               if (s.kind === 'VarDecl' && s.init?.kind === 'New') {
                 const cls = this.classes.get(s.init.name);

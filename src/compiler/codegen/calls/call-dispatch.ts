@@ -1,4 +1,3 @@
-// @ts-nocheck
 export default {
   callToC(node, lines, depth) {
     const { callee, args } = node;
@@ -129,7 +128,7 @@ export default {
       const closure = this.hoistClosure(callee, `_iife_${this.closureCount ?? 0}`);
       if (closure) {
         const argsC = this.argsToC(args, lines, depth);
-        const paramTypes = args.map(a => this.inferType(a.expr) ?? 'void *');
+        const paramTypes = args.map((a: any) => this.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
         const envName = `_iife_env_${this.closureCount - 1}`;
         lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
@@ -143,21 +142,21 @@ export default {
 
     // Plain function call вЂ” look up mangled name in scope
     let calleeC;
-    let sym = null;
+    let sym: any = null;
     if (callee.kind === 'Ident') {
       sym = this.lookup(callee.name);
       // Overload resolution: if there are multiple overloads, pick by arg count then type
       if (sym?.overloads && sym.overloads.length > 0) {
-        const argCount = args.filter(a => !a.spread).length;
+        const argCount = args.filter((a: any) => !a.spread).length;
         // First filter by arg count
-        const countMatches = sym.overloads.filter(o => o.params.filter(p => !p.rest).length === argCount);
+        const countMatches = sym.overloads.filter((o: any) => o.params.filter((p: any) => !p.rest).length === argCount);
         let match;
         if (countMatches.length === 1) {
           match = countMatches[0];
         } else if (countMatches.length > 1) {
           // Multiple count matches: pick by type
-          match = countMatches.find(o =>
-            args.every((a, i) => {
+          match = countMatches.find((o: any) =>
+            args.every((a: any, i: any) => {
               const p = o.params[i];
               if (!p?.typeAnn) return true;
               const expectedCtype = this.resolveType(p.typeAnn);
@@ -198,7 +197,7 @@ export default {
     // tsc_closure call: closure variable or func-ptr variable (not a regular function)
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = this.argsToC(args, lines, depth);
-      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
+      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: any) => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
       if (sym.isClosure || !sym.funcPtr) {
         this._releaseQuarantineBy(callee.name);
@@ -216,14 +215,14 @@ export default {
       const calleeType = this.inferType(callee);
       if (calleeType === 'tsc_closure') {
         const argsC = this.argsToC(args, lines, depth);
-        let paramTypes = null;
+        let paramTypes: any = null;
         let retType = this.inferType(node) ?? 'void';
         if (callee.kind === 'Index' && callee.object.kind === 'Ident') {
           const arrSym = this.lookup(callee.object.name);
           if (arrSym?._arrElemClosureParams) paramTypes = arrSym._arrElemClosureParams;
           if (arrSym?._arrElemClosureRet) retType = arrSym._arrElemClosureRet;
         }
-        if (!paramTypes) paramTypes = (node.args ?? []).map(a => this.inferType(a.expr) ?? 'void *');
+        if (!paramTypes) paramTypes = (node.args ?? []).map((a: any) => this.inferType(a.expr) ?? 'void *');
         const sigArgs = paramTypes.join(', ') || 'void';
         return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
       }
@@ -232,7 +231,7 @@ export default {
     // Libc variadic call or user Scalar-variadic call: pass args as raw C values
     if (sym?._isLibcVariadic || sym?._isScalarVariadic) {
       const _libcVmap = { printf: 'vprintf', fprintf: 'vfprintf', sprintf: 'vsprintf', snprintf: 'vsnprintf', scanf: 'vscanf', sscanf: 'vsscanf', fscanf: 'vfscanf' };
-      const _toRawArg = (a) => {
+      const _toRawArg = (a: any): any => {
         // Spread of a va_list в†’ va_list variable name (for v-variant forwarding)
         if (a.spread) {
           const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
@@ -247,15 +246,15 @@ export default {
         return { raw: at === 'String' ? `${ac}.data` : ac };
       };
       const processed = args.map(_toRawArg);
-      const vaListArg = processed.find(p => p.isVaList);
+      const vaListArg = processed.find((p: any) => p.isVaList);
       if (vaListArg) {
         // Forward to v-variant: printf(fmt, ...args) в†’ vprintf(fmt, _va_args)
         const vName = _libcVmap[calleeC] ?? ('v' + calleeC);
-        const normalParts = processed.filter(p => !p.isVaList).map(p => p.raw);
+        const normalParts = processed.filter((p: any) => !p.isVaList).map((p: any) => p.raw);
         normalParts.push(vaListArg.vaListName);
         return `${vName}(${normalParts.join(', ')})`;
       }
-      return `${calleeC}(${processed.map(p => p.raw).join(', ')})`;
+      return `${calleeC}(${processed.map((p: any) => p.raw).join(', ')})`;
     }
 
     // Check for any-typed params: cannot pass typed value as any
@@ -281,22 +280,22 @@ export default {
       if (restParam.typeAnn?.kind === 'TypeArray') et = this.resolveType(restParam.typeAnn.element);
       else if (restParam.typeAnn) et = this.resolveType(restParam.typeAnn);
       // Normal args before rest
-      const normalArgs = args.slice(0, restIdx).map(a => this.exprToC(a.expr, lines, depth));
+      const normalArgs = args.slice(0, restIdx).map((a: any) => this.exprToC(a.expr, lines, depth));
       // Variadic args from restIdx onward
       const varArgs = args.slice(restIdx);
       const I = ' '.repeat(this.indent * depth);
       const restName = `_rest_${this.restCount++}`;
-      const varArgsC = varArgs.map(a => this.exprToC(a.expr, lines, depth)).join(', ');
+      const varArgsC = varArgs.map((a: any) => this.exprToC(a.expr, lines, depth)).join(', ');
       lines.push(`${I}${et} ${restName}[] = {${varArgsC}};`);
       const allArgs = [...normalArgs, restName, String(varArgs.length)];
       return `${calleeC}(${allArgs.join(', ')})`;
     }
 
     // Fill in default params at call site if fewer args are provided (skip if any spread arg)
-    const hasSpread = args.some(a => a.spread);
-    if (!hasSpread && symParams && args.length < symParams.filter(p => !p.rest).length) {
-      const normalParams = symParams.filter(p => !p.rest);
-      const filled = normalParams.map((p, i) => {
+    const hasSpread = args.some((a: any) => a.spread);
+    if (!hasSpread && symParams && args.length < symParams.filter((p: any) => !p.rest).length) {
+      const normalParams = symParams.filter((p: any) => !p.rest);
+      const filled = normalParams.map((p: any, i: any) => {
         if (i < args.length) {
           return this.exprToC(args[i].expr, lines, depth);
         }
@@ -308,10 +307,10 @@ export default {
 
     // If we have symParams, coerce string literals to enum values for string-literal-union params
     // (only when no spread args вЂ” spread needs argsToC expansion)
-    const hasSpreadArgs = args.some(a => a.spread);
+    const hasSpreadArgs = args.some((a: any) => a.spread);
     if (symParams && !hasSpreadArgs) {
       const I = ' '.repeat(this.indent * depth);
-      const _callMutBorrowedSyms = [];
+      const _callMutBorrowedSyms: any[] = [];
       // Pre-pass: detect same variable passed as Mut<T> to multiple params of the same call
       {
         const mutArgNames = new Map();
@@ -333,7 +332,7 @@ export default {
           }
         }
       }
-      const coercedArgs = args.map((a, i) => {
+      const coercedArgs = args.map((a: any, i: any) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
         if (a.expr.kind === 'Ident') {
@@ -611,13 +610,13 @@ export default {
     }
 
     // Array.of
-    const itemsC = args.map(a => this.exprToC(a.expr, lines, depth));
+    const itemsC = args.map((a: any) => this.exprToC(a.expr, lines, depth));
     const count = itemsC.length;
     const tmpArr = `_of_${this.tempCount++}`;
     for (let i = 0; i < count; i++) {
       lines.push(`${I}${etCType} ${tmpArr}_${i} = ${itemsC[i]};`);
     }
-    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_, i) => `${tmpArr}_${i}`).join(', ')}};`);
+    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_: any, i: any) => `${tmpArr}_${i}`).join(', ')}};`);
     lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
     return `${tmpArr}`;
   },
@@ -641,15 +640,15 @@ export default {
       const tmpObj = `_obj_${this.tempCount++}`;
       lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
       this._ensureArrayStruct('Array_string', 'String');
-      const keysData = fields.map(f => `STR_LIT("${f.name}")`).join(', ');
+      const keysData = fields.map((f: any) => `STR_LIT("${f.name}")`).join(', ');
       const tmpArr = `_keys_${this.tempCount++}`;
       lines.push(`${I}String ${tmpArr}_data[] = {${keysData}};`);
       lines.push(`${I}Array_string ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
       return `${tmpArr}`;
     }
-    const fieldTypes = fields.map(f => this.resolveType(f.typeAnn));
+    const fieldTypes = fields.map((f: any) => this.resolveType(f.typeAnn));
     const firstType = fieldTypes[0];
-    const allSame = fieldTypes.every(t => t === firstType);
+    const allSame = fieldTypes.every((t: any) => t === firstType);
     if (!allSame) {
       throw this.error('Object.values/entries requires uniform field types', node);
     }
@@ -669,7 +668,7 @@ export default {
       srcExpr = tmpObj;
     }
     if (prop === 'values') {
-      const valsData = fields.map(f => `&${srcExpr}.${f.name}`).join(', ');
+      const valsData = fields.map((f: any) => `&${srcExpr}.${f.name}`).join(', ');
       const tmpArr = `_vals_${this.tempCount++}`;
       lines.push(`${I}${firstType} *${tmpArr}_data[] = {${valsData}};`);
       lines.push(`${I}${refArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
@@ -688,7 +687,7 @@ export default {
       ], readonly: false });
     }
     this._ensureArrayStruct(tupleArrName, tupleName);
-    const entriesData = fields.map(f => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
+    const entriesData = fields.map((f: any) => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
     const tmpArr = `_entries_${this.tempCount++}`;
     lines.push(`${I}${tupleName} ${tmpArr}_data[] = {${entriesData}};`);
     lines.push(`${I}${tupleArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);

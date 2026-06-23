@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { inferLiteralCType } from '../../types.js';
 // infer.js
 export default {
@@ -43,7 +42,7 @@ export default {
           const innerIdent = objType.slice(4);
           const innerCType = this._arrIdentToCType(innerIdent);
           const classDef = this.classes.get(innerCType);
-          const field = classDef?.fields?.find(f => f.name === node.prop);
+          const field = classDef?.fields?.find((f: any) => f.name === node.prop);
           const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
           return `opt_${this.cTypeToIdent(fieldCType)}`;
         }
@@ -87,19 +86,19 @@ export default {
           if (objSym) {
             const structDef = this.classes.get(objSym.ctype) ?? this.classes.get(objSym.derefType);
             if (structDef?.fields) {
-              const field = structDef.fields.find(f => (f.name ?? f) === node.prop);
+              const field = structDef.fields.find((f: any) => (f.name ?? f) === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
               if (field?.ctype) return field.ctype;
               // Check inherited fields from superClass
               if (structDef.superClass) {
                 const baseDef = this.classes.get(structDef.superClass);
-                const baseField = baseDef?.fields?.find(f => (f.name ?? f) === node.prop);
+                const baseField = baseDef?.fields?.find((f: any) => (f.name ?? f) === node.prop);
                 if (baseField?.typeAnn) return this.resolveType(baseField.typeAnn);
               }
             }
             // Labeled tuple access: p.x → type of field with label 'x'
             if (structDef?.isTuple) {
-              const field = structDef.fields.find(f => f.label === node.prop);
+              const field = structDef.fields.find((f: any) => f.label === node.prop);
               if (field) return field.ctype.replace(' *', '');
             }
           }
@@ -162,7 +161,7 @@ export default {
               sd = this.classes.get(stripped);
             }
             if (sd?.fields) {
-              const f = sd.fields.find(ff => (ff.name ?? ff) === node.prop);
+              const f = sd.fields.find((ff: any) => (ff.name ?? ff) === node.prop);
               if (f?.typeAnn) return this.resolveType(f.typeAnn);
               if (f?.ctype) return f.ctype;
             }
@@ -182,7 +181,7 @@ export default {
           return `Array_${this.cTypeToIdent(et)}`;
         }
         if (node.name === 'Map') {
-          const [kt, vt] = (node.typeArgs ?? []).map(t => this.resolveType(t));
+          const [kt, vt] = (node.typeArgs ?? []).map((t: any) => this.resolveType(t));
           const k = kt ? this.cTypeToIdent(kt) : 'string';
           const v = vt ? this.cTypeToIdent(vt) : 'i32';
           return `TscMap_${k}_${v}`;
@@ -198,7 +197,7 @@ export default {
             const ct = node.typeArgs[i] ? this.resolveType(node.typeArgs[i]) : 'int32_t';
             subst.set(tmpl.typeParams[i].name, ct);
           }
-          const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+          const suffix = tmpl.typeParams.map((tp: any) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
           return `${node.name}_${suffix}`;
         }
         const poolCls = this.classes.get(node.name);
@@ -208,7 +207,7 @@ export default {
       }
       case 'ObjLit': return 'int32_t';
       case 'ArrayLit': {
-        const first = node.elems.find(e => !e.spread);
+        const first = node.elems.find((e: any) => !e.spread);
         const et = first ? this.inferType(first.expr) : 'int32_t';
         return `Array_${this.cTypeToIdent(et)}`;
       }
@@ -404,13 +403,13 @@ export default {
       }
       const cls2 = this.classes.get(lookupType);
       if (cls2?.methods) {
-        const m2 = cls2.methods.find(m => m.name === node.callee.prop);
+        const m2 = cls2.methods.find((m: any) => m.name === node.callee.prop);
         if (m2?.returnType) return this.resolveType(m2.returnType);
       }
       const ifaceType = sym2?.ctype ?? objType2;
       const ifaceDef = this.interfaces.get(ifaceType);
       if (ifaceDef) {
-        const m3 = ifaceDef.find(m => m.kind === 'MethodSig' && m.name === node.callee.prop);
+        const m3 = ifaceDef.find((m: any) => m.kind === 'MethodSig' && m.name === node.callee.prop);
         if (m3?.returnType) return this.resolveType(m3.returnType);
       }
     }

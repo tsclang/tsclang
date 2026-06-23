@@ -275,9 +275,9 @@ function resolveRange(pkg, range) {
   const entry = MOCK_REGISTRY[pkg];
   const versions = entry?.versions ?? (Array.isArray(entry) ? entry : null);
   if (!versions) return range.replace(/^[^\d]*/, ''); // fallback: strip operator
-  const satisfying = versions.filter(v => semverSatisfies(v, range));
+  const satisfying = versions.filter((v: any) => semverSatisfies(v, range));
   if (satisfying.length === 0) return null;
-  return satisfying.sort((a, b) => semverCmp(semverParse(a), semverParse(b))).pop();
+  return satisfying.sort((a: any, b: any) => semverCmp(semverParse(a), semverParse(b))).pop();
 }
 
 // Detect if two ranges are compatible (simple: same major for ^ ranges)
@@ -318,7 +318,7 @@ if (command === 'validate-config') {
     process.exit(1);
   }
 
-  const cfgErr = (msg) => {
+  const cfgErr = (msg: any): any => {
     process.stderr.write(`ConfigError: tsc.package.json: ${msg}\n`);
     process.exit(1);
   };
@@ -440,7 +440,7 @@ if (command === 'validate-config') {
 // ---------------------------------------------------------------------------
 if (command === 'init') {
   // Parse positional name and flags
-  let name = null;
+  let name: any = null;
   for (let i = 1; i < args.length; i++) {
     if (!args[i].startsWith('-')) {
       name = args[i];
@@ -547,9 +547,9 @@ if (command === 'format') {
 // ---------------------------------------------------------------------------
 if (command === 'lint') {
   const fixFlag    = args.includes('--fix');
-  const ruleArg    = args.find(a => a.startsWith('--rule='));
+  const ruleArg    = args.find((a: any) => a.startsWith('--rule='));
   const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
-  const inputFile  = args.find(a => !a.startsWith('--') && a !== 'lint');
+  const inputFile  = args.find((a: any) => !a.startsWith('--') && a !== 'lint');
   if (!inputFile) {
     _missingInput('lint');
     process.exit(1);
@@ -563,7 +563,7 @@ if (command === 'lint') {
     const tokens = lex(src, filename);
     const { ast: parsedAst, errors: parseErrors } = parse(tokens, filename, src);
     if (parseErrors.length > 0) {
-      const bag = parseErrors.map(e => Object.assign(e, { kind: 'error' }));
+      const bag = parseErrors.map((e: any) => Object.assign(e, { kind: 'error' }));
       throw { isTscErrorBag: true, errors: bag };
     }
     ast = parsedAst;
@@ -577,12 +577,12 @@ if (command === 'lint') {
   if (fixFlag) {
     const fixed = applyFixes(src, diagnostics);
     writeFileSync(inputPath, fixed, 'utf8');
-    const remaining = diagnostics.filter(d => !d.fixable);
+    const remaining = diagnostics.filter((d: any) => !d.fixable);
     for (const d of remaining) {
       const tag = d.severity === 'error' ? 'LintError' : 'LintWarning';
       process.stderr.write(`${tag}[${d.rule}]: ${d.message} at line ${d.line}\n`);
     }
-    process.exit(remaining.some(d => d.severity === 'error') ? 1 : 0);
+    process.exit(remaining.some((d: any) => d.severity === 'error') ? 1 : 0);
   }
 
   for (const d of diagnostics) {
@@ -661,7 +661,7 @@ if (command === 'publish') {
 // ---------------------------------------------------------------------------
 if (command === 'install') {
   const productionFlag = args.includes('--production');
-  const pkgArg = args.find(a => !a.startsWith('--') && a !== 'install');
+  const pkgArg = args.find((a: any) => !a.startsWith('--') && a !== 'install');
 
   if (productionFlag && !pkgArg) {
     // --production: skip devDependencies, nothing to install in mock
@@ -690,12 +690,12 @@ if (command === 'install') {
       }
     }
     // Remove packages no longer in manifest
-    const removed = [];
+    const removed: any[] = [];
     for (const name of Object.keys(lock.packages)) {
       if (!deps[name]) { delete lock.packages[name]; removed.push(name); }
     }
     _writeLock(lock);
-    const parts = [];
+    const parts: any[] = [];
     if (installed) parts.push(`${installed} installed`);
     if (updated) parts.push(`${updated} updated`);
     if (removed.length) parts.push(`${removed.length} removed`);
@@ -767,7 +767,7 @@ if (command === 'install') {
 // update command
 // ---------------------------------------------------------------------------
 if (command === 'update') {
-  const pkgArg = args.find(a => !a.startsWith('--') && a !== 'update');
+  const pkgArg = args.find((a: any) => !a.startsWith('--') && a !== 'update');
 
   if (pkgArg) {
     const lock = _readLock();
@@ -867,7 +867,7 @@ if (command === 'build') {
   }
 
   const _validNumberTypes = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64']);
-  const _flagVal = (name) => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : null; };
+  const _flagVal = (name: any): any => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : null; };
   const _targetFlag       = _flagVal('--target');
   const _defaultNumberFlag = _flagVal('--default-number');
   const _allocatorFlag    = _flagVal('--allocator');
@@ -920,12 +920,12 @@ if (command === 'build') {
     return null;
   }
 
-  let _capabilities = null;
-  let _profileTarget = null;
-  let _mcu = null;
+  let _capabilities: any = null;
+  let _profileTarget: any = null;
+  let _mcu: any = null;
 
-  let _buildCfg = null;
-  let _pkgStrict = null;
+  let _buildCfg: any = null;
+  let _pkgStrict: any = null;
 
   function _validateStrictRules(rules, source) {
     if (!Array.isArray(rules)) {
@@ -944,7 +944,7 @@ if (command === 'build') {
   if (_platformFlag) {
     const prof = loadProfile(_platformFlag);
     if (!prof) {
-      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter(f => f.endsWith('.d.tsc') || f.endsWith('.json')).map(f => f.replace(/\.(d\.tsc|json)$/, '')).filter((v, i, a) => a.indexOf(v) === i).join(', ')}\n`);
+      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter((f: any) => f.endsWith('.d.tsc') || f.endsWith('.json')).map((f: any) => f.replace(/\.(d\.tsc|json)$/, '')).filter((v, i, a) => a.indexOf(v) === i).join(', ')}\n`);
       process.exit(1);
     }
     _capabilities = prof;
@@ -985,7 +985,7 @@ if (command === 'build') {
     }
   }
 
-  let _pkgAliases = null;
+  let _pkgAliases: any = null;
   if (!_buildFlag) {
     const p = findPackageJson(dirname(resolve(inputFile)));
     if (p) {
@@ -1044,7 +1044,7 @@ if (command === 'build') {
 
   function capabilityDefines(caps) {
     if (!caps) return [];
-    const defs = [];
+    const defs: any[] = [];
     if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
     if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
     if (caps.console_uart) {
@@ -1060,7 +1060,7 @@ if (command === 'build') {
   // Check lock file staleness
   const _stale = _checkLockStale();
   if (_stale) {
-    const parts = [];
+    const parts: any[] = [];
     if (_stale.added.length) parts.push(`added: ${_stale.added.join(', ')}`);
     if (_stale.removed.length) parts.push(`removed: ${_stale.removed.join(', ')}`);
     if (_stale.changed.length) parts.push(`changed: ${_stale.changed.join(', ')}`);
@@ -1251,7 +1251,7 @@ if (command === 'build') {
 
   if (watchMode) {
     const ts = () => new Date().toLocaleTimeString();
-    let debounceTimer = null;
+    let debounceTimer: any = null;
     let watchedFiles = new Set();
 
     function onFileChange() {

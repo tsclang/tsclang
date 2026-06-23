@@ -1,4 +1,3 @@
-// @ts-nocheck
 export default {
   _dispatchStdLib(node, lines, depth) {
     const { callee, args } = node;
@@ -106,7 +105,7 @@ export default {
           const cfgArg = args[0]?.expr;
           let baud = '9600';
           if (cfgArg?.kind === 'ObjLit') {
-            const bp = cfgArg.props?.find(p => p.key === 'baud');
+            const bp = cfgArg.props?.find((p: any) => p.key === 'baud');
             if (bp?.value) baud = this.exprToC(bp.value, lines, depth);
           }
           return `tsc_uart_init(${baud})`;
@@ -243,7 +242,7 @@ export default {
         if (callee.name === 'batch') {
           // batch: emit static fn that accesses already-captured signal refs
           this._batchCount = (this._batchCount ?? 0) + 1;
-          const batchLines = [];
+          const batchLines: any[] = [];
           if (arrow?.kind === 'Arrow') {
             // Use persistent capture refs inside batch body
             const _savedMap = this._capturedSignalMap;
@@ -266,9 +265,9 @@ export default {
         this._reactiveClosureCount = (this._reactiveClosureCount ?? 0) + 1;
 
         // Find free Signal vars
-        const paramNames = new Set((arrow.params ?? []).map(p => p.name));
+        const paramNames = new Set((arrow.params ?? []).map((p: any) => p.name));
         const capturedSignals = new Map();
-        const walkFreeVars = (node) => {
+        const walkFreeVars = (node: any): any => {
           if (!node || typeof node !== 'object') return;
           if (Array.isArray(node)) { node.forEach(walkFreeVars); return; }
           if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee.object?.kind === 'Ident') {
@@ -290,7 +289,7 @@ export default {
         if (capturedSignals.size > 0) {
           const envName = `_closure_${n}_env`;
           const fields = [...capturedSignals.entries()].map(([nm, sym]) => `${sym.ctype} *${nm};`).join(' ');
-          const hasGlobalsBefore = this.topLevel.some(l => l.trim().length > 0);
+          const hasGlobalsBefore = this.topLevel.some((l: any) => l.trim().length > 0);
           if (hasGlobalsBefore) {
             this.topLevel.push(`typedef struct { ${fields} } ${envName};`);
             this.topLevel.push(`static ${envName} _closure_${n}_captured;`);
@@ -312,7 +311,7 @@ export default {
         const sigType = callee.name === 'computed' ? `Signal_${etIdent}` : null;
 
         if (callee.name === 'computed') this._inComputedFn = true;
-        const fnLines = [];
+        const fnLines: any[] = [];
         this.pushScope();
         if (arrow.body.kind === 'Block') this.visitBlock(arrow.body, fnLines, 0);
         else { const c = this.exprToC(arrow.body, fnLines, 0); fnLines.push(`return ${c};`); }
@@ -333,7 +332,7 @@ export default {
 
         // Emit env init in current scope (main/function body)
         if (capturedSignals.size > 0) {
-          const envInit = `(_closure_${n}_env){ ${[...capturedSignals.keys()].map(nm => `.${nm} = &${nm}`).join(', ')} }`;
+          const envInit = `(_closure_${n}_env){ ${[...capturedSignals.keys()].map((nm: any) => `.${nm} = &${nm}`).join(', ')} }`;
           lines.push(' '.repeat(this.indent * depth) + `_closure_${n}_captured = ${envInit};`);
           // Track persistent captures for batch fns (separate from fn-body map)
           for (const nm of capturedSignals.keys()) {
@@ -375,17 +374,17 @@ export default {
           const dataExprC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(_empty_arr)';
           return `tsc_ws_send_bytes(${wsRef}, ${dataExprC}.data, ${dataExprC}.length)`;
         }
-        const _wsHoistCb = (paramTypes) => {
+        const _wsHoistCb = (paramTypes: any): any => {
           const cbArg = args[0]?.expr;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             const cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
             return cbName;
           }
           return cbArg ? this.exprToC(cbArg, lines, depth) : 'NULL';
         };
-        if (_wsProp === 'onMessage') return `tsc_ws_on_message(${wsRef}, ${_wsHoistCb()})`;
+        if (_wsProp === 'onMessage') return `tsc_ws_on_message(${wsRef}, ${_wsHoistCb(undefined)})`;
         if (_wsProp === 'onClose')   return `tsc_ws_on_close(${wsRef}, ${_wsHoistCb([])})`;
       }
       // WebSocketServer methods: server.onConnect(cb), server.listen(port)
@@ -400,10 +399,10 @@ export default {
           const cbArg = args[0]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
+            const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
             const paramTypes = ['TscWebSocket *'];
-            const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i] ?? `_p${i}`}`);
-            const handlerLines = [];
+            const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines: any[] = [];
             this.pushScope();
             for (let i = 0; i < Math.min(paramNames.length, paramTypes.length); i++) {
               this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const', _isWebSocket: true });
@@ -443,9 +442,9 @@ export default {
         const handlerName = `_handler_${n}`;
         if (cbArg?.kind === 'Arrow') {
           const paramTypes = ['TscSocket *'];
-          const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
-          const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i]}`);
-          const handlerLines = [];
+          const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
+          const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i]}`);
+          const handlerLines: any[] = [];
           this.pushScope();
           for (let i = 0; i < paramNames.length; i++) {
             this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const' });
@@ -476,10 +475,10 @@ export default {
           this._handlerCount = n + 1;
           const handlerName = `_handler_${n}`;
           if (cbArg?.kind === 'Arrow') {
-            const paramNames = (cbArg.params ?? []).map((p, i) => p.name ?? `_p${i}`);
+            const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
             const paramTypes = ['TscRequest *', 'TscResponse *'];
-            const paramStrs = paramTypes.map((t, i) => `${t}${paramNames[i] ?? `_p${i}`}`);
-            const handlerLines = [];
+            const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines: any[] = [];
             const savedInFunc = this.inFunction;
             const savedStackLen = this._blockCleanupStack.length;
             this.inFunction = true;
@@ -542,7 +541,7 @@ export default {
           const cbArg = args[1]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = (cbArg.params ?? []).map(p => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = (cbArg.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
           } else {
@@ -616,11 +615,11 @@ export default {
           }
           _temporalSuppressConst();
           if ('days' in props && !('hours' in props) && !('minutes' in props)) {
-            return `tsc_duration_from_days(${props.days ?? '0'})`;
+            return `tsc_duration_from_days(${(props as any).days ?? '0'})`;
           }
-          const h = props.hours ?? '0';
-          const m = props.minutes ?? '0';
-          const s = props.seconds ?? '0';
+          const h = (props as any).hours ?? '0';
+          const m = (props as any).minutes ?? '0';
+          const s = (props as any).seconds ?? '0';
           return `tsc_duration_from_hms(${h}, ${m}, ${s})`;
         }
       }

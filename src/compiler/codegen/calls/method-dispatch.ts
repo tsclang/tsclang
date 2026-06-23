@@ -1,10 +1,9 @@
-// @ts-nocheck
 export default {
   methodCall(callee, args, lines, depth) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
-      const chainLinks = [];
+      const chainLinks: any[] = [];
       while (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
         chainLinks.push(baseObject);
         baseObject = baseObject.callee.object;
@@ -17,8 +16,8 @@ export default {
         const nextProp = (i > 0) ? chainLinks[i - 1].callee.prop : callee.prop;
         const nextTargetClass = this.classes.get(resultType);
         const nextTargetIface = this.interfaces.get(resultType);
-        const hasNextMethod = (nextTargetClass?.methods?.some(m => m.name === nextProp))
-          || (nextTargetIface?.some(m => m.kind === 'MethodSig' && m.name === nextProp))
+        const hasNextMethod = (nextTargetClass?.methods?.some((m: any) => m.name === nextProp))
+          || (nextTargetIface?.some((m: any) => m.kind === 'MethodSig' && m.name === nextProp))
           || (resultType.startsWith('Array_') && ['map','filter','slice','join','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap','keys','values','entries','flat','concat','includes','indexOf','lastIndexOf','at','with','toReversed','toSorted','toSpliced','clone','pop','shift','unshift','splice','reverse','push','resize','reallocate','fill','set','view','viewMut','length','capacity'].includes(nextProp))
           || (resultType === 'String' && ['slice','indexOf','lastIndexOf','at','includes','startsWith','endsWith','split','trim','toUpperCase','toLowerCase','replace','padStart','padEnd','repeat','charAt','charCodeAt','concat','codePoints','graphemes','replaceAll','substring','trimStart','trimEnd','search','match','matchAll','length','toString'].includes(nextProp));
         if (hasNextMethod) {
@@ -55,7 +54,7 @@ export default {
       baseObject = { kind: 'Ident', name: tmpName };
     }
     const prop  = callee.prop;
-    const sym   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    const sym: any   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = true;
     const objC = this.exprToC(baseObject, lines, depth);
     if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = false;
@@ -73,7 +72,7 @@ export default {
       arrObjC = `(*${objC})`;
     }
 
-    const lambdaOutET = (argsC) => {
+    const lambdaOutET = (argsC: any): any => {
       const m = argsC.match(/_lambda_\d+_(\w+)/);
       return m ? m[1] : et;
     };
@@ -81,7 +80,7 @@ export default {
     const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_')
                      || (sym?.isRefParam && sym?.derefType?.startsWith('Array_'));
     const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap']);
-    let cbFnName = null;
+    let cbFnName: any = null;
     let cbExtraArgs = '';
     let argsForC = args;
     if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
@@ -100,7 +99,7 @@ export default {
       if (cbFnName) {
         argsForC = args.slice(1);
         if (argsForC.length > 0) {
-          cbExtraArgs = argsForC.map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth)).join(', ');
+          cbExtraArgs = argsForC.map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth)).join(', ');
         }
       }
     }
@@ -356,7 +355,7 @@ export default {
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const spStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const spDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const spItems = argsForC.slice(2).map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const spItems = argsForC.slice(2).map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
           const spArgs = spItems.length > 0 ? `${spStart}, ${spDel}, ${spItems.join(', ')}` : `${spStart}, ${spDel}`;
           return `tsc_array_splice_${et}(&${objC}, ${spArgs})`;
         }
@@ -405,7 +404,7 @@ export default {
           this._ensureArrayToSplicedMacro(et, etC);
           const tsStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const tsDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const tsItems = argsForC.slice(2).map(a => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const tsItems = argsForC.slice(2).map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
           const tsArgs = tsItems.length > 0 ? `${tsStart}, ${tsDel}, ${tsItems.join(', ')}` : `${tsStart}, ${tsDel}`;
           return `tsc_array_to_spliced_${et}(${arrObjC}, ${tsArgs})`;
         }
@@ -459,7 +458,7 @@ export default {
     const strObjC = _isStrPtr ? `(*${objC})` : objC;
     const strMethods = {
       length:     () => `${_isStrPtr ? objC + '->' : objC + '.'}length`,
-      slice:      () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
+      slice:      () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
       indexOf:      () => `(int)tsc_string_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       lastIndexOf:  () => `(int)tsc_string_last_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       at:           () => {
@@ -479,18 +478,18 @@ export default {
       trim:       () => `tsc_string_trim(${strObjC})`,
       toUpperCase:() => `tsc_string_to_upper(${strObjC})`,
       toLowerCase:() => `tsc_string_to_lower(${strObjC})`,
-      replace:    () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${strObjC}, ${a[0]}, ${a[1]})`; },
-      padStart:   () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
-      padEnd:     () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      replace:    () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${strObjC}, ${a[0]}, ${a[1]})`; },
+      padStart:   () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      padEnd:     () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
       repeat:     () => `tsc_string_repeat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       charAt:     () => `tsc_string_char_at(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       charCodeAt: () => { const idxC = this.exprToC(args[0].expr, lines, depth); return `(unsigned)(uint8_t)TSC_STRING_GET_CHAR(${strObjC}, ${idxC})`; },
       concat:     () => `tsc_string_concat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       codePoints:  () => `tsc_codepoints(${strObjC})`,
       graphemes:   () => `tsc_graphemes(${strObjC})`,
-      replaceAll:  () => { const a = args.map(a => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${strObjC}, ${a[0]}, ${a[1]})`; },
+      replaceAll:  () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${strObjC}, ${a[0]}, ${a[1]})`; },
       substring:   () => {
-                     const a = args.map(a => this.exprToC(a.expr, lines, depth));
+                     const a = args.map((a: any) => this.exprToC(a.expr, lines, depth));
                      if (a[1] === undefined && baseObject.kind !== 'Ident') {
                        const tmp = `_tsc_str_${this.tempCount++}`;
                        lines.push(`${' '.repeat(this.indent * depth)}String ${tmp} = ${strObjC};`);
@@ -540,7 +539,7 @@ export default {
         this.addTop('typedef struct { bool has_value; int32_t value; } opt_i32;');
         this.addTop('');
 
-        const djb2 = (s) => {
+        const djb2 = (s: any): any => {
           let h = 5381;
           for (let i = 0; i < s.length; i++) {
             h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0;
@@ -555,7 +554,7 @@ export default {
           bucketMap.get(b).push(e);
         }
 
-        const fnLines = [];
+        const fnLines: any[] = [];
         fnLines.push(`static opt_i32 ${fnName}(String key) {`);
         fnLines.push(`    uint32_t _h = tsc_djb2(key);`);
         fnLines.push(`    switch (_h % ${buckets}) {`);
@@ -693,7 +692,7 @@ export default {
     if (baseObject.kind === 'Ident' && this.classes.has(baseObject.name)) {
       const poolDef = this.classes.get(baseObject.name);
       if (poolDef?._isPool && prop === 'alloc') {
-        throw this.error(`PoolClass.alloc() is removed; use "new ${baseObject.name}()" instead`, node);
+        throw this.error(`PoolClass.alloc() is removed; use "new ${baseObject.name}()" instead`, baseObject);
       }
       if (poolDef?._isPool && prop === 'drop') {
         this._ensurePoolDrop(baseObject.name);
@@ -834,7 +833,7 @@ export default {
   },
 
   argsToC(args, lines, depth) {
-    const parts = [];
+    const parts: any[] = [];
     const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
       if (a.spread) {
@@ -892,10 +891,10 @@ export default {
         lines.push(`${' '.repeat(this.indent * depth)}${envGlobal} = ${envLocal};`);
         const hint = this._lambdaParamHint ?? [];
         const adapterParams = hint.length > 0
-          ? hint.map((ct, i) => `${ct} _p${i}`).join(', ')
+          ? hint.map((ct: any, i: any) => `${ct} _p${i}`).join(', ')
           : 'void *_elem';
         const adapterArgs = hint.length > 0
-          ? hint.map((_, i) => `_p${i}`).join(', ')
+          ? hint.map((_: any, i: any) => `_p${i}`).join(', ')
           : '_elem';
         const adapterName = `${closure.closureName}_adapter`;
         this.addLambda(`static ${closure.ret} ${adapterName}(${adapterParams}) {`);
@@ -929,23 +928,23 @@ export default {
 
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
-    const ifaceMethods = ifaceDef.filter(m => m.kind === 'MethodSig');
+    const ifaceMethods = ifaceDef.filter((m: any) => m.kind === 'MethodSig');
     const classDef = this.classes.get(className);
     for (const im of ifaceMethods) {
-      const methodExists = classDef?.methods?.some(mm => mm.name === im.name);
+      const methodExists = classDef?.methods?.some((mm: any) => mm.name === im.name);
       if (!methodExists) {
         throw this.error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
       }
     }
     const vtableName = `_${className}_${ifaceName}_vtable`;
 
-    const entries = ifaceMethods.map(m => {
+    const entries = ifaceMethods.map((m: any) => {
       const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
       return `    .${m.name} = (${retType} (*)(void *))${className}_${m.name}`;
     });
     this.topLevel.push(
       `static const ${ifaceName}_vtable ${vtableName} = {`,
-      ...entries.map(e => e + ','),
+      ...entries.map((e: any) => e + ','),
       `};`,
       ``
     );
