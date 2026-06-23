@@ -1,6 +1,6 @@
 // async-stmt.js
 export default {
-  _emitAsyncStmt(s, lines: any, ctx: any, I: any) {
+  _emitAsyncStmt(s: any, lines: any, ctx: any, I: any) {
     if (!s) return;
 
     // ── spawn VarDecl: emit call site using pre-emitted env/fn ──

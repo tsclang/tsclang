@@ -230,7 +230,7 @@ export default {
 
     // Libc variadic call or user Scalar-variadic call: pass args as raw C values
     if (sym?._isLibcVariadic || sym?._isScalarVariadic) {
-      const _libcVmap = { printf: 'vprintf', fprintf: 'vfprintf', sprintf: 'vsprintf', snprintf: 'vsnprintf', scanf: 'vscanf', sscanf: 'vsscanf', fscanf: 'vfscanf' };
+      const _libcVmap: Record<string, string> = { printf: 'vprintf', fprintf: 'vfprintf', sprintf: 'vsprintf', snprintf: 'vsnprintf', scanf: 'vscanf', sscanf: 'vsscanf', fscanf: 'vfscanf' };
       const _toRawArg = (a: any): any => {
         // Spread of a va_list в†’ va_list variable name (for v-variant forwarding)
         if (a.spread) {

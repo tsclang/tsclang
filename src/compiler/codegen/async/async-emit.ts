@@ -517,7 +517,7 @@ export default {
   },
 
   // Check for await on a non-async/non-callable expression and throw if found
-  _checkAwaitTarget(awaitNode) {
+  _checkAwaitTarget(awaitNode: any) {
     const expr = awaitNode?.expr;
     if (!expr) return;
     if (expr.kind === 'Ident') {
