@@ -232,7 +232,7 @@ const RULES = {
 };
 
 export function lint(ast: any, { rules = Object.keys(RULES) } = {}) {
-  const diagnostics = [];
+  const diagnostics: any[] = [];
   for (const name of rules) {
     const rule = (RULES as Record<string, any>)[name];
     if (!rule) continue;
