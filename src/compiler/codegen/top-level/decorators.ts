@@ -42,7 +42,7 @@ export default {
     }
     const result = {};
     for (const [k, v] of Object.entries(node)) {
-      result[k] = (typeof v === 'object' && v !== null) ? this._deepSubstOrigApply(v, replacement, isVoid) : v;
+      (result as any)[k] = (typeof v === 'object' && v !== null) ? this._deepSubstOrigApply(v, replacement, isVoid) : v;
     }
     return result;
   },
@@ -55,7 +55,7 @@ export default {
     if (node.kind === 'Binary' && node.op === '+') {
       const left  = this._substituteInAst(node.left,  bindings);
       const right = this._substituteInAst(node.right, bindings);
-      const isStr = t => t.kind === 'Literal' && (t.litType === 'string' || t.litType === 'char');
+      const isStr = (t: any) => t.kind === 'Literal' && (t.litType === 'string' || t.litType === 'char');
       if (isStr(left) && isStr(right)) {
         return { kind: 'Literal', litType: 'string', value: left.value + right.value };
       }
@@ -63,7 +63,7 @@ export default {
     }
     const result = {};
     for (const [k, v] of Object.entries(node)) {
-      result[k] = (typeof v === 'object' && v !== null) ? this._substituteInAst(v, bindings) : v;
+      (result as any)[k] = (typeof v === 'object' && v !== null) ? this._substituteInAst(v, bindings) : v;
     }
     return result;
   },
