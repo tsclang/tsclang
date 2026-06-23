@@ -116,7 +116,7 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
     // Template literal (backtick)
     if (ch === '`') {
       advance(); // consume `
-      const parts = [];
+      const parts: any[] = [];
       let str = '';
       while (i < src.length && cur() !== '`') {
         if (cur() === '\\') { advance(); str += '\\' + advance(); }
