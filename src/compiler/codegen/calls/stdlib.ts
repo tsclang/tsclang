@@ -685,7 +685,7 @@ export default {
         const I = ' '.repeat(this.indent * depth);
 
         // Backward compat: *LE aliases
-        const leAliases = {
+        const leAliases: Record<string, any> = {
           getU16LE: ['get', 'U16', true], setU16LE: ['set', 'U16', true],
           getU32LE: ['get', 'U32', true], setU32LE: ['set', 'U32', true],
           getF64LE: ['get', 'F64', true], setF64LE: ['set', 'F64', true],
@@ -698,7 +698,7 @@ export default {
         }
 
         // Standard methods: getU8, getI8, getU16, getI16, ..., setU8, setI8, ...
-        const dvMethods = {
+        const dvMethods: Record<string, any> = {
           getU8:['get','U8',1], getI8:['get','I8',1],
           getU16:['get','U16',2], getI16:['get','I16',2],
           getU32:['get','U32',4], getI32:['get','I32',4],
