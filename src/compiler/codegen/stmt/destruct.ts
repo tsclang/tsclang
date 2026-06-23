@@ -63,7 +63,7 @@ export default {
         // Ident init with type annotation: move semantics (copy fields + zero-out source)
         if (typeAnn && init.kind === 'Ident' && structDef?.fields) {
           const srcName = init.name;
-          const stringFields = [];
+          const stringFields: any[] = [];
           for (const { name, alias } of pattern) {
             const field = structDef.fields.find((f: any) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';

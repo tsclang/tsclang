@@ -28,7 +28,7 @@ export default {
     }
 
     // Collect extra fields from class decorators (@sealed → target._field = val)
-    const _classDecoratorFields = [];   // extra fields to add to struct
+    const _classDecoratorFields: any[] = [];   // extra fields to add to struct
     const _classDecoratorInits  = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
       if (['struct', 'pool', 'heap', 'packed', 'align'].includes(d.name)) continue;
@@ -122,7 +122,7 @@ export default {
     const implements_ = node.implements_ ?? [];
     // Detect implements Iterable<T> and extract element type
     const _ifaceName = (iface: any) => typeof iface === 'string' ? iface : iface.name;
-    let _iterableElemType = null;
+    let _iterableElemType: any = null;
     for (const iface of implements_) {
       if (_ifaceName(iface) === 'Iterable' && typeof iface === 'object' && iface.typeArgs?.[0]) {
         _iterableElemType = this.resolveType(iface.typeArgs[0]);
@@ -160,7 +160,7 @@ export default {
 
     if (_usedAsType) {
       // Build field list (single-line struct always)
-      const userFieldParts = [];
+      const userFieldParts: any[] = [];
       if (cBase) userFieldParts.push(`${cBase} _base;`);
       for (const f of fields) {
         // Ref<T>/Mut<T> cannot be stored in class fields
@@ -438,7 +438,7 @@ export default {
   _getStringFields(className: any) {
     const cls = this.classes.get(className);
     if (!cls?.fields) return [];
-    const result = [];
+    const result: any[] = [];
     for (const f of cls.fields) {
       const fname = typeof f === 'string' ? f : (f.name ?? f);
       const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';

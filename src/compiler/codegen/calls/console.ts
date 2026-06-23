@@ -22,7 +22,7 @@ export default {
       return isErr ? 'fprintf(stderr, "\\n")' : 'printf("\\n")';
     }
 
-    const fmtParts = [];
+    const fmtParts: any[] = [];
     const fmtArgs  = [];
     let needSpace = false;
 
@@ -36,7 +36,7 @@ export default {
       }
 
       // Unwrap throws function calls: store Result, check ok, use .value
-      let unwrapRes = null;
+      let unwrapRes: any = null;
       if (expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
         const calleeSym = this.lookup(expr.callee.name);
         if (calleeSym?._isThrowsFunc && ctype?.startsWith('Result_')) {

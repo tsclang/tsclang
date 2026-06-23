@@ -15,7 +15,7 @@ export default {
       }
     }
 
-    const throwsNames = [];
+    const throwsNames: any[] = [];
     for (const t of (throwsTypes || [])) {
       if (t.kind === 'TypeRef') throwsNames.push(t.name);
     }
@@ -64,9 +64,9 @@ export default {
       }
     }
 
-    const stringFields = [];
-    const classFreeFields = [];
-    const arrayFields = [];
+    const stringFields: any[] = [];
+    const classFreeFields: any[] = [];
+    const arrayFields: any[] = [];
     for (const f of letFields) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
@@ -160,7 +160,7 @@ export default {
 
   _buildGenNext(body: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any) {
     const stmts = body?.kind === 'Block' ? body.body : [];
-    const lines = [];
+    const lines: any[] = [];
     const ctx = { caseNum: 0, loopLabels: [], needTerminal: true };
 
     const zeroVal = yieldType === 'String' ? '(String){0}'
@@ -253,7 +253,7 @@ export default {
       }
 
       const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
-      let postYieldStmts = [];
+      let postYieldStmts: any[] = [];
       let yieldFound = false;
 
       for (const ws of whileBody) {

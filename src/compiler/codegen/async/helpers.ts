@@ -158,7 +158,7 @@ export default {
           (expr.callee.prop === 'race' || expr.callee.prop === 'any' || expr.callee.prop === 'allSettled')) {
         const prop = expr.callee.prop;
         const items = expr.args?.[0]?.expr?.elems || [];
-        let resultCType = null;
+        let resultCType: any = null;
         if (prop !== 'allSettled') {
           const firstName = items[0]?.expr?.callee?.kind === 'Ident' ? items[0].expr.callee.name : null;
           if (firstName && this._asyncFuncs?.has(firstName)) {

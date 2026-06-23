@@ -211,7 +211,7 @@ export default {
                    _hasCallNode(nd.left) || _hasCallNode(nd.right) || _hasCallNode(nd.init) ||
                    _hasCallNode(nd.value) || _hasCallNode(nd.args) || _hasCallNode(nd.elems);
           };
-          let _splitInit = null;
+          let _splitInit: any = null;
           if (node.init && _hasCallNode(node.init)) {
             const _savedInit = node.init;
             node.init = null;

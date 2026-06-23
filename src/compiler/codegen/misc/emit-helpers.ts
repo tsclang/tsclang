@@ -4,8 +4,8 @@ export default {
     const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
 
     // Find pre-return VarDecl stmts and the returned arrow
-    const preStmts = [];
-    let returnedArrow = null;
+    const preStmts: any[] = [];
+    let returnedArrow: any = null;
     for (const s of stmts) {
       if (s.kind === 'Return' && s.value?.kind === 'Arrow') { returnedArrow = s.value; break; }
       preStmts.push(s);
@@ -31,8 +31,8 @@ export default {
     this.pushScope();
     this.define('this', { ctype: `${className} *`, _cAlias: '_self', isPointer: true });
 
-    const localVars = [];
-    const factoryLines = [];
+    const localVars: any[] = [];
+    const factoryLines: any[] = [];
     for (const s of preStmts) {
       if (s.kind !== 'VarDecl') continue;
       const tmpLines: any[] = [];
@@ -178,8 +178,8 @@ export default {
     const threadVar = varName ?? `_t_${idx}`;
 
     const hasThrows = throwsTypes?.length > 0;
-    let resultType = null;
-    let throwsTypeName = null;
+    let resultType: any = null;
+    let throwsTypeName: any = null;
     if (hasThrows) {
       throwsTypeName = throwsTypes[0]?.name ?? throwsTypes[0];
       resultType = `Result_void_${throwsTypeName}`;
@@ -191,7 +191,7 @@ export default {
     }
 
     // Build env struct fields: [result if throws] + [captured vars]
-    const envFields = [];
+    const envFields: any[] = [];
     if (hasThrows && resultType) envFields.push({ ctype: resultType, name: 'result' });
     for (const fv of freeVars) envFields.push(fv);
 
@@ -205,7 +205,7 @@ export default {
     this.addTop('');
 
     // Build spawn function
-    const fnLines = [];
+    const fnLines: any[] = [];
     fnLines.push(`static void *${fnName}(void *_arg) {`);
     fnLines.push(`    ${envType} *env = (${envType} *)_arg;`);
 

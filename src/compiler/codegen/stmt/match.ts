@@ -78,7 +78,7 @@ export default {
         } else {
           const cond = this._matchPatternCond(c.pattern, discUse, discType, enumDef);
           if (needsBindings) {
-            const armLines = [];
+            const armLines: any[] = [];
             const armI = ' '.repeat(this.indent * (depth + 1));
             this.pushScope();
             const bindings = this._matchPatternBindings(c.pattern, discUse, discType);
@@ -390,7 +390,7 @@ export default {
       }
       case 'MatchTuple': {
         // Check each non-wildcard element against the corresponding tuple field
-        const conds = [];
+        const conds: any[] = [];
         for (let i = 0; i < pattern.elements.length; i++) {
           const el = pattern.elements[i];
           if (el.kind === 'MatchWild') continue;
@@ -417,7 +417,7 @@ export default {
     const doneLabel = `_sel${selIdx}_done`;
 
     // Determine field types from channel receive() calls
-    const fields = [];
+    const fields: any[] = [];
     for (const prop of props) {
       const key = prop.key;
       // prop.value is ch.receive() call; infer channel element type from ch variable

@@ -1,7 +1,7 @@
 // arrays.js
 export default {
   arrayLitToC(node: any, _elemType: any, lines: any, depth: any) {
-    const result = [];
+    const result: any[] = [];
     for (const e of node.elems) {
       if (e.spread) {
         const sym = e.expr?.kind === 'Ident' ? this.lookup(e.expr.name) : null;

@@ -201,7 +201,7 @@ export default {
       const monoReturnType = m.returnType ? this.resolveType(this.substType(m.returnType, subst)) : 'void';
       const monoBody = this.substNode(m.body, subst);
 
-      const paramDecls = [];
+      const paramDecls: any[] = [];
       if (!isStatic) paramDecls.push(`${monoName} *self`);
       for (const p of monoParams) {
         if (p.name === 'this') continue;

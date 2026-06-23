@@ -50,7 +50,7 @@ export default {
     // If all expressions are strings → use tsc_string_concat / tsc_string_concat_n
     const allStrings = compiled.every((p: any) => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
     if (allStrings) {
-      const pieces = [];
+      const pieces: any[] = [];
       for (const p of compiled) {
         if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${p.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`); }
         else if (p.t === 'String *') pieces.push(`(*${p.c})`);
@@ -64,7 +64,7 @@ export default {
 
     // Mixed types → use tsc_string_format
     let fmt = '';
-    const fmtArgs = [];
+    const fmtArgs: any[] = [];
     const isEmb = this._cap('bits') < 32;
     for (const p of compiled) {
       if (p.kind === 'str') {
@@ -150,7 +150,7 @@ export default {
   hoistClosure(arrowNode: any, varName: any) {
     const paramNames = (arrowNode.params ?? []).map((p: any) => p.name);
     let captured;
-    let explicitCaptures = null;
+    let explicitCaptures: any = null;
     if (arrowNode.captures?.length > 0) {
       captured = new Map();
       explicitCaptures = [];
@@ -158,7 +158,7 @@ export default {
         const sym = this.lookup(cap.name);
         if (!sym) throw this.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
         captured.set(cap.name, sym);
-        let mode = null;
+        let mode: any = null;
         if (cap.typeAnn?.kind === 'TypeRef') {
           if (cap.typeAnn.name === 'Ref') mode = 'ref';
           else if (cap.typeAnn.name === 'Mut') mode = 'mut';
@@ -190,8 +190,8 @@ export default {
 
     let ret = arrowNode.returnType ? this.resolveType(arrowNode.returnType) : this.inferArrowReturn(arrowNode);
 
-    const envFields = [];
-    const capturedStringFields = [];
+    const envFields: any[] = [];
+    const capturedStringFields: any[] = [];
     for (const [nm, sym] of captured) {
       const ct = sym.ctype ?? 'void *';
       const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
@@ -284,7 +284,7 @@ export default {
     this.addLambda('}');
     this.addLambda('');
 
-    const retainLines = [];
+    const retainLines: any[] = [];
     for (const nm of capturedStringFields) {
       const sym = captured.get(nm);
       const src = sym?._closureEnvVar ? `env->${nm}` : nm;

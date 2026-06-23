@@ -75,7 +75,7 @@ export function codegen(ast: any, filename: string = 'input', src: string | null
     for (const [resolvedPath, moduleExports] of Object.entries(opts.importedModules)) {
       if (!moduleExports) continue;
       // Check if this module is imported as a namespace
-      let nsName = null;
+      let nsName: any = null;
       for (const [name, path] of namespaceImports) {
         if (path === resolvedPath) { nsName = name; break; }
       }
@@ -825,7 +825,7 @@ class Context {
     // Full emit: includes → typedefs → lambdas → topLevel → main
     const parts: any[] = [];
     // Pre-generate main's panic message expression (may addTop helper functions)
-    let _mainPanicMsg = null;
+    let _mainPanicMsg: any = null;
     if (this._hasExplicitMain && this._explicitMainThrows) {
       _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes);
     }
