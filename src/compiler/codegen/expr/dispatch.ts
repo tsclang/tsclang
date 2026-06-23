@@ -9,7 +9,7 @@ export default {
 
       case 'Ident': {
         if (node.name === 'keyof') throw this.error(`"keyof" can only be used in type position`, node);
-        const kw = {
+        const kw: Record<string, string> = {
           'true': 'true', 'false': 'false', 'null': 'NULL',
           'undefined': 'NULL',
         };

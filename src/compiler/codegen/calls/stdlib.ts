@@ -26,11 +26,11 @@ export default {
     if (_r !== null) return _r;
     _r = this._dispatchStdHashMap(node, lines, depth);
     if (_r !== null) return _r;
-    _r = this._dispatchStdSet(node, lines, depth);
+    _r = this._dispatchStdSet(node: any, lines: any, depth: any);
     if (_r !== null) return _r;
-    _r = this._dispatchStdTasks(node, lines, depth);
+    _r = this._dispatchStdTasks(node: any, lines: any, depth: any);
     if (_r !== null) return _r;
-    _r = this._dispatchStdRegex(node, lines, depth);
+    _r = this._dispatchStdRegex(node: any, lines: any, depth: any);
     if (_r !== null) return _r;
     return null;
   },
@@ -832,7 +832,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSet(node, lines, depth) {
+  _dispatchStdSet(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Set method calls: s.add(), s.has(), s.delete(), s.clear()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -906,7 +906,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTasks(node, lines, depth) {
+  _dispatchStdTasks(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Tasks method calls: tasks.add(), tasks.run(), tasks.stop()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -945,7 +945,7 @@ export default {
     return null;
   },
 
-  _dispatchStdRegex(node, lines, depth) {
+  _dispatchStdRegex(node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // TscRegex method calls: r.test(), r.match(), r.replace(), r.replaceAll()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
