@@ -13,7 +13,7 @@
  */
 export function format(src: any) {
   const lines = src.split('\n');
-  const result = [];
+  const result: any[] = [];
 
   let indentLevel = 0;
   let prevBlank = false;

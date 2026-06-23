@@ -775,7 +775,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseParams() {
     eat(TK.LPAREN);
-    const params = [];
+    const params: any[] = [];
     let hadRest = false;
     while (cur().type !== TK.RPAREN) {
       if (hadRest) {
@@ -1696,7 +1696,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const savedPos = pos;
     try {
       eat(TK.LPAREN);
-      const params = [];
+      const params: any[] = [];
       while (cur().type !== TK.RPAREN) {
         let rest = false;
         if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
@@ -1842,7 +1842,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const savedPos = pos;
     try {
       eat(TK.LPAREN);
-      const params = [];
+      const params: any[] = [];
       while (cur().type !== TK.RPAREN) {
         let rest = false;
         if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
