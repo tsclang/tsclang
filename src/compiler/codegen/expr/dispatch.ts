@@ -115,7 +115,7 @@ export default {
         }
         // Math constants: Math.PI, Math.E, Math.SQRT2, etc.
         if (node.object.kind === 'Ident' && node.object.name === 'Math') {
-          const mathConsts = {
+          const mathConsts: Record<string, string> = {
             PI: 'M_PI', E: 'M_E', LN2: 'M_LN2', LN10: 'M_LN10',
             SQRT2: 'M_SQRT2', SQRT1_2: 'M_SQRT1_2',
             LOG2E: 'M_LOG2E', LOG10E: 'M_LOG10E',
@@ -181,7 +181,7 @@ export default {
         }
         // PinMode enum (std/hal): PinMode.OUTPUT → TSC_PINMODE_OUTPUT
         if (node.object.kind === 'Ident' && node.object.name === 'PinMode') {
-          const pm = { INPUT: 'TSC_PINMODE_INPUT', OUTPUT: 'TSC_PINMODE_OUTPUT', INPUTPULLUP: 'TSC_PINMODE_INPUTPULLUP' };
+          const pm: Record<string, string> = { INPUT: 'TSC_PINMODE_INPUT', OUTPUT: 'TSC_PINMODE_OUTPUT', INPUTPULLUP: 'TSC_PINMODE_INPUTPULLUP' };
           return pm[node.prop] ?? `TSC_PINMODE_${node.prop.toUpperCase()}`;
         }
         // Enum member access: Direction.North → Direction_North
