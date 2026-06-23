@@ -280,7 +280,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       name = eat(TK.IDENT).value;
     }
 
-    let typeArgs = [];
+    let typeArgs: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       typeArgs.push(parseTypeUnion());
@@ -681,7 +681,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (tryEat(TK.STAR)) generator = true;
     const name = cur().type === TK.IDENT ? eat(TK.IDENT).value : null;
     // Type parameters: function foo<T>(...)
-    let typeParams = [];
+    let typeParams: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) {
@@ -840,7 +840,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     eat(TK.IDENT, 'class');
     const name = eat(TK.IDENT).value;
     // Type parameters: class Foo<T>
-    let classTypeParams = [];
+    let classTypeParams: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) {
@@ -898,7 +898,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
       if (cur().type === TK.LPAREN || cur().type === TK.LT) {
         // Method
-        let typeParams = [];
+        let typeParams: any[] = [];
         if (cur().type === TK.LT) {
           eat(TK.LT);
           while (cur().type !== TK.GT) { typeParams.push(eat(TK.IDENT).value); tryEat(TK.COMMA); }
@@ -938,13 +938,13 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   function parseInterface() {
     eat(TK.IDENT, 'interface');
     const name = eat(TK.IDENT).value;
-    let typeParams = [];
+    let typeParams: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) { typeParams.push(eat(TK.IDENT).value); tryEat(TK.COMMA); }
       eat(TK.GT);
     }
-    let extends_ = [];
+    let extends_: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'extends') {
       eat(TK.IDENT); extends_.push(eat(TK.IDENT).value);
       while (tryEat(TK.COMMA)) extends_.push(eat(TK.IDENT).value);
@@ -991,7 +991,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   function parseTypeAlias() {
     eat(TK.IDENT, 'type');
     const name = eat(TK.IDENT).value;
-    let typeParams = [];
+    let typeParams: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) { typeParams.push(eat(TK.IDENT).value); tryEat(TK.COMMA); }
@@ -1370,7 +1370,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   function parseNew() {
     const newTok = eat(TK.IDENT, 'new');
     let name = eat(TK.IDENT).value;
-    let typeArgs = [];
+    let typeArgs: any[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) { typeArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
