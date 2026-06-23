@@ -1628,7 +1628,7 @@ export default {
           if (enumDef?.isEnum && !enumDef?.isStringLiteralUnion && !enumDef?.isKeyOf) {
             throw this.error(`variable of enum type "${ctype}" must be explicitly initialized or declared nullable`);
           }
-          const PRIMITIVE_ZERO = {
+          const PRIMITIVE_ZERO: Record<string, string> = {
             'int8_t': '0', 'int16_t': '0', 'int32_t': '0', 'int64_t': '0',
             'uint8_t': '0', 'uint16_t': '0', 'uint32_t': '0', 'uint64_t': '0',
             'float': '0.0f', 'double': '0.0',
