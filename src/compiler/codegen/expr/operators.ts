@@ -302,7 +302,7 @@ export default {
           const builtin = op === '+' ? '__builtin_add_overflow'
                         : op === '-' ? '__builtin_sub_overflow'
                         : '__builtin_mul_overflow';
-          const typeRank = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
+          const typeRank: Record<string, any> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
           const resultType = (typeRank[lt] ?? 2) >= (typeRank[rt] ?? 2) ? (lt ?? 'int32_t') : (rt ?? 'int32_t');
           const tmp = `_math_${this.tempCount++}`;
           const opName = op === '+' ? 'add' : op === '-' ? 'sub' : 'mul';
@@ -317,7 +317,7 @@ export default {
       const slt = this.inferType(node.left);
       const srt = this.inferType(node.right);
       if (signedIntSet.has(slt) && signedIntSet.has(srt)) {
-        const typeRank = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
+        const typeRank: Record<string, any> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
         const resultType = typeRank[slt] >= typeRank[srt] ? slt : srt;
         const uType = resultType.replace('int', 'uint');
         return `(${resultType})((${uType})${l} ${op} (${uType})${r})`;
