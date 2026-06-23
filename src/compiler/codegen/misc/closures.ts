@@ -16,7 +16,7 @@ function _isComplexCtype(ct: any) {
 }
 
 export default {
-  _templateToC(node: any, lines: any, depth: any) {
+  _templateToC(this: any, node: any, lines: any, depth: any) {
     const parts = node.parts; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
     const hasSubs = parts.some((p: any) => p.kind === 'expr');
     if (!hasSubs) {
@@ -102,7 +102,7 @@ export default {
 
   // Walk an AST node and collect all Ident references that are free variables
   // (defined in outer scope, not in params or locally defined within the body).
-  _findFreeVars(body: any, paramNames: any, selfName: any) {
+  _findFreeVars(this: any, body: any, paramNames: any, selfName: any) {
     const params = new Set(paramNames);
     const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
     const captured = new Map(); // name → symInfo
@@ -147,7 +147,7 @@ export default {
 
   // Generate closure structs and fn for an Arrow, returning closure metadata.
   // Returns null if no captures (use regular hoistArrow).
-  hoistClosure(arrowNode: any, varName: any) {
+  hoistClosure(this: any, arrowNode: any, varName: any) {
     const paramNames = (arrowNode.params ?? []).map((p: any) => p.name);
     let captured;
     let explicitCaptures: any = null;

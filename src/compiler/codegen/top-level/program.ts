@@ -1,6 +1,6 @@
 // program.js
 export default {
-  visitProgram(ast: any) {
+  visitProgram(this: any, ast: any) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
     this._fromEntriesConsumed = new Map();
     for (const node of ast.body) {

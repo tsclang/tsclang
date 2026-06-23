@@ -1,7 +1,7 @@
 // scan.js
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
-  _scanAsyncBody(params: any, body: any) {
+  _scanAsyncBody(this: any, params: any, body: any) {
     const paramFields: any[] = [];
     const bodyFields: any[] = [];
     const inlined = new Map();     // name → C literal string
@@ -156,7 +156,7 @@ export default {
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
   },
 
-  _scanExprIdents(node: any, touch: any) {
+  _scanExprIdents(this: any, node: any, touch: any) {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'Ident') { touch(node.name); return; }
     if (node.kind === 'Literal' || node.kind === 'RawC') return;
@@ -174,7 +174,7 @@ export default {
     }
   },
 
-  _livenessScan(body: any, localVarNames: any) {
+  _livenessScan(this: any, body: any, localVarNames: any) {
     const segs = new Map();
     let seg = 0;
 
@@ -283,7 +283,7 @@ export default {
     return needsPromotion;
   },
 
-  _genLivenessScan(body: any, localVarNames: any) {
+  _genLivenessScan(this: any, body: any, localVarNames: any) {
     const segs = new Map();
     let seg = 0;
 
@@ -380,7 +380,7 @@ export default {
   },
 
   // Collect await sub-state field descriptors for the struct
-  _collectAwaitStates(body: any) {
+  _collectAwaitStates(this: any, body: any) {
     const result: any[] = [];
     let awaitIdx = 0;
     let genIdx = 0;
@@ -441,11 +441,11 @@ export default {
 
   // ─── Top-level emitters ───────────────────────────────────────────────────
 
-  _topBlank(arr = this.topLevel) {
+  _topBlank(this: any, arr = this.topLevel) {
     if (arr.length > 0 && arr[arr.length - 1] !== '') arr.push('');
   },
 
-  _emitStructMultiline(name: any, fields: any) {
+  _emitStructMultiline(this: any, name: any, fields: any) {
     this._topBlank();
     this.topLevel.push('typedef struct {');
     // First line: state/result/done header fields (up to bool _done)
@@ -461,12 +461,12 @@ export default {
     this.topLevel.push(`} ${name};`);
   },
 
-  _emitStructCompact(name: any, fields: any) {
+  _emitStructCompact(this: any, name: any, fields: any) {
     this._topBlank();
     this.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
   },
 
-  _emitTopFn(sig: any, bodyLines: any) {
+  _emitTopFn(this: any, sig: any, bodyLines: any) {
     this._topBlank();
     this.topLevel.push(`${sig} {`);
     for (const l of bodyLines) this.topLevel.push(l);

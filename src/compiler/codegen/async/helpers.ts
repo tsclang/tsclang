@@ -1,6 +1,6 @@
 // helpers.js
 export default {
-  _initAsync() {
+  _initAsync(this: any) {
   },
 
   // ─── Return type helpers ──────────────────────────────────────────────────
@@ -8,7 +8,7 @@ export default {
   // C result type for async _result field.
   // Returns null for Promise<void> (no _result field).
   // Returns 'int' for void (placeholder).
-  _asyncRetType(rt: any) {
+  _asyncRetType(this: any, rt: any) {
     if (!rt) return 'int';
     if (rt.kind === 'TypeRef') {
       if (rt.name === 'Promise') {
@@ -23,13 +23,13 @@ export default {
 
   // ─── Inlinable const detection ────────────────────────────────────────────
 
-  _isInlinableConst(init: any) {
+  _isInlinableConst(this: any, init: any) {
     if (!init) return false;
     if (init.kind === 'Literal') return init.litType === 'number' || init.litType === 'boolean';
     return init.kind === 'Num' || init.kind === 'Bool';
   },
 
-  _constLiteralC(init: any) {
+  _constLiteralC(this: any, init: any) {
     if (init.kind === 'Literal') {
       if (init.litType === 'number') return String(init.value);
       if (init.litType === 'boolean') return init.value === 'true' || init.value === true ? 'true' : 'false';
@@ -41,7 +41,7 @@ export default {
 
   // ─── Await info ───────────────────────────────────────────────────────────
 
-  _awaitInfoOf(awaitNode: any) {
+  _awaitInfoOf(this: any, awaitNode: any) {
     const expr = awaitNode.expr;
     if (!expr) return null;
 

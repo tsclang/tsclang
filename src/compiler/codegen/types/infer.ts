@@ -1,7 +1,7 @@
 import { inferLiteralCType } from '../../types.js';
 // infer.js
 export default {
-  inferType(node: any) {
+  inferType(this: any, node: any) {
     if (!node) return 'double';
     switch (node.kind) {
       case 'Literal':  return inferLiteralCType(node, this._defaultNumber);
@@ -299,7 +299,7 @@ export default {
     }
   },
 
-  _effectiveType(node: any) {
+  _effectiveType(this: any, node: any) {
     if (!node) return 'double';
     const dn = this._defaultNumber;
     const floatDefault = dn === 'f64' || dn === 'f32';
@@ -344,7 +344,7 @@ export default {
     }
   },
 
-  _inferCall(node: any) {
+  _inferCall(this: any, node: any) {
     if (node.callee.kind === 'OptChain') {
       const objType = this.inferType(node.callee.object);
       if (objType?.startsWith('opt_') && node.callee.prop === 'toString') return 'opt_string';
@@ -425,7 +425,7 @@ export default {
     return 'int32_t';
   },
 
-  _inferMemberCall(node: any) {
+  _inferMemberCall(this: any, node: any) {
     const obj = node.callee.object;
     const prop = node.callee.prop;
     if (obj.kind === 'Ident') {
@@ -844,7 +844,7 @@ export default {
     return null;
   },
 
-  inferTypeWithParams(arrowNode: any, paramCType: any) {
+  inferTypeWithParams(this: any, arrowNode: any, paramCType: any) {
     const hasParams = arrowNode.params?.length > 0;
     if (hasParams) {
       this.pushScope();

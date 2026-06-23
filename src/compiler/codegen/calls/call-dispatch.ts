@@ -1,5 +1,5 @@
 export default {
-  callToC(node: any, lines: any, depth: any) {
+  callToC(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
@@ -575,7 +575,7 @@ export default {
     return `${calleeC}(${argsC})`;
   },
 
-  _dispatchArrayStatic(node: any, lines: any, depth: any) {
+  _dispatchArrayStatic(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -621,7 +621,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchObjectStatic(node: any, lines: any, depth: any) {
+  _dispatchObjectStatic(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -694,7 +694,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchGroupBy(node: any, lines: any, depth: any) {
+  _dispatchGroupBy(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;

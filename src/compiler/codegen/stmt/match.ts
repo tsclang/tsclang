@@ -1,5 +1,5 @@
 export default {
-  emitMatchVarDecl(node: any, lines: any, depth: any) {
+  emitMatchVarDecl(this: any, node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
     const { discriminant, cases, hasParens } = init;
     const I = ' '.repeat(this.indent * depth);
@@ -108,7 +108,7 @@ export default {
   // -----------------------------------------------------------------------
   // Result-based TryCatch emission
   // -----------------------------------------------------------------------
-  _emitTryCatchResult(node: any, tryStmts: any, callStmt: any, lines: any, depth: any) {
+  _emitTryCatchResult(this: any, node: any, tryStmts: any, callStmt: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
     const II = ' '.repeat(this.indent * (depth + 1));
@@ -178,7 +178,7 @@ export default {
     }
   },
 
-  _emitCatchBodies(catches: any, resName: any, calleeSym: any, lines: any, depth: any) {
+  _emitCatchBodies(this: any, catches: any, resName: any, calleeSym: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const II = ' '.repeat(this.indent * (depth + 1));
     const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
@@ -240,7 +240,7 @@ export default {
   // -----------------------------------------------------------------------
   // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
   // -----------------------------------------------------------------------
-  emitPropagateVarDecl(node: any, lines: any, depth: any) {
+  emitPropagateVarDecl(this: any, node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
@@ -310,7 +310,7 @@ export default {
 
   // Generate field binding declarations for patterns that destructure (MatchClass, MatchObjLit)
   // Returns array of C declaration strings, or empty array if no bindings needed
-  _matchPatternBindings(pattern: any, discC: any, discType: any) {
+  _matchPatternBindings(this: any, pattern: any, discC: any, discType: any) {
     if (pattern.kind === 'MatchClass') {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
@@ -343,7 +343,7 @@ export default {
   },
 
   // Generate a C condition expression for a match pattern
-  _matchPatternCond(pattern: any, discC: any, discType: any, enumDef: any) {
+  _matchPatternCond(this: any, pattern: any, discC: any, discType: any, enumDef: any) {
     switch (pattern.kind) {
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
@@ -405,7 +405,7 @@ export default {
   },
 
   // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
-  emitSelectVarDecl(node: any, lines: any, depth: any) {
+  emitSelectVarDecl(this: any, node: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const { name, varKind, init } = node;
     const objArg = init.args?.[0]?.expr;

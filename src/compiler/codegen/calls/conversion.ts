@@ -1,5 +1,5 @@
 export default {
-  _dispatchConversion(node: any, lines: any, depth: any) {
+  _dispatchConversion(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       // variable.toString() where variable is a string-literal-union type

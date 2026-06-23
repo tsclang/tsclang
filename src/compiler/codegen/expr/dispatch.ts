@@ -1,6 +1,6 @@
 // dispatch.js
 export default {
-  exprToC(node: any, lines: any[] = [], depth: any = 0) {
+  exprToC(this: any, node: any, lines: any[] = [], depth: any = 0) {
     if (!node) return '0';
     this._currentNode = node;
     switch (node.kind) {
@@ -771,7 +771,7 @@ export default {
     }
   },
 
-  _truthyToC(node: any, lines: any[] = [], depth: any = 0) {
+  _truthyToC(this: any, node: any, lines: any[] = [], depth: any = 0) {
     const type = this.inferType(node);
     if (!type || type === 'bool' || type === 'void *') {
       return this.exprToC(node, lines, depth);

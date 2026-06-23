@@ -1,7 +1,7 @@
 // dispatch.js
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
-  visitTopLevel(node: any) {
+  visitTopLevel(this: any, node: any) {
     if (!node) return;
     switch (node.kind) {
       case 'Import':
@@ -271,11 +271,11 @@ export default {
     }
   },
 
-  visitDeclareModule(node: any) {
+  visitDeclareModule(this: any, node: any) {
     this._declaredModules.set(node.moduleName, node.body);
   },
 
-  visitDeclareConst(node: any) {
+  visitDeclareConst(this: any, node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, typeAnn, init } = node;
@@ -288,7 +288,7 @@ export default {
     this._inDeclare = prevDeclare;
   },
 
-  visitDeclareFunction(node: any) {
+  visitDeclareFunction(this: any, node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, params, returnType } = node;

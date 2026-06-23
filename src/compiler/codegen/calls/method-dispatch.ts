@@ -1,5 +1,5 @@
 export default {
-  methodCall(callee: any, args: any, lines: any, depth: any) {
+  methodCall(this: any, callee: any, args: any, lines: any, depth: any) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
@@ -832,7 +832,7 @@ export default {
     return `${objC}.${prop}(${argsC})`;
   },
 
-  argsToC(args: any, lines: any, depth: any) {
+  argsToC(this: any, args: any, lines: any, depth: any) {
     const parts: any[] = [];
     const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
@@ -860,7 +860,7 @@ export default {
     return parts.join(', ');
   },
 
-  _getIfaceParamName(typeAnn: any) {
+  _getIfaceParamName(this: any, typeAnn: any) {
     if (!typeAnn || typeAnn.kind !== 'TypeRef') return null;
     if (this.interfaces.has(typeAnn.name)) return typeAnn.name;
     if ((typeAnn.name === 'Mut' || typeAnn.name === 'Ref') && typeAnn.typeArgs?.[0]?.kind === 'TypeRef') {
@@ -870,7 +870,7 @@ export default {
     return null;
   },
 
-  _extractCallbackFn(arg: any, lines: any, depth: any) {
+  _extractCallbackFn(this: any, arg: any, lines: any, depth: any) {
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
       if (this._strictRules?.has('no-closures')) {
@@ -921,7 +921,7 @@ export default {
     return null;
   },
 
-  _ensureImplicitVtable(className: any, ifaceName: any) {
+  _ensureImplicitVtable(this: any, className: any, ifaceName: any) {
     const key = `${className}_${ifaceName}`;
     if (this._emittedImplicitVtables.has(key)) return;
     this._emittedImplicitVtables.add(key);

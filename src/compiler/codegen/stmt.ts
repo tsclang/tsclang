@@ -1,6 +1,6 @@
 // stmt.js
 export default {
-  visitBlock(block: any, lines: any, depth: any) {
+  visitBlock(this: any, block: any, lines: any, depth: any) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars: any[] = [];
@@ -49,7 +49,7 @@ export default {
     this.popScope();
   },
 
-  visitStmtInMain(node: any) {
+  visitStmtInMain(this: any, node: any) {
     const lines: any[] = [];
     if (this._debugLines && node?.line) {
       this.mainStmts.push(`#line ${node.line} "${this.filename}"`);
@@ -58,7 +58,7 @@ export default {
     for (const l of lines) this.mainStmts.push(l);
   },
 
-  visitStmt(node: any, lines: any, depth: any) {
+  visitStmt(this: any, node: any, lines: any, depth: any) {
     this._currentNode = node;
     if (!node) return;
 
@@ -98,7 +98,7 @@ export default {
     }
   },
 
-  visitStmtOrBlock(node: any, lines: any, depth: any) {
+  visitStmtOrBlock(this: any, node: any, lines: any, depth: any) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
   },

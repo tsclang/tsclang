@@ -1,5 +1,5 @@
 export default {
-  _visitVarDestruct(node: any, lines: any, depth: any) {
+  _visitVarDestruct(this: any, node: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
     if (node.kind === 'VarDestructObj') {

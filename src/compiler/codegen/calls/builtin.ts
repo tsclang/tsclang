@@ -1,5 +1,5 @@
 export default {
-  _dispatchBuiltin(node: any, lines: any, depth: any) {
+  _dispatchBuiltin(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
       return this.consoleCall(callee.prop, args, lines, depth);

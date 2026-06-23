@@ -1,5 +1,5 @@
 export default {
-  mathCall(prop: any, args: any, lines: any, depth: any) {
+  mathCall(this: any, prop: any, args: any, lines: any, depth: any) {
     const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
     const isFloat = (t: any) => t === 'double' || t === 'float';
@@ -109,7 +109,7 @@ export default {
     return (map as Record<string, string>)[prop] ?? `/* Math.${prop} */(${a0})`;
   },
 
-  jsonCall(prop: any, typeArgs: any, args: any, lines: any, depth: any) {
+  jsonCall(this: any, prop: any, typeArgs: any, args: any, lines: any, depth: any) {
     if (prop === 'stringify') {
       const arg0 = args[0]?.expr;
       const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
@@ -130,7 +130,7 @@ export default {
     return `/* JSON.${prop} */0`;
   },
 
-  labelUsed(node: any, label: any, kind: any) {
+  labelUsed(this: any, node: any, label: any, kind: any) {
     if (!node || typeof node !== 'object') return false;
     if (node.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && node.label === label) return true;
     if (node.kind === 'Labeled' && node.label === label) return false;
@@ -144,7 +144,7 @@ export default {
     return false;
   },
 
-  isBareLiteralNumber(expr: any) {
+  isBareLiteralNumber(this: any, expr: any) {
     if (expr.kind === 'Literal' && expr.litType === 'number' &&
         expr.value !== 'NaN' && expr.value !== 'Infinity' &&
         !expr.value.includes('.') && !expr.value.includes('e') && !expr.value.includes('E') &&
@@ -156,7 +156,7 @@ export default {
     return false;
   },
 
-  bareNumberValue(expr: any) {
+  bareNumberValue(this: any, expr: any) {
     if (expr.kind === 'Literal') {
       return expr.value + '.0';
     }

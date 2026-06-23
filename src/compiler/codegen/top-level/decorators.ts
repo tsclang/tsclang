@@ -5,7 +5,7 @@ export default {
   // ----------------------------------------------------------------
 
   // Analyze a class decorator body and extract field mutations (target._field = value)
-  _analyzeClassDecorator(decFn: any) {
+  _analyzeClassDecorator(this: any, decFn: any) {
     const fields: any[] = [], inits: any[] = [];
     for (const stmt of (decFn.body?.body ?? [])) {
       if (stmt.kind !== 'ExprStmt') continue;
@@ -30,7 +30,7 @@ export default {
   },
 
   // Deep-substitute orig.apply(...) calls with a replacement expression
-  _deepSubstOrigApply(node: any, replacement: any, isVoid = false) {
+  _deepSubstOrigApply(this: any, node: any, replacement: any, isVoid = false) {
     if (!node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((n: any) => this._deepSubstOrigApply(n, replacement, isVoid));
     if (node.kind === 'Return' && node.value?.kind === 'Call' && node.value.callee?.prop === 'apply') {
@@ -48,7 +48,7 @@ export default {
   },
 
   // Recursively substitute Ident nodes in an AST
-  _substituteInAst(node: any, bindings: any) {
+  _substituteInAst(this: any, node: any, bindings: any) {
     if (!node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((n: any) => this._substituteInAst(n, bindings));
     if (node.kind === 'Ident' && bindings.has(node.name)) return bindings.get(node.name);
@@ -70,14 +70,14 @@ export default {
 
   // Check if a statement is `return orig.apply(this, ...)` or `orig.apply(this, ...)`
   // Check if orig.apply appears anywhere inside a stmt (for nested patterns like else branches)
-  _hasOrigApplyDeep(node: any) {
+  _hasOrigApplyDeep(this: any, node: any) {
     if (!node || typeof node !== 'object') return false;
     if (Array.isArray(node)) return node.some((n: any) => this._hasOrigApplyDeep(n));
     if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee?.prop === 'apply') return true;
     return Object.values(node).some((v: any) => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
   },
 
-  _isOrigApply(stmt: any) {
+  _isOrigApply(this: any, stmt: any) {
     const expr = stmt.kind === 'Return' ? stmt.value
       : stmt.kind === 'ExprStmt' ? stmt.expr
       : stmt.kind === 'VarDecl' ? stmt.init
@@ -90,7 +90,7 @@ export default {
 
   // Analyze a decorator function and extract wrapper info
   // Returns: { style, befores, afters } | { style, beforeStmts, afterStmts, applyIsReturn, paramBindings }
-  _analyzeDecorator(decFn: any, factoryArgs: any = null) {
+  _analyzeDecorator(this: any, decFn: any, factoryArgs: any = null) {
     // TSClang `decorator function` style
     if (decFn.isDecorator) {
       const befores: any[] = [], afters: any[] = [];
@@ -169,7 +169,7 @@ export default {
   },
 
   // Build a synthetic body statement from an Arrow/FuncExpr lambda (for desc.before/after)
-  _extractLambdaBody(lambdaNode: any) {
+  _extractLambdaBody(this: any, lambdaNode: any) {
     if (!lambdaNode) return [];
     const body = lambdaNode.body;
     if (!body) return [];
@@ -178,7 +178,7 @@ export default {
   },
 
   // Build the C call to the inner function
-  _buildInnerCall(className: any, methodName: any, m: any, isStatic: any) {
+  _buildInnerCall(this: any, className: any, methodName: any, m: any, isStatic: any) {
     const innerFnName = `${className}_${methodName}_inner`;
     const paramNames = (m.params ?? []).map((p: any) => p.name).filter(Boolean);
     if (isStatic) {
@@ -188,7 +188,7 @@ export default {
   },
 
   // Emit a decorated method: generates _inner + chain of wrappers
-  _emitDecoratedMethod(className: any, m: any, isStatic: any, explicitImplements: any, decs: any) {
+  _emitDecoratedMethod(this: any, className: any, m: any, isStatic: any, explicitImplements: any, decs: any) {
     // Check if a MethodDesc decorator is applied to a standalone function (error case handled in standalone)
     // decs: [D_1 (outermost/leftmost), ..., D_n (innermost/rightmost)]
 
@@ -221,7 +221,7 @@ export default {
   },
 
   // Emit a single wrapper function
-  _emitDecoratorWrapperFn(className: any, m: any, isStatic: any, wrapperName: any, innerName: any, analysis: any, d: any, decIdx: any, totalDecs: any) {
+  _emitDecoratorWrapperFn(this: any, className: any, m: any, isStatic: any, wrapperName: any, innerName: any, analysis: any, d: any, decIdx: any, totalDecs: any) {
     const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
     const isVoid = retType === 'void';
     const innerFnName = `${className}_${innerName}`;
@@ -369,7 +369,7 @@ export default {
   },
 
   // Emit a decorated standalone function
-  _emitDecoratedStandaloneFunc(node: any, decs: any) {
+  _emitDecoratedStandaloneFunc(this: any, node: any, decs: any) {
     const { name, params, returnType, body } = node;
     const retType = returnType ? this.resolveType(returnType) : 'void';
 
@@ -448,7 +448,7 @@ export default {
     this.define(name, { ctype: retType, funcName: mangledName, params });
   },
 
-  emitMethod(className: any, m: any, isStatic: any, explicitImplements = []) {
+  emitMethod(this: any, className: any, m: any, isStatic: any, explicitImplements = []) {
     if (!m.body) return; // abstract / overload
 
     // Error: static methods cannot be mut

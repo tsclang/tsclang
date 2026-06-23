@@ -1,5 +1,5 @@
 export default {
-  _emitRetainIfNeeded(valC: any, valNode: any, p: any) {
+  _emitRetainIfNeeded(this: any, valC: any, valNode: any, p: any) {
     if (valNode.kind === 'Ident') {
       const sym = this.lookup(valNode.name);
       if (sym?.isArc) {
@@ -12,7 +12,7 @@ export default {
     }
   },
 
-  _wrapErrForCaller(ctx: any, errExpr: any, calleeSym: any) {
+  _wrapErrForCaller(this: any, ctx: any, errExpr: any, calleeSym: any) {
     if (ctx.throwsNames.length <= 1) return errExpr;
     const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
     if (calleeErrTypes.length > 1) return errExpr;
@@ -23,7 +23,7 @@ export default {
     return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
   },
 
-  _visitControlFlow(node: any, lines: any, depth: any) {
+  _visitControlFlow(this: any, node: any, lines: any, depth: any) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
@@ -1364,7 +1364,7 @@ export default {
     'char', 'String', 'tsc_unknown',
   ]),
 
-  _validateSwitchFallthrough(node: any) {
+  _validateSwitchFallthrough(this: any, node: any) {
     if (this.inferType(node.discriminant) === 'double' || this.inferType(node.discriminant) === 'float') {
       throw this.error(`cannot switch on type 'f64'`, node);
     }
@@ -1384,7 +1384,7 @@ export default {
     }
   },
 
-  _isSimpleCType(ct: any) {
+  _isSimpleCType(this: any, ct: any) {
     return this._SIMPLE_C_TYPES.has(ct);
   },
 };

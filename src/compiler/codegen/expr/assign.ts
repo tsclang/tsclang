@@ -1,7 +1,7 @@
 // assign.js
 export default {
   // Assignment
-  assignToC(node: any, lines: any, depth: any) {
+  assignToC(this: any, node: any, lines: any, depth: any) {
     // Generator .next() assignment: r = g.next() → r = genFn_next(&g, args);
     if (node.right?.kind === 'Call' && node.right.callee?.kind === 'Member'
         && node.right.callee.prop === 'next') {

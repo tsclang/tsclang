@@ -2,7 +2,7 @@ const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64',
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export default {
-  _visitVarDecl(node: any, lines: any, depth: any) {
+  _visitVarDecl(this: any, node: any, lines: any, depth: any) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);

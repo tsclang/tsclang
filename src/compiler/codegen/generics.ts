@@ -1,7 +1,7 @@
 import { mangleParams } from '../types.js';
 // generics.js
 export default {
-  callGeneric(name: any, typeArgs: any, args: any, lines: any, depth: any) {
+  callGeneric(this: any, name: any, typeArgs: any, args: any, lines: any, depth: any) {
     const tmpl = this._genericFuncs.get(name);
     if (!tmpl) return `${name}(${this.argsToC(args, lines, depth)})`;
 
@@ -77,7 +77,7 @@ export default {
 
   // Create a virtual anonymous struct for field lookup (not emitted to C output)
   // Used internally by callGeneric to resolve utility types like Pick<T, K>
-  inferObjLitType(node: any) {
+  inferObjLitType(this: any, node: any) {
     const fields = node.props
       .filter((p: any) => !p.spread && !p.computed)
       .map((p: any) => ({ name: p.key, ctype: this.inferType(p.value) }));
@@ -95,7 +95,7 @@ export default {
   },
 
   // Substitute type params in a type annotation
-  substType(typeNode: any, subst: any) {
+  substType(this: any, typeNode: any, subst: any) {
     if (!typeNode) return typeNode;
     if (typeNode.kind === 'TypeRef') {
       if (subst.has(typeNode.name)) {
@@ -111,7 +111,7 @@ export default {
   },
 
   // Substitute type params in an AST node
-  substNode(node: any, subst: any) {
+  substNode(this: any, node: any, subst: any) {
     if (!node || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((n: any) => this.substNode(n, subst));
     const result: any = {};
@@ -127,7 +127,7 @@ export default {
     return result;
   },
 
-  emitMonoFunc(tmpl: any, monoName: any, subst: any) {
+  emitMonoFunc(this: any, tmpl: any, monoName: any, subst: any) {
     // Create a copy of the function with substituted type params
     const monoParams = tmpl.params.map((p: any) => ({
       ...p,
@@ -150,7 +150,7 @@ export default {
     this.visitFuncDecl(monoNode, true);
   },
 
-  emitMonoClass(tmpl: any, monoName: any, subst: any) {
+  emitMonoClass(this: any, tmpl: any, monoName: any, subst: any) {
     const fields  = tmpl.members.filter((m: any) => m.kind === 'Field');
     const methods = tmpl.members.filter((m: any) => m.kind === 'Method');
 

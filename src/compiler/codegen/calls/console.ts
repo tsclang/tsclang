@@ -1,5 +1,5 @@
 export default {
-  consoleCall(method: any, args: any, lines: any, depth: any) {
+  consoleCall(this: any, method: any, args: any, lines: any, depth: any) {
     if (method === 'time') {
       const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
       return `tsc_console_time(${label})`;

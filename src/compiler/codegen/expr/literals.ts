@@ -1,7 +1,7 @@
 // literals.js
 export default {
   // Unescape a char literal value to numeric code
-  _charCode(raw: any) {
+  _charCode(this: any, raw: any) {
     if (raw === '\\n') return 10;
     if (raw === '\\t') return 9;
     if (raw === '\\r') return 13;
@@ -19,12 +19,12 @@ export default {
     throw this.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
   },
 
-  _charLiteralToSTR_LIT(value: any) {
+  _charLiteralToSTR_LIT(this: any, value: any) {
     const escaped = value.replace(/\\(?![ntr0'"\\abfvxuU0-7])/g, '\\\\').replace(/"/g, '\\"');
     return `STR_LIT("${escaped}")`;
   },
 
-  _stringLiteralToByte(node: any) {
+  _stringLiteralToByte(this: any, node: any) {
     const raw = node.value;
     if (raw.length === 0) {
       throw this.error(`cannot convert empty string to char/u8`, node);
@@ -42,7 +42,7 @@ export default {
     return code;
   },
 
-  literalToC(node: any) {
+  literalToC(this: any, node: any) {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
     if (node.litType === 'char')   return this._charLiteralToSTR_LIT(node.value);
     if (node.litType === 'bool')   return node.value;
@@ -55,7 +55,7 @@ export default {
   },
 
   // Emit a number literal with the correct suffix for the given target C type
-  literalToCTyped(node: any, ctype: any) {
+  literalToCTyped(this: any, node: any, ctype: any) {
     // Char literals: convert to numeric value
     if (node.litType === 'char') {
       if (ctype === 'String') return this._charLiteralToSTR_LIT(node.value);
@@ -94,7 +94,7 @@ export default {
     return v;
   },
 
-  _checkLiteralFitsType(node: any, ctype: any) {
+  _checkLiteralFitsType(this: any, node: any, ctype: any) {
     const INT_RANGES = {
       'int8_t':   { min: -128n,                    max: 127n,                    ts: 'i8' },
       'int16_t':  { min: -32768n,                  max: 32767n,                  ts: 'i16' },
@@ -122,7 +122,7 @@ export default {
   // Binary
   // ----------------------------------------------------------------
   // Get compile-time constant value of a const-literal variable or literal node (BigInt or null)
-  constVal(node: any) {
+  constVal(this: any, node: any) {
     if (node.kind === 'Literal' && node.litType === 'number') {
       const raw = node.value.replace(/_/g, '');
       try { return BigInt(raw); } catch(_) {
@@ -143,7 +143,7 @@ export default {
 
   // For const-context mixed integer binary expressions: cast operands and result explicitly.
   // Returns null if not applicable.
-  tryConstMixedBinary(node: any, targetCtype: any, lines: any, depth: any) {
+  tryConstMixedBinary(this: any, node: any, targetCtype: any, lines: any, depth: any) {
     const lt = this.inferType(node.left);
     const rt = this.inferType(node.right);
     // Only applies to arithmetic ops with const operands (not let variables)

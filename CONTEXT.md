@@ -1,17 +1,17 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (JS-compatible number formatting via `tsc_format_double()`, NaN/Infinity codegen #57 closed, audit #100).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (`strict: true` enabled — 8/8 strict options, #99 closed).
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. 7/8 strict options enabled.
+- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1749 tests**, all pass)
-- **Build:** `npm run typecheck` (tsc --noEmit, 7 strict options), `npm run build` (tsc → dist/), `tsx` for dev
+- **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
 - **Next goal:** Self-hosting (#47–#50 gaps: string methods, file I/O, CLI args, StringBuilder). Then #99 (strict mode completion).
@@ -366,7 +366,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 ### Project state & tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 **closed** (NaN/Infinity + `tsc_format_double`), #72–#80 #82 #91 (self-hosting epics), #99 (strict mode: `noImplicitThis` + `strictPropertyInitialization` + `strict: true`), #100 (audit tracking).
+- **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 **closed** (NaN/Infinity + `tsc_format_double`), #72–#80 #82 #91 (self-hosting epics), #99 **closed** (`strict: true` — 8/8 strict options), #100 **closed** (audit).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
 - **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
@@ -374,7 +374,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 
 ### Architectural decisions
 
-- **Compiler language: TypeScript.** JS→TS migration complete (7/8 strict options, ZERO @ts-nocheck). Long-term goal: self-host in `.tsc`.
+- **Compiler language: TypeScript.** JS→TS migration complete (`strict: true`, ZERO @ts-nocheck). Long-term goal: self-host in `.tsc`.
 - **IR/SSA: deferred.** Existing codegen supports all language features. IR is architectural improvement, not release blocker. Prototype removed, spec retained as `[PLANNED]`. Revisit post-self-hosting.
 - **Bug fix priority before refactoring:** All bugs fixed before refactoring started (П6 — can't refactor safely with red tests).
 

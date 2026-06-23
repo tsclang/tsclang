@@ -184,7 +184,7 @@ export function handleStdlibImport(ctx: any, node: any) {
 }
 
 export const STDLIB_HANDLERS = {
-  _handleStdAvr(node: any) {
+  _handleStdAvr(this: any, node: any) {
     const names = node.names ?? [];
     for (const n of names) {
       const name = typeof n === 'object' ? n.name : n;
@@ -201,7 +201,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdFs(node: any) {
+  _handleStdFs(this: any, node: any) {
     if (node.namespace && node.names.length > 0) {
       this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
@@ -210,7 +210,7 @@ export const STDLIB_HANDLERS = {
                { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
   },
 
-  _handleStdIo(node: any) {
+  _handleStdIo(this: any, node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'Reader') {
@@ -244,19 +244,19 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdReactive(node: any) {
+  _handleStdReactive(this: any, node: any) {
     this._reactiveClosureCount = 0;
     this._capturedSignalMap = new Map();
   },
 
-  _handleStdNet(node: any) {
+  _handleStdNet(this: any, node: any) {
     this.classes.set('TscResponse', {
       isStruct: true,
       fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
     });
   },
 
-  _handleStdLibc(node: any) {
+  _handleStdLibc(this: any, node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
@@ -264,7 +264,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdStack(node: any) {
+  _handleStdStack(this: any, node: any) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'push') {
