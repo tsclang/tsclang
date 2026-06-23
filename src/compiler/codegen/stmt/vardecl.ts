@@ -1109,7 +1109,7 @@ export default {
             throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
           }
           const _closureParamCtypes = (typeAnn.params ?? []).map((p: any) => this.resolveType(p));
-          let initC;
+          let initC: any;
           if (init?.kind === 'Arrow') {
             // Pre-declare for recursion support (before hoistClosure compiles body)
             const _pfx1 = this._modulePrefix ?? '';
@@ -1367,7 +1367,7 @@ export default {
                 return;
               }
             }
-            let initC;
+            let initC: any;
             if (typeAnn) this._checkLiteralFitsType(init, ctype);
             // Float literal with fractional part → integer type: error
             if (typeAnn && init.kind === 'Literal' && init.litType === 'number') {

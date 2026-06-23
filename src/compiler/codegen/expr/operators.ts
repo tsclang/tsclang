@@ -337,7 +337,7 @@ export default {
           const divTmp = `_math_${this.tempCount++}`;
           lines.push(`${I}int32_t ${divTmp} = ${r};`);
           lines.push(`${I}if (${divTmp} == 0) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
-          const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+          const minMap: Record<string, string> = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
           const minConst = minMap[lt];
           if (minConst) {
             lines.push(`${I}if (${divTmp} == -1 && ${l} == ${minConst}) { ${this._mathErrVar}.operation = "${opName}"; goto ${this._mathCatchLabel}; }`);
@@ -354,7 +354,7 @@ export default {
           : 'abort()';
         lines.push(`${I}int32_t ${tmp} = ${r};`);
         lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
-        const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+        const minMap: Record<string, string> = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
         const minConst = minMap[lt];
         if (minConst) {
           const overflowPanic = this._strictRules?.has('no-abort')
