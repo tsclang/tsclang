@@ -724,7 +724,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     eat(TK.IDENT, 'this');
     eat(TK.COLON);
     const thisType = parseTypeAnnotation();
-    let params = [];
+    let params: any[] = [];
     if (tryEat(TK.COMMA)) {
       while (cur().type !== TK.RPAREN) {
         const pname = eat(TK.IDENT).value;
@@ -853,7 +853,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (cur().type === TK.IDENT && cur().value === 'extends') {
       eat(TK.IDENT); superClass = eat(TK.IDENT).value;
     }
-    let implements_ = [];
+    let implements_: any[] = [];
     if (cur().type === TK.IDENT && cur().value === 'implements') {
       eat(TK.IDENT);
       const _parseImpl = () => {
