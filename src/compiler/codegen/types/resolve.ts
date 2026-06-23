@@ -251,7 +251,7 @@ export default {
     const { elements, readonly } = typeNode;
 
     // Build struct fields
-    const fields = [];
+    const fields: any[] = [];
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
       if (el.rest) {
