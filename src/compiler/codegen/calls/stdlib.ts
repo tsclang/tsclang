@@ -731,7 +731,7 @@ export default {
   _dvOp(_dvName, base, I, dir, type, le, args, lines, depth, _dvSym) {
     const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const ptr = `(${base} + ${_dvIdx})`;
-    const sz: Record<string, number> = { U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 }[type];
+    const sz = ({ U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 } as Record<string, number>)[type];
     const cType: Record<string, any> = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
     const castCType: Record<string, any> = { U8:'uint8_t', I8:'int8_t', U16:'uint16_t', I16:'int16_t', U32:'uint32_t', I32:'int32_t', U64:'uint64_t', I64:'int64_t', F32:'float', F64:'double' }[type];
 
