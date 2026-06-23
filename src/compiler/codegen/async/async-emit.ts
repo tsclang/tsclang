@@ -178,7 +178,7 @@ export default {
     }
   },
 
-  _buildAsyncPoll(body) {
+  _buildAsyncPoll(body: any) {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines: any[] = [];
     const ctx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
@@ -227,7 +227,7 @@ export default {
     return lines;
   },
 
-  _emitAsyncStmtList(stmts, lines, ctx, I) {
+  _emitAsyncStmtList(stmts: any, lines: any, ctx: any, I: any) {
     for (let i = 0; i < stmts.length; i++) {
       const s = stmts[i];
       if (s?.kind === 'While') {
@@ -250,7 +250,7 @@ export default {
     }
   },
 
-  _emitAsyncWhile(s, remainingStmts, lines, ctx, I) {
+  _emitAsyncWhile(s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
     const loopCase = ctx.nextCase++;
     const condC = this._selfE(s.cond ?? s.test);
     const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
@@ -293,7 +293,7 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncDoWhile(s, remainingStmts, lines, ctx, I) {
+  _emitAsyncDoWhile(s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
     const loopCase = ctx.nextCase++;
     const condC = this._selfE(s.cond ?? s.test);
     const doBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
@@ -338,7 +338,7 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncFor(s, remainingStmts, lines, ctx, I) {
+  _emitAsyncFor(s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
     const loopCase = ctx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `for_${loopCase}_end`;
@@ -409,7 +409,7 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncForOf(s, remainingStmts, lines, ctx, I) {
+  _emitAsyncForOf(s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
     const loopCase = ctx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `forof_${loopCase}_end`;
@@ -509,7 +509,7 @@ export default {
   },
 
   // Emit: self->_state = N; /* fall through */ case N:
-  _emitAsyncTransition(lines, ctx, I) {
+  _emitAsyncTransition(lines: any, ctx: any, I: any) {
     lines.push(`${I}self->_state = ${ctx.nextCase};`);
     lines.push(`${I}/* fall through */`);
     lines.push(`        case ${ctx.nextCase}:`);
