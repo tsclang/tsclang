@@ -136,7 +136,7 @@ export default {
     // Wrap sub-expressions in parens when needed for precedence
     const needsParens = (child: any, parentOp: any, isRight: any) => {
       if (child.kind !== 'Binary') return child.kind === 'Assign';
-      const prec = { '**':13, '*':12, '/':12, '%':12, '+':11, '-':11,
+      const prec: Record<string, number> = { '**':13, '*':12, '/':12, '%':12, '+':11, '-':11,
         '<<':10, '>>':10, '>>>':10, '<':9, '>':9, '<=':9, '>=':9,
         '==':8, '!=':8, '===':8, '!==':8,
         '&':7, '^':6, '|':5, '&&':4, '||':3, '??':3 };
@@ -229,7 +229,7 @@ export default {
     const rRaw = this.exprToC(node.right, lines, depth);
     const l = needsParens(node.left,  node.op, false) ? `(${lRaw})` : lRaw;
     const r = needsParens(node.right, node.op, true)  ? `(${rRaw})` : rRaw;
-    const opMap = {
+    const opMap: Record<string, string> = {
       '===': '==', '!==': '!=',
       '&&':  '&&', '||': '||', '??': '||',
     };
