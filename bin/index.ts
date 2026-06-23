@@ -486,7 +486,7 @@ if (command === 'init') {
 
 // ---------------------------------------------------------------------------
 // Shared: compile TSC → C string (recursive for local imports)
-function reportErrors(e, filename: any) {
+function reportErrors(e: any, filename: any) {
   const errors = e?.isTscErrorBag ? e.errors
                : e?.isTscError    ? [e]
                : null;
@@ -632,7 +632,7 @@ if (command === 'publish') {
   }
 
   // Collect .tsc files and tsc.package.json
-  const files = {};
+  const files: Record<string, string> = {};
   const collectFiles = (dir: any, base = '') => {
     for (const entry of readdirSync(dir)) {
       if (entry === 'tsc_packages' || entry.startsWith('.')) continue;
