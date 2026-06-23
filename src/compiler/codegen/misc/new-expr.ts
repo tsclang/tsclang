@@ -1,4 +1,3 @@
-// @ts-nocheck — #97: cascading
 // new-expr.js
 export default {
   newToC(node: any, lines: any, depth: any) {
@@ -18,12 +17,12 @@ export default {
         throw this.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Map requires heap allocation`, node);
       }
       if (this._allocatorName === 'static' && !args[0]) {
-        const [kt2, vt2] = (node.typeArgs ?? []).map((t) => this.resolveType(t));
+        const [kt2, vt2] = (node.typeArgs ?? []).map((t: any) => this.resolveType(t));
         const k2 = kt2 ? this.ctypeToTsName(kt2) : 'string';
         const v2 = vt2 ? this.ctypeToTsName(vt2) : 'i32';
         throw this.error(`TypeError: 'new Map<${k2}, ${v2}>()' requires a capacity argument when allocator is "static"; use 'new Map<${k2}, ${v2}>(N)'`);
       }
-      const [kt, vt] = (node.typeArgs ?? []).map((t) => this.resolveType(t));
+      const [kt, vt] = (node.typeArgs ?? []).map((t: any) => this.resolveType(t));
       const k = kt ? this.cTypeToIdent(kt) : 'string';
       const v = vt ? this.cTypeToIdent(vt) : 'i32';
       const suffix = `${k}_${v}`;
@@ -89,7 +88,7 @@ export default {
         return `tsc_date_from_ms((int64_t)(${msC}))`;
       }
       // new Date(year, month, day[, h, m, s, ms])
-      const a = args.map((a) => this.exprToC(a.expr ?? a, lines, depth));
+      const a = args.map((a: any) => this.exprToC(a.expr ?? a, lines, depth));
       return `tsc_date_from_ymd(${a[0]}, ${a[1]}, ${a[2] ?? 1}, ${a[3] ?? 0}, ${a[4] ?? 0}, ${a[5] ?? 0}, ${a[6] ?? 0})`;
     }
 
@@ -151,7 +150,7 @@ export default {
         const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
         subst.set(tmpl.typeParams[i].name, ct);
       }
-      const suffix = tmpl.typeParams.map(tp => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+      const suffix = tmpl.typeParams.map((tp: any) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
       const monoName = `${name}_${suffix}`;
       if (!this._emittedGenericClasses.has(monoName)) {
         this._emittedGenericClasses.add(monoName);
@@ -170,9 +169,9 @@ export default {
         const tmpName = `_heap_${this.tempCount++}`;
         this.includes.add('#include <stdlib.h>');
         lines.push(`${cname} *${tmpName} = (${cname} *)tsc_malloc(sizeof(${cname}));`);
-        const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
+        const hasCtor = cls.methods?.some((m: any) => m.name === 'constructor');
         if (hasCtor) {
-          const ctorArgs = node.args.map((a) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
+          const ctorArgs = node.args.map((a: any) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
           lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
         } else {
           lines.push(`*${tmpName} = (${cname}){0};`);
@@ -204,17 +203,17 @@ export default {
           lines.push(`    abort();`);
         }
         lines.push(`}`);
-        const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
+        const hasCtor = cls.methods?.some((m: any) => m.name === 'constructor');
         if (hasCtor && node.args?.length > 0) {
-          const argsC = node.args.map((a) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
+          const argsC = node.args.map((a: any) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
           lines.push(`*${tmpName}.value = ${cname}_new(${argsC});`);
         }
         return tmpName;
       }
-      const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
+      const hasCtor = cls.methods?.some((m: any) => m.name === 'constructor');
       // Suppress const for class instances unless ALL fields are readonly
       const allReadonly = cls.fields?.length > 0 &&
-        cls.fields.every((f) => f.modifiers?.includes('readonly'));
+        cls.fields.every((f: any) => f.modifiers?.includes('readonly'));
       if (!allReadonly) this._lastSuppressConst = true;
       if (hasCtor) return `${cname}_new(${argsC})`;
       // Throws classes have a synthesized _new(String msg) function
@@ -222,11 +221,11 @@ export default {
       // Class decorator inits: flag for injection after VarDecl emit
       if (cls._decoratorInits?.length) this._pendingDecoratorInits = cls._decoratorInits;
       // @readonly fields with initializers → designated initializer syntax
-      const readonlyInits = (cls.fields ?? []).filter((f) =>
-        f.init && (f.decorators ?? []).some((d) => d.name === 'readonly')
+      const readonlyInits = (cls.fields ?? []).filter((f: any) =>
+        f.init && (f.decorators ?? []).some((d: any) => d.name === 'readonly')
       );
       if (readonlyInits.length > 0) {
-        const parts = readonlyInits.map((f) => `.${f.name} = ${this.exprToC(f.init, lines, depth)}`);
+        const parts = readonlyInits.map((f: any) => `.${f.name} = ${this.exprToC(f.init, lines, depth)}`);
         return `{ ${parts.join(', ')} }`;
       }
       // In return context, compound literal syntax is required; in declarations, {0} works too
@@ -249,7 +248,7 @@ export default {
     const retSuffix = this.cTypeToIdent(ret);
     const _pfx = this._modulePrefix ?? '';
     const name = `${_pfx}_lambda_${n}_${retSuffix}`;
-    const paramStrs = (node.params ?? []).map((p, i) => {
+    const paramStrs = (node.params ?? []).map((p: any, i: any) => {
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
       return ct === 'String *' ? `${ct}${p.name}` : `${ct} ${p.name}`;
@@ -267,7 +266,7 @@ export default {
       const p = node.params[i];
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
-      const symInfo = { ctype: ct, varKind: 'const' };
+      const symInfo: any = { ctype: ct, varKind: 'const' };
       if (ct === 'String *') {
         symInfo.isPointer = true;
         symInfo.isRefParam = true;
@@ -347,7 +346,7 @@ export default {
   },
 
   arrowParamTypes(node: any) {
-    return (node.params ?? []).map((p) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+    return (node.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
   },
 
   // Expand an ArrayLit's elements into C initializer strings, handling spreads.

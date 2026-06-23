@@ -1,4 +1,3 @@
-// @ts-nocheck — #97: cascading
 export default {
   consoleCall(method: any, args: any, lines: any, depth: any) {
     if (method === 'time') {
@@ -51,7 +50,7 @@ export default {
       }
 
       if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
-        const flattenConcat = (n: any) => {
+        const flattenConcat = (n: any): any[] => {
           if (n.kind === 'Binary' && n.op === '+' && this.isStringExpr(n)) {
             return [...flattenConcat(n.left), ...flattenConcat(n.right)];
           }
@@ -59,7 +58,7 @@ export default {
         };
         const segments = flattenConcat(expr);
         // Only flatten when every segment is a string literal (safe to merge into format string)
-        if (segments.every(seg => seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char'))) {
+        if (segments.every((seg: any) => seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char'))) {
           let concatFmt = '';
           for (const seg of segments) {
             concatFmt += seg.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%');
@@ -88,7 +87,7 @@ export default {
       const cexpr = unwrapRes ? `${unwrapRes}.value` : this.exprToC(expr, lines, depth);
 
       if (expr.kind === 'Binary' && ['&','|','^','<<','>>','>>>'].includes(expr.op)) {
-        const hasTypedVar = (n: any) => {
+        const hasTypedVar = (n: any): boolean => {
           if (!n) return false;
           if (n.kind === 'Ident') {
             const s = this.lookup(n.name);

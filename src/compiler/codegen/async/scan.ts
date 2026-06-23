@@ -1,15 +1,14 @@
-// @ts-nocheck — #97: cascading
 // scan.js
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
   _scanAsyncBody(params: any, body: any) {
-    const paramFields = [];
-    const bodyFields = [];
+    const paramFields: any[] = [];
+    const bodyFields: any[] = [];
     const inlined = new Map();     // name → C literal string
     const inlinedTypes = new Map(); // name → raw TSclang type name (for error messages)
     const seen = new Set();
-    const spawnInfos = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
-    const extraPollParams = []; // free vars of spawn blocks that become extra poll params
+    const spawnInfos: any[] = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
+    const extraPollParams: any[] = []; // free vars of spawn blocks that become extra poll params
 
     // Pre-scan type map: tracks variable types as the walk progresses so that
     // _awaitInfoOf can look up types of variables not yet in the real scope.
@@ -169,7 +168,7 @@ export default {
             else if (item.expr?.kind) this._scanExprIdents(item.expr, touch);
           }
         }
-      } else if (val && typeof val === 'object' && val.kind) {
+      } else if (val && typeof val === 'object' && (val as any).kind) {
         this._scanExprIdents(val, touch);
       }
     }
@@ -190,7 +189,7 @@ export default {
       }
     };
 
-    const scanExpr = (node) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: any) => this._scanExprIdents(node, touch);
 
     const walk = (stmts: any) => {
       for (const s of stmts || []) {
@@ -299,7 +298,7 @@ export default {
       }
     };
 
-    const scanExpr = (node) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: any) => this._scanExprIdents(node, touch);
 
     const walk = (stmts: any) => {
       for (const s of stmts || []) {
@@ -382,7 +381,7 @@ export default {
 
   // Collect await sub-state field descriptors for the struct
   _collectAwaitStates(body: any) {
-    const result = [];
+    const result: any[] = [];
     let awaitIdx = 0;
     let genIdx = 0;
 

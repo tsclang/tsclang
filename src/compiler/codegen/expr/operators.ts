@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 // operators.js
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow

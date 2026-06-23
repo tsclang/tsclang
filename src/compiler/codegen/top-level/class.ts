@@ -1,4 +1,3 @@
-// @ts-nocheck — #97: cascading callbacks, needs manual pass
 // class.js
 export default {
   visitClassDecl(node: any) {
@@ -116,13 +115,13 @@ export default {
       // Always treat as if extending Error (TscError _base)
       effectiveSuperClass = 'Error';
       // Remove 'message' field — it's replaced by _base.message via TscError
-      fields = allFields_.filter((f) => f.name !== 'message');
+      fields = allFields_.filter((f: any) => f.name !== 'message');
     }
 
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
     const implements_ = node.implements_ ?? [];
     // Detect implements Iterable<T> and extract element type
-    const _ifaceName = (iface) => typeof iface === 'string' ? iface : iface.name;
+    const _ifaceName = (iface: any) => typeof iface === 'string' ? iface : iface.name;
     let _iterableElemType = null;
     for (const iface of implements_) {
       if (_ifaceName(iface) === 'Iterable' && typeof iface === 'object' && iface.typeArgs?.[0]) {
@@ -150,13 +149,13 @@ export default {
     const _allStatic = methods.length > 0 && methods.every((m: any) => m.modifiers.includes('static'));
     const _hasUserFields = fields.length > 0 || cBase;
     const _usedAsType = !_allStatic || _hasUserFields || (() => {
-      const scanType = (node) => {
+      const scanType = (node: any): any => {
         if (!node || typeof node !== 'object') return false;
         if (Array.isArray(node)) return node.some(scanType);
         if (node.kind === 'TypeRef' && node.name === name) return true;
-        return Object.values(node).some((v) => v && typeof v === 'object' ? scanType(v) : false);
+        return Object.values(node).some((v: any) => v && typeof v === 'object' ? scanType(v) : false);
       };
-      return methods.some((m: any) => scanType(m.returnType) || (m.params ?? []).some((p) => scanType(p.typeAnn)));
+      return methods.some((m: any) => scanType(m.returnType) || (m.params ?? []).some((p: any) => scanType(p.typeAnn)));
     })();
 
     if (_usedAsType) {
@@ -171,7 +170,7 @@ export default {
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
           throw this.error(`"never" cannot be used as a field type`);
         }
-        const isReadonly = (f.decorators ?? []).some((d) => d.name === 'readonly');
+        const isReadonly = (f.decorators ?? []).some((d: any) => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         const constPfx = isReadonly ? 'const ' : '';
         if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);

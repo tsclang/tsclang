@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 // async-stmt.js
 export default {
   _emitAsyncStmt(s, lines, ctx, I) {

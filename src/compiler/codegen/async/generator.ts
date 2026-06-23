@@ -1,4 +1,3 @@
-// @ts-nocheck — #97: cascading
 // generator.js
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
@@ -30,7 +29,7 @@ export default {
     const nextFn = `${name}_next`;
 
     // Scan let vars (promoted to struct)
-    const letFields = [];
+    const letFields: any[] = [];
     const seenLets = new Set();
     const walkLets = (stmts: any) => {
       for (const s of stmts || []) {
@@ -212,7 +211,7 @@ export default {
     }
   },
 
-  _emitGenStmt(s, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
+  _emitGenStmt(s: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
     if (!s) return;
 
     // Unwrap ExprStmt(Yield(...))
@@ -345,7 +344,7 @@ export default {
         lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name} = {0};`);
       }
     } else {
-      const tmp = [];
+      const tmp: any[] = [];
       this.visitStmt(stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }

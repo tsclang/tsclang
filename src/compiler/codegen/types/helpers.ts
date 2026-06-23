@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 // helpers.js
 const _RUNTIME_ET = new Set(['i32', 'f64', 'string']);
 const _RUNTIME_MAP = new Set(['i32_i32', 'i32_f64', 'f64_f64', 'string_string']);

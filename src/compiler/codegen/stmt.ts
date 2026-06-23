@@ -1,11 +1,10 @@
-// @ts-nocheck — #97: cascading array types
 // stmt.js
 export default {
   visitBlock(block: any, lines: any, depth: any) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
-    const blockPoolVars = [];
-    const blockHeapVars = [];
+    const blockPoolVars: any[] = [];
+    const blockHeapVars: any[] = [];
     const prevPoolVars = this._currentBlockPoolVars;
     const prevHeapVars = this._currentBlockHeapVars;
     this._currentBlockPoolVars = blockPoolVars;

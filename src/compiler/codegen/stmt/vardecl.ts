@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];

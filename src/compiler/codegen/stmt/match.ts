@@ -1,4 +1,3 @@
-// @ts-nocheck — #97: cascading callbacks
 export default {
   emitMatchVarDecl(node: any, lines: any, depth: any) {
     const { varKind, name, typeAnn, init } = node;
@@ -24,7 +23,7 @@ export default {
 
     // For enum discriminants: check exhaustiveness
     if (isEnum) {
-      const allValues = (enumDef.members ?? []).map((m) => m.name);
+      const allValues = (enumDef.members ?? []).map((m: any) => m.name);
       const coveredEnumCases = new Set();
       let hasWild = false;
       for (const c of cases) {
@@ -32,9 +31,9 @@ export default {
         if (c.pattern.kind === 'MatchEnum') coveredEnumCases.add(c.pattern.caseName);
       }
       if (!hasWild) {
-        const missing = allValues.filter((v) => !coveredEnumCases.has(v));
+        const missing = allValues.filter((v: any) => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v) => `'${v}'`).join(', ')}`);
+          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: any) => `'${v}'`).join(', ')}`);
         }
       }
     }
@@ -318,8 +317,8 @@ export default {
       const className = pattern.className;
       const ifaceDef = this.interfaces?.get(discType) ?? null;
       const classDef = this.classes.get(className);
-      return fields.map((f) => {
-        const fieldDef = classDef?.fields?.find(fd => fd.name === f);
+      return fields.map((f: any) => {
+        const fieldDef = classDef?.fields?.find((fd: any) => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = ifaceDef
           ? `((${className}*)${discC}.self)->${f}`
@@ -332,8 +331,8 @@ export default {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const structDef = this.classes.get(discType);
-      return fields.map((f) => {
-        const fieldDef = structDef?.fields?.find(fd => fd.name === f);
+      return fields.map((f: any) => {
+        const fieldDef = structDef?.fields?.find((fd: any) => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = `${discC}.${f}`;
         this.define(f, { ctype, varKind: 'const' });
@@ -361,7 +360,7 @@ export default {
       case 'MatchIdent': {
         // Bare identifier: check if it's a known enum value or treat as wildcard
         if (enumDef) {
-          const allValues = enumDef.values?.map((v) => typeof v === 'string' ? v : v.name) ?? [];
+          const allValues = enumDef.values?.map((v: any) => typeof v === 'string' ? v : v.name) ?? [];
           if (allValues.includes(pattern.name)) return `${discC} == ${discType}_${pattern.name}`;
         }
         return null; // treat as wildcard
@@ -383,7 +382,7 @@ export default {
       case 'MatchObjLit': {
         // Object literal pattern: check discriminator fields
         if (pattern.discriminators.length === 0) return null;
-        const conds = pattern.discriminators.map((d) => {
+        const conds = pattern.discriminators.map((d: any) => {
           if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${d.value}"))`;
           return `${discC}.${d.key} == ${d.value}`;
         });
@@ -435,14 +434,14 @@ export default {
     }
 
     // Emit typedef
-    const fieldDecls = [`int32_t _arm`, ...fields.map((f) => `${f.ctype} ${f.key}`)].join('; ');
+    const fieldDecls = [`int32_t _arm`, ...fields.map((f: any) => `${f.ctype} ${f.key}`)].join('; ');
     this.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
 
     // Register struct type so inferType works for field access
     this.classes.set(structName, {
       fields: [
         { name: '_arm', ctype: 'int32_t' },
-        ...fields.map((f) => ({ name: f.key, ctype: f.ctype })),
+        ...fields.map((f: any) => ({ name: f.key, ctype: f.ctype })),
       ],
     });
 

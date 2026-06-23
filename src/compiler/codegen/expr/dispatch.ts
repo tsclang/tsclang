@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 // dispatch.js
 export default {
   exprToC(node, lines = [], depth = 0) {

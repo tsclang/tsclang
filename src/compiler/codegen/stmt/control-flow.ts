@@ -1,4 +1,4 @@
-// @ts-nocheck — Stage 6: mixin file, types added in Stage 8
+// @ts-nocheck
 export default {
   _emitRetainIfNeeded(valC, valNode, p) {
     if (valNode.kind === 'Ident') {
