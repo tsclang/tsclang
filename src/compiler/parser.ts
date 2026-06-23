@@ -119,7 +119,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       if (afterParen === TK.ARROW) {
         // Function type: (T1, T2, ...) => R
         eat(TK.LPAREN);
-        const paramTypes = [];
+        const paramTypes: any[] = [];
         while (cur().type !== TK.RPAREN) {
           // Allow optional param name before type: (x: i32) or just (i32)
           if (cur().type === TK.IDENT && peek().type === TK.COLON) {
@@ -184,7 +184,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       }
       if (cur().type === TK.LBRACK) {
         eat(TK.LBRACK);
-        const elements = [];
+        const elements: any[] = [];
         while (cur().type !== TK.RBRACK) {
           let label = null;
           let rest = false;
@@ -237,7 +237,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // Inline object type: { x: f64; y: f64 } or { getX(): i32; }
     if (cur().type === TK.LBRACE) {
       eat(TK.LBRACE);
-      const fields = [];
+      const fields: any[] = [];
       while (cur().type !== TK.RBRACE) {
         const fname = eat(TK.IDENT).value;
         const fopt = tryEat(TK.QUEST) !== null;
@@ -311,7 +311,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   // Decorators  @name, @name(args)
   // -------------------------------------------------------------------------
   function parseDecorators() {
-    const decorators = [];
+    const decorators: any[] = [];
     while (cur().type === TK.AT) {
       eat(TK.AT);
       let name = eat(TK.IDENT).value;
@@ -336,7 +336,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   // Statements
   // -------------------------------------------------------------------------
   function parseProgram() {
-    const body = [];
+    const body: any[] = [];
     while (!done()) {
       if (cur().type === TK.HASH) {
         errors.push(new TscError(`SyntaxError: unexpected '#[...]' directive; use CLI flags (--target, --allocator, --scheduler) or tsc.package.json instead`, {
@@ -470,7 +470,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       eat(TK.IDENT, 'module');
       const moduleName = eat(TK.STRING).value;
       eat(TK.LBRACE);
-      const body = [];
+      const body: any[] = [];
       while (!done() && cur().type !== TK.RBRACE) {
         if (cur().type === TK.IDENT && cur().value === 'function') {
           eat(TK.IDENT, 'function');
@@ -524,7 +524,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // import type { X } from "..." — type-only imports (compile-time only, no C emit)
     const isTypeOnly = cur().type === TK.IDENT && cur().value === 'type';
     if (isTypeOnly) eat(TK.IDENT, 'type');
-    const names = [];
+    const names: any[] = [];
     let namespace = false;
     if (tryEat(TK.LBRACE)) {
       while (cur().type !== TK.RBRACE) {
@@ -560,7 +560,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // export { X, Y } from "./module"  OR  export { X, Y }
     if (cur().type === TK.LBRACE) {
       eat(TK.LBRACE);
-      const names = [];
+      const names: any[] = [];
       while (cur().type !== TK.RBRACE) {
         const name = eat(TK.IDENT).value;
         if (cur().type === TK.IDENT && cur().value === 'as') {
@@ -645,7 +645,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseObjectPattern() {
     eat(TK.LBRACE);
-    const props = [];
+    const props: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const name = eat(TK.IDENT).value;
       let alias = name, defaultVal = null;
@@ -660,7 +660,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseArrayPattern() {
     eat(TK.LBRACK);
-    const elems = [];
+    const elems: any[] = [];
     while (cur().type !== TK.RBRACK) {
       if (tryEat(TK.COMMA)) { elems.push(null); continue; }
       if (cur().type === TK.SPREAD) {
@@ -795,7 +795,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       // Array destructuring param: [a, b, , c]
       if (cur().type === TK.LBRACK) {
         eat(TK.LBRACK);
-        const pattern = [];
+        const pattern: any[] = [];
         while (cur().type !== TK.RBRACK) {
           if (cur().type === TK.COMMA) {
             pattern.push(null); // skip slot
@@ -860,7 +860,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         const nm = eat(TK.IDENT).value;
         if (cur().type === TK.LT) {
           eat(TK.LT);
-          const tArgs = [];
+          const tArgs: any[] = [];
           while (cur().type !== TK.GT) { tArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
           eat(TK.GT);
           return { name: nm, typeArgs: tArgs };
@@ -871,10 +871,10 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       while (tryEat(TK.COMMA)) implements_.push(_parseImpl());
     }
     eat(TK.LBRACE);
-    const members = [];
+    const members: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const memberDecorators = parseDecorators();
-      const modifiers = [];
+      const modifiers: any[] = [];
       while (cur().type === TK.IDENT && ['public','private','protected','static','readonly','abstract','async','override','mut','move'].includes(cur().value)) {
         const mod = eat(TK.IDENT).value;
         if (mod === 'protected') err(`'protected' is not supported — there is no inheritance in TSClang`);
@@ -950,7 +950,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       while (tryEat(TK.COMMA)) extends_.push(eat(TK.IDENT).value);
     }
     eat(TK.LBRACE);
-    const members = [];
+    const members: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const mname = eat(TK.IDENT).value;
       let optional = false;
@@ -976,7 +976,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     eat(TK.IDENT, 'enum');
     const name = eat(TK.IDENT).value;
     eat(TK.LBRACE);
-    const members = [];
+    const members: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const mname = eat(TK.IDENT).value;
       let value = null;
@@ -1128,7 +1128,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   function parseTryCatch() {
     eat(TK.IDENT, 'try');
     const body = parseBlock();
-    const catches = [];
+    const catches: any[] = [];
     while (cur().type === TK.IDENT && cur().value === 'catch') {
       eat(TK.IDENT);
       let param = null, typeAnn = null;
@@ -1152,20 +1152,20 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     const discriminant = parseExpr();
     eat(TK.RPAREN);
     eat(TK.LBRACE);
-    const cases = [];
+    const cases: any[] = [];
     while (cur().type !== TK.RBRACE) {
       if (cur().type === TK.IDENT && cur().value === 'case') {
         const caseTok = eat(TK.IDENT);
         const test = parseExpr();
         eat(TK.COLON);
-        const stmts = [];
+        const stmts: any[] = [];
         while (!(cur().type === TK.IDENT && (cur().value === 'case' || cur().value === 'default')) && cur().type !== TK.RBRACE) {
           stmts.push(parseStmt());
         }
         cases.push({ test, body: stmts, line: caseTok.line });
       } else if (cur().type === TK.IDENT && cur().value === 'default') {
         const defTok = eat(TK.IDENT); eat(TK.COLON);
-        const stmts = [];
+        const stmts: any[] = [];
         while (!(cur().type === TK.IDENT && cur().value === 'case') && cur().type !== TK.RBRACE) {
           stmts.push(parseStmt());
         }
@@ -1228,7 +1228,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseBlock(): any {
     eat(TK.LBRACE);
-    const stmts = [];
+    const stmts: any[] = [];
     while (cur().type !== TK.RBRACE && !done()) {
         const s = parseStmt();
         if (s.kind === 'VarDecls') s.decls.forEach((d: any) => stmts.push(d));
@@ -1423,7 +1423,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       } else if (cur().type === TK.LT && isGenericCall()) {
         const callTok2 = cur();
         eat(TK.LT);
-        const typeArgs2 = [];
+        const typeArgs2: any[] = [];
         while (cur().type !== TK.GT) { typeArgs2.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
         eat(TK.GT);
         const callArgs2 = parseCallArgs();
@@ -1472,7 +1472,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         // generic call: fn<T>(args)
         const callTok2 = cur();
         eat(TK.LT);
-        const typeArgs = [];
+        const typeArgs: any[] = [];
         while (cur().type !== TK.GT) { typeArgs.push(parseTypeAnnotation()); tryEat(TK.COMMA); }
         eat(TK.GT);
         const args = parseCallArgs();
@@ -1524,7 +1524,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseCallArgs() {
     eat(TK.LPAREN);
-    const args = [];
+    const args: any[] = [];
     while (cur().type !== TK.RPAREN) {
       if (cur().type === TK.SPREAD) { eat(TK.SPREAD); args.push({ spread: true, expr: parseExpr() }); }
       else args.push({ spread: false, expr: parseExpr() });
@@ -1545,7 +1545,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       // Array/tuple destructuring [p1, p2, ...]
       if (t.type === TK.LBRACK) {
         eat(TK.LBRACK);
-        const elements = [];
+        const elements: any[] = [];
         while (cur().type !== TK.RBRACK) {
           elements.push(parseSinglePattern());
           tryEat(TK.COMMA);
@@ -1585,8 +1585,8 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       // Object literal pattern: { key: "lit", field1, field2 }
       if (t.type === TK.LBRACE) {
         eat(TK.LBRACE);
-        const discriminators = [];
-        const fields = [];
+        const discriminators: any[] = [];
+        const fields: any[] = [];
         while (cur().type !== TK.RBRACE) {
           const key = eat(TK.IDENT).value;
           if (cur().type === TK.COLON) {
@@ -1617,7 +1617,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
         // Class/struct destructuring pattern: ClassName { field1, field2 }
         if (cur().type === TK.LBRACE) {
           eat(TK.LBRACE);
-          const fields = [];
+          const fields: any[] = [];
           while (cur().type !== TK.RBRACE) {
             fields.push(eat(TK.IDENT).value);
             tryEat(TK.COMMA);
@@ -1654,7 +1654,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       discriminant = parsePrimary();
     }
     eat(TK.LBRACE);
-    const cases = [];
+    const cases: any[] = [];
     while (cur().type !== TK.RBRACE) {
       const pattern = parseMatchPattern();
       eat(TK.ARROW);
@@ -1680,7 +1680,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
 
   function parseCaptureList() {
     eat(TK.LBRACK);
-    const captures = [];
+    const captures: any[] = [];
     while (cur().type !== TK.RBRACK) {
       const name = eat(TK.IDENT).value;
       eat(TK.COLON);
@@ -1760,7 +1760,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // Array literal
     if (t.type === TK.LBRACK) {
       eat(TK.LBRACK);
-      const elems = [];
+      const elems: any[] = [];
       while (cur().type !== TK.RBRACK) {
         if (cur().type === TK.SPREAD) { eat(TK.SPREAD); elems.push({ spread: true, expr: parseExpr() }); }
         else elems.push({ spread: false, expr: parseExpr() });
@@ -1773,7 +1773,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     // Object literal
     if (t.type === TK.LBRACE) {
       eat(TK.LBRACE);
-      const props = [];
+      const props: any[] = [];
       while (cur().type !== TK.RBRACE) {
         if (cur().type === TK.SPREAD) {
           eat(TK.SPREAD);
