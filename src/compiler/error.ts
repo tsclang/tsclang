@@ -161,7 +161,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
     // Opening blank gutter
     out.push(blankGutter());
 
-    let prevLn = null;
+    let prevLn: any = null;
     for (const ln of showLines) {
       // Gap marker — only when lines are not consecutive (tip from plan)
       if (prevLn !== null && (ln as number) > (prevLn as number) + 1) {

@@ -264,7 +264,7 @@ export function _buildLineMap(tscSrc: any, cSrc: any) {
     }
   }
 
-  const mappings = [];
+  const mappings: any[] = [];
   const len = Math.min(tscStmtLines.length, cStmtLines.length);
   for (let i = 0; i < len; i++) {
     mappings.push([tscStmtLines[i], cStmtLines[i]]);

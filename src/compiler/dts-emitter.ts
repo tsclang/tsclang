@@ -83,7 +83,7 @@ export function emitDtsSync(src: any, filename: any) {
     throw new Error(`Parse errors: ${msg}`);
   }
 
-  const decls = [];
+  const decls: any[] = [];
   for (const node of ast.body) {
     if (node.kind !== 'Export') continue;
     const d = emitDecl(node);
