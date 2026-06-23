@@ -380,8 +380,8 @@ if (command === 'validate-config') {
   if (type === 'package' && config.dependencies) {
     const deps = config.dependencies;
     // Collect all resolved versions and transitive deps
-    const resolved = {}; // pkg → resolved version
-    const requiredBy = {}; // dep → { range, requiredByPkg }
+    const resolved: Record<string, any> = {}; // pkg → resolved version
+    const requiredBy: Record<string, any> = {}; // dep → { range, requiredByPkg }
 
     for (const [pkg, range] of Object.entries(deps)) {
       const ver = resolveRange(pkg, range);
