@@ -421,7 +421,7 @@ export default {
             return t === 'String *' ? 'String' : t;
           });
           if (elemTypes.some((t: any) => t !== elemTypes[0])) {
-            const tsName = (ct: any) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct: any);
+            const tsName = (ct: any) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct);
             const unique = [...new Set(elemTypes.map(tsName))];
             throw this.error(`mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]`, node);
           }

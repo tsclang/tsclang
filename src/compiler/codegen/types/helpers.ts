@@ -116,8 +116,8 @@ export default {
   },
 
   // Emit MapEntry_K_V and Array_MapEntry_K_V struct typedefs (idempotent)
-  _ensureMapEntry(suffix, kCType, vCType) {
-    if (!this._emittedMapEntries.has(suffix: any)) {
+  _ensureMapEntry(suffix: any, kCType: any, vCType: any) {
+    if (!this._emittedMapEntries.has(suffix)) {
       this._emittedMapEntries.add(suffix);
       const entryName = `MapEntry_${suffix}`;
       const arrName = `Array_${entryName}`;
@@ -129,7 +129,7 @@ export default {
     }
   },
 
-  _ensureRefArrayStruct(arrName, et) {
+  _ensureRefArrayStruct(arrName: any, et: any) {
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} **data; size_t length; size_t capacity; } ${arrName};`);
@@ -138,7 +138,7 @@ export default {
   },
 
   // Emit Array_T struct typedef (idempotent)
-  _ensureArrayStruct(arrName, et) {
+  _ensureArrayStruct(arrName: any, et: any) {
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} *data; size_t length; size_t capacity; } ${arrName};`);
@@ -154,7 +154,7 @@ export default {
     }
   },
 
-  _ensureArrayFreeMacro(elemIdent, arrName, et) {
+  _ensureArrayFreeMacro(elemIdent: any, arrName: any, et: any) {
     const key = `free_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -166,7 +166,7 @@ export default {
     }
   },
 
-  _ensureArrayPushMacro(elemIdent, arrName, et) {
+  _ensureArrayPushMacro(elemIdent: any, arrName: any, et: any) {
     const key = `push_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -174,11 +174,11 @@ export default {
     }
   },
 
-  _isOptType(elemType) {
+  _isOptType(elemType: any) {
     return elemType?.startsWith('opt_');
   },
 
-  _wrapOptValue(cExpr, exprNode, elemType) {
+  _wrapOptValue(cExpr: any, exprNode: any, elemType: any) {
     if (!this._isOptType(elemType)) return cExpr;
     const innerCType = this._arrIdentToCType(elemType.slice(4));
     if (exprNode.kind === 'Literal' && exprNode.litType === 'null') {
@@ -187,13 +187,13 @@ export default {
     return `((${elemType}){true, ${cExpr}})`;
   },
 
-  _ensureOptArrayMacros(elemIdent, arrName, et) {
+  _ensureOptArrayMacros(elemIdent: any, arrName: any, et: any) {
     this._ensureArrayFreeMacro(elemIdent, arrName, et);
     this._ensureArrayPushMacro(elemIdent, arrName, et);
-    this._ensureArrayPopMacro(elemIdent: any, arrName: any, et: any);
+    this._ensureArrayPopMacro(elemIdent, arrName, et);
   },
 
-  _ensureArrayPopMacro(elemIdent, arrName, et) {
+  _ensureArrayPopMacro(elemIdent: any, arrName: any, et: any) {
     const key = `pop_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -203,7 +203,7 @@ export default {
 
   // Emit opt_T struct typedef (idempotent): { bool has_value; T value; }
   // Inserts before any trailing blank line so typedefs group together.
-  _ensureOptStruct(optName, ctype) {
+  _ensureOptStruct(optName: any, ctype: any) {
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
       this.addTop(`typedef struct { bool has_value; ${ctype} value; } ${optName};`);
@@ -211,7 +211,7 @@ export default {
   },
 
   // Emit Slice_T / MutSlice_T typedef (idempotent)
-  _ensureSliceStruct(slName, etC, mutable = false) {
+  _ensureSliceStruct(slName: any, etC: any, mutable = false) {
     if (this._emittedSliceStructs.has(slName)) return;
     this._emittedSliceStructs.add(slName);
     const ptrType = mutable ? `${etC} *` : `const ${etC} *`;
@@ -226,7 +226,7 @@ export default {
   },
 
   // Emit opt_ref_T struct typedef (idempotent): { bool has_value; T *value; }
-  _ensureOptRefStruct(optName, ctype) {
+  _ensureOptRefStruct(optName: any, ctype: any) {
 
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
@@ -273,20 +273,20 @@ export default {
     this.addTop('static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }');
   },
 
-  _tsNameToTypeId(tsName) {
+  _tsNameToTypeId(tsName: any) {
     if (tsName === 'number') return this._tsNameToTypeId(this._defaultNumber);
     const m = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
     return m[tsName] ?? 0;
   },
 
-  _tsNameToCType(tsName) {
+  _tsNameToCType(tsName: any) {
     if (tsName === 'number') return this._tsNameToCType(this._defaultNumber);
     const m = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
     return m[tsName] ?? 'int32_t';
   },
 
-  _unknownPackerFor(ctype) {
-    const m = { 'int8_t': 'tsc_unknown_from_i32', 'int16_t': 'tsc_unknown_from_i32', 'int32_t': 'tsc_unknown_from_i32', 'int64_t': 'tsc_unknown_from_i64', 'uint8_t': 'tsc_unknown_from_i32', 'uint16_t': 'tsc_unknown_from_i32', 'uint32_t': 'tsc_unknown_from_i32', 'uint64_t': 'tsc_unknown_from_i64', 'float': 'tsc_unknown_from_f32', 'double': 'tsc_unknown_from_f64', 'bool': 'tsc_unknown_from_bool', 'String': 'tsc_unknown_from_string', 'char': 'tsc_unknown_from_char' };
+  _unknownPackerFor(ctype: any) {
+    const m: Record<string, string> = { 'int8_t': 'tsc_unknown_from_i32', 'int16_t': 'tsc_unknown_from_i32', 'int32_t': 'tsc_unknown_from_i32', 'int64_t': 'tsc_unknown_from_i64', 'uint8_t': 'tsc_unknown_from_i32', 'uint16_t': 'tsc_unknown_from_i32', 'uint32_t': 'tsc_unknown_from_i32', 'uint64_t': 'tsc_unknown_from_i64', 'float': 'tsc_unknown_from_f32', 'double': 'tsc_unknown_from_f64', 'bool': 'tsc_unknown_from_bool', 'String': 'tsc_unknown_from_string', 'char': 'tsc_unknown_from_char' };
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
       if (this._cap('allocator') !== 'heap' || this._cap('bits') < 64) {
@@ -307,8 +307,8 @@ export default {
     return 'tsc_unknown_from_i32';
   },
 
-  _unknownGetterFor(ctype) {
-    const m = { 'int8_t': 'tsc_unknown_get_i32', 'int16_t': 'tsc_unknown_get_i32', 'int32_t': 'tsc_unknown_get_i32', 'int64_t': 'tsc_unknown_get_i64', 'uint8_t': 'tsc_unknown_get_i32', 'uint16_t': 'tsc_unknown_get_i32', 'uint32_t': 'tsc_unknown_get_i32', 'uint64_t': 'tsc_unknown_get_i64', 'float': 'tsc_unknown_get_f32', 'double': 'tsc_unknown_get_f64', 'bool': 'tsc_unknown_get_bool', 'String': 'tsc_unknown_get_string', 'char': 'tsc_unknown_get_char' };
+  _unknownGetterFor(ctype: any) {
+    const m: Record<string, string> = { 'int8_t': 'tsc_unknown_get_i32', 'int16_t': 'tsc_unknown_get_i32', 'int32_t': 'tsc_unknown_get_i32', 'int64_t': 'tsc_unknown_get_i64', 'uint8_t': 'tsc_unknown_get_i32', 'uint16_t': 'tsc_unknown_get_i32', 'uint32_t': 'tsc_unknown_get_i32', 'uint64_t': 'tsc_unknown_get_i64', 'float': 'tsc_unknown_get_f32', 'double': 'tsc_unknown_get_f64', 'bool': 'tsc_unknown_get_bool', 'String': 'tsc_unknown_get_string', 'char': 'tsc_unknown_get_char' };
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
       const elemIdent = ctype.slice(6);
@@ -323,7 +323,7 @@ export default {
     return 'tsc_unknown_get_i32';
   },
 
-  _ensureUnknownPackerArray(elemIdent, arrName, et) {
+  _ensureUnknownPackerArray(elemIdent: any, arrName: any, et: any) {
     const key = `unknown_array_${elemIdent}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -337,7 +337,7 @@ export default {
     this.addTop(`static inline ${arrName}* tsc_unknown_get_${arrName}(const tsc_unknown *self) { ${arrName} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
   },
 
-  _ensureUnknownPackerClass(className) {
+  _ensureUnknownPackerClass(className: any) {
     const key = `unknown_class_${className}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -349,7 +349,7 @@ export default {
     this.addTop(`static inline ${className}* tsc_unknown_get_${className}(const tsc_unknown *self) { ${className} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
   },
 
-  _ensureGroupByMapStruct(etIdent, etCType) {
+  _ensureGroupByMapStruct(etIdent: any, etCType: any) {
     const key = `groupby_${etIdent}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -360,7 +360,7 @@ export default {
     this.addTop('');
   },
 
-  _emitArrayMacro(macroName, lines) {
+  _emitArrayMacro(macroName: any, lines: any) {
     if (this._emittedHelpers.has(macroName)) return;
     this._emittedHelpers.add(macroName);
     this.addTop(`#ifndef ${macroName}`);
@@ -369,15 +369,15 @@ export default {
     this.addTop('');
   },
 
-  _arrElem(etC) {
+  _arrElem(etC: any) {
     return etC === 'String' ? '&_a_.data[_i_]' : '_a_.data[_i_]';
   },
 
-  _ensureArrayMapMacro(fromEt, toEt, fromCType, toCType) {
+  _ensureArrayMapMacro(fromEt: any, toEt: any, fromCType: any, toCType: any) {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_MAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_map_${fromEt}_${toEt}`;
-    const elem = this._arrElem(fromCType: any);
+    const elem = this._arrElem(fromCType);
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     this._emitArrayMacro(name, [
       `#define ${name}(arr, fn) ({ \\`,
@@ -389,11 +389,11 @@ export default {
     ]);
   },
 
-  _ensureArrayFlatMapMacro(fromEt, toEt, fromCType, toCType) {
+  _ensureArrayFlatMapMacro(fromEt: any, toEt: any, fromCType: any, toCType: any) {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_FLATMAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_flat_map_${fromEt}_${toEt}`;
-    const elem = this._arrElem(fromCType: any);
+    const elem = this._arrElem(fromCType);
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     this._emitArrayMacro(name, [
       `#define ${name}(arr, fn) ({ \\`,
@@ -415,7 +415,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFilterMacro(et, etC) {
+  _ensureArrayFilterMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_filter_${et}`;
     const elem = this._arrElem(etC);
@@ -437,7 +437,7 @@ export default {
     ]);
   },
 
-  _ensureArrayForeachMacro(et, etC) {
+  _ensureArrayForeachMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_foreach_${et}`;
     const elem = this._arrElem(etC);
@@ -449,7 +449,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReduceMacro(et, toEt, etC, toCType, isRight) {
+  _ensureArrayReduceMacro(et: any, toEt: any, etC: any, toCType: any, isRight: any) {
     const combos = isRight ? _RUNTIME_REDUCE_R : _RUNTIME_REDUCE;
     if (combos.has(`${et}_${toEt}`)) return;
     const op = isRight ? 'reduce_right' : 'reduce';
@@ -468,7 +468,7 @@ export default {
     ]);
   },
 
-  _ensureArrayEveryMacro(et, etC) {
+  _ensureArrayEveryMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_every_${et}`;
     const elem = this._arrElem(etC);
@@ -481,7 +481,7 @@ export default {
     ]);
   },
 
-  _ensureArraySomeMacro(et, etC) {
+  _ensureArraySomeMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_some_${et}`;
     const elem = this._arrElem(etC);
@@ -494,7 +494,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFindMacro(et, etC, isLast) {
+  _ensureArrayFindMacro(et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) {
       this._ensureOptRefStruct(`opt_ref_${et}`, etC);
       return;
@@ -517,11 +517,11 @@ export default {
     ]);
   },
 
-  _ensureArrayFindIndexMacro(et, etC, isLast) {
+  _ensureArrayFindIndexMacro(et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) return;
     const op = isLast ? 'find_last_index' : 'find_index';
     const name = `tsc_array_${op}_${et}`;
-    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC: any);
+    const e = isLast ? (etC === 'String' ? '&_a_.data[_i_ - 1]' : '_a_.data[_i_ - 1]') : this._arrElem(etC);
     const loop = isLast
       ? `for (size_t _i_ = _a_.length; _i_ > 0; _i_--) if ((pred)(${e})) { _r_ = (ptrdiff_t)(_i_ - 1); break; }`
       : `for (size_t _i_ = 0; _i_ < _a_.length; _i_++) if ((pred)(${e})) { _r_ = (ptrdiff_t)_i_; break; }`;
@@ -534,7 +534,7 @@ export default {
     ]);
   },
 
-  _ensureArrayIncludesMacro(et, etC) {
+  _ensureArrayIncludesMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_includes_${et}`;
     this._emitArrayMacro(name, [
@@ -546,7 +546,7 @@ export default {
     ]);
   },
 
-  _ensureArrayIndexOfMacro(et, etC, isLast) {
+  _ensureArrayIndexOfMacro(et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) return;
     const op = isLast ? 'last_index_of' : 'index_of';
     const name = `tsc_array_${op}_${et}`;
@@ -562,7 +562,7 @@ export default {
     ]);
   },
 
-  _ensureArrayConcatMacro(et, etC) {
+  _ensureArrayConcatMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_concat_${et}`;
     this._emitArrayMacro(name, [
@@ -577,7 +577,7 @@ export default {
     ]);
   },
 
-  _ensureArraySliceMacro(et, etC) {
+  _ensureArraySliceMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_slice_${et}`;
     this._emitArrayMacro(name, [
@@ -592,7 +592,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFlatMacro(et, etC) {
+  _ensureArrayFlatMacro(et: any, etC: any) {
     if (_RUNTIME_FLAT.has(et)) return;
     const name = `tsc_array_flat_${et}`;
     this._emitArrayMacro(name, [
@@ -605,7 +605,7 @@ export default {
     ]);
   },
 
-  _ensureArrayAtMacro(et, etC) {
+  _ensureArrayAtMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_at_${et}`;
     this._emitArrayMacro(name, [
@@ -617,7 +617,7 @@ export default {
     ]);
   },
 
-  _ensureArrayWithMacro(et, etC) {
+  _ensureArrayWithMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_with_${et}`;
     this._emitArrayMacro(name, [
@@ -632,7 +632,7 @@ export default {
     ]);
   },
 
-  _ensureArrayToReversedMacro(et, etC) {
+  _ensureArrayToReversedMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_to_reversed_${et}`;
     this._emitArrayMacro(name, [
@@ -645,7 +645,7 @@ export default {
     ]);
   },
 
-  _ensureArrayToSplicedMacro(et, etC) {
+  _ensureArrayToSplicedMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_to_spliced_${et}`;
     this._emitArrayMacro(name, [
@@ -666,7 +666,7 @@ export default {
     ]);
   },
 
-  _ensureArrayKeysMacro(et, etC) {
+  _ensureArrayKeysMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_keys_${et}`;
     this._emitArrayMacro(name, [
@@ -679,7 +679,7 @@ export default {
     ]);
   },
 
-  _ensureArrayValuesMacro(et, etC) {
+  _ensureArrayValuesMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_values_${et}`;
     this._emitArrayMacro(name, [
@@ -692,7 +692,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReverseMacro(et, etC) {
+  _ensureArrayReverseMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_reverse_${et}`;
     this._emitArrayMacro(name, [
@@ -705,7 +705,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFillMacro(et, etC) {
+  _ensureArrayFillMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_fill_${et}`;
     this._emitArrayMacro(name, [
@@ -717,7 +717,7 @@ export default {
     ]);
   },
 
-  _ensureArrayResizeMacro(et, etC) {
+  _ensureArrayResizeMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_resize_${et}`;
     this._emitArrayMacro(name, [
@@ -736,7 +736,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReallocateMacro(et, etC) {
+  _ensureArrayReallocateMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_reallocate_${et}`;
     this._emitArrayMacro(name, [
@@ -751,7 +751,7 @@ export default {
     ]);
   },
 
-  _ensureArraySpliceMacro(et, etC) {
+  _ensureArraySpliceMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_splice_${et}`;
     this._emitArrayMacro(name, [
@@ -784,7 +784,7 @@ export default {
     ]);
   },
 
-  _ensureArrayShiftMacro(et, etC) {
+  _ensureArrayShiftMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) {
       this._ensureOptStruct(`opt_${et}`, etC);
       return;
@@ -805,7 +805,7 @@ export default {
     ]);
   },
 
-  _ensureArrayUnshiftMacro(et, etC) {
+  _ensureArrayUnshiftMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_unshift_${et}`;
     this._emitArrayMacro(name, [
@@ -821,7 +821,7 @@ export default {
     ]);
   },
 
-  _ensureArrayRemoveMacro(et, etC) {
+  _ensureArrayRemoveMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_remove_${et}`;
     this._emitArrayMacro(name, [
@@ -834,7 +834,7 @@ export default {
     ]);
   },
 
-  _ensureArraySetMacro(et, etC) {
+  _ensureArraySetMacro(et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_set_${et}`;
     this._emitArrayMacro(name, [

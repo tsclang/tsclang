@@ -229,7 +229,7 @@ export default {
         // Slice_T / MutSlice_T indexing → element type
         if (objType?.startsWith('Slice_') || objType?.startsWith('MutSlice_')) {
           const etIdent = objType.startsWith('MutSlice_') ? objType.slice(9) : objType.slice(6);
-          const primMap2 = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          const primMap2: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
                              u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
                              f32:'float', f64:'double', bool:'bool', usize:'size_t', string:'String' };
           return primMap2[etIdent] ?? etIdent;
