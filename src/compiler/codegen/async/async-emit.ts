@@ -1,4 +1,3 @@
-// @ts-nocheck
 // async-emit.js
 export default {
   // ─── emitAsyncFunc ────────────────────────────────────────────────────────
@@ -61,7 +60,7 @@ export default {
     // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
     if (innerResultCType && innerResultCType !== 'int32_t') {
       const returnedVars = new Set();
-      const scanReturns = (stmts) => {
+      const scanReturns = (stmts: any): any => {
         for (const s of stmts || []) {
           if (s.kind === 'Return' && s.value?.kind === 'Ident') returnedVars.add(s.value.name);
           if (s.kind === 'Block') scanReturns(s.body);
@@ -93,7 +92,7 @@ export default {
     }
 
     // Compact if no promoted body vars; multiline if any body vars exist
-    const _hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
+    const _hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
     if (_hasStaticDec || bodyFields.length === 0) {
       this._emitStructCompact(stateType, sFields);
     } else {
@@ -110,7 +109,7 @@ export default {
     if (!body) return;
 
     // Check for unknown await targets (no poll function available)
-    const canEmitPoll = awaitStates.every(af => !af.isUnknown);
+    const canEmitPoll = awaitStates.every((af: any) => !af.isUnknown);
     if (!canEmitPoll) return;
 
     // Build promoted set
@@ -122,9 +121,9 @@ export default {
     const spawnVarAlias = new Map();
     for (const si of spawnInfos) spawnVarAlias.set(si.userVar, si.threadVar);
 
-    const stringFields = [];
-    const classFreeFields = [];
-    const arrayFields = [];
+    const stringFields: any[] = [];
+    const classFreeFields: any[] = [];
+    const arrayFields: any[] = [];
     for (const f of [...paramFields, ...bodyFields]) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
@@ -146,7 +145,7 @@ export default {
       }
     }
     const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0 || arrayFields.length > 0;
-    const paramStringFields = stringFields.filter(n => paramFields.some(f => f.name === n));
+    const paramStringFields = stringFields.filter((n: any) => paramFields.some((f: any) => f.name === n));
 
     this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, arrayFields, hasCleanup, paramStringFields };
     this._inAsyncFunc = true;
@@ -158,12 +157,12 @@ export default {
 
     // Extra poll params from spawn free vars
     const extraParamsStr = extraPollParams.length > 0
-      ? ', ' + extraPollParams.map(f => `${f.ctype} ${f.name}`).join(', ')
+      ? ', ' + extraPollParams.map((f: any) => `${f.ctype} ${f.name}`).join(', ')
       : '';
     this._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
 
     // @static cooperative task: emit static instance, register for main scheduler
-    const hasStaticDec = (node.decorators ?? []).some(d => d.name === 'static');
+    const hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
     if (hasStaticDec && this._asyncName === 'state_machine') {
       this.topLevel.push('');
       this.topLevel.push(`static ${stateType} _${name}_instance;`);
@@ -181,7 +180,7 @@ export default {
 
   _buildAsyncPoll(body) {
     const stmts = body?.kind === 'Block' ? body.body : [];
-    const lines = [];
+    const lines: any[] = [];
     const ctx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
     const sc = this._selfCtx;
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // decorators.js
 export default {
   // ----------------------------------------------------------------
@@ -7,7 +6,7 @@ export default {
 
   // Analyze a class decorator body and extract field mutations (target._field = value)
   _analyzeClassDecorator(decFn) {
-    const fields = [], inits = [];
+    const fields: any[] = [], inits: any[] = [];
     for (const stmt of (decFn.body?.body ?? [])) {
       if (stmt.kind !== 'ExprStmt') continue;
       const expr = stmt.expr;
@@ -16,7 +15,7 @@ export default {
         const fieldName = expr.left.prop;
         const valNode = expr.right;
         // Resolve value: literal true/false/number/string
-        let cVal = null, cType = null;
+        let cVal: any = null, cType: any = null;
         if (valNode?.kind === 'Literal') {
           if (valNode.litType === 'bool') { cVal = valNode.value; cType = 'bool'; }
           else if (valNode.litType === 'number') { cVal = valNode.value; cType = 'int32_t'; }
@@ -33,7 +32,7 @@ export default {
   // Deep-substitute orig.apply(...) calls with a replacement expression
   _deepSubstOrigApply(node, replacement, isVoid = false) {
     if (!node || typeof node !== 'object') return node;
-    if (Array.isArray(node)) return node.map(n => this._deepSubstOrigApply(n, replacement, isVoid));
+    if (Array.isArray(node)) return node.map((n: any) => this._deepSubstOrigApply(n, replacement, isVoid));
     if (node.kind === 'Return' && node.value?.kind === 'Call' && node.value.callee?.prop === 'apply') {
       // return orig.apply(...) → for void: just call; for non-void: return result
       return isVoid ? { kind: 'ExprStmt', expr: replacement } : { kind: 'Return', value: replacement };
@@ -51,7 +50,7 @@ export default {
   // Recursively substitute Ident nodes in an AST
   _substituteInAst(node, bindings) {
     if (!node || typeof node !== 'object') return node;
-    if (Array.isArray(node)) return node.map(n => this._substituteInAst(n, bindings));
+    if (Array.isArray(node)) return node.map((n: any) => this._substituteInAst(n, bindings));
     if (node.kind === 'Ident' && bindings.has(node.name)) return bindings.get(node.name);
     if (node.kind === 'Binary' && node.op === '+') {
       const left  = this._substituteInAst(node.left,  bindings);
@@ -73,9 +72,9 @@ export default {
   // Check if orig.apply appears anywhere inside a stmt (for nested patterns like else branches)
   _hasOrigApplyDeep(node) {
     if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some(n => this._hasOrigApplyDeep(n));
+    if (Array.isArray(node)) return node.some((n: any) => this._hasOrigApplyDeep(n));
     if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee?.prop === 'apply') return true;
-    return Object.values(node).some(v => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
+    return Object.values(node).some((v: any) => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
   },
 
   _isOrigApply(stmt) {
@@ -91,10 +90,10 @@ export default {
 
   // Analyze a decorator function and extract wrapper info
   // Returns: { style, befores, afters } | { style, beforeStmts, afterStmts, applyIsReturn, paramBindings }
-  _analyzeDecorator(decFn, factoryArgs = null) {
+  _analyzeDecorator(decFn: any, factoryArgs: any = null) {
     // TSClang `decorator function` style
     if (decFn.isDecorator) {
-      const befores = [], afters = [];
+      const befores: any[] = [], afters: any[] = [];
       for (const stmt of (decFn.body?.body ?? [])) {
         if (stmt.kind !== 'ExprStmt') continue;
         const c = stmt.expr;
@@ -126,8 +125,8 @@ export default {
     }
 
     // Find `desc.value = function(...) { BODY }` or `desc.value = function(x: T) { BODY }`
-    let wrapperBody = null;
-    let lambdaParams = [];
+    let wrapperBody: any = null;
+    let lambdaParams: any[] = [];
     for (const stmt of innerBody) {
       if (stmt.kind !== 'ExprStmt') continue;
       const expr = stmt.expr;
@@ -136,7 +135,7 @@ export default {
       const rhs = expr.right;
       if (rhs?.kind === 'FuncExpr' || rhs?.kind === 'Arrow') {
         wrapperBody = (rhs.body?.body ?? rhs.body?.body) ?? (rhs.body?.kind === 'Block' ? rhs.body.body : [rhs.body]);
-        lambdaParams = (rhs.params ?? []).filter(p => p.name && p.name !== 'this');
+        lambdaParams = (rhs.params ?? []).filter((p: any) => p.name && p.name !== 'this');
         break;
       }
     }
@@ -144,8 +143,8 @@ export default {
     if (!wrapperBody) return { style: 'passthrough' };
 
     // Split at orig.apply(...)
-    const beforeStmts = [], afterStmts = [];
-    let foundApply = false, applyIsReturn = false, applyResultVar = null, applyArgs = null;
+    const beforeStmts: any[] = [], afterStmts: any[] = [];
+    let foundApply = false, applyIsReturn = false, applyResultVar: any = null, applyArgs: any = null;
     let allApplyDeep = false;  // true when orig.apply only appears inside nested stmts
     for (const stmt of wrapperBody) {
       if (this._isOrigApply(stmt)) {
@@ -181,7 +180,7 @@ export default {
   // Build the C call to the inner function
   _buildInnerCall(className, methodName, m, isStatic) {
     const innerFnName = `${className}_${methodName}_inner`;
-    const paramNames = (m.params ?? []).map(p => p.name).filter(Boolean);
+    const paramNames = (m.params ?? []).map((p: any) => p.name).filter(Boolean);
     if (isStatic) {
       return `${innerFnName}(${paramNames.join(', ')})`;
     }
@@ -206,7 +205,7 @@ export default {
 
       // Resolve factory args from decorator call args
       const decFn = this._decoratorFns.get(d.name);
-      const factoryArgs = d.args ? d.args.map(a => a) : null;
+      const factoryArgs = d.args ? d.args.map((a: any) => a) : null;
       const analysis = this._analyzeDecorator(decFn, factoryArgs);
 
       this._emitDecoratorWrapperFn(className, m, isStatic, wrapperMethodName, prevMethodName, analysis, d, i, decs.length);
@@ -230,12 +229,12 @@ export default {
     // For prop-desc style, use the lambda's params (may differ in name from m.params).
     // Exception: rest params (...args: any[]) mean the lambda captures all args generically —
     // fall back to original method params in that case.
-    const _hasRestLambdaParam = analysis.lambdaParams?.some(p => p.rest);
+    const _hasRestLambdaParam = analysis.lambdaParams?.some((p: any) => p.rest);
     const wrapperParamList = (analysis.style === 'prop-desc' && analysis.lambdaParams?.length > 0 && !_hasRestLambdaParam)
       ? analysis.lambdaParams
       : (m.params ?? []);
-    const paramNames = wrapperParamList.map(p => p.name).filter(Boolean);
-    const paramCTypes = wrapperParamList.map(p => {
+    const paramNames = wrapperParamList.map((p: any) => p.name).filter(Boolean);
+    const paramCTypes = wrapperParamList.map((p: any) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return `${ct} ${p.name}`;
     });
@@ -252,16 +251,16 @@ export default {
     const allParams = [selfParam, ...paramCTypes].filter(Boolean).join(', ');
     const wrapperFnName = `${className}_${wrapperName}`;
 
-    const lines = [];
+    const lines: any[] = [];
     const I = '    ';
 
     if (analysis.style === 'desc') {
       // TSClang decorator function style: desc.before/after
-      const beforeBody = analysis.befores.flatMap(l => this._extractLambdaBody(l));
-      const afterBody  = analysis.afters.flatMap(l => this._extractLambdaBody(l));
+      const beforeBody = analysis.befores.flatMap((l: any) => this._extractLambdaBody(l));
+      const afterBody  = analysis.afters.flatMap((l: any) => this._extractLambdaBody(l));
 
       // Emit before stmts
-      const beforeLines = [], afterLines = [];
+      const beforeLines: any[] = [], afterLines: any[] = [];
       this.pushScope();
       this.visitBlock({ body: beforeBody }, beforeLines, 1);
       this.popScope();
@@ -294,14 +293,14 @@ export default {
       }
       // Build the actual inner call, using explicit args from orig.apply if provided
       if (analysis.applyArgs && analysis.applyArgs.length > 0) {
-        const tmpLines2 = [];
+        const tmpLines2: any[] = [];
         this.pushScope();
         if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
         // Use lambda params in scope so type inference works for substituted args
         for (const p of wrapperParamList) {
           if (p.name) this.define(p.name, { ctype: p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t', varKind: 'let' });
         }
-        const argsC = analysis.applyArgs.map(a => {
+        const argsC = analysis.applyArgs.map((a: any) => {
           const subA = this._substituteInAst(a.expr ?? a, bindings);
           return this.exprToC(subA, tmpLines2, 1);
         });
@@ -314,7 +313,7 @@ export default {
       // Build the replacement AST node for deep-substitution (orig.apply in nested branches)
       const innerCallExpr = { kind: 'RawC', code: innerCall };
 
-      const subBefore = analysis.beforeStmts.map(s => {
+      const subBefore = analysis.beforeStmts.map((s: any) => {
         if (s._deepSubstApply) {
           // Nested orig.apply: deep-replace it with the inner call
           const subStmt = this._substituteInAst(s.stmt, bindings);
@@ -325,13 +324,13 @@ export default {
       // Filter afterStmts: if void and applyResultVar, drop `return <resultVar>` stmts
       let afterFiltered = analysis.afterStmts;
       if (isVoid && analysis.applyResultVar) {
-        afterFiltered = analysis.afterStmts.filter(s =>
+        afterFiltered = analysis.afterStmts.filter((s: any) =>
           !(s.kind === 'Return' && s.value?.kind === 'Ident' && s.value.name === analysis.applyResultVar)
         );
       }
-      const subAfter = afterFiltered.map(s => this._substituteInAst(s, bindings));
+      const subAfter = afterFiltered.map((s: any) => this._substituteInAst(s, bindings));
 
-      const beforeLines = [], afterLines = [];
+      const beforeLines: any[] = [], afterLines: any[] = [];
       this.pushScope();
       if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
       if (analysis.applyResultVar && !isVoid) this.define(analysis.applyResultVar, { ctype: retType });
@@ -389,7 +388,7 @@ export default {
     }
 
     // Mangle the function suffix from param types
-    const paramSuffix = params.map(p => {
+    const paramSuffix = params.map((p: any) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return ct === 'String' ? 'string' : ct.replace(/[^a-zA-Z0-9]/g, '_');
     }).join('_');
@@ -407,23 +406,23 @@ export default {
       const isOuter = i === 0;
       const wrapperFnName = isOuter ? mangledName : `${name}_${d.name}_${paramSuffix}`;
       const decFn = this._decoratorFns.get(d.name);
-      const factoryArgs = d.args ? d.args.map(a => a) : null;
+      const factoryArgs = d.args ? d.args.map((a: any) => a) : null;
       const analysis = this._analyzeDecorator(decFn, factoryArgs);
 
       const isVoid = retType === 'void';
-      const paramCDecls = params.map(p => {
+      const paramCDecls = params.map((p: any) => {
         const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
         return `${ct} ${p.name}`;
       });
-      const paramNms = params.map(p => p.name);
+      const paramNms = params.map((p: any) => p.name);
       const innerCall = `${prevName}(${paramNms.join(', ')})`;
 
-      const lines = [];
+      const lines: any[] = [];
       const I = '    ';
       if (analysis.style === 'desc') {
-        const beforeBody = analysis.befores.flatMap(l => this._extractLambdaBody(l));
-        const afterBody  = analysis.afters.flatMap(l => this._extractLambdaBody(l));
-        const beforeLines = [], afterLines = [];
+        const beforeBody = analysis.befores.flatMap((l: any) => this._extractLambdaBody(l));
+        const afterBody  = analysis.afters.flatMap((l: any) => this._extractLambdaBody(l));
+        const beforeLines: any[] = [], afterLines: any[] = [];
         this.pushScope();
         this.visitBlock({ body: beforeBody }, beforeLines, 1);
         this.popScope();
@@ -475,13 +474,13 @@ export default {
     const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut);
 
     // Determine whether method mutates self
-    const mutatesself = isMut || lines.some(l =>
+    const mutatesself = isMut || lines.some((l: any) =>
       /self->[\w]+ *[+\-*\/|&^%]?=(?!=)/.test(l) ||
       /self->[\w]+\+\+/.test(l) ||
       /self->[\w]+--/.test(l)
     );
 
-    const params = [];
+    const params: any[] = [];
     if (!isStatic && m.name !== 'new') {
       if (isMoveMethod) {
         params.push(`${className} self`);
@@ -504,7 +503,7 @@ export default {
     let finalLines = lines;
     if (isIfaceMethod) {
       finalLines = [`${className} *self = (${className} *)_self;`, `(void)self;`, ...lines];
-    } else if (!isStatic && m.name !== 'new' && !lines.some(l => /\bself\b/.test(l))) {
+    } else if (!isStatic && m.name !== 'new' && !lines.some((l: any) => /\bself\b/.test(l))) {
       finalLines = ['(void)self;', ...lines];
     }
 

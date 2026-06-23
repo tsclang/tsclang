@@ -1,4 +1,3 @@
-// @ts-nocheck
 // async-stmt.js
 export default {
   _emitAsyncStmt(s, lines, ctx, I) {
@@ -6,7 +5,7 @@ export default {
 
     // ── spawn VarDecl: emit call site using pre-emitted env/fn ──
     if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
-      const si = this._selfCtx?.spawnInfos?.find(info => info.userVar === s.name);
+      const si = this._selfCtx?.spawnInfos?.find((info: any) => info.userVar === s.name);
       if (!si) return;
       // Patch previous line (e.g. "        case 0:") to open a block
       if (lines.length > 0) lines[lines.length - 1] += ' {';
@@ -33,7 +32,7 @@ export default {
       // Promise.race / Promise.any: poll all, take first done's result
       if (ai.kind === 'promise-race' || ai.kind === 'promise-any') {
         const baseIdx = ctx.awaitIdx;
-        const doneConds = [];
+        const doneConds: any[] = [];
         for (const item of ai.items) {
           const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
           const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
@@ -78,7 +77,7 @@ export default {
           const optsIdx = this._fetchOptsCount ?? 0;
           this._fetchOptsCount = optsIdx + 1;
           const optsVar = `_opts_${optsIdx}`;
-          const optsFields = (optsArg.props ?? []).map(p => `.${p.key} = ${this._selfE(p.value)}`);
+          const optsFields = (optsArg.props ?? []).map((p: any) => `.${p.key} = ${this._selfE(p.value)}`);
           lines.push(`${I}TscFetchOptions ${optsVar} = { ${optsFields.join(', ')} };`);
           lines.push(`${I}self->_await_${awaitIdx} = tsc_fetch_async(${urlC}, &${optsVar});`);
           lines.push(`${I}self->_state = ${ctx.nextCase};`);
@@ -154,7 +153,7 @@ export default {
       this._emitAsyncTransition(lines, ctx, I);
 
       // Poll all + combined done check
-      const notDone = [];
+      const notDone: any[] = [];
       for (let j = 0; j < ai.items.length; j++) {
         const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
           ? ai.items[j].expr.callee.name : null;
@@ -218,14 +217,14 @@ export default {
       // Promise.allSettled / race / any as statement (no result capture)
       if (ai.kind === 'promise-allSettled' || ai.kind === 'promise-race' || ai.kind === 'promise-any') {
         const baseIdx = ctx.awaitIdx;
-        const subItems = [];
+        const subItems: any[] = [];
         for (const item of ai.items) {
           const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
           const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
           if (sub) { lines.push(`${I}self->_await_${ctx.awaitIdx++} = (${sub.stateType}){0};`); subItems.push({ idx: baseIdx + subItems.length, sub }); }
         }
         this._emitAsyncTransition(lines, ctx, I);
-        const notDone = [];
+        const notDone: any[] = [];
         for (const { idx, sub } of subItems) {
           lines.push(`${I}${sub.pollFn}(&self->_await_${idx});`);
           notDone.push(`!self->_await_${idx}._done`);
@@ -291,7 +290,7 @@ export default {
           }
         }
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
-        const catchEndsControl = (catchBody?.body || []).some(cs => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
+        const catchEndsControl = (catchBody?.body || []).some((cs: any) => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
         if (!catchEndsControl) {
           if (this._selfCtx.hasCleanup) {
             lines.push(`${I}    goto _cleanup;`);
@@ -327,7 +326,7 @@ export default {
       lines.push(`        case ${loopCase}: {`);
       ctx.nextCase++;
 
-      const genArgsC = genArgs.map(a => this._selfE(a.expr)).join(', ');
+      const genArgsC = genArgs.map((a: any) => this._selfE(a.expr)).join(', ');
       const nextArgs = genArgsC ? `&self->_gen_${genIdx}, ${genArgsC}` : `&self->_gen_${genIdx}`;
       const nrVar = `_nr_${genIdx}`;
       lines.push(`${I}    ${gi.resultType} ${nrVar} = ${gi.nextFn}(${nextArgs});`);
@@ -342,7 +341,7 @@ export default {
       }
 
       for (const bs of s.body?.body || []) {
-        const tmp = [];
+        const tmp: any[] = [];
         this.visitStmt(bs, tmp, 0);
         for (const l of tmp) lines.push(`${I}    ${l.trim()}`);
       }
@@ -433,7 +432,7 @@ export default {
           if (ct) this.define(name, { ctype: ct, varKind: stmt.varKind ?? 'const' });
         }
       } else {
-        const tmp = [];
+        const tmp: any[] = [];
         this.visitStmt(stmt, tmp, 0);
         for (const l of tmp) lines.push(I + l.trim());
       }
@@ -466,12 +465,12 @@ export default {
           lines.push(`${I}return;`);
         }
       } else {
-        const tmp = [];
+        const tmp: any[] = [];
         this.visitStmt(stmt, tmp, 0);
         for (const l of tmp) lines.push(I + l.trim());
       }
     } else {
-      const tmp = [];
+      const tmp: any[] = [];
       this.visitStmt(stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }
@@ -484,7 +483,7 @@ export default {
     const discEnumDef = this.classes.get(discType);
 
     // Build grouped cases: consecutive empty cases + final non-empty case
-    const groups = [];
+    const groups: any[] = [];
     for (const c of node.cases) {
       if (c.body.length === 0) {
         // Empty case — starts a new group or extends current one
@@ -508,7 +507,7 @@ export default {
     let first = true;
     for (const g of groups) {
       const isDefault = g.tests.length === 0;
-      const condParts = [];
+      const condParts: any[] = [];
       for (const t of g.tests) {
         if (discEnumDef?.isStringLiteralUnion && t.kind === 'Literal' && t.litType === 'string') {
           condParts.push(`${discC} == ${discType}_${t.value}`);

@@ -1,9 +1,8 @@
-// @ts-nocheck
 // operators.js
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
   binaryWidened(node, targetCtype, lines, depth) {
-    const widenOperand = (operand) => {
+    const widenOperand = (operand: any): any => {
       if (operand.kind === 'Literal' && operand.litType === 'number') {
         return this.literalToCTyped(operand, targetCtype);
       }
@@ -165,7 +164,7 @@ export default {
           const leftIsLet  = node.left.kind  === 'Ident' && this.lookup(node.left.name)?.varKind  === 'let';
           const rightIsLet = node.right.kind === 'Ident' && this.lookup(node.right.name)?.varKind === 'let';
           if (leftIsLet || rightIsLet) {
-            const [tsA, tsB] = [a,b].map(t => this.ctypeToTsName(t));
+            const [tsA, tsB] = [a,b].map((t: any) => this.ctypeToTsName(t));
             const widthA = a.match(/\d+/)?.[0];
             const widthB = b.match(/\d+/)?.[0];
             const reason = widthA === widthB
@@ -416,8 +415,8 @@ export default {
 
   _stringConcatChain(operands, lines, depth) {
     const I = ' '.repeat(this.indent * depth);
-    const parts = [];
-    const temps = [];
+    const parts: any[] = [];
+    const temps: any[] = [];
 
     for (const operand of operands) {
       const c = this.exprToC(operand, lines, depth);
