@@ -1734,6 +1734,9 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (t.type === TK.SQUOTE)  { pos++; return { kind: 'Literal', litType: 'char',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.NULL)   { pos++; return { kind: 'Literal', litType: 'null',   value: 'null',  line: t.line, col: t.col, endCol: t.endCol }; }
+    // Special numeric values: NaN, Infinity (not keywords, but recognized as literals)
+    if (t.type === TK.IDENT && t.value === 'NaN') { pos++; return { kind: 'Literal', litType: 'number', value: 'NaN', line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.IDENT && t.value === 'Infinity') { pos++; return { kind: 'Literal', litType: 'number', value: 'Infinity', line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.TEMPLATE) {
       pos++;
       return { kind: 'TemplateLit', parts: t.parts };

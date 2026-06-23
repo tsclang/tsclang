@@ -48,6 +48,8 @@ export default {
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';
     const v = node.value;
+    if (v === 'NaN') return 'NAN';
+    if (v === 'Infinity') return 'INFINITY';
     if (v.startsWith('0o') || v.startsWith('0O')) return '0' + v.slice(2);
     return v;
   },
@@ -62,6 +64,8 @@ export default {
       return String(code);
     }
     let v = node.value;
+    if (v === 'NaN') return ctype === 'float' ? '(float)NAN' : 'NAN';
+    if (v === 'Infinity') return ctype === 'float' ? '(float)INFINITY' : 'INFINITY';
     // Convert 0o (octal) → C octal 0NNN format
     if (v.startsWith('0o') || v.startsWith('0O')) v = '0' + v.slice(2);
     if (ctype === 'float') {

@@ -1,0 +1,2 @@
+const x = Infinity;
+console.log(x);

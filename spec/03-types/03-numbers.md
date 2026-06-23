@@ -292,4 +292,41 @@ const z = x + y;           // ✅ — оба const, значения извес�
 
 > **Обоснование:** C integer promotion для mixed signed+unsigned — известный источник багов. `-1` молча становится `4294967295`. TSClang требует явный `as` для всех same-width mixed комбинаций `let`-переменных. `const`/литералы exempt, потому что компилятор проверяет значения на этапе компиляции.
 
+### Специальные значения: NaN, Infinity
+
+TSClang поддерживает `NaN` и `Infinity` как first-class значения (П2 — TS compat):
+
+```typescript
+const x = NaN;           // f64 (NAN in C)
+const y = Infinity;      // f64 (INFINITY in C)
+const z = -Infinity;     // f64 (-INFINITY in C)
+
+console.log(NaN);        // "nan"
+console.log(Infinity);   // "inf"
+console.log(-Infinity);  // "-inf"
+
+NaN === NaN;             // false (IEEE 754)
+NaN !== NaN;             // true
+Infinity > 1e308;        // true
+-Infinity < -1e308;      // true
+```
+
+**Type inference:** `NaN` и `Infinity` выводятся как `number` (= `defaultNumber`, обычно `f64`). На embedded (`defaultNumber = i16`) — ошибка компиляции (float literal not supported, `fpu: false`).
+
+**C-output:**
+- `NaN` → `NAN` (macro из `<math.h>`)
+- `Infinity` → `INFINITY`
+- `-Infinity` → `-INFINITY`
+
+**`Number` static properties** (планируется):
+- `Number.NaN` → `NAN`
+- `Number.POSITIVE_INFINITY` → `INFINITY`
+- `Number.NEGATIVE_INFINITY` → `-INFINITY`
+- `Number.isNaN(x)` — strict NaN check
+- `Number.isFinite(x)` — strict finite check
+
+**Global functions** (планируется):
+- `isNaN(x)` — coerces to number first (JS semantics)
+- `isFinite(x)` — coerces to number first (JS semantics)
+
 ## Конвертация типов
