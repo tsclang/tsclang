@@ -81,7 +81,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
   const colorOn = opts.color !== undefined ? opts.color : isColorEnabled();
   const C = makeColors(colorOn);
 
-  const out = [];
+  const out: string[] = [];
 
   // ── 1. Header: error[E001]: message  /  warning: message ────────────────
   const kind     = diag.kind ?? 'error';
