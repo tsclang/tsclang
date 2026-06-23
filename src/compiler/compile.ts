@@ -145,9 +145,9 @@ export function compileTsc(inputPath: string, opts: any = {}) {
   const sourceToPath = { ...(opts.sourceToPath || {}) };
   const compilingStack = opts._compilingStack ?? new Set();
   const aliases = opts._aliases ?? loadPathAliases(inputPath);
-  const depCParts = [];
-  const depCacheKeys = [];
-  const depInitFns = [];
+  const depCParts: any[] = [];
+  const depCacheKeys: any[] = [];
+  const depInitFns: any[] = [];
 
   if (compilingStack.has(inputPath)) {
     const cycle = [...compilingStack, inputPath].map(p => basename(p)).join(' → ');
@@ -203,7 +203,7 @@ export function compileTsc(inputPath: string, opts: any = {}) {
 
   const modulePrefix = opts.modulePrefix ?? '';
   const noCache = opts.noCache || opts.debugLines;
-  let cacheKey = null;
+  let cacheKey: any = null;
   if (opts.libraryMode && !noCache) {
     cacheKey = _cacheKey(src, modulePrefix, depCacheKeys);
     const cached = _cacheGet(cacheKey);
@@ -248,7 +248,7 @@ export function _buildLineMap(tscSrc: any, cSrc: any) {
   const tscLines = tscSrc.split('\n');
   const cLines   = cSrc.split('\n');
 
-  const tscStmtLines = [];
+  const tscStmtLines: any[] = [];
   for (let i = 0; i < tscLines.length; i++) {
     const t = tscLines[i].trim();
     if (t && !t.startsWith('//') && t !== '{' && t !== '}') {
@@ -256,7 +256,7 @@ export function _buildLineMap(tscSrc: any, cSrc: any) {
     }
   }
 
-  const cStmtLines = [];
+  const cStmtLines: any[] = [];
   for (let i = 0; i < cLines.length; i++) {
     const t = cLines[i].trim();
     if (t && !t.startsWith('#') && !t.startsWith('//') && t !== '{' && t !== '}') {
