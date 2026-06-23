@@ -111,7 +111,7 @@ export function codegen(ast: any, filename: string = 'input', src: string | null
 
 // ============================================================
 class Context {
-  [key: string]: any;  // Stage 5: allows gradual mixin migration; removed in Stage 8 (strict)
+  [key: string]: any;  // allows mixin method access
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)

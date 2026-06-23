@@ -1,4 +1,4 @@
-// async-stmt.js
+// async-stmt.ts
 export default {
   _emitAsyncStmt(this: any, s: any, lines: any, ctx: any, I: any) {
     if (!s) return;

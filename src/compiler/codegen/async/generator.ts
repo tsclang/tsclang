@@ -1,4 +1,4 @@
-// generator.js
+// generator.ts
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
   emitGeneratorFunc(this: any, node: any) {

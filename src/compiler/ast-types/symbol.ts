@@ -1,5 +1,4 @@
 // Symbol info type definitions for TSClang compiler
-// Stage 2 of JS→TS migration (#84)
 //
 // SymbolInfo is stored in ScopeManager's scope Maps.
 // A single Map holds variable symbols, function symbols, type aliases,

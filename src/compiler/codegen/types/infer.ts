@@ -1,5 +1,5 @@
 import { inferLiteralCType } from '../../types.js';
-// infer.js
+// infer.ts
 export default {
   inferType(this: any, node: any) {
     if (!node) return 'double';

@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (`strict: true` enabled — 8/8 strict options, #99 closed).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (audit cleanup: remove phantom `no-extern-c`, stale comments, CONTEXT fixes).
 
 ---
 
@@ -10,11 +10,11 @@
 - **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
-- **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1749 tests**, all pass)
+- **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1752 tests** `--no-gcc` / **1748** with gcc, all pass)
 - **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
-- **Next goal:** Self-hosting (#47–#50 gaps: string methods, file I/O, CLI args, StringBuilder). Then #99 (strict mode completion).
+- **Next goal:** Self-hosting (#47–#50 gaps: string methods, file I/O, CLI args, StringBuilder).
 
 ---
 
@@ -49,7 +49,7 @@ input.tsc
 
 ### Context class (`codegen.ts:109`)
 
-God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin pattern (modules export a function that adds methods to `Context.prototype`).
+God-object with ~300+ methods (~888 lines). Split across **51 files** via mixin pattern (modules export objects spread onto `Context.prototype`).
 
 **Extracted state objects** (delegated from Context):
 - `ScopeManager` (`codegen/scope-manager.ts`) — scope stack, `define()`/`lookup()`.
@@ -67,13 +67,13 @@ God-object with ~300+ methods (~827 lines). Split across **49 files** via mixin 
 | `codegen/scope-manager.ts` | 1 | **ScopeManager** — scope stack, `define()`/`lookup()`/`pushScope()`/`popScope()` |
 | `codegen/borrow-tracker.ts` | 1 | **BorrowTracker** — Ref/Mut borrow tracking, quarantine, scope-exit cleanup |
 | `codegen/output-buffer.ts` | 1 | **OutputBuffer** — output sections, `addTop()` smart routing, `addLambda()` |
-| `top-level/` | 6 | `dispatch.ts` (entry), `program.ts` (visitProgram, pre-scan), `func.ts`, `class.ts`, `types-alias.ts`, `decorators.ts` |
-| `stmt/` | 4 | `index.ts`→`stmt.ts` (visitStmtInMain dispatcher), `vardecl.ts` (let/const), `control-flow.ts` (if/while/for/switch/try-catch/break/continue), `destruct.ts`, `match.ts` |
-| `expr/` | 4 | `index.ts`→`dispatch.ts` (exprToC), `operators.ts`, `assign.ts`, `literals.ts` |
-| `calls/` | 8 | `call-dispatch.ts` (function calls), `method-dispatch.ts` (method calls, chains), `console.ts`, `stdlib.ts` (Map/Set/array methods), `builtin.ts`, `builtin-helpers.ts`, `conversion.ts` (parseInt/toString), `concurrency.ts` (Atomic/channel/spawn) |
-| `types/` | 3 | `resolve.ts` (TSC type → C type), `infer.ts` (expression type inference), `helpers.ts` (`_ensure*Struct`, `_wrapOptValue`, mangle helpers) |
-| `misc/` | 4 | `index.ts`, `arrays.ts` (array literals), `closures.ts` (lambda hoisting, capture), `new-expr.ts` (new X()), `emit-helpers.ts` (spawn, Thread) |
-| `async/` | 5 | `index.ts`, `async-stmt.ts` (emit async statements), `async-emit.ts` (state machine poll fn), `generator.ts`, `scan.ts` (collect await states, liveness), `helpers.ts` |
+| `top-level/` | 7 | `index.ts`, `dispatch.ts` (entry), `program.ts` (visitProgram, pre-scan), `func.ts`, `class.ts`, `types-alias.ts`, `decorators.ts` |
+| `stmt/` | 5 | `index.ts`, `stmt.ts` (visitStmtInMain dispatcher), `vardecl.ts` (let/const), `control-flow.ts` (if/while/for/switch/try-catch/break/continue), `destruct.ts`, `match.ts` |
+| `expr/` | 5 | `index.ts`, `dispatch.ts` (exprToC), `operators.ts`, `assign.ts`, `literals.ts` |
+| `calls/` | 9 | `index.ts`, `call-dispatch.ts` (function calls), `method-dispatch.ts` (method calls, chains), `console.ts`, `stdlib.ts` (Map/Set/array methods), `builtin.ts`, `builtin-helpers.ts`, `conversion.ts` (parseInt/toString), `concurrency.ts` (Atomic/channel/spawn) |
+| `types/` | 4 | `index.ts`, `resolve.ts` (TSC type → C type), `infer.ts` (expression type inference), `helpers.ts` (`_ensure*Struct`, `_wrapOptValue`, mangle helpers) |
+| `misc/` | 5 | `index.ts`, `arrays.ts` (array literals), `closures.ts` (lambda hoisting, capture), `new-expr.ts` (new X()), `emit-helpers.ts` (spawn, Thread) |
+| `async/` | 6 | `index.ts`, `async-stmt.ts` (emit async statements), `async-emit.ts` (state machine poll fn), `generator.ts`, `scan.ts` (collect await states, liveness), `helpers.ts` |
 | `types.ts` | 1 | `PRIMITIVE_MAP`, `toCType`, `mangleType`, `fmtSpec`, `inferLiteralCType` |
 
 ### Key Context state (the `this.*` properties)
@@ -323,14 +323,14 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ## 8. Current State
 
-### Tests: 1749 (spec-based structure)
+### Tests: 1752 (spec-based structure, `--no-gcc`)
 
 Tests organized by spec section (`test/cases/<NN-section>/`):
 
 | Section | Tests | Topic |
 |---------|-------|-------|
 | 02-syntax | 124 | Arithmetic, assign, bitwise, comparison, logical, variables, formatting |
-| 03-types | 395 | Numbers, enum, type aliases, tuples, utility types, null/optional, widening |
+| 03-types | 398 | Numbers, enum, type aliases, tuples, utility types, null/optional, widening |
 | 04-ownership | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
 | 05-control-flow | 49 | if/else, while, switch, ternary, for-of, match |
 | 06-functions | 61 | Functions, arrows, default/rest params, closures, overloads, extensions |
@@ -345,7 +345,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | 15-decorators | 22 | Decorator function, factories, before/after |
 | 16-tooling | 44 | LSP, linter, formatter, optimizer, wasm, capabilities |
 
-**Total: 1749 tests, all pass (`--no-gcc`).**
+**Total: 1748 tests (with gcc), 1752 (`--no-gcc`). All pass.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -366,8 +366,8 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 ### Project state & tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** All bugs and enhancements #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #57 **closed** (NaN/Infinity + `tsc_format_double`), #72–#80 #82 #91 (self-hosting epics), #99 **closed** (`strict: true` — 8/8 strict options), #100 **closed** (audit).
-- **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~843 lines across 49 mixin files.
+- **GitHub Issues:** All bugs #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #66 (bare-throws: Typeof/Yield/Drop), #67 (bare-throws: method calls), #69 (Math.saturatingCast/checkedCast), #72–#80 #82 (self-hosting epics). Closed: #57 (NaN/Infinity + `tsc_format_double`), #91 (#81–#90 epic), #99 (`strict: true`), #100 (audit).
+- **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~888 lines across 51 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
 - **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
 - **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`.

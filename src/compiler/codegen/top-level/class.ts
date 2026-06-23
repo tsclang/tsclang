@@ -1,10 +1,11 @@
-// class.js
+// class.ts
 export default {
   visitClassDecl(this: any, node: any) {
     const { name, superClass, members, decorators, typeParams } = node;
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     // Generic class: store as template
-    if (typeParams?.length > 0) {
+    if (typeParams?.length > 0) {
+
       this._genericClasses.set(name, node);
       return;
     }

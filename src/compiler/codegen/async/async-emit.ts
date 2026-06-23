@@ -1,4 +1,4 @@
-// async-emit.js
+// async-emit.ts
 export default {
   // ─── emitAsyncFunc ────────────────────────────────────────────────────────
   emitAsyncFunc(this: any, node: any) {
@@ -28,7 +28,8 @@ export default {
     if (hasThrows) {
       const innerIdent = isVoidReturn ? 'void' : this.cTypeToIdent(innerResultCType ?? 'int');
       resultCType = `Result_${innerIdent}_${throwsKey}`;
-      // Emit Result typedef only once (deduplicate across functions sharing same Result type)
+      // Emit Result typedef only once (deduplicate across functions sharing same Result type)
+
       if (!this._emittedResultTypes.has(resultCType)) {
         this._emittedResultTypes.add(resultCType);
         const innerDecl = isVoidReturn ? 'int _dummy' : `${innerResultCType} value`;
@@ -165,7 +166,8 @@ export default {
     const hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
     if (hasStaticDec && this._asyncName === 'state_machine') {
       this.topLevel.push('');
-      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+
       this._staticTasks.push({ name, stateType, pollFn });
       return;
     }

@@ -1,4 +1,4 @@
-// helpers.js
+// helpers.ts
 const _RUNTIME_ET = new Set(['i32', 'f64', 'string']);
 const _RUNTIME_MAP = new Set(['i32_i32', 'i32_f64', 'f64_f64', 'string_string']);
 const _RUNTIME_FLATMAP = new Set(['i32_i32', 'f64_f64', 'string_string']);
@@ -111,7 +111,8 @@ export default {
   },
 
   // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32 via TSC_MAP_DECL.
-  _ensureMapStruct(this: any, suffix: any) {
+  _ensureMapStruct(this: any, suffix: any) {
+
     this._emittedMapStructs.add(suffix);
   },
 
@@ -124,7 +125,8 @@ export default {
       this.addTop(`typedef struct { ${kCType} key; ${vCType} value; } ${entryName};`);
       this.addTop(`typedef struct { ${entryName} *data; size_t length; size_t capacity; } ${arrName};`);
       this.addTop('');
-      // Register in _emittedArrayStructs to prevent _ensureArrayStruct from re-emitting
+      // Register in _emittedArrayStructs to prevent _ensureArrayStruct from re-emitting
+
       this._emittedArrayStructs.add(arrName);
     }
   },

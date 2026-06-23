@@ -1,4 +1,4 @@
-// dispatch.js
+// dispatch.ts
 export default {
   exprToC(this: any, node: any, lines: any[] = [], depth: any = 0) {
     if (!node) return '0';

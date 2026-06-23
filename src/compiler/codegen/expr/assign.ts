@@ -1,4 +1,4 @@
-// assign.js
+// assign.ts
 export default {
   // Assignment
   assignToC(this: any, node: any, lines: any, depth: any) {

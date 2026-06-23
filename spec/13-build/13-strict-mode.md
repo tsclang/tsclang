@@ -6,7 +6,7 @@
 
 ```json
 {
-  "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
+  "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
 }
 ```
 
@@ -77,20 +77,6 @@ declare function abort(): never;
 ```
 
 **Обоснование:** Inline C неаудитируем компилятором — может содержать произвольные операции, включая UB. Для C interop — `.d.tsc` с типизированными декларациями.
-
-#### `no-extern-c` — запрет extern "C"
-
-Запрещает `extern "C" function`.
-
-```typescript
-// ❌ error: extern "C" is forbidden in strict mode (no-extern-c)
-extern "C" function memcmp(a: Ref<u8>, b: Ref<u8>, n: usize): i32;
-
-// ✅ typed declaration — ok
-declare function memcmp(a: Ref<u8>, b: Ref<u8>, n: usize): i32;
-```
-
-**Обоснование:** `extern "C"` обходит name mangling — типы параметров не проверяются на call site. `.d.tsc` декларации обеспечивают тот же C interop, но с проверкой типов.
 
 #### `safe-math` — безопасная целочисленная арифметика (runtime)
 
@@ -395,7 +381,7 @@ IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
 
 ```json
 // Только type safety — без ограничений на аллокацию
-{ "strict": ["no-any", "no-unsafe", "no-native", "no-extern-c"] }
+{ "strict": ["no-any", "no-unsafe", "no-native"] }
 
 // SIL 3 embedded — максимальная строгость, нет void*
 { "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "no-closures", "no-interfaces", "no-threads", "no-sort", "switch-default", "no-abort"] }
@@ -445,7 +431,6 @@ Strict rules проверяются **после** platform capability checks. �
 | `no-any` | `any`, `unknown` типы | `(no-any)` |
 | `no-unsafe` | `unsafe {}` блоки | `(no-unsafe)` |
 | `no-native` | `native \`...\`` | `(no-native)` |
-| `no-extern-c` | `extern "C" function` | `(no-extern-c)` |
 | `safe-math` | Integer `+`, `-`, `*`, `/`, `%` без `try/catch` или `throws MathError` | `(safe-math)` |
 | `no-lossy-cast` | Lossy `as` cast | `(no-lossy-cast)` |
 | `no-dynamic-alloc` | `new Array(runtimeN)`, `new Map()`, `new Set()` | `(no-dynamic-alloc)` |

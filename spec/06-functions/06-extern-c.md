@@ -1,4 +1,6 @@
-## Ограничение: extern "C" запрещает перегрузку
+## Ограничение: extern "C" запрещает перегрузку *[NOT YET IMPLEMENTED]*
+
+> `extern "C" function` syntax is not yet implemented. Use `declare function` for C interop (provides the same capability with full type checking).
 
 `extern "C"` функции имеют фиксированное C-имя — манглинг невозможен. Перегрузка — ошибка компилятора:
 

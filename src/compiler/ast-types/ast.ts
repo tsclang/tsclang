@@ -1,5 +1,4 @@
 // AST type definitions for TSClang compiler
-// Stage 2 of JS→TS migration (#84)
 
 // ---------------------------------------------------------------------------
 // Position info (attached to some nodes for error reporting)

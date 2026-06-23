@@ -1,22 +1,9 @@
 // Context base interface for declaration merging.
-// Stage 2 of JS→TS migration (#84).
-//
-// This interface defines the base Context type. In Stage 5 (#87),
-// each mixin file will add methods via TypeScript declaration merging:
-//
-//   declare module '../ast-types/context' {
-//     interface Context {
-//       _visitVarDecl(node: VarDecl, lines: string[], depth: number): void;
-//     }
-//   }
-//
-// For now, this only contains constructor fields and core methods
-// defined directly in codegen.js. Mixin methods will be added in Stage 5.
 
 import type { SymbolInfo } from './symbol.js';
 
 export interface Context {
-  // Core properties (constructor-initialized in codegen.js)
+  // Core properties (constructor-initialized in codegen.ts)
   filename: string;
   src: string;
   classes: Map<string, unknown>;
@@ -57,7 +44,7 @@ export interface Context {
   define(name: string, info: SymbolInfo): void;
   lookup(name: string): SymbolInfo | null;
 
-  // Type delegates (TypeChecker methods — will be properly typed in Stage 5)
+  // Type delegates (TypeChecker methods)
   resolveType(typeAnn: unknown): string | null;
   inferType(expr: unknown): string;
 

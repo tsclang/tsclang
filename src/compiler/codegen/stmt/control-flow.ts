@@ -262,7 +262,7 @@ export default {
             const optSide = nullSide === 'right' ? node.test.left : node.test.right;
             if (optSide.kind === 'Ident') {
               const sym = this.lookup(optSide.name);
-              // Pool opt_ref types: don't narrow (member access routed via .value-> in expr.js)
+              // Pool opt_ref types: don't narrow (member access routed via .value-> in expr/dispatch.ts)
               const isPool = sym?.ctype?.startsWith('opt_ref_') && this.classes.get(sym.ctype.slice(8))?._isPool;
               if (sym?.ctype?.startsWith('opt_') && !isPool) narrowVar = optSide.name;
               else if (sym?.isArcUpgrade) upgradeReleaseVar = optSide.name;
@@ -1301,7 +1301,7 @@ export default {
             if (part.kind === 'str') {
               nativeOut += part.value;
             } else if (part.kind === 'expr') {
-              // Re-parse the expression source (same as _templateToC in misc.js)
+              // Re-parse the expression source (same as _templateToC in misc/closures.ts)
               const toks = this._lex(part.src, this.filename);
               const { ast } = this._parse(toks);
               const exprNode = ast.body[0]?.expr ?? ast.body[0];

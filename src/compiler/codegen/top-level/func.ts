@@ -1,5 +1,5 @@
 import { mangleParams } from '../../types.js';
-// func.js
+// func.ts
 export default {
   visitEnum(this: any, node: any) {
     const { name, members, isConst } = node;

@@ -1,5 +1,5 @@
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
-// resolve.js
+// resolve.ts
 export default {
   resolveType(this: any, typeNode: any) {
     if (!typeNode) return 'void';

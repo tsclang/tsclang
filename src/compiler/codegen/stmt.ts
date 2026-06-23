@@ -1,4 +1,4 @@
-// stmt.js
+// stmt.ts
 export default {
   visitBlock(this: any, block: any, lines: any, depth: any) {
     this.pushScope();

@@ -1,4 +1,4 @@
-// arrays.js
+// arrays.ts
 export default {
   arrayLitToC(this: any, node: any, _elemType: any, lines: any, depth: any) {
     const result: any[] = [];

@@ -863,7 +863,7 @@ export default {
               this._currentBlockPoolVars.push({ name, className: _pcls2 });
             }
           }
-          // Heap vars are auto-registered in codegen.js:define
+          // Heap vars are auto-registered in define()
           // Move semantics for pool refs: mark source moved and zero out
           if (ctype?.startsWith('opt_ref_') && init?.kind === 'Ident') {
             const initSym2 = this.lookup(init.name);

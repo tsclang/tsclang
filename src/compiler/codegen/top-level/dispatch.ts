@@ -1,4 +1,4 @@
-// dispatch.js
+// dispatch.ts
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
   visitTopLevel(this: any, node: any) {
@@ -87,7 +87,8 @@ export default {
       case 'TypeAlias':   this.visitTypeAlias(node); break;
       case 'FuncDecl':    this.visitFuncDecl(node, true, false); break; // not exported → static
       case 'FuncOverload':
-        // Collect signatures; implementation FuncDecl will emit them
+        // Collect signatures; implementation FuncDecl will emit them
+
         { const _sigs = this._pendingOverloads.get(node.name) ?? [];
           // Check for duplicate/ambiguous signature
           const newSig = (node.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
@@ -108,7 +109,8 @@ export default {
             node.init.object?.kind === 'Ident' && node.init.object.name === 'process' &&
             node.init.prop === 'argv') {
           this._useArgcArgv = true;
-          // Array_string is predefined in runtime.h (no need to emit typedef)
+          // Array_string is predefined in runtime.h (no need to emit typedef)
+
           this._emittedArrayStructs.add('Array_string');
           this.define(node.name, { ctype: 'Array_string', varKind: node.varKind, _cAlias: '_argv' });
           break;
@@ -172,7 +174,8 @@ export default {
             const v = vt ?? 'int32_t';
             const kId = this.cTypeToIdent(k);
             const vId = this.cTypeToIdent(v);
-            const smType = `StaticMap_${kId}_${vId}`;
+            const smType = `StaticMap_${kId}_${vId}`;
+
             if (!this._emittedStaticMaps.has(smType)) {
               this._emittedStaticMaps.add(smType);
               this.addTop(`typedef struct {`);
@@ -271,7 +274,8 @@ export default {
     }
   },
 
-  visitDeclareModule(this: any, node: any) {
+  visitDeclareModule(this: any, node: any) {
+
     this._declaredModules.set(node.moduleName, node.body);
   },
 

@@ -1,4 +1,4 @@
-// types-alias.js
+// types-alias.ts
 export default {
   visitInterface(this: any, node: any) {
     const { name, members } = node;
@@ -169,12 +169,14 @@ export default {
         } else if (innerCtype.startsWith('opt_')) {
           // Strip opt_ (best effort: opt_string → String via re-resolve... just use pending map)
           innerCtype = innerCtype.slice(4);
-        }
+        }
+
         this._typeAliases.set(name, innerCtype); // transparent alias, no typedef
       } else if (utName === 'Record' && utArgs.length >= 2) {
         const keyTypeNode = utArgs[0];
         const valTypeNode = utArgs[1];
-        const valCtype = this.resolveType(valTypeNode);
+        const valCtype = this.resolveType(valTypeNode);
+
         if (this.isStringLiteralUnion(keyTypeNode)) {
           // Record<"x"|"y", f64> → struct { double x; double y; }
           const keys = this.getStringLiteralMembers(keyTypeNode);
@@ -204,7 +206,8 @@ export default {
         throw this.error(`conditional types are not supported`);
       } else if (utName === 'ReturnType' && utArgs.length >= 1) {
         // ReturnType<typeof fn> → fn's return type
-        const arg = utArgs[0];
+        const arg = utArgs[0];
+
         if (arg.kind === 'TypeTypeof') {
           const sym = this.lookup(arg.name);
           if (sym?.returnType) {
@@ -229,12 +232,14 @@ export default {
               elements: params.map((p: any) => ({ typeAnn: p.typeAnn ?? { kind: 'TypeRef', name: 'i32', typeArgs: [] }, label: p.name, rest: false, optional: false })),
               readonly: false
             };
-            const tupleName = this.resolveTupleType(tupleNode);
+            const tupleName = this.resolveTupleType(tupleNode);
+
             this._typeAliases.set(name, tupleName);
           }
         }
       } else if (utName === 'Awaited' && utArgs.length >= 1) {
-        // Awaited<Promise<T>> → T
+        // Awaited<Promise<T>> → T
+
         let inner = utArgs[0];
         // Unwrap all Promise<> wrappers
         while (inner.kind === 'TypeRef' && inner.name === 'Promise' && inner.typeArgs.length > 0) {
@@ -270,7 +275,8 @@ export default {
       const hasNonString = allMembers.some((t: any) => !(t.kind === 'TypeLiteral' && t.litKind === 'string'));
       if (hasString && hasNonString) {
         throw this.error(`string literal union cannot be mixed with non-string types`);
-      }
+      }
+
       // For nullable unions (T | null), compute opt name without emitting typedef yet
       const nonNullLeaves = allMembers.filter((t: any) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
                                                   && !(t.kind === 'TypeLiteral' && t.value === 'null'));
@@ -278,7 +284,8 @@ export default {
         const inner = this.resolveType(nonNullLeaves[0]);
         const optName = `opt_${this.cTypeToIdent(inner)}`;
         this._typeAliases.set(name, optName);
-        // Store for deferred typedef emission (emitted on first actual use)
+        // Store for deferred typedef emission (emitted on first actual use)
+
         this._pendingOptTypedefs.set(optName, inner);
       } else {
         this._typeAliases.set(name, this.resolveType(typeAnn));

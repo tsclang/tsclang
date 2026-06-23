@@ -1,4 +1,4 @@
-// decorators.js
+// decorators.ts
 export default {
   // ----------------------------------------------------------------
   // Decorator helpers

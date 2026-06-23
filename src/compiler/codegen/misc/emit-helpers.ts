@@ -1,4 +1,4 @@
-// emit-helpers.js
+// emit-helpers.ts
 export default {
   _emitIterableImpl(this: any, className: any, iterMethod: any, elemCType: any) {
     const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
@@ -96,7 +96,8 @@ export default {
   },
 
   // Emit `typedef struct {...} Promise_T;` once per type
-  _emitPromiseTypedef(this: any, promiseType: any, innerType: any) {
+  _emitPromiseTypedef(this: any, promiseType: any, innerType: any) {
+
     if (this._emittedPromiseTypes.has(promiseType)) return;
     this._emittedPromiseTypes.add(promiseType);
     this._topBlank();
@@ -182,7 +183,8 @@ export default {
     let throwsTypeName: any = null;
     if (hasThrows) {
       throwsTypeName = throwsTypes[0]?.name ?? throwsTypes[0];
-      resultType = `Result_void_${throwsTypeName}`;
+      resultType = `Result_void_${throwsTypeName}`;
+
       if (!this._emittedResultErrKeys.has(throwsTypeName)) {
         this._emittedResultErrKeys.add(throwsTypeName);
         this.addTop(`typedef struct { bool ok; union { int _dummy; ${throwsTypeName} error; }; } ${resultType};`);

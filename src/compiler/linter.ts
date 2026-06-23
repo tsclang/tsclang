@@ -1,4 +1,4 @@
-// linter.js — AST-based lint rules for TSClang
+// linter.ts — AST-based lint rules for TSClang
 
 // Generic recursive AST walker
 function walkAst(node: any, visitor: any) {

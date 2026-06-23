@@ -1,6 +1,8 @@
-// helpers.js
+// helpers.ts
 export default {
-  _initAsync(this: any) {
+  _initAsync(this: any) {
+
+
   },
 
   // ─── Return type helpers ──────────────────────────────────────────────────

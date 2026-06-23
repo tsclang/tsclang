@@ -1,4 +1,4 @@
-// scan.js
+// scan.ts
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
   _scanAsyncBody(this: any, params: any, body: any) {

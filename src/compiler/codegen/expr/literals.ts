@@ -1,4 +1,4 @@
-// literals.js
+// literals.ts
 export default {
   // Unescape a char literal value to numeric code
   _charCode(this: any, raw: any) {

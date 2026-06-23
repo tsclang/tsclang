@@ -1,4 +1,4 @@
-// new-expr.js
+// new-expr.ts
 export default {
   newToC(this: any, node: any, lines: any, depth: any) {
     const { name, args } = node;

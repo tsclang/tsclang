@@ -1,4 +1,4 @@
-// operators.js
+// operators.ts
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
   binaryWidened(this: any, node: any, targetCtype: any, lines: any, depth: any) {

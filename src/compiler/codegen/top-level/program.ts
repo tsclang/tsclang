@@ -1,4 +1,4 @@
-// program.js
+// program.ts
 export default {
   visitProgram(this: any, ast: any) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
