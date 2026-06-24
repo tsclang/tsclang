@@ -1,11 +1,11 @@
 #include "runtime.h"
 
 int32_t mymath_add_i32_i32(int32_t a, int32_t b) {
-    return a + b;
+    return (int32_t)((uint32_t)a + (uint32_t)b);
 }
 
 int32_t mymath_mul_i32_i32(int32_t a, int32_t b) {
-    return a * b;
+    return (int32_t)((uint32_t)a * (uint32_t)b);
 }
 
 int main(void) {

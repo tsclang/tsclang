@@ -1,5 +1,4 @@
 node_modules/
-.tsclang-cache/
 .tsclang-tmp/
 .tsclang-tmp2/
 dist/

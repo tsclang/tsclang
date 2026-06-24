@@ -3,15 +3,14 @@
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { basename, extname, dirname, join, resolve } from 'path';
-import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
+import { homedir } from 'os';
 import { lex } from './lexer.js';
 import { parse } from './parser.js';
 import { codegen } from './codegen.js';
 import { optimize } from './optimizer.js';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CACHE_DIR = join(ROOT, '.tsclang-cache');
+const CACHE_DIR = process.env.TSCLANG_CACHE_DIR || join(homedir(), '.tsclang', 'cache');
 
 // ---------------------------------------------------------------------------
 // Incremental compilation cache
