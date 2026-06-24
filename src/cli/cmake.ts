@@ -28,6 +28,7 @@ export function generateProjectCmake(opts: ProjectCmakeOptions): string {
   } else {
     if (toolchain !== 'gcc') lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
     lines.push('set(CMAKE_C_STANDARD 11)');
+    lines.push('set(CMAKE_C_STANDARD_REQUIRED ON)');
     if (optimize) lines.push(`add_compile_options(-${optimize})`);
     lines.push(`add_executable(${projectName} ${mainFile})`);
   }
@@ -47,6 +48,7 @@ export function generateBuildCmake(opts: BuildCmakeOptions): string {
     'cmake_minimum_required(VERSION 3.10)',
     `project(${stem} C)`,
     'set(CMAKE_C_STANDARD 11)',
+    'set(CMAKE_C_STANDARD_REQUIRED ON)',
     `add_executable(${stem} ${stem}.c)`,
     `target_include_directories(${stem} PRIVATE ${JSON.stringify(runtimeDir)})`,
   ];

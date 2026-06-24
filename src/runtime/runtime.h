@@ -29,6 +29,10 @@
 
 #pragma once
 
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -39,11 +43,20 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <ctype.h>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 #ifdef __AVR__
 #include <avr/pgmspace.h>
 #endif
-#ifndef TSC_EMBEDDED
+#if !defined(TSC_EMBEDDED) && !defined(__STDC_NO_ATOMICS__)
 #include <stdatomic.h>
+#define TSC_HAS_C11_ATOMICS 1
+#else
+#define TSC_HAS_C11_ATOMICS 0
 #endif
 
 /* ISR fallback for non-AVR targets (avr-libc defines the real one) */
@@ -287,23 +300,37 @@ typedef struct MathError {
  * ------------------------------------------------------------------------- */
 static double _tsc_t0 = 0.0;
 
+#ifdef _WIN32
+static LARGE_INTEGER _tsc_qpc_freq;
+static LARGE_INTEGER _tsc_qpc_start;
+
 static inline void _tsc_init(void) {
-#ifndef TSC_NO_POSIX
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    _tsc_t0 = (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
-#endif
+    QueryPerformanceFrequency(&_tsc_qpc_freq);
+    QueryPerformanceCounter(&_tsc_qpc_start);
 }
 
 static inline double tsc_performance_now(void) {
-#ifndef TSC_NO_POSIX
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return (double)(now.QuadPart - _tsc_qpc_start.QuadPart) * 1000.0 / (double)_tsc_qpc_freq.QuadPart;
+}
+#elif !defined(TSC_NO_POSIX)
+static inline void _tsc_init(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    _tsc_t0 = (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
+}
+
+static inline double tsc_performance_now(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6 - _tsc_t0;
-#else
-    return 0.0;
-#endif
 }
+#else
+static inline void _tsc_init(void) {}
+
+static inline double tsc_performance_now(void) { return 0.0; }
+#endif
 
 /* performance.mark / performance.measure */
 typedef struct { String name; double duration; double startTime; } TscPerfEntry;
@@ -413,7 +440,14 @@ static inline time_t _tsc_timegm(struct tm *tm) {
 static inline Date tsc_date_from_ms(int64_t ms) { return (Date){ ms }; }
 
 static inline int64_t tsc_date_now(void) {
-#ifndef TSC_EMBEDDED
+#ifdef _WIN32
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    return (int64_t)((uli.QuadPart - 116444736000000000ULL) / 10000ULL);
+#elif !defined(TSC_EMBEDDED)
     struct timespec _ts;
     clock_gettime(CLOCK_REALTIME, &_ts);
     return (int64_t)_ts.tv_sec * 1000LL + (int64_t)_ts.tv_nsec / 1000000LL;
@@ -618,7 +652,13 @@ static inline int32_t tsc_random_range_i32(TscRandom *r, int32_t lo, int32_t hi)
     return lo + (int32_t)(_tsc_xorshift64(&r->state) % (uint32_t)(hi - lo));
 }
 static inline TscRandom tsc_random_default(void) {
-#ifndef TSC_NO_POSIX
+#ifdef _WIN32
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    uint64_t seed = (uint64_t)counter.QuadPart;
+    if (seed == 0) seed = 1;
+    return (TscRandom){ seed };
+#elif !defined(TSC_NO_POSIX)
     struct timespec _ts;
     clock_gettime(CLOCK_MONOTONIC, &_ts);
     uint64_t seed = (uint64_t)_ts.tv_nsec ^ ((uint64_t)_ts.tv_sec << 32);
@@ -3226,13 +3266,14 @@ TSC_STATICMAP_IMPL(uint8_t, int32_t, u8_i32)
 
 /* -------------------------------------------------------------------------
  * AbortController / AbortSignal
- * Desktop: atomic_bool for thread-safety; Embedded: plain bool
+ * Desktop with C11 atomics: atomic_bool for thread-safety
+ * MSVC / Embedded: volatile bool (MSVC defines __STDC_NO_ATOMICS__)
  * ------------------------------------------------------------------------- */
 typedef struct {
-#ifndef TSC_EMBEDDED
+#if TSC_HAS_C11_ATOMICS
     _Atomic bool aborted;
 #else
-    bool aborted;
+    volatile bool aborted;
 #endif
 } TscAbortSignal;
 
@@ -3246,7 +3287,7 @@ static inline TscAbortController tsc_abort_controller_create(void) {
 }
 
 static inline void tsc_abort_controller_abort(TscAbortController *ctrl) {
-#ifndef TSC_EMBEDDED
+#if TSC_HAS_C11_ATOMICS
     atomic_store(&ctrl->signal->aborted, true);
 #else
     ctrl->signal->aborted = true;
@@ -3254,7 +3295,7 @@ static inline void tsc_abort_controller_abort(TscAbortController *ctrl) {
 }
 
 static inline bool tsc_abort_signal_aborted(TscAbortSignal *sig) {
-#ifndef TSC_EMBEDDED
+#if TSC_HAS_C11_ATOMICS
     return atomic_load(&sig->aborted);
 #else
     return sig->aborted;
@@ -3300,10 +3341,7 @@ static inline bool tsc_async_mutex_is_locked(TscAsyncMutex *m) {
  * ------------------------------------------------------------------------- */
 #ifndef TSC_EMBEDDED
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+/* <windows.h> already included at top of file */
 typedef struct { HANDLE _h; void *(*_fn)(void *); void *_arg; } _TscThread;
 typedef _TscThread *tsc_thread_t;
 static DWORD WINAPI _tsc_thread_trampoline(LPVOID arg) {
