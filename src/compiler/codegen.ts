@@ -418,6 +418,7 @@ class Context {
         this._checkNoBareThrows(expr.index);
         break;
       case 'RangeIndex':
+        this._checkNoBareThrows(expr.object);
         this._checkNoBareThrows(expr.start);
         this._checkNoBareThrows(expr.end);
         break;
@@ -443,6 +444,29 @@ class Context {
         break;
       case 'Cast':
         this._checkNoBareThrows(expr.expr);
+        break;
+      case 'Typeof':
+        this._checkNoBareThrows(expr.expr);
+        break;
+      case 'Drop':
+        this._checkNoBareThrows(expr.expr);
+        break;
+      case 'Yield':
+        if (expr.value) this._checkNoBareThrows(expr.value);
+        break;
+      case 'Await':
+        this._checkNoBareThrows(expr.expr);
+        break;
+      case 'TemplateLit':
+        for (const part of expr.parts ?? []) {
+          if (part.expr) this._checkNoBareThrows(part.expr);
+        }
+        break;
+      case 'New':
+        for (const a of expr.args ?? []) this._checkNoBareThrows(a.expr ?? a);
+        break;
+      case 'Match':
+        this._checkNoBareThrows(expr.discriminant);
         break;
       case 'NonNull':
       case 'Propagate':

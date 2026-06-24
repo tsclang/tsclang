@@ -1,0 +1,7 @@
+function risky(): i32 throws IOError { throw new IOError(); }
+function main(): i32 {
+    switch (risky()) {
+        case 1: return 1;
+        default: return 0;
+    }
+}

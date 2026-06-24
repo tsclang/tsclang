@@ -51,7 +51,11 @@ export default {
               this._emitFuncCleanup(lines, I + '    ');
               p(`    return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
             } else {
-              p(`    /* unhandled throws error in non-throwing context */`);
+              const errTypes = sym._resultErrTypes?.map((t: any) => typeof t === 'string' ? t : t?.name).join(' | ') ?? 'unknown';
+              throw this.error(
+                `TypeError: '${callee.name}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function`,
+                expr
+              );
             }
             p(`}`);
             this._flushPostStmtCleanups(lines);
@@ -94,6 +98,10 @@ export default {
           }
           break;
         }
+        // Check bare throws in return value, unless auto-propagate will handle it
+        const _retAutoProp = this._throwsCtx && node.value?.kind === 'Call' &&
+          node.value.callee?.kind === 'Ident' && this.lookup(node.value.callee.name)?._isThrowsFunc;
+        if (!_retAutoProp) this._checkNoBareThrows(node.value);
         // Error: return inside finally block
         if (this._inFinallyBlock) {
           throw this.error('TypeError: Cannot return inside a finally block');
@@ -252,7 +260,7 @@ export default {
       }
 
       case 'If': {
-        // Detect narrowing: if (x != null) тЖТ narrow x to x.value inside block
+        this._checkNoBareThrows(node.test);
         const isNullLit = (n: any) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
         let narrowVar: any = null;
         let upgradeReleaseVar: any = null;
@@ -437,6 +445,9 @@ export default {
       }
 
       case 'For': {
+        if (node.init) this._checkNoBareThrows(node.init.kind === 'ExprStmt' ? node.init.expr : node.init);
+        if (node.test) this._checkNoBareThrows(node.test);
+        if (node.update) this._checkNoBareThrows(node.update);
         const _savedAsyncBreak3 = this._asyncBreakStack;
         const _savedAsyncCont3 = this._asyncContinueStack;
         this._asyncBreakStack = null;
@@ -867,6 +878,7 @@ export default {
       }
 
       case 'While': {
+        this._checkNoBareThrows(node.test);
         const _savedAsyncBreak = this._asyncBreakStack;
         const _savedAsyncCont = this._asyncContinueStack;
         this._asyncBreakStack = null;
@@ -902,6 +914,7 @@ export default {
       }
 
       case 'DoWhile': {
+        this._checkNoBareThrows(node.test);
         const _savedAsyncBreak2 = this._asyncBreakStack;
         const _savedAsyncCont2 = this._asyncContinueStack;
         this._asyncBreakStack = null;
@@ -1007,6 +1020,7 @@ export default {
       }
 
       case 'Throw': {
+        this._checkNoBareThrows(node.value);
         const val = node.value;
         // Error: throw inside finally block
         if (this._inFinallyBlock) {
@@ -1261,6 +1275,7 @@ export default {
       }
 
       case 'Switch': {
+        this._checkNoBareThrows(node.discriminant);
         this._validateSwitchFallthrough(node);
         const discType = this.inferType(node.discriminant);
         const discC = this.exprToC(node.discriminant, lines, depth);
@@ -1353,7 +1368,7 @@ export default {
 
       case 'Noop': break;
       default:
-        p(`/* unhandled stmt: ${node.kind} */`);
+        throw this.error(`internal: unhandled statement kind '${node.kind}'`, node);
     }
   },
 

@@ -1,0 +1,1 @@
+TypeError: 'readFile()' throws IOError which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function

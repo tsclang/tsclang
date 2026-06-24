@@ -1,0 +1,4 @@
+function risky(): i32 throws IOError { throw new IOError(); }
+function main(): void {
+    const t: string = typeof risky();
+}
