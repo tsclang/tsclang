@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import { parsePlatformDecl } from '../src/compiler/profile.js';
 import { compileTsc, findPackageJson } from '../src/compiler/compile.js';
+import { flagValue, hasFlag, hasFlagAny, getPositional, getPositionalAfter, isValidOptimizeLevel, isValidNumberType, NUMBER_TYPES } from '../src/cli/args.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -46,11 +47,11 @@ import { startLsp }          from '../src/lsp/server.js';
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
 
-if (args.includes('--no-color')) setColorEnabled(false);
+if (hasFlag(args, '--no-color')) setColorEnabled(false);
 
 const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 
-if (args.includes('--version') || args.includes('-v')) {
+if (hasFlagAny(args, '--version', '-v')) {
   console.log(`tsclang ${VERSION}`);
   process.exit(0);
 }
@@ -150,7 +151,7 @@ EXAMPLE:
   tsclang explain E012`,
 };
 
-if (CMD_HELP[command] && (args.includes('--help') || args.includes('-h'))) {
+if (CMD_HELP[command] && hasFlagAny(args, '--help', '-h')) {
   console.log(CMD_HELP[command]);
   process.exit(0);
 }
@@ -447,10 +448,9 @@ if (command === 'init') {
     }
   }
 
-  const typeIdx = args.indexOf('--type');
-  const hasLibrary = args.includes('--library') || args.includes('-l');
-  const hasDeclaration = args.includes('--declaration') || args.includes('-d');
-  let type = typeIdx !== -1 ? args[typeIdx + 1] : 'executable';
+  const hasLibrary = hasFlagAny(args, '--library', '-l');
+  const hasDeclaration = hasFlagAny(args, '--declaration', '-d');
+  let type = flagValue(args, '--type') ?? 'executable';
   if (hasLibrary) type = 'library';
   if (hasDeclaration) type = 'declaration';
 
@@ -545,10 +545,10 @@ if (command === 'format') {
 // lint command
 // ---------------------------------------------------------------------------
 if (command === 'lint') {
-  const fixFlag    = args.includes('--fix');
-  const ruleArg    = args.find((a: any) => a.startsWith('--rule='));
+  const fixFlag    = hasFlag(args, '--fix');
+  const ruleArg    = args.find((a: string) => a.startsWith('--rule='));
   const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
-  const inputFile  = args.find((a: any) => !a.startsWith('--') && a !== 'lint');
+  const inputFile  = getPositional(args, 'lint');
   if (!inputFile) {
     _missingInput('lint');
     process.exit(1);
@@ -659,8 +659,8 @@ if (command === 'publish') {
 // install command
 // ---------------------------------------------------------------------------
 if (command === 'install') {
-  const productionFlag = args.includes('--production');
-  const pkgArg = args.find((a: any) => !a.startsWith('--') && a !== 'install');
+  const productionFlag = hasFlag(args, '--production');
+  const pkgArg = getPositional(args, 'install');
 
   if (productionFlag && !pkgArg) {
     // --production: skip devDependencies, nothing to install in mock
@@ -766,7 +766,7 @@ if (command === 'install') {
 // update command
 // ---------------------------------------------------------------------------
 if (command === 'update') {
-  const pkgArg = args.find((a: any) => !a.startsWith('--') && a !== 'update');
+  const pkgArg = getPositional(args, 'update');
 
   if (pkgArg) {
     const lock = _readLock();
@@ -798,7 +798,7 @@ if (command === 'build-cmake') {
     process.exit(1);
   }
 
-  const buildNameArg = args.indexOf('--build') !== -1 ? args[args.indexOf('--build') + 1] : null;
+  const buildNameArg = flagValue(args, '--build') ?? null;
   // Auto-select: use --build value, or if one build config exists pick it
   const builds = pkg.builds ?? {};
   const buildNames = Object.keys(builds);
@@ -849,36 +849,31 @@ if (command === 'build') {
     process.exit(1);
   }
 
-  const emitIdx   = args.indexOf('--emit');
-  let emit       = emitIdx !== -1 ? args[emitIdx + 1] : 'c';
-  const outIdx    = args.indexOf('--outDir');
-  let outDir     = outIdx !== -1 ? args[outIdx + 1] : '.';
-  const allErrors  = args.includes('--all-errors');
-  const debugLines = args.includes('--debug');
-  const noCache    = args.includes('--no-cache');
-  const sourcemap  = args.includes('--sourcemap');
-  const watchMode  = args.includes('--watch') || args.includes('-w');
-  const optIdx    = args.indexOf('--optimize');
-  let optimize   = optIdx !== -1 ? args[optIdx + 1] : null;
-  if (optimize && !/^O[0-3sz]$/.test(optimize)) {
+  let emit       = flagValue(args, '--emit') ?? 'c';
+  let outDir     = flagValue(args, '--outDir') ?? '.';
+  const allErrors  = hasFlag(args, '--all-errors');
+  const debugLines = hasFlag(args, '--debug');
+  const noCache    = hasFlag(args, '--no-cache');
+  const sourcemap  = hasFlag(args, '--sourcemap');
+  const watchMode  = hasFlagAny(args, '--watch', '-w');
+  let optimize   = flagValue(args, '--optimize') ?? null;
+  if (optimize && !isValidOptimizeLevel(optimize)) {
     process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use O0, O1, O2, O3, Os, Oz\n`);
     process.exit(1);
   }
 
-  const _validNumberTypes = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64']);
-  const _flagVal = (name: any): any => { const i = args.indexOf(name); return i !== -1 ? args[i + 1] : null; };
-  const _targetFlag       = _flagVal('--target');
-  let _defaultNumberFlag = _flagVal('--default-number');
-  const _allocatorFlag    = _flagVal('--allocator');
-  const _asyncFlag        = _flagVal('--async');
-  const _strictFlag       = _flagVal('--strict');
-  const _ramSizeFlag      = _flagVal('--ram-size');
-  const _stackSizeFlag    = _flagVal('--stack-size');
-  const _platformFlag     = _flagVal('--platform');
-  const _buildFlag        = _flagVal('--build');
-  const _mcuFlag          = _flagVal('--mcu');
-  if (_defaultNumberFlag && !_validNumberTypes.has(_defaultNumberFlag)) {
-    process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${[..._validNumberTypes].join(', ')}\n`);
+  const _targetFlag       = flagValue(args, '--target');
+  let _defaultNumberFlag = flagValue(args, '--default-number');
+  const _allocatorFlag    = flagValue(args, '--allocator');
+  const _asyncFlag        = flagValue(args, '--async');
+  const _strictFlag       = flagValue(args, '--strict');
+  const _ramSizeFlag      = flagValue(args, '--ram-size');
+  const _stackSizeFlag    = flagValue(args, '--stack-size');
+  const _platformFlag     = flagValue(args, '--platform');
+  const _buildFlag        = flagValue(args, '--build');
+  const _mcuFlag          = flagValue(args, '--mcu');
+  if (_defaultNumberFlag && !isValidNumberType(_defaultNumberFlag)) {
+    process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${NUMBER_TYPES.join(', ')}\n`);
     process.exit(1);
   }
 
@@ -1306,11 +1301,11 @@ if (command === 'build') {
   }
 
   // Check for -- separator (args to pass to program)
+  const progArgs = getPositionalAfter(args, '--');
   const sepIdx = args.indexOf('--');
-  const progArgs = sepIdx !== -1 ? args.slice(sepIdx + 1) : [];
   const runOptIdx = args.indexOf('--optimize');
   const runOptimize = runOptIdx !== -1 && runOptIdx < (sepIdx !== -1 ? sepIdx : args.length) ? args[runOptIdx + 1] : null;
-  if (runOptimize && !/^O[0-3sz]$/.test(runOptimize)) {
+  if (runOptimize && !isValidOptimizeLevel(runOptimize)) {
     process.stderr.write(`tsclang run: invalid --optimize value '${runOptimize}'; use O0, O1, O2, O3, Os, Oz\n`);
     process.exit(1);
   }
