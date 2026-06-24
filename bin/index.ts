@@ -6,7 +6,6 @@ import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
-import { parsePlatformDecl } from '../src/compiler/profile.js';
 import { compileTsc, findPackageJson } from '../src/compiler/compile.js';
 import { flagValue, hasFlag, hasFlagAny, getPositional, getPositionalAfter, isValidOptimizeLevel, isValidNumberType, NUMBER_TYPES } from '../src/cli/args.js';
 import { getVersion, getHelpText, CMD_HELP } from '../src/cli/help.js';
@@ -17,6 +16,8 @@ import { VALID_STRICT_RULES, VALID_BUILD_KEYS, validateStrictRules, validateBuil
 import { DESKTOP_CAPABILITIES, loadProfile, listAvailableProfiles, capabilityDefines } from '../src/cli/profile-loader.js';
 import type { Capabilities } from '../src/cli/profile-loader.js';
 import { generateProjectCmake, generateBuildCmake } from '../src/cli/cmake.js';
+import { missingInput, checkInput, reportErrors } from '../src/cli/helpers.js';
+import { runBuildCommand } from '../src/cli/commands/build.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -64,17 +65,7 @@ if (CMD_HELP[command] && hasFlagAny(args, '--help', '-h')) {
   process.exit(0);
 }
 
-function _missingInput(cmd: any) {
-  process.stderr.write(`tsclang ${cmd}: missing input file\n\nUsage: tsclang ${cmd} <input.tsc> [options]\nRun 'tsclang ${cmd} --help' for details.\n`);
-  process.exit(1);
-}
-
-function _checkInput(cmd: any, inputPath: any) {
-  if (!existsSync(inputPath)) {
-    process.stderr.write(`tsclang ${cmd}: file not found: ${inputPath}\n`);
-    process.exit(1);
-  }
-}
+// CLI helpers — extracted to src/cli/helpers.ts
 
 // Lock file helpers — extracted to src/cli/registry.ts
 
@@ -281,22 +272,7 @@ if (command === 'init') {
 
 // ---------------------------------------------------------------------------
 // Shared: compile TSC → C string (recursive for local imports)
-function reportErrors(e: any, filename: any) {
-  const errors = e?.isTscErrorBag ? e.errors
-               : e?.isTscError    ? [e]
-               : null;
-  if (errors) {
-    for (const err of errors) {
-      process.stderr.write(renderDiagnostic(err, { contextLines: 1 }) + '\n');
-    }
-    const n = errors.length;
-    process.stderr.write(`aborting due to ${n} error${n > 1 ? 's' : ''}\n`);
-  } else {
-    process.stderr.write(`${filename}: ${e.message}\n`);
-    if (process.env.TSC_DEBUG) process.stderr.write(e.stack + '\n');
-    process.stderr.write('aborting due to 1 error\n');
-  }
-}
+// reportErrors — extracted to src/cli/helpers.ts
 
 // ---------------------------------------------------------------------------
 // format command
@@ -307,7 +283,7 @@ function reportErrors(e: any, filename: any) {
 if (command === 'emit-dts') {
   const inputFile = args[1];
   if (!inputFile) {
-    _missingInput('emit-dts');
+    missingInput('emit-dts');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -325,7 +301,7 @@ if (command === 'emit-dts') {
 if (command === 'format') {
   const inputFile = args[1];
   if (!inputFile) {
-    _missingInput('format');
+    missingInput('format');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -345,7 +321,7 @@ if (command === 'lint') {
   const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
   const inputFile  = getPositional(args, 'lint');
   if (!inputFile) {
-    _missingInput('lint');
+    missingInput('lint');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
@@ -615,397 +591,11 @@ if (command === 'build-cmake') {
 // ---------------------------------------------------------------------------
 // build command
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// build command — extracted to src/cli/commands/build.ts
+// ---------------------------------------------------------------------------
 if (command === 'build') {
-  const inputFile = args[1];
-  if (!inputFile) {
-    _missingInput('build');
-    process.exit(1);
-  }
-
-  let emit       = flagValue(args, '--emit') ?? 'c';
-  let outDir     = flagValue(args, '--outDir') ?? '.';
-  const allErrors  = hasFlag(args, '--all-errors');
-  const debugLines = hasFlag(args, '--debug');
-  const noCache    = hasFlag(args, '--no-cache');
-  const sourcemap  = hasFlag(args, '--sourcemap');
-  const watchMode  = hasFlagAny(args, '--watch', '-w');
-  let optimize   = flagValue(args, '--optimize') ?? null;
-  if (optimize && !isValidOptimizeLevel(optimize)) {
-    process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use O0, O1, O2, O3, Os, Oz\n`);
-    process.exit(1);
-  }
-
-  const _targetFlag       = flagValue(args, '--target');
-  let _defaultNumberFlag = flagValue(args, '--default-number');
-  const _allocatorFlag    = flagValue(args, '--allocator');
-  const _asyncFlag        = flagValue(args, '--async');
-  const _strictFlag       = flagValue(args, '--strict');
-  const _ramSizeFlag      = flagValue(args, '--ram-size');
-  const _stackSizeFlag    = flagValue(args, '--stack-size');
-  const _platformFlag     = flagValue(args, '--platform');
-  const _buildFlag        = flagValue(args, '--build');
-  const _mcuFlag          = flagValue(args, '--mcu');
-  if (_defaultNumberFlag && !isValidNumberType(_defaultNumberFlag)) {
-    process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${NUMBER_TYPES.join(', ')}\n`);
-    process.exit(1);
-  }
-
-  // Profile loading: --platform <name> or --build <name> (reads builds.*.profile from tsc.package.json)
-  const PROFILES_DIR = join(ROOT, 'src', 'profiles');
-
-  // Profile loading — extracted to src/cli/profile-loader.ts
-
-  let _capabilities: any = null;
-  let _profileTarget: any = null;
-  let _mcu: any = null;
-
-  let _buildCfg: any = null;
-  let _pkgStrict: any = null;
-
-  function _validateStrictRulesCli(rules: unknown, source: string): string[] {
-    const err = validateStrictRules(rules, source);
-    if (err) {
-      process.stderr.write(`ConfigError: ${err}\n`);
-      process.exit(1);
-    }
-    return rules as string[];
-  }
-
-  if (_platformFlag) {
-    const prof = loadProfile(_platformFlag, PROFILES_DIR, inputFile);
-    if (!prof) {
-      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${listAvailableProfiles(PROFILES_DIR).join(', ')}\n`);
-      process.exit(1);
-    }
-    _capabilities = prof;
-    _profileTarget = prof.target || _platformFlag;
-  } else if (_buildFlag) {
-    const pkgPath = findPackageJson(dirname(resolve(inputFile)));
-    if (!pkgPath) {
-      process.stderr.write(`tsclang build: --build requires a tsc.package.json\n`);
-      process.exit(1);
-    }
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-      const buildCfg = pkg.builds?.[_buildFlag];
-      if (!buildCfg) {
-        process.stderr.write(`tsclang build: build '${_buildFlag}' not found in tsc.package.json\n`);
-        process.exit(1);
-      }
-      _buildCfg = buildCfg;
-      if (buildCfg.profile) {
-        const prof = loadProfile(buildCfg.profile, PROFILES_DIR, inputFile);
-        if (!prof) {
-          process.stderr.write(`tsclang build: unknown profile '${buildCfg.profile}' in build '${_buildFlag}'\n`);
-          process.exit(1);
-        }
-        _capabilities = prof;
-        _profileTarget = prof.target || buildCfg.profile;
-      }
-      // Build-level overrides
-      if (buildCfg.optimize && !optimize) optimize = buildCfg.optimize;
-      if (buildCfg.outDir && outDir === '.') outDir = buildCfg.outDir;
-      if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
-      if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
-      if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
-      if (pkg.strict) _pkgStrict = _validateStrictRulesCli(pkg.strict, 'tsc.package.json');
-    } catch (e: any) {
-      process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
-      process.exit(1);
-    }
-  }
-
-  let _pkgAliases: any = null;
-  if (!_buildFlag) {
-    const p = findPackageJson(dirname(resolve(inputFile)));
-    if (p) {
-      try {
-        const raw = JSON.parse(readFileSync(p, 'utf8'));
-        if (raw.strict) _pkgStrict = _validateStrictRulesCli(raw.strict, 'tsc.package.json');
-        if (raw.paths && typeof raw.paths === 'object') {
-          _pkgAliases = { paths: raw.paths, pkgDir: dirname(p) };
-        }
-      } catch {}
-    }
-  }
-
-  if (_mcuFlag) _mcu = _mcuFlag;
-
-  // Legacy fallback: --target <name> without --platform → try loading built-in profile
-  if (!_capabilities && _targetFlag) {
-    const prof = loadProfile(_targetFlag!, PROFILES_DIR, inputFile);
-    if (prof) {
-      _capabilities = prof;
-      if (!_profileTarget) _profileTarget = prof.target || _targetFlag;
-    }
-  }
-
-  // --allocator / --async flags → derive capabilities
-  if (!_capabilities && (_allocatorFlag || _asyncFlag)) {
-    _capabilities = {
-      ...DESKTOP_CAPABILITIES,
-      allocator: _allocatorFlag === 'static' ? 'static' : 'heap',
-      async: _asyncFlag === 'state_machine' ? 'state_machine' : (_asyncFlag === 'libuv' ? 'libuv' : (_asyncFlag === 'none' ? 'none' : 'libuv')),
-    };
-    if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {
-      _capabilities.async = 'none';
-    }
-  }
-
-  if (emit === 'hex' || emit === 'flash') {
-    const targetName = _profileTarget || _targetFlag;
-    if (targetName !== 'avr') {
-      process.stderr.write(
-        `ConfigError: --emit ${emit} requires an embedded target (avr); current target is ${targetName || 'desktop'}\n`
-      );
-      process.exit(1);
-    }
-  }
-
-  if (emit === 'flash') {
-    const flashCfg = _buildCfg?.flash;
-    if (!flashCfg || !flashCfg.programmer || !flashCfg.port) {
-      process.stderr.write(
-        'ConfigError: --emit flash requires "flash" config with "programmer" and "port" in tsc.package.json\n'
-      );
-      process.exit(1);
-    }
-  }
-
-  // capabilityDefines — extracted to src/cli/profile-loader.ts
-
-  const inputPath = resolve(inputFile);
-  _checkInput('build', inputPath);
-
-  // Check lock file staleness
-  const _stale = checkLockStale();
-  if (_stale) {
-    const parts: any[] = [];
-    if (_stale.added.length) parts.push(`added: ${_stale.added.join(', ')}`);
-    if (_stale.removed.length) parts.push(`removed: ${_stale.removed.join(', ')}`);
-    if (_stale.changed.length) parts.push(`changed: ${_stale.changed.join(', ')}`);
-    process.stderr.write(`tsclang build: warning: tsc.package.lock is out of date (${parts.join('; ')}). Run 'tsclang install' to sync.\n`);
-  }
-
-  const buildOpts = {
-    maxErrors: allErrors ? Infinity : 10, debugLines, noCache, sourcemap,
-    target: _profileTarget || _targetFlag, defaultNumber: _defaultNumberFlag,
-    allocator: _allocatorFlag, scheduler: _asyncFlag,
-    ramSize: _ramSizeFlag ? parseInt(_ramSizeFlag) : null,
-    stackSize: _stackSizeFlag ? parseInt(_stackSizeFlag) : null,
-    optimize: !!optimize, strict: _strictFlag ? _strictFlag.split(',') : _pkgStrict,
-    mcu: _mcu,
-    capabilities: _capabilities,
-    _aliases: _pkgAliases,
-  };
-
-  let _lastSourceFiles = [inputPath];
-
-  function doBuild() {
-    let c, warnings, lineMap;
-    try {
-      const _r = compileTsc(inputPath, buildOpts);
-      c = _r.c; warnings = _r.warnings; lineMap = _r.lineMap;
-      if (_r._sourceFiles) _lastSourceFiles = _r._sourceFiles;
-    } catch (e: any) {
-      reportErrors(e, basename(inputPath));
-      return false;
-    }
-
-    for (const w of warnings) {
-      process.stderr.write(renderDiagnostic(w, { contextLines: 1 }) + '\n');
-    }
-    if (warnings.length > 0) {
-      const n = warnings.length;
-      process.stderr.write(`${n} warning${n > 1 ? 's' : ''} emitted\n`);
-    }
-
-    const stem = basename(inputPath, extname(inputPath));
-    mkdirSync(outDir, { recursive: true });
-
-    const cPath = join(outDir, stem + '.c');
-    writeFileSync(cPath, c, 'utf8');
-
-    if (sourcemap && lineMap) {
-      const mapPath = join(outDir, stem + '.tsc.map');
-      const mapData = JSON.stringify({
-        version: 1,
-        file: basename(inputPath),
-        sourceC: stem + '.c',
-        mappings: lineMap,
-      }, null, 2);
-      writeFileSync(mapPath, mapData, 'utf8');
-    }
-
-    if (emit === 'c') {
-      const cmakePath = join(outDir, 'CMakeLists.txt');
-      if (!existsSync(cmakePath)) {
-        const runtimeH = join(ROOT, 'src/runtime/runtime.h');
-        const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
-        const cmakeContent = generateBuildCmake({
-          stem,
-          runtimeDir: dirname(runtimeH),
-          useLibuv,
-        });
-        writeFileSync(cmakePath, cmakeContent, 'utf8');
-      }
-    }
-
-    if (emit === 'binary') {
-      const runtimeH = join(ROOT, 'src/runtime/runtime.h');
-      const binPath = join(outDir, stem);
-      const gccOptimize = optimize ? [`-${optimize}`] : [];
-      const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
-      const gcc = spawnSync('gcc', [
-        cPath, '-o', binPath,
-        '-I', dirname(runtimeH),
-        '-lpthread', '-std=c11',
-        ...gccOptimize,
-        ...(useLibuv ? ['-luv'] : []),
-        ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
-      if (gcc.status !== 0) {
-        process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
-        return false;
-      }
-    }
-
-    if (emit === 'wasm') {
-      const emcc = spawnSync('emcc', ['--version'], { stdio: 'pipe' });
-      if (emcc.status !== 0 || emcc.error) {
-        process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
-        return false;
-      }
-      const runtimeH = join(ROOT, 'src/runtime/runtime_wasm.h');
-      const wasmPath = join(outDir, stem + '.wasm');
-      const jsPath   = join(outDir, stem + '.js');
-      const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
-      const emccResult = spawnSync('emcc', [
-        cPath, '-o', jsPath,
-        '-I', dirname(runtimeH),
-        '-sWASM=1',
-        '-sSTANDALONE_WASM=1',
-        '-DTSC_WASM',
-        ...emccOpts,
-        ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
-      if (emccResult.status !== 0) {
-        process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
-        return false;
-      }
-      process.stdout.write(`Built ${stem}.wasm\n`);
-    }
-
-    if (emit === 'hex' || emit === 'flash') {
-      const avrGcc = spawnSync('avr-gcc', ['--version'], { stdio: 'pipe' });
-      if (avrGcc.status !== 0 || avrGcc.error) {
-        process.stderr.write('ConfigError: --emit hex/flash requires avr-gcc in PATH\n');
-        return false;
-      }
-      const mcu = buildOpts.mcu || 'atmega328p';
-      const elfPath = join(outDir, stem + '.elf');
-      const hexPath = join(outDir, stem + '.hex');
-      const runtimeH = join(ROOT, 'src/runtime/runtime.h');
-      const gccOptimize = optimize ? [`-${optimize}`] : ['-Os'];
-      const gccResult = spawnSync('avr-gcc', [
-        cPath, '-o', elfPath,
-        '-I', dirname(runtimeH),
-        `-mmcu=${mcu}`,
-        '-std=c11',
-        '-DTSC_EMBEDDED',
-        ...gccOptimize,
-        ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
-      if (gccResult.status !== 0) {
-        process.stderr.write(`tsclang: avr-gcc failed:\n${gccResult.stderr?.toString() || ''}\n`);
-        try { unlinkSync(elfPath); } catch {}
-        return false;
-      }
-      const objcopyResult = spawnSync('avr-objcopy', [
-        '-O', 'ihex', elfPath, hexPath,
-      ], { stdio: 'pipe' });
-      if (objcopyResult.status !== 0) {
-        process.stderr.write(`tsclang: avr-objcopy failed:\n${objcopyResult.stderr?.toString() || ''}\n`);
-        try { unlinkSync(elfPath); } catch {}
-        return false;
-      }
-      try { unlinkSync(elfPath); } catch {}
-
-      if (emit === 'flash') {
-        const avrdudeCheck = spawnSync('avrdude', ['--version'], { stdio: 'pipe' });
-        if (avrdudeCheck.error) {
-          process.stderr.write('ConfigError: --emit flash requires avrdude in PATH\n');
-          return false;
-        }
-        const flashCfg = _buildCfg?.flash;
-        const avrdudeArgs = [
-          '-c', flashCfg.programmer,
-          '-p', mcu,
-          '-P', flashCfg.port,
-          ...(flashCfg.baud ? ['-b', String(flashCfg.baud)] : []),
-          ...(flashCfg.extraFlags || []),
-          '-U', `flash:w:${hexPath}:i`,
-        ];
-        const avrdudeResult = spawnSync('avrdude', avrdudeArgs, { stdio: 'pipe' });
-        if (avrdudeResult.status !== 0) {
-          process.stderr.write(`tsclang: avrdude failed:\n${avrdudeResult.stderr?.toString() || ''}\n`);
-          return false;
-        }
-        process.stdout.write(`Flashed ${stem}.hex to ${mcu} via ${flashCfg.programmer}\n`);
-      } else {
-        process.stdout.write(`Built ${stem}.hex\n`);
-      }
-    }
-
-    return true;
-  }
-
-  if (watchMode) {
-    const ts = () => new Date().toLocaleTimeString();
-    let debounceTimer: any = null;
-    let watchedFiles = new Set();
-
-    function onFileChange() {
-      if (debounceTimer) return;
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
-        process.stderr.write(`\n[${ts()}] Change detected — rebuilding...\n`);
-        const ok = doBuild();
-        if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
-        syncWatches(_lastSourceFiles);
-        const n = watchedFiles.size;
-        process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
-      }, 150);
-    }
-
-    function syncWatches(files: any) {
-      const newSet = new Set(files);
-      for (const f of watchedFiles) {
-        if (!newSet.has(f)) unwatchFile(f as string, onFileChange as any);
-      }
-      for (const f of newSet) {
-        if (!watchedFiles.has(f)) watchFile(f as string, { interval: 200 }, onFileChange as any);
-      }
-      watchedFiles = newSet;
-    }
-
-    process.stderr.write(`[${ts()}] Watching ${basename(inputPath)}...\n`);
-    const ok = doBuild();
-    if (ok) {
-      process.stderr.write(`[${ts()}] Build succeeded\n`);
-      syncWatches(_lastSourceFiles);
-      const n = watchedFiles.size;
-      process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
-    }
-
-    process.on('SIGINT', () => {
-      for (const f of watchedFiles) unwatchFile(f as string, onFileChange as any);
-      process.stderr.write(`\n[${ts()}] Watch stopped\n`);
-      process.exit(0);
-    });
-  } else {
-    if (!doBuild()) process.exit(1);
-  }
+  runBuildCommand(args, ROOT);
 
 } else if (command === 'run') {
 // ---------------------------------------------------------------------------
@@ -1013,7 +603,7 @@ if (command === 'build') {
 // ---------------------------------------------------------------------------
   const inputFile = args[1];
   if (!inputFile) {
-    _missingInput('run');
+    missingInput('run');
     process.exit(1);
   }
 
@@ -1028,7 +618,7 @@ if (command === 'build') {
   }
 
   const inputPath = resolve(inputFile);
-  _checkInput('run', inputPath);
+  checkInput('run', inputPath);
   let c, warnings;
   try {
     ({ c, warnings } = compileTsc(inputPath));
@@ -1066,7 +656,7 @@ if (command === 'build') {
 } else if (command === 'debug') {
   const inputFile = args[1];
   if (!inputFile) {
-    _missingInput('debug');
+    missingInput('debug');
     process.exit(1);
   }
   const inputPath = resolve(inputFile);
