@@ -1,5 +1,5 @@
 // Compilation pipeline: TSC source → C string
-// Extracted from bin/index.ts for reuse by test runner and other tools.
+// Extracted from src/index.ts for reuse by test runner and other tools.
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { basename, extname, dirname, join, resolve } from 'path';

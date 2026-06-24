@@ -9,7 +9,7 @@
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
 - **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
-- **CLI:** `bin/index.ts` (94-line slim dispatcher) → `src/cli/commands/*.ts` (one module per command)
+- **CLI:** `src/index.ts` (94-line slim dispatcher) → `src/cli/commands/*.ts` (one module per command). Compiles to `dist/index.js` via `npm run build`. `package.json` bin → `./dist/index.js`.
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
 - **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
@@ -474,7 +474,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Fix string ownership | `stmt/vardecl.ts`, `expr/assign.ts`, `calls/call-dispatch.ts`, `calls/method-dispatch.ts`, `top-level/func.ts` |
 | Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
 | Run tests | `npx tsx test/runner.ts 03-types` (filter by spec section or feature name) |
-| Compile manually | `npx tsx bin/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
+| Compile manually | `npx tsx src/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure
 
@@ -500,7 +500,7 @@ Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`
 
 ## 11. CLI Architecture (refactored)
 
-`bin/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
+`src/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
 
 ### Module map
 

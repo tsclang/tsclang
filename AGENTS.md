@@ -121,7 +121,7 @@ npm run build                     # собрать в dist/ (tsc)
 При ручном запуске `tsclang build` ВСЕГДА указывай `--outDir` во временную папку:
 
 ```bash
-npx tsx bin/index.ts build input.tsc --outDir .tsclang-tmp/
+npx tsx src/index.ts build input.tsc --outDir .tsclang-tmp/
 ```
 
 Или используй программный API вместо CLI:

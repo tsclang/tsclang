@@ -17,11 +17,12 @@
   "author": "fwmakc",
   "type": "module",
   "bin": {
-    "tsclang": "./bin/index.ts"
+    "tsclang": "./dist/index.js"
   },
   "files": [
-    "bin/",
-    "src/",
+    "dist/",
+    "src/profiles/",
+    "src/runtime/",
     "README.md",
     "LICENSE"
   ],
@@ -40,6 +41,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "tsx test/runner.ts",
     "test:v": "tsx test/runner.ts --verbose"

@@ -16,7 +16,10 @@ import { renderDiagnostic } from '../src/compiler/error.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DOC_DIR = join(ROOT, 'test', 'cases');
-const TSCLANG_BIN = join(ROOT, 'bin', 'index.ts');
+const TSCLANG_BIN_JS = join(ROOT, 'dist', 'index.js');
+const TSCLANG_BIN_TS = join(ROOT, 'src', 'index.ts');
+const TSCLANG_BIN = existsSync(TSCLANG_BIN_JS) ? TSCLANG_BIN_JS : TSCLANG_BIN_TS;
+const USE_TSX = !existsSync(TSCLANG_BIN_JS);
 const TSX_LOADER = pathToFileURL(join(ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href;
 const RUNTIME_INC = join(ROOT, 'src', 'runtime');
 
@@ -579,14 +582,18 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
 // ---------------------------------------------------------------------------
 async function executeJsonTest(testDir, kind) {
   if (!checkTsclang()) {
-    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.ts missing)' };
+    return { status: 'skip', testDir, reason: 'tsclang not built (src/index.ts missing)' };
   }
 
   const inputJson = join(testDir, 'input.json');
 
+  const tscArgs = USE_TSX
+    ? ['--import', TSX_LOADER, TSCLANG_BIN, 'validate-config', inputJson]
+    : [TSCLANG_BIN, 'validate-config', inputJson];
+
   const tscResult = await run(
     process.execPath,
-    ['--import', TSX_LOADER, TSCLANG_BIN, 'validate-config', inputJson],
+    tscArgs,
   );
 
   if (kind === 'E') {
@@ -614,7 +621,7 @@ async function executeJsonTest(testDir, kind) {
 // ---------------------------------------------------------------------------
 async function executeShTest(testDir, kind, tmpBase) {
   if (!checkTsclang()) {
-    return { status: 'skip', testDir, reason: 'tsclang not built (bin/index.ts missing)' };
+    return { status: 'skip', testDir, reason: 'tsclang not built (src/index.ts missing)' };
   }
 
   const script = await readFile(join(testDir, 'input.sh'), 'utf8');
@@ -632,15 +639,21 @@ async function executeShTest(testDir, kind, tmpBase) {
   // Use the full node executable path (MSYS2-compatible) so bash can find it.
   const nodeExec = MSYS2_BASH ? `"${toMsysPath(process.execPath)}"` : 'node';
   const tscBin   = MSYS2_BASH ? toMsysPath(TSCLANG_BIN) : TSCLANG_BIN;
+  const tsclangCmd = USE_TSX
+    ? `${nodeExec} --import ${TSX_LOADER} ${JSON.stringify(tscBin)}`
+    : `${nodeExec} ${JSON.stringify(tscBin)}`;
   const patchedScript = script
     .replace(/\bnode\b/g, nodeExec)
-    .replace(/\btsclang\b/g, `${nodeExec} ${JSON.stringify(tscBin)}`);
+    .replace(/\btsclang\b/g, tsclangCmd);
 
   const finalScript = MSYS2_BASH
     ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`
     : patchedScript;
 
-  const result = await runShell(finalScript, { cwd: tmpBase, env: { ...process.env, NODE_OPTIONS: `--import ${TSX_LOADER}` } });
+  const env = { ...process.env };
+  if (USE_TSX) env.NODE_OPTIONS = `--import ${TSX_LOADER}`;
+
+  const result = await runShell(finalScript, { cwd: tmpBase, env });
 
   if (kind === 'E') {
     if (result.code === 0) {
@@ -772,7 +785,7 @@ function printResult(r) {
 async function main() {
   console.log(bold('TSClang Test Runner'));
   console.log(dim(`doc:      ${DOC_DIR}`));
-  console.log(dim(`tsclang:  ${checkTsclang() ? green('found') : yellow('not built')}`));
+  console.log(dim(`tsclang:  ${checkTsclang() ? green('found') : yellow('not built')}` + (checkTsclang() && !USE_TSX ? dim(' (compiled)') : '')));
   console.log(dim(`gcc:      ${await checkGcc() ? green('found') : yellow('not found')}`));
   console.log(dim(`avr-gcc:  ${await checkAvrGcc() ? green('found') : yellow('not found')}`));
   console.log(dim(`simavr:   ${await checkSimavr() ? green('found') : yellow('not found')}`));

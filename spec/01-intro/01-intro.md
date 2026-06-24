@@ -117,7 +117,7 @@ cd out && cmake --build . && ./hello
 git clone <repo-url> tsclang
 cd tsclang
 npm install
-npx tsx bin/index.ts --version
+npx tsx src/index.ts --version
 ```
 
 ### Установка через npm (roadmap)

@@ -3,18 +3,18 @@
 
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { hasFlag, hasFlagAny } from '../src/cli/args.js';
-import { getVersion, getHelpText, CMD_HELP } from '../src/cli/help.js';
-import { setColorEnabled } from '../src/compiler/colors.js';
-import { startLsp } from '../src/lsp/server.js';
-import { runBuildCommand } from '../src/cli/commands/build.js';
-import { runExplainCommand } from '../src/cli/commands/explain.js';
-import { runValidateConfigCommand } from '../src/cli/commands/config.js';
-import { runInitCommand } from '../src/cli/commands/init.js';
-import { runEmitDtsCommand, runFormatCommand, runLintCommand } from '../src/cli/commands/source.js';
-import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from '../src/cli/commands/package.js';
-import { runBuildCmakeCommand } from '../src/cli/commands/build-cmake.js';
-import { runRunCommand, runDebugCommand } from '../src/cli/commands/run.js';
+import { hasFlag, hasFlagAny } from './cli/args.js';
+import { getVersion, getHelpText, CMD_HELP } from './cli/help.js';
+import { setColorEnabled } from './compiler/colors.js';
+import { startLsp } from './lsp/server.js';
+import { runBuildCommand } from './cli/commands/build.js';
+import { runExplainCommand } from './cli/commands/explain.js';
+import { runValidateConfigCommand } from './cli/commands/config.js';
+import { runInitCommand } from './cli/commands/init.js';
+import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/commands/source.js';
+import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from './cli/commands/package.js';
+import { runBuildCmakeCommand } from './cli/commands/build-cmake.js';
+import { runRunCommand, runDebugCommand } from './cli/commands/run.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
