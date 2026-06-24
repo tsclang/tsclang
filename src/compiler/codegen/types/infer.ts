@@ -295,6 +295,19 @@ export default {
         if (objType?.startsWith('Array_')) return objType;
         return 'int32_t';
       }
+      case 'Assign': return this.inferType(node.left);
+      case 'NonNull':
+      case 'Propagate': return this.inferType(node.expr);
+      case 'Await': {
+        const innerType = this.inferType(node.expr);
+        if (innerType?.startsWith('Promise_')) return innerType.slice(8);
+        return innerType;
+      }
+      case 'Arrow':
+      case 'FuncExpr': return 'tsc_closure';
+      case 'Drop': return 'void';
+      case 'Yield': return this._asyncGenRetType ?? 'int32_t';
+      case 'Match': return (node.cases?.length > 0) ? this.inferType(node.cases[0].body) : 'int32_t';
       default: return 'int32_t';
     }
   },
@@ -338,6 +351,9 @@ export default {
       }
       case 'Ternary': {
         return this._effectiveType(node.yes);
+      }
+      case 'Match': {
+        return (node.cases?.length > 0) ? this._effectiveType(node.cases[0].body) : 'int32_t';
       }
       default:
         return this.inferType(node);
