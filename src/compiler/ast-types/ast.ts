@@ -36,8 +36,8 @@ export interface TypeFunc extends BaseNode {
   params: Param[];
   returnType: TypeAnn;
   throwsTypes?: TypeAnn[];
-  isAsync?: boolean;
-  isGenerator?: boolean;
+  async?: boolean;
+  generator?: boolean;
 }
 
 export interface TypeArray extends BaseNode {
@@ -134,7 +134,7 @@ export type Stmt =
   | ClassDecl | Interface | Enum | TypeAlias | DeclareConst | DeclareFunction
   | DeclareModule | DeclarePlatform | Return | If | For | While | DoWhile
   | Throw | TryCatch | Switch | Native | Unsafe | Spawn | Block | ExprStmt
-  | Break | Continue | Labeled | Noop | Match;
+  | Break | Continue | Labeled | Noop | Match | ForOf | ForIn;
 
 export interface Program extends BaseNode {
   kind: 'Program';
@@ -204,7 +204,7 @@ export interface FuncDecl extends BaseNode {
   throwsTypes?: TypeAnn[];
   body: Stmt[];
   generator?: boolean;
-  isAsync?: boolean;
+  async?: boolean;
   decorators?: Decorator[];
   typeParams?: string[];
 }
@@ -240,16 +240,13 @@ export type ClassMember = Method | Field;
 export interface Method extends BaseNode {
   kind: 'Method';
   name: string;
+  modifiers: string[];
   params: Param[];
   returnType?: TypeAnn;
   throwsTypes?: TypeAnn[];
   body: Stmt[];
-  isStatic?: boolean;
-  isMut?: boolean;
-  isAsync?: boolean;
-  isGenerator?: boolean;
-  isOverride?: boolean;
-  isAbstract?: boolean;
+  generator?: boolean;
+  isIterator?: boolean;
   decorators?: Decorator[];
   typeParams?: string[];
 }
@@ -257,11 +254,10 @@ export interface Method extends BaseNode {
 export interface Field extends BaseNode {
   kind: 'Field';
   name: string;
+  modifiers: string[];
   typeAnn?: TypeAnn;
+  optional?: boolean;
   init?: Expression | null;
-  isStatic?: boolean;
-  isReadonly?: boolean;
-  isPrivate?: boolean;
   decorators?: Decorator[];
 }
 
@@ -352,6 +348,23 @@ export interface For extends BaseNode {
   init?: Stmt | null;
   test?: Expression | null;
   update?: Expression | null;
+  body: Stmt;
+}
+
+export interface ForOf extends BaseNode {
+  kind: 'ForOf';
+  varKind: string;
+  binding: VarDecl;
+  iterable: Expression;
+  body: Stmt;
+  await?: boolean;
+}
+
+export interface ForIn extends BaseNode {
+  kind: 'ForIn';
+  varKind: string;
+  binding: VarDecl;
+  iterable: Expression;
   body: Stmt;
 }
 
@@ -618,7 +631,7 @@ export interface Arrow extends BaseNode {
   params: Param[];
   returnType?: TypeAnn;
   body: Stmt[] | Expression;
-  isAsync?: boolean;
+  async?: boolean;
 }
 
 export interface FuncExpr extends BaseNode {
@@ -627,7 +640,7 @@ export interface FuncExpr extends BaseNode {
   params: Param[];
   returnType?: TypeAnn;
   body: Stmt[];
-  isAsync?: boolean;
+  async?: boolean;
 }
 
 // ---------------------------------------------------------------------------
