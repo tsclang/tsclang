@@ -14,19 +14,14 @@ import { semverParse, semverCmp, semverSatisfies, rangesCompatible } from '../sr
 import { MOCK_REGISTRY, MOCK_PKG_DEPS, resolveRange, readLock, writeLock, readManifest, checkLockStale } from '../src/cli/registry.js';
 import type { LockFile, Manifest, LockPackage } from '../src/cli/registry.js';
 import { VALID_STRICT_RULES, VALID_BUILD_KEYS, validateStrictRules, validateBuildKeys } from '../src/cli/config-validator.js';
+import { DESKTOP_CAPABILITIES, loadProfile, listAvailableProfiles, capabilityDefines } from '../src/cli/profile-loader.js';
+import type { Capabilities } from '../src/cli/profile-loader.js';
+import { generateProjectCmake, generateBuildCmake } from '../src/cli/cmake.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-const DESKTOP_CAPABILITIES = {
-  allocator: 'heap',
-  async: 'libuv',
-  fpu: true,
-  bits: 64,
-  usize: 'u64',
-  unaligned_access: true,
-  os: true,
-};
+// DESKTOP_CAPABILITIES — extracted to src/cli/profile-loader.ts
 
 // VALID_STRICT_RULES — extracted to src/cli/config-validator.ts
 
@@ -612,30 +607,8 @@ if (command === 'build-cmake') {
   const optimize    = buildCfg.optimize ?? null;
   const mainTsc     = pkg.main ?? `${projectName}.tsc`;
   const mainFile    = mainTsc.replace(/\.tsc$/, '.c');
-  const runtimeH    = join(ROOT, 'src/runtime/runtime.h');
 
-  const lines = [
-    'cmake_minimum_required(VERSION 3.16)',
-    `project(${projectName} C)`,
-  ];
-
-  if (target === 'avr') {
-    lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
-    if (mcu) {
-      lines.push(`set(MCU ${mcu})`);
-      lines.push('add_compile_options(-mmcu=${MCU})');
-      lines.push('add_link_options(-mmcu=${MCU})');
-    }
-    if (optimize) lines.push(`add_compile_options(-${optimize})`);
-    lines.push(`add_executable(${projectName} ${mainFile})`);
-  } else {
-    if (toolchain !== 'gcc') lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
-    lines.push('set(CMAKE_C_STANDARD 11)');
-    if (optimize) lines.push(`add_compile_options(-${optimize})`);
-    lines.push(`add_executable(${projectName} ${mainFile})`);
-  }
-
-  process.stdout.write(lines.join('\n') + '\n');
+  process.stdout.write(generateProjectCmake({ projectName, target, mcu, toolchain, optimize, mainFile }));
   process.exit(0);
 }
 
@@ -680,39 +653,7 @@ if (command === 'build') {
   // Profile loading: --platform <name> or --build <name> (reads builds.*.profile from tsc.package.json)
   const PROFILES_DIR = join(ROOT, 'src', 'profiles');
 
-  function loadProfile(name: any) {
-    // 1. Built-in profiles from src/profiles/
-    const dtsPath = join(PROFILES_DIR, name + '.d.tsc');
-    const jsonPath = join(PROFILES_DIR, name + '.json');
-    if (existsSync(dtsPath)) {
-      try { return parsePlatformDecl(readFileSync(dtsPath, 'utf8'), dtsPath); } catch { return null; }
-    }
-    if (existsSync(jsonPath)) {
-      try { return JSON.parse(readFileSync(jsonPath, 'utf8')); } catch { return null; }
-    }
-
-    // 2. tsc_packages/<name>/index.d.tsc (e.g. @tsclang/avr-platform)
-    const pkgDir = name.startsWith('@') ? name : null;
-    if (pkgDir) {
-      const pkgDts = join(inputFile ? dirname(resolve(inputFile)) : process.cwd(), 'tsc_packages', pkgDir, 'index.d.tsc');
-      if (existsSync(pkgDts)) {
-        try { return parsePlatformDecl(readFileSync(pkgDts, 'utf8'), pkgDts); } catch { return null; }
-      }
-    }
-
-    // 3. Local .d.tsc path (e.g. ./profiles/my-platform.d.tsc)
-    if (name.endsWith('.d.tsc') || name.endsWith('.json')) {
-      const localPath = resolve(name);
-      if (existsSync(localPath)) {
-        try {
-          if (name.endsWith('.d.tsc')) return parsePlatformDecl(readFileSync(localPath, 'utf8'), localPath);
-          return JSON.parse(readFileSync(localPath, 'utf8'));
-        } catch { return null; }
-      }
-    }
-
-    return null;
-  }
+  // Profile loading — extracted to src/cli/profile-loader.ts
 
   let _capabilities: any = null;
   let _profileTarget: any = null;
@@ -731,9 +672,9 @@ if (command === 'build') {
   }
 
   if (_platformFlag) {
-    const prof = loadProfile(_platformFlag);
+    const prof = loadProfile(_platformFlag, PROFILES_DIR, inputFile);
     if (!prof) {
-      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${readdirSync(PROFILES_DIR).filter((f: any) => f.endsWith('.d.tsc') || f.endsWith('.json')).map((f: any) => f.replace(/\.(d\.tsc|json)$/, '')).filter((v, i, a) => a.indexOf(v) === i).join(', ')}\n`);
+      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${listAvailableProfiles(PROFILES_DIR).join(', ')}\n`);
       process.exit(1);
     }
     _capabilities = prof;
@@ -753,7 +694,7 @@ if (command === 'build') {
       }
       _buildCfg = buildCfg;
       if (buildCfg.profile) {
-        const prof = loadProfile(buildCfg.profile);
+        const prof = loadProfile(buildCfg.profile, PROFILES_DIR, inputFile);
         if (!prof) {
           process.stderr.write(`tsclang build: unknown profile '${buildCfg.profile}' in build '${_buildFlag}'\n`);
           process.exit(1);
@@ -792,7 +733,7 @@ if (command === 'build') {
 
   // Legacy fallback: --target <name> without --platform → try loading built-in profile
   if (!_capabilities && _targetFlag) {
-    const prof = loadProfile(_targetFlag);
+    const prof = loadProfile(_targetFlag!, PROFILES_DIR, inputFile);
     if (prof) {
       _capabilities = prof;
       if (!_profileTarget) _profileTarget = prof.target || _targetFlag;
@@ -831,17 +772,7 @@ if (command === 'build') {
     }
   }
 
-  function capabilityDefines(caps: any) {
-    if (!caps) return [];
-    const defs: any[] = [];
-    if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
-    if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
-    if (caps.console_uart) {
-      defs.push('-DTSC_CONSOLE_UART');
-      if (caps.console_baud) defs.push(`-DTSC_CONSOLE_BAUD=${caps.console_baud}`);
-    }
-    return defs;
-  }
+  // capabilityDefines — extracted to src/cli/profile-loader.ts
 
   const inputPath = resolve(inputFile);
   _checkInput('build', inputPath);
@@ -911,20 +842,11 @@ if (command === 'build') {
       if (!existsSync(cmakePath)) {
         const runtimeH = join(ROOT, 'src/runtime/runtime.h');
         const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
-        const cmakeContent = [
-          'cmake_minimum_required(VERSION 3.10)',
-          `project(${stem} C)`,
-          'set(CMAKE_C_STANDARD 11)',
-          `add_executable(${stem} ${stem}.c)`,
-          `target_include_directories(${stem} PRIVATE ${JSON.stringify(dirname(runtimeH))})`,
-          ...(useLibuv ? [
-            'find_package(PkgConfig REQUIRED)',
-            'pkg_check_modules(LIBUV REQUIRED libuv)',
-            `target_link_libraries(${stem} \${LIBUV_LIBRARIES})`,
-            `target_include_directories(${stem} PRIVATE \${LIBUV_INCLUDE_DIRS})`,
-          ] : []),
-          '',
-        ].join('\n');
+        const cmakeContent = generateBuildCmake({
+          stem,
+          runtimeDir: dirname(runtimeH),
+          useLibuv,
+        });
         writeFileSync(cmakePath, cmakeContent, 'utf8');
       }
     }
