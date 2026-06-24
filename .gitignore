@@ -1,4 +1,5 @@
 node_modules/
+.mimocode/
 .tsclang-tmp/
 .tsclang-tmp2/
 dist/
