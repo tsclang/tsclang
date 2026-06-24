@@ -1,5 +1,5 @@
 export default {
-  mathCall(this: any, prop: any, args: any, lines: any, depth: any) {
+  mathCall(this: any, prop: any, args: any, lines: any, depth: any, node?: any) {
     const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
     const isFloat = (t: any) => t === 'double' || t === 'float';
@@ -106,10 +106,12 @@ export default {
       fround: `(float)(${a0})`,
       random: `tsc_math_random()`,
     };
-    return (map as Record<string, string>)[prop] ?? `/* Math.${prop} */(${a0})`;
+    const result = (map as Record<string, string>)[prop];
+    if (!result) throw this.error(`Unknown Math method 'Math.${prop}'`, node);
+    return result;
   },
 
-  jsonCall(this: any, prop: any, typeArgs: any, args: any, lines: any, depth: any) {
+  jsonCall(this: any, prop: any, typeArgs: any, args: any, lines: any, depth: any, node?: any) {
     if (prop === 'stringify') {
       const arg0 = args[0]?.expr;
       const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
@@ -127,7 +129,7 @@ export default {
       if (typeName === 'boolean') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
       return `atoi(${a0}.data)`;
     }
-    return `/* JSON.${prop} */0`;
+    throw this.error(`Unknown JSON method 'JSON.${prop}'`, node);
   },
 
   labelUsed(this: any, node: any, label: any, kind: any) {

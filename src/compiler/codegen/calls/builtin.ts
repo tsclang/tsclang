@@ -100,7 +100,7 @@ export default {
     // Math.xxx
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'Math') {
-      return this.mathCall(callee.prop, args, lines, depth);
+      return this.mathCall(callee.prop, args, lines, depth, node);
     }
 
     // Date.now() static call
@@ -151,7 +151,7 @@ export default {
     // JSON.stringify / JSON.parse
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'JSON') {
-      return this.jsonCall(callee.prop, node.typeArgs ?? [], args, lines, depth);
+      return this.jsonCall(callee.prop, node.typeArgs ?? [], args, lines, depth, node);
     }
 
     return null;

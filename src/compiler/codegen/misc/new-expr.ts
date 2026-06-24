@@ -132,7 +132,7 @@ export default {
 
     // new Promise<T>(...)
     if (name === 'Promise') {
-      return `/* new Promise */ {0}`;
+      throw this.error(`Promise requires a type argument: new Promise<T>(executor)`, node);
     }
 
     // new URL(...)

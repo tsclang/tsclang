@@ -98,7 +98,7 @@ export default {
         const argsC = this.argsToC(args, lines, depth);
         return `self._base = ${superClass}_new(${argsC})`;
       }
-      return '/* super */';
+      throw this.error(`super() can only be called in a class with a superclass`, node);
     }
 
 
@@ -236,7 +236,7 @@ export default {
         if (a.spread) {
           const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
           if (spreadSym?._isVaList) return { isVaList: true, vaListName: spreadSym._vaListName };
-          return { raw: `/* ...${this.exprToC(a.expr, lines, depth)} */` };
+          throw this.error(`spread '...' requires a va_list in variadic function calls`, a.expr ?? a);
         }
         if (a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           return { raw: `"${a.expr.value.replace(/"/g, '\\"')}"` };
