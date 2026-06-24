@@ -13,6 +13,7 @@ import { getVersion, getHelpText, CMD_HELP } from '../src/cli/help.js';
 import { semverParse, semverCmp, semverSatisfies, rangesCompatible } from '../src/semver.js';
 import { MOCK_REGISTRY, MOCK_PKG_DEPS, resolveRange, readLock, writeLock, readManifest, checkLockStale } from '../src/cli/registry.js';
 import type { LockFile, Manifest, LockPackage } from '../src/cli/registry.js';
+import { VALID_STRICT_RULES, VALID_BUILD_KEYS, validateStrictRules, validateBuildKeys } from '../src/cli/config-validator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -27,11 +28,7 @@ const DESKTOP_CAPABILITIES = {
   os: true,
 };
 
-const VALID_STRICT_RULES = new Set([
-  'no-any', 'no-unsafe', 'no-native', 'safe-math',
-  'no-lossy-cast', 'no-dynamic-alloc', 'no-closures', 'no-sort',
-  'no-threads', 'no-interfaces', 'no-abort', 'no-i64-print', 'switch-default',
-]);
+// VALID_STRICT_RULES — extracted to src/cli/config-validator.ts
 
 // Cache and compilation logic extracted to src/compiler/compile.js
 
@@ -161,33 +158,17 @@ if (command === 'validate-config') {
 
   // Validate builds entries
   if (config.builds) {
-    const validBuildKeys = new Set([
-      'target', 'mcu', 'toolchain', 'toolchainFile', 'arch',
-      'emit', 'linkerScript', 'frequency', 'freq', 'allocator', 'debug',
-    ]);
     for (const [buildName, buildCfg] of Object.entries(config.builds)) {
       if (buildCfg && typeof buildCfg === 'object') {
-        for (const key of Object.keys(buildCfg)) {
-          if (!validBuildKeys.has(key)) {
-            cfgErr(`unknown key '${key}' in builds.${buildName}`);
-          }
-        }
+        const err = validateBuildKeys(buildCfg as Record<string, unknown>, buildName);
+        if (err) cfgErr(err);
       }
     }
   }
 
   if (config.strict) {
-    if (!Array.isArray(config.strict)) {
-      cfgErr(`'strict' must be an array of strings`);
-    } else {
-      for (const rule of config.strict) {
-        if (typeof rule !== 'string') {
-          cfgErr(`'strict' entries must be strings, got ${typeof rule}`);
-        } else if (!VALID_STRICT_RULES.has(rule)) {
-          cfgErr(`unknown strict rule '${rule}'; valid: ${[...VALID_STRICT_RULES].join(', ')}`);
-        }
-      }
-    }
+    const err = validateStrictRules(config.strict, 'tsc.package.json');
+    if (err) cfgErr(err);
   }
 
   // Library projects: run is not available
@@ -740,18 +721,13 @@ if (command === 'build') {
   let _buildCfg: any = null;
   let _pkgStrict: any = null;
 
-  function _validateStrictRules(rules: any, source: any) {
-    if (!Array.isArray(rules)) {
-      process.stderr.write(`ConfigError: 'strict' in ${source} must be an array of strings\n`);
+  function _validateStrictRulesCli(rules: unknown, source: string): string[] {
+    const err = validateStrictRules(rules, source);
+    if (err) {
+      process.stderr.write(`ConfigError: ${err}\n`);
       process.exit(1);
     }
-    for (const rule of rules) {
-      if (typeof rule !== 'string' || !VALID_STRICT_RULES.has(rule)) {
-        process.stderr.write(`ConfigError: unknown strict rule '${rule}' in ${source}; valid: ${[...VALID_STRICT_RULES].join(', ')}\n`);
-        process.exit(1);
-      }
-    }
-    return rules;
+    return rules as string[];
   }
 
   if (_platformFlag) {
@@ -791,7 +767,7 @@ if (command === 'build') {
       if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
       if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
       if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
-      if (pkg.strict) _pkgStrict = _validateStrictRules(pkg.strict, 'tsc.package.json');
+      if (pkg.strict) _pkgStrict = _validateStrictRulesCli(pkg.strict, 'tsc.package.json');
     } catch (e: any) {
       process.stderr.write(`tsclang build: error reading tsc.package.json: ${e.message}\n`);
       process.exit(1);
@@ -804,7 +780,7 @@ if (command === 'build') {
     if (p) {
       try {
         const raw = JSON.parse(readFileSync(p, 'utf8'));
-        if (raw.strict) _pkgStrict = _validateStrictRules(raw.strict, 'tsc.package.json');
+        if (raw.strict) _pkgStrict = _validateStrictRulesCli(raw.strict, 'tsc.package.json');
         if (raw.paths && typeof raw.paths === 'object') {
           _pkgAliases = { paths: raw.paths, pkgDir: dirname(p) };
         }
