@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (audit cleanup: remove phantom `no-extern-c`, stale comments, CONTEXT fixes).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (comprehensive codegen audit: FuncExpr, Match-as-expression, bare-throws detection, comment-placeholders→errors, defensive defaults, AST type accuracy).
 
 ---
 
@@ -10,7 +10,7 @@
 - **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
 - **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
-- **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1752 tests** `--no-gcc` / **1748** with gcc, all pass)
+- **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
 - **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
@@ -323,7 +323,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ## 8. Current State
 
-### Tests: 1752 (spec-based structure, `--no-gcc`)
+### Tests: 1764 (spec-based structure, `--no-gcc`)
 
 Tests organized by spec section (`test/cases/<NN-section>/`):
 
@@ -332,20 +332,20 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | 02-syntax | 124 | Arithmetic, assign, bitwise, comparison, logical, variables, formatting |
 | 03-types | 398 | Numbers, enum, type aliases, tuples, utility types, null/optional, widening |
 | 04-ownership | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
-| 05-control-flow | 49 | if/else, while, switch, ternary, for-of, match |
-| 06-functions | 61 | Functions, arrows, default/rest params, closures, overloads, extensions |
+| 05-control-flow | 52 | if/else, while, switch, ternary, for-of, match, match-as-expression |
+| 06-functions | 64 | Functions, arrows, function expressions, default/rest params, closures, overloads |
 | 07-classes | 44 | Classes, methods, inheritance, instanceof, interfaces |
 | 08-collections | 231 | Arrays, Map, Set, strings, objects, slices |
-| 09-errors | 41 | throws, try/catch/finally, ?/!, bare-throws, cleanup |
+| 09-errors | 46 | throws, try/catch/finally, ?/!, bare-throws, cleanup, math try/catch |
 | 10-async | 82 | async/await, Promise, generators, AbortSignal, timers |
 | 11-concurrency | 44 | Threads, Atomic, channels, ISR, Volatile |
 | 12-modules | 26 | import/export, entry point |
-| 13-build | 164 | CLI, build, strict mode, CMake, C interop, @platform |
+| 13-build | 165 | CLI, build, strict mode, CMake, C interop, @platform, declare platform |
 | 14-stdlib | 302 | console, Math, Date, JSON, std/* (net, ws, fs, hal, reactive, regex) |
 | 15-decorators | 22 | Decorator function, factories, before/after |
 | 16-tooling | 44 | LSP, linter, formatter, optimizer, wasm, capabilities |
 
-**Total: 1748 tests (with gcc), 1752 (`--no-gcc`). All pass.**
+**Total: 1764 tests (`--no-gcc`). All pass.**
 
 ### `[NOT YET IMPLEMENTED]` / Deferred
 
@@ -366,7 +366,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 ### Project state & tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** All bugs #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #66 (bare-throws: Typeof/Yield/Drop), #67 (bare-throws: method calls), #69 (Math.saturatingCast/checkedCast), #72–#80 #82 (self-hosting epics). Closed: #57 (NaN/Infinity + `tsc_format_double`), #91 (#81–#90 epic), #99 (`strict: true`), #100 (audit).
+- **GitHub Issues:** All bugs #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #67 (bare-throws: method calls — needs class method throws tracking), #69 (Math.saturatingCast/checkedCast), #72–#80 #82 (self-hosting epics). Closed: #57 (NaN/Infinity + `tsc_format_double`), #66 (bare-throws: Typeof/Yield/Drop — fixed in audit), #91 (#81–#90 epic), #99 (`strict: true`), #100 (audit).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~888 lines across 51 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
 - **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
@@ -439,8 +439,18 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
   - **Union throws wrapping** (`func.ts` + `control-flow.ts:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
   - **Bare throws call compile error** (`control-flow.ts` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
   - **Union error panic** (`codegen.ts:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.ts (`!`), console.ts, codegen.ts (main).
-  - **`!`/`?` in expression context** (`dispatch.ts:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.ts:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.ts`): recursive check for bare throws calls in binary/array/member/template/argument/index/ternary/unary/cast/range contexts + New args → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
+  - **`!`/`?` in expression context** (`dispatch.ts:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.ts:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.ts`): exhaustive recursive check for bare throws calls in ALL expression contexts (binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new, typeof, drop, yield, await, match) + statement-boundary positions (if/while/do-while/for conditions, switch discriminant, throw value, return value with auto-propagate guard) → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
 - **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
+
+### Codegen audit (comprehensive)
+
+- **No silent `/* ... */` fallbacks.** All switch-defaults in expr/stmt dispatchers now `throw this.error()` instead of emitting comment-only C. Covers: `expr/dispatch.ts` (expression kinds), `operators.ts` (unary ops), `stmt.ts` (statement kinds), `control-flow.ts` (statement kinds), `match.ts` (pattern kinds).
+- **Comment-placeholders → errors.** 7 cases that previously emitted silent garbage C now produce compile errors: computed property keys, `drop()` on non-pool types, `new Promise()` without type args, unknown `Math.xxx`/`JSON.xxx` methods, `super()` without superclass, spread `...` on non-va_list.
+- **FuncExpr codegen.** `function() { ... }` expressions now compile correctly (fall-through to Arrow handler in `dispatch.ts`, with FuncExpr checks in `vardecl.ts`).
+- **Match as expression.** `match(v) { ... }` can be used inline in any expression context (args, binary ops, return). Implemented via temp var + if/else chain pattern (`_matchExprToC` in `match.ts`). Fully portable (no GCC statement-expressions).
+- **`inferType` exhaustive.** All expression kinds now have explicit cases in `infer.ts` (was `default: return 'int32_t'`). Added: Assign, NonNull, Propagate, Await, Arrow/FuncExpr, Drop, Yield, Match. **Bug:** `Assign` returns type of LEFT side (target), not right — `a = b = 5` must infer as `i32`, not `double`.
+- **`_effectiveType` has Match case.** Delegates to first case body's effective type. Without this, `1 + match(v) { ... }` inferred as `double` (via `inferType`) instead of `int32_t`.
+- **AST types match reality.** `ForOf`/`ForIn` added to `Stmt` union (with interfaces). `isAsync`→`async`, `isGenerator`→`generator` (matching parser field names). `Method`/`Field` interfaces updated to use `modifiers: string[]` (matching parser output). Dead `Select`/`Propagate`/`NonNull` cases removed from `stmt.ts` visitStmt (they're expressions, handled via vardecl.ts).
 
 ---
 

@@ -200,7 +200,22 @@ const x = risky()? + 1;         // propagate (if enclosing function throws)
 
 > **Почему assignment allowed:** `let x = risky()` без `!`/`?` намеренно разрешено — программист может хотеть manual Result handling (проверить `.ok`, извлечь `.error` и т.д.). Проверка срабатывает только когда Result используется в expression (где Result-struct дал бы некорректный C).
 
-> **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new. См. `_checkNoBareThrows` в `codegen.ts`.
+> **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new, typeof, drop, yield, await, match. Дополнительно проверяются statement-boundary позиции: условия `if`/`while`/`do-while`/`for`, `switch` discriminant, `throw` value, `return` value (с auto-propagate guard для throws-функций). См. `_checkNoBareThrows` в `codegen.ts`.
+
+### Math try/catch и non-MathError throws
+
+Внутри `try { ... } catch (e: MathError) { ... }` (math try/catch), вызов throws-функции с **non-MathError** типом — ошибка компилятора. Компилятор не может молча проигнорировать Result-struct (это был бы silent no-op):
+
+```typescript
+function risky(): i32 throws IOError { ... }
+
+try {
+    const x = 1 / 0;        // ✅ MathError — перехвачено
+    const y = risky();       // ❌ error: throws function 'risky()' produces IOError, not MathError; cannot be used in math try/catch
+} catch (e: MathError) {
+    // ...
+}
+```
 
 ## C-output
 

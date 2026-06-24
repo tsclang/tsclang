@@ -314,23 +314,23 @@
 | Раздел | Тестов | Что покрывает |
 |--------|--------|---------------|
 | `02-syntax` | 124 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, spread, truthy |
-| `03-types` | 395 | Числа, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
+| `03-types` | 398 | Числа, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
 | `04-ownership` | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
-| `05-control-flow` | 49 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue |
-| `06-functions` | 61 | Функции, стрелочные, default params, rest params, closures, overloads, extensions |
+| `05-control-flow` | 52 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue, match-as-expression |
+| `06-functions` | 64 | Функции, стрелочные, function expressions, default params, rest params, closures, overloads, extensions |
 | `07-classes` | 44 | Классы, методы, наследование, instanceof, интерфейсы, field modifiers |
 | `08-collections` | 231 | Массивы, Map, Set, строки, string methods, objects, slices |
-| `09-errors` | 41 | throws, try/catch/finally, propagate (?), unwrap (!), bare-throws detection, cleanup |
+| `09-errors` | 46 | throws, try/catch/finally, propagate (?), unwrap (!), bare-throws detection, cleanup, math try/catch |
 | `10-async` | 82 | async/await, Promise, generators, AbortSignal, AsyncMutex, timers, state machines |
 | `11-concurrency` | 44 | Threads, Atomic, AtomicArray, channels, select, ISR, Volatile, Readonly |
 | `12-modules` | 26 | import/export, entry point, declaration merging |
-| `13-build` | 164 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct |
+| `13-build` | 165 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct, declare platform |
 | `14-stdlib` | 302 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
 | `15-decorators` | 22 | decorator function, factories, before/after, order, async methods |
 | `16-tooling` | 44 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
 | `book` | 4 | Примеры из документации |
 
-**Всего: 1749 тестов.**
+**Всего: 1764 тестов.**
 
 ## Roadmap
 
