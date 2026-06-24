@@ -10,6 +10,7 @@ import { parsePlatformDecl } from '../src/compiler/profile.js';
 import { compileTsc, findPackageJson } from '../src/compiler/compile.js';
 import { flagValue, hasFlag, hasFlagAny, getPositional, getPositionalAfter, isValidOptimizeLevel, isValidNumberType, NUMBER_TYPES } from '../src/cli/args.js';
 import { getVersion, getHelpText, CMD_HELP } from '../src/cli/help.js';
+import { semverParse, semverCmp, semverSatisfies, rangesCompatible } from '../src/semver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -142,32 +143,8 @@ if (command === 'explain') {
 }
 
 // ---------------------------------------------------------------------------
-// Semver helpers (used by validate-config and install)
+// Semver helpers — extracted to src/semver.ts
 // ---------------------------------------------------------------------------
-function semverParse(v: any) {
-  const [maj, min, pat] = v.split('.').map(Number);
-  return [maj || 0, min || 0, pat || 0];
-}
-function semverCmp([a0, a1, a2]: number[], [b0, b1, b2]: number[]) {
-  return (a0 - b0) || (a1 - b1) || (a2 - b2);
-}
-function semverSatisfies(v: any, range: any) {
-  const sv = semverParse(v);
-  const m = range.match(/^(\^|~|>=|>|<=|<|=)?(.+)$/);
-  if (!m) return false;
-  const [, op, ver] = m;
-  const sv2 = semverParse(ver);
-  const cmp = semverCmp(sv, sv2);
-  switch (op || '=') {
-    case '^':  return cmp >= 0 && sv[0] === sv2[0] && (sv2[0] !== 0 || (sv[1] === sv2[1] && cmp >= 0));
-    case '~':  return cmp >= 0 && sv[0] === sv2[0] && sv[1] === sv2[1];
-    case '>=': return cmp >= 0;
-    case '>':  return cmp > 0;
-    case '<=': return cmp <= 0;
-    case '<':  return cmp < 0;
-    default:   return cmp === 0;
-  }
-}
 
 // Mock registry of known packages for dependency resolution tests
 const MOCK_REGISTRY: Record<string, any> = {
@@ -184,26 +161,16 @@ const MOCK_PKG_DEPS: Record<string, any> = {
   'pkgB@2.0.0': { 'shared-dep': '^2.0.0' },
 };
 
-function resolveRange(pkg: any, range: any) {
+function resolveRange(pkg: string, range: string): string | null {
   const entry = MOCK_REGISTRY[pkg];
   const versions = entry?.versions ?? (Array.isArray(entry) ? entry : null);
-  if (!versions) return range.replace(/^[^\d]*/, ''); // fallback: strip operator
-  const satisfying = versions.filter((v: any) => semverSatisfies(v, range));
+  if (!versions) return range.replace(/^[^\d]*/, '');
+  const satisfying = versions.filter((v: string) => semverSatisfies(v, range));
   if (satisfying.length === 0) return null;
-  return satisfying.sort((a: any, b: any) => semverCmp(semverParse(a), semverParse(b))).pop();
+  return satisfying.sort((a: string, b: string) => semverCmp(semverParse(a), semverParse(b))).pop()!;
 }
 
-// Detect if two ranges are compatible (simple: same major for ^ ranges)
-function rangesCompatible(r1: any, r2: any) {
-  const m1 = r1.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
-  const m2 = r2.match(/^(\^|~|>=|>|<=|<)?(\d+)/);
-  if (!m1 || !m2) return true;
-  // ^ ranges with different majors are incompatible
-  if ((m1[1] === '^' || m1[1] === '~') && (m2[1] === '^' || m2[1] === '~')) {
-    if (m1[2] !== m2[2]) return false;
-  }
-  return true;
-}
+// rangesCompatible — extracted to src/semver.ts
 
 // ---------------------------------------------------------------------------
 // validate-config command
@@ -297,13 +264,13 @@ if (command === 'validate-config') {
     const resolved: Record<string, any> = {}; // pkg → resolved version
     const requiredBy: Record<string, any> = {}; // dep → { range, requiredByPkg }
 
-    for (const [pkg, range] of Object.entries(deps)) {
+    for (const [pkg, range] of Object.entries(deps as Record<string, string>)) {
       const ver = resolveRange(pkg, range);
       if (!ver) cfgErr(`Cannot resolve '${pkg}@${range}': no matching version found`);
       resolved[pkg] = ver;
       // Get transitive deps
       const transitiveDeps = MOCK_PKG_DEPS[`${pkg}@${ver}`] || {};
-      for (const [dep, depRange] of Object.entries(transitiveDeps)) {
+      for (const [dep, depRange] of Object.entries(transitiveDeps as Record<string, string>)) {
         if (requiredBy[dep]) {
           // Check for conflict
           if (!rangesCompatible(requiredBy[dep].range, depRange)) {
