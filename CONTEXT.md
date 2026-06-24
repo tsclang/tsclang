@@ -9,7 +9,7 @@
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
 - **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
 - **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
-- **CLI:** `bin/index.ts` (`tsclang build|run|init|lint|...`)
+- **CLI:** `bin/index.ts` (94-line slim dispatcher) → `src/cli/commands/*.ts` (one module per command)
 - **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
 - **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
@@ -41,7 +41,7 @@ input.tsc
 
 **Generics:** Monomorphization in `generics.ts`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
 
-**Module bundling:** `bin/index.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
+**Module bundling:** `src/compiler/compile.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
 
 ---
 
@@ -466,7 +466,7 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Add a new builtin (console, Math, etc.) | `stdlib-registry.ts` (LANGUAGE_BUILTINS), `calls/builtin.ts` |
 | Add a new type annotation | `types/resolve.ts` (TSC→C), `types/infer.ts` (inference) |
 | Add a new decorator | `top-level/decorators.ts` (codegen), `parser.ts` (parse) |
-| Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `bin/index.ts` (loadProfile) |
+| Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `src/cli/profile-loader.ts` (loadProfile) |
 | Add a new strict rule | `codegen.ts` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
 | Fix borrow checker error | `codegen.ts` (scope/borrow core), `stmt/vardecl.ts`, `expr/assign.ts`, `calls/*.ts` |
 | Fix cleanup/memory leak | `codegen.ts` (_blockCleanupStack), `stmt/control-flow.ts`, `stmt/vardecl.ts` |
@@ -495,3 +495,32 @@ Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`
 - `[R]` runnable — compile with gcc + run + compare stdout
 - `[E]` error — compare compiler error message
 - `[RE]` runtime error — compile, run, expect runtime panic message
+
+---
+
+## 11. CLI Architecture (refactored)
+
+`bin/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
+
+### Module map
+
+| Module | Exports |
+|--------|---------|
+| `src/cli/args.ts` | `flagValue`, `hasFlag`, `hasFlagAny`, `getPositional`, `getPositionalAfter`, `isValidOptimizeLevel`, `isValidNumberType`, `NUMBER_TYPES` |
+| `src/cli/help.ts` | `getVersion`, `getHelpText`, `CMD_HELP` |
+| `src/cli/helpers.ts` | `missingInput`, `checkInput`, `reportErrors` |
+| `src/cli/registry.ts` | `MOCK_REGISTRY`, `MOCK_PKG_DEPS`, `resolveRange`, `readLock`, `writeLock`, `readManifest`, `checkLockStale` + types |
+| `src/cli/config-validator.ts` | `VALID_STRICT_RULES`, `VALID_BUILD_KEYS`, `validateStrictRules`, `validateBuildKeys` |
+| `src/cli/profile-loader.ts` | `DESKTOP_CAPABILITIES`, `loadProfile`, `listAvailableProfiles`, `capabilityDefines` + `Capabilities` type |
+| `src/cli/cmake.ts` | `generateProjectCmake`, `generateBuildCmake` |
+| `src/semver.ts` | `semverParse`, `semverCmp`, `semverSatisfies`, `rangesCompatible` |
+| `src/cli/commands/build.ts` | `runBuildCommand` (build + doBuild + watch = ~450 LOC) |
+| `src/cli/commands/run.ts` | `runRunCommand`, `runDebugCommand` |
+| `src/cli/commands/config.ts` | `runValidateConfigCommand` |
+| `src/cli/commands/init.ts` | `runInitCommand` |
+| `src/cli/commands/source.ts` | `runEmitDtsCommand`, `runFormatCommand`, `runLintCommand` |
+| `src/cli/commands/package.ts` | `runSearchCommand`, `runPublishCommand`, `runInstallCommand`, `runUpdateCommand` |
+| `src/cli/commands/explain.ts` | `runExplainCommand` |
+| `src/cli/commands/build-cmake.ts` | `runBuildCmakeCommand` |
+
+**Note:** Commands still use `process.exit()` internally. CliResult pattern deferred to focused follow-up.
