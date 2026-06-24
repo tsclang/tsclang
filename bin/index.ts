@@ -11,6 +11,8 @@ import { compileTsc, findPackageJson } from '../src/compiler/compile.js';
 import { flagValue, hasFlag, hasFlagAny, getPositional, getPositionalAfter, isValidOptimizeLevel, isValidNumberType, NUMBER_TYPES } from '../src/cli/args.js';
 import { getVersion, getHelpText, CMD_HELP } from '../src/cli/help.js';
 import { semverParse, semverCmp, semverSatisfies, rangesCompatible } from '../src/semver.js';
+import { MOCK_REGISTRY, MOCK_PKG_DEPS, resolveRange, readLock, writeLock, readManifest, checkLockStale } from '../src/cli/registry.js';
+import type { LockFile, Manifest, LockPackage } from '../src/cli/registry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -82,46 +84,7 @@ function _checkInput(cmd: any, inputPath: any) {
   }
 }
 
-const LOCK_FILE = 'tsc.package.lock';
-
-function _readLock() {
-  if (!existsSync(LOCK_FILE)) return { version: 1, packages: {} };
-  try {
-    const data = JSON.parse(readFileSync(LOCK_FILE, 'utf8'));
-    if (!data.packages || typeof data.packages !== 'object') data.packages = {};
-    return data;
-  } catch {
-    return { version: 1, packages: {} };
-  }
-}
-
-function _writeLock(lock: any) {
-  writeFileSync(LOCK_FILE, JSON.stringify(lock, null, 2) + '\n', 'utf8');
-}
-
-function _readManifest() {
-  const p = join(process.cwd(), 'tsc.package.json');
-  if (!existsSync(p)) return null;
-  try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
-}
-
-function _checkLockStale() {
-  const manifest = _readManifest();
-  if (!manifest) return null;
-  const lock = _readLock();
-  const deps = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
-  const lockPkgs = lock.packages || {};
-  const added: any[] = [], removed: any[] = [], changed: any[] = [];
-  for (const [name, version] of Object.entries(deps)) {
-    if (!lockPkgs[name]) added.push(name);
-    else if (lockPkgs[name].version !== version) changed.push(name);
-  }
-  for (const name of Object.keys(lockPkgs)) {
-    if (!deps[name]) removed.push(name);
-  }
-  if (!added.length && !removed.length && !changed.length) return null;
-  return { added, removed, changed };
-}
+// Lock file helpers — extracted to src/cli/registry.ts
 
 // ---------------------------------------------------------------------------
 // explain command
@@ -146,31 +109,7 @@ if (command === 'explain') {
 // Semver helpers — extracted to src/semver.ts
 // ---------------------------------------------------------------------------
 
-// Mock registry of known packages for dependency resolution tests
-const MOCK_REGISTRY: Record<string, any> = {
-  lib:          { versions: ['1.0.0', '1.0.5', '1.2.3', '2.0.0'], description: 'Core utility library' },
-  pkgA:         { versions: ['1.0.0', '1.1.0'],                    description: 'Package A with shared deps' },
-  pkgB:         { versions: ['2.0.0'],                             description: 'Package B' },
-  'shared-dep': { versions: ['1.0.0', '2.0.0'],                   description: 'Shared dependency' },
-  mylib:        { versions: ['1.0.0'],                             description: 'Sample math library' },
-};
-// Transitive deps: "pkg@version" → { dep: range }
-const MOCK_PKG_DEPS: Record<string, any> = {
-  'pkgA@1.0.0': { 'shared-dep': '^1.0.0' },
-  'pkgA@1.1.0': { 'shared-dep': '^1.0.0' },
-  'pkgB@2.0.0': { 'shared-dep': '^2.0.0' },
-};
-
-function resolveRange(pkg: string, range: string): string | null {
-  const entry = MOCK_REGISTRY[pkg];
-  const versions = entry?.versions ?? (Array.isArray(entry) ? entry : null);
-  if (!versions) return range.replace(/^[^\d]*/, '');
-  const satisfying = versions.filter((v: string) => semverSatisfies(v, range));
-  if (satisfying.length === 0) return null;
-  return satisfying.sort((a: string, b: string) => semverCmp(semverParse(a), semverParse(b))).pop()!;
-}
-
-// rangesCompatible — extracted to src/semver.ts
+// Mock registry + resolveRange + lock helpers — extracted to src/cli/registry.ts
 
 // ---------------------------------------------------------------------------
 // validate-config command
@@ -549,7 +488,7 @@ if (command === 'install') {
 
   if (!pkgArg) {
     // Sync lock with tsc.package.json dependencies
-    const manifest = _readManifest();
+    const manifest = readManifest();
     if (!manifest) {
       console.error('tsclang install: no tsc.package.json found in current directory');
       process.exit(1);
@@ -557,7 +496,7 @@ if (command === 'install') {
     const deps = productionFlag
       ? (manifest.dependencies || {})
       : { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
-    const lock = _readLock();
+    const lock = readLock();
     let installed = 0, updated = 0;
     for (const [name, version] of Object.entries(deps)) {
       if (!lock.packages[name]) {
@@ -573,7 +512,7 @@ if (command === 'install') {
     for (const name of Object.keys(lock.packages)) {
       if (!deps[name]) { delete lock.packages[name]; removed.push(name); }
     }
-    _writeLock(lock);
+    writeLock(lock);
     const parts: any[] = [];
     if (installed) parts.push(`${installed} installed`);
     if (updated) parts.push(`${updated} updated`);
@@ -606,9 +545,9 @@ if (command === 'install') {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content as string, 'utf8');
     }
-    const lock = _readLock();
+    const lock = readLock();
     lock.packages[pkgName] = { version: pkgVersion, source: 'local' };
-    _writeLock(lock);
+    writeLock(lock);
     process.stdout.write(`Installed ${pkgName}@${pkgVersion}\n`);
     process.exit(0);
   }
@@ -635,9 +574,9 @@ if (command === 'install') {
   mkdirSync(join('tsc_packages', pkgName), { recursive: true });
 
   // Write lock
-  const lock = _readLock();
+  const lock = readLock();
   lock.packages[pkgName] = { version: pkgVersion, source: pkgSource };
-  _writeLock(lock);
+  writeLock(lock);
 
   process.exit(0);
 }
@@ -649,12 +588,12 @@ if (command === 'update') {
   const pkgArg = getPositional(args, 'update');
 
   if (pkgArg) {
-    const lock = _readLock();
-    lock.packages[pkgArg] = { version: 'latest', ...(lock.packages[pkgArg] || {}) };
+    const lock = readLock();
+    lock.packages[pkgArg] = { ...(lock.packages[pkgArg] || {}) };
     lock.packages[pkgArg].version = 'latest';
-    _writeLock(lock);
+    writeLock(lock);
   } else {
-    _writeLock({ version: 1, packages: {} });
+    writeLock({ version: 1, packages: {} });
   }
 
   process.exit(0);
@@ -932,7 +871,7 @@ if (command === 'build') {
   _checkInput('build', inputPath);
 
   // Check lock file staleness
-  const _stale = _checkLockStale();
+  const _stale = checkLockStale();
   if (_stale) {
     const parts: any[] = [];
     if (_stale.added.length) parts.push(`added: ${_stale.added.join(', ')}`);
