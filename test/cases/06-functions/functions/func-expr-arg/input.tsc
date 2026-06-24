@@ -1,0 +1,3 @@
+function apply(fn: () => i32): i32 { return fn(); }
+const result = apply(function(): i32 { return 99; });
+console.log(result);

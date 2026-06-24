@@ -1,0 +1,7 @@
+const v: i32 = 2;
+const result: i32 = 1 + match(v) {
+    1 => 10,
+    2 => 20,
+    _ => 0,
+};
+console.log(result);

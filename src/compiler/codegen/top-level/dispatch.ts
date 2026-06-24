@@ -267,6 +267,7 @@ export default {
       case 'DeclareConst':    this.visitDeclareConst(node); break;
       case 'DeclareFunction': this.visitDeclareFunction(node); break;
       case 'DeclareModule':   this.visitDeclareModule(node); break;
+      case 'DeclarePlatform': break;
       case 'Noop':        break;
       default:
         // Top-level expression (e.g. console.log at top level)

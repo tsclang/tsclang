@@ -501,7 +501,7 @@ export default {
       case '--pre': return `--${e}`;
       case '++post': return `${e}++`;
       case '--post': return `${e}--`;
-      default: return `/* ${node.op} */${e}`;
+      default: throw this.error(`internal: unhandled unary operator '${node.op}'`, node);
     }
   },
 };

@@ -1,0 +1,10 @@
+function grade(score: i32): string {
+    return match(score) {
+        10 => "perfect",
+        5 => "average",
+        _ => "other",
+    };
+}
+console.log(grade(10));
+console.log(grade(5));
+console.log(grade(3));

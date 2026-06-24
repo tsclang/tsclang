@@ -1,0 +1,7 @@
+declare platform {
+    flash: 32768;
+    ram: 2048;
+}
+function main(): i32 {
+    return 0;
+}

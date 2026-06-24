@@ -270,6 +270,7 @@ export default {
       }
 
       case 'Index': {
+        this._checkNoBareThrows(node.object);
         this._checkNoBareThrows(node.index);
         if (node.object.kind === 'Ident') {
           const _idxQSym = this.lookup(node.object.name);
@@ -357,6 +358,7 @@ export default {
       }
 
       case 'RangeIndex': {
+        this._checkNoBareThrows(node.object);
         this._checkNoBareThrows(node.start);
         this._checkNoBareThrows(node.end);
         const obj = this.exprToC(node.object, lines, depth);
@@ -526,12 +528,13 @@ export default {
           return props.length > 0 ? `{${props.join(', ')}}` : `{}`;
         }
         const props = node.props.map((p: any) => {
-          if (p.computed) return `/* computed key */`;
+          if (p.computed) throw this.error(`computed object key '[...]' is not supported; use StaticMap or inline the value`, node);
           return `.${p.key} = ${this.exprToC(p.value, lines, depth)}`;
         });
         return props.length > 0 ? `{ ${props.join(', ')} }` : `{}`;
       }
 
+      case 'FuncExpr':
       case 'Arrow': {
         const closure = this.hoistClosure(node, '_lambda');
         if (closure) {
@@ -546,6 +549,10 @@ export default {
         }
         const lambdaName = this.hoistArrow(node, 'void', '_lambda');
         return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
+      }
+
+      case 'Match': {
+        return this._matchExprToC(node, lines, depth);
       }
 
       case 'Cast': {
@@ -641,6 +648,7 @@ export default {
       }
 
       case 'Typeof': {
+        this._checkNoBareThrows(node.expr);
         const exprC = this.exprToC(node.expr, lines, depth);
         const sym = node.expr.kind === 'Ident' ? this.lookup(node.expr.name) : null;
         const ctype = sym?.ctype ?? 'int32_t';
@@ -676,8 +684,9 @@ export default {
         }
         return this.exprToC(node.expr, lines, depth);
       }
-      case 'Yield':    return node.value ? this.exprToC(node.value, lines, depth) : '0';
+      case 'Yield':    { if (node.value) this._checkNoBareThrows(node.value); return node.value ? this.exprToC(node.value, lines, depth) : '0'; }
       case 'Drop': {
+        this._checkNoBareThrows(node.expr);
         // drop(x) for pool opt_ref_T → T_drop(x)
         const dropExpr = node.expr;
         const dropSym = dropExpr?.kind === 'Ident' ? this.lookup(dropExpr.name) : null;
@@ -689,7 +698,7 @@ export default {
           const _dropArg = dropExpr?.kind === 'Ident' ? dropExpr.name : this.exprToC(dropExpr, lines, depth);
           return `${_dc._poolDropFn}(${_dropArg})`;
         }
-        return `/* drop(${this.exprToC(node.expr, lines, depth)}) */`;
+        throw this.error(`drop() can only be used on pool-allocated types`, node);
       }
       case 'NonNull': {
         const innerExpr = node.expr;
@@ -744,6 +753,7 @@ export default {
         return `${resName}.value`;
       }
       case 'OptChain': {
+        this._checkNoBareThrows(node.object);
         const objType = this.inferType(node.object);
         if (objType?.startsWith('opt_')) {
           const innerIdent = objType.slice(4);
@@ -767,7 +777,7 @@ export default {
       }
 
       default:
-        return `/* expr:${node.kind} */`;
+        throw this.error(`internal: unhandled expression kind '${node.kind}'`, node);
     }
   },
 

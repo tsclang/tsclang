@@ -87,14 +87,8 @@ export default {
       case 'Spawn':
       case 'Noop':
         this._visitControlFlow(node, lines, depth); break;
-      case 'Match': this.emitMatchVarDecl(node, lines, depth); break;
-      case 'Select': this.emitSelectVarDecl(node, lines, depth); break;
-      case 'Propagate': this.emitPropagateVarDecl(node, lines, depth); break;
-      case 'NonNull': this.emitPropagateVarDecl(node, lines, depth); break;
-      default: {
-        const I = ' '.repeat(this.indent * depth);
-        lines.push(I + `/* unhandled stmt: ${node.kind} */`);
-      }
+      default:
+        throw this.error(`internal: unhandled statement kind '${node.kind}'`, node);
     }
   },
 

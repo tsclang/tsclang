@@ -1,27 +1,15 @@
 export default {
-  emitMatchVarDecl(this: any, node: any, lines: any, depth: any) {
-    const { varKind, name, typeAnn, init } = node;
-    const { discriminant, cases, hasParens } = init;
+  _emitMatchCore(this: any, discriminant: any, cases: any, hasParens: any,
+                 discC: any, discType: any, resultType: any, resultVar: any,
+                 lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
 
-    // Determine discriminant C expression and type
-    const discC = this.exprToC(discriminant, lines, depth);
-    const discType = this.inferType(discriminant);
+    p(`${resultType} ${resultVar} = {0};`);
 
-    // Determine result type from first arm body
-    const resultType = typeAnn
-      ? this.resolveType(typeAnn)
-      : (cases.length > 0 ? this.inferType(cases[0].body) : 'int32_t');
-    const qualifier = (varKind === 'const') ? '' : '';  // match result var is never const
-    p(`${resultType} ${name} = {0};`);
-    this.define(name, { ctype: resultType, varKind: 'let' });
-
-    // Check if discriminant is an enum type
     const enumDef = this.classes.get(discType);
     const isEnum = enumDef?.isEnum && !enumDef?.isConst && !enumDef?.isStringLiteralUnion;
 
-    // For enum discriminants: check exhaustiveness
     if (isEnum) {
       const allValues = (enumDef.members ?? []).map((m: any) => m.name);
       const coveredEnumCases = new Set();
@@ -38,9 +26,7 @@ export default {
       }
     }
 
-    // Emit match as switch (enum, non-parens) or if/else chain
     if (isEnum && !hasParens) {
-      // Switch/case form
       let hasDefault = false;
       p(`switch (${discC}) {`);
       for (const c of cases) {
@@ -48,10 +34,10 @@ export default {
         if (c.pattern.kind === 'MatchEnum') {
           const _enumDef = this.classes.get(c.pattern.enumName);
           const _enumCname = _enumDef?._cname ?? c.pattern.enumName;
-          p(`    case ${_enumCname}_${c.pattern.caseName}: ${name} = ${bodyC}; break;`);
+          p(`    case ${_enumCname}_${c.pattern.caseName}: ${resultVar} = ${bodyC}; break;`);
         } else if (c.pattern.kind === 'MatchWild') {
           hasDefault = true;
-          p(`    default: ${name} = ${bodyC}; break;`);
+          p(`    default: ${resultVar} = ${bodyC}; break;`);
         }
       }
       if (!hasDefault && this._strictRules?.has('switch-default')) {
@@ -59,7 +45,6 @@ export default {
       }
       p('}');
     } else {
-      // if/else chain form
       let discUse = discC;
       if (!['Ident', 'Literal'].includes(discriminant.kind)) {
         const discTmp = `_tsc_disc_${this.tempCount++}`;
@@ -74,7 +59,7 @@ export default {
 
         if (isLast && (c.pattern.kind === 'MatchWild' || (isEnum && c.pattern.kind === 'MatchEnum'))) {
           const bodyC = this.exprToC(c.body, lines, depth);
-          p(`else { ${name} = ${bodyC}; }`);
+          p(`else { ${resultVar} = ${bodyC}; }`);
         } else {
           const cond = this._matchPatternCond(c.pattern, discUse, discType, enumDef);
           if (needsBindings) {
@@ -84,7 +69,7 @@ export default {
             const bindings = this._matchPatternBindings(c.pattern, discUse, discType);
             for (const b of bindings) armLines.push(armI + b);
             const bodyC = this.exprToC(c.body, armLines, depth + 1);
-            armLines.push(`${armI}${name} = ${bodyC};`);
+            armLines.push(`${armI}${resultVar} = ${bodyC};`);
             this.popScope();
             if (cond === null) {
               p(`else {`);
@@ -95,14 +80,44 @@ export default {
             p('}');
           } else if (cond === null) {
             const bodyC = this.exprToC(c.body, lines, depth);
-            p(`else { ${name} = ${bodyC}; }`);
+            p(`else { ${resultVar} = ${bodyC}; }`);
           } else {
             const bodyC = this.exprToC(c.body, lines, depth);
-            p(`${prefix} (${cond}) { ${name} = ${bodyC}; }`);
+            p(`${prefix} (${cond}) { ${resultVar} = ${bodyC}; }`);
           }
         }
       }
     }
+  },
+
+  emitMatchVarDecl(this: any, node: any, lines: any, depth: any) {
+    const { name, typeAnn, init } = node;
+    const { discriminant, cases, hasParens } = init;
+
+    const discC = this.exprToC(discriminant, lines, depth);
+    const discType = this.inferType(discriminant);
+
+    const resultType = typeAnn
+      ? this.resolveType(typeAnn)
+      : (cases.length > 0 ? this.inferType(cases[0].body) : 'int32_t');
+
+    this.define(name, { ctype: resultType, varKind: 'let' });
+
+    this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, name, lines, depth);
+  },
+
+  _matchExprToC(this: any, node: any, lines: any, depth: any) {
+    const { discriminant, cases, hasParens } = node;
+
+    const discC = this.exprToC(discriminant, lines, depth);
+    const discType = this.inferType(discriminant);
+
+    const resultType = cases.length > 0 ? this._effectiveType(cases[0].body) : 'int32_t';
+    const resultVar = `_match_${this.tempCount++}`;
+
+    this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, resultVar, lines, depth);
+
+    return resultVar;
   },
 
   // -----------------------------------------------------------------------
@@ -400,7 +415,7 @@ export default {
         }
         return conds.length > 0 ? conds.join(' && ') : '1';
       }
-      default: return '1';
+      default: throw this.error(`internal: unhandled match pattern kind '${pattern.kind}'`, pattern);
     }
   },
 

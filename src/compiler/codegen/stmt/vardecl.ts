@@ -1110,7 +1110,7 @@ export default {
           }
           const _closureParamCtypes = (typeAnn.params ?? []).map((p: any) => this.resolveType(p));
           let initC: any;
-          if (init?.kind === 'Arrow') {
+          if (init?.kind === 'Arrow' || init?.kind === 'FuncExpr') {
             // Pre-declare for recursion support (before hoistClosure compiles body)
             const _pfx1 = this._modulePrefix ?? '';
             const _predFnName = `${_pfx1}_closure_${this.closureCount}_fn`;
@@ -1189,7 +1189,7 @@ export default {
         }
 
         if (init) {
-          if (init.kind === 'Arrow') {
+          if (init.kind === 'Arrow' || init.kind === 'FuncExpr') {
             if (this._strictRules?.has('no-closures')) {
               throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
             }

@@ -1,0 +1,2 @@
+const twice = function(x: i32): i32 { return x * 2; };
+console.log(twice(21));

@@ -1,0 +1,2 @@
+const f = function(): i32 { return 42; };
+console.log(f());
