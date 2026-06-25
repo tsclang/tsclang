@@ -117,7 +117,50 @@ The language needs several features before the compiler can be self-hosted:
 
 ### IR pipeline — deferred
 
-An IR/SSA pipeline was prototyped (#27-#29) but is **not integrated** into the compiler. The existing AST→C codegen already supports all language features (ownership, borrow checker, async, generics). IR is an architectural improvement, not a release blocker. Decision: revisit **after** self-hosting. Spec retained as `[PLANNED]` in [spec/16-tooling/16-compiler.md](spec/16-tooling/16-compiler.md).
+An IR/SSA pipeline was prototyped (#27-#29) but is **not integrated** into the compiler. The existing AST→C codegen already supports all language features (ownership, borrow checker, async, generics). IR is an architectural improvement, not a release blocker. Decision: revisit **after** self-hosting. Spec retained as `[PLANNED]` in [packages/spec/spec/16-tooling/16-compiler.md](../packages/spec/spec/16-tooling/16-compiler.md).
+
+## Development
+
+This is an npm workspaces monorepo.
+
+### Setup
+
+```bash
+git clone https://github.com/tsclang/tsclang.git
+cd tsclang
+npm install
+```
+
+### Build compiler
+
+```bash
+npm run build
+# produces packages/compiler/dist/index.js
+```
+
+### Run tests
+
+```bash
+npm test                  # static tests (~1764 tests)
+npm run test:engine       # on-the-fly generated tests
+```
+
+### Run compiler from source
+
+```bash
+npx tsx packages/compiler/src/index.ts --version
+npx tsx packages/compiler/src/index.ts run hello.tsc
+```
+
+### Repository structure
+
+```
+packages/
+  compiler/      # TypeScript-like compiler (.tsc → C)
+  spec/          # Language specification + book/
+  tests/         # Static tests (test/runner.ts + test/cases/)
+  test-engine/   # On-the-fly test generator
+```
 
 ## License
 

@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(firmware C)
+set(CMAKE_C_COMPILER avr-gcc)
+set(MCU atmega328p)
+add_compile_options(-mmcu=${MCU})
+add_link_options(-mmcu=${MCU})
+add_executable(firmware src/main.c)

@@ -1,0 +1,21 @@
+#include "runtime.h"
+
+int main(void) {
+    TSC_INIT();
+    int32_t total = 0;
+    for (int32_t i = 0; i < 3; i++) {
+        String s = STR_LIT("hello");
+        for (int32_t j = 0; j < 3; j++) {
+            String t = STR_LIT("world");
+            if (i == 1 && j == 1) {
+                tsc_string_release(t);
+                break;
+            }
+            tsc_string_release(t);
+        }
+        total = (int32_t)((uint32_t)total + (uint32_t)i);
+        tsc_string_release(s);
+    }
+    printf("%d\n", total);
+    return 0;
+}

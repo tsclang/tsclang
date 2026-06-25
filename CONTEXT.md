@@ -7,10 +7,10 @@
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
-- **Runtime:** `src/runtime/runtime.h` (C header, included in every output)
-- **CLI:** `src/index.ts` (94-line slim dispatcher) → `src/cli/commands/*.ts` (one module per command). Compiles to `dist/index.js` via `npm run build`. `package.json` bin → `./dist/index.js`.
-- **Tests:** `tsx test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
+- **Compiler:** `packages/compiler/src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
+- **Runtime:** `packages/compiler/src/runtime/runtime.h` (C header, included in every output)
+- **CLI:** `packages/compiler/src/index.ts` (94-line slim dispatcher) → `packages/compiler/src/cli/commands/*.ts` (one module per command). Compiles to `packages/compiler/dist/index.js` via `npm run build`. `package.json` bin → `./dist/index.js`.
+- **Tests:** `tsx packages/tests/test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
 - **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
 - **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
 - **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
@@ -41,7 +41,7 @@ input.tsc
 
 **Generics:** Monomorphization in `generics.ts`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
 
-**Module bundling:** `src/compiler/compile.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
+**Module bundling:** `packages/compiler/src/compiler/compile.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
 
 ---
 
@@ -279,7 +279,7 @@ opt_T asyncFunc_poll_N(asyncFunc_frame_N* self) {
 
 ---
 
-## 7. Runtime (`src/runtime/runtime.h`)
+## 7. Runtime (`packages/compiler/src/runtime/runtime.h`)
 
 Single-header C library. `#include`d in every output. Key components:
 
@@ -305,9 +305,9 @@ Single-header C library. `#include`d in every output. Key components:
 | `tsc_dtoa` | Rotating 8-buffer helper for inline use in printf args (codegen uses `%s` + `tsc_dtoa(val)`) |
 
 **Platform headers:** `runtime_nes.h`, `runtime_wasm.h`, etc. — subset for constrained platforms.
-**Std runtime headers:** `src/runtime/std/*.h` — `fs.h`, `net.h`, `ws.h`, `io.h`, `regex.h`, `base64.h`, `reactive.h`, `temporal.h`, `url.h`, `blob.h`, `embedded.h`, `hal.h`, `avr.h`.
+**Std runtime headers:** `packages/compiler/src/runtime/std/*.h` — `fs.h`, `net.h`, `ws.h`, `io.h`, `regex.h`, `base64.h`, `reactive.h`, `temporal.h`, `url.h`, `blob.h`, `embedded.h`, `hal.h`, `avr.h`.
 
-### Platform capabilities (`src/profiles/*.d.tsc`)
+### Platform capabilities (`packages/compiler/src/profiles/*.d.tsc`)
 
 12 built-in profiles: `desktop`, `avr`, `avr-heap`, `avr-coop`, `arm`, `nes`, `spectrum`, `genesis`, `ps2`, `dos`, `wasm`, `wasm32`. Capabilities: `bits`, `fpu`, `allocator` (heap|static), `async` (libuv|state_machine|none), `usize`, `defaultNumber`, `posix`, `strtoll`, `console_uart`, `console_baud`, `unaligned_access`, `os`. See Section 3 for `_cap()` usage.
 
@@ -325,7 +325,7 @@ Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dyn
 
 ### Tests: 1764 (spec-based structure, `--no-gcc`)
 
-Tests organized by spec section (`test/cases/<NN-section>/`):
+Tests organized by spec section (`packages/tests/test/cases/<NN-section>/`):
 
 | Section | Tests | Topic |
 |---------|-------|-------|
@@ -466,20 +466,20 @@ Tests organized by spec section (`test/cases/<NN-section>/`):
 | Add a new builtin (console, Math, etc.) | `stdlib-registry.ts` (LANGUAGE_BUILTINS), `calls/builtin.ts` |
 | Add a new type annotation | `types/resolve.ts` (TSC→C), `types/infer.ts` (inference) |
 | Add a new decorator | `top-level/decorators.ts` (codegen), `parser.ts` (parse) |
-| Add a new platform profile | `src/profiles/<name>.d.tsc`, `src/profiles/<name>.json`, `src/cli/profile-loader.ts` (loadProfile) |
+| Add a new platform profile | `packages/compiler/src/profiles/<name>.d.tsc`, `packages/compiler/src/profiles/<name>.json`, `packages/compiler/src/cli/profile-loader.ts` (loadProfile) |
 | Add a new strict rule | `codegen.ts` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
 | Fix borrow checker error | `codegen.ts` (scope/borrow core), `stmt/vardecl.ts`, `expr/assign.ts`, `calls/*.ts` |
 | Fix cleanup/memory leak | `codegen.ts` (_blockCleanupStack), `stmt/control-flow.ts`, `stmt/vardecl.ts` |
 | Fix async codegen | `async/scan.ts` (state collection), `async/async-stmt.ts` (emit), `async/async-emit.ts` (poll fn) |
 | Fix string ownership | `stmt/vardecl.ts`, `expr/assign.ts`, `calls/call-dispatch.ts`, `calls/method-dispatch.ts`, `top-level/func.ts` |
-| Add a test | `test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
-| Run tests | `npx tsx test/runner.ts 03-types` (filter by spec section or feature name) |
-| Compile manually | `npx tsx src/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
+| Add a test | `packages/tests/test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
+| Run tests | `npx tsx packages/tests/test/runner.ts 03-types` (filter by spec section or feature name) |
+| Compile manually | `npx tsx packages/compiler/src/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
 
 ### Test file structure
 
 ```
-test/cases/<NN-section>/feature/name/
+packages/tests/test/cases/<NN-section>/feature/name/
   input.tsc            # input source
   expected.c           # expected C output ([F] fragment or [R] runnable)
   expected.out         # expected stdout ([R] only)
@@ -488,7 +488,7 @@ test/cases/<NN-section>/feature/name/
   meta.json            # { kind: "[F]"|"[R]"|"[E]"|"[RE]", target/profile, ... }
 ```
 
-Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`. See `spec/INDEX.md` for full table.
+Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`. See `packages/spec/spec/INDEX.md` for full table.
 
 ### Test kinds
 - `[F]` fragment — compare C output only (no compilation)
@@ -500,27 +500,27 @@ Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`
 
 ## 11. CLI Architecture (refactored)
 
-`src/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
+`packages/compiler/src/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
 
 ### Module map
 
 | Module | Exports |
 |--------|---------|
-| `src/cli/args.ts` | `flagValue`, `hasFlag`, `hasFlagAny`, `getPositional`, `getPositionalAfter`, `isValidOptimizeLevel`, `isValidNumberType`, `NUMBER_TYPES` |
-| `src/cli/help.ts` | `getVersion`, `getHelpText`, `CMD_HELP` |
-| `src/cli/helpers.ts` | `missingInput`, `checkInput`, `reportErrors` |
-| `src/cli/registry.ts` | `MOCK_REGISTRY`, `MOCK_PKG_DEPS`, `resolveRange`, `readLock`, `writeLock`, `readManifest`, `checkLockStale` + types |
-| `src/cli/config-validator.ts` | `VALID_STRICT_RULES`, `VALID_BUILD_KEYS`, `validateStrictRules`, `validateBuildKeys` |
-| `src/cli/profile-loader.ts` | `DESKTOP_CAPABILITIES`, `loadProfile`, `listAvailableProfiles`, `capabilityDefines` + `Capabilities` type |
-| `src/cli/cmake.ts` | `generateProjectCmake`, `generateBuildCmake` |
-| `src/semver.ts` | `semverParse`, `semverCmp`, `semverSatisfies`, `rangesCompatible` |
-| `src/cli/commands/build.ts` | `runBuildCommand` (build + doBuild + watch = ~450 LOC) |
-| `src/cli/commands/run.ts` | `runRunCommand`, `runDebugCommand` |
-| `src/cli/commands/config.ts` | `runValidateConfigCommand` |
-| `src/cli/commands/init.ts` | `runInitCommand` |
-| `src/cli/commands/source.ts` | `runEmitDtsCommand`, `runFormatCommand`, `runLintCommand` |
-| `src/cli/commands/package.ts` | `runSearchCommand`, `runPublishCommand`, `runInstallCommand`, `runUpdateCommand` |
-| `src/cli/commands/explain.ts` | `runExplainCommand` |
-| `src/cli/commands/build-cmake.ts` | `runBuildCmakeCommand` |
+| `packages/compiler/src/cli/args.ts` | `flagValue`, `hasFlag`, `hasFlagAny`, `getPositional`, `getPositionalAfter`, `isValidOptimizeLevel`, `isValidNumberType`, `NUMBER_TYPES` |
+| `packages/compiler/src/cli/help.ts` | `getVersion`, `getHelpText`, `CMD_HELP` |
+| `packages/compiler/src/cli/helpers.ts` | `missingInput`, `checkInput`, `reportErrors` |
+| `packages/compiler/src/cli/registry.ts` | `MOCK_REGISTRY`, `MOCK_PKG_DEPS`, `resolveRange`, `readLock`, `writeLock`, `readManifest`, `checkLockStale` + types |
+| `packages/compiler/src/cli/config-validator.ts` | `VALID_STRICT_RULES`, `VALID_BUILD_KEYS`, `validateStrictRules`, `validateBuildKeys` |
+| `packages/compiler/src/cli/profile-loader.ts` | `DESKTOP_CAPABILITIES`, `loadProfile`, `listAvailableProfiles`, `capabilityDefines` + `Capabilities` type |
+| `packages/compiler/src/cli/cmake.ts` | `generateProjectCmake`, `generateBuildCmake` |
+| `packages/compiler/src/semver.ts` | `semverParse`, `semverCmp`, `semverSatisfies`, `rangesCompatible` |
+| `packages/compiler/src/cli/commands/build.ts` | `runBuildCommand` (build + doBuild + watch = ~450 LOC) |
+| `packages/compiler/src/cli/commands/run.ts` | `runRunCommand`, `runDebugCommand` |
+| `packages/compiler/src/cli/commands/config.ts` | `runValidateConfigCommand` |
+| `packages/compiler/src/cli/commands/init.ts` | `runInitCommand` |
+| `packages/compiler/src/cli/commands/source.ts` | `runEmitDtsCommand`, `runFormatCommand`, `runLintCommand` |
+| `packages/compiler/src/cli/commands/package.ts` | `runSearchCommand`, `runPublishCommand`, `runInstallCommand`, `runUpdateCommand` |
+| `packages/compiler/src/cli/commands/explain.ts` | `runExplainCommand` |
+| `packages/compiler/src/cli/commands/build-cmake.ts` | `runBuildCmakeCommand` |
 
 **Note:** Commands still use `process.exit()` internally. CliResult pattern deferred to focused follow-up.

@@ -4,7 +4,14 @@ node_modules/
 .tsclang-tmp2/
 dist/
 *.tsbuildinfo
+tutorial-test/
+
+# Generated C files (output, not source)
 *.c
 !src/**/*.c
 !test/**/*.c
-tutorial-test/
+!packages/**/test/**/*.c
+!packages/**/src/**/*.c
+
+# Generated CMake files in test cases
+**/test/cases/**/CMakeLists.txt
