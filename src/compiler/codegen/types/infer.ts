@@ -34,6 +34,11 @@ export default {
         // Bitwise/shift ops always yield integer
         if (['&','|','^','<<','>>'].includes(node.op)) return this.inferType(node.left);
         if (node.op === '>>>') return 'int32_t';
+        if (node.op === '??') {
+          const lt = this.inferType(node.left);
+          if (lt?.startsWith('opt_')) return this._arrIdentToCType(lt.slice(4));
+          return lt || this.inferType(node.right);
+        }
         return 'bool';
       }
       case 'OptChain': {
