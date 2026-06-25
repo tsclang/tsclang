@@ -377,16 +377,20 @@ async function executeTest(testDir, { kind, inputType, hasWarning }, tmpBase) {
 // ---------------------------------------------------------------------------
 // Test metadata (meta.json)
 // ---------------------------------------------------------------------------
-const PROFILES_DIR = join(ROOT, 'src', 'profiles');
+const PROFILES_DIR = join(ROOT, "packages", "compiler", "src", "profiles");
 
 function loadProfile(name) {
-  const dtsPath = join(PROFILES_DIR, name + '.d.tsc');
-  const jsonPath = join(PROFILES_DIR, name + '.json');
+  const newDtsPath = join(PROFILES_DIR, name, "index.d.tsc");
+  const dtsPath = join(PROFILES_DIR, name + ".d.tsc");
+  const jsonPath = join(PROFILES_DIR, name + ".json");
+  if (existsSync(newDtsPath)) {
+    try { return parsePlatformDecl(readFileSync(newDtsPath, "utf8"), newDtsPath); } catch { return null; }
+  }
   if (existsSync(dtsPath)) {
-    try { return parsePlatformDecl(readFileSync(dtsPath, 'utf8'), dtsPath); } catch { return null; }
+    try { return parsePlatformDecl(readFileSync(dtsPath, "utf8"), dtsPath); } catch { return null; }
   }
   if (existsSync(jsonPath)) {
-    try { return JSON.parse(readFileSync(jsonPath, 'utf8')); } catch { return null; }
+    try { return JSON.parse(readFileSync(jsonPath, "utf8")); } catch { return null; }
   }
   return null;
 }
