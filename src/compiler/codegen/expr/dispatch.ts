@@ -125,6 +125,33 @@ export default {
             return mathConsts[node.prop];
           }
         }
+        // Number.* constants: type-specific integer limits + JS standard float constants
+        if (node.object.kind === 'Ident' && node.object.name === 'Number') {
+          const intLimits: Record<string, string> = {
+            MAX_I8:  'INT8_MAX',  MIN_I8:  'INT8_MIN',
+            MAX_I16: 'INT16_MAX', MIN_I16: 'INT16_MIN',
+            MAX_I32: 'INT32_MAX', MIN_I32: 'INT32_MIN',
+            MAX_I64: 'INT64_MAX', MIN_I64: 'INT64_MIN',
+            MAX_U8:  'UINT8_MAX', MAX_U16: 'UINT16_MAX',
+            MAX_U32: 'UINT32_MAX', MAX_U64: 'UINT64_MAX',
+          };
+          if (intLimits[node.prop]) return intLimits[node.prop];
+          if (node.prop === 'MAX_SAFE_INTEGER') return '9007199254740991LL';
+          if (node.prop === 'MIN_SAFE_INTEGER') return '(-9007199254740991LL)';
+          const floatConsts: Record<string, string> = {
+            MAX_VALUE:         'DBL_MAX',
+            MIN_VALUE:         'DBL_MIN',
+            EPSILON:           'DBL_EPSILON',
+            POSITIVE_INFINITY: 'INFINITY',
+            NEGATIVE_INFINITY: '(-INFINITY)',
+            NaN:               'NAN',
+          };
+          if (floatConsts[node.prop]) {
+            this.includes.add('#include <float.h>');
+            return floatConsts[node.prop];
+          }
+          throw this.error(`TypeError: 'Number.${node.prop}' is not a known constant`, node);
+        }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
         if (sym?._mutQuarantined) {
           throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);

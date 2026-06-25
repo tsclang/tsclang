@@ -39,6 +39,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdarg.h>

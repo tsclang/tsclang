@@ -64,6 +64,22 @@ export default {
           const mathFloatConsts = ['PI', 'E', 'LN2', 'LN10', 'SQRT2', 'SQRT1_2', 'LOG2E', 'LOG10E'];
           if (mathFloatConsts.includes(node.prop)) return 'double';
         }
+        // Number.* constants: type-specific integer limits + JS standard float constants
+        if (node.object.kind === 'Ident' && node.object.name === 'Number') {
+          const intLimitTypes: Record<string, string> = {
+            MAX_I8: 'int8_t',  MIN_I8: 'int8_t',
+            MAX_I16: 'int16_t', MIN_I16: 'int16_t',
+            MAX_I32: 'int32_t', MIN_I32: 'int32_t',
+            MAX_I64: 'int64_t', MIN_I64: 'int64_t',
+            MAX_U8: 'uint8_t', MAX_U16: 'uint16_t',
+            MAX_U32: 'uint32_t', MAX_U64: 'uint64_t',
+          };
+          if (intLimitTypes[node.prop]) return intLimitTypes[node.prop];
+          if (node.prop === 'MAX_SAFE_INTEGER' || node.prop === 'MIN_SAFE_INTEGER') return 'int64_t';
+          const floatConsts = ['MAX_VALUE', 'MIN_VALUE', 'EPSILON',
+            'POSITIVE_INFINITY', 'NEGATIVE_INFINITY', 'NaN'];
+          if (floatConsts.includes(node.prop)) return 'double';
+        }
         if (node.prop === 'length')   return 'size_t';
         if (node.prop === 'capacity') return 'size_t';
         if (node.prop === 'size') {

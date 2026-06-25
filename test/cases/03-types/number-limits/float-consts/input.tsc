@@ -1,0 +1,7 @@
+const nan: f64 = Number.NaN;
+const posInf: f64 = Number.POSITIVE_INFINITY;
+const negInf: f64 = Number.NEGATIVE_INFINITY;
+const eps: f64 = Number.EPSILON;
+console.log(nan);
+console.log(posInf);
+console.log(negInf);

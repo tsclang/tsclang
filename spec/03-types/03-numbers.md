@@ -331,10 +331,54 @@ console.log(Infinity);          // "Infinity"
 
 > **Note:** `f32` values are promoted to `f64` before formatting, so `let x: f32 = 3.14; console.log(x);` prints `"3.140000104904175"` (the shortest f64 representation of the f32 value). This matches the behavior of reading an f32 through an f64 lens.
 
-**`Number` static properties** `[NOT YET]`:
-- `Number.NaN` → `NAN`
-- `Number.POSITIVE_INFINITY` → `INFINITY`
-- `Number.NEGATIVE_INFINITY` → `-INFINITY`
+**`Number.*` built-in constants:**
+
+TSClang provides type-specific integer limits and JS-standard float constants via the `Number.*` namespace. These are compile-time constants — no runtime overhead, no memory usage. Available on all platforms including embedded and retro (П1 — кроссплатформенность).
+
+**Integer limits** (type-specific, from `<stdint.h>`):
+
+| Constant | TSClang type | C macro | Value |
+|----------|-------------|---------|-------|
+| `Number.MAX_I8` | `i8` | `INT8_MAX` | 127 |
+| `Number.MIN_I8` | `i8` | `INT8_MIN` | -128 |
+| `Number.MAX_I16` | `i16` | `INT16_MAX` | 32767 |
+| `Number.MIN_I16` | `i16` | `INT16_MIN` | -32768 |
+| `Number.MAX_I32` | `i32` | `INT32_MAX` | 2147483647 |
+| `Number.MIN_I32` | `i32` | `INT32_MIN` | -2147483648 |
+| `Number.MAX_I64` | `i64` | `INT64_MAX` | 9223372036854775807 |
+| `Number.MIN_I64` | `i64` | `INT64_MIN` | -9223372036854775808 |
+| `Number.MAX_U8` | `u8` | `UINT8_MAX` | 255 |
+| `Number.MAX_U16` | `u16` | `UINT16_MAX` | 65535 |
+| `Number.MAX_U32` | `u32` | `UINT32_MAX` | 4294967295 |
+| `Number.MAX_U64` | `u64` | `UINT64_MAX` | 18446744073709551615 |
+
+**JS standard constants** (П2 — TS compatibility):
+
+| Constant | TSClang type | C equivalent | Value |
+|----------|-------------|-------------|-------|
+| `Number.MAX_SAFE_INTEGER` | `i64` | `9007199254740991LL` | 2^53 − 1 |
+| `Number.MIN_SAFE_INTEGER` | `i64` | `(-9007199254740991LL)` | −(2^53 − 1) |
+| `Number.MAX_VALUE` | `f64` | `DBL_MAX` | ~1.8e+308 |
+| `Number.MIN_VALUE` | `f64` | `DBL_MIN` | ~5e-324 (smallest positive double) |
+| `Number.EPSILON` | `f64` | `DBL_EPSILON` | ~2.2e-16 |
+| `Number.POSITIVE_INFINITY` | `f64` | `INFINITY` | +∞ |
+| `Number.NEGATIVE_INFINITY` | `f64` | `(-INFINITY)` | −∞ |
+| `Number.NaN` | `f64` | `NAN` | NaN |
+
+```typescript
+const maxI32: i32 = Number.MAX_I32;      // 2147483647
+const minI32: i32 = Number.MIN_I32;      // -2147483648
+const maxU8: u8 = Number.MAX_U8;         // 255
+const maxSafe: i64 = Number.MAX_SAFE_INTEGER;  // 9007199254740991
+const eps: f64 = Number.EPSILON;         // 2.220446049250313e-16
+const nan: f64 = Number.NaN;             // NaN
+```
+
+> **Design choice:** `MAX_SAFE_INTEGER`/`MIN_SAFE_INTEGER` are `i64` (not `f64` as in JS) because they represent exact integer values that fit in `i64`. This is more precise and useful in TSClang's type system (П3 — better than TS).
+
+> Unknown `Number.*` properties produce a compile error: `TypeError: 'Number.X' is not a known constant`.
+
+**`Number.*` static methods** `[NOT YET]`:
 - `Number.isNaN(x)` — strict NaN check
 - `Number.isFinite(x)` — strict finite check
 
