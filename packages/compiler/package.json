@@ -1,0 +1,27 @@
+{
+  "name": "@tsclang/compiler",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": { ".": "./dist/index.js" },
+  "bin": { "tsclang": "./dist/index.js" },
+  "files": [
+    "dist/",
+    "src/profiles/",
+    "src/runtime/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.3"
+  }
+}

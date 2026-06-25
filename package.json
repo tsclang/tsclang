@@ -1,50 +1,22 @@
 {
   "name": "tsclang",
   "version": "0.1.0",
-  "description": "TypeScript-like language that compiles to C — for server, desktop, embedded, and retro platforms",
-  "publishConfig": {
-    "access": "public"
-  },
-  "homepage": "https://github.com/tsclang/tsclang#readme",
-  "bugs": {
-    "url": "https://github.com/tsclang/tsclang/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tsclang/tsclang.git"
-  },
-  "license": "Apache-2.0",
-  "author": "fwmakc",
-  "type": "module",
-  "bin": {
-    "tsclang": "./dist/index.js"
-  },
-  "files": [
-    "dist/",
-    "src/profiles/",
-    "src/runtime/",
-    "README.md",
-    "LICENSE"
-  ],
+  "private": true,
+  "description": "TSClang monorepo — TypeScript-like language that compiles to C",
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": [
-    "typescript",
-    "compiler",
-    "c",
-    "transpiler",
-    "embedded",
-    "avr",
-    "language",
-    "tsclang"
+  "workspaces": [
+    "packages/compiler",
+    "packages/spec",
+    "packages/tests",
+    "packages/test-engine"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run build",
-    "typecheck": "tsc --noEmit",
-    "test": "tsx test/runner.ts",
-    "test:v": "tsx test/runner.ts --verbose"
+    "build": "npm run build -w @tsclang/compiler",
+    "typecheck": "npm run typecheck -w @tsclang/compiler",
+    "test": "npm test -w @tsclang/tests",
+    "test:engine": "npm test -w @tsclang/test-engine"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

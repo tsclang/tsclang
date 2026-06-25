@@ -1,0 +1,17 @@
+{
+  "name": "@tsclang/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx test/runner.ts",
+    "test:v": "tsx test/runner.ts --verbose"
+  },
+  "dependencies": {
+    "@tsclang/compiler": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.22.4"
+  }
+}
