@@ -455,7 +455,12 @@ export default {
         let initC = '';
         if (node.init) {
           if (node.init.kind === 'VarDecls') {
-            const parts = node.init.decls.map((d: any) => {
+            const simpleDecls = node.init.decls.filter((d: any) => d.kind === 'VarDecl');
+            const destructDecls = node.init.decls.filter((d: any) => d.kind !== 'VarDecl');
+            for (const dd of destructDecls) {
+              this._visitVarDestruct(dd, lines, depth);
+            }
+            const parts = simpleDecls.map((d: any) => {
               const ctype = d.typeAnn ? this.resolveType(d.typeAnn) : (d.init ? this.inferType(d.init) : 'int32_t');
               const initExpr = d.init ? this.exprToC(d.init, lines, depth) : '0';
               this.define(d.name, { ctype, varKind: d.varKind });

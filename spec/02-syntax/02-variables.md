@@ -69,13 +69,16 @@ const PI = 3.14, E = 2.71;            // const тоже поддерживает
 - Каждый declarатор независим: может иметь или не иметь type annotation и initializer
 - `let`/`const`/`var` applies ко всем declarators в группе
 - Decorators apply только к первому declarator
-- Destructuring (`let {a, b} = obj`) не поддерживает comma — только один pattern
+- Destructuring (`let {a, b} = obj`) можно смешивать с обычными declarators через запятую
 
 ```typescript
-// ❌ destructuring + comma — не поддерживается
-let {a, b} = obj, c = 5;             // error
+// ✅ destructuring + comma
+let {a, b} = obj, c = 5;
 
-// ✅ раздельно
+// ✅ несколько destructuring
+let {a, b} = obj, [x, y] = arr;
+
+// ✅ раздельно (тоже работает)
 let {a, b} = obj;
 let c = 5;
 ```

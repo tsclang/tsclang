@@ -596,15 +596,24 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       (node as any).isConst = true;
       return node;
     }
-    // Destructuring
+
+    const decls = [parseOneDeclarator(kind, decorators, startLine)];
+    while (tryEat(TK.COMMA)) {
+      decls.push(parseOneDeclarator(kind, [], cur().line));
+    }
+    eatSemi();
+    if (decls.length === 1) return decls[0];
+    return { kind: 'VarDecls', decls, line: startLine };
+  }
+
+  function parseOneDeclarator(kind: string, decorators: any[], line: number): any {
     if (cur().type === TK.LBRACE) {
       const pattern = parseObjectPattern();
       let typeAnn: any = null;
       if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
-      eatSemi();
-      return { kind: 'VarDestructObj', varKind: kind, pattern, typeAnn, init };
+      return { kind: 'VarDestructObj', varKind: kind, pattern, typeAnn, init, line };
     }
     if (cur().type === TK.LBRACK) {
       const pattern = parseArrayPattern();
@@ -612,17 +621,9 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
       if (tryEat(TK.COLON)) typeAnn = parseTypeAnnotation();
       eat(TK.EQ);
       const init = parseExpr();
-      eatSemi();
-      return { kind: 'VarDestructArr', varKind: kind, pattern, typeAnn, init };
+      return { kind: 'VarDestructArr', varKind: kind, pattern, typeAnn, init, line };
     }
-
-    const decls = [parseSingleDeclarator(kind, decorators, startLine)];
-    while (tryEat(TK.COMMA)) {
-      decls.push(parseSingleDeclarator(kind, [], cur().line));
-    }
-    eatSemi();
-    if (decls.length === 1) return decls[0];
-    return { kind: 'VarDecls', decls, line: startLine };
+    return parseSingleDeclarator(kind, decorators, line);
   }
 
   function parseSingleDeclarator(kind: any, decorators: any, line: any) {

@@ -175,9 +175,11 @@ export interface VarDecl extends BaseNode {
   decorators?: Decorator[];
 }
 
+export type VarDeclItem = VarDecl | VarDestructObj | VarDestructArr;
+
 export interface VarDecls extends BaseNode {
   kind: 'VarDecls';
-  decls: VarDecl[];
+  decls: VarDeclItem[];
 }
 
 export interface VarDestructObj extends BaseNode {
