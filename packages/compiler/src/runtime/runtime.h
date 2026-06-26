@@ -1,33 +1,52 @@
+#pragma once
+
+// Enable POSIX functions (clock_gettime, CLOCK_MONOTONIC, etc.) on Linux
+#ifndef _WIN32
+#ifndef __AVR__
+#define _POSIX_C_SOURCE 199309L
+#endif
+#endif
+
+
 /*
- * TSClang runtime — header-only
+
+ * TSClang runtime РІР‚вЂќ header-only
  * Included by all generated C files: gcc -I src/runtime
  *
- * Type mapping (TSClang → C):
- *   i8→int8_t   i16→int16_t   i32→int32_t   i64→int64_t
- *   u8→uint8_t  u16→uint16_t  u32→uint32_t  u64→uint64_t
- *   f32→float   f64→double    bool→bool      usize→size_t
- *   string→String
+ * Type mapping (TSClang РІвЂ вЂ™ C):
+ *   i8РІвЂ вЂ™int8_t   i16РІвЂ вЂ™int16_t   i32РІвЂ вЂ™int32_t   i64РІвЂ вЂ™int64_t
+ *   u8РІвЂ вЂ™uint8_t  u16РІвЂ вЂ™uint16_t  u32РІвЂ вЂ™uint32_t  u64РІвЂ вЂ™uint64_t
+ *   f32РІвЂ вЂ™float   f64РІвЂ вЂ™double    boolРІвЂ вЂ™bool      usizeРІвЂ вЂ™size_t
+ *   stringРІвЂ вЂ™String
  *
  * console.log(x) rules (see codegen/calls/console.js):
- *   string literal  → printf("...\n")
- *   i32             → printf("%d\n", v)
- *   i16/i8          → printf("%d\n", (int)v)
- *   u32             → printf("%u\n", v)
- *   u16/u8          → printf("%u\n", (unsigned)v)
- *   i64             → printf("%lld\n", (long long)v)
- *   u64             → printf("%llu\n", (unsigned long long)v)
- *   f64             → tsc_dtoa(v) → printf("%s\n", ...)
- *   f32             → tsc_dtoa((double)v) → printf("%s\n", ...)
- *   bool            → printf("%s\n", v ? "true" : "false")
- *   char            → printf("%c\n", v)
- *   size_t          → printf("%u\n", (unsigned)v)
- *   String          → printf("%s\n", v.data)  (%.*s for string refs)
- *   String* (deref) → printf("%s\n", v->data)
- *   multi-arg       → single printf with merged format string
- * console.error/warn/debug → fprintf(stderr, ...)
+ *   string literal  РІвЂ вЂ™ printf("...\n")
+ *   i32             РІвЂ вЂ™ printf("%d\n", v)
+ *   i16/i8          РІвЂ вЂ™ printf("%d\n", (int)v)
+ *   u32             РІвЂ вЂ™ printf("%u\n", v)
+ *   u16/u8          РІвЂ вЂ™ printf("%u\n", (unsigned)v)
+ *   i64             РІвЂ вЂ™ printf("%lld\n", (long long)v)
+ *   u64             РІвЂ вЂ™ printf("%llu\n", (unsigned long long)v)
+ *   f64             РІвЂ вЂ™ tsc_dtoa(v) РІвЂ вЂ™ printf("%s\n", ...)
+ *   f32             РІвЂ вЂ™ tsc_dtoa((double)v) РІвЂ вЂ™ printf("%s\n", ...)
+ *   bool            РІвЂ вЂ™ printf("%s\n", v ? "true" : "false")
+ *   char            РІвЂ вЂ™ printf("%c\n", v)
+ *   size_t          РІвЂ вЂ™ printf("%u\n", (unsigned)v)
+ *   String          РІвЂ вЂ™ printf("%s\n", v.data)  (%.*s for string refs)
+ *   String* (deref) РІвЂ вЂ™ printf("%s\n", v->data)
+ *   multi-arg       РІвЂ вЂ™ single printf with merged format string
+ * console.error/warn/debug РІвЂ вЂ™ fprintf(stderr, ...)
  */
 
 #pragma once
+
+// Enable POSIX functions (clock_gettime, CLOCK_MONOTONIC, etc.) on Linux
+#ifndef _WIN32
+#ifndef __AVR__
+#define _POSIX_C_SOURCE 199309L
+#endif
+#endif
+
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
@@ -67,7 +86,7 @@
 #endif
 #endif
 
-/* Math constants — POSIX extensions, not guaranteed by C99 */
+/* Math constants РІР‚вЂќ POSIX extensions, not guaranteed by C99 */
 #ifndef M_E
 #define M_E        2.718281828459045235360
 #endif
@@ -94,7 +113,7 @@
 #endif
 
 /* -------------------------------------------------------------------------
- * Allocation helpers — fail-fast on OOM
+ * Allocation helpers РІР‚вЂќ fail-fast on OOM
  * All heap allocations in the runtime go through these wrappers.
  * If malloc/realloc returns NULL, a panic is emitted instead of a segfault.
  * ------------------------------------------------------------------------- */
@@ -112,7 +131,7 @@ static inline void *_tsc_xrealloc(void *ptr, size_t sz) {
 #define tsc_free(ptr) free(ptr)
 
 /* -------------------------------------------------------------------------
- * String — immutable, ARC on desktop, rodata-only on embedded
+ * String РІР‚вЂќ immutable, ARC on desktop, rodata-only on embedded
  * ------------------------------------------------------------------------- */
 #ifdef TSC_EMBEDDED
 typedef struct {
@@ -191,9 +210,9 @@ static inline void tsc_string_release(String s) {
 #endif
 
 /* -------------------------------------------------------------------------
- * TSC_STRING_GET_CHAR — PROGMEM-aware single-char read
+ * TSC_STRING_GET_CHAR РІР‚вЂќ PROGMEM-aware single-char read
  * On AVR, strings with capacity==0 are in PROGMEM (flash).
- * On desktop, all strings are in RAM — direct access.
+ * On desktop, all strings are in RAM РІР‚вЂќ direct access.
  * Used by the compiler for s[i] string indexing.
  * ------------------------------------------------------------------------- */
 #ifdef __AVR__
@@ -273,7 +292,7 @@ static inline char *_tsc_str_malloc(size_t sz) {
 }
 
 /* -------------------------------------------------------------------------
- * tsc_closure — universal fat pointer for function values
+ * tsc_closure РІР‚вЂќ universal fat pointer for function values
  * All () => T parameters and variables use this type.
  * Plain functions: .env = NULL, .fn = (void*)funcName
  * Closures with captures: .env = &envVar, .fn = (void*)closureFn
@@ -284,7 +303,7 @@ typedef struct {
 } tsc_closure;
 
 /* -------------------------------------------------------------------------
- * Error (stub — proper heap allocation added in Phase 3)
+ * Error (stub РІР‚вЂќ proper heap allocation added in Phase 3)
  * ------------------------------------------------------------------------- */
 typedef struct TscError {
     String message;
@@ -296,7 +315,7 @@ typedef struct MathError {
 } MathError;
 
 /* -------------------------------------------------------------------------
- * performance.now() — milliseconds since program start
+ * performance.now() РІР‚вЂќ milliseconds since program start
  * _tsc_t0 is set in TSC_INIT() which the compiler inserts at top of main()
  * ------------------------------------------------------------------------- */
 static double _tsc_t0 = 0.0;
@@ -361,7 +380,7 @@ static inline TscPerfEntry tsc_performance_measure(String name, String startMark
     return (TscPerfEntry){name, _en - _st, _st};
 }
 
-/* Console UART init — connects stdout to hardware UART on embedded targets */
+/* Console UART init РІР‚вЂќ connects stdout to hardware UART on embedded targets */
 #ifdef TSC_CONSOLE_UART
 #ifndef TSC_CONSOLE_BAUD
 #define TSC_CONSOLE_BAUD 9600
@@ -413,7 +432,7 @@ static inline void _tsc_console_init(void) {}
 #define TSC_INIT() do { _tsc_init(); _tsc_console_init(); } while(0)
 
 /* -------------------------------------------------------------------------
- * Date — legacy JS-compatible date/time type (ms since Unix epoch)
+ * Date РІР‚вЂќ legacy JS-compatible date/time type (ms since Unix epoch)
  * ------------------------------------------------------------------------- */
 typedef struct { int64_t ms; } Date;
 
@@ -569,7 +588,7 @@ static inline String tsc_date_to_string(Date d) {
     return _tsc_str_make(buf, (size_t)strlen(buf), (size_t)strlen(buf) + 1);
 }
 
-/* console.time / console.timeEnd — simple map-backed timers */
+/* console.time / console.timeEnd РІР‚вЂќ simple map-backed timers */
 #define _TSC_CONSOLE_TIMERS_CAP 16
 typedef struct {
     String _label;
@@ -627,7 +646,7 @@ static inline void tsc_console_time_log(String label) {
 }
 
 /* -------------------------------------------------------------------------
- * TscRandom — xorshift64 PRNG
+ * TscRandom РІР‚вЂќ xorshift64 PRNG
  * ------------------------------------------------------------------------- */
 typedef struct { uint64_t state; } TscRandom;
 static inline TscRandom tsc_random_seed(uint64_t seed) {
@@ -675,7 +694,7 @@ static inline TscRandom tsc_random_default(void) {
  * ------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------
- * ARC — Atomic Reference Counting
+ * ARC РІР‚вЂќ Atomic Reference Counting
  * All Arc<T> structs have int32_t _refcount as their first field.
  * Weak<T> structs also have int32_t _weakcount as their second field.
  * tsc_arc_alloc sets _refcount = 1; all other fields are zero-initialized.
@@ -712,7 +731,7 @@ static inline opt_u8 tsc_string_at(String s, int32_t idx) {
 }
 
 /* -------------------------------------------------------------------------
- * TscMap — simple array-backed string→value map (up to 64 entries)
+ * TscMap РІР‚вЂќ simple array-backed stringРІвЂ вЂ™value map (up to 64 entries)
  * ------------------------------------------------------------------------- */
 #define TSC_MAP_CAP 64
 
@@ -738,7 +757,7 @@ static inline void tsc_map_delete_impl_##SUFFIX(TscMap_##SUFFIX *m, K key) { \
             m->size--; return; } } } \
 static inline void tsc_map_clear_##SUFFIX(TscMap_##SUFFIX *m) { m->size = 0; }
 
-/* get returns opt_V — expanded at call site where opt_V is already typedef'd */
+/* get returns opt_V РІР‚вЂќ expanded at call site where opt_V is already typedef'd */
 #define tsc_map_get_string_i32(_m_, _key_) ({ \
     const TscMap_string_i32 *_mm_ = (_m_); \
     String _kk_ = (_key_); \
@@ -820,7 +839,7 @@ TSC_MAP_DECL(String, String, string_string)
 #define tsc_map_free_string_string(m) ((void)(m))
 
 /* -------------------------------------------------------------------------
- * Map.groupBy / Object.groupBy — group array elements by key into Map<K, T[]>
+ * Map.groupBy / Object.groupBy РІР‚вЂќ group array elements by key into Map<K, T[]>
  * Struct typedef (TscMap_string_array_<T>) emitted by codegen.
  * ------------------------------------------------------------------------- */
 
@@ -873,7 +892,7 @@ TSC_MAP_DECL(String, String, string_string)
     _r_; })
 
 /* -------------------------------------------------------------------------
- * TscSet — simple array-backed set (up to 64 entries)
+ * TscSet РІР‚вЂќ simple array-backed set (up to 64 entries)
  * ------------------------------------------------------------------------- */
 #define TSC_SET_CAP 64
 
@@ -1160,7 +1179,7 @@ static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 #define _Noreturn
 #endif
 
-/* tsc_throw — used for 'throw new Error(msg)' in _Noreturn functions */
+/* tsc_throw РІР‚вЂќ used for 'throw new Error(msg)' in _Noreturn functions */
 #include <stdlib.h>
 _Noreturn static inline void tsc_throw(String msg) {
 #ifdef __AVR__
@@ -1175,7 +1194,7 @@ _Noreturn static inline void tsc_throw(String msg) {
 #define _tsc_on_panic(msg) (fprintf(stderr, "panic: %s\n", msg), abort())
 #endif
 
-/* tsc_panic — used for '!' non-null assertion failure in non-throws context */
+/* tsc_panic РІР‚вЂќ used for '!' non-null assertion failure in non-throws context */
 _Noreturn static inline void tsc_panic(String msg) {
 #ifdef __AVR__
     fputs("panic: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
@@ -1185,7 +1204,7 @@ _Noreturn static inline void tsc_panic(String msg) {
     exit(1);
 }
 
-/* tsc_capture_stack — capture call stack as string (stub for desktop) */
+/* tsc_capture_stack РІР‚вЂќ capture call stack as string (stub for desktop) */
 static inline String tsc_capture_stack(void) {
     static const char _tsc_stack_stub[] = "(stack trace not available)";
     return _tsc_str_make(_tsc_stack_stub, sizeof(_tsc_stack_stub) - 1, 0);
@@ -1326,7 +1345,7 @@ static inline bool tsc_string_eq(String a, String b) {
     return _tsc_str_eq(a, b);
 }
 
-/* Concatenate two strings → new heap String */
+/* Concatenate two strings РІвЂ вЂ™ new heap String */
 static inline String tsc_string_concat(String a, String b) {
     size_t len = a.length + b.length;
     char *buf = _tsc_str_malloc(len + 1);
@@ -1336,7 +1355,7 @@ static inline String tsc_string_concat(String a, String b) {
     return _tsc_str_make(buf, len, len + 1);
 }
 
-/* Concatenate N strings → single heap allocation (avoids intermediate leaks) */
+/* Concatenate N strings РІвЂ вЂ™ single heap allocation (avoids intermediate leaks) */
 static inline String tsc_string_concat_n(const String *parts, size_t n) {
     size_t total = 0;
     for (size_t i = 0; i < n; i++) total += parts[i].length;
@@ -1350,7 +1369,7 @@ static inline String tsc_string_concat_n(const String *parts, size_t n) {
     return _tsc_str_make(buf, total, total + 1);
 }
 
-/* Format string → new heap String (like sprintf) */
+/* Format string РІвЂ вЂ™ new heap String (like sprintf) */
 #ifdef __AVR__
 static size_t _tsc_format_impl(char *buf, const char *fmt, va_list ap) {
     size_t len = 0;
@@ -1458,7 +1477,7 @@ static inline String tsc_string_format(const char *fmt, ...) {
 #endif
 
 /* -------------------------------------------------------------------------
- * String query methods (return primitive types — no heap issue)
+ * String query methods (return primitive types РІР‚вЂќ no heap issue)
  * ------------------------------------------------------------------------- */
 
 static inline bool tsc_string_includes(String s, String sub) {
@@ -1743,7 +1762,7 @@ static inline int _tsc_parse_prefixed_i64(const char *b, int64_t *out) {
         if (e == s || *e != '\0') return 0;
         *out = (int64_t)v; return 1;
     }
-    /* decimal: allow float-like input (parseInt("3.14") → 3), truncate fraction */
+    /* decimal: allow float-like input (parseInt("3.14") РІвЂ вЂ™ 3), truncate fraction */
     char *e; double dv = strtod(b, &e);
     if (e == b) return 0;
     *out = (int64_t)dv; return 1;
@@ -1834,7 +1853,7 @@ typedef struct { uint8_t *data; size_t length; size_t capacity; } Array_u8;
 
 typedef struct { bool has_value; String value; } opt_string;
 
-/* process.env.get(key) → opt_string  (key must be null-terminated — string literals are) */
+/* process.env.get(key) РІвЂ вЂ™ opt_string  (key must be null-terminated РІР‚вЂќ string literals are) */
 static inline opt_string tsc_env_get(String key) {
     const char *v = getenv(key.data);
     if (!v) return (opt_string){false, _tsc_str_make(NULL, 0, 0)};
@@ -1854,7 +1873,7 @@ static inline Array_string tsc_make_argv(int argc, char **argv) {
 }
 
 /* -------------------------------------------------------------------------
- * Array functions — GCC statement-expression macros so they can reference
+ * Array functions РІР‚вЂќ GCC statement-expression macros so they can reference
  * Array_T and opt_T types defined AFTER #include "runtime.h".
  * -------------------------------------------------------------------------
  */
@@ -3102,7 +3121,7 @@ static inline int _tsc_cmp_string_asc(const void *a, const void *b) {
 } while(0)
 
 /* -------------------------------------------------------------------------
- * Map<string, string> — keys, values, entries, forEach
+ * Map<string, string> РІР‚вЂќ keys, values, entries, forEach
  * ------------------------------------------------------------------------- */
 
 #define tsc_map_keys_string_string(_m_) ({ \
@@ -3245,7 +3264,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 }
 
 /* -------------------------------------------------------------------------
- * UTF-8 encode/decode (work on any Array_u8-compatible struct — use macros)
+ * UTF-8 encode/decode (work on any Array_u8-compatible struct РІР‚вЂќ use macros)
  * Array_u8 is defined by codegen; these macros expand at call site.
  * ------------------------------------------------------------------------- */
 #define tsc_encode_utf8(_tsc_str) ({ \
@@ -3309,7 +3328,7 @@ static inline void tsc_abort_controller_free(TscAbortController *ctrl) {
 }
 
 /* -------------------------------------------------------------------------
- * AsyncMutex — non-blocking mutex for async coordination on event loop
+ * AsyncMutex РІР‚вЂќ non-blocking mutex for async coordination on event loop
  * Simple boolean lock; in a real event loop the waiter queue would be
  * implemented with callbacks, but for single-threaded async state machines
  * a plain bool is sufficient.
@@ -3337,7 +3356,7 @@ static inline bool tsc_async_mutex_is_locked(TscAsyncMutex *m) {
 }
 
 /* -------------------------------------------------------------------------
- * Thread runtime — tsc_thread_t, tsc_thread_spawn, tsc_thread_join
+ * Thread runtime РІР‚вЂќ tsc_thread_t, tsc_thread_spawn, tsc_thread_join
  * Uses Win32 threads on Windows, pthreads elsewhere.
  * ------------------------------------------------------------------------- */
 #ifndef TSC_EMBEDDED
@@ -3376,7 +3395,7 @@ static inline void tsc_thread_join(tsc_thread_t t) {
     pthread_join(t, NULL);
 }
 static inline bool tsc_thread_done(tsc_thread_t t) {
-    /* Non-blocking join attempt — not portable but works on Linux */
+    /* Non-blocking join attempt РІР‚вЂќ not portable but works on Linux */
 #if defined(__linux__)
     return pthread_tryjoin_np(t, NULL) == 0;
 #else
@@ -3387,7 +3406,7 @@ static inline bool tsc_thread_done(tsc_thread_t t) {
 #endif /* TSC_EMBEDDED */
 
 /* -------------------------------------------------------------------------
- * Channel runtime — bounded SPSC ring buffer, single-threaded tests only.
+ * Channel runtime РІР‚вЂќ bounded SPSC ring buffer, single-threaded tests only.
  * For multi-threaded use, add mutex guards around send/receive.
  * ------------------------------------------------------------------------- */
 #ifndef TSC_EMBEDDED
@@ -3491,7 +3510,7 @@ TSC_CHANNEL_DEF(bool,    bool)
 #endif /* TSC_EMBEDDED */
 
 /* -------------------------------------------------------------------------
- * Async event loop — simple synchronous stub for desktop targets
+ * Async event loop РІР‚вЂќ simple synchronous stub for desktop targets
  * ------------------------------------------------------------------------- */
 #ifndef TSC_EMBEDDED
 
@@ -3503,7 +3522,7 @@ typedef void (*_TscPollFn)(void *);
     while (!_sm._done) (poll_fn)(&_sm); \
 } while (0)
 
-/* Timer stubs: synchronous — callbacks fire immediately, intervals fire once */
+/* Timer stubs: synchronous РІР‚вЂќ callbacks fire immediately, intervals fire once */
 typedef int32_t _TscTimerId;
 
 static inline _TscTimerId tsc_set_timeout(void (*fn)(void), int32_t ms) {
@@ -3521,7 +3540,7 @@ static inline _TscTimerId tsc_set_interval(void (*fn)(void), int32_t ms) {
 static inline void tsc_clear_timeout(_TscTimerId id) { (void)id; }
 static inline void tsc_clear_interval(_TscTimerId id) { (void)id; }
 
-/* Sleep awaitable — synchronous stub: marks done immediately */
+/* Sleep awaitable РІР‚вЂќ synchronous stub: marks done immediately */
 typedef struct {
     bool _done;
     int32_t _ms;
@@ -3538,7 +3557,7 @@ static inline void tsc_sleep_poll(TscSleepAwaitable *self) {
 #endif /* TSC_EMBEDDED */
 
 /* -------------------------------------------------------------------------
- * TSC_RUN_ASYNC — drive async main state machine to completion.
+ * TSC_RUN_ASYNC РІР‚вЂќ drive async main state machine to completion.
  * Default (cooperative): busy spin.  With TSC_SCHEDULER_LIBUV: uv_idle_t.
  * ------------------------------------------------------------------------- */
 #ifndef TSC_EMBEDDED
