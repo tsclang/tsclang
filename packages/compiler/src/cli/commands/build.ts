@@ -25,15 +25,22 @@ interface FlashConfig {
 export function runBuildCommand(args: string[], rootDir: string): void {
   const ROOT = rootDir;
   let inputFile = args[1];
-  if (!inputFile) {
-    // Try to read main from tsc.package.json
-    const _pkgPath = findPackageJson(process.cwd());
-    if (_pkgPath) {
-      try {
-        const _pkg = JSON.parse(readFileSync(_pkgPath, 'utf8'));
-        if (_pkg.main) inputFile = _pkg.main;
-      } catch {}
-    }
+  let _buildName: string | null = null;
+  const _pkgPath = findPackageJson(process.cwd());
+  let _pkg: any = null;
+  if (_pkgPath) {
+    try { _pkg = JSON.parse(readFileSync(_pkgPath, 'utf8')); } catch {}
+  }
+
+  // If inputFile is not a .tsc file, check if it's a build name
+  if (inputFile && !inputFile.endsWith('.tsc') && _pkg?.builds?.[inputFile]) {
+    _buildName = inputFile;
+    inputFile = _pkg.main ?? null;
+  }
+
+  // If no inputFile, read main from tsc.package.json
+  if (!inputFile && _pkg?.main) {
+    inputFile = _pkg.main;
   }
   if (!inputFile) {
     missingInput('build');
@@ -61,6 +68,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const _stackSizeFlag    = flagValue(args, '--stack-size');
   const _platformFlag     = flagValue(args, '--platform');
   const _buildFlag        = flagValue(args, '--build');
+  const _effectiveBuild = _buildFlag ?? _buildName;
   const _mcuFlag          = flagValue(args, '--mcu');
   if (_defaultNumberFlag && !isValidNumberType(_defaultNumberFlag)) {
     process.stderr.write(`tsclang build: invalid --default-number value '${_defaultNumberFlag}'; valid: ${NUMBER_TYPES.join(', ')}\n`);
@@ -93,7 +101,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
     _capabilities = prof;
     _profileTarget = prof.target || _platformFlag;
-  } else if (_buildFlag) {
+  } else if (_effectiveBuild) {
     const pkgPath = findPackageJson(dirname(resolve(inputFile)));
     if (!pkgPath) {
       process.stderr.write(`tsclang build: --build requires a tsc.package.json\n`);
@@ -101,7 +109,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-      const buildCfg = pkg.builds?.[_buildFlag];
+      const buildCfg = pkg.builds?.[_effectiveBuild];
       if (!buildCfg) {
         process.stderr.write(`tsclang build: build '${_buildFlag}' not found in tsc.package.json\n`);
         process.exit(1);
@@ -380,7 +388,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       if (debounceTimer) return;
       debounceTimer = setTimeout(() => {
         debounceTimer = null;
-        process.stderr.write(`\n[${ts()}] Change detected — rebuilding...\n`);
+        process.stderr.write(`\n[${ts()}] Change detected вЂ” rebuilding...\n`);
         const ok = doBuild();
         if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
         syncWatches(_lastSourceFiles);
