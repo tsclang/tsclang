@@ -6,7 +6,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "packages/compiler/src",
     "allowJs": true,
     "checkJs": false,
     "strict": true,
@@ -16,6 +16,6 @@
     "sourceMap": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "book"]
+  "include": ["packages/compiler/src/**/*"],
+  "exclude": ["node_modules", "dist", "packages/tests", "packages/spec"]
 }
