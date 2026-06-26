@@ -2,7 +2,7 @@
   "name": "tsclang",
   "version": "0.1.0",
   "private": true,
-  "description": "TSClang monorepo — TypeScript-like language that compiles to C",
+  "description": "TSClang monorepo - TypeScript-like language that compiles to C",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -16,7 +16,8 @@
     "build": "npm run build -w @tsclang/compiler",
     "typecheck": "npm run typecheck -w @tsclang/compiler",
     "test": "npm test -w @tsclang/tests",
-    "test:engine": "npm test -w @tsclang/test-engine"
+    "test:engine": "npm test -w @tsclang/test-engine",
+    "tsclang": "node packages/compiler/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
