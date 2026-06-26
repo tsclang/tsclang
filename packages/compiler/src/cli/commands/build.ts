@@ -24,7 +24,17 @@ interface FlashConfig {
 
 export function runBuildCommand(args: string[], rootDir: string): void {
   const ROOT = rootDir;
-  const inputFile = args[1];
+  let inputFile = args[1];
+  if (!inputFile) {
+    // Try to read main from tsc.package.json
+    const _pkgPath = findPackageJson(process.cwd());
+    if (_pkgPath) {
+      try {
+        const _pkg = JSON.parse(readFileSync(_pkgPath, 'utf8'));
+        if (_pkg.main) inputFile = _pkg.main;
+      } catch {}
+    }
+  }
   if (!inputFile) {
     missingInput('build');
   }
