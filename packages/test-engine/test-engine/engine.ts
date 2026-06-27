@@ -7,7 +7,9 @@ import { parse } from "../../compiler/src/compiler/parser.js"
 import { codegen } from "../../compiler/src/compiler/codegen.js"
 
 export const platformMatrix = {
-  defaultNumber: ["i8", "i16", "i32", "f64", "u8", "u16"]
+  defaultNumber: ["i8", "i16", "i32", "f64", "u8", "u16"],
+  targets: ["desktop", "avr", "nes", "spectrum"],
+  strict: [[], ["safe-math"], ["no-lossy-cast"], ["safe-math", "no-lossy-cast"]]
 }
 
 export const matrix = {
@@ -150,6 +152,8 @@ export interface CodegenOptions {
   defaultNumber?: string
   async?: string
   allocator?: string
+  target?: string
+  strict?: string[]
 }
 
 export interface TestOptions {
@@ -187,8 +191,11 @@ export function test(name: string, options: TestOptions): void {
   try {
     let c: string
     try {
-      const codegenOpts: any = options.options || {}
-    const tokens = lex(options.input, "<test>")
+      const codegenOpts: any = { ...options.options }
+      if (codegenOpts.target === "avr") {
+        codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
+      }
+      const tokens = lex(options.input, "<test>")
       const { ast, errors: parseErrors } = parse(tokens, "<test>", options.input)
       if (parseErrors.length > 0) {
         throw { isTscErrorBag: true, errors: parseErrors }
@@ -248,7 +255,7 @@ export function printSummary(): void {
   if (failed > 0) {
     console.log("\nFailures:")
     for (const r of results.filter(x => !x.passed)) {
-      console.log(`  РІСљвЂ” ${r.name}`)
+      console.log(`  Р В Р вЂ Р РЋРЎв„ўР Р†Р вЂљРІР‚Сњ ${r.name}`)
       if (r.expected !== undefined) console.log(`    expected: ${r.expected}`)
       if (r.actual !== undefined) console.log(`    actual:   ${r.actual}`)
       if (r.error) console.log(`    error:    ${r.error}`)
