@@ -5,6 +5,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 test-*/
+!test-engine/
 
 # Generated C files (output, not source)
 *.c
