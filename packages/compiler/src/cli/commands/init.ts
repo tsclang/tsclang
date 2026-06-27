@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { flagValue, hasFlagAny } from '../args.js';
+import { packageGenerate } from '../package.js';
+import { PackageType } from '../../types/package-type.js';
 
 export function runInitCommand(args: string[]): void {
   let name: string | null = null;
@@ -11,11 +12,15 @@ export function runInitCommand(args: string[]): void {
     }
   }
 
-  const hasLibrary = hasFlagAny(args, '--library', '-l');
   const hasDeclaration = hasFlagAny(args, '--declaration', '-d');
-  let type = flagValue(args, '--type') ?? 'executable';
-  if (hasLibrary) type = 'library';
+  const hasLibrary = hasFlagAny(args, '--library', '-l');
+  const hasPlatform = hasFlagAny(args, '--platform', '-p');
+
+  let type: PackageType = (flagValue(args, '--type') ?? 'executable') as PackageType;
+
   if (hasDeclaration) type = 'declaration';
+  if (hasLibrary) type = 'library';
+  if (hasPlatform) type = 'platform';
 
   const pkgName = name || 'myapp';
 
@@ -24,12 +29,7 @@ export function runInitCommand(args: string[]): void {
     process.chdir(name);
   }
 
-  let pkg;
-  if (type === 'executable') {
-    pkg = { version: '0.1.0', type, main: 'src/main.tsc', name: pkgName };
-  } else {
-    pkg = { version: '0.1.0', name: pkgName, type };
-  }
+  const pkg = packageGenerate(pkgName, type);
 
   writeFileSync('tsc.package.json', JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
