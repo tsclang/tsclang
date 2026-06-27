@@ -6,6 +6,7 @@ import "./tests/binary-inference.test"
 import "./tests/platform-specific.test"
 import "./tests/strict-mode.test"
 import "./tests/literal-inference.test"
+import "./tests/literal-overflow.test"
 import { printSummary } from "./engine"
 
 printSummary()

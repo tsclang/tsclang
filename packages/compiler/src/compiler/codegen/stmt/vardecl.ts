@@ -9,7 +9,7 @@ export default {
     {
         const { varKind, name, typeAnn, init } = node;
 
-        // Generator instantiation: const g = genFn(args) тЖТ genFn_state g = {0};
+        // Generator instantiation: const g = genFn(args) С‚Р–Рў genFn_state g = {0};
         if (init?.kind === 'Call' && init.callee?.kind === 'Ident') {
           const gi = this._generatorFuncs?.get(init.callee.name);
           if (gi) {
@@ -22,7 +22,7 @@ export default {
           }
         }
 
-        // Generator .next() result: let r = g.next() тЖТ genFn_result r = genFn_next(&g, args);
+        // Generator .next() result: let r = g.next() С‚Р–Рў genFn_result r = genFn_next(&g, args);
         if (init?.kind === 'Call' && init.callee?.kind === 'Member' && init.callee.prop === 'next') {
           const objName = init.callee.object?.name;
           const sym = objName ? this.lookup(objName) : null;
@@ -67,7 +67,7 @@ export default {
           return;
         }
 
-        // select({key: ch.receive(), ...}) тЖТ tagged-union SelectResult
+        // select({key: ch.receive(), ...}) С‚Р–Рў tagged-union SelectResult
         if (init?.kind === 'Call' && init.callee?.kind === 'Ident' && init.callee.name === 'select') {
           this.emitSelectVarDecl(node, lines, depth);
           return;
@@ -79,7 +79,7 @@ export default {
           return;
         }
 
-        // Object.fromEntries<{a: T, b: U}>(array) тЖТ compile-time struct init
+        // Object.fromEntries<{a: T, b: U}>(array) С‚Р–Рў compile-time struct init
         if (init?.kind === 'Call' &&
             init.callee?.kind === 'Member' &&
             init.callee?.object?.name === 'Object' &&
@@ -131,14 +131,14 @@ export default {
           return;
         }
 
-        // If consumed by fromEntries (Ident arg), defer all processing тАФ no C emit, no typedefs yet
+        // If consumed by fromEntries (Ident arg), defer all processing С‚РђР¤ no C emit, no typedefs yet
         if (this._fromEntriesConsumed?.has(name) && typeAnn?.kind === 'TypeArray') {
           this._fromEntriesConsumed.set(name, { typeAnn, init });
           this.define(name, { ctype: 'void', isArray: true, varKind, initNode: init });
           return;
         }
 
-        // String.split() тЖТ special multi-statement form: String *parts; int32_t parts_len; tsc_string_split(...)
+        // String.split() С‚Р–Рў special multi-statement form: String *parts; int32_t parts_len; tsc_string_split(...)
         if (!typeAnn && init?.kind === 'Call' &&
             init.callee?.kind === 'Member' && init.callee?.prop === 'split') {
           const splitObjType = this.inferType(init.callee.object);
@@ -155,7 +155,7 @@ export default {
           }
         }
 
-        // new Atomic<T>(val) тЖТ Atomic_T typedef + {.value = val}
+        // new Atomic<T>(val) С‚Р–Рў Atomic_T typedef + {.value = val}
         if (init?.kind === 'New' && init.name === 'Atomic') {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
@@ -173,7 +173,7 @@ export default {
           return;
         }
 
-        // new Readonly(val) or new Readonly<T>(val) тЖТ const T name = val
+        // new Readonly(val) or new Readonly<T>(val) С‚Р–Рў const T name = val
         if (init?.kind === 'New' && init.name === 'Readonly') {
           const valArg = init.args?.[0];
           const valC = valArg ? this.exprToC(valArg.expr ?? valArg, lines, depth) : '{0}';
@@ -190,7 +190,7 @@ export default {
           return;
         }
 
-        // new AtomicArray<T>(N) тЖТ AtomicArray_T typedef + calloc
+        // new AtomicArray<T>(N) С‚Р–Рў AtomicArray_T typedef + calloc
         if (init?.kind === 'New' && init.name === 'AtomicArray') {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
@@ -209,7 +209,7 @@ export default {
           return;
         }
 
-        // new Arc<Atomic<T>>(val) тЖТ Atomic_T_shared typedef + arc alloc + atomic_init
+        // new Arc<Atomic<T>>(val) С‚Р–Рў Atomic_T_shared typedef + arc alloc + atomic_init
         if (init?.kind === 'New' && init.name === 'Arc' && init.typeArgs?.[0]?.name === 'Atomic') {
           const tArg = init.typeArgs[0].typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
@@ -229,7 +229,7 @@ export default {
           return;
         }
 
-        // new Signal<T>(val) тЖТ Signal_T struct + tsc_signal_create_T
+        // new Signal<T>(val) С‚Р–Рў Signal_T struct + tsc_signal_create_T
         if (init?.kind === 'New' && init.name === 'Signal' && this._stdReactiveImported) {
           const tArg = init.typeArgs?.[0];
           const et = tArg ? this.resolveType(tArg) : 'int32_t';
@@ -246,7 +246,7 @@ export default {
           return;
         }
 
-        // new StaticMap({ "key": val, ... }) тЖТ compile-time hash lookup function
+        // new StaticMap({ "key": val, ... }) С‚Р–Рў compile-time hash lookup function
         if (init?.kind === 'New' && init.name === 'StaticMap' && this._stdEmbeddedImported) {
           this.includes.add('#include "std/embedded.h"');
           const objArg = init.args?.[0]?.expr;
@@ -268,7 +268,7 @@ export default {
           return;
         }
 
-        // new HttpServer({ port: N }) тЖТ TscHttpServer server = tsc_http_server_create(N)
+        // new HttpServer({ port: N }) С‚Р–Рў TscHttpServer server = tsc_http_server_create(N)
         if (init?.kind === 'New' && init.name === 'HttpServer' && this._stdNetImported) {
           const optsArg = init.args?.[0]?.expr;
           let portC = '8080';
@@ -281,7 +281,7 @@ export default {
           return;
         }
 
-        // new WebSocket("url") тЖТ TscWebSocket ws = tsc_ws_connect(STR_LIT("url"))
+        // new WebSocket("url") С‚Р–Рў TscWebSocket ws = tsc_ws_connect(STR_LIT("url"))
         if (init?.kind === 'New' && init.name === 'WebSocket' && this._stdWsImported) {
           const urlC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
           p(`TscWebSocket ${name} = tsc_ws_connect(${urlC});`);
@@ -289,21 +289,21 @@ export default {
           return;
         }
 
-        // new WebSocketServer() тЖТ TscWebSocketServer server = tsc_ws_server_create()
+        // new WebSocketServer() С‚Р–Рў TscWebSocketServer server = tsc_ws_server_create()
         if (init?.kind === 'New' && init.name === 'WebSocketServer' && this._stdWsImported) {
           p(`TscWebSocketServer ${name} = tsc_ws_server_create();`);
           this.define(name, { ctype: 'TscWebSocketServer', varKind, _isWsServer: true });
           return;
         }
 
-        // new UDPSocket() тЖТ TscUdpSocket udp = tsc_udp_create()
+        // new UDPSocket() С‚Р–Рў TscUdpSocket udp = tsc_udp_create()
         if (init?.kind === 'New' && init.name === 'UDPSocket' && this._stdNetImported) {
           p(`TscUdpSocket ${name} = tsc_udp_create();`);
           this.define(name, { ctype: 'TscUdpSocket', varKind, _isUdpSocket: true });
           return;
         }
 
-        // new Tasks<N>() тЖТ Tasks_N typedef + cooperative scheduler support
+        // new Tasks<N>() С‚Р–Рў Tasks_N typedef + cooperative scheduler support
         if (init?.kind === 'New' && init.name === 'Tasks') {
           if (this._cap('async') === 'libuv') {
             throw this.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
@@ -327,7 +327,7 @@ export default {
           return;
         }
 
-        // new Buffer(n) тЖТ stack-allocated uint8_t array + Buffer struct (stdlib, not user class)
+        // new Buffer(n) С‚Р–Рў stack-allocated uint8_t array + Buffer struct (stdlib, not user class)
         if (init?.kind === 'New' && init.name === 'Buffer' && !this.classes.has('Buffer')) {
           if (!this._emittedBufferTypeDef) {
             this._emittedBufferTypeDef = true;
@@ -345,7 +345,7 @@ export default {
           return;
         }
 
-        // new DataView(buf) тЖТ DataView struct pointing to buf's data
+        // new DataView(buf) С‚Р–Рў DataView struct pointing to buf's data
         if (init?.kind === 'New' && init.name === 'DataView') {
           if (!this._emittedBufferTypeDef) {
             this._emittedBufferTypeDef = true;
@@ -367,7 +367,7 @@ export default {
           return;
         }
 
-        // new HashMap<K,V>(cap) тЖТ HashMap_K_V typedef + {.capacity = cap}
+        // new HashMap<K,V>(cap) С‚Р–Рў HashMap_K_V typedef + {.capacity = cap}
         if (init?.kind === 'New' && init.name === 'HashMap') {
           // Capacity overflow takes priority over platform error (detected by pre-scan)
           const _capViol = this._hmCapViolations?.get(name);
@@ -405,7 +405,7 @@ export default {
           return;
         }
 
-        // new Set<T>() / new Set<T>([...]) тЖТ TscSet_SUFFIX
+        // new Set<T>() / new Set<T>([...]) С‚Р–Рў TscSet_SUFFIX
         if (init?.kind === 'New' && init.name === 'Set') {
           if (this._strictRules?.has('no-dynamic-alloc')) {
             throw this.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Set requires heap allocation`, init);
@@ -414,7 +414,7 @@ export default {
           const elemCType = tArg ? this.resolveType(tArg) : 'int32_t';
           const suffix = this.cTypeToIdent(elemCType);
           const setType = `TscSet_${suffix}`;
-          // never const in C тАФ Set is a mutable struct
+          // never const in C С‚РђР¤ Set is a mutable struct
           p(`${setType} ${name} = tsc_set_create_${suffix}();`);
           const initArr = init.args?.[0]?.expr;
           if (initArr?.kind === 'ArrayLit') {
@@ -427,9 +427,9 @@ export default {
           return;
         }
 
-        // new Blob([...]) тЖТ two variants:
-        //   [int literals] тЖТ simple inline struct Blob {data, size, ?type}
-        //   [bufVar], {type:...} тЖТ TscBlob via tsc_blob_create
+        // new Blob([...]) С‚Р–Рў two variants:
+        //   [int literals] С‚Р–Рў simple inline struct Blob {data, size, ?type}
+        //   [bufVar], {type:...} С‚Р–Рў TscBlob via tsc_blob_create
         if (init?.kind === 'New' && init.name === 'Blob') {
           const firstArg = init.args?.[0]?.expr; // the array arg
           const secondArg = init.args?.[1]?.expr; // optional type arg
@@ -485,7 +485,7 @@ export default {
           return;
         }
 
-        // new URL(str) or new URL(path, base) тЖТ TscURL + tsc_url_parse / tsc_url_parse_relative
+        // new URL(str) or new URL(path, base) С‚Р–Рў TscURL + tsc_url_parse / tsc_url_parse_relative
         if (init?.kind === 'New' && init.name === 'URL') {
           this.includes.add('#include "std/url.h"');
           const firstArg = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -500,7 +500,7 @@ export default {
           return;
         }
 
-        // new URLSearchParams(str) тЖТ TscURLSearchParams + tsc_search_params_parse
+        // new URLSearchParams(str) С‚Р–Рў TscURLSearchParams + tsc_search_params_parse
         if (init?.kind === 'New' && init.name === 'URLSearchParams') {
           this.includes.add('#include "std/url.h"');
           const strArg = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -510,7 +510,7 @@ export default {
           return;
         }
 
-        // new Regex(pattern) тЖТ TscRegex + tsc_regex_compile
+        // new Regex(pattern) С‚Р–Рў TscRegex + tsc_regex_compile
         if (init?.kind === 'New' && init.name === 'Regex') {
           this.includes.add('#include "std/regex.h"');
           const patternC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -520,7 +520,7 @@ export default {
           return;
         }
 
-        // new Random(seed) тЖТ tsc_random_seed (TscRandom typedef is in runtime.h)
+        // new Random(seed) С‚Р–Рў tsc_random_seed (TscRandom typedef is in runtime.h)
         if (init?.kind === 'New' && init.name === 'Random') {
           const seedC = init.args?.[0] ? this.exprToC(init.args[0].expr, lines, depth) : '0';
           p(`TscRandom ${name} = tsc_random_seed(${seedC});`);
@@ -528,7 +528,7 @@ export default {
           return;
         }
 
-        // new SecureRandom() тЖТ error on embedded targets
+        // new SecureRandom() С‚Р–Рў error on embedded targets
         if (init?.kind === 'New' && init.name === 'SecureRandom') {
           if (this._cap('os') === false) {
             throw this.error(`"SecureRandom" is not available on embedded targets`);
@@ -543,14 +543,14 @@ export default {
           return;
         }
 
-        // new AsyncMutex() тЖТ TscAsyncMutex
+        // new AsyncMutex() С‚Р–Рў TscAsyncMutex
         if (init?.kind === 'New' && init.name === 'AsyncMutex') {
           p(`TscAsyncMutex ${name} = tsc_async_mutex_create();`);
           this.define(name, { ctype: 'TscAsyncMutex', varKind });
           return;
         }
 
-        // new AbortController() тЖТ TscAbortController
+        // new AbortController() С‚Р–Рў TscAbortController
         if (init?.kind === 'New' && init.name === 'AbortController') {
           p(`TscAbortController ${name} = tsc_abort_controller_create();`);
           this.define(name, { ctype: 'TscAbortController', varKind });
@@ -558,7 +558,7 @@ export default {
           return;
         }
 
-        // new Channel<T>(cap) тЖТ Channel_T typedef + tsc_channel_create_T
+        // new Channel<T>(cap) С‚Р–Рў Channel_T typedef + tsc_channel_create_T
         if (init?.kind === 'New' && init.name === 'Channel') {
           const tArg = init.typeArgs?.[0];
           const innerCtype = tArg ? this.resolveType(tArg) : 'int32_t';
@@ -576,7 +576,7 @@ export default {
           return;
         }
 
-        // new Arc<T>() тЖТ arc alloc
+        // new Arc<T>() С‚Р–Рў arc alloc
         if (!typeAnn && init?.kind === 'New' && init.name === 'Arc') {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
@@ -599,7 +599,7 @@ export default {
           }
         }
 
-        // new Weak<T>(src) тЖТ weak create
+        // new Weak<T>(src) С‚Р–Рў weak create
         if (!typeAnn && init?.kind === 'New' && init.name === 'Weak') {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
@@ -612,7 +612,7 @@ export default {
           }
         }
 
-        // let w: Weak<T>; without init → NULL-init weak pointer
+        // let w: Weak<T>; without init в†’ NULL-init weak pointer
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Weak' && !init) {
           const tArg = typeAnn.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
@@ -629,7 +629,7 @@ export default {
           throw this.error(`"Arc<T>" requires a heap allocator; "${this._allocatorName}" allocator does not support ARC`);
         }
 
-        // let x: Arc<T> = new T() тЖТ arc alloc with explicit field init
+        // let x: Arc<T> = new T() С‚Р–Рў arc alloc with explicit field init
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && init?.kind === 'New' && init.name !== 'Arc') {
           const tArg = typeAnn.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
@@ -648,7 +648,7 @@ export default {
           }
         }
 
-        // w.upgrade() тЖТ weak upgrade (result needs arc_release inside null-check)
+        // w.upgrade() С‚Р–Рў weak upgrade (result needs arc_release inside null-check)
         if (!typeAnn && init?.kind === 'Call' &&
             init.callee?.kind === 'Member' && init.callee.prop === 'upgrade') {
           const weakSym2 = init.callee.object?.kind === 'Ident' ? this.lookup(init.callee.object.name) : null;
@@ -663,7 +663,7 @@ export default {
           }
         }
 
-        // let b = a where a is Arc тЖТ arc retain
+        // let b = a where a is Arc С‚Р–Рў arc retain
         if (!typeAnn && init?.kind === 'Ident') {
           const initSym3 = this.lookup(init.name);
           if (initSym3?.isArc) {
@@ -675,7 +675,7 @@ export default {
           }
         }
 
-        // Promise.resolve(expr) тЖТ Promise_T typedef + struct init
+        // Promise.resolve(expr) С‚Р–Рў Promise_T typedef + struct init
         if (init?.kind === 'Call' &&
             init.callee?.kind === 'Member' &&
             init.callee.object?.kind === 'Ident' && init.callee.object.name === 'Promise' &&
@@ -691,7 +691,7 @@ export default {
           return;
         }
 
-        // Promise.reject<T>(error) тЖТ Promise_T_E typedef + rejected struct
+        // Promise.reject<T>(error) С‚Р–Рў Promise_T_E typedef + rejected struct
         if (init?.kind === 'Call' &&
             init.callee?.kind === 'Member' &&
             init.callee.object?.kind === 'Ident' && init.callee.object.name === 'Promise' &&
@@ -713,7 +713,7 @@ export default {
           return;
         }
 
-        // new Promise<T>((resolve, reject) => { ... }) тЖТ static resolve/reject pattern
+        // new Promise<T>((resolve, reject) => { ... }) С‚Р–Рў static resolve/reject pattern
         if (init?.kind === 'New' && init.name === 'Promise' && init.typeArgs?.length > 0) {
           const tArg = init.typeArgs[0];
           const innerType = this.resolveType(tArg);
@@ -757,7 +757,7 @@ export default {
           const innerInit = (init?.kind === 'Cast' &&
             init.castType?.kind === 'TypeRef' && init.castType.name === ifaceName)
             ? init.expr : init;
-          // new Foo() тЖТ create temp var, then fat-ptr
+          // new Foo() С‚Р–Рў create temp var, then fat-ptr
           if (innerInit?.kind === 'New' && this.classes.has(innerInit.name) && !this.interfaces.has(innerInit.name)) {
             const className = innerInit.name;
             const classDef = this.classes.get(className);
@@ -778,7 +778,7 @@ export default {
         // Fat-pointer assignment: let x: Interface = concreteVar  OR  let x: Interface = (concreteVar as Interface)
         if (typeAnn?.kind === 'TypeRef' && this.interfaces.has(typeAnn.name)) {
           const ifaceName = typeAnn.name;
-          // Unwrap cast: (concreteVar as Interface) тЖТ concreteVar
+          // Unwrap cast: (concreteVar as Interface) С‚Р–Рў concreteVar
           const innerInit2 = (init?.kind === 'Cast' && init.castType?.kind === 'TypeRef' && init.castType.name === ifaceName) ? init.expr : init;
           if (innerInit2?.kind !== 'Ident') { /* fall through */ }
           else {
@@ -808,7 +808,7 @@ export default {
         if (!typeAnn && init && init.kind === 'Literal' && init.litType === 'number') {
           ctype = this._tsNameToCType(this._defaultNumber);
         }
-        // ObjLit with named fields and no type annotation тЖТ defer as individual consts (expanded at destructuring)
+        // ObjLit with named fields and no type annotation С‚Р–Рў defer as individual consts (expanded at destructuring)
         if (!typeAnn && init?.kind === 'ObjLit' && init.props?.length > 0 && init.props.every((p: any) => !p.spread && !p.computed)) {
           for (const p of init.props) {
             if (p.value) this._checkNoBareThrows(p.value);
@@ -818,7 +818,7 @@ export default {
             const ft = this.inferType(p.value);
             return { name: p.key, typeAnn: { kind: 'TypeRef', name: ft, typeArgs: [] }, _ctype: ft };
           });
-          // Defer emission: don't create typedef or variable yet тАФ expand at destructuring time
+          // Defer emission: don't create typedef or variable yet С‚РђР¤ expand at destructuring time
           this._deferredAnons.set(name, { fields, init });
           this.define(name, { ctype: anonName, varKind, initNode: init, deferredAnon: true });
           this.classes.set(anonName, { isStruct: true, fields });
@@ -896,7 +896,7 @@ export default {
           }
         }
 
-        // String literal union: handle string literal init тЖТ enum value
+        // String literal union: handle string literal init С‚Р–Рў enum value
         if (enumDef2?.isStringLiteralUnion && init?.kind === 'Literal' && init.litType === 'string') {
           const val = init.value;
           if (!enumDef2.members.includes(val)) {
@@ -907,14 +907,14 @@ export default {
           return;
         }
 
-        // TypeFixedArray тЖТ C stack array: int32_t arr[N] = {elems}
+        // TypeFixedArray С‚Р–Рў C stack array: int32_t arr[N] = {elems}
         if (typeAnn?.kind === 'TypeFixedArray') {
           const et = this.resolveType(typeAnn.element);
           const size = typeAnn.size;
           if (init?.kind === 'ArrayLit') {
             const elems = this.arrayLitToC(init, et, lines, depth);
             if (elems.length === 1) {
-              // Single-element: C fill/zero-init shorthand (e.g. [0] тЖТ {0})
+              // Single-element: C fill/zero-init shorthand (e.g. [0] С‚Р–Рў {0})
               p(`${et} ${name}[${size}] = {${elems[0]}};`);
             } else if (elems.length !== size) {
               throw this.error(`array literal has ${elems.length} elements but type ${this.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
@@ -931,14 +931,14 @@ export default {
           return;
         }
 
-        // TypeArray тЖТ managed Array_T struct
+        // TypeArray С‚Р–Рў managed Array_T struct
         if (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind !== 'TypeFunc') {
           const et = this.resolveType(typeAnn.element);
           const arrName = `Array_${this.cTypeToIdent(et)}`;
           this._ensureArrayStruct(arrName, et);
           const elemIdent = this.cTypeToIdent(et);
 
-          // new T[N] тЖТ stack array + Array_T struct
+          // new T[N] С‚Р–Рў stack array + Array_T struct
           if (init?.kind === 'New' && init.arraySize != null) {
             const nC = this.exprToC(init.arraySize, lines, depth);
             const dataVar = `_buf_data_${this._bufDataCount ?? 0}`;
@@ -997,7 +997,7 @@ export default {
             this.define(name, { ctype, varKind });
             return;
           }
-          const elemIdent = ctype.slice(6); // Array_i32 тЖТ i32
+          const elemIdent = ctype.slice(6); // Array_i32 С‚Р–Рў i32
           const etC2 = this._arrIdentToCType(elemIdent);
           this._ensureArrayStruct(ctype, etC2);
           const initC = this.exprToC(init, lines, depth);
@@ -1016,7 +1016,7 @@ export default {
           return;
         }
 
-        // Tuple init: let pair: [i32, string] = [1, "hello"] тЖТ struct init
+        // Tuple init: let pair: [i32, string] = [1, "hello"] С‚Р–Рў struct init
         {
           const tupleDef1 = this.classes.get(ctype);
           if (tupleDef1?.isTuple && init?.kind === 'ArrayLit') {
@@ -1024,7 +1024,7 @@ export default {
             let fieldIdx = 0;
             for (const el of init.elems) {
               if (el.spread) {
-                // spread: [...p] тЖТ copy all fields
+                // spread: [...p] С‚Р–Рў copy all fields
                 const spreadSrc = this.exprToC(el.expr, lines, depth);
                 const srcType = this.inferType(el.expr);
                 const srcDef = this.classes.get(srcType);
@@ -1049,7 +1049,7 @@ export default {
                 const tailVals = tailElems.map((e: any) => this.exprToC(e.expr, lines, depth)).join(', ');
                 lines.push(`${field.elemType} ${tailVar}[] = {${tailVals}};`);
                 initParts.push(`.${field.name} = ${tailVar}`);
-                // Skip tail_len field тАФ add length directly
+                // Skip tail_len field С‚РђР¤ add length directly
                 fieldIdx++; // skip _tail_len field
                 initParts.push(`._tail_len = ${tailElems.length}`);
                 break; // rest consumes all remaining elements
@@ -1290,7 +1290,7 @@ export default {
               this._registerCleanup(`tsc_string_release(${name})`);
             }
           } else if (init.kind === 'ObjLit' && enumDef2?.isPartial) {
-            // Partial<T> ObjLit: expand { name: "Alice" } тЖТ { .has_name = true, .name = ..., .has_age = false }
+            // Partial<T> ObjLit: expand { name: "Alice" } С‚Р–Рў { .has_name = true, .name = ..., .has_age = false }
             const provided = new Map();
             for (const prop of init.props) {
               if (!prop.spread && !prop.computed) {
@@ -1368,15 +1368,15 @@ export default {
               }
             }
             let initC: any;
-            if (typeAnn) this._checkLiteralFitsType(init, ctype);
-            // Float literal with fractional part → integer type: error
+            this._checkLiteralFitsType(init, ctype);
+            // Float literal with fractional part в†’ integer type: error
             if (typeAnn && init.kind === 'Literal' && init.litType === 'number') {
               const fval = parseFloat(init.value.replace(/_/g, ''));
               if (!Number.isInteger(fval)) {
                 const di = this._numericTypeInfo(ctype);
                 if (di && di.kind === 'int') {
                   const dstTs = this.ctypeToTsName(ctype);
-                  throw this.error(`float literal ${init.value} assigned to integer type ${dstTs} — fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})`);
+                  throw this.error(`float literal ${init.value} assigned to integer type ${dstTs} вЂ” fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})`);
                 }
               }
             }
@@ -1429,13 +1429,13 @@ export default {
                     throw this.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
                   }
                 }
-                // C-level widening cast for size_t → int64_t
+                // C-level widening cast for size_t в†’ int64_t
                 if (ctype === 'int64_t' && srcType === 'size_t') {
                   initC = `(int64_t)${initC}`;
                 }
               }
             }
-            // computed() → Signal_T var (Signal is the result type, not raw T)
+            // computed() в†’ Signal_T var (Signal is the result type, not raw T)
             if (this._lastComputedSigType) {
               const _sigType = this._lastComputedSigType;
               const _sigElemIdent = this._lastComputedElemType;
@@ -1477,7 +1477,7 @@ export default {
               }
               this._registerCleanup(`tsc_string_release(${name})`);
             } else {
-              // Detect Ref/Mut return before effQual — Mut return suppresses const qualifier
+              // Detect Ref/Mut return before effQual вЂ” Mut return suppresses const qualifier
               let _retBorrowMode: any = null;
               if (init?.kind === 'Call' && init.callee?.kind === 'Ident') {
                 const _fnSym = this.lookup(init.callee.name);
@@ -1491,7 +1491,7 @@ export default {
               const effQual = (this._lastArrayElemReturn || this._lastSuppressConst || _retBorrowMode === 'Mut') ? '' : qualifier;
               this._lastArrayElemReturn = undefined;
               this._lastSuppressConst = undefined;
-              // D6: Conservative lifetime binding — borrow all Ref/Mut arguments
+              // D6: Conservative lifetime binding вЂ” borrow all Ref/Mut arguments
               if (_retBorrowMode) {
                 this._trackBorrowForRefReturn(init, name, _retBorrowMode);
               }
@@ -1600,7 +1600,7 @@ export default {
                   }
                 }
               } else if (init.kind === 'Member' && init.object.kind === 'Ident') {
-                // Field move: let d = obj.field → mark field as moved
+                // Field move: let d = obj.field в†’ mark field as moved
                 const objSym = this.lookup(init.object.name);
                 const objDef = objSym ? this.classes.get(objSym.ctype) : null;
                 const fieldType = objDef?.fields?.find((f: any) => f.name === init.prop);
