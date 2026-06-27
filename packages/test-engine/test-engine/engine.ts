@@ -6,6 +6,10 @@ import { lex } from "../../compiler/src/compiler/lexer.js"
 import { parse } from "../../compiler/src/compiler/parser.js"
 import { codegen } from "../../compiler/src/compiler/codegen.js"
 
+export const platformMatrix = {
+  defaultNumber: ["i8", "i16", "i32", "f64", "u8", "u16"]
+}
+
 export const matrix = {
   i8: {
     type: "i8",
@@ -13,7 +17,7 @@ export const matrix = {
     max: 127,
     values: [0, 1, -128, 127, -129, 128],
     validValues: [0, 1, -128, 127],
-    invalidValues: [-129, 128, true, "hello"]
+    invalidRange: [-129, 128], invalidValues: [true, "hello"]
   },
   i16: {
     type: "i16",
@@ -21,7 +25,7 @@ export const matrix = {
     max: 32767,
     values: [0, 1, -32768, 32767, -32769, 32768],
     validValues: [0, 1, -32768, 32767],
-    invalidValues: [-32769, 32768, true, "hello"]
+    invalidRange: [-32769, 32768], invalidValues: [true, "hello"]
   },
   i32: {
     type: "i32",
@@ -29,7 +33,7 @@ export const matrix = {
     max: 2147483647,
     values: [0, 1, -2147483648, 2147483647, -2147483649, 2147483648],
     validValues: [0, 1, -2147483648, 2147483647],
-    invalidValues: [-2147483649, 2147483648, true, "hello"]
+    invalidRange: [-2147483649, 2147483648], invalidValues: [true, "hello"]
   },
   i64: {
     type: "i64",
@@ -45,7 +49,7 @@ export const matrix = {
     max: 255,
     values: [0, 1, 255, 256, -1],
     validValues: [0, 1, 255],
-    invalidValues: [256, -1, true, "hello"]
+    invalidRange: [256, -1], invalidValues: [true, "hello"]
   },
   u16: {
     type: "u16",
@@ -53,7 +57,7 @@ export const matrix = {
     max: 65535,
     values: [0, 1, 65535, 65536, -1],
     validValues: [0, 1, 65535],
-    invalidValues: [65536, -1, true, "hello"]
+    invalidRange: [65536, -1], invalidValues: [true, "hello"]
   },
   u32: {
     type: "u32",
@@ -61,7 +65,7 @@ export const matrix = {
     max: 4294967295,
     values: [0, 1, 4294967295, 4294967296, -1],
     validValues: [0, 1, 4294967295],
-    invalidValues: [4294967296, -1, true, "hello"]
+    invalidRange: [4294967296, -1], invalidValues: [true, "hello"]
   },
   u64: {
     type: "u64",
@@ -142,10 +146,17 @@ export function eq(value: string | number): EqExpectation {
   return { kind: "eq", value }
 }
 
+export interface CodegenOptions {
+  defaultNumber?: string
+  async?: string
+  allocator?: string
+}
+
 export interface TestOptions {
   input: string
   expect?: EqExpectation
   expectError?: boolean
+  options?: CodegenOptions
 }
 
 export interface TestResult {
@@ -176,12 +187,13 @@ export function test(name: string, options: TestOptions): void {
   try {
     let c: string
     try {
-      const tokens = lex(options.input, "<test>")
+      const codegenOpts: any = options.options || {}
+    const tokens = lex(options.input, "<test>")
       const { ast, errors: parseErrors } = parse(tokens, "<test>", options.input)
       if (parseErrors.length > 0) {
         throw { isTscErrorBag: true, errors: parseErrors }
       }
-      c = codegen(ast, "<test>", options.input).c
+      c = codegen(ast, "<test>", options.input, codegenOpts).c
     } catch (e) {
       if (options.expectError) {
         results.push({ name: fullName, passed: true, error: "compile error as expected" })
@@ -236,7 +248,7 @@ export function printSummary(): void {
   if (failed > 0) {
     console.log("\nFailures:")
     for (const r of results.filter(x => !x.passed)) {
-      console.log(`  ✗ ${r.name}`)
+      console.log(`  РІСљвЂ” ${r.name}`)
       if (r.expected !== undefined) console.log(`    expected: ${r.expected}`)
       if (r.actual !== undefined) console.log(`    actual:   ${r.actual}`)
       if (r.error) console.log(`    error:    ${r.error}`)
