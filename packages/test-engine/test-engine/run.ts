@@ -5,6 +5,7 @@ import "./tests/platform-targets.test"
 import "./tests/binary-inference.test"
 import "./tests/platform-specific.test"
 import "./tests/strict-mode.test"
+import "./tests/literal-inference.test"
 import { printSummary } from "./engine"
 
 printSummary()
