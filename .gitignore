@@ -4,7 +4,7 @@ node_modules/
 .tsclang-tmp2/
 dist/
 *.tsbuildinfo
-tutorial-test/
+test-*/
 
 # Generated C files (output, not source)
 *.c
