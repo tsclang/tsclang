@@ -15,6 +15,7 @@ import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/comma
 import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from './cli/commands/package.js';
 import { runBuildCmakeCommand } from './cli/commands/build-cmake.js';
 import { runRunCommand, runDebugCommand } from './cli/commands/run.js';
+import { runTestCommand } from './cli/commands/test.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -87,6 +88,9 @@ switch (command) {
     break;
   case 'lsp':
     startLsp();
+    break;
+  case 'test':
+    runTestCommand(args);
     break;
   default:
     console.error(`tsclang: unknown command '${command}'`);

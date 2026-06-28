@@ -6,6 +6,7 @@ USAGE:
 COMMANDS:
   build            Compile .tsc to C or binary
   run              Compile and run
+  test             Run tests in test/ directory
   init             Create a new project
   build-cmake      Generate CMakeLists.txt
   lint             Run linter
