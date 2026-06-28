@@ -1,0 +1,5 @@
+import { sum } from "./math"
+
+export function addOne(x: i32): i32 {
+  return sum(x, 1)
+}

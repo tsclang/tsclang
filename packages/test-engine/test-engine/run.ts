@@ -7,6 +7,8 @@ import "./tests/platform-specific.test"
 import "./tests/strict-mode.test"
 import "./tests/literal-inference.test"
 import "./tests/literal-overflow.test"
+import "./tests/compiler-backend.test"
+import "./tests/file-param.test"
 import { printSummary } from "./engine"
 
 printSummary()
