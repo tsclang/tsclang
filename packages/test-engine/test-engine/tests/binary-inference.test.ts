@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 describe("binary type inference", () => {
   // Same type
@@ -7,7 +7,7 @@ describe("binary type inference", () => {
 let b: i32 = 2
 let c = a + b
 console.log(c)`,
-    expect: eq(3)
+    expect: { toBe: 3 }
   })
 
   // Wider wins
@@ -16,7 +16,7 @@ console.log(c)`,
 let b: i64 = 2
 let c = a + b
 console.log(c)`,
-    expect: eq(3)
+    expect: { toBe: 3 }
   })
 
   // Float wins
@@ -25,7 +25,7 @@ console.log(c)`,
 let b: f64 = 2.5
 let c = a + b
 console.log(c)`,
-    expect: eq("3.5")
+    expect: { toBe: "3.5" }
   })
 
   // f32 + f64 = f64
@@ -34,7 +34,7 @@ console.log(c)`,
 let b: f64 = 2.5
 let c = a + b
 console.log(c)`,
-    expect: eq("4")
+    expect: { toBe: "4" }
   })
 
   // Banned: same-width mixed signed/unsigned

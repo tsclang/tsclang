@@ -1,4 +1,4 @@
-import { describe, test, eq, getBackend, getDefaultCompiler, normalizeC } from "../engine"
+import { describe, test, getBackend, getDefaultCompiler, normalizeC } from "../engine"
 import { listAvailable, listAll } from "../../compilers/registry.js"
 
 // === CompilerBackend registry ===
@@ -12,7 +12,7 @@ describe("CompilerBackend registry", () => {
 
   test("getDefaultCompiler() returns a valid compiler", {
     input: `console.log("default")`,
-    expect: eq("default")
+    expect: { toBe: "default" }
   })
 })
 
@@ -21,13 +21,13 @@ describe("CompilerBackend registry", () => {
 describe("GccBackend — positive", () => {
   test("compile() produces binary from valid C code", {
     input: `console.log("hello gcc")`,
-    expect: eq("hello gcc"),
+    expect: { toBe: "hello gcc" },
     compiler: "gcc"
   })
 
   test("run() captures stdout correctly", {
     input: `console.log(42)`,
-    expect: eq(42),
+    expect: { toBe: 42 },
     compiler: "gcc"
   })
 
@@ -52,7 +52,7 @@ describe("GccBackend — negative (phase 3: runtime)", () => {
 describe("Integration — TSC pipeline (phase 1: TSC→C)", () => {
   test("valid TSC produces C and runs successfully", {
     input: `console.log("integration ok")`,
-    expect: eq("integration ok")
+    expect: { toBe: "integration ok" }
   })
 
   test("invalid TSC syntax → expectTscError", {
@@ -90,7 +90,7 @@ describe("Integration — C-output check (phase 1.5)", () => {
 describe("Integration — multi-compiler", () => {
   test("same TSC runs on gcc with correct output", {
     input: `console.log(42)`,
-    expect: eq(42),
+    expect: { toBe: 42 },
     compiler: "gcc"
   })
 })

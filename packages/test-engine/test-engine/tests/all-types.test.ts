@@ -1,4 +1,4 @@
-import { describe, test, eq, matrix } from "../engine"
+import { describe, test, matrix } from "../engine"
 
 function runTypeTests(typeName: string, typeDef: any) {
   describe(`${typeName} = value`, () => {
@@ -16,7 +16,7 @@ console.log(x)`
         test(`let x: ${typeName} = ${val} (wrong type)`, { input, expectError: true })
       } else {
         const expected = typeof val === "number" && !Number.isInteger(val) ? String(val) : val
-        test(`let x: ${typeName} = ${val}`, { input, expect: eq(expected) })
+        test(`let x: ${typeName} = ${val}`, { input, expect: { toBe: expected } })
       }
     }
   })
@@ -29,13 +29,13 @@ for (const [typeName, typeDef] of Object.entries(matrix)) {
 }
 
 describe("char = value", () => {
-  test("char = 65 (A)", { input: "let x: char = 65\nconsole.log(x)", expect: eq("A") })
+  test("char = 65 (A)", { input: "let x: char = 65\nconsole.log(x)", expect: { toBe: "A" } })
 })
 
 describe("float values", () => {
-  test("f32 = 0.0", { input: "let x: f32 = 0.0\nconsole.log(x)", expect: eq("0") })
-  test("f32 = 1.0", { input: "let x: f32 = 1.0\nconsole.log(x)", expect: eq("1") })
-  test("f64 = 0.0", { input: "let x: f64 = 0.0\nconsole.log(x)", expect: eq("0") })
-  test("f64 = 1.0", { input: "let x: f64 = 1.0\nconsole.log(x)", expect: eq("1") })
-  test("f64 = 3.14", { input: "let x: f64 = 3.14\nconsole.log(x)", expect: eq("3.14") })
+  test("f32 = 0.0", { input: "let x: f32 = 0.0\nconsole.log(x)", expect: { toBe: "0" } })
+  test("f32 = 1.0", { input: "let x: f32 = 1.0\nconsole.log(x)", expect: { toBe: "1" } })
+  test("f64 = 0.0", { input: "let x: f64 = 0.0\nconsole.log(x)", expect: { toBe: "0" } })
+  test("f64 = 1.0", { input: "let x: f64 = 1.0\nconsole.log(x)", expect: { toBe: "1" } })
+  test("f64 = 3.14", { input: "let x: f64 = 3.14\nconsole.log(x)", expect: { toBe: "3.14" } })
 })

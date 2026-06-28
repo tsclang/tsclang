@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 describe("strict mode behavior", () => {
   // safe-math: overflow in try/catch
@@ -11,7 +11,7 @@ describe("strict mode behavior", () => {
   console.log("overflow")
 }`,
     options: { strict: ["safe-math"] },
-    expect: eq("overflow")
+    expect: { toBe: "overflow" }
   })
 
   // safe-math: no overflow
@@ -24,7 +24,7 @@ describe("strict mode behavior", () => {
   console.log("overflow")
 }`,
     options: { strict: ["safe-math"] },
-    expect: eq(101)
+    expect: { toBe: 101 }
   })
 
   // safe-math: without try/catch should error
@@ -50,7 +50,7 @@ let y = x as i32`,
 let y = x as i64
 console.log(y)`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq(42)
+    expect: { toBe: 42 }
   })
 
   // Math.saturatingCast — clamps to target range
@@ -59,7 +59,7 @@ console.log(y)`,
 let clamped = Math.saturatingCast<i32>(big)
 console.log(clamped)`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq(2147483647)
+    expect: { toBe: 2147483647 }
   })
 
   test("saturatingCast: i64 to i32 clamps to INT32_MIN", {
@@ -67,7 +67,7 @@ console.log(clamped)`,
 let clamped = Math.saturatingCast<i32>(big)
 console.log(clamped)`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq(-2147483648)
+    expect: { toBe: -2147483648 }
   })
 
   test("saturatingCast: i64 to i32 fits unchanged", {
@@ -75,7 +75,7 @@ console.log(clamped)`,
 let y = Math.saturatingCast<i32>(x)
 console.log(y)`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq(42)
+    expect: { toBe: 42 }
   })
 
   // Math.checkedCast — returns null on overflow
@@ -88,7 +88,7 @@ if (result === null) {
   console.log(result)
 }`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq("overflow")
+    expect: { toBe: "overflow" }
   })
 
   test("checkedCast: i64 to i32 fits returns value", {
@@ -100,6 +100,6 @@ if (result === null) {
   console.log(result)
 }`,
     options: { strict: ["no-lossy-cast"] },
-    expect: eq(42)
+    expect: { toBe: 42 }
   })
 })

@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 describe("literal type inference across platforms", () => {
   // On desktop (defaultNumber=f64): 1 is f64, so 1 + 0.8 works
@@ -7,7 +7,7 @@ describe("literal type inference across platforms", () => {
 a += 0.8
 console.log(a)`,
     options: { target: "desktop" },
-    expect: eq("1.8")
+    expect: { toBe: "1.8" }
   })
 
   // On AVR (defaultNumber=i16): 1 is i16, so 1 + 0.8 is error
@@ -25,6 +25,6 @@ console.log(a)`,
 a += 0.8
 console.log(a)`,
     options: { target: "desktop" },
-    expect: eq("1.8")
+    expect: { toBe: "1.8" }
   })
 })

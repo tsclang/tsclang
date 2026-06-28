@@ -9,6 +9,9 @@ import "./tests/literal-inference.test"
 import "./tests/literal-overflow.test"
 import "./tests/compiler-backend.test"
 import "./tests/file-param.test"
+import "./tests/expect-matchers.test"
+import "./tests/hooks.test"
+import "./tests/async.test"
 import { printSummary } from "./engine"
 
 printSummary()

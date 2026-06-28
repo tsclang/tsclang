@@ -144,13 +144,60 @@ export const matrix = {
   }
 }
 
-export interface EqExpectation {
-  kind: "eq"
-  value: string | number
+export interface Expectation {
+  toBe?: string | number
+  toBeGreaterThan?: number
+  toBeLessThan?: number
+  toBeGreaterThanOrEqual?: number
+  toBeLessThanOrEqual?: number
+  toBeTruthy?: boolean
+  toBeFalsy?: boolean
+  toBeNull?: boolean
+  toContain?: string | number
+  toMatch?: string
 }
 
-export function eq(value: string | number): EqExpectation {
-  return { kind: "eq", value }
+export function checkExpect(actual: string, expect: Expectation): { passed: boolean, error?: string } {
+  if (expect.toBe !== undefined) {
+    const expected = String(expect.toBe)
+    if (actual !== expected) return { passed: false, error: `expected "${expected}" but got "${actual}"` }
+  }
+  if (expect.toBeGreaterThan !== undefined) {
+    const num = parseFloat(actual)
+    if (isNaN(num) || num <= expect.toBeGreaterThan) return { passed: false, error: `expected ${actual} > ${expect.toBeGreaterThan}` }
+  }
+  if (expect.toBeLessThan !== undefined) {
+    const num = parseFloat(actual)
+    if (isNaN(num) || num >= expect.toBeLessThan) return { passed: false, error: `expected ${actual} < ${expect.toBeLessThan}` }
+  }
+  if (expect.toBeGreaterThanOrEqual !== undefined) {
+    const num = parseFloat(actual)
+    if (isNaN(num) || num < expect.toBeGreaterThanOrEqual) return { passed: false, error: `expected ${actual} >= ${expect.toBeGreaterThanOrEqual}` }
+  }
+  if (expect.toBeLessThanOrEqual !== undefined) {
+    const num = parseFloat(actual)
+    if (isNaN(num) || num > expect.toBeLessThanOrEqual) return { passed: false, error: `expected ${actual} <= ${expect.toBeLessThanOrEqual}` }
+  }
+  if (expect.toBeTruthy !== undefined) {
+    const truthy = actual !== "" && actual !== "0" && actual !== "false"
+    if (expect.toBeTruthy && !truthy) return { passed: false, error: `expected truthy but got "${actual}"` }
+  }
+  if (expect.toBeFalsy !== undefined) {
+    const falsy = actual === "" || actual === "0" || actual === "false"
+    if (expect.toBeFalsy && !falsy) return { passed: false, error: `expected falsy but got "${actual}"` }
+  }
+  if (expect.toBeNull !== undefined) {
+    if (expect.toBeNull && actual !== "null") return { passed: false, error: `expected null but got "${actual}"` }
+  }
+  if (expect.toContain !== undefined) {
+    const expected = String(expect.toContain)
+    if (!actual.includes(expected)) return { passed: false, error: `expected "${actual}" to contain "${expected}"` }
+  }
+  if (expect.toMatch !== undefined) {
+    const regex = new RegExp(expect.toMatch)
+    if (!regex.test(actual)) return { passed: false, error: `expected "${actual}" to match ${expect.toMatch}` }
+  }
+  return { passed: true }
 }
 
 export interface CodegenOptions {
@@ -164,7 +211,7 @@ export interface CodegenOptions {
 export interface TestOptions {
   input?: string
   file?: string
-  expect?: EqExpectation
+  expect?: Expectation
   expectError?: boolean
   expectTscError?: boolean | string
   expectCompileError?: boolean | string
@@ -174,6 +221,8 @@ export interface TestOptions {
   expectCNotContains?: string | string[]
   options?: CodegenOptions
   compiler?: string
+  async?: boolean
+  timeoutMs?: number
 }
 
 export interface TestResult {
@@ -184,18 +233,55 @@ export interface TestResult {
   error?: string
 }
 
+interface DescribeContext {
+  name: string
+  beforeAll?: () => void
+  afterAll?: () => void
+  beforeEach?: () => void
+  afterEach?: () => void
+}
+
 let results: TestResult[] = []
 let currentDescribe = ""
+let describeStack: DescribeContext[] = []
 
 export function describe(name: string, fn: () => void): void {
   const prev = currentDescribe
   currentDescribe = prev ? `${prev} > ${name}` : name
+  const ctx: DescribeContext = { name }
+  describeStack.push(ctx)
   fn()
+  describeStack.pop()
   currentDescribe = prev
+}
+
+export function before(fn: () => void): void {
+  const ctx = describeStack[describeStack.length - 1]
+  if (ctx) ctx.beforeAll = fn
+}
+
+export function after(fn: () => void): void {
+  const ctx = describeStack[describeStack.length - 1]
+  if (ctx) ctx.afterAll = fn
+}
+
+export function beforeEach(fn: () => void): void {
+  const ctx = describeStack[describeStack.length - 1]
+  if (ctx) ctx.beforeEach = fn
+}
+
+export function afterEach(fn: () => void): void {
+  const ctx = describeStack[describeStack.length - 1]
+  if (ctx) ctx.afterEach = fn
 }
 
 export function test(name: string, options: TestOptions): void {
   const fullName = currentDescribe ? `${currentDescribe} > ${name}` : name
+
+  // Вызвать beforeEach для всех describe в стеке
+  for (const ctx of describeStack) {
+    ctx.beforeEach?.()
+  }
 
   const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-test-engine-"))
   const runtimeDir = resolve(import.meta.dirname, "../../compiler/src/runtime")
@@ -215,6 +301,9 @@ export function test(name: string, options: TestOptions): void {
     let c: string
     try {
       const codegenOpts: any = { ...options.options }
+      if (options.async) {
+        codegenOpts.async = "state-machine"
+      }
       if (codegenOpts.target === "avr") {
         codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
       }
@@ -314,7 +403,8 @@ export function test(name: string, options: TestOptions): void {
 
     // === Фаза 3: Runtime ===
     if (backend.run) {
-      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: 5000 })
+      const timeoutMs = options.timeoutMs ?? 5000
+      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs })
       if (!runResult.success || runResult.exitCode !== 0) {
         if (options.expectRuntimeError) {
           if (typeof options.expectRuntimeError === "string" && !runResult.stderr.includes(options.expectRuntimeError)) {
@@ -334,12 +424,12 @@ export function test(name: string, options: TestOptions): void {
 
       // === Позитивная проверка stdout ===
       if (options.expect) {
-        const expected = String(options.expect.value)
         const actual = runResult.stdout.trim()
-        if (actual === expected) {
-          results.push({ name: fullName, passed: true, actual, expected })
+        const result = checkExpect(actual, options.expect)
+        if (result.passed) {
+          results.push({ name: fullName, passed: true, actual })
         } else {
-          results.push({ name: fullName, passed: false, actual, expected })
+          results.push({ name: fullName, passed: false, actual, error: result.error })
         }
       } else {
         results.push({ name: fullName, passed: true })
@@ -349,6 +439,10 @@ export function test(name: string, options: TestOptions): void {
     }
   } finally {
     try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+    // Вызвать afterEach для всех describe в стеке
+    for (const ctx of describeStack) {
+      ctx.afterEach?.()
+    }
   }
 }
 

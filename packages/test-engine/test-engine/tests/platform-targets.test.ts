@@ -1,4 +1,4 @@
-import { describe, test, eq, platformMatrix } from "../engine"
+import { describe, test, platformMatrix } from "../engine"
 
 describe("platform-specific: float on AVR", () => {
   // On desktop (fpu=true), float operations work
@@ -6,7 +6,7 @@ describe("platform-specific: float on AVR", () => {
     input: `let a: f64 = 3.14
 console.log(a)`,
     options: { target: "desktop" },
-    expect: eq("3.14")
+    expect: { toBe: "3.14" }
   })
 
   // On AVR (fpu=false), float literals are forbidden

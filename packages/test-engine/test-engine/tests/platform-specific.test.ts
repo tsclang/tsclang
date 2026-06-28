@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 describe("platform-specific behavior", () => {
   // Float works on desktop
@@ -6,7 +6,7 @@ describe("platform-specific behavior", () => {
     input: `let a: f64 = 3.14
 console.log(a)`,
     options: { target: "desktop" },
-    expect: eq("3.14")
+    expect: { toBe: "3.14" }
   })
 
   // Float blocked on AVR (fpu: false)
@@ -23,7 +23,7 @@ console.log(a)`,
 let b = a + 0.8
 console.log(b)`,
     options: { target: "desktop" },
-    expect: eq("1.8")
+    expect: { toBe: "1.8" }
   })
 
   // Mixed int + float blocked on AVR
@@ -41,7 +41,7 @@ console.log(b)`,
 let b: i32 = 2
 console.log(a + b)`,
     options: { target: "desktop" },
-    expect: eq(3)
+    expect: { toBe: 3 }
   })
 
   test("int + int on AVR", {
@@ -49,6 +49,6 @@ console.log(a + b)`,
 let b: i32 = 2
 console.log(a + b)`,
     options: { target: "avr" },
-    expect: eq(3)
+    expect: { toBe: 3 }
   })
 })

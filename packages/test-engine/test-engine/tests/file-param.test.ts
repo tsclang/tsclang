@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 // === file parameter — positive tests ===
 

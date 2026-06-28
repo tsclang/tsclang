@@ -1,4 +1,4 @@
-import { describe, test, eq } from "../engine"
+import { describe, test } from "../engine"
 
 describe("literal overflow", () => {
   // defaultNumber=i8: 256 overflows i8
@@ -14,7 +14,7 @@ console.log(a)`,
     input: `let a = 127
 console.log(a)`,
     options: { defaultNumber: "i8" },
-    expect: eq(127)
+    expect: { toBe: 127 }
   })
 
   // defaultNumber=i8: -129 underflows i8
@@ -30,7 +30,7 @@ console.log(a)`,
     input: `let a = 256
 console.log(a)`,
     options: { defaultNumber: "f64" },
-    expect: eq(256)
+    expect: { toBe: 256 }
   })
 
   // Explicit type annotation

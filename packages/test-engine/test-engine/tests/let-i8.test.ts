@@ -1,4 +1,4 @@
-import { describe, test, eq, matrix } from '../engine'
+import { describe, test, matrix } from '../engine'
 
 describe('let x: i8 = value', () => {
   for (const val of matrix.i8.values) {
@@ -9,7 +9,7 @@ console.log(x)`
     if (expectError) {
       test(`let x: i8 = ${val} (overflow)`, { input, expectError: true })
     } else {
-      test(`let x: i8 = ${val}`, { input, expect: eq(val) })
+      test(`let x: i8 = ${val}`, { input, expect: { toBe: val } })
     }
   }
 })
