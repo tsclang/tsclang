@@ -179,6 +179,35 @@ let b = a as i64;    // i32 → i64 — safe
 - `as` на non-null assertion: `x as i32` при `x: i32 | null` (не lossy, только убирает null)
 - String literal union → string (не числовой cast)
 
+**Escape hatch — безопасные альтернативы `as`:**
+
+Когда `no-lossy-cast` включён, но нужен lossy cast — используйте `Math.saturatingCast<T>` или `Math.checkedCast<T>`:
+
+```typescript
+// strict: ["no-lossy-cast"]
+
+let big: i64 = 5000000000;
+
+// Math.saturatingCast<T>(x) — clamp к диапазону целевого типа
+let clamped = Math.saturatingCast<i32>(big);   // INT32_MAX (2147483647)
+let neg = Math.saturatingCast<i32>(-5000000000); // INT32_MIN (-2147483648)
+let fits = Math.saturatingCast<i32>(42 as i64);  // 42 — влезает
+
+// Math.checkedCast<T>(x) — возвращает null если не влезает
+let overflow = Math.checkedCast<i32>(big);     // null
+let safe = Math.checkedCast<i32>(42 as i64);   // 42
+
+if (overflow !== null) {
+  console.log(overflow); // не выполнится
+}
+```
+
+**`Math.saturatingCast<T>(x)`** — clamps значение к диапазону типа `T`. Никогда не теряет данные (результат всегда валиден), но может изменить значение.
+
+**`Math.checkedCast<T>(x)`** — возвращает `T | null`. `null` если значение не влезает в диапазон типа `T`. Позволяет проверить overflow без потери данных.
+
+Поддерживаемые типы: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
+
 **Обоснование:** Потеря данных при cast — источник скрытых багов. В safety-critical коде все преобразования должны быть явными и безопасными.
 
 #### `no-dynamic-alloc` — запрет динамической аллокации

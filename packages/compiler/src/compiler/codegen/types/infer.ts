@@ -498,6 +498,22 @@ export default {
     if (obj.kind === 'Ident' && obj.name === 'Math') {
       if (prop === 'clz32' || prop === 'imul') return 'int32_t';
       if (prop === 'fround') return 'float';
+      if (prop === 'saturatingCast') {
+        const tname = node.typeArgs?.[0]?.name ?? 'i32';
+        const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+          f32:'float', f64:'double', bool:'bool', usize:'size_t' };
+        return (primMap as Record<string, string>)[tname] ?? 'int32_t';
+      }
+      if (prop === 'checkedCast') {
+        const tname = node.typeArgs?.[0]?.name ?? 'i32';
+        const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
+          u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
+          f32:'float', f64:'double', bool:'bool', usize:'size_t' };
+        const ctype = (primMap as Record<string, string>)[tname] ?? 'int32_t';
+        const ident = this.cTypeToIdent(ctype);
+        return `opt_${ident}`;
+      }
       if (prop === 'abs' || prop === 'min' || prop === 'max') {
         const a0 = node.args?.[0];
         if (a0?.spread) {

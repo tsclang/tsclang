@@ -52,4 +52,54 @@ console.log(y)`,
     options: { strict: ["no-lossy-cast"] },
     expect: eq(42)
   })
+
+  // Math.saturatingCast — clamps to target range
+  test("saturatingCast: i64 to i32 clamps to INT32_MAX", {
+    input: `let big: i64 = 5000000000
+let clamped = Math.saturatingCast<i32>(big)
+console.log(clamped)`,
+    options: { strict: ["no-lossy-cast"] },
+    expect: eq(2147483647)
+  })
+
+  test("saturatingCast: i64 to i32 clamps to INT32_MIN", {
+    input: `let big: i64 = -5000000000
+let clamped = Math.saturatingCast<i32>(big)
+console.log(clamped)`,
+    options: { strict: ["no-lossy-cast"] },
+    expect: eq(-2147483648)
+  })
+
+  test("saturatingCast: i64 to i32 fits unchanged", {
+    input: `let x: i64 = 42
+let y = Math.saturatingCast<i32>(x)
+console.log(y)`,
+    options: { strict: ["no-lossy-cast"] },
+    expect: eq(42)
+  })
+
+  // Math.checkedCast — returns null on overflow
+  test("checkedCast: i64 to i32 overflow returns null", {
+    input: `let big: i64 = 5000000000
+let result = Math.checkedCast<i32>(big)
+if (result === null) {
+  console.log("overflow")
+} else {
+  console.log(result)
+}`,
+    options: { strict: ["no-lossy-cast"] },
+    expect: eq("overflow")
+  })
+
+  test("checkedCast: i64 to i32 fits returns value", {
+    input: `let x: i64 = 42
+let result = Math.checkedCast<i32>(x)
+if (result === null) {
+  console.log("overflow")
+} else {
+  console.log(result)
+}`,
+    options: { strict: ["no-lossy-cast"] },
+    expect: eq(42)
+  })
 })

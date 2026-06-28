@@ -87,6 +87,54 @@ export default {
       return `(${a0} > 0.0) - (${a0} < 0.0) + 0.0`;
     }
 
+    // Math.saturatingCast<T>(x) — clamp to target type's range
+    if (prop === 'saturatingCast') {
+      const targetType = node?.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
+      const srcType = a0t;
+      const RANGE: Record<string, [string, string]> = {
+        'int8_t':   ['INT8_MIN',   'INT8_MAX'],
+        'int16_t':  ['INT16_MIN',  'INT16_MAX'],
+        'int32_t':  ['INT32_MIN',  'INT32_MAX'],
+        'int64_t':  ['INT64_MIN',  'INT64_MAX'],
+        'uint8_t':  ['0',          'UINT8_MAX'],
+        'uint16_t': ['0',          'UINT16_MAX'],
+        'uint32_t': ['0',          'UINT32_MAX'],
+        'uint64_t': ['0',          'UINT64_MAX'],
+      };
+      const range = RANGE[targetType];
+      if (!range) throw this.error(`saturatingCast: unsupported target type '${targetType}'`, node);
+      if (isFloat(srcType)) {
+        return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
+      }
+      return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
+    }
+
+    // Math.checkedCast<T>(x) — return null if value doesn't fit target type
+    if (prop === 'checkedCast') {
+      const targetType = node?.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
+      const srcType = a0t;
+      const optName = `opt_${this.cTypeToIdent(targetType)}`;
+      this._ensureOptStruct(optName, targetType);
+      const RANGE: Record<string, [string, string]> = {
+        'int8_t':   ['INT8_MIN',   'INT8_MAX'],
+        'int16_t':  ['INT16_MIN',  'INT16_MAX'],
+        'int32_t':  ['INT32_MIN',  'INT32_MAX'],
+        'int64_t':  ['INT64_MIN',  'INT64_MAX'],
+        'uint8_t':  ['0',          'UINT8_MAX'],
+        'uint16_t': ['0',          'UINT16_MAX'],
+        'uint32_t': ['0',          'UINT32_MAX'],
+        'uint64_t': ['0',          'UINT64_MAX'],
+      };
+      const range = RANGE[targetType];
+      if (!range) throw this.error(`checkedCast: unsupported target type '${targetType}'`, node);
+      const I = ' '.repeat(this.indent * depth);
+      const tmp = `_checked_${this.tempCount++}`;
+      lines.push(`${I}${optName} ${tmp};`);
+      lines.push(`${I}${tmp}.has_value = (${a0} >= (${range[0]}) && ${a0} <= (${range[1]}));`);
+      lines.push(`${I}${tmp}.value = ${tmp}.has_value ? (${targetType})(${a0}) : (${targetType})0;`);
+      return tmp;
+    }
+
     this.includes.add('#include <math.h>');
     const map = {
       floor: `floor(${a0})`, ceil: `ceil(${a0})`,

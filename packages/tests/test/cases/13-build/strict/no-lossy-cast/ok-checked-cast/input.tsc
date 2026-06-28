@@ -1,0 +1,7 @@
+let big: i64 = 5000000000;
+let result = Math.checkedCast<i32>(big);
+if (result === null) {
+  console.log("overflow");
+} else {
+  console.log(result);
+}
