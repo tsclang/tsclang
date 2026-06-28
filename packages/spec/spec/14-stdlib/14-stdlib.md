@@ -918,6 +918,12 @@ Math.clz32(1)              // i32 → i32 — 31  (число ведущих н�
 Math.imul(3, 4)            // (i32, i32) → i32 — 12  (32-битное целочисленное умножение с переполнением)
 Math.fround(1.337)         // f64 → f32  (ближайшее представление в f32)
 
+// safe casts (TSClang-specific, для no-lossy-cast escape hatch)
+Math.saturatingCast<i32>(5000000000 as i64)  // i64 → i32 — 2147483647 (clamp к INT32_MAX)
+Math.saturatingCast<i32>(42 as i64)          // i64 → i32 — 42 (влезает, без изменений)
+Math.checkedCast<i32>(5000000000 as i64)     // i64 → i32|null — null (не влезает)
+Math.checkedCast<i32>(42 as i64)             // i64 → i32|null — 42 (влезает)
+
 // random (0..1, без seed)
 Math.random()              // f64 — [0.0, 1.0)
 ```
@@ -961,6 +967,8 @@ Math.random()              // f64 — [0.0, 1.0)
 | `clz32` | `(x: i32): i32` | `__builtin_clz(x)` (GCC/Clang) |
 | `imul` | `(a: i32, b: i32): i32` | `(int32_t)((int32_t)(a) * (int32_t)(b))` |
 | `fround` | `(x: f64): f32` | `(float)(x)` |
+| `saturatingCast` | `<T>(x: numeric): T` | inline clamp to T range |
+| `checkedCast` | `<T>(x: numeric): T \| null` | inline opt_T with range check |
 | `random` | `(): f64` | runtime RNG |
 
 ## std/string
