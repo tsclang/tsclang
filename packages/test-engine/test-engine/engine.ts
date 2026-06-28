@@ -221,7 +221,6 @@ export interface TestOptions {
   expectCNotContains?: string | string[]
   options?: CodegenOptions
   compiler?: string
-  async?: boolean
   timeoutMs?: number
 }
 
@@ -301,9 +300,6 @@ export function test(name: string, options: TestOptions): void {
     let c: string
     try {
       const codegenOpts: any = { ...options.options }
-      if (options.async) {
-        codegenOpts.async = "state-machine"
-      }
       if (codegenOpts.target === "avr") {
         codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
       }
