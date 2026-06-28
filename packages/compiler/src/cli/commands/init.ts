@@ -38,6 +38,23 @@ export function runInitCommand(args: string[]): void {
     if (!existsSync('src/main.tsc')) {
       writeFileSync('src/main.tsc', 'console.log("Hello, World!");\n', 'utf8');
     }
+
+    mkdirSync('test', { recursive: true });
+    if (!existsSync('test/main.test.tsc')) {
+      writeFileSync('test/main.test.tsc', [
+        'function add(a: i32, b: i32): i32 {',
+        '  return a + b',
+        '}',
+        '',
+        'let result = add(1, 1)',
+        'if (result != 2) {',
+        '  console.error("FAIL: add(1, 1) = " + result.toString())',
+        '  process.exit(1)',
+        '}',
+        'console.log("PASS: add(1, 1) = " + result.toString())',
+        '',
+      ].join('\n'), 'utf8');
+    }
   }
 
   process.exit(0);
