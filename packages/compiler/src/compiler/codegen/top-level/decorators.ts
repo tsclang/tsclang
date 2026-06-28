@@ -460,7 +460,7 @@ export default {
     }
 
     // Methods are NOT mangled by param types (class prefix already disambiguates)
-    const retType = m.returnTypeOverride ?? (m.returnType ? this.resolveType(m.returnType) : 'void');
+    let retType = m.returnTypeOverride ?? (m.returnType ? this.resolveType(m.returnType) : 'void');
     const nameMangled = `${className}_${m.name}`;
 
     const isMut = m.modifiers?.includes('mut');
@@ -471,7 +471,59 @@ export default {
     const isIfaceMethod = !isStatic && m.name !== 'new' && explicitImplements.length > 0;
 
     // Emit body first so we can inspect it for self-mutation
-    const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut);
+
+    // Build throwsCtx for throws methods
+    const throwsTypes = m.throwsTypes ?? [];
+    let throwsCtx: any = null;
+    if (throwsTypes.length > 0) {
+      const throwsNames = (() => {
+        const names: any[] = [];
+        for (const t of throwsTypes) {
+          if (t.kind === 'TypeRef') names.push(t.name === 'Error' ? 'TscError' : t.name);
+          else if (t.kind === 'TypeUnion') {
+            for (const inner of t.types) { if (inner.kind === 'TypeRef') names.push(inner.name === 'Error' ? 'TscError' : inner.name); }
+          }
+        }
+        return names;
+      })();
+      const errKey = throwsNames.join('_');
+      const isVoid = retType === 'void';
+      const retIdent = this.cTypeToIdent(retType);
+      const resultType = `Result_${retIdent}_${errKey}`;
+
+      // Emit union error types on first encounter of errKey
+      if (!this._emittedResultErrKeys.has(errKey)) {
+        this._emittedResultErrKeys.add(errKey);
+        if (throwsNames.length > 1) {
+          const tagEntries = throwsNames.map((n: any, i: any) => `_Err_${n} = ${i}`).join(', ');
+          this.addTop(`typedef enum { ${tagEntries} } _ErrTag_${errKey};`);
+          this.addTop(`typedef struct {`);
+          this.addTop(`    _ErrTag_${errKey} tag;`);
+          this.addTop(`    union { ${throwsNames.map((n: any, i: any) => `${n} _${i};`).join(' ')} };`);
+          this.addTop(`} _ErrUnion_${errKey};`);
+          this.typedefs.push('');
+        }
+      }
+      // Emit Result type
+      if (!this._emittedResultTypes.has(resultType)) {
+        this._emittedResultTypes.add(resultType);
+        const valPart = isVoid ? 'int _dummy' : `${retType} value`;
+        if (throwsNames.length > 1) {
+          this.addTop(`typedef struct {`);
+          this.addTop(`    bool ok;`);
+          this.addTop(`    union { ${valPart}; _ErrUnion_${errKey} error; };`);
+          this.addTop(`} ${resultType};`);
+        } else {
+          this.addTop(`typedef struct { bool ok; union { ${valPart}; ${throwsNames[0]} error; }; } ${resultType};`);
+        }
+      }
+
+      throwsCtx = { resultType, throwsNames, errKey, isVoid, origRetType: retType };
+      retType = resultType;
+    }
+
+    // Emit body first so we can inspect it for self-mutation
+    const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut, throwsCtx);
 
     // Determine whether method mutates self
     const mutatesself = isMut || lines.some((l: any) =>
@@ -511,7 +563,7 @@ export default {
     const cls = this.classes.get(className);
     if (cls) {
       if (!cls._methodNames) cls._methodNames = new Map();
-      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isExplicitMut: isMut, isMoveMethod, isIfaceMethod });
+      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isExplicitMut: isMut, isMoveMethod, isIfaceMethod, ...(throwsCtx ? { _isThrowsFunc: true, _resultType: throwsCtx.resultType, _resultIsVoid: throwsCtx.isVoid, _resultValueType: throwsCtx.origRetType, _resultErrKey: throwsCtx.errKey, _resultErrTypes: throwsCtx.throwsNames } : {}) });
     }
     this.addTop(`static ${retType} ${nameMangled}(${params.join(', ') || 'void'}) {`);
     for (const l of finalLines) this.addTop('    ' + l);

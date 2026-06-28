@@ -400,6 +400,21 @@ class Context {
             );
           }
         }
+        // Check method calls: obj.method() where method is throws
+        if (expr.callee?.kind === 'Member') {
+          const objType = this.inferType(expr.callee.object);
+          const cls = this.classes.get(objType);
+          if (cls?._methodNames) {
+            const methodInfo = cls._methodNames.get(expr.callee.prop);
+            if (methodInfo?._isThrowsFunc) {
+              const errNames = (methodInfo._resultErrTypes ?? []).join(' | ');
+              throw this.error(
+                `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', or assign to a variable first (throws ${errNames})`,
+                expr
+              );
+            }
+          }
+        }
         for (const arg of expr.args ?? []) {
           this._checkNoBareThrows(arg.expr ?? arg);
         }

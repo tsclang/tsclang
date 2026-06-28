@@ -71,6 +71,20 @@ export default {
             );
           }
         }
+        // Check method calls: obj.method() where method is throws
+        if (!this._throwsCtx && !this._inMathTry && expr.kind === 'Call' && expr.callee?.kind === 'Member') {
+          const objType = this.inferType(expr.callee.object);
+          const cls = this.classes.get(objType);
+          if (cls?._methodNames) {
+            const methodInfo = cls._methodNames.get(expr.callee.prop);
+            if (methodInfo?._isThrowsFunc) {
+              throw this.error(
+                `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function`,
+                node
+              );
+            }
+          }
+        }
         const c = this.exprToC(node.expr, lines, depth);
         if (c && c !== '') {
           // Block-form assignments (&&=, ||=, ??=) already include semicolons
@@ -106,7 +120,6 @@ export default {
         if (this._inFinallyBlock) {
           throw this.error('TypeError: Cannot return inside a finally block');
         }
-        // Error: returning Ref/Mut to local variable or array element (lifetime overflow)
         const funcSym = this.currentFuncName ? this.lookup(this.currentFuncName) : null;
         const retTypeAnn = funcSym?.returnType;
         const isRefReturn = retTypeAnn?.kind === 'TypeRef' && retTypeAnn.name === 'Ref';

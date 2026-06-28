@@ -1,0 +1,8 @@
+class Foo {
+  risky(): i32 throws MathError {
+    return 42
+  }
+}
+
+let foo = new Foo()
+foo.risky()
