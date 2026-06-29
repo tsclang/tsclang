@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-24 (comprehensive codegen audit: FuncExpr, Match-as-expression, bare-throws detection, comment-placeholders→errors, defensive defaults, AST type accuracy).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-29 (throws on methods, Math.saturatingCast/checkedCast, test engine: expect matchers/hooks/standalone CLI, tsclang test command).
 
 ---
 
@@ -366,7 +366,7 @@ Tests organized by spec section (`packages/tests/test/cases/<NN-section>/`):
 ### Project state & tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** All bugs #1–#65 closed. Open: #23 (deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting: string methods, file I/O, CLI/process, StringBuilder), #67 (bare-throws: method calls — needs class method throws tracking), #69 (Math.saturatingCast/checkedCast), #72–#80 #82 (self-hosting epics). Closed: #57 (NaN/Infinity + `tsc_format_double`), #66 (bare-throws: Typeof/Yield/Drop — fixed in audit), #91 (#81–#90 epic), #99 (`strict: true`), #100 (audit).
+- **GitHub Issues:** Open: #23 (null representation, deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting gaps), #67 (bare-throws: method calls — FIXED), #69 (Math.saturatingCast/checkedCast — FIXED), #72–#82 (self-hosting epics). Recently closed: #66, #67 (throws on methods), #69 (Math.saturatingCast/checkedCast), #111 (Number.* constants), #132 (i64+u32 banned pairs), #133–#137 (test engine features).
 - **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~888 lines across 51 mixin files.
 - **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
 - **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
@@ -524,3 +524,54 @@ Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`
 | `packages/compiler/src/cli/commands/build-cmake.ts` | `runBuildCmakeCommand` |
 
 **Note:** Commands still use `process.exit()` internally. CliResult pattern deferred to focused follow-up.
+
+## 12. Test Engine (`packages/test-engine/`)
+
+**Purpose:** On-the-fly test generator for compiler testing and user code testing.
+
+### Architecture
+- `engine.ts` — core: describe, test, expect, hooks, matrix, platformMatrix
+- `compilers/` — pluggable backends: gcc, clang, msvc, avr-gcc, wasm
+- `bin/tsclang-test.ts` — standalone CLI (subprocess approach)
+- `tests/` — 127 tests (14 test files + fixtures)
+
+### Key APIs
+- `describe(name, fn)` — group tests
+- `test(name, options)` — run test with 4-phase pipeline
+- `expect: { toBe, toBeGreaterThan, toContain, toMatch, toBeTruthy, toFalsy, toBeNull }` — matchers
+- `beforeEach`, `afterEach`, `before`, `after` — hooks
+- `expectTscError`, `expectCompileError`, `expectRuntimeError` — negative tests by phase
+- `expectC`, `expectCContains`, `expectCNotContains` — C-output verification
+- `file` parameter — test .tsc files with recursive imports (via compileTsc)
+- `compiler` parameter — select backend: gcc, clang, msvc, avr-gcc, wasm
+
+### 4-Phase Pipeline
+```
+TSC → C → [C-check] → binary → run
+  1    1.5       2        3
+```
+
+### CLI Integration
+- `tsclang test` — delegates to `tsclang-test` (subprocess)
+- `tsclang init` — creates `test/main.test.tsc` with example
+
+## 13. Throws on Methods
+
+**Status:** Implemented in `be59d42`.
+
+- Methods can declare `throws` like functions: `read(path: string): string throws IOError`
+- `emitMethod` in `decorators.ts` builds `throwsCtx` from `m.throwsTypes`
+- `_methodNames` stores `_isThrowsFunc` flag for bare-throws detection
+- `_checkNoBareThrows` and `control-flow.ts` check Member callee
+- Spec: `09-errors/09-errors.md` — "Throws на методах" section
+
+## 14. Math.saturatingCast/checkedCast
+
+**Status:** Implemented in `44ef36b`.
+
+- `Math.saturatingCast<T>(x)` — clamp to target type range
+- `Math.checkedCast<T>(x)` — return `T | null` on overflow
+- Escape hatch for `no-lossy-cast` strict rule
+- Codegen: inline C in `builtin-helpers.ts`
+- Type inference: `infer.ts` returns target type / opt_T
+- Spec: `14-stdlib/14-stdlib.md` + `13-strict-mode.md`
