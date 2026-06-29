@@ -3,18 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "src/engine.ts",
+  "exports": {
+    ".": "./src/engine.ts",
+    "./compilers": "./src/compilers/index.ts"
+  },
   "bin": {
-    "tsclang-test": "./bin/tsclang-test.ts"
+    "tsclang-test": "./src/bin/index.ts"
   },
   "scripts": {
-    "start": "tsx test-engine/run.ts",
-    "test": "tsx test-engine/run.ts"
+    "start": "tsx src/bin/index.ts",
+    "test": "tsx src/tests/run.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@tsclang/compiler": "*"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
-    "tsx": "^4.22.4"
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

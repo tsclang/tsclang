@@ -1,4 +1,4 @@
-import { describe, test, beforeEach, afterEach } from '../engine'
+import { describe, test, beforeEach, afterEach } from '../engine.js'
 
 let counter = 0
 

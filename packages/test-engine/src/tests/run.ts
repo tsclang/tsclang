@@ -1,0 +1,17 @@
+import "./let-i8.test"
+import "./all-types.test"
+import "./platform-matrix.test"
+import "./platform-targets.test"
+import "./binary-inference.test"
+import "./platform-specific.test"
+import "./strict-mode.test"
+import "./literal-inference.test"
+import "./literal-overflow.test"
+import "./compiler-backend.test"
+import "./file-param.test"
+import "./expect-matchers.test"
+import "./hooks.test"
+import "./async.test"
+import { printSummary } from "../engine"
+
+printSummary()

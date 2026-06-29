@@ -1,4 +1,4 @@
-import { describe, test } from '../engine'
+import { describe, test } from '../engine.js'
 
 describe('async tests', () => {
   test('async function compiles', {

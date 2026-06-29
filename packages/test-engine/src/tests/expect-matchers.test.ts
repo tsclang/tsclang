@@ -1,4 +1,4 @@
-import { describe, test } from '../engine'
+import { describe, test } from '../engine.js'
 
 describe('expect matchers', () => {
   test('toBe', {

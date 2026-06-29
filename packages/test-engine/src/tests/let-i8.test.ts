@@ -1,4 +1,4 @@
-import { describe, test, matrix } from '../engine'
+import { describe, test, matrix } from '../engine.js'
 
 describe('let x: i8 = value', () => {
   for (const val of matrix.i8.values) {
