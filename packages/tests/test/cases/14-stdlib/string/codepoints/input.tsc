@@ -1,5 +1,6 @@
-import { String } from "std/string";
-const s: string = "abc";
+let s = "hello"
+let count = 0
 for (const cp of s.codePoints()) {
-    console.log(cp);
+  count++
 }
+console.log(count)
