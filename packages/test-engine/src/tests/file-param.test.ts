@@ -1,15 +1,15 @@
-import { describe, test } from "../engine"
-
-// === file parameter — positive tests ===
+import { describe, test, compile, expect } from "../engine.js"
 
 describe("file parameter — positive", () => {
-  test("reads .tsc file from disk", {
-    file: "packages/test-engine/src/tests/fixtures/math.tsc",
-    expectCContains: ["sum", "multiply"]
+  test("reads .tsc file from disk", () => {
+    const c = compile("packages/test-engine/src/tests/fixtures/math.tsc")
+    expect(c).toContain("sum")
+    expect(c).toContain("multiply")
   })
 
-  test("recursive import — utils imports math", {
-    file: "packages/test-engine/src/tests/fixtures/utils.tsc",
-    expectCContains: ["sum", "addOne"]
+  test("recursive import — utils imports math", () => {
+    const c = compile("packages/test-engine/src/tests/fixtures/utils.tsc")
+    expect(c).toContain("sum")
+    expect(c).toContain("addOne")
   })
 })

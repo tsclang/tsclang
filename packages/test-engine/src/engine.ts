@@ -144,84 +144,12 @@ export const matrix = {
   }
 }
 
-export interface Expectation {
-  toBe?: string | number
-  toBeGreaterThan?: number
-  toBeLessThan?: number
-  toBeGreaterThanOrEqual?: number
-  toBeLessThanOrEqual?: number
-  toBeTruthy?: boolean
-  toBeFalsy?: boolean
-  toBeNull?: boolean
-  toContain?: string | number
-  toMatch?: string
-}
-
-export function checkExpect(actual: string, expect: Expectation): { passed: boolean, error?: string } {
-  if (expect.toBe !== undefined) {
-    const expected = String(expect.toBe)
-    if (actual !== expected) return { passed: false, error: `expected "${expected}" but got "${actual}"` }
-  }
-  if (expect.toBeGreaterThan !== undefined) {
-    const num = parseFloat(actual)
-    if (isNaN(num) || num <= expect.toBeGreaterThan) return { passed: false, error: `expected ${actual} > ${expect.toBeGreaterThan}` }
-  }
-  if (expect.toBeLessThan !== undefined) {
-    const num = parseFloat(actual)
-    if (isNaN(num) || num >= expect.toBeLessThan) return { passed: false, error: `expected ${actual} < ${expect.toBeLessThan}` }
-  }
-  if (expect.toBeGreaterThanOrEqual !== undefined) {
-    const num = parseFloat(actual)
-    if (isNaN(num) || num < expect.toBeGreaterThanOrEqual) return { passed: false, error: `expected ${actual} >= ${expect.toBeGreaterThanOrEqual}` }
-  }
-  if (expect.toBeLessThanOrEqual !== undefined) {
-    const num = parseFloat(actual)
-    if (isNaN(num) || num > expect.toBeLessThanOrEqual) return { passed: false, error: `expected ${actual} <= ${expect.toBeLessThanOrEqual}` }
-  }
-  if (expect.toBeTruthy !== undefined) {
-    const truthy = actual !== "" && actual !== "0" && actual !== "false"
-    if (expect.toBeTruthy && !truthy) return { passed: false, error: `expected truthy but got "${actual}"` }
-  }
-  if (expect.toBeFalsy !== undefined) {
-    const falsy = actual === "" || actual === "0" || actual === "false"
-    if (expect.toBeFalsy && !falsy) return { passed: false, error: `expected falsy but got "${actual}"` }
-  }
-  if (expect.toBeNull !== undefined) {
-    if (expect.toBeNull && actual !== "null") return { passed: false, error: `expected null but got "${actual}"` }
-  }
-  if (expect.toContain !== undefined) {
-    const expected = String(expect.toContain)
-    if (!actual.includes(expected)) return { passed: false, error: `expected "${actual}" to contain "${expected}"` }
-  }
-  if (expect.toMatch !== undefined) {
-    const regex = new RegExp(expect.toMatch)
-    if (!regex.test(actual)) return { passed: false, error: `expected "${actual}" to match ${expect.toMatch}` }
-  }
-  return { passed: true }
-}
-
 export interface CodegenOptions {
   defaultNumber?: string
   async?: string
   allocator?: string
   target?: string
   strict?: string[]
-}
-
-export interface TestOptions {
-  input?: string
-  file?: string
-  expect?: Expectation
-  expectError?: boolean
-  expectTscError?: boolean | string
-  expectCompileError?: boolean | string
-  expectRuntimeError?: boolean | string
-  expectC?: string
-  expectCContains?: string | string[]
-  expectCNotContains?: string | string[]
-  options?: CodegenOptions
-  compiler?: string
-  timeoutMs?: number
 }
 
 export interface TestResult {
@@ -269,6 +197,10 @@ export function run(code: string, opts?: RunOptions): string {
   const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-run-"))
   try {
     const codegenOpts: any = { ...opts }
+    // AVR capabilities
+    if (codegenOpts.target === "avr") {
+      codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
+    }
     let c: string
     try {
       if (code.includes("import ")) {
@@ -304,22 +236,29 @@ export function run(code: string, opts?: RunOptions): string {
   }
 }
 
-export function compile(code: string): string {
+export function compile(codeOrPath: string): string {
   const codegenOpts: any = {}
-  if (code.includes("import ")) {
+  // Check if input is a file path
+  const isFilePath = codeOrPath.endsWith('.tsc') || codeOrPath.includes('/') || codeOrPath.includes('\\')
+  if (isFilePath) {
+    const filePath = resolve(codeOrPath)
+    return compileTsc(filePath, codegenOpts).c
+  }
+  // Otherwise treat as inline code
+  if (codeOrPath.includes("import ")) {
     const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-compile-"))
     try {
       const tmpFile = join(tmpDir, "test.tsc")
-      writeFileSync(tmpFile, code, "utf8")
+      writeFileSync(tmpFile, codeOrPath, "utf8")
       return compileTsc(tmpFile, codegenOpts).c
     } finally {
       try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
     }
   }
-  const tokens = lex(code, "<compile>")
-  const { ast, errors } = parse(tokens, "<compile>", code)
+  const tokens = lex(codeOrPath, "<compile>")
+  const { ast, errors } = parse(tokens, "<compile>", codeOrPath)
   if (errors.length > 0) throw new TscError(errors[0].message)
-  return codegen(ast, "<compile>", code, codegenOpts).c
+  return codegen(ast, "<compile>", codeOrPath, codegenOpts).c
 }
 
 export function file(path: string): string {
@@ -397,188 +336,19 @@ export function afterEach(fn: () => void): void {
   if (ctx) ctx.afterEach = fn
 }
 
-export function test(name: string, optionsOrCallback: TestOptions | (() => void)): void {
+export function test(name: string, callback: () => void): void {
   const fullName = currentDescribe ? `${currentDescribe} > ${name}` : name
 
-  // New Jest-like API: test("name", () => { ... })
-  if (typeof optionsOrCallback === "function") {
-    for (const ctx of describeStack) { ctx.beforeEach?.() }
-    try {
-      optionsOrCallback()
-      results.push({ name: fullName, passed: true })
-    } catch (e) {
-      results.push({ name: fullName, passed: false, error: e instanceof Error ? e.message : String(e) })
-    } finally {
-      for (const ctx of describeStack) { ctx.afterEach?.() }
-    }
-    return
-  }
-
-  // Old API: test("name", { input: "...", expect: ... })
-  const options = optionsOrCallback
-
   // Вызвать beforeEach для всех describe в стеке
-  for (const ctx of describeStack) {
-    ctx.beforeEach?.()
-  }
-
-  const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-test-engine-"))
-  const runtimeDir = resolve(import.meta.dirname, "../../compiler/src/runtime")
+  for (const ctx of describeStack) { ctx.beforeEach?.() }
 
   try {
-    // === Валидация input/file ===
-    if (options.input && options.file) {
-      results.push({ name: fullName, passed: false, error: "Cannot specify both 'input' and 'file'" })
-      return
-    }
-    if (!options.input && !options.file) {
-      results.push({ name: fullName, passed: false, error: "Must specify either 'input' or 'file'" })
-      return
-    }
-
-    // === Фаза 1: TSC → C ===
-    let c: string
-    try {
-      const codegenOpts: any = { ...options.options }
-      if (codegenOpts.target === "avr") {
-        codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
-      }
-
-      if (options.file) {
-        const filePath = resolve(options.file)
-        c = compileTsc(filePath, codegenOpts).c
-      } else {
-        const tokens = lex(options.input!, "<test>")
-        const { ast, errors: parseErrors } = parse(tokens, "<test>", options.input!)
-        if (parseErrors.length > 0) {
-          throw { isTscErrorBag: true, errors: parseErrors }
-        }
-        c = codegen(ast, "<test>", options.input!, codegenOpts).c
-      }
-    } catch (e) {
-      if (options.expectTscError) {
-        const msg = e instanceof Error ? e.message : String(e)
-        if (typeof options.expectTscError === "string" && !msg.includes(options.expectTscError)) {
-          results.push({ name: fullName, passed: false, error: `TSC error message mismatch: expected "${options.expectTscError}" in "${msg}"` })
-        } else {
-          results.push({ name: fullName, passed: true })
-        }
-        return
-      }
-      if (options.expectError) {
-        results.push({ name: fullName, passed: true, error: "compile error as expected" })
-        return
-      }
-      const msg = e instanceof Error ? e.message : String(e)
-      results.push({ name: fullName, passed: false, error: `unexpected TSC error: ${msg}` })
-      return
-    }
-
-    if (options.expectTscError) {
-      results.push({ name: fullName, passed: false, error: "expected TSC error, got success" })
-      return
-    }
-    if (options.expectError) {
-      results.push({ name: fullName, passed: false, error: "expected compile error, got success" })
-      return
-    }
-
-    // === Фаза 1.5: C-check ===
-    if (options.expectC) {
-      const normalized = normalizeC(c)
-      const expected = normalizeC(options.expectC)
-      if (normalized !== expected) {
-        results.push({ name: fullName, passed: false, error: `C output mismatch:\nexpected:\n${expected}\nactual:\n${normalized}` })
-        return
-      }
-    }
-    if (options.expectCContains) {
-      const substrings = Array.isArray(options.expectCContains) ? options.expectCContains : [options.expectCContains]
-      for (const sub of substrings) {
-        if (!c.includes(sub)) {
-          results.push({ name: fullName, passed: false, error: `C output missing "${sub}"` })
-          return
-        }
-      }
-    }
-    if (options.expectCNotContains) {
-      const substrings = Array.isArray(options.expectCNotContains) ? options.expectCNotContains : [options.expectCNotContains]
-      for (const sub of substrings) {
-        if (c.includes(sub)) {
-          results.push({ name: fullName, passed: false, error: `C output unexpectedly contains "${sub}"` })
-          return
-        }
-      }
-    }
-
-    // === Фаза 2: C → binary ===
-    const compilerName = options.compiler ?? getDefaultCompiler()
-    const backend = getBackend(compilerName)
-    if (!backend || !backend.isAvailable()) {
-      results.push({ name: fullName, passed: false, error: `compiler "${compilerName}" not available` })
-      return
-    }
-
-    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir] })
-    if (!compileResult.success) {
-      if (options.expectCompileError) {
-        if (typeof options.expectCompileError === "string" && !compileResult.stderr.includes(options.expectCompileError)) {
-          results.push({ name: fullName, passed: false, error: `compile error message mismatch: expected "${options.expectCompileError}" in "${compileResult.stderr}"` })
-        } else {
-          results.push({ name: fullName, passed: true })
-        }
-        return
-      }
-      results.push({ name: fullName, passed: false, error: `unexpected compile error: ${compileResult.stderr}` })
-      return
-    }
-    if (options.expectCompileError) {
-      results.push({ name: fullName, passed: false, error: "expected compile error, got success" })
-      return
-    }
-
-    // === Фаза 3: Runtime ===
-    if (backend.run) {
-      const timeoutMs = options.timeoutMs ?? 5000
-      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs })
-      if (!runResult.success || runResult.exitCode !== 0) {
-        if (options.expectRuntimeError) {
-          if (typeof options.expectRuntimeError === "string" && !runResult.stderr.includes(options.expectRuntimeError)) {
-            results.push({ name: fullName, passed: false, error: `runtime error message mismatch: expected "${options.expectRuntimeError}" in "${runResult.stderr}"` })
-          } else {
-            results.push({ name: fullName, passed: true })
-          }
-          return
-        }
-        results.push({ name: fullName, passed: false, error: `unexpected runtime error: exit=${runResult.exitCode} stderr=${runResult.stderr}` })
-        return
-      }
-      if (options.expectRuntimeError) {
-        results.push({ name: fullName, passed: false, error: "expected runtime error, got success" })
-        return
-      }
-
-      // === Позитивная проверка stdout ===
-      if (options.expect) {
-        const actual = runResult.stdout.trim()
-        const result = checkExpect(actual, options.expect)
-        if (result.passed) {
-          results.push({ name: fullName, passed: true, actual })
-        } else {
-          results.push({ name: fullName, passed: false, actual, error: result.error })
-        }
-      } else {
-        results.push({ name: fullName, passed: true })
-      }
-    } else {
-      results.push({ name: fullName, passed: true })
-    }
+    callback()
+    results.push({ name: fullName, passed: true })
+  } catch (e) {
+    results.push({ name: fullName, passed: false, error: e instanceof Error ? e.message : String(e) })
   } finally {
-    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
-    // Вызвать afterEach для всех describe в стеке
-    for (const ctx of describeStack) {
-      ctx.afterEach?.()
-    }
+    for (const ctx of describeStack) { ctx.afterEach?.() }
   }
 }
 

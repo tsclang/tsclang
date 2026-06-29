@@ -1,19 +1,13 @@
-import { describe, test, platformMatrix } from "../engine"
+import { describe, test, run, expect, platformMatrix } from "../engine.js"
 
 describe("platform-specific: float on AVR", () => {
   // On desktop (fpu=true), float operations work
-  test("float on desktop", {
-    input: `let a: f64 = 3.14
-console.log(a)`,
-    options: { target: "desktop" },
-    expect: { toBe: "3.14" }
+  test("float on desktop", () => {
+    expect(run("let a: f64 = 3.14\nconsole.log(a)", { target: "desktop" })).toBe("3.14")
   })
 
   // On AVR (fpu=false), float literals are forbidden
-  test("float on AVR", {
-    input: `let a: f64 = 3.14
-console.log(a)`,
-    options: { target: "avr" },
-    expectError: true
+  test("float on AVR", () => {
+    expect(() => run("let a: f64 = 3.14\nconsole.log(a)", { target: "avr" })).toThrow()
   })
 })

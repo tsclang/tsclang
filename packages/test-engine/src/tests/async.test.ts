@@ -1,10 +1,10 @@
-import { describe, test } from '../engine.js'
+import { describe, test, compile, expect } from '../engine.js'
 
 describe('async tests', () => {
-  test('async function compiles', {
-    input: `async function getValue(): i32 {
+  test('async function compiles', () => {
+    const c = compile(`async function getValue(): i32 {
   return 42
-}`,
-    expectCContains: 'getValue_poll'
+}`)
+    expect(c).toContain('getValue_poll')
   })
 })

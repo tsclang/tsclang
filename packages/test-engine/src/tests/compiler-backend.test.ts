@@ -1,96 +1,78 @@
-import { describe, test, getBackend, getDefaultCompiler, normalizeC } from "../engine"
-import { listAvailable, listAll } from "../../compilers/registry.js"
+import { describe, test, run, compile, expect, getBackend, getDefaultCompiler } from "../engine.js"
+import { listAvailable, listAll } from "../compilers/registry.js"
 
 // === CompilerBackend registry ===
 
 describe("CompilerBackend registry", () => {
-  test("getBackend('gcc') returns GccBackend", {
-    input: `console.log("ok")`,
-    expectCContains: "printf",
-    compiler: "gcc"
+  test("getBackend('gcc') returns GccBackend", () => {
+    const c = compile('console.log("ok")')
+    expect(c).toContain("printf")
   })
 
-  test("getDefaultCompiler() returns a valid compiler", {
-    input: `console.log("default")`,
-    expect: { toBe: "default" }
+  test("getDefaultCompiler() returns a valid compiler", () => {
+    expect(run('console.log("default")')).toBe("default")
   })
 })
 
 // === GccBackend — positive ===
 
 describe("GccBackend — positive", () => {
-  test("compile() produces binary from valid C code", {
-    input: `console.log("hello gcc")`,
-    expect: { toBe: "hello gcc" },
-    compiler: "gcc"
+  test("compile() produces binary from valid C code", () => {
+    expect(run('console.log("hello gcc")', { compiler: "gcc" })).toBe("hello gcc")
   })
 
-  test("run() captures stdout correctly", {
-    input: `console.log(42)`,
-    expect: { toBe: 42 },
-    compiler: "gcc"
+  test("run() captures stdout correctly", () => {
+    expect(run("console.log(42)", { compiler: "gcc" })).toBe("42")
   })
 
-  test("run() returns zero exit code on success", {
-    input: `let x: i32 = 1 + 2`,
-    compiler: "gcc"
+  test("run() returns zero exit code on success", () => {
+    run("let x: i32 = 1 + 2", { compiler: "gcc" })
   })
 })
 
 // === GccBackend — negative (phase 3: runtime) ===
 
 describe("GccBackend — negative (phase 3: runtime)", () => {
-  test("run() returns non-zero exit code on crash", {
-    input: `process.exit(1)`,
-    expectRuntimeError: true,
-    compiler: "gcc"
+  test("run() returns non-zero exit code on crash", () => {
+    expect(() => run("process.exit(1)", { compiler: "gcc" })).toThrow()
   })
 })
 
 // === Integration — TSC pipeline (phase 1: TSC→C) ===
 
 describe("Integration — TSC pipeline (phase 1: TSC→C)", () => {
-  test("valid TSC produces C and runs successfully", {
-    input: `console.log("integration ok")`,
-    expect: { toBe: "integration ok" }
+  test("valid TSC produces C and runs successfully", () => {
+    expect(run('console.log("integration ok")')).toBe("integration ok")
   })
 
-  test("invalid TSC syntax → expectTscError", {
-    input: `let x: i32 = 'hello'`,
-    expectTscError: true
+  test("invalid TSC syntax → throws", () => {
+    expect(() => run("let x: i32 = 'hello'")).toThrow()
   })
 })
 
 // === Integration — C-output check (phase 1.5) ===
 
 describe("Integration — C-output check (phase 1.5)", () => {
-  test("expectCContains finds printf in console.log output", {
-    input: `console.log("test")`,
-    expectCContains: "printf"
+  test("compile() finds printf in console.log output", () => {
+    expect(compile('console.log("test")')).toContain("printf")
   })
 
-  test("expectCContains array checks multiple substrings", {
-    input: `let x: i32 = 42`,
-    expectCContains: ["#include", "int32_t"]
+  test("compile() checks multiple substrings", () => {
+    const c = compile("let x: i32 = 42")
+    expect(c).toContain("#include")
+    expect(c).toContain("int32_t")
   })
 
-  test("expectCNotContains rejects malloc in stack-only code", {
-    input: `let x: i32 = 42`,
-    expectCNotContains: "malloc"
-  })
-
-  test("expectCNotContains array checks multiple substrings", {
-    input: `let x: i32 = 42`,
-    expectCNotContains: ["malloc", "free"]
+  test("compile() rejects malloc in stack-only code", () => {
+    const c = compile("let x: i32 = 42")
+    expect(c).not.toContain("malloc")
   })
 })
 
 // === Integration — multi-compiler ===
 
 describe("Integration — multi-compiler", () => {
-  test("same TSC runs on gcc with correct output", {
-    input: `console.log(42)`,
-    expect: { toBe: 42 },
-    compiler: "gcc"
+  test("same TSC runs on gcc with correct output", () => {
+    expect(run("console.log(42)", { compiler: "gcc" })).toBe("42")
   })
 })

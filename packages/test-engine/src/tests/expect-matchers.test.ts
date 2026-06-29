@@ -1,43 +1,35 @@
-import { describe, test } from '../engine.js'
+import { describe, test, run, expect } from '../engine.js'
 
 describe('expect matchers', () => {
-  test('toBe', {
-    input: 'console.log(42)',
-    expect: { toBe: 42 }
+  test('toBe', () => {
+    expect(run('console.log(42)')).toBe('42')
   })
 
-  test('toBeGreaterThan', {
-    input: 'console.log(100)',
-    expect: { toBeGreaterThan: 50 }
+  test('toBeGreaterThan', () => {
+    expect(Number(run('console.log(100)'))).toBeGreaterThan(50)
   })
 
-  test('toBeLessThan', {
-    input: 'console.log(10)',
-    expect: { toBeLessThan: 20 }
+  test('toBeLessThan', () => {
+    expect(Number(run('console.log(10)'))).toBeLessThan(20)
   })
 
-  test('toContain', {
-    input: 'console.log("hello world")',
-    expect: { toContain: 'world' }
+  test('toContain', () => {
+    expect(run('console.log("hello world")')).toContain('world')
   })
 
-  test('toBeTruthy', {
-    input: 'console.log(1)',
-    expect: { toBeTruthy: true }
+  test('toBeTruthy', () => {
+    expect(run('console.log(1)')).toBeTruthy()
   })
 
-  test('toBeFalsy', {
-    input: 'console.log(0)',
-    expect: { toBeFalsy: true }
+  test('toBeFalsy', () => {
+    expect(run('console.log(0)')).toBeFalsy()
   })
 
-  test('toBeNull', {
-    input: 'console.log("null")',
-    expect: { toBeNull: true }
+  test('toBeNull', () => {
+    expect(run('console.log("null")')).toBeNull()
   })
 
-  test('toMatch regex', {
-    input: `console.log("abc123")`,
-    expect: { toMatch: '^[a-z]+[0-9]+$' }
+  test('toMatch regex', () => {
+    expect(run('console.log("abc123")')).toMatch('^[a-z]+[0-9]+$')
   })
 })
