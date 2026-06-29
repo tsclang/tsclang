@@ -242,6 +242,129 @@ interface DescribeContext {
 
 let results: TestResult[] = []
 let currentDescribe = ""
+
+// === Jest-like API ===
+
+export class TscError extends Error {
+  constructor(message: string) { super(message); this.name = "TscError"; }
+}
+
+export class CompileError extends Error {
+  constructor(message: string) { super(message); this.name = "CompileError"; }
+}
+
+export class RuntimeError extends Error {
+  constructor(message: string) { super(message); this.name = "RuntimeError"; }
+}
+
+export interface RunOptions {
+  compiler?: string
+  target?: string
+  defaultNumber?: string
+  strict?: string[]
+  timeoutMs?: number
+}
+
+export function run(code: string, opts?: RunOptions): string {
+  const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-run-"))
+  try {
+    const codegenOpts: any = { ...opts }
+    let c: string
+    try {
+      if (code.includes("import ")) {
+        const tmpFile = join(tmpDir, "test.tsc")
+        writeFileSync(tmpFile, code, "utf8")
+        c = compileTsc(tmpFile, codegenOpts).c
+      } else {
+        const tokens = lex(code, "<run>")
+        const { ast, errors } = parse(tokens, "<run>", code)
+        if (errors.length > 0) throw { isTscErrorBag: true, errors }
+        c = codegen(ast, "<run>", code, codegenOpts).c
+      }
+    } catch (e) {
+      throw new TscError(e instanceof Error ? e.message : String(e))
+    }
+
+    const compilerName = opts?.compiler ?? getDefaultCompiler()
+    const backend = getBackend(compilerName)
+    if (!backend || !backend.isAvailable()) throw new CompileError(`compiler "${compilerName}" not available`)
+
+    const runtimeDir = resolve(import.meta.dirname, "../../compiler/src/runtime")
+    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir] })
+    if (!compileResult.success) throw new CompileError(compileResult.stderr)
+
+    if (backend.run) {
+      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000 })
+      if (!runResult.success || runResult.exitCode !== 0) throw new RuntimeError(runResult.stderr || `exit code ${runResult.exitCode}`)
+      return runResult.stdout.trim()
+    }
+    return ""
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+  }
+}
+
+export function compile(code: string): string {
+  const codegenOpts: any = {}
+  if (code.includes("import ")) {
+    const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-compile-"))
+    try {
+      const tmpFile = join(tmpDir, "test.tsc")
+      writeFileSync(tmpFile, code, "utf8")
+      return compileTsc(tmpFile, codegenOpts).c
+    } finally {
+      try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+    }
+  }
+  const tokens = lex(code, "<compile>")
+  const { ast, errors } = parse(tokens, "<compile>", code)
+  if (errors.length > 0) throw new TscError(errors[0].message)
+  return codegen(ast, "<compile>", code, codegenOpts).c
+}
+
+export function file(path: string): string {
+  return require("fs").readFileSync(resolve(path), "utf8")
+}
+
+export function expect(actual: any) {
+  if (typeof actual === "function") {
+    return {
+      toThrow(ErrorClass?: any) {
+        try { actual(); } catch (e) {
+          if (ErrorClass && !(e instanceof ErrorClass)) throw new Error(`expected ${ErrorClass.name} but got ${e.constructor.name}`)
+          return
+        }
+        throw new Error("expected function to throw")
+      },
+      get not() {
+        return {
+          toThrow() {
+            try { actual(); } catch { throw new Error("expected function not to throw") }
+          }
+        }
+      }
+    }
+  }
+  const s = String(actual)
+  return {
+    toBe(expected: any) { if (s !== String(expected)) throw new Error(`expected "${String(expected)}" but got "${s}"`) },
+    toBeGreaterThan(n: number) { if (parseFloat(s) <= n) throw new Error(`expected ${s} > ${n}`) },
+    toBeLessThan(n: number) { if (parseFloat(s) >= n) throw new Error(`expected ${s} < ${n}`) },
+    toContain(sub: string) { if (!s.includes(sub)) throw new Error(`expected "${s}" to contain "${sub}"`) },
+    toMatch(regex: string) { if (!new RegExp(regex).test(s)) throw new Error(`expected "${s}" to match ${regex}`) },
+    toBeTruthy() { if (!s || s === "0" || s === "false") throw new Error(`expected truthy but got "${s}"`) },
+    toBeFalsy() { if (s && s !== "0" && s !== "false") throw new Error(`expected falsy but got "${s}"`) },
+    toBeNull() { if (s !== "null") throw new Error(`expected null but got "${s}"`) },
+    get not() {
+      const self = this
+      return {
+        toContain(sub: string) { if (s.includes(sub)) throw new Error(`expected "${s}" not to contain "${sub}"`) },
+        toThrow() { /* handled above */ }
+      }
+    }
+  }
+}
+
 let describeStack: DescribeContext[] = []
 
 export function describe(name: string, fn: () => void): void {
@@ -274,8 +397,25 @@ export function afterEach(fn: () => void): void {
   if (ctx) ctx.afterEach = fn
 }
 
-export function test(name: string, options: TestOptions): void {
+export function test(name: string, optionsOrCallback: TestOptions | (() => void)): void {
   const fullName = currentDescribe ? `${currentDescribe} > ${name}` : name
+
+  // New Jest-like API: test("name", () => { ... })
+  if (typeof optionsOrCallback === "function") {
+    for (const ctx of describeStack) { ctx.beforeEach?.() }
+    try {
+      optionsOrCallback()
+      results.push({ name: fullName, passed: true })
+    } catch (e) {
+      results.push({ name: fullName, passed: false, error: e instanceof Error ? e.message : String(e) })
+    } finally {
+      for (const ctx of describeStack) { ctx.afterEach?.() }
+    }
+    return
+  }
+
+  // Old API: test("name", { input: "...", expect: ... })
+  const options = optionsOrCallback
 
   // Вызвать beforeEach для всех describe в стеке
   for (const ctx of describeStack) {
