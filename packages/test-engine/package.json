@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "tsclang-test": "./bin/tsclang-test.ts"
+  },
   "scripts": {
     "start": "tsx test-engine/run.ts",
     "test": "tsx test-engine/run.ts"
