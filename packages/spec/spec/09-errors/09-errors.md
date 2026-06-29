@@ -202,6 +202,34 @@ const x = risky()? + 1;         // propagate (if enclosing function throws)
 
 > **Coverage:** Проверка рекурсивно обходит все nested expressions: binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new, typeof, drop, yield, await, match. Дополнительно проверяются statement-boundary позиции: условия `if`/`while`/`do-while`/`for`, `switch` discriminant, `throw` value, `return` value (с auto-propagate guard для throws-функций). См. `_checkNoBareThrows` в `codegen.ts`.
 
+### Throws на методах
+
+Методы классов могут объявлять `throws` так же, как функции:
+
+````typescript
+class FileReader {
+  read(path: string): string throws IOError {
+    // ...
+  }
+}
+
+// ❌ error: Call to throws method 'read()' requires error handling
+const reader = new FileReader()
+reader.read("data.txt")
+
+// ✅ propagate
+const content = reader.read("data.txt")?
+
+// ✅ unwrap
+const content = reader.read("data.txt")!
+
+// ✅ assign
+const result = reader.read("data.txt")
+if (result.ok) { ... }
+````
+
+Bare-throws detection работает для методов так же, как для функций: вызов `obj.method()` где метод объявлен с `throws` — ошибка компилятора, если нет `?`, `!` или assignment.
+
 ### Math try/catch и non-MathError throws
 
 Внутри `try { ... } catch (e: MathError) { ... }` (math try/catch), вызов throws-функции с **non-MathError** типом — ошибка компилятора. Компилятор не может молча проигнорировать Result-struct (это был бы silent no-op):
