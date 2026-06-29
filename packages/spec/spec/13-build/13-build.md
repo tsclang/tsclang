@@ -2304,6 +2304,48 @@ tsclang run
   # запускает: ./build/desktop/myapp --port 8080 --verbose
   ```
 
+## `tsclang test` подробно
+
+```bash
+tsclang test              # запустить тесты из test/
+tsclang test my-tests     # запустить тесты из my-tests/
+```
+
+Ищет `*.test.ts` файла в указанной директории (по умолчанию `test/`), запускает каждый через `tsx` как subprocess, проверяет exit code.
+
+### Структура тестового проекта
+
+```
+myapp/
+  src/
+    main.tsc
+    math.tsc
+  test/
+    math.test.ts
+  tsc.package.json
+```
+
+### Формат тестового файла
+
+```typescript
+import { describe, test } from "../packages/test-engine/test-engine/engine"
+
+describe("math", () => {
+  test("sum works", {
+    input: `console.log(sum(1, 2))`,
+    expect: { toBe: 3 }
+  })
+})
+```
+
+### Встроенный при `tsclang init`
+
+`tsclang init` создаёт `test/main.test.tsc` с примером теста.
+
+### Делегирование
+
+`tsclang test` вызывает `tsclang-test` (standalone CLI из `@tsclang/test-engine`) через subprocess.
+
 ## `tsclang dev` подробно *[NOT YET IMPLEMENTED]*
 
 Текущая реализация: `tsclang build --watch` / `-w` — отслеживает изменения файлов и пересобирает.
