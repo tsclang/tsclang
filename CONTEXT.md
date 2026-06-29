@@ -1,577 +1,192 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST — no need to re-read spec/ unless doing specific work. Last updated: 2026-06-29 (throws on methods, Math.saturatingCast/checkedCast, test engine: expect matchers/hooks/standalone CLI, tsclang test command).
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-06-29.
 
 ---
 
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `packages/compiler/src/compiler/` (lexer.ts → parser.ts → codegen.ts → C string). JS→TS migration complete. ZERO .js files. All 74 project files are .ts. ZERO @ts-nocheck. `strict: true` (8/8 strict options).
-- **Runtime:** `packages/compiler/src/runtime/runtime.h` (C header, included in every output)
-- **CLI:** `packages/compiler/src/index.ts` (94-line slim dispatcher) → `packages/compiler/src/cli/commands/*.ts` (one module per command). Compiles to `packages/compiler/dist/index.js` via `npm run build`. `package.json` bin → `./dist/index.js`.
-- **Tests:** `tsx packages/tests/test/runner.ts 03-types` (15 spec-based dirs, **1764 tests** `--no-gcc`, all pass)
-- **Build:** `npm run typecheck` (tsc --noEmit, `strict: true`), `npm run build` (tsc → dist/), `tsx` for dev
-- **Targets:** desktop (libuv), embedded (AVR, no heap), retro (NES/Genesis/Spectrum), WASM
-- **Design:** TS syntax + C backend + Rust-style ownership (no GC, no manual free)
-- **Next goal:** Self-hosting (#47–#50 gaps: string methods, file I/O, CLI args, StringBuilder).
+- **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). `strict: true`, ZERO @ts-nocheck.
+- **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
+- **CLI:** `packages/compiler/src/index.ts` → `packages/compiler/src/cli/commands/*.ts`
+- **Tests:** 1764 spec-based tests (`--no-gcc`) + 127 engine tests
+- **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
+- **Next goal:** Self-hosting (#47–#50)
 
 ---
 
 ## 2. Compiler Pipeline
 
 ```
-input.tsc
-  → lexer.ts        (lex → tokens)
-  → parser.ts       (parse → AST, returns { ast, errors } with recovery)
-  → [optimizer.ts]  (optional: --opt, AST-level: const fold, dead branch, strength reduce)
-  → codegen.ts      (codegen(ast, filename, src, opts) → { c, warnings, exports })
-      └─ Context class walks AST → emits C string
-  → runtime.h       (prepended to output, provides all C types/macros)
-  → output.c        (→ gcc/avr-gcc/emcc → binary/hex/wasm)
+input.tsc → lexer.ts → parser.ts → [optimizer.ts] → codegen.ts → runtime.h → output.c
 ```
 
-**Key entry points:**
-- `codegen()` in `codegen.ts:26` — creates `Context`, calls `visitProgram(ast)`, returns `ctx.emit()`
-- `Context.visitProgram(ast)` in `top-level/program.ts` — dispatches top-level nodes
-- `visitStmtInMain(node)` in `stmt.ts` — thin dispatcher for statements
-- `exprToC(node)` in `expr/dispatch.ts` — main expression → C string converter
+**Entry points:** `codegen()` in `codegen.ts:26`, `compileTsc()` in `compile.ts` (recursive imports).
 
-**Pre-scan phase:** Before codegen of function bodies, compiler pre-scans top-level declarations to populate `this.classes`, `this.interfaces`, `this._typeAliases`, function signatures (for overloads), and platform capability checks. (Note: Result type emission is now **lazy** per-function via `_emittedResultTypes` Set in `func.ts`, not pre-scanned.)
+**Pre-scan:** Populates `this.classes`, `this.interfaces`, function signatures before body codegen.
 
-**Generics:** Monomorphization in `generics.ts`. Each concrete instantiation (`Box<i32>`) generates separate C code. `_genericClasses` / `_genericFuncs` Maps track instantiations. `substNode` substitutes typeArgs in AST.
+**Generics:** Monomorphization in `generics.ts`. Each instantiation generates separate C code.
 
-**Module bundling:** `packages/compiler/src/compiler/compile.ts` `compileTsc()` recursively compiles imports. Each module gets `modulePrefix` (basename). All top-level C symbols mangled with prefix. `opts.libraryMode` = emit without `#include`/`main()`.
+**Module bundling:** `compileTsc()` recursively compiles imports. Module prefix mangles all C symbols.
 
 ---
 
 ## 3. Codegen Architecture
 
-### Context class (`codegen.ts:109`)
+**Context class** (~888 lines, 51 mixin files). Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`, `TypeChecker`.
 
-God-object with ~300+ methods (~888 lines). Split across **51 files** via mixin pattern (modules export objects spread onto `Context.prototype`).
+**Module map:** `top-level/` (7), `stmt/` (5), `expr/` (5), `calls/` (9), `types/` (4), `misc/` (5), `async/` (6).
 
-**Extracted state objects** (delegated from Context):
-- `ScopeManager` (`codegen/scope-manager.ts`) — scope stack, `define()`/`lookup()`.
-- `BorrowTracker` (`codegen/borrow-tracker.ts`) — Ref/Mut borrow tracking, quarantine, scope-exit cleanup.
-- `OutputBuffer` (`codegen/output-buffer.ts`) — output sections (`includes`/`typedefs`/`topLevel`/`mainStmts`/`lambdaLines`), `addTop()`/`addLambda()`.
-- `TypeChecker` (`typechecker.ts`) — type resolution + inference (resolveType, inferType, _effectiveType, etc.). **Proxy-based delegation**: forwards `this.X` to `this.ctx.X`. Context delegates via wrapper methods.
-
-**IR pipeline — DEFERRED:** Prototype removed. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Revisit post-self-hosting (#30).
-
-### Module map
-
-| Directory | Files | Responsibility |
-|-----------|-------|----------------|
-| `codegen.ts` | 1 | `codegen()` entry, `Context` class, cleanup core, `emit()` assembly |
-| `codegen/scope-manager.ts` | 1 | **ScopeManager** — scope stack, `define()`/`lookup()`/`pushScope()`/`popScope()` |
-| `codegen/borrow-tracker.ts` | 1 | **BorrowTracker** — Ref/Mut borrow tracking, quarantine, scope-exit cleanup |
-| `codegen/output-buffer.ts` | 1 | **OutputBuffer** — output sections, `addTop()` smart routing, `addLambda()` |
-| `top-level/` | 7 | `index.ts`, `dispatch.ts` (entry), `program.ts` (visitProgram, pre-scan), `func.ts`, `class.ts`, `types-alias.ts`, `decorators.ts` |
-| `stmt/` | 5 | `index.ts`, `stmt.ts` (visitStmtInMain dispatcher), `vardecl.ts` (let/const), `control-flow.ts` (if/while/for/switch/try-catch/break/continue), `destruct.ts`, `match.ts` |
-| `expr/` | 5 | `index.ts`, `dispatch.ts` (exprToC), `operators.ts`, `assign.ts`, `literals.ts` |
-| `calls/` | 9 | `index.ts`, `call-dispatch.ts` (function calls), `method-dispatch.ts` (method calls, chains), `console.ts`, `stdlib.ts` (Map/Set/array methods), `builtin.ts`, `builtin-helpers.ts`, `conversion.ts` (parseInt/toString), `concurrency.ts` (Atomic/channel/spawn) |
-| `types/` | 4 | `index.ts`, `resolve.ts` (TSC type → C type), `infer.ts` (expression type inference), `helpers.ts` (`_ensure*Struct`, `_wrapOptValue`, mangle helpers) |
-| `misc/` | 5 | `index.ts`, `arrays.ts` (array literals), `closures.ts` (lambda hoisting, capture), `new-expr.ts` (new X()), `emit-helpers.ts` (spawn, Thread) |
-| `async/` | 6 | `index.ts`, `async-stmt.ts` (emit async statements), `async-emit.ts` (state machine poll fn), `generator.ts`, `scan.ts` (collect await states, liveness), `helpers.ts` |
-| `types.ts` | 1 | `PRIMITIVE_MAP`, `toCType`, `mangleType`, `fmtSpec`, `inferLiteralCType` |
-
-### Key Context state (the `this.*` properties)
-
-**Symbol table & scope (delegated to ScopeManager):**
-- `this.classes` — `Map<name, { fields, methods, decorators, _isHeap, _isPool, ... }>`
-- `this.interfaces` — `Map<name, { methods }>`
-- `this._typeAliases` — `Map<name, TypeRef>`
-- `define(name, info)` — auto-marks heap vars, delegates to `_scopeMgr`. `info` = `{ ctype, varKind, isRefParam, isMutParam, isArc, isWeak, _moved, ... }`
-
-**Borrow tracking** — delegated to `BorrowTracker`. Context coordinates `pushScope()`/`popScope()` across both ScopeManager + BorrowTracker. `_checkBorrowsAcrossAwait` and `_trackBorrowForRefReturn` stay on Context (need `this.error()`/`this.interfaces`). See Section 5 for semantics.
-
-**Cleanup system** — `_blockCleanupStack` (per-block), `_heapVarStack` (auto-free at scope), `_loopCleanupStack` (labeled break), `_usesGotoCleanup` (throws functions). `_emitFuncCleanup()` emits all pending before return/throw. `_snapshotHeapMoved`/`_restoreHeapMoved` for conditional paths. See Section 5 for semantics.
-
-**Lazy emission guards** — `_emittedArrayStructs`/`_emittedOptStructs`/`_emittedResultTypes`/`_emittedTuples`/`_emittedMapStructs` Sets. Pattern: `_ensureXxx(name, ...)` checks Set → emit typedef → add to Set.
-
-**Capabilities & config:**
-- `this._capabilities` — `{ allocator, async, fpu, bits, usize, defaultNumber, posix, strtoll, console_uart, os }`
-- `this._cap(key)` — capability lookup with DESKTOP_CAPABILITIES fallback
-- `this._ptrBytes()` — pointer size from `_cap('usize')`: `{u16:2, u32:4, u64:8}`
-- `this._strictRules` — `Set<string>` (`no-any`, `safe-math`, `no-closures`, ...)
-- `this._defaultNumber` — Priority: CLI > builds > profile > DESKTOP_CAPABILITIES ('f64')
-
-**Output buffers** — delegated to `OutputBuffer`. `ctx.emit()` assembles: includes + typedefs + lambdaLines + topLevel + `int main() { mainStmts }`.
-
-### Common patterns
-
-- **`_ensureXxx(name, ...)`** — lazy struct/typedef generation. Check Set → emit → add to Set.
-- **`exprToC(node)`** — returns C string. Switch on `node.kind` (`'Ident'`, `'Binary'`, `'Call'`, `'Member'`, `'Index'`, `'Lambda'`, etc.)
-- **`this.define(name, {ctype, varKind, ...})`** — registers variable in scope
-- **`this.lookup(name)`** — searches scope stack bottom-up
-- **`this.error(msg, node)` / `this.warn(msg)`** — diagnostics (TscError, rustc-style)
-- **`_checkMoved(sym, node, name)`** — E002 use-after-move check
-- **`_postStmtCleanups`** — deferred cleanups after statement (e.g., zero-out after move)
-- **`hoistClosure(node, ...)`** — lifts lambda to file-scope function + env struct
+**Common patterns:** `_ensureXxx()` (lazy typedefs), `exprToC(node)` (expr→C), `define()`/`lookup()` (scope), `hoistClosure()` (lambda lifting).
 
 ---
 
 ## 4. Type System → C Mapping
 
-### Primitive types (`types.ts: PRIMITIVE_MAP`)
+See `spec/03-types/` for full details. Key mappings:
 
-| TSC type | C type | printf fmt | Notes |
-|----------|--------|------------|-------|
-| `number` | `double` | `tsc_format_double` | resolves to `defaultNumber` C type per profile (f64/f32/i32/i16) |
-| `i8` | `int8_t` | `%d` | |
-| `i16` | `int16_t` | `%d` | |
-| `i32` | `int32_t` | `%d` desktop, `%ld`+(long) when `_cap('bits') < 32` | AVR `int`=16bit! |
-| `i64` | `int64_t` | `%lld` | no-i64-print strict rule on embedded |
-| `u8`–`u64` | `uint8_t`–`uint64_t` | `%u`/`%lu`/`%llu` | |
-| `f32` | `float` | `tsc_format_double` | |
-| `f64` | `double` | `tsc_format_double` | |
-| `boolean` | `bool` | `%d` (0/1) | TSC name = `boolean`, NOT `bool` |
-| `usize` | `size_t` | `%zu` desktop, `%u`+cast when `_cap('bits') < 32` | platform-dependent (u16/u32/u64) |
-| `isize` | `ptrdiff_t` | `%td` | |
-| `char` | `uint8_t` | `%c` | single-char string `'A'` = char code |
-| `void` | `void` | — | |
-| `string` | `String` | `%.*s` + `.data,.length` | immutable ARC struct, NOT `char*` |
+| TSC | C | Notes |
+|-----|---|-------|
+| `i32` | `int32_t` | AVR `int`=16bit! |
+| `f64` | `double` | `defaultNumber` on desktop |
+| `string` | `String` (struct) | ARC, NOT `char*` |
+| `T[]` | `Array_T` | heap, growable |
+| `T \| null` | `opt_T` | `{ bool has_value; T value; }` |
+| `Ref<T>` | `const T*` | immutable borrow |
+| `Arc<T>` | `T*` + refcount | desktop only |
 
-**CRITICAL:** TSC uses `boolean`/`string` (lowercase). `bool`/`String` (capitalized) are REJECTED as TSC types — they're C-only.
-
-### String struct (runtime.h)
-```c
-typedef struct {
-    char* data;       // UTF-8 bytes
-    size_t length;    // byte count (NOT char count)
-    size_t capacity;  // 0 = literal/rodata (non-owning), >0 = heap (ARC)
-    #ifndef TSC_EMBEDDED
-    uint32_t _refcount;  // ARC refcount (desktop only)
-    #endif
-} String;
-```
-- `capacity = 0` → literal, no ARC (retain/release = no-op)
-- `capacity > 0` → heap-allocated, ARC managed
-- `tsc_string_retain(s)` / `tsc_string_release(s)` — ARC ops
-- String params = **implicit borrow** (caller owns, no retain/release in callee)
-
-### Complex types → C
-
-| TSC type | C representation | Notes |
-|----------|-----------------|-------|
-| `T` (owned class) | `T value` (stack value type) | move on assign, `_free()` destructor |
-| `T[]` (dynamic array) | `Array_T { T* data; size_t length; size_t capacity; }` | heap, growable |
-| `T[N]` (fixed array) | `T name[N]` | stack, compile-time size |
-| `[A, B]` (tuple) | `Tuple_A_B { A _0; B _1; }` | struct, labeled = dot access |
-| `T | null` (nullable) | `opt_T { bool has_value; T value; }` or `{ bool has_value; T* ptr; }` | primitive vs complex |
-| `Ref<T>` | `const T* ptr` | immutable borrow |
-| `Mut<T>` | `T* ptr` | mutable borrow |
-| `Arc<T>` | `T* ptr` + `_refcount`/`_weakcount` in struct | ARC, desktop only |
-| `Weak<T>` | same struct as Arc | `tsc_weak_create`/`upgrade`/`release` |
-| `Slice<T>` | `{ T* ptr; size_t length; }` | zero-copy view |
-| interface w/ methods | fat ptr `{ void* self; const Iface_vtable* vtable; }` | dyn dispatch |
-| `@heap` class | `T* ptr` (malloc'd) | heap-allocated, auto-free at scope |
-| `@pool(N)` class | `opt_ref_T { bool has_value; T* value; int idx; }` | static pool in BSS |
-| `@struct` class | `T value` (no vtable, no methods) | pure value type |
-| `unknown` | `tsc_unknown { uint32_t type_id; vtable* vtable; uint8_t buffer[24]; }` | type-tagged container |
-
-### Name mangling (`types.ts: mangleType`)
-
-```
-foo(i32, string)     → foo_i32_string
-Array<T>             → Array_T (e.g., Array_string, Array_i32)
-T | null             → opt_T (e.g., opt_i32, opt_string)
-Ref<T>               → ref_T (pointer)
-Map<K,V>             → TscMap_K_V (e.g., TscMap_string_i32)
-Result<T,E>          → Result_T_E (e.g., Result_i32_TscError)
-```
-
-Reserved prefixes (user types starting with these = error): `ref_`, `mut_`, `arc_`, `weak_`, `opt_`, `Array_`, `Tuple_`, `TscMap_`, `Result_`
+**Critical:** `boolean`/`string` (TSC) vs `bool`/`String` (C). Reserved prefixes: `ref_`, `mut_`, `arc_`, `opt_`, `Array_`, `Result_`.
 
 ---
 
 ## 5. Ownership Model
 
-### Core rules
-
 | Operation | Primitive | String | Class/Array |
 |-----------|-----------|--------|-------------|
-| `let b = a` | copy | retain (ARC copy) | **move** + zero-out source |
-| `const b = a` | copy (const) | retain (ARC copy) | **move** + zero-out source |
-| `b = a` (reassign) | copy | release old, retain new | release old, move new, zero-out source |
-| `foo(a)` (T param) | copy | implicit borrow (no retain) | **move** (zero-out caller) |
-| `foo(a)` (Ref param) | copy | borrow | borrow (`const T*`) |
-| `foo(a)` (Mut param) | copy | borrow | borrow (`T*`) |
-| `foo(a)` (Arc param) | N/A | N/A | ARC retain |
-| `return a` | copy | retain (if borrowed expr) | move (no zero-out, scope ending) |
-| spread / destruct | copy | copy + retain | **always copy** (source alive!) |
-| `arr[i]` (read) | copy | ARC copy (retain) | borrow (`Ref<T>`) |
-| `arr[i] = val` | assign | release old, retain new | assign |
+| `let b = a` | copy | retain | **move** + zero-out |
+| `foo(a)` (T param) | copy | borrow | **move** |
+| `foo(a)` (Ref param) | copy | borrow | borrow |
+| `return a` | copy | retain | move |
 
-### Borrow checker
+**Borrow checker:** Aliasing XOR mutability. `Ref<T>` multiple OK, `Mut<T>` exclusive. Use-after-move = E002.
 
-- **Aliasing XOR mutability:** multiple `Ref<T>` OK simultaneously; only one `Mut<T>` exclusive; `Mut` + `Ref` = error.
-- **Scope-based release:** borrows auto-released on `popScope()` via `_scopeBorrowStack`.
-- **Use-after-move (E002):** accessing `_moved` symbol = compile error. Secondary span shows move location.
-- **Move from array (E009):** `arr[i]` for complex types = borrow, can't move out by index.
-- **Borrow across await (E051):** `Ref<T>` / `Mut<T>` alive across `await` = error. Must `.clone()` first.
-- **Ref/Mut in class fields (E044):** forbidden — would dangle.
-- **Ref return from function:** Conservative Union — all Ref/Mut args borrowed.
+**Cleanup:** `_blockCleanupStack`, `_heapVarStack`. Throws functions use `_cleanup:` label. Auto-destructors for classes with string fields.
 
-### Cleanup system
-
-- **Block/loop/goto cleanup:** See Section 3 state vars. Owned vars freed at scope exit; throws functions use single `_cleanup:` label (O(N+M)).
-- **Auto-destructors:** Classes with string fields get `ClassName_free()` auto-generated (releases strings, does NOT free struct — value types on stack).
-- **@heap classes:** `ClassName_destructor(ptr)` + `tsc_free(ptr)` at scope exit.
-- **@pool classes:** `ClassName_drop(&ref, idx)` returns slot to pool.
-
-### Arc/Weak (ARC, desktop only)
-
-- `Arc<T>` — `_refcount` + `_weakcount` embedded in struct. `tsc_arc_alloc` (calloc + refcount=1), `tsc_arc_retain`, `tsc_arc_release`.
-- `Weak<T>` — `tsc_weak_create` (weakcount++), `tsc_weak_upgrade` → `Arc<T> | null`, `tsc_weak_release`.
-- `allocator: 'static'` → `Arc<T>` = compile error.
+**Arc/Weak:** `_refcount`/`_weakcount` in struct. `allocator: 'static'` → Arc = error.
 
 ---
 
 ## 6. Async & Concurrency
 
-### Async = state machines
+**Async = state machines.** `scan.ts` collects await states, `async-emit.ts` emits poll function. Only vars crossing await boundary get promoted.
 
-Async functions compile to a **poll struct + poll function** in C:
-```c
-typedef struct {
-    int _state;            // current state (0 = initial)
-    Result_T_E _await_0;   // await result storage
-    ...promoted locals...  // only vars crossing await points
-} asyncFunc_frame_N;
+**Threads:** `Thread.spawn(fn)` — OS thread, no shared memory. Communication via `channel<T>`.
 
-opt_T asyncFunc_poll_N(asyncFunc_frame_N* self) {
-    switch (self->_state) {
-        case 0: /* code before first await */
-            self->_state = 1;
-            return (opt_T){false, 0}; // pending
-        case 1: /* code after first await */
-            ...
-    }
-}
-```
-
-- `_collectAwaitStates(node)` in `scan.ts` — walks AST, finds await points, collects states + live vars.
-- `_livenessScan()` — only vars crossing await boundary get promoted to struct. Primitives in `safeLocal` whitelist stay on C stack.
-- `_emitAsyncStmt` / `_emitAsyncWhile` / `_emitAsyncFor` / `_emitAsyncForOf` / `_emitAsyncDoWhile` — emit state machine code.
-- Async `switch` → transformed to `if/else if` (conflicts with outer state machine `switch(self->_state)`).
-- Async `break`/`continue` → `goto` labels (not C `break`/`continue`).
-
-### Promise
-
-- `Promise<T>` struct with `.then`/`.catch`/`.finally` — dispatch in `method-dispatch.ts`.
-- `Promise.all` / `race` / `any` / `allSettled` — combinators.
-- Desktop: event loop via libuv. Embedded: cooperative scheduler (`@static async function*`).
-
-### Threads (desktop only)
-
-- `Thread.spawn(fn)` — OS thread (pthread/Win32). **Isolates:** no shared memory.
-- Communication via `channel<T>` (SPSC ring buffer).
-- `spawn {}` blocks require `Send` type (checked by `_checkSend()`): primitives, String, Atomic, Readonly = OK; Array/Set/Map/Ref/Mut/Arc/Weak = error.
-- `await t.join()` — join thread from async context.
-
-### Atomic / Volatile / ISR
-
-- `Atomic<T>` — `.load()`/`.store()`/`.fetchAdd()`/`.compareExchange()` with memory orderings.
-- `Volatile<T>` — `volatile T*`, MMIO. `.read()`/`.write()`.
-- `@isr("VECTOR")` — interrupt handler. No await, no throw, no heap alloc.
+**Atomic/Volatile/ISR:** `Atomic<T>` for lock-free ops, `Volatile<T>` for MMIO, `@isr("VECTOR")` for interrupts.
 
 ---
 
-## 7. Runtime (`packages/compiler/src/runtime/runtime.h`)
+## 7. Runtime (`runtime.h`)
 
-Single-header C library. `#include`d in every output. Key components:
+Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscMap_K_V`, `opt_T`/`Result_T_E` structs, `tsc_arc_*`, `tsc_closure`, `tsc_format_double`.
 
-| Component | Purpose |
-|-----------|---------|
-| `_tsc_xmalloc`/`_tsc_xrealloc` | Fail-fast alloc wrappers — panic on NULL (OOM), all 83 malloc + 18 realloc calls routed through them |
-| `tsc_malloc`/`tsc_free` | Macros for @heap class codegen (`#define tsc_malloc _tsc_xmalloc`) |
-| `String` struct + ARC | String type with refcount |
-| `tsc_string_*` macros | retain/release/clone/eq/concat/concat_n/format |
-| `Array_T` macros | `TSC_ARRAY_DECL(T,ident)` — create/push/pop/free/slice/get/map/filter/... |
-| `TscMap_K_V` macros | `TSC_MAP_DECL(K,V,id)` — open-addressing hash map |
-| `TscSet_T` macros | `TSC_SET_DECL_PRIM(T,ident)` — flat array set |
-| `Tuple_A_B` structs | Generated per-use by codegen |
-| `opt_T` structs | `{ bool has_value; T value; }` |
-| `Result_T_E` structs | `{ bool ok; T value; E error; }` for throws |
-| `tsc_arc_*` | ARC alloc/retain/release for Arc |
-| `tsc_weak_*` | Weak ref create/upgrade/release |
-| `tsc_closure` | Fat ptr `{ void(*fn)(void*,...); void* env; }` for closures |
-| `tsc_channel_*` | SPSC ring buffer channel |
-| `_tsc_console_init` | UART init on embedded (`#ifdef TSC_CONSOLE_UART`) |
-| `tsc_throw` / `tsc_panic` | Error reporting (no setjmp) |
-| `tsc_format_double` | JS-compatible shortest round-trip f64 formatting (NaN→"NaN", Infinity→"Infinity", incremental precision 1-17 with strtod round-trip check) |
-| `tsc_dtoa` | Rotating 8-buffer helper for inline use in printf args (codegen uses `%s` + `tsc_dtoa(val)`) |
+**Platform headers:** `runtime_nes.h`, `runtime_wasm.h`. **Std headers:** `std/*.h` (fs, net, ws, hal, regex, etc.).
 
-**Platform headers:** `runtime_nes.h`, `runtime_wasm.h`, etc. — subset for constrained platforms.
-**Std runtime headers:** `packages/compiler/src/runtime/std/*.h` — `fs.h`, `net.h`, `ws.h`, `io.h`, `regex.h`, `base64.h`, `reactive.h`, `temporal.h`, `url.h`, `blob.h`, `embedded.h`, `hal.h`, `avr.h`.
-
-### Platform capabilities (`packages/compiler/src/profiles/*.d.tsc`)
-
-12 built-in profiles: `desktop`, `avr`, `avr-heap`, `avr-coop`, `arm`, `nes`, `spectrum`, `genesis`, `ps2`, `dos`, `wasm`, `wasm32`. Capabilities: `bits`, `fpu`, `allocator` (heap|static), `async` (libuv|state_machine|none), `usize`, `defaultNumber`, `posix`, `strtoll`, `console_uart`, `console_baud`, `unaligned_access`, `os`. See Section 3 for `_cap()` usage.
-
-`defaultNumber` per profile: desktop/dos/wasm/wasm32=`f64`, ps2=`f32`, arm/genesis=`i32`, avr/avr-heap/avr-coop/nes/spectrum=`i16`. 8-bit platforms use `i16` because C `int` is 16-bit.
-
-`TSC_NO_POSIX`, `TSC_NO_STRTOLL`, `TSC_CONSOLE_UART`, `TSC_CONSOLE_BAUD` defines passed to gcc.
-
-### Strict mode (`_strictRules`)
-
-Rules: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc`, `no-closures`, `no-interfaces`, `no-threads`, `no-sort`, `switch-default`, `no-abort`, `no-i64-print`. Configured via `tsc.package.json` `"strict": [...]` or `--strict` CLI. SIL3 preset combines all.
+**12 profiles:** desktop, avr, avr-heap, avr-coop, arm, nes, spectrum, genesis, ps2, dos, wasm, wasm32. Capabilities: `bits`, `fpu`, `allocator`, `async`, `usize`, `defaultNumber`, `posix`, etc.
 
 ---
 
 ## 8. Current State
 
-### Tests: 1764 (spec-based structure, `--no-gcc`)
-
-Tests organized by spec section (`packages/tests/test/cases/<NN-section>/`):
+### Tests: 1764 (spec-based) + 127 (engine)
 
 | Section | Tests | Topic |
 |---------|-------|-------|
-| 02-syntax | 124 | Arithmetic, assign, bitwise, comparison, logical, variables, formatting |
-| 03-types | 398 | Numbers, enum, type aliases, tuples, utility types, null/optional, widening |
-| 04-ownership | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
-| 05-control-flow | 52 | if/else, while, switch, ternary, for-of, match, match-as-expression |
-| 06-functions | 64 | Functions, arrows, function expressions, default/rest params, closures, overloads |
-| 07-classes | 44 | Classes, methods, inheritance, instanceof, interfaces |
-| 08-collections | 231 | Arrays, Map, Set, strings, objects, slices |
-| 09-errors | 46 | throws, try/catch/finally, ?/!, bare-throws, cleanup, math try/catch |
-| 10-async | 82 | async/await, Promise, generators, AbortSignal, timers |
-| 11-concurrency | 44 | Threads, Atomic, channels, ISR, Volatile |
-| 12-modules | 26 | import/export, entry point |
-| 13-build | 165 | CLI, build, strict mode, CMake, C interop, @platform, declare platform |
-| 14-stdlib | 302 | console, Math, Date, JSON, std/* (net, ws, fs, hal, reactive, regex) |
-| 15-decorators | 22 | Decorator function, factories, before/after |
-| 16-tooling | 44 | LSP, linter, formatter, optimizer, wasm, capabilities |
+| 02-syntax | 124 | Arithmetic, variables, formatting |
+| 03-types | 398 | Numbers, enums, tuples, null |
+| 04-ownership | 116 | Ownership, Arc, Weak, Clone |
+| 09-errors | 46 | throws, try/catch, bare-throws |
+| 14-stdlib | 302 | console, Math, Date, JSON, std/* |
 
-**Total: 1764 tests (`--no-gcc`). All pass.**
+### Deferred / NOT YET
 
-### `[NOT YET IMPLEMENTED]` / Deferred
+- IR/SSA pipeline (post-self-hosting)
+- Borrow elision for field access
+- Full Descriptor API, FnPtr, auto-constructor
+- instanceof narrowing, full grapheme segmentation
 
-| Feature | Status | Where |
-|---------|--------|-------|
-| IR / SSA pipeline | Deferred (post-self-hosting). Prototype removed. Spec retained as `[PLANNED]`. | `spec/16-tooling/16-compiler.md` |
-| Borrow elision for field access (M1) | Deferred (#78) | `const name = user.name` does ARC copy instead of pointer borrow |
-| Full Descriptor API (PropDesc, ParamDesc) | NOT YET | `spec/15-decorators/` |
-| `FnPtr<T>` (pure C fn pointer) | NOT YET | `spec/12-modules/` |
-| Auto-constructor generation | NOT YET | `spec/07-classes/` |
-| Unaligned access helpers (@packed) | NOT YET | `spec/07-classes/` |
-| `instanceof` narrowing | NOT YET | Use `as` cast workaround |
-| Full grapheme segmentation (UAX #29) | Simplified | Needs utf8proc (~300KB) |
-| Regex backreferences/lookahead | NOT YET | Use `@tsc/pcre` package |
-| Full Ref semantics in callbacks | Partial | String* auto-deref done, full auto-deref deferred |
-| `tsc_init_all()` topological module init | NOT YET | Module-level vars currently promoted to static |
-
-### Project state & tracking
+### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **GitHub Issues:** Open: #23 (null representation, deferred), #30–#31 (IR, long-term), #32 (bindgen, deferred), #33 (QNX, long-term), #47–#50 (self-hosting gaps), #67 (bare-throws: method calls — FIXED), #69 (Math.saturatingCast/checkedCast — FIXED), #72–#82 (self-hosting epics). Recently closed: #66, #67 (throws on methods), #69 (Math.saturatingCast/checkedCast), #111 (Number.* constants), #132 (i64+u32 banned pairs), #133–#137 (test engine features).
-- **Refactoring done:** #25 (ScopeManager/BorrowTracker/OutputBuffer extraction), #26 (TypeChecker separation). Context: ~888 lines across 51 mixin files.
-- **IR prototype (#27-#29):** Code removed. Prototype was never integrated. Spec retained as `[PLANNED]` in `spec/16-tooling/16-compiler.md`. Deferred until post-self-hosting (#30, long-term).
-- **Self-hosting:** Gaps identified: string methods (#47), file I/O (#48), CLI/process (#49), StringBuilder (#50). NaN/Infinity (#57) done. Next: close self-hosting gaps.
-- **Documentation:** root has 3 .md files — `README.md`, `AGENTS.md`, `CONTEXT.md`. Spec navigation in `spec/INDEX.md`.
-
-### Architectural decisions
-
-- **Compiler language: TypeScript.** JS→TS migration complete (`strict: true`, ZERO @ts-nocheck). Long-term goal: self-host in `.tsc`.
-- **IR/SSA: deferred.** Existing codegen supports all language features. IR is architectural improvement, not release blocker. Prototype removed, spec retained as `[PLANNED]`. Revisit post-self-hosting.
-- **Bug fix priority before refactoring:** All bugs fixed before refactoring started (П6 — can't refactor safely with red tests).
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine)
 
 ---
 
-## 9. Gotchas & Non-Obvious Behavior
+## 9. Gotchas
 
-### AVR / Embedded
-
-- **`int` != `int32_t` on AVR!** AVR `int` = 16-bit. Codegen uses `%ld` + `(long)` for i32, `%lu` + `(unsigned long)` for u32 on embedded.
-- **`%lld` unsupported** on avr-libc → `no-i64-print` strict rule auto-enabled. Manual digit conversion in `tsc_i64_to_string`.
-- **`%g` needs `-lprintf_flt`** linker flag on AVR — no longer used for float output. `tsc_format_double()` uses `snprintf("%.Ng")` internally (N=1..17), which works without `-lprintf_flt` on avr-libc.
-- **`%zu` unsupported** → `%u` + `(unsigned)` cast.
-- **`static char` buffers = NOT reentrant** → replaced with malloc+ARC (desktop) / ring buffer pool (embedded).
-- **PROGMEM strings** — `STR_LIT()` macro, `pgm_read_byte` for access. `tsc_print_str()` for PROGMEM-aware output.
-- **`F_CPU`** must be `#define`d (avr-gcc doesn't auto-define).
-
-### Arrays
-
-- **`capacity = 0` = non-owning array** (view/slice/static data). `tsc_array_free_*` checks `capacity > 0` before `free()`. Mutating non-owning = UB.
-- **`new Array(N)`** → capacity=N, **length=0** (NOT length=N like JS — no `undefined` to fill).
-- **`arr[i]` for complex types = borrow** (Ref), NOT copy. Can't move out by index (E009).
-- **`arr[i]` for string = ARC copy** (retain), NOT borrow.
-- **Empty `[]`** without type annotation → defaults to `double` element (use type annotation: `let a: string[] = []`).
-- **`(T | null)[]`** — elements wrapped in `_wrapOptValue()`, pop/shift return unwrapped, console.log prints "null" for missing.
-
-### Ownership
-
-- **Spread/destructuring = ALWAYS copy.** Source stays alive. No E002 after spread. Key design decision (D1 in spec).
-- **Closure capture = reference for class/array** (pointer), **copy for primitives**, **retain for string** (ARC). Explicit capture `[x: Ref<T>]` / `[x: Mut<T>]` for borrow.
-- **`const` on struct** only prevents reassignment, NOT property mutation → compiler does NOT emit C `const` for struct-typed variables.
-- **`==` is `===`** — no type coercion in TSClang (unlike JS). `===`/`!==` are synonyms.
-- **`undefined` = `null`** — synonym, both compile to NULL.
-- **`var` = `let`** — synonym, no hoisting/TDZ.
-- **Single quotes = double quotes** — `'hello'` = `"hello"`. Single-char `'A'` = string by default, `u8` with annotation.
-
-### Async
-
-- **Async `switch`** → `if/else if` chain (can't nest C `switch` inside state machine `switch(self->_state)`).
-- **Async `break`/`continue`** → `goto` labels (not C keywords).
-- **`Ref<T>` across `await`** = E051 error. String = retain-on-capture (exception to implicit borrow).
-- **`for-of` index vars** (`_forof_idx_N`) force-promoted to state struct regardless of liveness.
-- **Nested async loops** — inner loop must NOT emit terminal/goto cleanup if outer loop still active.
-
-### Codegen
-
-- **`_ensureXxx()` pattern** — ALWAYS use lazy guards (Set check → emit → add). Never emit a typedef/struct without checking first.
-- **`_postStmtCleanups`** — deferred cleanups after current statement (zero-out after move, temp release). **`_expectedType`** — set in vardecl.ts before init expr; empty array literals use it for element type.
-- **Narrowing** — `_narrowedVars` (Set, `if (x != null)` / `if (x)`), `_narrowedUnknownVars` (Map, `typeof x === "i32"`). Access uses unwrapped type.
-- **Double-evaluation prevention** — complex expressions in temp vars before multi-use (`??`, `?.`, compound assigns).
-- **`goto cleanup`** — triggers when `_usesGotoCleanup && owned vars >= 2`. String concat chain (3+) uses `_flattenStringConcat` → `tsc_string_concat_n` compound literal.
-- **Closures** — `hoistClosure` lifts lambdas to file-scope with env struct. Env always heap-allocated (`_closure_N_destroy`). `_returnsCapturingClosure` flag for functions returning capturing closures. Trampoline adapter for array callbacks (NOT reentrant).
-- **Recursive type detection** — `_resolvingTypes` Set. If `resolveType` returns its own name → compile error ("use Ref/Arc/Mut for indirection").
-- **Cross-module types** — In type tables (`this.classes`, `this._typeAliases`), NOT in scope. All declaration types get module-prefixed C names.
-- **Non-const static init** — `Call` nodes in init → zero-init at top level + runtime assignment. Library mode: `void <prefix>__init(void)`.
-- **Numeric widening** — (1) implicit narrowing = error; (2) explicit `as` = OK; (3) safe functions = always OK. `_isSafeWidening` + `_effectiveType` with simplified usual arithmetic conversions (not full C promotion). All same-width mixed signed+unsigned pairs banned for `let` variables (`i8+u8`, `i16+u16`, `i32+u32`, `i64+u64`) — require explicit `as`. Cross-width `i64+u32` also banned. `const`/literals exempt.
-- **Defined wrap for signed integers** — binary `+`/`-`/`*` and compound `+=`/`-=`/`*=` on signed types emit `(intN_t)((uintN_t)a OP (uintN_t)b)` to eliminate signed overflow UB. Widening check runs BEFORE the cast (so `i8 += i32` still errors). `safe-math` strict rule overrides to compile error. INT_MIN / -1 guarded in `operators.ts`/`assign.ts`.
-- **safe-math try/catch** — In `safe-math` strict mode, integer arithmetic outside `try { } catch (e: MathError)` or a `throws MathError` function → compile error. Inside try: compiler transforms each integer op to checked version (`__builtin_*_overflow` for +-*-, zero/INT_MIN guard for /%), goto catch on error. `MathError` is a builtin class with `.operation` field. Float arithmetic NOT checked (IEEE 754). `Math.checkedAdd/Sub/Mul` removed — use try/catch.
-  - **`_isIntOperand` helper** (`operators.ts`): Detects integer operands even when number literals infer as `double` but emit as `int` in C (e.g., `a - 1` where `a: i32`). Used for safe-math +/-/*  and division checks. Default-mode division guard keeps old `intTypes.has()` check to avoid changing non-safe-math behavior.
-  - **Loop restructure in `_inMathTry`** (`control-flow.ts`): While/DoWhile/For loops restructure to `while(1) { checked_cond; if (!cond) break; body; }` so checked arithmetic conditions are re-evaluated each iteration (not hoisted before loop). For-loop update emitted as statement at end of body.
-  - **`throws MathError` on functions** (`func.ts:emitFuncBody`): Function declares `throws MathError` + `safe-math` → body treated as `_inMathTry` context with `_func_math_throw` label. Overflow → `goto _func_math_throw` → error Result return. Auto-propagation: `return inner()` / `inner();` in throws function → Result checked, error propagated via `_mathCatchLabel`. Supports void/non-void, goto cleanup (owned vars).
-  - **Union throws wrapping** (`func.ts` + `control-flow.ts:_wrapErrForCaller`): When caller declares `throws A | B` and callee throws only `A`, the callee's error is wrapped in `_ErrUnion_A_B` tagged union. Applied in all 6 propagation paths (ExprStmt, Return, VarDecl, ?/!). `_funcMathThrow` label wraps MathError in union when `throwsNames.length > 1`.
-  - **Bare throws call compile error** (`control-flow.ts` ExprStmt): Calling a throws function without `?`/`!`/try-catch/enclosing `throws` → compile error. Manual Result handling (`let r = risky(); if (!r.ok)`) is allowed (VarDecl not restricted). ExprStmt auto-propagate extended to `_inMathTry` (top-level math try/catch without `_throwsCtx`).
-  - **Union error panic** (`codegen.ts:_panicMsgExpr`): For union error types, generates `_tsc_panic_msg_KEY` helper function with tag-based switch to extract `.message` from correct union member. Single error type: direct field access. Pre-computed before `emit()` section assembly for main function. Used in match.ts (`!`), console.ts, codegen.ts (main).
-  - **`!`/`?` in expression context** (`dispatch.ts:683-735`): NonNull (`!`) and Propagate (`?`) work inside expressions (`risky()! + 1`, `foo(inner()?)`, `(getData()?).field`). NonNull: Result temp + `tsc_panic`, returns `.value`. Propagate: Result temp + error propagation, returns `.value`. Void returns `((void)0)`. Parser (`parser.ts:1509`): `?` disambiguated from ternary via **whitespace-based rule** (O(1), no scanner): **tight** (no space before `?`: `risky()?`) or **closed** (next token is `)`/`]`/`,`/`;`/EOF: `foo(risky()?)`) → propagate; otherwise → ternary. `?.` (optional chaining) is a separate lexer token (QUESTDOT), no conflict. `_checkNoBareThrows` (`codegen.ts`): exhaustive recursive check for bare throws calls in ALL expression contexts (binary, member, index, array/object literals, template, call args, ternary, unary, cast, range, new, typeof, drop, yield, await, match) + statement-boundary positions (if/while/do-while/for conditions, switch discriminant, throw value, return value with auto-propagate guard) → compile error. `?`/`!` in async → compile error (use try/catch). Unary `+`/`-`/`~` unified under NUMERIC type guard.
-- **`_cap()` everywhere** — All platform checks via `_cap(key)`. `_ptrBytes()` from `_cap('usize')`, printf from `_cap('bits')`. No `_isEmbedded()`.
-
-### Codegen audit (comprehensive)
-
-- **No silent `/* ... */` fallbacks.** All switch-defaults in expr/stmt dispatchers now `throw this.error()` instead of emitting comment-only C. Covers: `expr/dispatch.ts` (expression kinds), `operators.ts` (unary ops), `stmt.ts` (statement kinds), `control-flow.ts` (statement kinds), `match.ts` (pattern kinds).
-- **Comment-placeholders → errors.** 7 cases that previously emitted silent garbage C now produce compile errors: computed property keys, `drop()` on non-pool types, `new Promise()` without type args, unknown `Math.xxx`/`JSON.xxx` methods, `super()` without superclass, spread `...` on non-va_list.
-- **FuncExpr codegen.** `function() { ... }` expressions now compile correctly (fall-through to Arrow handler in `dispatch.ts`, with FuncExpr checks in `vardecl.ts`).
-- **Match as expression.** `match(v) { ... }` can be used inline in any expression context (args, binary ops, return). Implemented via temp var + if/else chain pattern (`_matchExprToC` in `match.ts`). Fully portable (no GCC statement-expressions).
-- **`inferType` exhaustive.** All expression kinds now have explicit cases in `infer.ts` (was `default: return 'int32_t'`). Added: Assign, NonNull, Propagate, Await, Arrow/FuncExpr, Drop, Yield, Match. **Bug:** `Assign` returns type of LEFT side (target), not right — `a = b = 5` must infer as `i32`, not `double`.
-- **`_effectiveType` has Match case.** Delegates to first case body's effective type. Without this, `1 + match(v) { ... }` inferred as `double` (via `inferType`) instead of `int32_t`.
-- **AST types match reality.** `ForOf`/`ForIn` added to `Stmt` union (with interfaces). `isAsync`→`async`, `isGenerator`→`generator` (matching parser field names). `Method`/`Field` interfaces updated to use `modifiers: string[]` (matching parser output). Dead `Select`/`Propagate`/`NonNull` cases removed from `stmt.ts` visitStmt (they're expressions, handled via vardecl.ts).
+- **AVR `int` = 16-bit.** Use `%ld` + `(long)` for i32.
+- **`%lld` unsupported** on avr-libc → `no-i64-print` auto-enabled.
+- **`capacity = 0` = non-owning array** (view/slice). Mutating = UB.
+- **`new Array(N)` → length=0** (NOT N like JS).
+- **Spread/destructuring = ALWAYS copy.** Source stays alive.
+- **`==` is `===`** — no type coercion.
+- **`undefined` = `null`** — synonym.
+- **Async `switch` → `if/else if`** (can't nest C switch).
+- **`Ref<T>` across `await`** = E051 error.
+- **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
+- **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
+- **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
 
 ---
 
 ## 10. Quick Reference: Task → File
 
-| I need to... | Look at... |
-|--------------|-----------|
-| Add a new AST node type | `ast-types/ast.ts` (add interface + union member) |
-| Add a new statement type | `stmt/index.ts` (dispatch), then specific file in `stmt/` |
-| Add a new expression type | `expr/dispatch.ts` (exprToC switch), then `expr/*.ts` |
-| Add a new method on arrays/Map/Set | `calls/stdlib.ts` (dispatch + emit), `types/infer.ts` (return type), `runtime.h` (C macro) |
-| Add a new stdlib module | `stdlib-registry.ts` (register), `calls/call-dispatch.ts` (dispatch) |
-| Add a new builtin (console, Math, etc.) | `stdlib-registry.ts` (LANGUAGE_BUILTINS), `calls/builtin.ts` |
-| Add a new type annotation | `types/resolve.ts` (TSC→C), `types/infer.ts` (inference) |
-| Add a new decorator | `top-level/decorators.ts` (codegen), `parser.ts` (parse) |
-| Add a new platform profile | `packages/compiler/src/profiles/<name>.d.tsc`, `packages/compiler/src/profiles/<name>.json`, `packages/compiler/src/cli/profile-loader.ts` (loadProfile) |
-| Add a new strict rule | `codegen.ts` (_strictRules init), check in relevant codegen file, `spec/13-build/13-strict-mode.md` |
-| Fix borrow checker error | `codegen.ts` (scope/borrow core), `stmt/vardecl.ts`, `expr/assign.ts`, `calls/*.ts` |
-| Fix cleanup/memory leak | `codegen.ts` (_blockCleanupStack), `stmt/control-flow.ts`, `stmt/vardecl.ts` |
-| Fix async codegen | `async/scan.ts` (state collection), `async/async-stmt.ts` (emit), `async/async-emit.ts` (poll fn) |
-| Fix string ownership | `stmt/vardecl.ts`, `expr/assign.ts`, `calls/call-dispatch.ts`, `calls/method-dispatch.ts`, `top-level/func.ts` |
-| Add a test | `packages/tests/test/cases/<NN-section>/<feature>/<name>/` with `input.tsc` + expected files + `meta.json` |
-| Run tests | `npx tsx packages/tests/test/runner.ts 03-types` (filter by spec section or feature name) |
-| Compile manually | `npx tsx packages/compiler/src/index.ts build input.tsc --outDir .tsclang-tmp/` (NEVER without --outDir) |
-
-### Test file structure
-
-```
-packages/tests/test/cases/<NN-section>/feature/name/
-  input.tsc            # input source
-  expected.c           # expected C output ([F] fragment or [R] runnable)
-  expected.out         # expected stdout ([R] only)
-  expected.error       # expected error message ([E] error tests)
-  expected.runtime-error  # expected runtime panic ([RE])
-  meta.json            # { kind: "[F]"|"[R]"|"[E]"|"[RE]", target/profile, ... }
-```
-
-Sections mirror spec: `02-syntax`, `03-types`, `04-ownership`, ..., `16-tooling`. See `packages/spec/spec/INDEX.md` for full table.
-
-### Test kinds
-- `[F]` fragment — compare C output only (no compilation)
-- `[R]` runnable — compile with gcc + run + compare stdout
-- `[E]` error — compare compiler error message
-- `[RE]` runtime error — compile, run, expect runtime panic message
+| Task | File |
+|------|------|
+| Add AST node | `ast-types/ast.ts` |
+| Add statement | `stmt/index.ts` + `stmt/*.ts` |
+| Add expression | `expr/dispatch.ts` + `expr/*.ts` |
+| Add array/Map/Set method | `calls/stdlib.ts` + `types/infer.ts` + `runtime.h` |
+| Add stdlib module | `stdlib-registry.ts` + `calls/call-dispatch.ts` |
+| Add builtin (console, Math) | `stdlib-registry.ts` + `calls/builtin.ts` |
+| Add type annotation | `types/resolve.ts` + `types/infer.ts` |
+| Add decorator | `top-level/decorators.ts` + `parser.ts` |
+| Add platform profile | `profiles/<name>/index.d.tsc` + `profile-loader.ts` |
+| Add strict rule | `codegen.ts` (_strictRules) + relevant file + spec |
+| Fix borrow error | `codegen.ts` + `stmt/vardecl.ts` + `expr/assign.ts` |
+| Fix async codegen | `async/scan.ts` + `async/async-stmt.ts` + `async/async-emit.ts` |
+| Add test | `packages/tests/test/cases/<NN>/<feature>/<name>/` |
+| Run tests | `npx tsx packages/tests/test/runner.ts 03-types` |
+| Compile manually | `npx tsx packages/compiler/src/index.ts build input.tsc --outDir .tsclang-tmp/` |
 
 ---
 
-## 11. CLI Architecture (refactored)
+## 11. CLI Architecture
 
-`packages/compiler/src/index.ts` is a **94-line slim dispatcher** — parses global flags (`--version`, `--help`, `--no-color`), then `switch(command)` delegates to command modules.
+`packages/compiler/src/index.ts` — 94-line dispatcher. Commands: build, run, test, init, lint, format, explain, emit-dts, validate-config, install, update, search, publish, lsp.
 
-### Module map
+Module map: `cli/args.ts`, `cli/help.ts`, `cli/helpers.ts`, `cli/registry.ts`, `cli/config-validator.ts`, `cli/profile-loader.ts`, `cli/cmake.ts`, `semver.ts`, `cli/commands/*.ts`.
 
-| Module | Exports |
-|--------|---------|
-| `packages/compiler/src/cli/args.ts` | `flagValue`, `hasFlag`, `hasFlagAny`, `getPositional`, `getPositionalAfter`, `isValidOptimizeLevel`, `isValidNumberType`, `NUMBER_TYPES` |
-| `packages/compiler/src/cli/help.ts` | `getVersion`, `getHelpText`, `CMD_HELP` |
-| `packages/compiler/src/cli/helpers.ts` | `missingInput`, `checkInput`, `reportErrors` |
-| `packages/compiler/src/cli/registry.ts` | `MOCK_REGISTRY`, `MOCK_PKG_DEPS`, `resolveRange`, `readLock`, `writeLock`, `readManifest`, `checkLockStale` + types |
-| `packages/compiler/src/cli/config-validator.ts` | `VALID_STRICT_RULES`, `VALID_BUILD_KEYS`, `validateStrictRules`, `validateBuildKeys` |
-| `packages/compiler/src/cli/profile-loader.ts` | `DESKTOP_CAPABILITIES`, `loadProfile`, `listAvailableProfiles`, `capabilityDefines` + `Capabilities` type |
-| `packages/compiler/src/cli/cmake.ts` | `generateProjectCmake`, `generateBuildCmake` |
-| `packages/compiler/src/semver.ts` | `semverParse`, `semverCmp`, `semverSatisfies`, `rangesCompatible` |
-| `packages/compiler/src/cli/commands/build.ts` | `runBuildCommand` (build + doBuild + watch = ~450 LOC) |
-| `packages/compiler/src/cli/commands/run.ts` | `runRunCommand`, `runDebugCommand` |
-| `packages/compiler/src/cli/commands/config.ts` | `runValidateConfigCommand` |
-| `packages/compiler/src/cli/commands/init.ts` | `runInitCommand` |
-| `packages/compiler/src/cli/commands/source.ts` | `runEmitDtsCommand`, `runFormatCommand`, `runLintCommand` |
-| `packages/compiler/src/cli/commands/package.ts` | `runSearchCommand`, `runPublishCommand`, `runInstallCommand`, `runUpdateCommand` |
-| `packages/compiler/src/cli/commands/explain.ts` | `runExplainCommand` |
-| `packages/compiler/src/cli/commands/build-cmake.ts` | `runBuildCmakeCommand` |
-
-**Note:** Commands still use `process.exit()` internally. CliResult pattern deferred to focused follow-up.
+---
 
 ## 12. Test Engine (`packages/test-engine/`)
 
-**Purpose:** On-the-fly test generator for compiler testing and user code testing.
+- **API:** describe, test, expect (matchers), hooks (beforeEach/afterEach), 4-phase pipeline
+- **Backends:** gcc, clang, msvc, avr-gcc, wasm (pluggable)
+- **CLI:** `tsclang test` → `tsclang-test` (subprocess)
+- **File testing:** `file` parameter + `compileTsc()` for recursive imports
+- **Spec:** `packages/spec/spec/13-build/` (CLI), `packages/test-engine/README.md`
 
-### Architecture
-- `engine.ts` — core: describe, test, expect, hooks, matrix, platformMatrix
-- `compilers/` — pluggable backends: gcc, clang, msvc, avr-gcc, wasm
-- `bin/tsclang-test.ts` — standalone CLI (subprocess approach)
-- `tests/` — 127 tests (14 test files + fixtures)
-
-### Key APIs
-- `describe(name, fn)` — group tests
-- `test(name, options)` — run test with 4-phase pipeline
-- `expect: { toBe, toBeGreaterThan, toContain, toMatch, toBeTruthy, toFalsy, toBeNull }` — matchers
-- `beforeEach`, `afterEach`, `before`, `after` — hooks
-- `expectTscError`, `expectCompileError`, `expectRuntimeError` — negative tests by phase
-- `expectC`, `expectCContains`, `expectCNotContains` — C-output verification
-- `file` parameter — test .tsc files with recursive imports (via compileTsc)
-- `compiler` parameter — select backend: gcc, clang, msvc, avr-gcc, wasm
-
-### 4-Phase Pipeline
-```
-TSC → C → [C-check] → binary → run
-  1    1.5       2        3
-```
-
-### CLI Integration
-- `tsclang test` — delegates to `tsclang-test` (subprocess)
-- `tsclang init` — creates `test/main.test.tsc` with example
+---
 
 ## 13. Throws on Methods
 
-**Status:** Implemented in `be59d42`.
+Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_methodNames` stores `_isThrowsFunc`. Bare-throws detection works for `obj.method()`. Spec: `09-errors/09-errors.md`.
 
-- Methods can declare `throws` like functions: `read(path: string): string throws IOError`
-- `emitMethod` in `decorators.ts` builds `throwsCtx` from `m.throwsTypes`
-- `_methodNames` stores `_isThrowsFunc` flag for bare-throws detection
-- `_checkNoBareThrows` and `control-flow.ts` check Member callee
-- Spec: `09-errors/09-errors.md` — "Throws на методах" section
+---
 
 ## 14. Math.saturatingCast/checkedCast
 
-**Status:** Implemented in `44ef36b`.
-
-- `Math.saturatingCast<T>(x)` — clamp to target type range
-- `Math.checkedCast<T>(x)` — return `T | null` on overflow
-- Escape hatch for `no-lossy-cast` strict rule
-- Codegen: inline C in `builtin-helpers.ts`
-- Type inference: `infer.ts` returns target type / opt_T
-- Spec: `14-stdlib/14-stdlib.md` + `13-strict-mode.md`
+`saturatingCast<T>(x)` — clamp to range. `checkedCast<T>(x)` — return `T | null`. Escape hatch for `no-lossy-cast`. Inline C in `builtin-helpers.ts`. Spec: `14-stdlib/14-stdlib.md` + `13-strict-mode.md`.
