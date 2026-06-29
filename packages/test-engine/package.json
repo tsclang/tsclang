@@ -9,10 +9,10 @@
     "./compilers": "./src/compilers/index.ts"
   },
   "bin": {
-    "tsclang-test": "./src/bin/index.ts"
+    "tsclang-test": "./src/index.ts"
   },
   "scripts": {
-    "start": "tsx src/bin/index.ts",
+    "start": "tsx src/index.ts",
     "test": "tsx src/tests/run.ts",
     "typecheck": "tsc --noEmit"
   },

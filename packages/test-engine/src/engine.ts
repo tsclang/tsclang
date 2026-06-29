@@ -5,7 +5,7 @@ import { lex } from "../../compiler/src/compiler/lexer.js"
 import { parse } from "../../compiler/src/compiler/parser.js"
 import { codegen } from "../../compiler/src/compiler/codegen.js"
 import { compileTsc } from "../../compiler/src/compiler/compile.js"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC } from "../compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC } from "./compilers/index.js"
 
 registerAll()
 
