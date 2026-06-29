@@ -27,7 +27,7 @@ packages/test-engine/
     utils.ts                    # getDefaultCompiler(), isInPath(), findMsVC(), normalizeC()
     index.ts                    # barrel export + registerAll()
   test-engine/
-    engine.ts                   # Core: matrix, describe, test, eq, platformMatrix
+    engine.ts                   # Core: matrix, describe, test, expect, platformMatrix
     run.ts                      # Entry point
     tests/
       let-i8.test.ts            # Basic i8 variable tests
@@ -40,6 +40,10 @@ packages/test-engine/
       literal-inference.test.ts # literal type inference
       literal-overflow.test.ts  # overflow detection
       compiler-backend.test.ts  # Compiler backends + 4-phase pipeline
+      expect-matchers.test.ts   # Expect matchers (toBe, toBeGreaterThan, toContain, ...)
+      hooks.test.ts             # Before/after hooks (beforeEach, afterEach)
+      async.test.ts             # Async function tests
+      fixtures/                 # Test fixtures (math.tsc, utils.tsc)
 ```
 
 ## API
@@ -56,14 +60,14 @@ describe("my tests", () => {
 ```typescript
 test("let x: i8 = 42", {
   input: `let x: i8 = 42\nconsole.log(x)`,
-  expect: eq(42)
+  expect: { toBe: 42 }
 })
 ```
 
 Options:
 - `input` — TSClang source code (mutually exclusive with `file`)
 - `file` — path to .tsc file on disk (mutually exclusive with `input`, resolves imports recursively via `compileTsc`)
-- `expect` — expected stdout (use `eq(value)`)
+- `expect` — expected stdout (use matchers)
 - `expectError` — expect compile error (legacy, use `expectTscError`)
 - `expectTscError` — expect TSC compilation error (`true` or substring)
 - `expectCompileError` — expect C-to-binary error (`true` or substring)
@@ -73,12 +77,20 @@ Options:
 - `expectCNotContains` — C must NOT contain substring(s)
 - `options` — codegen options (`defaultNumber`, `target`, `strict`)
 - `compiler` — compiler backend (`"gcc"`, `"clang"`, `"msvc"`, `"avr-gcc"`, `"wasm"`)
+- `timeoutMs` — custom timeout (default 5000)
 
-### `eq(value)` — create expectation
+### `expect` — matchers
 ```typescript
-expect: eq(42)           // integer
-expect: eq("hello")      // string
-expect: eq("3.14")       // float as string
+expect: { toBe: 42 }                    // exact match
+expect: { toBeGreaterThan: 10 }         // actual > 10
+expect: { toBeLessThan: 100 }           // actual < 100
+expect: { toBeGreaterThanOrEqual: 0 }   // actual >= 0
+expect: { toBeLessThanOrEqual: 100 }    // actual <= 100
+expect: { toBeTruthy: true }            // actual !== "" && actual !== "0" && actual !== "false"
+expect: { toBeFalsy: true }             // actual === "" || actual === "0" || actual === "false"
+expect: { toBeNull: true }              // actual === "null"
+expect: { toContain: "world" }          // actual.includes("world")
+expect: { toMatch: "^[a-z]+$" }         // regex match
 ```
 
 ### `matrix` — type definitions
@@ -95,6 +107,30 @@ platformMatrix.defaultNumber // ["i8", "i16", "i32", "f64", "u8", "u16"]
 platformMatrix.targets       // ["desktop", "avr", "nes", "spectrum"]
 platformMatrix.strict        // [[], ["safe-math"], ["no-lossy-cast"], ...]
 ```
+
+## Hooks
+
+```typescript
+import { describe, test, beforeEach, afterEach } from "../engine"
+
+let counter = 0
+
+describe("my tests", () => {
+  beforeEach(() => { counter = 0 })
+  afterEach(() => { /* cleanup */ })
+  
+  test("counter starts at 0", {
+    input: `console.log(0)`,
+    expect: { toBe: 0 }
+  })
+})
+```
+
+Available hooks:
+- `before(fn)` — runs once before all tests in describe block
+- `after(fn)` — runs once after all tests in describe block
+- `beforeEach(fn)` — runs before each test
+- `afterEach(fn)` — runs after each test
 
 ## Compiler Backends
 
@@ -122,7 +158,7 @@ listAvailable()       // Returns ["gcc", "clang"] if both installed
 ```typescript
 test("clang test", {
   input: `console.log(42)`,
-  expect: eq(42),
+  expect: { toBe: 42 },
   compiler: "clang"
 })
 ```
@@ -221,7 +257,7 @@ test("exit code", {
 
 test("stdout check", {
   input: `console.log(42)`,
-  expect: eq(42)
+  expect: { toBe: 42 }
 })
 ```
 
@@ -229,12 +265,12 @@ test("stdout check", {
 
 ### Basic test
 ```typescript
-import { describe, test, eq } from "../engine"
+import { describe, test, beforeEach, afterEach } from "../engine"
 
 describe("my feature", () => {
   test("works", {
     input: `let x = 1\nconsole.log(x)`,
-    expect: eq(1)
+    expect: { toBe: 1 }
   })
 })
 ```
@@ -278,13 +314,13 @@ test("no heap operations", {
 ```typescript
 test("works on gcc", {
   input: `console.log(42)`,
-  expect: eq(42),
+  expect: { toBe: 42 },
   compiler: "gcc"
 })
 
 test("works on clang", {
   input: `console.log(42)`,
-  expect: eq(42),
+  expect: { toBe: 42 },
   compiler: "clang"
 })
 ```
@@ -304,7 +340,7 @@ for (const dn of platformMatrix.defaultNumber) {
   test(`defaultNumber=${dn}`, {
     input: `let a = 1\nconsole.log(a)`,
     options: { defaultNumber: dn },
-    expect: eq(1)
+    expect: { toBe: 1 }
   })
 }
 ```
@@ -358,7 +394,7 @@ for (const dn of platformMatrix.defaultNumber) {
    ```typescript
    test("my backend test", {
      input: `console.log(42)`,
-     expect: eq(42),
+     expect: { toBe: 42 },
      compiler: "my-backend"
    })
    ```
