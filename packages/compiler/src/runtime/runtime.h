@@ -1645,6 +1645,13 @@ static inline String tsc_string_char_at(String s, int32_t idx) {
     return _tsc_str_make(buf, 1, 2);
 }
 
+static inline String tsc_string_from_char_code(int32_t code) {
+    char *buf = _tsc_str_malloc(2);
+    buf[0] = (char)(code & 0xFF);
+    buf[1] = '\0';
+    return _tsc_str_make(buf, 1, 2);
+}
+
 static inline String tsc_string_repeat(String s, int32_t n) {
     if (n <= 0 || s.length == 0) { char *b = _tsc_str_malloc(1); b[0] = '\0'; return _tsc_str_make(b, 0, 1); }
     size_t total = s.length * (size_t)n;

@@ -80,6 +80,8 @@ export default {
             'POSITIVE_INFINITY', 'NEGATIVE_INFINITY', 'NaN'];
           if (floatConsts.includes(node.prop)) return 'double';
         }
+        // String.fromCharCode → String
+        if (node.object.kind === 'Ident' && node.object.name === 'String' && node.prop === 'fromCharCode') return 'String';
         if (node.prop === 'length')   return 'size_t';
         if (node.prop === 'capacity') return 'size_t';
         if (node.prop === 'size') {
@@ -530,6 +532,7 @@ export default {
       return 'double';
     }
     if (obj.kind === 'Ident' && obj.name === 'Date' && prop === 'now') return 'int64_t';
+    if (obj.kind === 'Ident' && obj.name === 'String' && prop === 'fromCharCode') return 'String';
     if (obj.kind === 'Ident' && obj.name === 'JSON') {
       if (prop === 'stringify') return 'String';
       if (prop === 'parse') {

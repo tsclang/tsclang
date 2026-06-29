@@ -263,6 +263,12 @@ export default {
       return `tsc_${argIdent}_to_string(${argC})`;
     }
 
+    // String.fromCharCode(code) → tsc_string_from_char_code(code)
+    if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'String' && callee.prop === 'fromCharCode' && args.length === 1) {
+      const argC = this.exprToC(args[0].expr, lines, depth);
+      return `tsc_string_from_char_code(${argC})`;
+    }
+
     // i32.parse(s), i32.tryParse(s), f64.parse(s), f64.tryParse(s)
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const typeName = callee.object.name;
