@@ -592,3 +592,62 @@ error[TSC-E031]: non-exhaustive switch вЂ” missing case `Direction.Up`
 - **РћРґРёРЅ РІР°СЂРёР°РЅС‚:** РµСЃР»Рё СЂРµС€РµРЅРёР№ РЅРµСЃРєРѕР»СЊРєРѕ вЂ” РїРѕРєР°Р·Р°С‚СЊ РЅР°РёР±РѕР»РµРµ РІРµСЂРѕСЏС‚РЅРѕРµ, РѕСЃС‚Р°Р»СЊРЅС‹Рµ РІ `note`
 - **Р‘РµР· Р¶Р°СЂРіРѕРЅР°:** РЅРµ В«lifetime constraint violatedВ», Р° В«borrow still used hereВ»
 - **РЈРєР°Р·С‹РІР°С‚СЊ СЃС‚СЂРѕРєСѓ** РєРѕРіРґР° fix РІ РґСЂСѓРіРѕРј РјРµСЃС‚Рµ: `= hint: move line 13 before line 9`
+## Test Engine API (для разработки компилятора и пользовательского тестирования)
+
+Jest-like API для написания тестов в TypeScript. Тесты компилируют TSClang > C > binary и проверяют результат.
+
+### Основной API
+
+```typescript
+import { describe, test, run, compile, expect, file } from "@tsclang/test"
+
+describe("math", () => {
+  test("sum works", () => {
+    const output = run(`console.log(sum(1, 2))`)
+    expect(output).toBe("3")
+  })
+
+  test("throws on type error", () => {
+    expect(() => run(`let x: i32 = "hello"`)).toThrow(TscError)
+  })
+
+  test("compiles to C", () => {
+    const c = compile(`let x: i32 = 42`)
+    expect(c).toContain("int32_t")
+    expect(c).not.toContain("malloc")
+  })
+})
+```
+
+### Функции
+
+| Функция | Описание |
+|---------|----------|
+| `describe(name, fn)` | Группировка тестов |
+| `test(name, callback)` | Запуск теста |
+| `run(code, opts?)` | Компилирует TSC > C > binary, возвращает stdout |
+| `compile(codeOrPath)` | Компилирует TSC > C, возвращает C строку |
+| `file(path)` | Читает .tsc файл |
+| `expect(value)` | Создаёт chain с матчерами |
+| `expect(() => ...)` | Создаёт chain для проверки throw |
+| `TscError / CompileError / RuntimeError` | Классы ошибок по фазам |
+
+### Matchers
+
+- `toBe(expected)`, `toBeGreaterThan(n)`, `toBeLessThan(n)`
+- `toContain(substring)`, `toMatch(regex)`
+- `toBeTruthy()`, `toBeFalsy()`, `toBeNull()`
+- `.not.toContain(substring)` — инверсия
+
+### Компиляторы
+
+- `gcc` (Linux/WSL), `clang` (macOS), `msvc` (Windows), `avr-gcc` (AVR), `wasm`
+
+### 4-фазный пайплайн
+
+```
+TSC > C > [C-check] > binary > run
+  1    1.5       2        3
+```
+
+`run()` обрабатывает все 3 фазы. `compile()` останавливается после фазы 1.
