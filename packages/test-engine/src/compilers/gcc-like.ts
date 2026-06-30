@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { C_STANDARD_FLAG, GCC_LINK_FLAGS, TSC_DEFINES, DEFAULT_OPTIMIZE_FLAG, DEBUG_FLAG } from "@tsclang/shared"
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS, GCC_WARN_FLAGS, TSC_DEFINES, DEFAULT_OPTIMIZE_FLAG, DEBUG_FLAG } from "@tsclang/shared"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class GccLikeBackend implements CompilerBackend {
@@ -24,7 +24,7 @@ export class GccLikeBackend implements CompilerBackend {
 
     writeFileSync(cPath, cCode, "utf8")
 
-    const args = [cPath, "-o", binPath, C_STANDARD_FLAG]
+    const args = [cPath, "-o", binPath, C_STANDARD_FLAG, ...GCC_WARN_FLAGS]
     if (opts?.includes) {
       for (const inc of opts.includes) args.push(`-I${inc}`)
     }

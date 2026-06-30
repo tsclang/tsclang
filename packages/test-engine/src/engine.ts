@@ -1,8 +1,8 @@
-import { writeFileSync, mkdtempSync, rmSync } from "fs"
+import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs"
 import { tmpdir } from "os"
 import { join, resolve } from "path"
-import { lex, parse, codegen, compileTsc } from "@tsclang/compiler"
-import { RUNTIME_DIR } from "@tsclang/shared"
+import { lex, parse, codegen, compileTsc, parsePlatformDecl } from "@tsclang/compiler"
+import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath } from "./compilers/index.js"
 
 registerAll()
@@ -171,8 +171,8 @@ let currentDescribe = ""
 
 // === Jest-like API ===
 
-export class TscError extends Error {
-  constructor(message: string) { super(message); this.name = "TscError"; }
+export class TscCompilationError extends Error {
+  constructor(message: string) { super(message); this.name = "TscCompilationError"; }
 }
 
 export class CompileError extends Error {
@@ -195,9 +195,13 @@ export function run(code: string, opts?: RunOptions): string {
   const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-run-"))
   try {
     const codegenOpts: any = { ...opts }
-    // AVR capabilities
-    if (codegenOpts.target === "avr") {
-      codegenOpts.capabilities = { allocator: "static", async: "none", fpu: false, bits: 8, usize: "u16", defaultNumber: "i16", unaligned_access: false, os: false }
+    // Load platform profile for non-desktop targets
+    if (codegenOpts.target && codegenOpts.target !== "desktop") {
+      const profilesDir = resolve(import.meta.dirname, "..", "..", "compiler", PROFILES_DIR)
+      const profilePath = join(profilesDir, codegenOpts.target, "index.d.tsc")
+      if (existsSync(profilePath)) {
+        codegenOpts.capabilities = parsePlatformDecl(readFileSync(profilePath, "utf8"), profilePath)
+      }
     }
     let c: string
     try {
@@ -212,7 +216,7 @@ export function run(code: string, opts?: RunOptions): string {
         c = codegen(ast, "<run>", code, codegenOpts).c
       }
     } catch (e) {
-      throw new TscError(e instanceof Error ? e.message : String(e))
+      throw new TscCompilationError(e instanceof Error ? e.message : String(e))
     }
 
     const compilerName = opts?.compiler ?? getDefaultCompiler()
@@ -255,7 +259,7 @@ export function compile(codeOrPath: string): string {
   }
   const tokens = lex(codeOrPath, "<compile>")
   const { ast, errors } = parse(tokens, "<compile>", codeOrPath)
-  if (errors.length > 0) throw new TscError(errors[0].message)
+  if (errors.length > 0) throw new TscCompilationError(errors[0].message)
   return codegen(ast, "<compile>", codeOrPath, codegenOpts).c
 }
 

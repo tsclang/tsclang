@@ -1,4 +1,4 @@
-import { Emit, PackageType } from '@tsclang/shared';
+import { Emit, PackageType, DEFAULT_MAIN_FILE } from '@tsclang/shared';
 
 interface PkgBuildSettings {
   outDir: string;
@@ -26,7 +26,7 @@ export function packageGenerate (name: string, type: PackageType) {
   };
 
   if (type === 'executable') {
-    pkg.main = 'src/main.tsc';
+    pkg.main = DEFAULT_MAIN_FILE;
     pkg.builds = { 
       desktop: { 
         emit: 'binary', 
