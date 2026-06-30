@@ -4,12 +4,16 @@ import { join } from "path"
 import { C_STANDARD_FLAG, GCC_LINK_FLAGS, TSC_DEFINES } from "@tsclang/shared"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
-export class ClangBackend implements CompilerBackend {
-  name = "clang"
+export class GccLikeBackend implements CompilerBackend {
+  readonly name: string
+
+  constructor(name: string) {
+    this.name = name
+  }
 
   isAvailable(): boolean {
     const cmd = process.platform === "win32" ? "where" : "which"
-    const result = spawnSync(cmd, ["clang"], { stdio: "pipe", shell: true })
+    const result = spawnSync(cmd, [this.name], { stdio: "pipe", shell: true })
     return result.status === 0
   }
 
@@ -34,7 +38,7 @@ export class ClangBackend implements CompilerBackend {
     const isEmbedded = opts?.defines?.includes(TSC_DEFINES.EMBEDDED) ?? false
     if (!isEmbedded) args.push(...GCC_LINK_FLAGS)
 
-    const result = spawnSync("clang", args, { stdio: "pipe", shell: true })
+    const result = spawnSync(this.name, args, { stdio: "pipe", shell: true })
 
     return {
       success: result.status === 0,
