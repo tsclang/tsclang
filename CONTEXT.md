@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-06-29.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-06-30.
 
 ---
 
@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1764 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1774 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -35,7 +35,7 @@ input.tsc → lexer.ts → parser.ts → [optimizer.ts] → codegen.ts → runti
 
 ## 3. Codegen Architecture
 
-**Context class** (~888 lines, 51 mixin files). Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`, `TypeChecker`.
+**Context class** (~1118 lines, 51 mixin files). **Fully typed** (Phase 2.3): 185 typed properties (100 constructor + 85 dynamic), no `[key: string]: any`. Mixin files still use `this: any` (100+ methods, low priority). Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`, `TypeChecker`.
 
 **Module map:** `top-level/` (7), `stmt/` (5), `expr/` (5), `calls/` (9), `types/` (4), `misc/` (5), `async/` (6).
 
@@ -100,7 +100,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1764 (spec-based) + 127 (engine)
+### Tests: 1774 (spec-based) + 127 (engine)
 
 | Section | Tests | Topic |
 |---------|-------|-------|
@@ -121,7 +121,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
 - **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing)
 
 ---
 
@@ -139,6 +139,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
 - **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
 - **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
+- **Context typing (Phase 2.3).** Context class has 185 typed fields, NO `[key: string]: any`. Mixin files still use `this: any`. `@tsclang/ast` provides AST types: `Program`, `Expression`, `Stmt`, `Token`, `SymbolInfo` (with index signature for dynamic codegen props). Pipeline entry points typed: `parse(): { ast: Program, errors: TscError[] }`, `codegen(ast: Program, ...)`.
 - **Package model (monorepo).** All packages build to `dist/` (`.js` + `.d.ts`). Exports: `types`→`dist/*.d.ts`, `default`→`dist/*.js`. Run `pnpm build` after changes before testing via built JS. `pnpm tsclang` runs built JS (`node dist/index.js`); `pnpm tsclang:dev` runs from source via tsx (no build needed).
 - **CLI runtime root.** `packages/cli/dist/index.js` (source: `src/index.ts`) resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
@@ -149,7 +150,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 | Task | File |
 |------|------|
-| Add AST node | `ast-types/ast.ts` |
+| Add AST node | `packages/ast/src/ast.ts` |
 | Add statement | `stmt/index.ts` + `stmt/*.ts` |
 | Add expression | `expr/dispatch.ts` + `expr/*.ts` |
 | Add array/Map/Set method | `calls/stdlib.ts` + `types/infer.ts` + `runtime.h` |
