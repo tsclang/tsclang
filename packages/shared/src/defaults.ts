@@ -13,3 +13,5 @@ export const DEFAULT_ASYNC: AsyncModel = 'libuv';
 export const DEFAULT_USIZE = 'u64';
 
 export const DEFAULT_BITS = 64;
+
+export const DEFAULT_MAIN_FILE = 'src/main.tsc';

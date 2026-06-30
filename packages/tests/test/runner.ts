@@ -11,6 +11,7 @@ import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { PACKAGE_FILE } from '@tsclang/shared';
+import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -104,18 +105,6 @@ function runShell(script, opts = {}) {
     proc.on('error', err => resolve({ code: 1, stdout, stderr: err.message }));
     proc.on('close', code => resolve({ code: code ?? 1, stdout, stderr }));
   });
-}
-
-// ---------------------------------------------------------------------------
-// C normalization (trailing whitespace + extra blank lines)
-// ---------------------------------------------------------------------------
-function normalizeC(src) {
-  return src
-    .split('\n')
-    .map(line => line.trimEnd())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 function normalizeOut(s) {
@@ -236,9 +225,6 @@ const HAS_WSL = process.platform === 'win32'
   ? (() => { try { const r = spawnSync('wsl', ['--list'], { timeout: 5000 }); return r.status === 0; } catch { return false; } })()
   : false;
 
-function toWslPath(p) {
-  return p.replace(/^([A-Za-z]):\\/, (_, d) => `/mnt/${d.toLowerCase()}/`).replace(/\\/g, '/');
-}
 
 let avrGccAvailable = null;
 async function checkAvrGcc() {

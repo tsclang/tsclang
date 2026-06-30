@@ -1,5 +1,40 @@
 import { lex, TK } from './lexer.js';
 
+export interface Capabilities {
+  target?: string;
+  allocator?: string;
+  async?: string;
+  fpu?: boolean;
+  bits?: number;
+  usize?: string;
+  defaultNumber?: string;
+  unaligned_access?: boolean;
+  os?: boolean;
+  posix?: boolean;
+  strtoll?: boolean;
+  console_uart?: boolean;
+  console_baud?: number;
+  toolchain?: string;
+  toolchainFile?: string;
+  include?: string;
+  heap_size?: number;
+  stack_size?: number;
+  ram_size?: number;
+  flash_size?: number;
+}
+
+export function capabilityDefines(caps: Capabilities | null | undefined): string[] {
+  if (!caps) return [];
+  const defs: string[] = [];
+  if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
+  if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
+  if (caps.console_uart) {
+    defs.push('-DTSC_CONSOLE_UART');
+    if (caps.console_baud) defs.push(`-DTSC_CONSOLE_BAUD=${caps.console_baud}`);
+  }
+  return defs;
+}
+
 const VALID_FIELDS = {
   target:            'string',
   allocator:         'string',

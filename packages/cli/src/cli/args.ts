@@ -33,5 +33,3 @@ const VALID_NUMBER_TYPES = new Set<string>(NUMBER_TYPES);
 export function isValidNumberType(val: string): boolean {
   return VALID_NUMBER_TYPES.has(val);
 }
-
-export { NUMBER_TYPES };

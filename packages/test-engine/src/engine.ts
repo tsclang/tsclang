@@ -2,11 +2,11 @@ import { writeFileSync, mkdtempSync, rmSync } from "fs"
 import { tmpdir } from "os"
 import { join, resolve } from "path"
 import { lex, parse, codegen, compileTsc } from "@tsclang/compiler"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC } from "./compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath } from "./compilers/index.js"
 
 registerAll()
 
-export { normalizeC, getBackend, getDefaultCompiler }
+export { normalizeC, toWslPath, getBackend, getDefaultCompiler }
 
 export const platformMatrix = {
   defaultNumber: ["i8", "i16", "i32", "f64", "u8", "u16"],

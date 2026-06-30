@@ -12,7 +12,7 @@ import { TypeChecker } from './typechecker.js';
 
 const WASM_BARE_TARGET = 'wasm';
 
-const DESKTOP_CAPABILITIES = {
+export const DESKTOP_CAPABILITIES = {
   allocator: 'heap',
   async: 'libuv',
   fpu: true,
@@ -21,6 +21,8 @@ const DESKTOP_CAPABILITIES = {
   defaultNumber: 'f64',
   unaligned_access: true,
   os: true,
+  posix: true,
+  strtoll: true,
 };
 
 // Returns { c: string, warnings: TscError[], exports: Object }

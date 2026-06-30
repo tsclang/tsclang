@@ -7,7 +7,7 @@ import { WasmBackend } from "./wasm.js"
 
 export type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 export { register, getBackend, listAvailable, listAll } from "./registry.js"
-export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC } from "./utils.js"
+export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC, toWslPath } from "./utils.js"
 
 export function registerAll(): void {
   register(new GccBackend())

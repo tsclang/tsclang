@@ -75,3 +75,7 @@ export function normalizeC(s: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 }
+
+export function toWslPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/^([A-Z]):/i, (_, d) => `/mnt/${d.toLowerCase()}`)
+}

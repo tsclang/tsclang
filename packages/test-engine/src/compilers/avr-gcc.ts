@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { isInPath, isInWsl, wslExec } from "./utils.js"
+import { isInPath, isInWsl, wslExec, toWslPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class AvrGccBackend implements CompilerBackend {
@@ -31,7 +31,6 @@ export class AvrGccBackend implements CompilerBackend {
     }
 
     if (process.platform === "win32") {
-      const toWslPath = (p: string) => p.replace(/\\/g, "/").replace(/^([A-Z]):/i, (_, d) => `/mnt/${d.toLowerCase()}`)
       const wslCPath = toWslPath(cPath)
       const wslElfPath = toWslPath(elfPath)
       const wslHexPath = toWslPath(hexPath)

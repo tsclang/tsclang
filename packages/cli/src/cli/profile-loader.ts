@@ -1,40 +1,11 @@
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { parsePlatformDecl } from '@tsclang/compiler';
+import type { Capabilities } from '@tsclang/compiler';
 import { PACKAGES_DIR } from '@tsclang/shared';
 
-export interface Capabilities {
-  target?: string;
-  allocator?: string;
-  async?: string;
-  fpu?: boolean;
-  bits?: number;
-  usize?: string;
-  defaultNumber?: string;
-  unaligned_access?: boolean;
-  os?: boolean;
-  posix?: boolean;
-  strtoll?: boolean;
-  console_uart?: boolean;
-  console_baud?: number;
-  toolchain?: string;
-  toolchainFile?: string;
-  include?: string;
-  heap_size?: number;
-  stack_size?: number;
-  ram_size?: number;
-  flash_size?: number;
-}
+export type { Capabilities };
 
-export const DESKTOP_CAPABILITIES: Capabilities = {
-  allocator: "heap",
-  async: "libuv",
-  fpu: true,
-  bits: 64,
-  usize: "u64",
-  unaligned_access: true,
-  os: true,
-};
 
 export function loadProfile(name: string, profilesDir: string, inputFile?: string): Capabilities | null {
   const newDtsPath = join(profilesDir, name, "index.d.tsc");
@@ -82,16 +53,4 @@ export function listAvailableProfiles(profilesDir: string): string[] {
     }
   }
   return [...new Set(names)];
-}
-
-export function capabilityDefines(caps: Capabilities | null | undefined): string[] {
-  if (!caps) return [];
-  const defs: string[] = [];
-  if (caps.posix === false) defs.push("-DTSC_NO_POSIX");
-  if (caps.strtoll === false) defs.push("-DTSC_NO_STRTOLL");
-  if (caps.console_uart) {
-    defs.push("-DTSC_CONSOLE_UART");
-    if (caps.console_baud) defs.push(`-DTSC_CONSOLE_BAUD=${caps.console_baud}`);
-  }
-  return defs;
 }

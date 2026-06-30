@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFile, unwatchFile } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { spawnSync } from 'child_process';
-import { compileTsc, findPackageJson, renderDiagnostic } from '@tsclang/compiler';
-import { flagValue, hasFlag, hasFlagAny, isValidOptimizeLevel, isValidNumberType, NUMBER_TYPES } from '../args.js';
-import { DESKTOP_CAPABILITIES, loadProfile, listAvailableProfiles, capabilityDefines } from '../profile-loader.js';
+import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines } from '@tsclang/compiler';
+import { flagValue, hasFlag, hasFlagAny, isValidOptimizeLevel, isValidNumberType } from '../args.js';
+import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
