@@ -6,9 +6,9 @@
 //   Phase 4: dead branch elimination (if(false)/if(true))
 
 import type {
-  Program, Stmt, Expression, Literal, BaseNode,
-  VarDecl, Return, ExprStmt, If, Block, While, For,
-  ClassDecl, ClassMember, Method, Ident,
+  Program, Stmt, Expression, Literal, BaseNode, Block,
+  VarDecl, Return, ExprStmt, If, While, For,
+  FuncDecl, ClassDecl, ClassMember, Method, Ident,
 } from '@tsclang/ast';
 
 // ---------------------------------------------------------------------------
@@ -320,30 +320,21 @@ function optimizeBody(stmts: Stmt[]): Stmt[] {
 }
 
 // Recursively apply to function/class bodies
-// At runtime, FuncDecl/Method body is a Block node from parseBlock(),
-// even though AST types declare it as Stmt[]. This captures the real shape.
-interface BlockBody { kind: 'Block'; body: Stmt[] }
-
 function optimizeNode(node: Stmt): Stmt {
   const kind = (node as BaseNode).kind;
 
   if (kind === 'FuncDecl' || kind === 'ArrowFunc') {
-    const fn = node as BaseNode & Record<string, unknown>;
-    const body = fn.body as BlockBody | undefined;
-    if (body?.kind === 'Block') {
-      return { ...fn, body: { ...body, body: optimizeBody(body.body).map(optimizeNode) } } as unknown as Stmt;
+    const fn = node as FuncDecl;
+    if (fn.body) {
+      return { ...fn, body: { ...fn.body, body: optimizeBody(fn.body.body).map(optimizeNode) } } as FuncDecl;
     }
   }
 
   if (kind === 'ClassDecl') {
     const cls = node as ClassDecl;
     const members = (cls.members ?? []).map((m: ClassMember) => {
-      if (m.kind !== 'Method') return m;
-      const mbody = m.body as unknown as BlockBody | undefined;
-      if (mbody?.kind === 'Block') {
-        return { ...m, body: { ...mbody, body: optimizeBody(mbody.body).map(optimizeNode) } } as unknown as Method;
-      }
-      return m;
+      if (m.kind !== 'Method' || !m.body) return m;
+      return { ...m, body: { ...m.body, body: optimizeBody(m.body.body).map(optimizeNode) } } as Method;
     });
     return { ...cls, members } as ClassDecl;
   }

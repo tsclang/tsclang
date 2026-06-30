@@ -207,7 +207,7 @@ export interface FuncDecl extends BaseNode {
   params: Param[];
   returnType?: TypeAnn;
   throwsTypes?: TypeAnn[];
-  body: Stmt[];
+  body: Block | null;
   generator?: boolean;
   async?: boolean;
   decorators?: Decorator[];
@@ -227,7 +227,7 @@ export interface ExtensionFunc extends BaseNode {
   thisType: TypeAnn;
   params: Param[];
   returnType?: TypeAnn;
-  body: Stmt[];
+  body: Block;
 }
 
 export interface ClassDecl extends BaseNode {
@@ -249,7 +249,7 @@ export interface Method extends BaseNode {
   params: Param[];
   returnType?: TypeAnn;
   throwsTypes?: TypeAnn[];
-  body: Stmt[];
+  body: Block | null;
   generator?: boolean;
   isIterator?: boolean;
   decorators?: Decorator[];
@@ -393,14 +393,14 @@ export interface Throw extends BaseNode {
 export interface CatchClause {
   param?: string | null;
   typeAnn?: TypeAnn;
-  body: Stmt[];
+  body: Block;
 }
 
 export interface TryCatch extends BaseNode {
   kind: 'TryCatch';
-  body: Stmt[];
+  body: Block;
   catches: CatchClause[];
-  finally?: Stmt[] | null;
+  finally?: Block | null;
 }
 
 export interface SwitchCase {
@@ -422,13 +422,13 @@ export interface Native extends BaseNode {
 
 export interface Unsafe extends BaseNode {
   kind: 'Unsafe';
-  body: Stmt[];
+  body: Block;
 }
 
 export interface Spawn extends BaseNode {
   kind: 'Spawn';
   throwsTypes?: TypeAnn[];
-  body: Stmt[];
+  body: Block;
 }
 
 export interface Block extends BaseNode {
@@ -639,7 +639,7 @@ export interface Arrow extends BaseNode {
   captures: unknown[];
   params: Param[];
   returnType?: TypeAnn;
-  body: Stmt[] | Expression;
+  body: Block | Expression;
   async?: boolean;
 }
 
@@ -648,7 +648,7 @@ export interface FuncExpr extends BaseNode {
   name?: string | null;
   params: Param[];
   returnType?: TypeAnn;
-  body: Stmt[];
+  body: Block;
   async?: boolean;
 }
 
