@@ -3,6 +3,7 @@
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { basename, extname, dirname, join, resolve } from 'path';
+import { PACKAGE_FILE, PACKAGES_DIR } from '@tsclang/shared';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
 import { lex } from './lexer.js';
@@ -43,7 +44,7 @@ export function _cacheSet(key: any, data: any) {
 export function findPackageJson(startDir: any) {
   let dir = startDir;
   while (true) {
-    const candidate = join(dir, 'tsc.package.json');
+    const candidate = join(dir, PACKAGE_FILE);
     if (existsSync(candidate)) return candidate;
     const parent = dirname(dir);
     if (parent === dir) return null;
@@ -97,9 +98,9 @@ export function resolveLocalImport(baseDir: any, source: any) {
 export function resolvePackageImport(pkgName: any, fromDir: any) {
   let dir = fromDir;
   while (true) {
-    const pkgDir = join(dir, 'tsc_packages', pkgName);
+    const pkgDir = join(dir, PACKAGES_DIR, pkgName);
     if (existsSync(pkgDir)) {
-      const manifestPath = join(pkgDir, 'tsc.package.json');
+      const manifestPath = join(pkgDir, PACKAGE_FILE);
       if (existsSync(manifestPath)) {
         try {
           const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));

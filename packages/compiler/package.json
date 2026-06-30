@@ -21,7 +21,8 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@tsclang/ast": "workspace:*"
+    "@tsclang/ast": "workspace:*",
+    "@tsclang/shared": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

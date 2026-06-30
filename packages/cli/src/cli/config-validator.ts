@@ -1,8 +1,6 @@
-export const VALID_STRICT_RULES = new Set<string>([
-  'no-any', 'no-unsafe', 'no-native', 'safe-math',
-  'no-lossy-cast', 'no-dynamic-alloc', 'no-closures', 'no-sort',
-  'no-threads', 'no-interfaces', 'no-abort', 'no-i64-print', 'switch-default',
-]);
+import { STRICT_RULES } from '@tsclang/shared';
+
+export const VALID_STRICT_RULES = new Set<string>(STRICT_RULES);
 
 export const VALID_BUILD_KEYS = new Set<string>([
   'target', 'mcu', 'toolchain', 'toolchainFile', 'arch',

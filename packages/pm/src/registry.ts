@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { LOCK_FILE, PACKAGE_FILE } from '@tsclang/shared';
 import { semverParse, semverCmp, semverSatisfies } from './semver.js';
 
 // MOCK: not yet implemented — mock package registry for dependency resolution tests
@@ -43,7 +44,6 @@ export interface LockFile {
   packages: Record<string, LockPackage>;
 }
 
-const LOCK_FILE = 'tsc.package.lock';
 
 export function readLock(): LockFile {
   if (!existsSync(LOCK_FILE)) return { version: 1, packages: {} };
@@ -73,7 +73,7 @@ export interface Manifest {
 }
 
 export function readManifest(): Manifest | null {
-  const p = join(process.cwd(), 'tsc.package.json');
+  const p = join(process.cwd(), PACKAGE_FILE);
   if (!existsSync(p)) return null;
   try {
     return JSON.parse(readFileSync(p, 'utf8')) as Manifest;

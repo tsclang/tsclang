@@ -10,6 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
+import { PACKAGE_FILE } from '@tsclang/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -454,7 +455,7 @@ function metaToOpts(testDir) {
   }
 
   // Also read tsc.package.json (some tests specify config here)
-  const pkgPath = join(testDir, 'tsc.package.json');
+  const pkgPath = join(testDir, PACKAGE_FILE);
   if (existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));

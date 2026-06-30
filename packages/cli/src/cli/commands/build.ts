@@ -7,6 +7,7 @@ import { DESKTOP_CAPABILITIES, loadProfile, listAvailableProfiles, capabilityDef
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -54,7 +55,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const watchMode        = hasFlagAny(args, '--watch', '-w');
   let optimize: string | null = flagValue(args, '--optimize') ?? null;
   if (optimize && !isValidOptimizeLevel(optimize)) {
-    process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use O0, O1, O2, O3, Os, Oz\n`);
+    process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use ${OPTIMIZE_LEVELS.join(', ')}\n`);
     process.exit(1);
   }
 

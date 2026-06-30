@@ -3,6 +3,7 @@ import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { compileTsc } from '@tsclang/compiler';
+import { OPTIMIZE_LEVELS } from '@tsclang/shared';
 import { getPositionalAfter, isValidOptimizeLevel } from '../args.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -17,7 +18,7 @@ export function runRunCommand(args: string[], rootDir: string): void {
   const runOptIdx = args.indexOf('--optimize');
   const runOptimize = runOptIdx !== -1 && runOptIdx < (sepIdx !== -1 ? sepIdx : args.length) ? args[runOptIdx + 1] : null;
   if (runOptimize && !isValidOptimizeLevel(runOptimize)) {
-    process.stderr.write(`tsclang run: invalid --optimize value '${runOptimize}'; use O0, O1, O2, O3, Os, Oz\n`);
+    process.stderr.write(`tsclang run: invalid --optimize value '${runOptimize}'; use ${OPTIMIZE_LEVELS.join(', ')}\n`);
     process.exit(1);
   }
 

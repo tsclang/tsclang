@@ -1,3 +1,5 @@
+import { PACKAGE_FILE } from '@tsclang/shared';
+
 export const help = `tsclang {version} — TypeScript-like language that compiles to C
 
 USAGE:
@@ -6,6 +8,7 @@ USAGE:
 COMMANDS:
   build            Compile .tsc to C or binary
   run              Compile and run
+  debug            Debug a .tsc program
   test             Run tests in test/ directory
   init             Create a new project
   build-cmake      Generate CMakeLists.txt
@@ -14,7 +17,7 @@ COMMANDS:
   explain          Explain an error code
   emit-dts         Generate .d.tsc declaration files
   lsp              Start Language Server
-  validate-config  Validate tsc.package.json
+  validate-config  Validate ${PACKAGE_FILE}
   install          Install a package
   update           Update lock file
   search           Search packages

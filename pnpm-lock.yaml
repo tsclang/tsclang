@@ -54,6 +54,9 @@ importers:
       '@tsclang/ast':
         specifier: workspace:*
         version: link:../ast
+      '@tsclang/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^26.0.0
@@ -88,6 +91,9 @@ importers:
       '@tsclang/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@tsclang/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^26.0.0
@@ -104,6 +110,9 @@ importers:
       '@tsclang/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@tsclang/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^26.0.0

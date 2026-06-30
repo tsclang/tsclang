@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSy
 import { join, resolve, dirname } from 'path';
 import { MOCK_REGISTRY, readLock, writeLock, readManifest } from '@tsclang/pm';
 import type { LockPackage } from '@tsclang/pm';
+import { PACKAGE_FILE, PACKAGES_DIR } from '@tsclang/shared';
 import { hasFlag, getPositional } from '../args.js';
 
 export function runSearchCommand(args: string[]): void {
@@ -22,7 +23,7 @@ export function runSearchCommand(args: string[]): void {
 }
 
 export function runPublishCommand(): void {
-  const pkgPath = join(process.cwd(), 'tsc.package.json');
+  const pkgPath = join(process.cwd(), PACKAGE_FILE);
   if (!existsSync(pkgPath)) {
     process.stderr.write('tsclang publish: tsc.package.json not found\n');
     process.exit(1);
@@ -41,12 +42,12 @@ export function runPublishCommand(): void {
   const files: Record<string, string> = {};
   const collectFiles = (dir: string, base = ''): void => {
     for (const entry of readdirSync(dir)) {
-      if (entry === 'tsc_packages' || entry.startsWith('.')) continue;
+      if (entry === PACKAGES_DIR || entry.startsWith('.')) continue;
       const full = join(dir, entry);
       const rel  = base ? `${base}/${entry}` : entry;
       if (statSync(full).isDirectory()) {
         collectFiles(full, rel);
-      } else if (entry.endsWith('.tsc') || entry === 'tsc.package.json') {
+      } else if (entry.endsWith('.tsc') || entry === PACKAGE_FILE) {
         files[rel] = readFileSync(full, 'utf8');
       }
     }
@@ -118,7 +119,7 @@ export function runInstallCommand(args: string[]): void {
       process.stderr.write('tsclang install: malformed .tspkg (missing name/version/files)\n');
       process.exit(1);
     }
-    const pkgDir = join('tsc_packages', pkgName);
+    const pkgDir = join(PACKAGES_DIR, pkgName);
     mkdirSync(pkgDir, { recursive: true });
     for (const [rel, content] of Object.entries(files)) {
       const dest = join(pkgDir, rel);
@@ -149,7 +150,7 @@ export function runInstallCommand(args: string[]): void {
     pkgSource = 'registry';
   }
 
-  mkdirSync(join('tsc_packages', pkgName), { recursive: true });
+  mkdirSync(join(PACKAGES_DIR, pkgName), { recursive: true });
 
   const lock = readLock();
   lock.packages[pkgName] = { version: pkgVersion, source: pkgSource };

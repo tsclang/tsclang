@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { parsePlatformDecl } from '@tsclang/compiler';
+import { PACKAGES_DIR } from '@tsclang/shared';
 
 export interface Capabilities {
   target?: string;
@@ -51,7 +52,7 @@ export function loadProfile(name: string, profilesDir: string, inputFile?: strin
 
   const pkgDir = name.startsWith("@") ? name : null;
   if (pkgDir) {
-    const pkgDts = join(inputFile ? dirname(resolve(inputFile)) : process.cwd(), "tsc_packages", pkgDir, "index.d.tsc");
+    const pkgDts = join(inputFile ? dirname(resolve(inputFile)) : process.cwd(), PACKAGES_DIR, pkgDir, "index.d.tsc");
     if (existsSync(pkgDts)) {
       try { return parsePlatformDecl(readFileSync(pkgDts, "utf8"), pkgDts); } catch { return null; }
     }
