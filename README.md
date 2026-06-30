@@ -159,6 +159,7 @@ packages/
   ast/           # Pure AST/token/symbol type definitions (@tsclang/ast)
   compiler/      # Compiler core library: lexer, parser, codegen, runtime (.tsc → C)
   cli/           # CLI binary: dispatcher, commands, LSP
+  pm/            # Package manager domain logic: lock, manifest, registry, semver (@tsclang/pm)
   spec/          # Language specification + book/
   tests/         # Static tests (test/runner.ts + test/cases/)
   test-engine/   # On-the-fly test generator

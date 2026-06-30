@@ -1,7 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { flagValue, hasFlagAny } from '../args.js';
-import { packageGenerate } from '../package.js';
-import { PackageType } from '../../types/package-type.js';
+import { packageGenerate, PackageType } from '@tsclang/pm';
 
 export function runInitCommand(args: string[]): void {
   let name: string | null = null;

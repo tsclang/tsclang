@@ -7,7 +7,7 @@
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Monorepo (npm workspaces):** `@tsclang/ast` (pure AST/token/symbol types) · `@tsclang/compiler` (core library: lexer→parser→codegen→C + runtime + profiles) · `@tsclang/cli` (binary: dispatcher + commands + LSP) · `@tsclang/tests` / `@tsclang/test-engine` · `@tsclang/spec`
+- **Monorepo (npm workspaces):** `@tsclang/ast` (pure AST/token/symbol types) · `@tsclang/compiler` (core library: lexer→parser→codegen→C + runtime + profiles) · `@tsclang/cli` (binary: dispatcher + commands + LSP) · `@tsclang/pm` (package manager domain: lock/manifest/registry/semver — mock prototype) · `@tsclang/tests` / `@tsclang/test-engine` · `@tsclang/spec`
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`

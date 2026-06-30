@@ -1,4 +1,4 @@
-import { EMIT_VALUES } from "../../types/emit.js";
+import { EMIT_VALUES } from "@tsclang/pm";
 
 const emitOptions = EMIT_VALUES.join('|');
 

@@ -1,8 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, resolve, dirname } from 'path';
-import { MOCK_REGISTRY } from '../registry.js';
-import { readLock, writeLock, readManifest } from '../registry.js';
-import type { LockPackage } from '../registry.js';
+import { MOCK_REGISTRY, readLock, writeLock, readManifest } from '@tsclang/pm';
+import type { LockPackage } from '@tsclang/pm';
 import { hasFlag, getPositional } from '../args.js';
 
 export function runSearchCommand(args: string[]): void {

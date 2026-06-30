@@ -1,7 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { MOCK_PKG_DEPS, resolveRange } from '../registry.js';
-import { rangesCompatible } from '../../semver.js';
+import { MOCK_PKG_DEPS, resolveRange, rangesCompatible } from '@tsclang/pm';
 import { validateBuildKeys, validateStrictRules } from '../config-validator.js';
 
 export function runValidateConfigCommand(args: string[]): void {

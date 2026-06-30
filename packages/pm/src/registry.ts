@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { semverParse, semverCmp, semverSatisfies } from '../semver.js';
+import { semverParse, semverCmp, semverSatisfies } from './semver.js';
 
 // MOCK: not yet implemented — mock package registry for dependency resolution tests
 

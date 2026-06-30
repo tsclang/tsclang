@@ -6,7 +6,7 @@ import { flagValue, hasFlag, hasFlagAny, isValidOptimizeLevel, isValidNumberType
 import { DESKTOP_CAPABILITIES, loadProfile, listAvailableProfiles, capabilityDefines } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
-import { checkLockStale } from '../registry.js';
+import { checkLockStale } from '@tsclang/pm';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
