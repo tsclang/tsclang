@@ -113,7 +113,6 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
 
 // ============================================================
 class Context {
-  [key: string]: any;  // TODO: [phase2.3] remove after typing all mixin methods
 
   // Core state
   filename!: string;
@@ -349,6 +348,11 @@ class Context {
   _noOptEmit!: boolean;
   _postStmtCleanups!: any[];
   _panicHelpers!: Set<string>;
+
+  // Mixin methods accessed within this class (implemented via Object.assign below)
+  declare visitProgram: (ast: Program) => void;
+  declare _ensureHeapDestructor: (className: string) => void;
+  declare _ensurePoolDrop: (className: string) => void;
 
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
