@@ -1,5 +1,6 @@
 import { lex, TK } from './lexer.js';
 import { TSC_DEFINES } from '@tsclang/shared';
+import type { Token } from '@tsclang/ast';
 
 export interface Capabilities {
   target?: string;
@@ -59,7 +60,7 @@ const VALID_FIELDS = {
   flash_size:        'number',
 };
 
-function parseValue(tok: any) {
+function parseValue(tok: Token): string | boolean | number | undefined {
   if (tok.type === TK.STRING) return tok.value;
   if (tok.type === TK.BOOL)   return tok.value === 'true';
   if (tok.type === TK.NUMBER) return Number(tok.value);
@@ -105,7 +106,7 @@ export function parsePlatformDecl(src: string, filename = '<profile>') {
           if (typeof val !== expected) {
             throw new Error(`${filename}: field '${key}' expects ${expected}, got ${typeof val}`);
           }
-          (caps as Record<string, any>)[key] = val;
+          (caps as Record<string, unknown>)[key] = val;
         }
 
         if (cur().type === TK.RBRACE) advance();

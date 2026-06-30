@@ -8,7 +8,7 @@
 import type {
   Program, Stmt, Expression, Literal, BaseNode, Block,
   VarDecl, Return, ExprStmt, If, While, For,
-  FuncDecl, ClassDecl, ClassMember, Method, Ident,
+  FuncDecl, ClassDecl, ClassMember, Method, Ident, Arrow,
 } from '@tsclang/ast';
 
 // ---------------------------------------------------------------------------
@@ -319,14 +319,32 @@ function optimizeBody(stmts: Stmt[]): Stmt[] {
   return s;
 }
 
-// Recursively apply to function/class bodies
+// Recursively apply to function/class bodies and arrow-with-block initializers
 function optimizeNode(node: Stmt): Stmt {
   const kind = (node as BaseNode).kind;
 
-  if (kind === 'FuncDecl' || kind === 'ArrowFunc') {
+  if (kind === 'FuncDecl') {
     const fn = node as FuncDecl;
     if (fn.body) {
       return { ...fn, body: { ...fn.body, body: optimizeBody(fn.body.body).map(optimizeNode) } } as FuncDecl;
+    }
+  }
+
+  if (kind === 'VarDecl') {
+    const vd = node as VarDecl;
+    if (vd.init) {
+      const initKind = (vd.init as BaseNode).kind;
+      if (initKind === 'Arrow') {
+        const arrow = vd.init as Arrow;
+        if (arrow.body && (arrow.body as BaseNode).kind === 'Block') {
+          const block = arrow.body as Block;
+          return { ...vd, init: { ...arrow, body: { ...block, body: optimizeBody(block.body).map(optimizeNode) } } } as VarDecl;
+        }
+      }
+      if (initKind === 'FuncExpr') {
+        const fe = vd.init as { kind: 'FuncExpr'; body: Block };
+        return { ...vd, init: { ...fe, body: { ...fe.body, body: optimizeBody(fe.body.body).map(optimizeNode) } } } as VarDecl;
+      }
     }
   }
 

@@ -33,8 +33,8 @@ export interface TypeUnion extends BaseNode {
 
 export interface TypeFunc extends BaseNode {
   kind: 'TypeFunc';
-  params: Param[];
-  returnType: TypeAnn;
+  params: TypeAnn[];
+  ret: TypeAnn;
   throwsTypes?: TypeAnn[];
   async?: boolean;
   generator?: boolean;
@@ -42,7 +42,7 @@ export interface TypeFunc extends BaseNode {
 
 export interface TypeArray extends BaseNode {
   kind: 'TypeArray';
-  elemType: TypeAnn;
+  element: TypeAnn;
 }
 
 export interface TypePointer extends BaseNode {

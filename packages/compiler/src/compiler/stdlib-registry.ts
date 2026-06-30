@@ -1,3 +1,6 @@
+import type { CodeGenThis } from './codegen.js';
+import type { Import, ImportName } from '@tsclang/ast';
+
 export const LANGUAGE_BUILTINS = new Set([
   'true', 'false', 'null', 'undefined',
   'console', 'Math', 'performance', 'Date', 'JSON', 'process', 'Object',
@@ -118,14 +121,14 @@ const _AVR_RETURN_TYPES = {
   digitalRead: 'bool', serialAvailable: 'bool', serialRead: 'uint8_t',
 };
 
-export function resolveImportName(source: any, rawName: any) {
+export function resolveImportName(source: string, rawName: string | ImportName) {
   const mod = (STDLIB_MODULES as Record<string, any>)[source];
   if (!mod?.exports) return null;
   const name = typeof rawName === 'object' ? rawName.name : rawName;
   return mod.exports[name] ?? null;
 }
 
-export function handleStdlibImport(ctx: any, node: any) {
+export function handleStdlibImport(ctx: CodeGenThis, node: Import) {
   const mod = (STDLIB_MODULES as Record<string, any>)[node.source];
   if (!mod) return false;
 
@@ -150,10 +153,10 @@ export function handleStdlibImport(ctx: any, node: any) {
     const inc = mod.include.startsWith('<') ? `#include ${mod.include}` : `#include "${mod.include}"`;
     ctx.includes.add(inc);
   }
-  if (mod.flag) ctx[mod.flag] = true;
+  if (mod.flag) (ctx as unknown as Record<string, unknown>)[mod.flag] = true;
 
   if (mod.handler) {
-    ctx[mod.handler](node);
+    (ctx as unknown as Record<string, (node: Import) => void>)[mod.handler](node);
   } else if (mod.exports) {
     const names = node.names ?? [];
     const usedIncludes = new Set();
@@ -162,7 +165,7 @@ export function handleStdlibImport(ctx: any, node: any) {
       const exp = mod.exports[name];
       if (!exp) continue;
       if (exp.special) {
-        ctx[exp.special] = true;
+        (ctx as unknown as Record<string, unknown>)[exp.special] = true;
       }
       if (exp.func) {
         const includeKey = exp.include;
@@ -184,7 +187,7 @@ export function handleStdlibImport(ctx: any, node: any) {
 }
 
 export const STDLIB_HANDLERS = {
-  _handleStdAvr(this: any, node: any) {
+  _handleStdAvr(this: CodeGenThis, node: Import) {
     const names = node.names ?? [];
     for (const n of names) {
       const name = typeof n === 'object' ? n.name : n;
@@ -201,7 +204,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdFs(this: any, node: any) {
+  _handleStdFs(this: CodeGenThis, node: Import) {
     if (node.namespace && node.names.length > 0) {
       this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
@@ -210,7 +213,7 @@ export const STDLIB_HANDLERS = {
                { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
   },
 
-  _handleStdIo(this: any, node: any) {
+  _handleStdIo(this: CodeGenThis, node: Import) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'Reader') {
@@ -244,19 +247,19 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdReactive(this: any, node: any) {
+  _handleStdReactive(this: CodeGenThis, node: Import) {
     this._reactiveClosureCount = 0;
     this._capturedSignalMap = new Map();
   },
 
-  _handleStdNet(this: any, node: any) {
+  _handleStdNet(this: CodeGenThis, node: Import) {
     this.classes.set('TscResponse', {
       isStruct: true,
       fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
     });
   },
 
-  _handleStdLibc(this: any, node: any) {
+  _handleStdLibc(this: CodeGenThis, node: Import) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
@@ -264,7 +267,7 @@ export const STDLIB_HANDLERS = {
     }
   },
 
-  _handleStdStack(this: any, node: any) {
+  _handleStdStack(this: CodeGenThis, node: Import) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'push') {

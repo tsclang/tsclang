@@ -359,6 +359,7 @@ class Context {
   _stdFsImported!: boolean;
   _stdTemporalImported!: boolean;
   _stdEmbeddedImported!: boolean;
+  _avrSleepModeImported!: boolean;
 
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;

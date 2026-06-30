@@ -1,5 +1,7 @@
 // TSClang Type System — type resolution helpers for codegen
 
+import type { TypeAnn, Param, Literal } from '@tsclang/ast';
+
 // Primitive type mapping: TSClang → C
 export const PRIMITIVE_MAP: Record<string, string> = {
   i8:    'int8_t',
@@ -44,7 +46,7 @@ export function fmtSpec(ctype: string): string {
 }
 
 // Mangle a type for use in C function/struct names
-export function mangleType(typeNode: any, defaultNumber: string = 'f64'): string {
+export function mangleType(typeNode: TypeAnn | null | undefined, defaultNumber: string = 'f64'): string {
   if (!typeNode) return '';
   if (typeNode.kind === 'TypeRef') {
     const { name, typeArgs } = typeNode;
@@ -57,20 +59,20 @@ export function mangleType(typeNode: any, defaultNumber: string = 'f64'): string
       if (name === 'boolean') return 'bool';
       return PRIMITIVE_MAP[name] ? name : name;
     }
-    return name + '_' + typeArgs.map((t: any) => mangleType(t, defaultNumber)).join('_');
+    return name + '_' + typeArgs.map((t: TypeAnn) => mangleType(t, defaultNumber)).join('_');
   }
   if (typeNode.kind === 'TypeArray')  return 'Array_' + mangleType(typeNode.element, defaultNumber);
   if (typeNode.kind === 'TypeUnion') {
     const types = typeNode.types;
-    const nullIdx = types.findIndex((t: any) => t.kind === 'TypeRef' && t.name === 'null');
+    const nullIdx = types.findIndex((t: TypeAnn) => t.kind === 'TypeRef' && t.name === 'null');
     if (nullIdx >= 0 && types.length === 2) {
       const inner = types[1 - nullIdx];
       return 'opt_' + mangleType(inner, defaultNumber);
     }
-    return types.map((t: any) => mangleType(t, defaultNumber)).join('_or_');
+    return types.map((t: TypeAnn) => mangleType(t, defaultNumber)).join('_or_');
   }
   if (typeNode.kind === 'TypeFunc') {
-    const parts = typeNode.params.map((t: any) => mangleType(t, defaultNumber));
+    const parts = typeNode.params.map((t: TypeAnn) => mangleType(t, defaultNumber));
     parts.push(mangleType(typeNode.ret, defaultNumber));
     return 'fn_' + parts.join('_');
   }
@@ -78,7 +80,7 @@ export function mangleType(typeNode: any, defaultNumber: string = 'f64'): string
 }
 
 // Mangle param types for function name suffix: foo(a: i32, b: f64) → foo_i32_f64
-export function mangleParams(params: any[], defaultNumber: string = 'f64'): string {
+export function mangleParams(params: Param[], defaultNumber: string = 'f64'): string {
   const parts: string[] = [];
   for (const p of params) {
     if (p.rest) continue;
@@ -90,7 +92,7 @@ export function mangleParams(params: any[], defaultNumber: string = 'f64'): stri
 }
 
 // Infer C type from a literal node
-export function inferLiteralCType(node: any, defaultNumber: string = 'f64'): string {
+export function inferLiteralCType(node: Literal, defaultNumber: string = 'f64'): string {
   if (node.litType === 'string')  return 'String';
   if (node.litType === 'char')    return 'String';
   if (node.litType === 'bool')    return 'bool';
