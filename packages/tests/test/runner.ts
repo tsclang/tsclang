@@ -10,7 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR } from '@tsclang/shared';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS } from '@tsclang/shared';
 import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -202,7 +202,7 @@ async function checkGcc() {
 }
 
 async function gccCompile(cFile, outBin) {
-  const extraLibs = process.platform === 'win32' ? '-lws2_32' : '';
+  const extraLibs = process.platform === 'win32' ? WIN32_LINK_FLAGS.join(' ') : '';
   if (MSYS2_BASH) {
     // On Windows: run gcc via MSYS2 bash so cc1.exe has the correct runtime environment
     const inc  = existsSync(RUNTIME_INC) ? `-I${toMsysPath(RUNTIME_INC)}` : '';
@@ -269,10 +269,10 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
   const args = [
     cFile, '-o', elfFile,
     '-I', incDir,
-    `-mmcu=${DEFAULT_AVR_MCU}`, C_STANDARD_FLAG, '-Os',
+    `-mmcu=${DEFAULT_AVR_MCU}`, C_STANDARD_FLAG, SIZE_OPTIMIZE_FLAG,
     `-D${TSC_DEFINES.EMBEDDED}`,
     ...defines,
-    '-Wl,-u,vfprintf', '-lprintf_flt',
+    ...AVR_FLOAT_PRINTF_FLAGS,
   ];
   if (HAS_WSL) {
     const wSrc = toWslPath(cFile);
@@ -282,7 +282,7 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
     const tmpOut = `/tmp/tsclang_${Date.now()}.elf`;
     const cpResult = await runWsl(`cp ${wSrc} ${tmpSrc}`);
     if (cpResult.code !== 0) return cpResult;
-    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=${DEFAULT_AVR_MCU} ${C_STANDARD_FLAG} -Os -D${TSC_DEFINES.EMBEDDED} ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
+    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=${DEFAULT_AVR_MCU} ${C_STANDARD_FLAG} ${SIZE_OPTIMIZE_FLAG} -D${TSC_DEFINES.EMBEDDED} ${defines.join(' ')} ${AVR_FLOAT_PRINTF_FLAGS.join(' ')}`);
     if (result.code === 0) {
       await runWsl(`cp ${tmpOut} ${wOut}`);
     }

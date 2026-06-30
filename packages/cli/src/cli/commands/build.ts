@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -280,7 +280,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         '-I', dirname(runtimeH),
         ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
         ...gccOptimize,
-        ...(useLibuv ? ['-luv'] : []),
+        ...(useLibuv ? [LIBUV_LINK_FLAG] : []),
         ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
       if (gcc.status !== 0) {
@@ -298,7 +298,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_WASM_HEADER);
       const wasmPath = join(outDir, stem + '.wasm');
       const jsPath   = join(outDir, stem + '.js');
-      const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
+      const emccOpts = optimize ? [`-${optimize}`] : [DEFAULT_OPTIMIZE_FLAG];
       const emccResult = spawnSync('emcc', [
         cPath, '-o', jsPath,
         '-I', dirname(runtimeH),
@@ -325,7 +325,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const elfPath = join(outDir, stem + '.elf');
       const hexPath = join(outDir, stem + '.hex');
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
-      const gccOptimize = optimize ? [`-${optimize}`] : ['-Os'];
+      const gccOptimize = optimize ? [`-${optimize}`] : [SIZE_OPTIMIZE_FLAG];
       const gccResult = spawnSync('avr-gcc', [
         cPath, '-o', elfPath,
         '-I', dirname(runtimeH),

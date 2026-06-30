@@ -6,6 +6,18 @@ export const GCC_WARN_FLAGS = ['-Wall', '-Wextra'] as const;
 
 export const GCC_LINK_FLAGS = ['-lpthread', '-lm'] as const;
 
+export const DEFAULT_OPTIMIZE_FLAG = '-O2';
+
+export const SIZE_OPTIMIZE_FLAG = '-Os';
+
+export const DEBUG_FLAG = '-g';
+
+export const WIN32_LINK_FLAGS = ['-lws2_32'] as const;
+
+export const LIBUV_LINK_FLAG = '-luv';
+
+export const AVR_FLOAT_PRINTF_FLAGS = ['-Wl,-u,vfprintf', '-lprintf_flt'] as const;
+
 export const RUNTIME_HEADER = 'runtime.h';
 
 export const RUNTIME_WASM_HEADER = 'runtime_wasm.h';

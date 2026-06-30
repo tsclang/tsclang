@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from "@tsclang/shared"
+import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES, SIZE_OPTIMIZE_FLAG } from "@tsclang/shared"
 import { isInPath, isInWsl, wslExec, toWslPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
@@ -26,7 +26,7 @@ export class AvrGccBackend implements CompilerBackend {
     writeFileSync(cPath, cCode, "utf8")
 
     const defines = [`-D${TSC_DEFINES.EMBEDDED}`, `-D${TSC_DEFINES.NO_POSIX}`, `-D${TSC_DEFINES.NO_STRTOLL}`, ...(opts?.defines ?? [])]
-    const args = [`-mmcu=${this.mcu}`, "-Os", C_STANDARD_FLAG, ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
+    const args = [`-mmcu=${this.mcu}`, SIZE_OPTIMIZE_FLAG, C_STANDARD_FLAG, ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
     if (opts?.includes) {
       for (const inc of opts.includes) args.splice(-2, 0, `-I${inc}`)
     }
@@ -36,7 +36,7 @@ export class AvrGccBackend implements CompilerBackend {
       const wslElfPath = toWslPath(elfPath)
       const wslHexPath = toWslPath(hexPath)
 
-      const compileArgs = [`-mmcu=${this.mcu}`, "-Os", C_STANDARD_FLAG, ...defines, wslCPath, "-o", wslElfPath]
+      const compileArgs = [`-mmcu=${this.mcu}`, SIZE_OPTIMIZE_FLAG, C_STANDARD_FLAG, ...defines, wslCPath, "-o", wslElfPath]
       if (opts?.includes) {
         for (const inc of opts.includes) compileArgs.splice(-2, 0, `-I${toWslPath(inc)}`)
       }

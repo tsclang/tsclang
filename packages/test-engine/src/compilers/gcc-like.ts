@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { C_STANDARD_FLAG, GCC_LINK_FLAGS, TSC_DEFINES } from "@tsclang/shared"
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS, TSC_DEFINES, DEFAULT_OPTIMIZE_FLAG, DEBUG_FLAG } from "@tsclang/shared"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class GccLikeBackend implements CompilerBackend {
@@ -31,8 +31,8 @@ export class GccLikeBackend implements CompilerBackend {
     if (opts?.defines) {
       for (const def of opts.defines) args.push(`-D${def}`)
     }
-    if (opts?.optimize) args.push("-O2")
-    if (opts?.debug) args.push("-g")
+    if (opts?.optimize) args.push(DEFAULT_OPTIMIZE_FLAG)
+    if (opts?.debug) args.push(DEBUG_FLAG)
     if (opts?.extraFlags) args.push(...opts.extraFlags)
 
     const isEmbedded = opts?.defines?.includes(TSC_DEFINES.EMBEDDED) ?? false
