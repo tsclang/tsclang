@@ -241,6 +241,115 @@ class Context {
   _parse!: any;
   _typeChecker!: TypeChecker;
 
+  // Config-derived (set in codegen() and visitProgram)
+  _debugLines!: boolean;
+  _modulePrefix!: string | null;
+  _strictRules!: Set<string> | null;
+  _capabilities!: Record<string, any>;
+  _importedModules!: Record<string, any>;
+  _sourceToPath!: Record<string, string>;
+  _targetName!: string;
+  _allocatorName!: string;
+  _asyncName!: string | null;
+  _ramSize!: number | null;
+  _stackSize!: number | null;
+  _defaultNumber!: string;
+  _useArgcArgv!: boolean;
+
+  // Registries (set in visitProgram pre-scans)
+  _fromEntriesConsumed!: Map<string, any>;
+  _arcClasses!: Map<string, any>;
+  _funcStackInfo!: Map<string, any>;
+  _throwsClasses!: Map<string, any>;
+  _decoratorFns!: Map<string, any>;
+  _decoratorNames!: Set<string>;
+  _hmCapViolations!: Map<string, any>;
+  _funcRefVars!: Set<string>;
+  _platformSkipped!: Map<string, any>;
+  _emittedTasksTypedefs!: boolean;
+
+  // Function-visit state
+  _curFuncName!: string | null;
+  _throwsCtx!: any;
+  _currentFuncIsNever!: boolean;
+  _currentFuncLines!: any[];
+  _funcDepth!: number;
+  _funcMathThrow!: any;
+  _mathCatchLabel!: string | null;
+  _mathErrVar!: string | null;
+
+  // Async machinery
+  _asyncCount!: number;
+  _preScanTypes!: Map<string, any> | null;
+  _selfCtx!: any;
+  _inAsyncFunc!: boolean;
+  _asyncMainPollFn!: string | null;
+  _asyncMainStateType!: string | null;
+  _asyncMainIsDesktop!: boolean;
+  _asyncBreakStack!: any[] | null;
+  _asyncContinueStack!: any[] | null;
+  _forOfEmitCount!: number;
+  _forOfCount!: number;
+  _fetchOptsCount!: number;
+  _inAsyncTryCatch!: boolean;
+  _expectedType!: string | null;
+
+  // Iteration / spawn
+  _inIterNextBody!: boolean;
+  _iterNextElemType!: string;
+  _iterNextOptType!: string;
+  _iterNextIsComplex!: boolean;
+  _inReturnContext!: boolean;
+  _spawnCount!: number;
+
+  // Statement flags
+  _inFinallyBlock!: boolean;
+  _inTryBlock!: boolean;
+  _inMathTry!: boolean;
+  _tryCatchInfo!: any;
+  _inUnsafe!: boolean;
+  _selectCount!: number;
+  _inWeakUpgrade!: boolean;
+  _staticMapInlineCount!: number;
+  _newArrayElemHint!: string | null;
+
+  // Block/pool stacks
+  _currentBlockPoolVars!: any[] | null;
+  _currentBlockHeapVars!: any[] | null;
+  _poolVarStack!: any[];
+  _heapVarStack!: any[];
+
+  // Calls / stdlib state
+  _lastSuppressConst!: boolean;
+  _lastHalRead!: string | null;
+  _lambdaParamHint!: string[] | null;
+  _inComputedFn!: boolean;
+  _lastComputedSigType!: string;
+  _lastComputedElemType!: string;
+  _handlerCount!: number;
+  _batchCount!: number;
+  _reactiveClosureCount!: number;
+  _blobTextN!: number;
+  _urlOptN!: number;
+  _dvTmpCount!: number;
+  _lastOptIsNull!: boolean;
+  _lastPopEmpty!: boolean;
+  _lastArrayElemReturn!: boolean;
+  _lastAtNonNeg!: boolean;
+  _lastCbRetType!: string;
+  _genResultCount!: number;
+
+  // Misc state
+  _inHoistedLambda!: boolean;
+  _pendingDecoratorInits!: any[] | null;
+  _blobStrN!: number;
+  _bufDataCount!: number;
+  _blobDataCount!: number;
+  _bssUsage!: number;
+  _noOptEmit!: boolean;
+  _postStmtCleanups!: any[];
+  _panicHelpers!: Set<string>;
+
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
