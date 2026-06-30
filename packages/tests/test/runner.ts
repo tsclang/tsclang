@@ -14,8 +14,8 @@ import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compil
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
 const DOC_DIR = join(ROOT, 'packages', 'tests', 'test', 'cases');
-const TSCLANG_BIN_JS = join(ROOT, 'packages', 'compiler', 'dist', 'index.js');
-const TSCLANG_BIN_TS = join(ROOT, 'packages', 'compiler', 'src', 'index.ts');
+const TSCLANG_BIN_JS = join(ROOT, 'packages', 'cli', 'dist', 'index.js');
+const TSCLANG_BIN_TS = join(ROOT, 'packages', 'cli', 'src', 'index.ts');
 const TSCLANG_BIN = existsSync(TSCLANG_BIN_JS) ? TSCLANG_BIN_JS : TSCLANG_BIN_TS;
 const USE_TSX = !existsSync(TSCLANG_BIN_JS);
 const TSX_LOADER = pathToFileURL(join(ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href;

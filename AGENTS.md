@@ -109,7 +109,7 @@ pnpm tsx packages/tests/test/runner.ts 04-ownership  # только 04-ownership
 pnpm tsx packages/tests/test/runner.ts --no-gcc      # только C-compare, без компиляции
 pnpm tsx packages/tests/test/runner.ts --verbose     # показывать diff при провале
 pnpm typecheck                               # проверить типы (tsc --noEmit)
-pnpm build                                   # собрать @tsclang/ast + декларации компилятора (dist/*.d.ts)
+pnpm build                                   # собрать все пакеты (ast → compiler → pm → cli) в dist/*.js
 pnpm test:engine                             # запуск генератора тестов на лету
 ```
 
@@ -124,7 +124,7 @@ pnpm test:engine                             # запуск генератора
 При ручном запуске `tsclang build` ВСЕГДА указывай `--outDir` во временную папку:
 
 ```bash
-pnpm tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/
+node packages/cli/dist/index.js build input.tsc --outDir .tsclang-tmp/
 ```
 
 Или используй программный API вместо CLI:

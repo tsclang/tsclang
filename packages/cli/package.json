@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "tsclang": "./src/index.ts" },
+  "bin": { "tsclang": "./dist/index.js" },
   "scripts": {
-    "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@tsclang/compiler": "workspace:*",

@@ -3,7 +3,7 @@
 ## Требования
 
 - Node.js `>=18.0.0`
-- npm `>=9.0.0`
+- pnpm `>=9.0.0`
 - CMake `>=3.16` (для сборки бинарника / hex)
 - Компилятор C: gcc, clang, или avr-gcc (для embedded таргетов)
 
@@ -25,8 +25,9 @@
 ```bash
 git clone <repo-url> tsclang
 cd tsclang
-npm install
-npx tsx src/index.ts --version
+pnpm install
+pnpm build
+node packages/cli/dist/index.js --version
 ```
 
 ## Установка через npm (roadmap)
@@ -41,15 +42,8 @@ npm install -g tsclang
 tsclang --version
 ```
 
-Из dist:
+Из исходников (без сборки):
 
 ```bash
-npm run build
-node dist/index.js --version
-```
-
-Из исходников:
-
-```bash
-npx tsx src/index.ts --version
+pnpm tsclang:dev --version
 ```

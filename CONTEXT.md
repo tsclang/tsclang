@@ -139,8 +139,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
 - **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
 - **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
-- **Package model (monorepo).** `@tsclang/compiler` `exports` splits `types`→`dist/*.d.ts` (for tsc of consumers) and `default`→`src/index.ts` (for tsx runtime). Editing compiler source needs NO rebuild for tsx tests; run `pnpm build` only to refresh declarations consumed by `@tsclang/cli` / `@tsclang/test-engine` typecheck.
-- **CLI runtime root.** `packages/cli/src/index.ts` resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
+- **Package model (monorepo).** All packages build to `dist/` (`.js` + `.d.ts`). Exports: `types`→`dist/*.d.ts`, `default`→`dist/*.js`. Run `pnpm build` after changes before testing via built JS. `pnpm tsclang` runs built JS (`node dist/index.js`); `pnpm tsclang:dev` runs from source via tsx (no build needed).
+- **CLI runtime root.** `packages/cli/dist/index.js` (source: `src/index.ts`) resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
 
 ---
@@ -163,13 +163,13 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 | Fix async codegen | `async/scan.ts` + `async/async-stmt.ts` + `async/async-emit.ts` |
 | Add test | `packages/tests/test/cases/<NN>/<feature>/<name>/` |
 | Run tests | `pnpm tsx packages/tests/test/runner.ts 03-types` |
-| Compile manually | `pnpm tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/` |
+| Compile manually | `node packages/cli/dist/index.js build input.tsc --outDir .tsclang-tmp/` |
 
 ---
 
 ## 11. CLI Architecture
 
-`packages/cli/src/index.ts` — slim dispatcher (lives in `@tsclang/cli`, separate from the compiler library). Resolves `COMPILER_ROOT` via `require.resolve('@tsclang/compiler')` to locate `runtime/`+`profiles/` (those stay in the compiler package). Commands: build, run, test, init, lint, format, explain, emit-dts, validate-config, install, update, search, publish, lsp.
+`packages/cli/dist/index.js` (source: `src/index.ts`) — slim dispatcher (lives in `@tsclang/cli`, separate from the compiler library). Resolves `COMPILER_ROOT` via `require.resolve('@tsclang/compiler')` to locate `runtime/`+`profiles/` (those stay in the compiler package). Commands: build, run, test, init, lint, format, explain, emit-dts, validate-config, install, update, search, publish, lsp.
 
 Module map (all under `packages/cli/src/cli/`): `args.ts`, `help.ts`, `helpers.ts`, `registry.ts`, `config-validator.ts`, `profile-loader.ts`, `cmake.ts`, `semver.ts` (top-level `src/`), `formatter.ts` (top-level `src/`), `types/` (package-type, emit), `cli/commands/*.ts`, `lsp/server.ts`.
 

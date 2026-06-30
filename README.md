@@ -145,11 +145,19 @@ pnpm test                  # static tests (~1764 tests)
 pnpm test:engine           # on-the-fly generated tests
 ```
 
-### Run compiler from source
+### Run compiler
 
 ```bash
-pnpm tsx packages/cli/src/index.ts --version
-pnpm tsx packages/cli/src/index.ts run hello.tsc
+pnpm build
+node packages/cli/dist/index.js --version
+node packages/cli/dist/index.js run hello.tsc
+```
+
+Dev mode (from source, no build needed):
+
+```bash
+pnpm tsclang:dev --version
+pnpm tsclang:dev run hello.tsc
 ```
 
 ### Repository structure
