@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -259,7 +259,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (emit === 'c') {
       const cmakePath = join(outDir, 'CMakeLists.txt');
       if (!existsSync(cmakePath)) {
-        const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+        const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
         const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
         const cmakeContent = generateBuildCmake({
           stem,
@@ -271,14 +271,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'binary') {
-      const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
       const binPath = join(outDir, stem);
       const gccOptimize = optimize ? [`-${optimize}`] : [];
       const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
       const gcc = spawnSync('gcc', [
         cPath, '-o', binPath,
         '-I', dirname(runtimeH),
-        '-lpthread', '-std=c11',
+        ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
         ...gccOptimize,
         ...(useLibuv ? ['-luv'] : []),
         ...capabilityDefines(_capabilities),
@@ -295,7 +295,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
         return false;
       }
-      const runtimeH = join(ROOT, 'src/runtime/runtime_wasm.h');
+      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_WASM_HEADER);
       const wasmPath = join(outDir, stem + '.wasm');
       const jsPath   = join(outDir, stem + '.js');
       const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
@@ -321,16 +321,16 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         process.stderr.write('ConfigError: --emit hex/flash requires avr-gcc in PATH\n');
         return false;
       }
-      const mcu = buildOpts.mcu || 'atmega328p';
+      const mcu = buildOpts.mcu || DEFAULT_AVR_MCU;
       const elfPath = join(outDir, stem + '.elf');
       const hexPath = join(outDir, stem + '.hex');
-      const runtimeH = join(ROOT, 'src/runtime/runtime.h');
+      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
       const gccOptimize = optimize ? [`-${optimize}`] : ['-Os'];
       const gccResult = spawnSync('avr-gcc', [
         cPath, '-o', elfPath,
         '-I', dirname(runtimeH),
         `-mmcu=${mcu}`,
-        '-std=c11',
+        C_STANDARD_FLAG,
         '-DTSC_EMBEDDED',
         ...gccOptimize,
         ...capabilityDefines(_capabilities),

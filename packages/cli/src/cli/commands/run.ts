@@ -3,7 +3,7 @@ import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { compileTsc } from '@tsclang/compiler';
-import { OPTIMIZE_LEVELS } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER } from '@tsclang/shared';
 import { getPositionalAfter, isValidOptimizeLevel } from '../args.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -38,12 +38,12 @@ export function runRunCommand(args: string[], rootDir: string): void {
   const binPath = join(tmpDir, stem);
   writeFileSync(cPath, c, 'utf8');
 
-  const runtimeH = join(rootDir, 'src/runtime/runtime.h');
+  const runtimeH = join(rootDir, 'src/runtime', RUNTIME_HEADER);
   const runGccOpt = runOptimize ? [`-${runOptimize}`] : [];
   const gcc = spawnSync('gcc', [
     cPath, '-o', binPath,
     '-I', dirname(runtimeH),
-    '-lpthread', '-std=c11',
+    ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
     ...runGccOpt,
   ], { stdio: 'pipe' });
   if (gcc.status !== 0) {
@@ -68,7 +68,7 @@ export function runDebugCommand(args: string[], rootDir: string): void {
   const binaryPath = join(tmpDir, 'main');
   writeFileSync(mainC, c, 'utf8');
   const runtimeInc = join(rootDir, 'src/runtime');
-  const gccResult = spawnSync('gcc', [mainC, '-o', binaryPath, '-g', `-I${runtimeInc}`, '-lpthread', '-lm'], { encoding: 'utf8' });
+  const gccResult = spawnSync('gcc', [mainC, '-o', binaryPath, '-g', `-I${runtimeInc}`, ...GCC_LINK_FLAGS], { encoding: 'utf8' });
   if (gccResult.status !== 0) {
     process.stderr.write(gccResult.stderr || 'gcc failed\n');
     process.exit(1);

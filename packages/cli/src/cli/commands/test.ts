@@ -3,6 +3,7 @@ import { join, resolve, basename } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { compileTsc } from '@tsclang/compiler';
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS } from '@tsclang/shared';
 
 function findTestFiles(dir: string): string[] {
   const files: string[] = [];
@@ -48,7 +49,7 @@ export function runTestCommand(args: string[]): void {
       writeFileSync(cPath, c, 'utf8');
 
       const runtimeDir = resolve(process.cwd(), 'node_modules/@tsclang/compiler/src/runtime');
-      const gcc = spawnSync('gcc', [cPath, '-o', binPath, `-I${runtimeDir}`, '-lpthread', '-std=c11'], { stdio: 'pipe' });
+      const gcc = spawnSync('gcc', [cPath, '-o', binPath, `-I${runtimeDir}`, ...GCC_LINK_FLAGS, C_STANDARD_FLAG], { stdio: 'pipe' });
 
       if (gcc.status !== 0) {
         failed++;

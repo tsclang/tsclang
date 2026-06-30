@@ -1,6 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join, resolve } from "path"
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS } from "@tsclang/shared"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class GccBackend implements CompilerBackend {
@@ -19,7 +20,7 @@ export class GccBackend implements CompilerBackend {
 
     writeFileSync(cPath, cCode, "utf8")
 
-    const args = [cPath, "-o", binPath, "-std=c11"]
+    const args = [cPath, "-o", binPath, C_STANDARD_FLAG]
     if (opts?.includes) {
       for (const inc of opts.includes) args.push(`-I${inc}`)
     }
@@ -31,7 +32,7 @@ export class GccBackend implements CompilerBackend {
     if (opts?.extraFlags) args.push(...opts.extraFlags)
 
     const isEmbedded = opts?.defines?.includes("TSC_EMBEDDED") ?? false
-    if (!isEmbedded) args.push("-lpthread", "-lm")
+    if (!isEmbedded) args.push(...GCC_LINK_FLAGS)
 
     const result = spawnSync("gcc", args, { stdio: "pipe", shell: true })
 

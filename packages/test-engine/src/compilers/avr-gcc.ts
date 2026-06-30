@@ -1,13 +1,14 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
+import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ } from "@tsclang/shared"
 import { isInPath, isInWsl, wslExec, toWslPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class AvrGccBackend implements CompilerBackend {
   name = "avr-gcc"
-  private mcu = "atmega328p"
-  private freq = "16000000"
+  private mcu = DEFAULT_AVR_MCU
+  private freq = String(DEFAULT_AVR_FREQ)
 
   isAvailable(): boolean {
     if (process.platform === "win32") {
@@ -25,7 +26,7 @@ export class AvrGccBackend implements CompilerBackend {
     writeFileSync(cPath, cCode, "utf8")
 
     const defines = ["-DTSC_EMBEDDED", "-DTSC_NO_POSIX", "-DTSC_NO_STRTOLL", ...(opts?.defines ?? [])]
-    const args = [`-mmcu=${this.mcu}`, "-Os", "-std=c11", ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
+    const args = [`-mmcu=${this.mcu}`, "-Os", C_STANDARD_FLAG, ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
     if (opts?.includes) {
       for (const inc of opts.includes) args.splice(-2, 0, `-I${inc}`)
     }
@@ -35,7 +36,7 @@ export class AvrGccBackend implements CompilerBackend {
       const wslElfPath = toWslPath(elfPath)
       const wslHexPath = toWslPath(hexPath)
 
-      const compileArgs = [`-mmcu=${this.mcu}`, "-Os", "-std=c11", ...defines, wslCPath, "-o", wslElfPath]
+      const compileArgs = [`-mmcu=${this.mcu}`, "-Os", C_STANDARD_FLAG, ...defines, wslCPath, "-o", wslElfPath]
       if (opts?.includes) {
         for (const inc of opts.includes) compileArgs.splice(-2, 0, `-I${toWslPath(inc)}`)
       }

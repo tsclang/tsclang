@@ -10,7 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE } from '@tsclang/shared';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ } from '@tsclang/shared';
 import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -208,12 +208,12 @@ async function gccCompile(cFile, outBin) {
     const inc  = existsSync(RUNTIME_INC) ? `-I${toMsysPath(RUNTIME_INC)}` : '';
     const src  = toMsysPath(cFile);
     const out  = toMsysPath(outBin);
-    const cmd  = `gcc ${src} -o ${out} ${inc} -Wall -Wextra -std=c11 -lm ${extraLibs}`;
+    const cmd  = `gcc ${src} -o ${out} ${inc} ${GCC_WARN_FLAGS.join(' ')} ${C_STANDARD_FLAG} ${GCC_LINK_FLAGS.join(' ')} ${extraLibs}`;
     return runShell(cmd);
   }
   const compileArgs = [cFile, '-o', outBin];
   if (existsSync(RUNTIME_INC)) compileArgs.push(`-I${RUNTIME_INC}`);
-  compileArgs.push('-Wall', '-Wextra', '-std=c11', '-lm');
+  compileArgs.push(...GCC_WARN_FLAGS, C_STANDARD_FLAG, ...GCC_LINK_FLAGS);
   if (extraLibs) compileArgs.push(extraLibs);
   return run('gcc', compileArgs);
 }
@@ -269,7 +269,7 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
   const args = [
     cFile, '-o', elfFile,
     '-I', incDir,
-    '-mmcu=atmega328p', '-std=c11', '-Os',
+    `-mmcu=${DEFAULT_AVR_MCU}`, C_STANDARD_FLAG, '-Os',
     '-DTSC_EMBEDDED',
     ...defines,
     '-Wl,-u,vfprintf', '-lprintf_flt',
@@ -282,7 +282,7 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
     const tmpOut = `/tmp/tsclang_${Date.now()}.elf`;
     const cpResult = await runWsl(`cp ${wSrc} ${tmpSrc}`);
     if (cpResult.code !== 0) return cpResult;
-    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=atmega328p -std=c11 -Os -DTSC_EMBEDDED ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
+    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=${DEFAULT_AVR_MCU} ${C_STANDARD_FLAG} -Os -DTSC_EMBEDDED ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
     if (result.code === 0) {
       await runWsl(`cp ${tmpOut} ${wOut}`);
     }
@@ -310,7 +310,7 @@ async function avrObjcopy(elfFile, hexFile) {
   return run('avr-objcopy', ['-O', 'ihex', elfFile, hexFile]);
 }
 
-async function runSimavr(hexFile, mcu = 'atmega328p', freq = 16000000, timeoutMs = 5000) {
+async function runSimavr(hexFile, mcu = DEFAULT_AVR_MCU, freq = DEFAULT_AVR_FREQ, timeoutMs = 5000) {
   if (HAS_WSL) {
     const wHex = toWslPath(hexFile);
     const tmpHex = `/tmp/tsclang_${Date.now()}.hex`;

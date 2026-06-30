@@ -108,6 +108,22 @@ Fix: use \`d\` (the new owner) instead of \`h.data\`, or restructure to avoid
 moving the field.
 `,
   },
+  E009: {
+    title: 'cannot move out of array by index',
+    body: `
+Arrays in TSClang own their elements. Assigning an element to a new variable
+by index would move it out of the array, leaving a gap — this is not allowed
+for owned types (structs, arrays).
+
+  const arr = [new Point(1, 2)];
+  const p = arr[0];   // error[E009]: cannot move out of array
+
+Fix: use \`.remove(i)\` to take ownership — it removes the element and
+shifts the rest:
+
+  const p = arr.remove(0);   // ok — p owns the Point
+`,
+  },
 };
 
 export function explainError(code: string) {

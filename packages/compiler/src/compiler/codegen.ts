@@ -9,6 +9,7 @@ import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
 import { TypeChecker } from './typechecker.js';
+import { RUNTIME_HEADER, RUNTIME_WASM_HEADER } from '@tsclang/shared';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -119,7 +120,7 @@ class Context {
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
     // Output buffers: delegated to OutputBuffer
-    const _initInclude = opts.target === 'wasm' ? '#include "runtime_wasm.h"' : '#include "runtime.h"';
+    const _initInclude = opts.target === 'wasm' ? `#include "${RUNTIME_WASM_HEADER}"` : `#include "${RUNTIME_HEADER}"`;
     this._output = new OutputBuffer(_initInclude);
     this.lambdaCount = 0;
     this.restCount = 0;

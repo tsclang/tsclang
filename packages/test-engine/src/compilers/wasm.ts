@@ -1,6 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
+import { C_STANDARD_FLAG } from "@tsclang/shared"
 import { isInPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
@@ -18,7 +19,7 @@ export class WasmBackend implements CompilerBackend {
 
     writeFileSync(cPath, cCode, "utf8")
 
-    const args = [cPath, "-o", jsPath, "-std=c11"]
+    const args = [cPath, "-o", jsPath, C_STANDARD_FLAG]
     if (opts?.includes) {
       for (const inc of opts.includes) args.push(`-I${inc}`)
     }
