@@ -1,5 +1,5 @@
 {
-  "name": "@tsclang/pm",
+  "name": "@tsclang/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,16 +11,14 @@
       "default": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@tsclang/shared": "workspace:*"
-  },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
     "typescript": "^6.0.3"
   }
 }

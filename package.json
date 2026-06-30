@@ -7,7 +7,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "pnpm --filter @tsclang/ast build && pnpm --filter @tsclang/compiler build && pnpm --filter @tsclang/pm build && pnpm --filter @tsclang/cli build",
+    "build": "pnpm --filter @tsclang/ast build && pnpm --filter @tsclang/shared build && pnpm --filter @tsclang/compiler build && pnpm --filter @tsclang/pm build && pnpm --filter @tsclang/cli build",
     "typecheck": "pnpm --filter @tsclang/compiler typecheck",
     "test": "pnpm --filter @tsclang/tests test",
     "test:engine": "pnpm --filter @tsclang/test-engine test",

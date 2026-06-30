@@ -35,6 +35,9 @@ importers:
       '@tsclang/pm':
         specifier: workspace:*
         version: link:../pm
+      '@tsclang/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^26.0.0
@@ -60,10 +63,20 @@ importers:
         version: 6.0.3
 
   packages/pm:
+    dependencies:
+      '@tsclang/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^26.0.0
         version: 26.0.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/shared:
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

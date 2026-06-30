@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@tsclang/compiler": "workspace:*",
-    "@tsclang/pm": "workspace:*"
+    "@tsclang/pm": "workspace:*",
+    "@tsclang/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

@@ -1,4 +1,4 @@
-import { EMIT_VALUES } from "@tsclang/pm";
+import { EMIT_VALUES } from "@tsclang/shared";
 
 const emitOptions = EMIT_VALUES.join('|');
 

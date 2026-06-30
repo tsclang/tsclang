@@ -1,5 +1,4 @@
-import { Emit } from "./types/emit.js";
-import { PackageType } from "./types/package-type.js";
+import { Emit, PackageType } from '@tsclang/shared';
 
 interface PkgBuildSettings {
   outDir: string;
