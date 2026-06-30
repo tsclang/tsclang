@@ -121,35 +121,35 @@ An IR/SSA pipeline was prototyped (#27-#29) but is **not integrated** into the c
 
 ## Development
 
-This is an npm workspaces monorepo.
+This is a pnpm workspaces monorepo.
 
 ### Setup
 
 ```bash
 git clone https://github.com/tsclang/tsclang.git
 cd tsclang
-npm install
+pnpm install
 ```
 
 ### Build compiler
 
 ```bash
-npm run build
-# produces packages/compiler/dist/index.js
+pnpm build
+# produces packages/compiler/dist/*.d.ts (declarations only)
 ```
 
 ### Run tests
 
 ```bash
-npm test                  # static tests (~1764 tests)
-npm run test:engine       # on-the-fly generated tests
+pnpm test                  # static tests (~1764 tests)
+pnpm test:engine           # on-the-fly generated tests
 ```
 
 ### Run compiler from source
 
 ```bash
-npx tsx packages/cli/src/index.ts --version
-npx tsx packages/cli/src/index.ts run hello.tsc
+pnpm tsx packages/cli/src/index.ts --version
+pnpm tsx packages/cli/src/index.ts run hello.tsc
 ```
 
 ### Repository structure

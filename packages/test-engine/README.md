@@ -6,10 +6,10 @@ Jest-like test engine for the TSClang compiler. Tests are generated and executed
 
 ```bash
 # Run all tests
-npm run test:engine
+pnpm test:engine
 
 # Or directly
-npx tsx packages/test-engine/src/tests/run.ts
+pnpm tsx packages/test-engine/src/tests/run.ts
 ```
 
 ## Architecture
@@ -131,4 +131,4 @@ expect(() => run(`process.exit(1)`)).toThrow(RuntimeError)
 
 1. Create `packages/test-engine/src/tests/my-test.test.ts`
 2. Import in `src/tests/run.ts`
-3. Run: `npm run test:engine`
+3. Run: `pnpm test:engine`

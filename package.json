@@ -6,25 +6,23 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "workspaces": [
-    "packages/ast",
-    "packages/compiler",
-    "packages/cli",
-    "packages/pm",
-    "packages/spec",
-    "packages/tests",
-    "packages/test-engine"
-  ],
   "scripts": {
-    "build": "npm run build -w @tsclang/ast && npm run build -w @tsclang/compiler",
-    "typecheck": "npm run typecheck -w @tsclang/compiler",
-    "test": "npm test -w @tsclang/tests",
-    "test:engine": "npm test -w @tsclang/test-engine",
-    "tsclang": "tsx packages/cli/src/index.ts"
+    "build": "pnpm --filter @tsclang/ast build && pnpm --filter @tsclang/compiler build",
+    "typecheck": "pnpm --filter @tsclang/compiler typecheck",
+    "test": "pnpm --filter @tsclang/tests test",
+    "test:engine": "pnpm --filter @tsclang/test-engine test",
+    "tsclang": "tsx packages/cli/src/index.ts",
+    "changeset": "changeset"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@types/node": "^26.0.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

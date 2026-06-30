@@ -8,7 +8,7 @@
     "test:v": "tsx test/runner.ts --verbose"
   },
   "dependencies": {
-    "@tsclang/compiler": "*"
+    "@tsclang/compiler": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

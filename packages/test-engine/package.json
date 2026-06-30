@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tsclang/compiler": "*"
+    "@tsclang/compiler": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

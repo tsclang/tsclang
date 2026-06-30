@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tsclang/compiler": "*",
-    "@tsclang/pm": "*"
+    "@tsclang/compiler": "workspace:*",
+    "@tsclang/pm": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

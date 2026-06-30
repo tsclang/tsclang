@@ -31,7 +31,7 @@ TSClang — серьёзный продакшн-проект, не учебны�
 
 **Покрытие тестами не экономить.** Лучше 50 тестов на все комбинации типов, чем потом ловить баг на платформе, которой нет под рукой. Positive + negative (error) + edge cases + разные defaultNumber/платформы.
 
-**Запуск тестов по фазам.** Полное тестирование запускать по частям, большие фазы бить пополам. Не запускать `npx tsx packages/tests/test/runner.ts` без аргументов — риск таймаута.
+**Запуск тестов по фазам.** Полное тестирование запускать по частям, большие фазы бить пополам. Не запускать `pnpm tsx packages/tests/test/runner.ts` без аргументов — риск таймаута.
 
 ### П6 — Не обходить баги — чинить
 Если новая фича или изменение ломает существующее поведение — это блокер. Нельзя писать тесты, которые намеренно избегают сломанного пути. Если код валиден в TS — он должен работать. Не работает — чини, не обходи. Разбить на минимальные шаги, каждый с тестами и коммитом. Если шаг раскрывается в рефакторинг — остановиться, создать issue (лейбл `investigation`), и добавить error test (compile error вместо тихого бага). Не молча обходить.
@@ -104,13 +104,13 @@ TSClang — серьёзный продакшн-проект, не учебны�
 ## Тесты и сборка
 
 ```bash
-npm test                                    # все тесты (через workspaces)
-npx tsx packages/tests/test/runner.ts 04-ownership  # только 04-ownership
-npx tsx packages/tests/test/runner.ts --no-gcc      # только C-compare, без компиляции
-npx tsx packages/tests/test/runner.ts --verbose     # показывать diff при провале
-npm run typecheck                           # проверить типы (tsc --noEmit)
-npm run build                               # собрать @tsclang/ast + декларации компилятора (dist/*.d.ts)
-npm run test:engine                         # запуск генератора тестов на лету
+pnpm test                                    # все тесты
+pnpm tsx packages/tests/test/runner.ts 04-ownership  # только 04-ownership
+pnpm tsx packages/tests/test/runner.ts --no-gcc      # только C-compare, без компиляции
+pnpm tsx packages/tests/test/runner.ts --verbose     # показывать diff при провале
+pnpm typecheck                               # проверить типы (tsc --noEmit)
+pnpm build                                   # собрать @tsclang/ast + декларации компилятора (dist/*.d.ts)
+pnpm test:engine                             # запуск генератора тестов на лету
 ```
 
 Каждый тест: `packages/tests/test/cases/<NN-section>/<feature>/<name>/`
@@ -124,7 +124,7 @@ npm run test:engine                         # запуск генератора 
 При ручном запуске `tsclang build` ВСЕГДА указывай `--outDir` во временную папку:
 
 ```bash
-npx tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/
+pnpm tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/
 ```
 
 Или используй программный API вместо CLI:

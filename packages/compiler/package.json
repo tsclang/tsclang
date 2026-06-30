@@ -21,12 +21,12 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@tsclang/ast": "*"
+    "@tsclang/ast": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

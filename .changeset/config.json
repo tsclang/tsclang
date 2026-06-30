@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    ["@tsclang/ast", "@tsclang/compiler", "@tsclang/cli", "@tsclang/pm"]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "develop",
+  "updateInternalDependencies": "patch",
+  "ignore": ["@tsclang/spec", "@tsclang/tests", "@tsclang/test-engine"]
+}
