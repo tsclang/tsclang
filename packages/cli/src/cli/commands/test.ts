@@ -3,7 +3,7 @@ import { join, resolve, basename } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { compileTsc } from '@tsclang/compiler';
-import { C_STANDARD_FLAG, GCC_LINK_FLAGS } from '@tsclang/shared';
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_DIR } from '@tsclang/shared';
 
 function findTestFiles(dir: string): string[] {
   const files: string[] = [];
@@ -18,7 +18,7 @@ function findTestFiles(dir: string): string[] {
   return files;
 }
 
-export function runTestCommand(args: string[]): void {
+export function runTestCommand(args: string[], compilerRoot: string): void {
   const testDir = resolve(process.cwd(), 'test');
   if (!existsSync(testDir)) {
     console.error('tsclang test: no test/ directory found');
@@ -48,7 +48,7 @@ export function runTestCommand(args: string[]): void {
 
       writeFileSync(cPath, c, 'utf8');
 
-      const runtimeDir = resolve(process.cwd(), 'node_modules/@tsclang/compiler/src/runtime');
+      const runtimeDir = join(compilerRoot, RUNTIME_DIR);
       const gcc = spawnSync('gcc', [cPath, '-o', binPath, `-I${runtimeDir}`, ...GCC_LINK_FLAGS, C_STANDARD_FLAG], { stdio: 'pipe' });
 
       if (gcc.status !== 0) {

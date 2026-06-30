@@ -2,6 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync } from "fs"
 import { tmpdir } from "os"
 import { join, resolve } from "path"
 import { lex, parse, codegen, compileTsc } from "@tsclang/compiler"
+import { RUNTIME_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath } from "./compilers/index.js"
 
 registerAll()
@@ -218,7 +219,7 @@ export function run(code: string, opts?: RunOptions): string {
     const backend = getBackend(compilerName)
     if (!backend || !backend.isAvailable()) throw new CompileError(`compiler "${compilerName}" not available`)
 
-    const runtimeDir = resolve(import.meta.dirname, "../../compiler/src/runtime")
+    const runtimeDir = resolve(import.meta.dirname, "..", "..", "compiler", RUNTIME_DIR)
     const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir] })
     if (!compileResult.success) throw new CompileError(compileResult.stderr)
 

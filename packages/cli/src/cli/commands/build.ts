@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -75,7 +75,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     process.exit(1);
   }
 
-  const PROFILES_DIR = join(ROOT, 'src', 'profiles');
+  const PROFILES_PATH = join(ROOT, PROFILES_DIR);
 
   let _capabilities: Capabilities | null = null;
   let _profileTarget: string | null = null;
@@ -94,9 +94,9 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   }
 
   if (_platformFlag) {
-    const prof = loadProfile(_platformFlag, PROFILES_DIR, inputFile);
+    const prof = loadProfile(_platformFlag, PROFILES_PATH, inputFile);
     if (!prof) {
-      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${listAvailableProfiles(PROFILES_DIR).join(', ')}\n`);
+      process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${listAvailableProfiles(PROFILES_PATH).join(', ')}\n`);
       process.exit(1);
     }
     _capabilities = prof;
@@ -116,7 +116,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
       _buildCfg = buildCfg;
       if (buildCfg.profile) {
-        const prof = loadProfile(buildCfg.profile, PROFILES_DIR, inputFile);
+        const prof = loadProfile(buildCfg.profile, PROFILES_PATH, inputFile);
         if (!prof) {
           process.stderr.write(`tsclang build: unknown profile '${buildCfg.profile}' in build '${_buildFlag}'\n`);
           process.exit(1);
@@ -156,7 +156,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   if (_mcuFlag) _mcu = _mcuFlag;
 
   if (!_capabilities && _targetFlag) {
-    const prof = loadProfile(_targetFlag, PROFILES_DIR, inputFile);
+    const prof = loadProfile(_targetFlag, PROFILES_PATH, inputFile);
     if (prof) {
       _capabilities = prof;
       if (!_profileTarget) _profileTarget = prof.target || _targetFlag;
@@ -259,7 +259,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (emit === 'c') {
       const cmakePath = join(outDir, 'CMakeLists.txt');
       if (!existsSync(cmakePath)) {
-        const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
+        const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
         const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
         const cmakeContent = generateBuildCmake({
           stem,
@@ -271,7 +271,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'binary') {
-      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
+      const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
       const binPath = join(outDir, stem);
       const gccOptimize = optimize ? [`-${optimize}`] : [];
       const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
@@ -295,7 +295,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
         return false;
       }
-      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_WASM_HEADER);
+      const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_WASM_HEADER);
       const wasmPath = join(outDir, stem + '.wasm');
       const jsPath   = join(outDir, stem + '.js');
       const emccOpts = optimize ? [`-${optimize}`] : ['-O2'];
@@ -324,7 +324,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const mcu = buildOpts.mcu || DEFAULT_AVR_MCU;
       const elfPath = join(outDir, stem + '.elf');
       const hexPath = join(outDir, stem + '.hex');
-      const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
+      const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
       const gccOptimize = optimize ? [`-${optimize}`] : ['-Os'];
       const gccResult = spawnSync('avr-gcc', [
         cPath, '-o', elfPath,

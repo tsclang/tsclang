@@ -93,7 +93,7 @@ switch (command) {
     startLsp();
     break;
   case 'test':
-    runTestCommand(args);
+    runTestCommand(args, COMPILER_ROOT);
     break;
   default:
     console.error(`tsclang: unknown command '${command}'`);

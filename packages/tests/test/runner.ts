@@ -10,7 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES } from '@tsclang/shared';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR } from '@tsclang/shared';
 import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ const TSCLANG_BIN_TS = join(ROOT, 'packages', 'cli', 'src', 'index.ts');
 const TSCLANG_BIN = existsSync(TSCLANG_BIN_JS) ? TSCLANG_BIN_JS : TSCLANG_BIN_TS;
 const USE_TSX = !existsSync(TSCLANG_BIN_JS);
 const TSX_LOADER = pathToFileURL(join(ROOT, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs')).href;
-const RUNTIME_INC = join(ROOT, 'packages', 'compiler', 'src', 'runtime');
+const RUNTIME_INC = join(ROOT, 'packages', 'compiler', RUNTIME_DIR);
 
 // ---------------------------------------------------------------------------
 // ANSI helpers
@@ -362,12 +362,12 @@ async function executeTest(testDir, { kind, inputType, hasWarning }, tmpBase) {
 // ---------------------------------------------------------------------------
 // Test metadata (meta.json)
 // ---------------------------------------------------------------------------
-const PROFILES_DIR = join(ROOT, "packages", "compiler", "src", "profiles");
+const PROFILES_PATH = join(ROOT, "packages", "compiler", PROFILES_DIR);
 
 function loadProfile(name) {
-  const newDtsPath = join(PROFILES_DIR, name, "index.d.tsc");
-  const dtsPath = join(PROFILES_DIR, name + ".d.tsc");
-  const jsonPath = join(PROFILES_DIR, name + ".json");
+  const newDtsPath = join(PROFILES_PATH, name, "index.d.tsc");
+  const dtsPath = join(PROFILES_PATH, name + ".d.tsc");
+  const jsonPath = join(PROFILES_PATH, name + ".json");
   if (existsSync(newDtsPath)) {
     try { return parsePlatformDecl(readFileSync(newDtsPath, "utf8"), newDtsPath); } catch { return null; }
   }
