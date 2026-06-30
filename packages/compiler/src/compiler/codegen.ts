@@ -9,17 +9,15 @@ import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
 import { TypeChecker } from './typechecker.js';
-import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES } from '@tsclang/shared';
-
-const WASM_BARE_TARGET = 'wasm';
+import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
 
 export const DESKTOP_CAPABILITIES = {
-  allocator: 'heap',
-  async: 'libuv',
+  allocator: DEFAULT_ALLOCATOR,
+  async: DEFAULT_ASYNC,
   fpu: true,
-  bits: 64,
-  usize: 'u64',
-  defaultNumber: 'f64',
+  bits: DEFAULT_BITS,
+  usize: DEFAULT_USIZE,
+  defaultNumber: DEFAULT_NUMBER,
   unaligned_access: true,
   os: true,
   posix: true,
@@ -120,7 +118,7 @@ class Context {
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
     // Output buffers: delegated to OutputBuffer
-    const _initInclude = opts.target === 'wasm' ? `#include "${RUNTIME_WASM_HEADER}"` : `#include "${RUNTIME_HEADER}"`;
+    const _initInclude = opts.target === WASM_TARGET ? `#include "${RUNTIME_WASM_HEADER}"` : `#include "${RUNTIME_HEADER}"`;
     this._output = new OutputBuffer(_initInclude);
     this.lambdaCount = 0;
     this.restCount = 0;
@@ -385,7 +383,7 @@ class Context {
     const m = { u16: 2, u32: 4, u64: 8 };
     return (m as Record<string, number>)[this._cap('usize')] ?? 4;
   }
-  _isWasmBare() { return this._targetName === WASM_BARE_TARGET; }
+  _isWasmBare() { return this._targetName === WASM_TARGET; }
   lookup(name: any) {
     return this._scopeMgr.lookup(name);
   }

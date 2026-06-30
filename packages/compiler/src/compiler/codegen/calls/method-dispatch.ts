@@ -1,3 +1,4 @@
+import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
   methodCall(this: any, callee: any, args: any, lines: any, depth: any) {
     let baseObject = callee.object;
@@ -712,7 +713,7 @@ export default {
       }
       if (this._platformSkipped?.has(`${baseObject.name}.${prop}`)) {
         const allowed = this._platformSkipped.get(`${baseObject.name}.${prop}`).join('", "');
-        const target = this._targetName ?? 'desktop';
+        const target = this._targetName ?? DEFAULT_TARGET;
         throw this.error(`TypeError: '${baseObject.name}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
       }
     }
@@ -824,7 +825,7 @@ export default {
     if (classSym?.ctype && this.classes.has(classSym.ctype)) {
       if (this._platformSkipped?.has(`${classSym.ctype}.${prop}`)) {
         const allowed = this._platformSkipped.get(`${classSym.ctype}.${prop}`).join('", "');
-        const target = this._targetName ?? 'desktop';
+        const target = this._targetName ?? DEFAULT_TARGET;
         throw this.error(`TypeError: '${classSym.ctype}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
       }
       return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;

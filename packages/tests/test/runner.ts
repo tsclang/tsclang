@@ -10,7 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from '@tsclang/shared';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES } from '@tsclang/shared';
 import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -539,7 +539,7 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
       ? (readFileSync(join(testDir, 'flags.txt'), 'utf8').trim().split(/\s+/).filter(Boolean))
       : [];
     const dFlags = flagsFromFile.filter((f: string) => f.startsWith('-D'));
-    const defines = dFlags.length > 0 ? dFlags : ['-DTSC_NO_POSIX', '-DTSC_NO_STRTOLL', '-DTSC_CONSOLE_UART', '-DTSC_CONSOLE_BAUD=9600'];
+    const defines = dFlags.length > 0 ? dFlags : [`-D${TSC_DEFINES.NO_POSIX}`, `-D${TSC_DEFINES.NO_STRTOLL}`, `-D${TSC_DEFINES.CONSOLE_UART}`, `-D${TSC_DEFINES.CONSOLE_BAUD}=${DEFAULT_CONSOLE_BAUD}`];
     const avrResult = await avrGccCompile(generatedC, elfFile, defines);
     if (avrResult.code !== 0) return fail(testDir, 'avr-gcc', 'C does not compile with avr-gcc', avrResult.stderr);
     const objcopyResult = await avrObjcopy(elfFile, hexFile);

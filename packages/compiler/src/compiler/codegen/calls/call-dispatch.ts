@@ -1,3 +1,4 @@
+import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
   callToC(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
@@ -58,7 +59,7 @@ export default {
     // @platform check: calling a function skipped for current platform
     if (callee.kind === 'Ident' && this._platformSkipped?.has(callee.name)) {
       const allowed = this._platformSkipped.get(callee.name).join('", "');
-      const target = this._targetName ?? 'desktop';
+      const target = this._targetName ?? DEFAULT_TARGET;
       throw this.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
     }
 

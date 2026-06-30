@@ -1,3 +1,5 @@
+import { DEFAULT_CONSOLE_BAUD } from '@tsclang/shared';
+
 export default {
   _dispatchStdLib(this: any, node: any, lines: any, depth: any) {
     const { callee, args } = node;
@@ -103,7 +105,7 @@ export default {
       if (_halClass === 'UART') {
         if (_halProp === 'init') {
           const cfgArg = args[0]?.expr;
-          let baud = '9600';
+          let baud = String(DEFAULT_CONSOLE_BAUD);
           if (cfgArg?.kind === 'ObjLit') {
             const bp = cfgArg.props?.find((p: any) => p.key === 'baud');
             if (bp?.value) baud = this.exprToC(bp.value, lines, depth);

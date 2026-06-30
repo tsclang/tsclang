@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { flagValue } from '../args.js';
 import { generateProjectCmake } from '../cmake.js';
+import { DEFAULT_TARGET } from '@tsclang/shared';
 
 export function runBuildCmakeCommand(args: string[]): void {
   const pkgFile = args[1];
@@ -25,7 +26,7 @@ export function runBuildCmakeCommand(args: string[]): void {
   const buildCfg = buildName ? (builds[buildName] ?? {}) : {};
 
   const projectName = (pkg.name as string | undefined)?.replace(/^@[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '_') ?? 'project';
-  const target      = (buildCfg.target as string) ?? 'desktop';
+  const target      = (buildCfg.target as string) ?? DEFAULT_TARGET;
   const mcu         = (buildCfg.mcu as string) ?? null;
   const toolchain   = (buildCfg.toolchain as string) ?? (target === 'avr' ? 'avr-gcc' : 'gcc');
   const optimize    = (buildCfg.optimize as string) ?? null;

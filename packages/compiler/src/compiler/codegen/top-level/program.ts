@@ -1,4 +1,5 @@
 // program.ts
+import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
   visitProgram(this: any, ast: any) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
@@ -88,7 +89,7 @@ export default {
 
     // Pre-scan: detect target and allocator from opts or defaults
     // Priority: opts > default
-    this._targetName = this._optsTarget || 'desktop';
+    this._targetName = this._optsTarget || DEFAULT_TARGET;
     this._allocatorName = this._optsAllocator || this._cap('allocator') || 'default';
     this._asyncName = this._optsAsync || null;
     this._ramSize = this._optsRamSize || null;

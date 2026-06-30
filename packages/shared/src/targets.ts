@@ -12,3 +12,5 @@ export const TARGET_NAMES = [
 ] as const;
 
 export type Target = typeof TARGET_NAMES[number];
+
+export const WASM_TARGET: Target = 'wasm';

@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -178,7 +178,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     const targetName = _profileTarget || _targetFlag;
     if (targetName !== 'avr') {
       process.stderr.write(
-        `ConfigError: --emit ${emit} requires an embedded target (avr); current target is ${targetName || 'desktop'}\n`
+        `ConfigError: --emit ${emit} requires an embedded target (avr); current target is ${targetName || DEFAULT_TARGET}\n`
       );
       process.exit(1);
     }

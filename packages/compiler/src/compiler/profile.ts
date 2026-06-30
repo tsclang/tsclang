@@ -1,4 +1,5 @@
 import { lex, TK } from './lexer.js';
+import { TSC_DEFINES } from '@tsclang/shared';
 
 export interface Capabilities {
   target?: string;
@@ -26,11 +27,11 @@ export interface Capabilities {
 export function capabilityDefines(caps: Capabilities | null | undefined): string[] {
   if (!caps) return [];
   const defs: string[] = [];
-  if (caps.posix === false) defs.push('-DTSC_NO_POSIX');
-  if (caps.strtoll === false) defs.push('-DTSC_NO_STRTOLL');
+  if (caps.posix === false) defs.push(`-D${TSC_DEFINES.NO_POSIX}`);
+  if (caps.strtoll === false) defs.push(`-D${TSC_DEFINES.NO_STRTOLL}`);
   if (caps.console_uart) {
-    defs.push('-DTSC_CONSOLE_UART');
-    if (caps.console_baud) defs.push(`-DTSC_CONSOLE_BAUD=${caps.console_baud}`);
+    defs.push(`-D${TSC_DEFINES.CONSOLE_UART}`);
+    if (caps.console_baud) defs.push(`-D${TSC_DEFINES.CONSOLE_BAUD}=${caps.console_baud}`);
   }
   return defs;
 }

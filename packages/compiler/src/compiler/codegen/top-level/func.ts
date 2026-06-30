@@ -1,4 +1,5 @@
 import { mangleParams } from '../../types.js';
+import { DEFAULT_TARGET } from '@tsclang/shared';
 // func.ts
 export default {
   visitEnum(this: any, node: any) {
@@ -90,7 +91,7 @@ export default {
     const platformDec = (decorators ?? []).find((d: any) => d.name === 'platform');
     if (platformDec) {
       const allowed = (platformDec.args ?? []).map((a: any) => a.value ?? a);
-      const target = this._targetName ?? 'desktop';
+      const target = this._targetName ?? DEFAULT_TARGET;
       if (!allowed.includes(target)) {
         if (name) this._platformSkipped.set(name, allowed);
         return; // skip for this platform

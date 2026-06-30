@@ -1,4 +1,5 @@
 // class.ts
+import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
   visitClassDecl(this: any, node: any) {
     const { name, superClass, members, decorators, typeParams } = node;
@@ -284,7 +285,7 @@ export default {
       const platformDec = (m.decorators ?? []).find((d: any) => d.name === 'platform');
       if (platformDec) {
         const allowed = (platformDec.args ?? []).map((a: any) => a.value ?? a);
-        const target = this._targetName ?? 'desktop';
+        const target = this._targetName ?? DEFAULT_TARGET;
         if (!allowed.includes(target)) {
           if (!this._platformSkipped) this._platformSkipped = new Map();
           this._platformSkipped.set(`${cname}.${m.name}`, allowed);
