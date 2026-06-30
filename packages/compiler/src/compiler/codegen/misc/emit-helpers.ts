@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 // emit-helpers.ts
 export default {
-  _emitIterableImpl(this: any, className: any, iterMethod: any, elemCType: any) {
+  _emitIterableImpl(this: CodeGenThis, className: any, iterMethod: any, elemCType: any) {
     const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
 
     // Find pre-return VarDecl stmts and the returned arrow
@@ -96,7 +97,7 @@ export default {
   },
 
   // Emit `typedef struct {...} Promise_T;` once per type
-  _emitPromiseTypedef(this: any, promiseType: any, innerType: any) {
+  _emitPromiseTypedef(this: CodeGenThis, promiseType: any, innerType: any) {
 
     if (this._emittedPromiseTypes.has(promiseType)) return;
     this._emittedPromiseTypes.add(promiseType);
@@ -106,7 +107,7 @@ export default {
 
   // Emit a spawn block: generate env struct, fn, and call site code
   // Returns the C variable name of the thread handle
-  _emitSpawnBlock(this: any, varName: any, body: any, throwsTypes: any, lines: any, depth: any) {
+  _emitSpawnBlock(this: CodeGenThis, varName: any, body: any, throwsTypes: any, lines: any, depth: any) {
     if (this._strictRules?.has('no-threads')) {
       throw this.error('threads are forbidden in strict mode (no-threads)', body);
     }
@@ -252,7 +253,7 @@ export default {
   },
 
   // Collect free (outer-scope) variables referenced in a lambda body
-  _collectFreeVars(this: any, lambda: any) {
+  _collectFreeVars(this: CodeGenThis, lambda: any) {
     const paramNames = new Set((lambda.params || []).map((p: any) => p.name));
     const free: any[] = [];
     const seen = new Set(paramNames);
@@ -284,7 +285,7 @@ export default {
     return free;
   },
 
-  _avrSleepModeToC(this: any, node: any) {
+  _avrSleepModeToC(this: CodeGenThis, node: any) {
     // SleepMode.Idle → SLEEP_MODE_IDLE, etc.
     if (node.kind === 'Member' && node.object.kind === 'Ident' && node.object.name === 'SleepMode') {
       const map = {

@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
-  methodCall(this: any, callee: any, args: any, lines: any, depth: any) {
+  methodCall(this: CodeGenThis, callee: any, args: any, lines: any, depth: any) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
@@ -756,7 +757,7 @@ export default {
 
     const classSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (classSym?._isHeap) {
-      const poolClassName = classSym.ctype.replace(/ \*$/, '');
+      const poolClassName = classSym.ctype!.replace(/ \*$/, '');
       const poolCls = this.classes.get(poolClassName);
       if (poolCls) {
         const methodInfo = poolCls._methodNames?.get(prop);
@@ -833,7 +834,7 @@ export default {
     return `${objC}.${prop}(${argsC})`;
   },
 
-  argsToC(this: any, args: any, lines: any, depth: any) {
+  argsToC(this: CodeGenThis, args: any, lines: any, depth: any) {
     const parts: any[] = [];
     const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
@@ -861,7 +862,7 @@ export default {
     return parts.join(', ');
   },
 
-  _getIfaceParamName(this: any, typeAnn: any) {
+  _getIfaceParamName(this: CodeGenThis, typeAnn: any) {
     if (!typeAnn || typeAnn.kind !== 'TypeRef') return null;
     if (this.interfaces.has(typeAnn.name)) return typeAnn.name;
     if ((typeAnn.name === 'Mut' || typeAnn.name === 'Ref') && typeAnn.typeArgs?.[0]?.kind === 'TypeRef') {
@@ -871,7 +872,7 @@ export default {
     return null;
   },
 
-  _extractCallbackFn(this: any, arg: any, lines: any, depth: any) {
+  _extractCallbackFn(this: CodeGenThis, arg: any, lines: any, depth: any) {
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
       if (this._strictRules?.has('no-closures')) {
@@ -916,13 +917,13 @@ export default {
     if (expr.kind === 'Ident') {
       const sym = this.lookup(expr.name);
       if (sym?._closureFnName) { this._lastCbRetType = sym.closureRetType; return sym._closureFnName; }
-      if (sym?.funcName) { this._lastCbRetType = sym.ctype; return sym.funcName; }
+      if (sym?.funcName) { this._lastCbRetType = sym.ctype!; return sym.funcName; }
     }
 
     return null;
   },
 
-  _ensureImplicitVtable(this: any, className: any, ifaceName: any) {
+  _ensureImplicitVtable(this: CodeGenThis, className: any, ifaceName: any) {
     const key = `${className}_${ifaceName}`;
     if (this._emittedImplicitVtables.has(key)) return;
     this._emittedImplicitVtables.add(key);

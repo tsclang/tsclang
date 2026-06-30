@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 // async-stmt.ts
 export default {
-  _emitAsyncStmt(this: any, s: any, lines: any, ctx: any, I: any) {
+  _emitAsyncStmt(this: CodeGenThis, s: any, lines: any, ctx: any, I: any) {
     if (!s) return;
 
     // ── spawn VarDecl: emit call site using pre-emitted env/fn ──
@@ -408,7 +409,7 @@ export default {
   },
 
   // Emit a regular statement (non-VarDecl, non-Return, non-Await) in async context
-  _emitAsyncRegStmt(this: any, stmt: any, lines: any, I: any) {
+  _emitAsyncRegStmt(this: CodeGenThis, stmt: any, lines: any, I: any) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { name, init } = stmt;
@@ -476,7 +477,7 @@ export default {
     }
   },
 
-  _emitAsyncSwitch(this: any, node: any, lines: any, ctx: any, I: any) {
+  _emitAsyncSwitch(this: CodeGenThis, node: any, lines: any, ctx: any, I: any) {
     this._validateSwitchFallthrough(node);
     const discC = this._selfE(node.discriminant);
     const discType = this.inferType(node.discriminant);
@@ -562,7 +563,7 @@ export default {
   },
 
   // Evaluate an expression with the current _selfCtx substitution
-  _selfE(this: any, expr: any) {
+  _selfE(this: CodeGenThis, expr: any) {
     if (!expr) return '0';
     const r = this.exprToC(expr, [], 0);
     return r;

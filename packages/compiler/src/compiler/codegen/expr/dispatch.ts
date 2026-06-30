@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // dispatch.ts
 import type { Expression } from '@tsclang/ast';
 export default {
-  exprToC(this: any, node: Expression, lines: any[] = [], depth: any = 0) {
+  exprToC(this: CodeGenThis, node: Expression, lines: any[] = [], depth: any = 0) {
     if (!node) return '0';
     this._currentNode = node;
     switch (node.kind) {
@@ -218,7 +219,7 @@ export default {
           if (enumDef?.isEnum) return `${enumDef._cname ?? node.object.name}_${node.prop}`;
           // Labeled tuple field access: p.x → p._0 (look up via symbol type)
           const symForLabel = this.lookup(node.object.name);
-          const tupleDef3 = symForLabel ? this.classes.get(symForLabel.ctype) : null;
+          const tupleDef3 = symForLabel ? this.classes.get(symForLabel.ctype!) : null;
           if (tupleDef3?.isTuple) {
             const field = tupleDef3.fields.find((f: any) => f.label === node.prop);
             if (field) {
@@ -233,7 +234,7 @@ export default {
           return `${rawName}->${node.prop}`;
         }
         const symType = sym?.ctype?.replace(' *', '');
-        if (this.classes.get(symType)?._isHeap && sym?.ctype?.endsWith(' *')) {
+        if (this.classes.get(symType!)?._isHeap && sym?.ctype?.endsWith(' *')) {
           const rawName = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
           return `${rawName}->${node.prop}`;
         }
@@ -263,7 +264,7 @@ export default {
         }
         const isPtr = sym?.isPointer;
         // Inherited field access: if prop not in own fields, check base class
-        const symCls = sym ? this.classes.get(sym.ctype) : null;
+        const symCls = sym ? this.classes.get(sym.ctype!) : null;
         if (symCls?.superClass && symCls.fields && !symCls.fields.some((f: any) => f.name === node.prop)) {
           const baseCls = this.classes.get(symCls.superClass);
           if (baseCls?.fields?.some((f: any) => f.name === node.prop)) {
@@ -809,7 +810,7 @@ export default {
     }
   },
 
-  _truthyToC(this: any, node: any, lines: any[] = [], depth: any = 0) {
+  _truthyToC(this: CodeGenThis, node: any, lines: any[] = [], depth: any = 0) {
     const type = this.inferType(node);
     if (!type || type === 'bool' || type === 'void *') {
       return this.exprToC(node, lines, depth);

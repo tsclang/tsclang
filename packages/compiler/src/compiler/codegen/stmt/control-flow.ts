@@ -1,5 +1,6 @@
+import type { CodeGenThis } from '../../codegen.js';
 export default {
-  _emitRetainIfNeeded(this: any, valC: any, valNode: any, p: any) {
+  _emitRetainIfNeeded(this: CodeGenThis, valC: any, valNode: any, p: any) {
     if (valNode.kind === 'Ident') {
       const sym = this.lookup(valNode.name);
       if (sym?.isArc) {
@@ -12,7 +13,7 @@ export default {
     }
   },
 
-  _wrapErrForCaller(this: any, ctx: any, errExpr: any, calleeSym: any) {
+  _wrapErrForCaller(this: CodeGenThis, ctx: any, errExpr: any, calleeSym: any) {
     if (ctx.throwsNames.length <= 1) return errExpr;
     const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
     if (calleeErrTypes.length > 1) return errExpr;
@@ -23,7 +24,7 @@ export default {
     return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
   },
 
-  _visitControlFlow(this: any, node: any, lines: any, depth: any) {
+  _visitControlFlow(this: CodeGenThis, node: any, lines: any, depth: any) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
@@ -803,7 +804,7 @@ export default {
 
         // Iterable<T> protocol: class implements Iterable<T>
         {
-          const _forOfSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+          const _forOfSym: any = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
           const _forOfClass = _forOfSym?.ctype ? this.classes.get(_forOfSym.ctype) : null;
           if (_forOfClass?._iterStructName && _forOfClass._iterableElemType) {
             const _clsName = _forOfSym.ctype;
@@ -1397,7 +1398,7 @@ export default {
     'char', 'String', 'tsc_unknown',
   ]),
 
-  _validateSwitchFallthrough(this: any, node: any) {
+  _validateSwitchFallthrough(this: CodeGenThis, node: any) {
     if (this.inferType(node.discriminant) === 'double' || this.inferType(node.discriminant) === 'float') {
       throw this.error(`cannot switch on type 'f64'`, node);
     }
@@ -1417,7 +1418,7 @@ export default {
     }
   },
 
-  _isSimpleCType(this: any, ct: any) {
+  _isSimpleCType(this: CodeGenThis, ct: any) {
     return this._SIMPLE_C_TYPES.has(ct);
   },
 };

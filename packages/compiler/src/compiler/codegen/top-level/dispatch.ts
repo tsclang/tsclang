@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // dispatch.ts
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
-  visitTopLevel(this: any, node: any) {
+  visitTopLevel(this: CodeGenThis, node: any) {
     if (!node) return;
     switch (node.kind) {
       case 'Import':
@@ -275,12 +276,12 @@ export default {
     }
   },
 
-  visitDeclareModule(this: any, node: any) {
+  visitDeclareModule(this: CodeGenThis, node: any) {
 
     this._declaredModules.set(node.moduleName, node.body);
   },
 
-  visitDeclareConst(this: any, node: any) {
+  visitDeclareConst(this: CodeGenThis, node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, typeAnn, init } = node;
@@ -293,7 +294,7 @@ export default {
     this._inDeclare = prevDeclare;
   },
 
-  visitDeclareFunction(this: any, node: any) {
+  visitDeclareFunction(this: CodeGenThis, node: any) {
     const prevDeclare = this._inDeclare;
     this._inDeclare = true;
     const { name, params, returnType } = node;

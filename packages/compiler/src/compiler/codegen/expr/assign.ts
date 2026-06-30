@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // assign.ts
 export default {
   // Assignment
-  assignToC(this: any, node: any, lines: any, depth: any) {
+  assignToC(this: CodeGenThis, node: any, lines: any, depth: any) {
     // Generator .next() assignment: r = g.next() → r = genFn_next(&g, args);
     if (node.right?.kind === 'Call' && node.right.callee?.kind === 'Member'
         && node.right.callee.prop === 'next') {
@@ -63,7 +64,7 @@ export default {
       }
       // String literal union: convert string literal to enum value
       if (sym && node.right?.kind === 'Literal' && node.right.litType === 'string') {
-        const enumDef = this.classes.get(sym.ctype);
+        const enumDef = this.classes.get(sym.ctype!);
         if (enumDef?.isStringLiteralUnion) {
           const val = node.right.value;
           if (!enumDef.members.includes(val)) {
@@ -173,7 +174,7 @@ export default {
 
     // opt_T value/null assignment: wrap in compound literal
     if (node.op === '=' && node.left.kind === 'Ident') {
-      const leftSym = this.lookup(node.left.name);
+      const leftSym = this.lookup(node.left.name) as any;
       const leftCtype = leftSym?.ctype;
       if (leftCtype?.startsWith('opt_') && !(node.right?.kind === 'Literal' && node.right.litType === 'null')) {
         const rightType = this.inferType(node.right);

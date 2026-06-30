@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 // types-alias.ts
 export default {
-  visitInterface(this: any, node: any) {
+  visitInterface(this: CodeGenThis, node: any) {
     const { name, members } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`interface name "${name}" must start with uppercase (PascalCase)`, node);
@@ -57,7 +58,7 @@ export default {
   // ----------------------------------------------------------------
   // Enums
   // ----------------------------------------------------------------
-  visitTypeAlias(this: any, node: any) {
+  visitTypeAlias(this: CodeGenThis, node: any) {
     const { name, typeAnn } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`type alias name "${name}" must start with uppercase (PascalCase)`, node);
@@ -295,7 +296,7 @@ export default {
   },
 
   // Get struct-like field definitions for a named type (interface or struct alias)
-  getStructFields(this: any, typeName: any) {
+  getStructFields(this: CodeGenThis, typeName: any) {
     const cls = this.classes.get(typeName);
     if (cls?.isStruct && cls.fields) return cls.fields;
     const iface = this.interfaces.get(typeName);
@@ -304,13 +305,13 @@ export default {
   },
 
   // Flatten nested TypeUnion into array of leaf types
-  flattenUnion(this: any, typeAnn: any) {
+  flattenUnion(this: CodeGenThis, typeAnn: any) {
     if (typeAnn.kind === 'TypeUnion') return typeAnn.types.flatMap((t: any) => this.flattenUnion(t));
     return [typeAnn];
   },
 
   // Check if a type annotation is a pure string literal union (handles nested TypeUnions)
-  isStringLiteralUnion(this: any, typeAnn: any) {
+  isStringLiteralUnion(this: CodeGenThis, typeAnn: any) {
     if (!typeAnn) return false;
     if (typeAnn.kind === 'TypeLiteral' && typeAnn.litKind === 'string') return true;
     if (typeAnn.kind === 'TypeUnion') {
@@ -320,7 +321,7 @@ export default {
   },
 
   // Extract string literal values from a string literal union type (handles nested TypeUnions)
-  getStringLiteralMembers(this: any, typeAnn: any) {
+  getStringLiteralMembers(this: CodeGenThis, typeAnn: any) {
     if (!typeAnn) return [];
     if (typeAnn.kind === 'TypeLiteral' && typeAnn.litKind === 'string') return [typeAnn.value];
     if (typeAnn.kind === 'TypeUnion') {

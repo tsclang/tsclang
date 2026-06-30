@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // generator.ts
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
-  emitGeneratorFunc(this: any, node: any) {
+  emitGeneratorFunc(this: CodeGenThis, node: any) {
     this._initAsync();
     const { name, params, returnType, body, throwsTypes } = node;
 
@@ -158,7 +159,7 @@ export default {
     }
   },
 
-  _buildGenNext(this: any, body: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any) {
+  _buildGenNext(this: CodeGenThis, body: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any) {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines: any[] = [];
     const ctx = { caseNum: 0, loopLabels: [], needTerminal: true };
@@ -205,13 +206,13 @@ export default {
     return lines;
   },
 
-  _emitGenStmtList(this: any, stmts: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
+  _emitGenStmtList(this: CodeGenThis, stmts: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
     for (const s of stmts || []) {
       this._emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
     }
   },
 
-  _emitGenStmt(this: any, s: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
+  _emitGenStmt(this: CodeGenThis, s: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
     if (!s) return;
 
     // Unwrap ExprStmt(Yield(...))
@@ -321,7 +322,7 @@ export default {
     this._emitGenRegStmt(s, lines, I);
   },
 
-  _emitGenRegStmt(this: any, stmt: any, lines: any, I: any) {
+  _emitGenRegStmt(this: CodeGenThis, stmt: any, lines: any, I: any) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { varKind, name, typeAnn, init } = stmt;

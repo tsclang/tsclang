@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
-  callToC(this: any, node: any, lines: any, depth: any) {
+  callToC(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
@@ -64,7 +65,7 @@ export default {
     }
 
     if (callee.kind === 'Ident') {
-      const sym = this.lookup(callee.name);
+      const sym = this.lookup(callee.name) as any;
       if (sym?._isStackMacro) {
         const strArg = (i: any) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
         if (sym._isStackMacro === 'push') {
@@ -88,7 +89,7 @@ export default {
     // super(args) in constructor в†’ initialize base struct
     if (callee.kind === 'Ident' && callee.name === 'super') {
       const selfSym = this.lookup('self');
-      const cls = selfSym ? this.classes.get(selfSym.ctype) : null;
+      const cls = selfSym ? this.classes.get(selfSym.ctype!) : null;
       const superClass = cls?.superClass;
       if (superClass === 'Error') {
         // super(msg) в†’ self._base.message = msg
@@ -393,7 +394,7 @@ export default {
               throw this.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
             }
           }
-          const argSym3 = this.lookup(argName);
+          const argSym3 = this.lookup(argName) as any;
           const argClass = argSym3?.ctype ? this.classes.get(argSym3.ctype) : null;
           if (argClass && !this.interfaces.has(argSym3.ctype)) {
             // Concrete class: wrap in fat pointer
@@ -576,7 +577,7 @@ export default {
     return `${calleeC}(${argsC})`;
   },
 
-  _dispatchArrayStatic(this: any, node: any, lines: any, depth: any) {
+  _dispatchArrayStatic(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -622,7 +623,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchObjectStatic(this: any, node: any, lines: any, depth: any) {
+  _dispatchObjectStatic(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -695,7 +696,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchGroupBy(this: any, node: any, lines: any, depth: any) {
+  _dispatchGroupBy(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;

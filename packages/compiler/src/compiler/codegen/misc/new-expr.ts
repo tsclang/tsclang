@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 // new-expr.ts
 export default {
-  newToC(this: any, node: any, lines: any, depth: any) {
+  newToC(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { name, args } = node;
     for (const a of args ?? []) this._checkNoBareThrows(a.expr ?? a);
     const argsC = this.argsToC(args, lines, depth);
@@ -240,7 +241,7 @@ export default {
   // ----------------------------------------------------------------
   // Arrow function hoisting
   // ----------------------------------------------------------------
-  hoistArrow(this: any, node: any, retType: any, hint: any) {
+  hoistArrow(this: CodeGenThis, node: any, retType: any, hint: any) {
     const n = this.lambdaCount++;
     // Determine return type from body
     let ret = retType === 'void' ? this.inferArrowReturn(node) : retType;
@@ -294,7 +295,7 @@ export default {
     return name;
   },
 
-  _scanReturnExpr(this: any, node: any) {
+  _scanReturnExpr(this: CodeGenThis, node: any) {
     if (!node || typeof node !== 'object') return null;
     if (Array.isArray(node)) {
       for (const child of node) { const r = this._scanReturnExpr(child); if (r) return r; }
@@ -309,7 +310,7 @@ export default {
     return null;
   },
 
-  inferArrowReturn(this: any, node: any) {
+  inferArrowReturn(this: CodeGenThis, node: any) {
     if (node.returnType) return this.resolveType(node.returnType);
     const hasParams = node.params?.length > 0;
     if (hasParams) {
@@ -339,13 +340,13 @@ export default {
   },
 
   // Format a variable declaration: qualifier + ctype + name with proper pointer spacing
-  varDecl(this: any, qualifier: any, ctype: any, name: any) {
+  varDecl(this: CodeGenThis, qualifier: any, ctype: any, name: any) {
     if (qualifier === 'const ' && ctype.startsWith('const ')) qualifier = '';
     if (ctype.endsWith(' *')) return `${qualifier}${ctype}${name}`;
     return `${qualifier}${ctype} ${name}`;
   },
 
-  arrowParamTypes(this: any, node: any) {
+  arrowParamTypes(this: CodeGenThis, node: any) {
     return (node.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
   },
 

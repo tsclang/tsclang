@@ -1,10 +1,11 @@
+import type { CodeGenThis } from '../../codegen.js';
 export default {
-  _dispatchConversion(this: any, node: any, lines: any, depth: any) {
+  _dispatchConversion(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       // variable.toString() where variable is a string-literal-union type
       if (callee.prop === 'toString' && callee.object.kind === 'Ident') {
-        const objSym = this.lookup(callee.object.name);
+        const objSym = this.lookup(callee.object.name) as any;
         const objEnumDef = objSym ? this.classes.get(objSym.ctype) : null;
         if (objEnumDef?.isStringLiteralUnion) {
           const objC = this.exprToC(callee.object, lines, depth);

@@ -173,7 +173,7 @@ class Context {
   _emittedMapEntries!: Set<string>;
   _emittedSliceStructs!: Set<string>;
   _emittedTuples!: Set<string>;
-  _emittedBlobTypeDef!: boolean;
+  _emittedBlobTypeDef!: boolean | string;
   _emittedBufferTypeDef!: boolean;
   _emittedDataViewTypeDef!: boolean;
   _emittedTscClamp!: boolean;
@@ -310,7 +310,7 @@ class Context {
   _selectCount!: number;
   _inWeakUpgrade!: boolean;
   _staticMapInlineCount!: number;
-  _newArrayElemHint!: string | null;
+  _newArrayElemHint!: string | null | undefined;
 
   // Block/pool stacks
   _currentBlockPoolVars!: any[] | null;
@@ -319,9 +319,9 @@ class Context {
   _heapVarStack!: any[];
 
   // Calls / stdlib state
-  _lastSuppressConst!: boolean;
+  _lastSuppressConst!: boolean | undefined;
   _lastHalRead!: string | null;
-  _lambdaParamHint!: string[] | null;
+  _lambdaParamHint!: string[] | null | undefined;
   _inComputedFn!: boolean;
   _lastComputedSigType!: string;
   _lastComputedElemType!: string;
@@ -331,10 +331,10 @@ class Context {
   _blobTextN!: number;
   _urlOptN!: number;
   _dvTmpCount!: number;
-  _lastOptIsNull!: boolean;
-  _lastPopEmpty!: boolean;
-  _lastArrayElemReturn!: boolean;
-  _lastAtNonNeg!: boolean;
+  _lastOptIsNull!: boolean | undefined;
+  _lastPopEmpty!: boolean | undefined;
+  _lastArrayElemReturn!: boolean | undefined;
+  _lastAtNonNeg!: boolean | undefined;
   _lastCbRetType!: string;
   _genResultCount!: number;
 
@@ -349,10 +349,16 @@ class Context {
   _postStmtCleanups!: any[];
   _panicHelpers!: Set<string>;
 
-  // Mixin methods accessed within this class (implemented via Object.assign below)
-  declare visitProgram: (ast: Program) => void;
-  declare _ensureHeapDestructor: (className: string) => void;
-  declare _ensurePoolDrop: (className: string) => void;
+  // Std module import flags (set when import is processed)
+  _stdIoImported!: boolean;
+  _stdHalImported!: boolean;
+  _stdUrlImported!: boolean;
+  _stdReactiveImported!: boolean;
+  _stdWsImported!: boolean;
+  _stdNetImported!: boolean;
+  _stdFsImported!: boolean;
+  _stdTemporalImported!: boolean;
+  _stdEmbeddedImported!: boolean;
 
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
@@ -735,7 +741,7 @@ class Context {
   // Throw a positioned TscError.
   // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
   // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }
-  error(msg: string, node: any, opts: any = {}) {
+  error(msg: string, node?: any, opts: any = {}) {
     const n = node ?? this._currentNode;
     const legacy = Array.isArray(opts);
     throw new TscError(msg, {
@@ -754,7 +760,7 @@ class Context {
 
   // Collect a warning diagnostic (does not throw).
   // opts — same shape as error(): string[] (legacy notes) or { label, spans, help, notes, code }
-  warn(msg: string, node: any, opts: any = {}) {
+  warn(msg: string, node?: any, opts: any = {}) {
     const n = node ?? this._currentNode;
     const legacy = Array.isArray(opts);
     this._warnings.push(new TscError(msg, {
@@ -1191,6 +1197,251 @@ class Context {
   addLambda(line: string) { this._output.addLambda(line); }
 
 }
+
+// Declaration merging: mixin methods added via Object.assign at bottom of file.
+// All signatures use loose (...args: any[]) for now — individual methods can be
+// tightened later. This gives method-name checking and IDE autocomplete.
+interface Context {
+  _SIMPLE_C_TYPES: Set<string>;
+  _derefStringPtr(...args: any[]): any;
+  _asyncGenRetType: string | null;
+  _analyzeClassDecorator(...args: any[]): any;
+  _analyzeDecorator(...args: any[]): any;
+  _arrElem(...args: any[]): any;
+  _arrIdentToCType(...args: any[]): any;
+  _asyncRetType(...args: any[]): any;
+  _avrSleepModeToC(...args: any[]): any;
+  _awaitInfoOf(...args: any[]): any;
+  _buildAsyncPoll(...args: any[]): any;
+  _buildGenNext(...args: any[]): any;
+  _buildInnerCall(...args: any[]): any;
+  _cTypeBytes(...args: any[]): any;
+  _charCode(...args: any[]): any;
+  _charLiteralToSTR_LIT(...args: any[]): any;
+  _checkAwaitTarget(...args: any[]): any;
+  _checkLiteralFitsType(...args: any[]): any;
+  _classHasInheritance(...args: any[]): any;
+  _collectAwaitStates(...args: any[]): any;
+  _collectFreeVars(...args: any[]): any;
+  _constLiteralC(...args: any[]): any;
+  _deepSubstOrigApply(...args: any[]): any;
+  _dispatchArrayStatic(...args: any[]): any;
+  _dispatchBuiltin(...args: any[]): any;
+  _dispatchConcurrency(...args: any[]): any;
+  _dispatchConversion(...args: any[]): any;
+  _dispatchGroupBy(...args: any[]): any;
+  _dispatchObjectStatic(...args: any[]): any;
+  _dispatchStdBlob(...args: any[]): any;
+  _dispatchStdBuffer(...args: any[]): any;
+  _dispatchStdDataView(...args: any[]): any;
+  _dispatchStdFs(...args: any[]): any;
+  _dispatchStdHal(...args: any[]): any;
+  _dispatchStdHashMap(...args: any[]): any;
+  _dispatchStdIo(...args: any[]): any;
+  _dispatchStdLib(...args: any[]): any;
+  _dispatchStdNet(...args: any[]): any;
+  _dispatchStdRegex(...args: any[]): any;
+  _dispatchStdSet(...args: any[]): any;
+  _dispatchStdSignal(...args: any[]): any;
+  _dispatchStdTasks(...args: any[]): any;
+  _dispatchStdTemporal(...args: any[]): any;
+  _dispatchStdUrl(...args: any[]): any;
+  _dispatchStdWs(...args: any[]): any;
+  _dvOp(...args: any[]): any;
+  _emitArrayMacro(...args: any[]): any;
+  _emitAsyncDoWhile(...args: any[]): any;
+  _emitAsyncFor(...args: any[]): any;
+  _emitAsyncForOf(...args: any[]): any;
+  _emitAsyncRegStmt(...args: any[]): any;
+  _emitAsyncStmt(...args: any[]): any;
+  _emitAsyncStmtList(...args: any[]): any;
+  _emitAsyncSwitch(...args: any[]): any;
+  _emitAsyncTransition(...args: any[]): any;
+  _emitAsyncWhile(...args: any[]): any;
+  _emitCatchBodies(...args: any[]): any;
+  _emitDecoratedMethod(...args: any[]): any;
+  _emitDecoratedStandaloneFunc(...args: any[]): any;
+  _emitDecoratorWrapperFn(...args: any[]): any;
+  _emitGenRegStmt(...args: any[]): any;
+  _emitGenStmt(...args: any[]): any;
+  _emitGenStmtList(...args: any[]): any;
+  _emitIterableImpl(...args: any[]): any;
+  _emitMatchCore(...args: any[]): any;
+  _emitPoolClass(...args: any[]): any;
+  _emitPromiseTypedef(...args: any[]): any;
+  _emitRetainIfNeeded(...args: any[]): any;
+  _emitSpawnBlock(...args: any[]): any;
+  _emitStructCompact(...args: any[]): any;
+  _emitStructMultiline(...args: any[]): any;
+  _emitTopFn(...args: any[]): any;
+  _emitTryCatchResult(...args: any[]): any;
+  _ensureArrayAtMacro(...args: any[]): any;
+  _ensureArrayConcatMacro(...args: any[]): any;
+  _ensureArrayEveryMacro(...args: any[]): any;
+  _ensureArrayFillMacro(...args: any[]): any;
+  _ensureArrayFilterMacro(...args: any[]): any;
+  _ensureArrayFindIndexMacro(...args: any[]): any;
+  _ensureArrayFindMacro(...args: any[]): any;
+  _ensureArrayFlatMacro(...args: any[]): any;
+  _ensureArrayFlatMapMacro(...args: any[]): any;
+  _ensureArrayForeachMacro(...args: any[]): any;
+  _ensureArrayFreeMacro(...args: any[]): any;
+  _ensureArrayIncludesMacro(...args: any[]): any;
+  _ensureArrayIndexOfMacro(...args: any[]): any;
+  _ensureArrayKeysMacro(...args: any[]): any;
+  _ensureArrayMapMacro(...args: any[]): any;
+  _ensureArrayPopMacro(...args: any[]): any;
+  _ensureArrayPushMacro(...args: any[]): any;
+  _ensureArrayReallocateMacro(...args: any[]): any;
+  _ensureArrayReduceMacro(...args: any[]): any;
+  _ensureArrayRemoveMacro(...args: any[]): any;
+  _ensureArrayResizeMacro(...args: any[]): any;
+  _ensureArrayReverseMacro(...args: any[]): any;
+  _ensureArraySetMacro(...args: any[]): any;
+  _ensureArrayShiftMacro(...args: any[]): any;
+  _ensureArraySliceMacro(...args: any[]): any;
+  _ensureArraySomeMacro(...args: any[]): any;
+  _ensureArraySpliceMacro(...args: any[]): any;
+  _ensureArrayStruct(...args: any[]): any;
+  _ensureArrayToReversedMacro(...args: any[]): any;
+  _ensureArrayToSplicedMacro(...args: any[]): any;
+  _ensureArrayUnshiftMacro(...args: any[]): any;
+  _ensureArrayValuesMacro(...args: any[]): any;
+  _ensureArrayWithMacro(...args: any[]): any;
+  _ensureClassFree(...args: any[]): any;
+  _ensureGroupByMapStruct(...args: any[]): any;
+  _ensureHeapDestructor(...args: any[]): any;
+  _ensureImplicitVtable(...args: any[]): any;
+  _ensureMapEntry(...args: any[]): any;
+  _ensureMapStruct(...args: any[]): any;
+  _ensureOptArrayMacros(...args: any[]): any;
+  _ensureOptRefStruct(...args: any[]): any;
+  _ensureOptStruct(...args: any[]): any;
+  _ensurePoolAlloc(...args: any[]): any;
+  _ensurePoolDrop(...args: any[]): any;
+  _ensureRefArrayStruct(...args: any[]): any;
+  _ensureSliceStruct(...args: any[]): any;
+  _ensureSliceU8Struct(...args: any[]): any;
+  _ensureUnknownPackerArray(...args: any[]): any;
+  _ensureUnknownPackerClass(...args: any[]): any;
+  _ensureUnknownStruct(...args: any[]): any;
+  _extractCallbackFn(...args: any[]): any;
+  _extractLambdaBody(...args: any[]): any;
+  _findFreeVars(...args: any[]): any;
+  _flattenStringConcat(...args: any[]): any;
+  _genLivenessScan(...args: any[]): any;
+  _getIfaceParamName(...args: any[]): any;
+  _getStringFields(...args: any[]): any;
+  _hasFloatVar(...args: any[]): any;
+  _hasOrigApplyDeep(...args: any[]): any;
+  _handleStdAvr(...args: any[]): any;
+  _handleStdFs(...args: any[]): any;
+  _handleStdIo(...args: any[]): any;
+  _handleStdReactive(...args: any[]): any;
+  _handleStdNet(...args: any[]): any;
+  _handleStdLibc(...args: any[]): any;
+  _handleStdStack(...args: any[]): any;
+  _initAsync(...args: any[]): any;
+  _isHeapStringInit(...args: any[]): any;
+  _isInlinableConst(...args: any[]): any;
+  _isOptType(...args: any[]): any;
+  _isOrigApply(...args: any[]): any;
+  _isSafeWidening(...args: any[]): any;
+  _isSimpleCType(...args: any[]): any;
+  _livenessScan(...args: any[]): any;
+  _mapSuffix(...args: any[]): any;
+  _markHeapClass(...args: any[]): any;
+  _matchExprToC(...args: any[]): any;
+  _matchPatternBindings(...args: any[]): any;
+  _matchPatternCond(...args: any[]): any;
+  _numericTypeInfo(...args: any[]): any;
+  _scanAsyncBody(...args: any[]): any;
+  _scanExprIdents(...args: any[]): any;
+  _scanReturnExpr(...args: any[]): any;
+  _selfE(...args: any[]): any;
+  _stackSizeOf(...args: any[]): any;
+  _stringConcatChain(...args: any[]): any;
+  _stringLiteralToByte(...args: any[]): any;
+  _substituteInAst(...args: any[]): any;
+  _templateToC(...args: any[]): any;
+  _topBlank(...args: any[]): any;
+  _truthyToC(...args: any[]): any;
+  _tsNameToCType(...args: any[]): any;
+  _tsNameToTypeId(...args: any[]): any;
+  _unknownGetterFor(...args: any[]): any;
+  _unknownPackerFor(...args: any[]): any;
+  _validateSwitchFallthrough(...args: any[]): any;
+  _visitControlFlow(...args: any[]): any;
+  _visitVarDecl(...args: any[]): any;
+  _visitVarDestruct(...args: any[]): any;
+  _wrapErrForCaller(...args: any[]): any;
+  _wrapOptValue(...args: any[]): any;
+  argsToC(...args: any[]): any;
+  arrayLitSize(...args: any[]): any;
+  arrayLitToC(...args: any[]): any;
+  arrowParamTypes(...args: any[]): any;
+  assignToC(...args: any[]): any;
+  bareNumberValue(...args: any[]): any;
+  binaryToC(...args: any[]): any;
+  binaryWidened(...args: any[]): any;
+  cTypeToIdent(...args: any[]): any;
+  callGeneric(...args: any[]): any;
+  callToC(...args: any[]): any;
+  consoleCall(...args: any[]): any;
+  constVal(...args: any[]): any;
+  ctypeToTsName(...args: any[]): any;
+  emitAsyncFunc(...args: any[]): any;
+  emitFuncBody(...args: any[]): any;
+  emitGeneratorFunc(...args: any[]): any;
+  emitMatchVarDecl(...args: any[]): any;
+  emitMethod(...args: any[]): any;
+  emitMonoClass(...args: any[]): any;
+  emitMonoFunc(...args: any[]): any;
+  emitPropagateVarDecl(...args: any[]): any;
+  emitSelectVarDecl(...args: any[]): any;
+  emitVtableConstant(...args: any[]): any;
+  exprToC(...args: any[]): any;
+  flattenUnion(...args: any[]): any;
+  getStringLiteralMembers(...args: any[]): any;
+  getStructFields(...args: any[]): any;
+  hoistArrow(...args: any[]): any;
+  hoistClosure(...args: any[]): any;
+  inferArrowReturn(...args: any[]): any;
+  inferObjLitType(...args: any[]): any;
+  isBareLiteralNumber(...args: any[]): any;
+  isStringExpr(...args: any[]): any;
+  isStringLiteralUnion(...args: any[]): any;
+  jsonCall(...args: any[]): any;
+  labelUsed(...args: any[]): any;
+  literalToC(...args: any[]): any;
+  literalToCTyped(...args: any[]): any;
+  mathCall(...args: any[]): any;
+  methodCall(...args: any[]): any;
+  newToC(...args: any[]): any;
+  substNode(...args: any[]): any;
+  substType(...args: any[]): any;
+  tryConstMixedBinary(...args: any[]): any;
+  unaryToC(...args: any[]): any;
+  varDecl(...args: any[]): any;
+  visitBlock(...args: any[]): any;
+  visitClassDecl(...args: any[]): any;
+  visitDeclareConst(...args: any[]): any;
+  visitDeclareFunction(...args: any[]): any;
+  visitDeclareModule(...args: any[]): any;
+  visitEnum(...args: any[]): any;
+  visitExtensionFunc(...args: any[]): any;
+  visitFuncDecl(...args: any[]): any;
+  visitGlobalVar(...args: any[]): any;
+  visitInterface(...args: any[]): any;
+  visitProgram(...args: any[]): any;
+  visitStmt(...args: any[]): any;
+  visitStmtInMain(...args: any[]): any;
+  visitStmtOrBlock(...args: any[]): any;
+  visitTopLevel(...args: any[]): any;
+  visitTypeAlias(...args: any[]): any;
+}
+
+export type CodeGenThis = Context;
 
 import topLevel  from './codegen/top-level.js';
 import stmt      from './codegen/stmt.js';

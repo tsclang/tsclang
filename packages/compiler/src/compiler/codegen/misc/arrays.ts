@@ -1,6 +1,7 @@
+import type { CodeGenThis } from '../../codegen.js';
 // arrays.ts
 export default {
-  arrayLitToC(this: any, node: any, _elemType: any, lines: any, depth: any) {
+  arrayLitToC(this: CodeGenThis, node: any, _elemType: any, lines: any, depth: any) {
     const result: any[] = [];
     for (const e of node.elems) {
       if (e.spread) {
@@ -33,7 +34,7 @@ export default {
   },
 
   // Count the static size of an ArrayLit (expanding spread if possible)
-  arrayLitSize(this: any, node: any) {
+  arrayLitSize(this: CodeGenThis, node: any) {
     let count = 0;
     for (const e of node.elems) {
       if (e.spread) {
@@ -48,7 +49,7 @@ export default {
   },
 
   // Returns true if the expression will produce a heap-allocated String
-  _isHeapStringInit(this: any, node: any) {
+  _isHeapStringInit(this: CodeGenThis, node: any) {
     if (!node) return false;
     if (node.kind === 'Binary' && node.op === '+') {
       const lt = this.inferType(node.left);

@@ -1,8 +1,9 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { mangleParams } from '../../types.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 // func.ts
 export default {
-  visitEnum(this: any, node: any) {
+  visitEnum(this: CodeGenThis, node: any) {
     const { name, members, isConst } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
@@ -65,7 +66,7 @@ export default {
   // ----------------------------------------------------------------
   // Global variables
   // ----------------------------------------------------------------
-  visitGlobalVar(this: any, node: any) {
+  visitGlobalVar(this: CodeGenThis, node: any) {
     const { varKind, name, typeAnn, init } = node;
     const isConst = varKind === 'const';
     const ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
@@ -83,7 +84,7 @@ export default {
   // ----------------------------------------------------------------
   // Functions
   // ----------------------------------------------------------------
-  visitFuncDecl(this: any, node: any, isTopLevel = false, isExported = false) {
+  visitFuncDecl(this: CodeGenThis, node: any, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
@@ -434,7 +435,7 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(this: any, funcName: any, body: any, params: any, retType: any, className = null, isMoveMethod = false, isMut = false, throwsCtx: any = null, isNever = false) {
+  emitFuncBody(this: CodeGenThis, funcName: any, body: any, params: any, retType: any, className = null, isMoveMethod = false, isMut = false, throwsCtx: any = null, isNever = false) {
     const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever,
       inMathTry: this._inMathTry, mathCatchLabel: this._mathCatchLabel, mathErrVar: this._mathErrVar };
     this.inFunction = true;
@@ -629,7 +630,7 @@ export default {
     return lines;
   },
 
-  visitExtensionFunc(this: any, node: any) {
+  visitExtensionFunc(this: CodeGenThis, node: any) {
     const { name, thisType, params, returnType, body } = node;
     const thisCType = this.resolveType(thisType);
     const thisIdent = this.cTypeToIdent(thisCType);

@@ -1,8 +1,9 @@
+import type { CodeGenThis } from '../../codegen.js';
 // program.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Program } from '@tsclang/ast';
 export default {
-  visitProgram(this: any, ast: Program) {
+  visitProgram(this: CodeGenThis, ast: Program) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
     this._fromEntriesConsumed = new Map();
     for (const node of ast.body) {

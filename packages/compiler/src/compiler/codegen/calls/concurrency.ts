@@ -1,3 +1,4 @@
+import type { CodeGenThis } from '../../codegen.js';
 const ORDERING_MAP = {
   'LoadOrdering.Acquire': 'memory_order_acquire',
   'LoadOrdering.SeqCst': 'memory_order_seq_cst',
@@ -11,7 +12,7 @@ const ORDERING_MAP = {
 };
 
 export default {
-  _dispatchConcurrency(this: any, node: any, lines: any, depth: any) {
+  _dispatchConcurrency(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       const objName2 = callee.object?.kind === 'Ident' ? callee.object.name : null;

@@ -1,3 +1,4 @@
+import type { CodeGenThis } from '../../codegen.js';
 // helpers.ts
 import { TSC_DEFINES } from '@tsclang/shared';
 
@@ -9,13 +10,13 @@ const _RUNTIME_REDUCE_R = new Set(['i32_i32', 'i32_f64']);
 const _RUNTIME_FLAT = new Set(['i32', 'f64', 'string', 'Array_i32']);
 
 export default {
-  _cTypeBytes(this: any, ct: any) {
+  _cTypeBytes(this: CodeGenThis, ct: any) {
     const m: Record<string, any> = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
     if (ct === 'size_t') return this._ptrBytes();
     return m[ct] ?? 4;
   },
 
-  _stackSizeOf(this: any, ct: any) {
+  _stackSizeOf(this: CodeGenThis, ct: any) {
     if (!ct || ct === 'void') return 0;
     if (ct.endsWith(' *')) return this._ptrBytes();
     if (ct.startsWith('opt_ref_')) return this._ptrBytes() * 2;
@@ -41,7 +42,7 @@ export default {
     return this._cTypeBytes(ct);
   },
 
-  cTypeToIdent(this: any, ctype: any) {
+  cTypeToIdent(this: CodeGenThis, ctype: any) {
     // Map C type to a valid identifier suffix
     const m: Record<string, any> = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
@@ -54,7 +55,7 @@ export default {
     return m[ctype] ?? ctype.replace(/[^a-zA-Z0-9]/g, '_');
   },
 
-  ctypeToTsName(this: any, ctype: any) {
+  ctypeToTsName(this: CodeGenThis, ctype: any) {
     const m: Record<string, any> = {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
@@ -64,7 +65,7 @@ export default {
     return m[ctype] ?? ctype;
   },
 
-  _numericTypeInfo(this: any, ct: any) {
+  _numericTypeInfo(this: CodeGenThis, ct: any) {
     const m: Record<string, any> = {
       'int8_t':   { bits: 8,  signed: true,  kind: 'int' },
       'int16_t':  { bits: 16, signed: true,  kind: 'int' },
@@ -81,7 +82,7 @@ export default {
     return m[ct] ?? null;
   },
 
-  _isSafeWidening(this: any, src: any, dst: any) {
+  _isSafeWidening(this: CodeGenThis, src: any, dst: any) {
     if (src === dst) return true;
     if (src === 'size_t' && (dst === 'int64_t' || dst === 'uint64_t')) return true;
     const si = this._numericTypeInfo(src);
@@ -96,7 +97,7 @@ export default {
   },
 
   // Map array element identifier back to C type (reverse of cTypeToIdent)
-  _arrIdentToCType(this: any, ident: any) {
+  _arrIdentToCType(this: CodeGenThis, ident: any) {
     const m: Record<string, any> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                 'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                 'f32':'float','f64':'double','bool':'bool','string':'String',
@@ -105,7 +106,7 @@ export default {
   },
 
   // Returns map suffix if ctype is Map_* or TscMap_*, otherwise null
-  _mapSuffix(this: any, ctype: any) {
+  _mapSuffix(this: CodeGenThis, ctype: any) {
     if (!ctype) return null;
     if (ctype.startsWith('TscMap_')) return ctype.slice(7);
     if (ctype.startsWith('Map_')) return ctype.slice(4);
@@ -113,13 +114,13 @@ export default {
   },
 
   // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32 via TSC_MAP_DECL.
-  _ensureMapStruct(this: any, suffix: any) {
+  _ensureMapStruct(this: CodeGenThis, suffix: any) {
 
     this._emittedMapStructs.add(suffix);
   },
 
   // Emit MapEntry_K_V and Array_MapEntry_K_V struct typedefs (idempotent)
-  _ensureMapEntry(this: any, suffix: any, kCType: any, vCType: any) {
+  _ensureMapEntry(this: CodeGenThis, suffix: any, kCType: any, vCType: any) {
     if (!this._emittedMapEntries.has(suffix)) {
       this._emittedMapEntries.add(suffix);
       const entryName = `MapEntry_${suffix}`;
@@ -133,7 +134,7 @@ export default {
     }
   },
 
-  _ensureRefArrayStruct(this: any, arrName: any, et: any) {
+  _ensureRefArrayStruct(this: CodeGenThis, arrName: any, et: any) {
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} **data; size_t length; size_t capacity; } ${arrName};`);
@@ -142,7 +143,7 @@ export default {
   },
 
   // Emit Array_T struct typedef (idempotent)
-  _ensureArrayStruct(this: any, arrName: any, et: any) {
+  _ensureArrayStruct(this: CodeGenThis, arrName: any, et: any) {
     if (!this._emittedArrayStructs.has(arrName)) {
       this._emittedArrayStructs.add(arrName);
       this.addTop(`typedef struct { ${et} *data; size_t length; size_t capacity; } ${arrName};`);
@@ -158,7 +159,7 @@ export default {
     }
   },
 
-  _ensureArrayFreeMacro(this: any, elemIdent: any, arrName: any, et: any) {
+  _ensureArrayFreeMacro(this: CodeGenThis, elemIdent: any, arrName: any, et: any) {
     const key = `free_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -170,7 +171,7 @@ export default {
     }
   },
 
-  _ensureArrayPushMacro(this: any, elemIdent: any, arrName: any, et: any) {
+  _ensureArrayPushMacro(this: CodeGenThis, elemIdent: any, arrName: any, et: any) {
     const key = `push_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -178,11 +179,11 @@ export default {
     }
   },
 
-  _isOptType(this: any, elemType: any) {
+  _isOptType(this: CodeGenThis, elemType: any) {
     return elemType?.startsWith('opt_');
   },
 
-  _wrapOptValue(this: any, cExpr: any, exprNode: any, elemType: any) {
+  _wrapOptValue(this: CodeGenThis, cExpr: any, exprNode: any, elemType: any) {
     if (!this._isOptType(elemType)) return cExpr;
     const innerCType = this._arrIdentToCType(elemType.slice(4));
     if (exprNode.kind === 'Literal' && exprNode.litType === 'null') {
@@ -191,13 +192,13 @@ export default {
     return `((${elemType}){true, ${cExpr}})`;
   },
 
-  _ensureOptArrayMacros(this: any, elemIdent: any, arrName: any, et: any) {
+  _ensureOptArrayMacros(this: CodeGenThis, elemIdent: any, arrName: any, et: any) {
     this._ensureArrayFreeMacro(elemIdent, arrName, et);
     this._ensureArrayPushMacro(elemIdent, arrName, et);
     this._ensureArrayPopMacro(elemIdent, arrName, et);
   },
 
-  _ensureArrayPopMacro(this: any, elemIdent: any, arrName: any, et: any) {
+  _ensureArrayPopMacro(this: CodeGenThis, elemIdent: any, arrName: any, et: any) {
     const key = `pop_${elemIdent}`;
     if (!this._emittedHelpers.has(key)) {
       this._emittedHelpers.add(key);
@@ -207,7 +208,7 @@ export default {
 
   // Emit opt_T struct typedef (idempotent): { bool has_value; T value; }
   // Inserts before any trailing blank line so typedefs group together.
-  _ensureOptStruct(this: any, optName: any, ctype: any) {
+  _ensureOptStruct(this: CodeGenThis, optName: any, ctype: any) {
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
       this.addTop(`typedef struct { bool has_value; ${ctype} value; } ${optName};`);
@@ -215,7 +216,7 @@ export default {
   },
 
   // Emit Slice_T / MutSlice_T typedef (idempotent)
-  _ensureSliceStruct(this: any, slName: any, etC: any, mutable = false) {
+  _ensureSliceStruct(this: CodeGenThis, slName: any, etC: any, mutable = false) {
     if (this._emittedSliceStructs.has(slName)) return;
     this._emittedSliceStructs.add(slName);
     const ptrType = mutable ? `${etC} *` : `const ${etC} *`;
@@ -223,14 +224,14 @@ export default {
   },
 
   // Emit Slice_u8 typedef (idempotent): { uint8_t *ptr; size_t length; }
-  _ensureSliceU8Struct(this: any) {
+  _ensureSliceU8Struct(this: CodeGenThis) {
     if (this._emittedSliceU8) return;
     this._emittedSliceU8 = true;
     this._ensureSliceStruct('Slice_u8', 'uint8_t', true);
   },
 
   // Emit opt_ref_T struct typedef (idempotent): { bool has_value; T *value; }
-  _ensureOptRefStruct(this: any, optName: any, ctype: any) {
+  _ensureOptRefStruct(this: CodeGenThis, optName: any, ctype: any) {
 
     if (!this._emittedOptStructs.has(optName)) {
       this._emittedOptStructs.add(optName);
@@ -238,7 +239,7 @@ export default {
     }
   },
 
-  _ensureUnknownStruct(this: any) {
+  _ensureUnknownStruct(this: CodeGenThis) {
     if (this._emittedUnknownStruct) return;
     this._emittedUnknownStruct = true;
     this.addTop('typedef struct tsc_unknown_vtable { void (*drop)(void *buf); void (*clone_into)(const void *src, void *dst); } tsc_unknown_vtable;');
@@ -277,19 +278,19 @@ export default {
     this.addTop('static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }');
   },
 
-  _tsNameToTypeId(this: any, tsName: any) {
+  _tsNameToTypeId(this: CodeGenThis, tsName: any) {
     if (tsName === 'number') return this._tsNameToTypeId(this._defaultNumber);
     const m: Record<string, any> = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
     return m[tsName] ?? 0;
   },
 
-  _tsNameToCType(this: any, tsName: any) {
+  _tsNameToCType(this: CodeGenThis, tsName: any) {
     if (tsName === 'number') return this._tsNameToCType(this._defaultNumber);
     const m: Record<string, any> = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
     return m[tsName] ?? 'int32_t';
   },
 
-  _unknownPackerFor(this: any, ctype: any) {
+  _unknownPackerFor(this: CodeGenThis, ctype: any) {
     const m: Record<string, string> = { 'int8_t': 'tsc_unknown_from_i32', 'int16_t': 'tsc_unknown_from_i32', 'int32_t': 'tsc_unknown_from_i32', 'int64_t': 'tsc_unknown_from_i64', 'uint8_t': 'tsc_unknown_from_i32', 'uint16_t': 'tsc_unknown_from_i32', 'uint32_t': 'tsc_unknown_from_i32', 'uint64_t': 'tsc_unknown_from_i64', 'float': 'tsc_unknown_from_f32', 'double': 'tsc_unknown_from_f64', 'bool': 'tsc_unknown_from_bool', 'String': 'tsc_unknown_from_string', 'char': 'tsc_unknown_from_char' };
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
@@ -311,7 +312,7 @@ export default {
     return 'tsc_unknown_from_i32';
   },
 
-  _unknownGetterFor(this: any, ctype: any) {
+  _unknownGetterFor(this: CodeGenThis, ctype: any) {
     const m: Record<string, string> = { 'int8_t': 'tsc_unknown_get_i32', 'int16_t': 'tsc_unknown_get_i32', 'int32_t': 'tsc_unknown_get_i32', 'int64_t': 'tsc_unknown_get_i64', 'uint8_t': 'tsc_unknown_get_i32', 'uint16_t': 'tsc_unknown_get_i32', 'uint32_t': 'tsc_unknown_get_i32', 'uint64_t': 'tsc_unknown_get_i64', 'float': 'tsc_unknown_get_f32', 'double': 'tsc_unknown_get_f64', 'bool': 'tsc_unknown_get_bool', 'String': 'tsc_unknown_get_string', 'char': 'tsc_unknown_get_char' };
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
@@ -327,7 +328,7 @@ export default {
     return 'tsc_unknown_get_i32';
   },
 
-  _ensureUnknownPackerArray(this: any, elemIdent: any, arrName: any, et: any) {
+  _ensureUnknownPackerArray(this: CodeGenThis, elemIdent: any, arrName: any, et: any) {
     const key = `unknown_array_${elemIdent}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -341,7 +342,7 @@ export default {
     this.addTop(`static inline ${arrName}* tsc_unknown_get_${arrName}(const tsc_unknown *self) { ${arrName} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
   },
 
-  _ensureUnknownPackerClass(this: any, className: any) {
+  _ensureUnknownPackerClass(this: CodeGenThis, className: any) {
     const key = `unknown_class_${className}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -353,7 +354,7 @@ export default {
     this.addTop(`static inline ${className}* tsc_unknown_get_${className}(const tsc_unknown *self) { ${className} *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return ptr; }`);
   },
 
-  _ensureGroupByMapStruct(this: any, etIdent: any, etCType: any) {
+  _ensureGroupByMapStruct(this: CodeGenThis, etIdent: any, etCType: any) {
     const key = `groupby_${etIdent}`;
     if (this._emittedHelpers.has(key)) return;
     this._emittedHelpers.add(key);
@@ -364,7 +365,7 @@ export default {
     this.addTop('');
   },
 
-  _emitArrayMacro(this: any, macroName: any, lines: any) {
+  _emitArrayMacro(this: CodeGenThis, macroName: any, lines: any) {
     if (this._emittedHelpers.has(macroName)) return;
     this._emittedHelpers.add(macroName);
     this.addTop(`#ifndef ${macroName}`);
@@ -373,11 +374,11 @@ export default {
     this.addTop('');
   },
 
-  _arrElem(this: any, etC: any) {
+  _arrElem(this: CodeGenThis, etC: any) {
     return etC === 'String' ? '&_a_.data[_i_]' : '_a_.data[_i_]';
   },
 
-  _ensureArrayMapMacro(this: any, fromEt: any, toEt: any, fromCType: any, toCType: any) {
+  _ensureArrayMapMacro(this: CodeGenThis, fromEt: any, toEt: any, fromCType: any, toCType: any) {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_MAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_map_${fromEt}_${toEt}`;
@@ -393,7 +394,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFlatMapMacro(this: any, fromEt: any, toEt: any, fromCType: any, toCType: any) {
+  _ensureArrayFlatMapMacro(this: CodeGenThis, fromEt: any, toEt: any, fromCType: any, toCType: any) {
     this._ensureArrayStruct(`Array_${toEt}`, toCType);
     if (_RUNTIME_FLATMAP.has(`${fromEt}_${toEt}`)) return;
     const name = `tsc_array_flat_map_${fromEt}_${toEt}`;
@@ -419,7 +420,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFilterMacro(this: any, et: any, etC: any) {
+  _ensureArrayFilterMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_filter_${et}`;
     const elem = this._arrElem(etC);
@@ -441,7 +442,7 @@ export default {
     ]);
   },
 
-  _ensureArrayForeachMacro(this: any, et: any, etC: any) {
+  _ensureArrayForeachMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_foreach_${et}`;
     const elem = this._arrElem(etC);
@@ -453,7 +454,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReduceMacro(this: any, et: any, toEt: any, etC: any, toCType: any, isRight: any) {
+  _ensureArrayReduceMacro(this: CodeGenThis, et: any, toEt: any, etC: any, toCType: any, isRight: any) {
     const combos = isRight ? _RUNTIME_REDUCE_R : _RUNTIME_REDUCE;
     if (combos.has(`${et}_${toEt}`)) return;
     const op = isRight ? 'reduce_right' : 'reduce';
@@ -472,7 +473,7 @@ export default {
     ]);
   },
 
-  _ensureArrayEveryMacro(this: any, et: any, etC: any) {
+  _ensureArrayEveryMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_every_${et}`;
     const elem = this._arrElem(etC);
@@ -485,7 +486,7 @@ export default {
     ]);
   },
 
-  _ensureArraySomeMacro(this: any, et: any, etC: any) {
+  _ensureArraySomeMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_some_${et}`;
     const elem = this._arrElem(etC);
@@ -498,7 +499,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFindMacro(this: any, et: any, etC: any, isLast: any) {
+  _ensureArrayFindMacro(this: CodeGenThis, et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) {
       this._ensureOptRefStruct(`opt_ref_${et}`, etC);
       return;
@@ -521,7 +522,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFindIndexMacro(this: any, et: any, etC: any, isLast: any) {
+  _ensureArrayFindIndexMacro(this: CodeGenThis, et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) return;
     const op = isLast ? 'find_last_index' : 'find_index';
     const name = `tsc_array_${op}_${et}`;
@@ -538,7 +539,7 @@ export default {
     ]);
   },
 
-  _ensureArrayIncludesMacro(this: any, et: any, etC: any) {
+  _ensureArrayIncludesMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_includes_${et}`;
     this._emitArrayMacro(name, [
@@ -550,7 +551,7 @@ export default {
     ]);
   },
 
-  _ensureArrayIndexOfMacro(this: any, et: any, etC: any, isLast: any) {
+  _ensureArrayIndexOfMacro(this: CodeGenThis, et: any, etC: any, isLast: any) {
     if (_RUNTIME_ET.has(et)) return;
     const op = isLast ? 'last_index_of' : 'index_of';
     const name = `tsc_array_${op}_${et}`;
@@ -566,7 +567,7 @@ export default {
     ]);
   },
 
-  _ensureArrayConcatMacro(this: any, et: any, etC: any) {
+  _ensureArrayConcatMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_concat_${et}`;
     this._emitArrayMacro(name, [
@@ -581,7 +582,7 @@ export default {
     ]);
   },
 
-  _ensureArraySliceMacro(this: any, et: any, etC: any) {
+  _ensureArraySliceMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_slice_${et}`;
     this._emitArrayMacro(name, [
@@ -596,7 +597,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFlatMacro(this: any, et: any, etC: any) {
+  _ensureArrayFlatMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_FLAT.has(et)) return;
     const name = `tsc_array_flat_${et}`;
     this._emitArrayMacro(name, [
@@ -609,7 +610,7 @@ export default {
     ]);
   },
 
-  _ensureArrayAtMacro(this: any, et: any, etC: any) {
+  _ensureArrayAtMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_at_${et}`;
     this._emitArrayMacro(name, [
@@ -621,7 +622,7 @@ export default {
     ]);
   },
 
-  _ensureArrayWithMacro(this: any, et: any, etC: any) {
+  _ensureArrayWithMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_with_${et}`;
     this._emitArrayMacro(name, [
@@ -636,7 +637,7 @@ export default {
     ]);
   },
 
-  _ensureArrayToReversedMacro(this: any, et: any, etC: any) {
+  _ensureArrayToReversedMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_to_reversed_${et}`;
     this._emitArrayMacro(name, [
@@ -649,7 +650,7 @@ export default {
     ]);
   },
 
-  _ensureArrayToSplicedMacro(this: any, et: any, etC: any) {
+  _ensureArrayToSplicedMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_to_spliced_${et}`;
     this._emitArrayMacro(name, [
@@ -670,7 +671,7 @@ export default {
     ]);
   },
 
-  _ensureArrayKeysMacro(this: any, et: any, etC: any) {
+  _ensureArrayKeysMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_keys_${et}`;
     this._emitArrayMacro(name, [
@@ -683,7 +684,7 @@ export default {
     ]);
   },
 
-  _ensureArrayValuesMacro(this: any, et: any, etC: any) {
+  _ensureArrayValuesMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_values_${et}`;
     this._emitArrayMacro(name, [
@@ -696,7 +697,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReverseMacro(this: any, et: any, etC: any) {
+  _ensureArrayReverseMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_reverse_${et}`;
     this._emitArrayMacro(name, [
@@ -709,7 +710,7 @@ export default {
     ]);
   },
 
-  _ensureArrayFillMacro(this: any, et: any, etC: any) {
+  _ensureArrayFillMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_fill_${et}`;
     this._emitArrayMacro(name, [
@@ -721,7 +722,7 @@ export default {
     ]);
   },
 
-  _ensureArrayResizeMacro(this: any, et: any, etC: any) {
+  _ensureArrayResizeMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_resize_${et}`;
     this._emitArrayMacro(name, [
@@ -740,7 +741,7 @@ export default {
     ]);
   },
 
-  _ensureArrayReallocateMacro(this: any, et: any, etC: any) {
+  _ensureArrayReallocateMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_reallocate_${et}`;
     this._emitArrayMacro(name, [
@@ -755,7 +756,7 @@ export default {
     ]);
   },
 
-  _ensureArraySpliceMacro(this: any, et: any, etC: any) {
+  _ensureArraySpliceMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_splice_${et}`;
     this._emitArrayMacro(name, [
@@ -788,7 +789,7 @@ export default {
     ]);
   },
 
-  _ensureArrayShiftMacro(this: any, et: any, etC: any) {
+  _ensureArrayShiftMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) {
       this._ensureOptStruct(`opt_${et}`, etC);
       return;
@@ -809,7 +810,7 @@ export default {
     ]);
   },
 
-  _ensureArrayUnshiftMacro(this: any, et: any, etC: any) {
+  _ensureArrayUnshiftMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_unshift_${et}`;
     this._emitArrayMacro(name, [
@@ -825,7 +826,7 @@ export default {
     ]);
   },
 
-  _ensureArrayRemoveMacro(this: any, et: any, etC: any) {
+  _ensureArrayRemoveMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_remove_${et}`;
     this._emitArrayMacro(name, [
@@ -838,7 +839,7 @@ export default {
     ]);
   },
 
-  _ensureArraySetMacro(this: any, et: any, etC: any) {
+  _ensureArraySetMacro(this: CodeGenThis, et: any, etC: any) {
     if (_RUNTIME_ET.has(et)) return;
     const name = `tsc_array_set_${et}`;
     this._emitArrayMacro(name, [

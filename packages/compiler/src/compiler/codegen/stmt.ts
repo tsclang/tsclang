@@ -1,7 +1,8 @@
 // stmt.ts
 import type { Stmt, Block } from '@tsclang/ast';
+import type { CodeGenThis } from '../codegen.js';
 export default {
-  visitBlock(this: any, block: Block, lines: any, depth: any) {
+  visitBlock(this: CodeGenThis, block: Block, lines: any, depth: any) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars: any[] = [];
@@ -50,7 +51,7 @@ export default {
     this.popScope();
   },
 
-  visitStmtInMain(this: any, node: any) {
+  visitStmtInMain(this: CodeGenThis, node: any) {
     const lines: any[] = [];
     if (this._debugLines && node?.line) {
       this.mainStmts.push(`#line ${node.line} "${this.filename}"`);
@@ -59,7 +60,7 @@ export default {
     for (const l of lines) this.mainStmts.push(l);
   },
 
-  visitStmt(this: any, node: Stmt, lines: any, depth: any) {
+  visitStmt(this: CodeGenThis, node: Stmt, lines: any, depth: any) {
     this._currentNode = node;
     if (!node) return;
 
@@ -96,7 +97,7 @@ export default {
     }
   },
 
-  visitStmtOrBlock(this: any, node: Stmt, lines: any, depth: any) {
+  visitStmtOrBlock(this: CodeGenThis, node: Stmt, lines: any, depth: any) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
   },

@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // class.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
 export default {
-  visitClassDecl(this: any, node: any) {
+  visitClassDecl(this: CodeGenThis, node: any) {
     const { name, superClass, members, decorators, typeParams } = node;
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     // Generic class: store as template
@@ -321,7 +322,7 @@ export default {
     }
   },
 
-  _emitPoolClass(this: any, name: any, poolDec: any, node: any) {
+  _emitPoolClass(this: CodeGenThis, name: any, poolDec: any, node: any) {
     const poolSize = parseInt(poolDec.args[0].value);
     const poolVar  = `_${name.toLowerCase()}_pool`;
     const maskVar  = `_${name.toLowerCase()}_pool_mask`;
@@ -351,7 +352,7 @@ export default {
     }
   },
 
-  _ensurePoolAlloc(this: any, className: any) {
+  _ensurePoolAlloc(this: CodeGenThis, className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isPool || cls._poolAllocEmitted) return;
     cls._poolAllocEmitted = true;
@@ -371,7 +372,7 @@ export default {
     this.addTop('');
   },
 
-  _ensurePoolDrop(this: any, className: any) {
+  _ensurePoolDrop(this: CodeGenThis, className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isPool || cls._poolDropEmitted) return;
     this._ensurePoolAlloc(className); // drop requires alloc
@@ -384,7 +385,7 @@ export default {
     this.addTop('');
   },
 
-  _markHeapClass(this: any, name: any, node: any) {
+  _markHeapClass(this: CodeGenThis, name: any, node: any) {
     const cls = this.classes.get(name);
     if (cls) {
       cls._heapClassName = name;
@@ -393,7 +394,7 @@ export default {
     }
   },
 
-  _ensureHeapDestructor(this: any, className: any) {
+  _ensureHeapDestructor(this: CodeGenThis, className: any) {
     const cls = this.classes.get(className);
     if (!cls?._isHeap || cls._heapDestructorEmitted) return;
     cls._heapDestructorEmitted = true;
@@ -412,11 +413,11 @@ export default {
     this.addTop('');
   },
 
-  _classHasInheritance(this: any, cBase: any) {
+  _classHasInheritance(this: CodeGenThis, cBase: any) {
     return cBase != null;
   },
 
-  emitVtableConstant(this: any, className: any, ifaceName: any, classNode: any = null) {
+  emitVtableConstant(this: CodeGenThis, className: any, ifaceName: any, classNode: any = null) {
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
     const ifaceMethods = ifaceDef.filter((m: any) => m.kind === 'MethodSig');
@@ -437,7 +438,7 @@ export default {
     this.addTop('');
   },
 
-  _getStringFields(this: any, className: any) {
+  _getStringFields(this: CodeGenThis, className: any) {
     const cls = this.classes.get(className);
     if (!cls?.fields) return [];
     const result: any[] = [];
@@ -449,7 +450,7 @@ export default {
     return result;
   },
 
-  _ensureClassFree(this: any, className: any) {
+  _ensureClassFree(this: CodeGenThis, className: any) {
     const cls = this.classes.get(className);
     if (!cls || cls._classFreeEmitted) return;
     const stringFields = this._getStringFields(className);

@@ -38,7 +38,7 @@ export interface SymbolInfo {
 
   // Namespace
   _isNamespace?: boolean;
-  _namespaceExports?: Record<string, unknown>;
+  _namespaceExports?: Record<string, any>;
 
   // Type alias
   _isTypeAlias?: boolean;

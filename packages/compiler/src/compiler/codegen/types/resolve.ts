@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
 // resolve.ts
 export default {
-  resolveType(this: any, typeNode: any) {
+  resolveType(this: CodeGenThis, typeNode: any) {
     if (!typeNode) return 'void';
     if (typeof typeNode === 'string') return toCType(typeNode);
 
@@ -247,7 +248,7 @@ export default {
   },
 
   // Build tuple struct name and emit typedef if needed
-  resolveTupleType(this: any, typeNode: any, namedAs = null) {
+  resolveTupleType(this: CodeGenThis, typeNode: any, namedAs = null) {
     const { elements, readonly } = typeNode;
 
     // Build struct fields
@@ -305,7 +306,7 @@ export default {
 
   // Generate a full C declarator: handles function pointer types correctly
   // e.g. typeDecl({kind:'TypeFunc', params:[i32], ret:i32}, 'f') → 'int32_t (*f)(int32_t)'
-  typeDecl(this: any, typeNode: any, name: any) {
+  typeDecl(this: CodeGenThis, typeNode: any, name: any) {
     if (!typeNode) return `void *${name ? ' ' + name : ''}`;
     if (typeNode.kind === 'TypeFunc') {
       return `tsc_closure${name ? ' ' + name : ''}`;

@@ -1,8 +1,9 @@
+import type { CodeGenThis } from '../../codegen.js';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export default {
-  _visitVarDecl(this: any, node: any, lines: any, depth: any) {
+  _visitVarDecl(this: CodeGenThis, node: any, lines: any, depth: any) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: any) => lines.push(I + s);
@@ -783,7 +784,7 @@ export default {
           if (innerInit2?.kind !== 'Ident') { /* fall through */ }
           else {
           const argName = innerInit2.name;
-          const argSym = this.lookup(argName);
+          const argSym = this.lookup(argName) as any;
           const argClass = argSym?.ctype ? this.classes.get(argSym.ctype) : null;
           if (argClass && !this.interfaces.has(argSym.ctype)) {
             const className = argSym.ctype;
@@ -955,7 +956,7 @@ export default {
             const litVar = `_lit_${this.tempCount++}`;
             this._expectedType = et?.startsWith('Array_') ? et : null;
             const elems = this.arrayLitToC(init, et, lines, depth);
-            this._expectedType = undefined;
+            this._expectedType = null;
             p(`${et} ${litVar}[] = {${elems.join(', ')}};`);
             p(`${qualifier}${arrName} ${name} = {.data = ${litVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
           } else {
@@ -963,7 +964,7 @@ export default {
             this._newArrayElemHint = et;
             const initC = this.exprToC(init, lines, depth);
             this._newArrayElemHint = null;
-            this._expectedType = undefined;
+            this._expectedType = null;
             if (this._gotoCleanupPreDecls?.has(name)) {
               p(`${name} = ${initC};`);
             } else {
@@ -1403,7 +1404,7 @@ export default {
                 // Set expected type hint for context-sensitive calls (e.g. parseFloat with f64 annotation)
                 this._expectedType = ctype;
                 initC = this.exprToC(init, lines, depth);
-                this._expectedType = undefined;
+                this._expectedType = null;
               }
               // Implicit type conversion checks for typed assignments (skip if already handled by mixedBinary)
               if (typeAnn && mixedBinary === null) {
@@ -1439,8 +1440,8 @@ export default {
             if (this._lastComputedSigType) {
               const _sigType = this._lastComputedSigType;
               const _sigElemIdent = this._lastComputedElemType;
-              this._lastComputedSigType = undefined;
-              this._lastComputedElemType = undefined;
+              this._lastComputedSigType = undefined as any;
+              this._lastComputedElemType = undefined as any;
               if (!this._emittedSignalTypedefs.has(_sigType)) {
                 this._emittedSignalTypedefs.add(_sigType);
                 const _sigElemCType = this._arrIdentToCType(_sigElemIdent);
@@ -1453,7 +1454,7 @@ export default {
             }
             // Cross-struct assignment: const b: Pt2 = a (where a is a different struct type)
             if (init.kind === 'Ident') {
-              const initSym = this.lookup(init.name);
+              const initSym = this.lookup(init.name) as any;
               const srcDef = initSym ? this.classes.get(initSym.ctype) : null;
               const dstDef = this.classes.get(ctype);
               if (srcDef?.isStruct && dstDef?.isStruct && initSym.ctype !== ctype) {
@@ -1601,7 +1602,7 @@ export default {
                 }
               } else if (init.kind === 'Member' && init.object.kind === 'Ident') {
                 // Field move: let d = obj.field в†’ mark field as moved
-                const objSym = this.lookup(init.object.name);
+                const objSym = this.lookup(init.object.name) as any;
                 const objDef = objSym ? this.classes.get(objSym.ctype) : null;
                 const fieldType = objDef?.fields?.find((f: any) => f.name === init.prop);
                 if (fieldType && this.classes.has(this.resolveType(fieldType.typeAnn ?? {}))) {

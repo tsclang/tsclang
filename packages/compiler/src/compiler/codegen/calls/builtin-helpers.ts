@@ -1,5 +1,6 @@
+import type { CodeGenThis } from '../../codegen.js';
 export default {
-  mathCall(this: any, prop: any, args: any, lines: any, depth: any, node?: any) {
+  mathCall(this: CodeGenThis, prop: any, args: any, lines: any, depth: any, node?: any) {
     const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
     const isFloat = (t: any) => t === 'double' || t === 'float';
@@ -159,7 +160,7 @@ export default {
     return result;
   },
 
-  jsonCall(this: any, prop: any, typeArgs: any, args: any, lines: any, depth: any, node?: any) {
+  jsonCall(this: CodeGenThis, prop: any, typeArgs: any, args: any, lines: any, depth: any, node?: any) {
     if (prop === 'stringify') {
       const arg0 = args[0]?.expr;
       const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
@@ -180,7 +181,7 @@ export default {
     throw this.error(`Unknown JSON method 'JSON.${prop}'`, node);
   },
 
-  labelUsed(this: any, node: any, label: any, kind: any) {
+  labelUsed(this: CodeGenThis, node: any, label: any, kind: any) {
     if (!node || typeof node !== 'object') return false;
     if (node.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && node.label === label) return true;
     if (node.kind === 'Labeled' && node.label === label) return false;
@@ -194,7 +195,7 @@ export default {
     return false;
   },
 
-  isBareLiteralNumber(this: any, expr: any) {
+  isBareLiteralNumber(this: CodeGenThis, expr: any) {
     if (expr.kind === 'Literal' && expr.litType === 'number' &&
         expr.value !== 'NaN' && expr.value !== 'Infinity' &&
         !expr.value.includes('.') && !expr.value.includes('e') && !expr.value.includes('E') &&
@@ -206,7 +207,7 @@ export default {
     return false;
   },
 
-  bareNumberValue(this: any, expr: any) {
+  bareNumberValue(this: CodeGenThis, expr: any) {
     if (expr.kind === 'Literal') {
       return expr.value + '.0';
     }

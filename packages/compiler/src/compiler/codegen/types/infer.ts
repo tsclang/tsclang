@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { inferLiteralCType } from '../../types.js';
 // infer.ts
 export default {
-  inferType(this: any, node: any) {
+  inferType(this: CodeGenThis, node: any) {
     if (!node) return 'double';
     switch (node.kind) {
       case 'Literal':  return inferLiteralCType(node, this._defaultNumber);
@@ -105,7 +106,7 @@ export default {
           const enumDef = this.classes.get(node.object.name);
           if (enumDef?.isEnum) return node.object.name;
           // Struct member access: p.x where p is a struct type
-          const objSym = this.lookup(node.object.name);
+          const objSym = this.lookup(node.object.name) as any;
           if (objSym) {
             const structDef = this.classes.get(objSym.ctype) ?? this.classes.get(objSym.derefType);
             if (structDef?.fields) {
@@ -335,7 +336,7 @@ export default {
     }
   },
 
-  _effectiveType(this: any, node: any) {
+  _effectiveType(this: CodeGenThis, node: any) {
     if (!node) return 'double';
     const dn = this._defaultNumber;
     const floatDefault = dn === 'f64' || dn === 'f32';
@@ -383,14 +384,14 @@ export default {
     }
   },
 
-  _inferCall(this: any, node: any) {
+  _inferCall(this: CodeGenThis, node: any) {
     if (node.callee.kind === 'OptChain') {
       const objType = this.inferType(node.callee.object);
       if (objType?.startsWith('opt_') && node.callee.prop === 'toString') return 'opt_string';
       return 'int32_t';
     }
     if (node.callee.kind === 'Ident') {
-      const sym = this.lookup(node.callee.name);
+      const sym = this.lookup(node.callee.name) as any;
       if (sym?._isStackMacro === 'push') return 'void';
       if (sym?._isStackMacro === 'empty') return 'bool';
       if (sym?._isStackMacro === 'pop') {
@@ -428,7 +429,7 @@ export default {
     }
     if (node.callee.kind === 'Member' && node.callee.prop === 'next') {
       const genObj = node.callee.object;
-      const genSym = genObj.kind === 'Ident' ? this.lookup(genObj.name) : null;
+      const genSym: any = genObj.kind === 'Ident' ? this.lookup(genObj.name) : null;
       if (genSym?._isGenState) return genSym._gi?.resultType ?? genSym._resultType ?? 'int32_t';
     }
     if (node.callee.kind === 'Member') {
@@ -464,7 +465,7 @@ export default {
     return 'int32_t';
   },
 
-  _inferMemberCall(this: any, node: any) {
+  _inferMemberCall(this: CodeGenThis, node: any) {
     const obj = node.callee.object;
     const prop = node.callee.prop;
     if (obj.kind === 'Ident') {
@@ -860,7 +861,7 @@ export default {
       if (ed?.isEnum) return `${obj.name} *`;
     }
     if (node.callee.prop === 'toString' && obj.kind === 'Ident') {
-      const objSym2 = this.lookup(obj.name);
+      const objSym2 = this.lookup(obj.name) as any;
       const objEnumDef = objSym2 ? this.classes.get(objSym2.ctype) : null;
       if (objEnumDef?.isStringLiteralUnion) return 'const char *';
     }
@@ -900,7 +901,7 @@ export default {
     return null;
   },
 
-  inferTypeWithParams(this: any, arrowNode: any, paramCType: any) {
+  inferTypeWithParams(this: CodeGenThis, arrowNode: any, paramCType: any) {
     const hasParams = arrowNode.params?.length > 0;
     if (hasParams) {
       this.pushScope();

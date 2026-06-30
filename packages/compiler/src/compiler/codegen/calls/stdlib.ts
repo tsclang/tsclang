@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_CONSOLE_BAUD } from '@tsclang/shared';
 
 export default {
-  _dispatchStdLib(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdLib(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     let _r;
     _r = this._dispatchStdIo(node, lines, depth);
@@ -37,7 +38,7 @@ export default {
     return null;
   },
 
-  _dispatchStdIo(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdIo(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (this._stdIoImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _ioSym = this.lookup(callee.object.name);
@@ -58,7 +59,7 @@ export default {
     return null;
   },
 
-  _dispatchStdHal(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdHal(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (this._stdHalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _halClass = callee.object.name;
@@ -128,7 +129,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBlob(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdBlob(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _blobSym = this.lookup(callee.object.name);
@@ -168,7 +169,7 @@ export default {
     return null;
   },
 
-  _dispatchStdUrl(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdUrl(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // URL / URLSearchParams method calls
     if (this._stdUrlImported && callee.kind === 'Member') {
@@ -216,7 +217,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSignal(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdSignal(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Signal methods: signal.get(), signal.set(val)
     if (this._stdReactiveImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -344,7 +345,7 @@ export default {
 
         if (callee.name === 'computed') {
           // Signal the VarDecl that the result type is Signal_T (not raw T)
-          this._lastComputedSigType = sigType;
+          this._lastComputedSigType = sigType!;
           this._lastComputedElemType = etIdent;
           return `tsc_computed_${etIdent}(${fnName})`;
         }
@@ -355,7 +356,7 @@ export default {
     return null;
   },
 
-  _dispatchStdWs(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdWs(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // WebSocket methods: ws.send(), ws.close(), ws.onMessage(), ws.onClose(), ws.sendBytes()
     if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -430,7 +431,7 @@ export default {
     return null;
   },
 
-  _dispatchStdNet(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdNet(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // std/net: net.listen(port, handler) / net.connect handled via async
     if (this._stdNetImported && callee.kind === 'Member' &&
@@ -529,7 +530,7 @@ export default {
     return null;
   },
 
-  _dispatchStdFs(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdFs(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // fs namespace: fs.watch(), fs.readFileSync(), fs.writeFileSync(), etc.
     if (this._stdFsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -567,7 +568,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTemporal(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdTemporal(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Temporal static methods: PlainDate.from(), Instant.now(), etc.
     if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -650,7 +651,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBuffer(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdBuffer(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Buffer method calls: buf.fill(), buf.slice()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -676,7 +677,7 @@ export default {
     return null;
   },
 
-  _dispatchStdDataView(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdDataView(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _dvSym = this.lookup(callee.object.name);
@@ -730,7 +731,7 @@ export default {
     return null;
   },
 
-  _dvOp(this: any, _dvName: any, base: any, I: any, dir: any, type: any, le: any, args: any, lines: any, depth: any, _dvSym: any) {
+  _dvOp(this: CodeGenThis, _dvName: any, base: any, I: any, dir: any, type: any, le: any, args: any, lines: any, depth: any, _dvSym: any) {
     const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const ptr = `(${base} + ${_dvIdx})`;
     const sz = ({ U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 } as Record<string, number>)[type];
@@ -796,7 +797,7 @@ export default {
     return `(void)0`;
   },
 
-  _dispatchStdHashMap(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdHashMap(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // HashMap method calls: m.set(), m.get(), m.has(), m.delete()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -834,7 +835,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSet(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdSet(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Set method calls: s.add(), s.has(), s.delete(), s.clear()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -908,7 +909,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTasks(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdTasks(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // Tasks method calls: tasks.add(), tasks.run(), tasks.stop()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -947,7 +948,7 @@ export default {
     return null;
   },
 
-  _dispatchStdRegex(this: any, node: any, lines: any, depth: any) {
+  _dispatchStdRegex(this: CodeGenThis, node: any, lines: any, depth: any) {
     const { callee, args } = node;
     // TscRegex method calls: r.test(), r.match(), r.replace(), r.replaceAll()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {

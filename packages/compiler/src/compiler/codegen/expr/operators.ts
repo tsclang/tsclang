@@ -1,7 +1,8 @@
+import type { CodeGenThis } from '../../codegen.js';
 // operators.ts
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
-  binaryWidened(this: any, node: any, targetCtype: any, lines: any, depth: any) {
+  binaryWidened(this: CodeGenThis, node: any, targetCtype: any, lines: any, depth: any) {
     const widenOperand = (operand: any): any => {
       if (operand.kind === 'Literal' && operand.litType === 'number') {
         return this.literalToCTyped(operand, targetCtype);
@@ -16,7 +17,7 @@ export default {
     return `${lC} ${node.op} ${rC}`;
   },
 
-  binaryToC(this: any, node: any, lines: any, depth: any) {
+  binaryToC(this: CodeGenThis, node: any, lines: any, depth: any) {
     this._checkNoBareThrows(node.left);
     this._checkNoBareThrows(node.right);
     // instanceof: obj instanceof TypeName
@@ -368,7 +369,7 @@ export default {
     return `${l} ${op} ${r}`;
   },
 
-  _hasFloatVar(this: any, node: any) {
+  _hasFloatVar(this: CodeGenThis, node: any) {
     if (!node) return false;
     if (node.kind === 'Literal') return false;
     if (node.kind === 'Ident') {
@@ -381,7 +382,7 @@ export default {
     return t === 'double' || t === 'float';
   },
 
-  isStringExpr(this: any, node: any) {
+  isStringExpr(this: CodeGenThis, node: any) {
     if (node.kind === 'Literal' && (node.litType === 'string' || node.litType === 'char')) return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
@@ -398,7 +399,7 @@ export default {
     return false;
   },
 
-  _derefStringPtr(this: any, node: any, cexpr: any) {
+  _derefStringPtr(this: CodeGenThis, node: any, cexpr: any) {
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype === 'String *') return `(*${cexpr})`;
@@ -406,14 +407,14 @@ export default {
     return cexpr;
   },
 
-  _flattenStringConcat(this: any, node: any) {
+  _flattenStringConcat(this: CodeGenThis, node: any) {
     if (node.kind === 'Binary' && node.op === '+' && this.isStringExpr(node.left)) {
       return [...this._flattenStringConcat(node.left), node.right];
     }
     return [node];
   },
 
-  _stringConcatChain(this: any, operands: any, lines: any, depth: any) {
+  _stringConcatChain(this: CodeGenThis, operands: any, lines: any, depth: any) {
     const I = ' '.repeat(this.indent * depth);
     const parts: any[] = [];
     const temps: any[] = [];
@@ -458,7 +459,7 @@ export default {
   // ----------------------------------------------------------------
   // Unary
   // ----------------------------------------------------------------
-  unaryToC(this: any, node: any, lines: any, depth: any) {
+  unaryToC(this: CodeGenThis, node: any, lines: any, depth: any) {
     this._checkNoBareThrows(node.expr);
     if (node.op === '&' || node.op === '*') {
       if (node.op === '*') {
