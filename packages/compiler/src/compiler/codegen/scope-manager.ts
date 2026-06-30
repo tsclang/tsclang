@@ -1,7 +1,7 @@
 // ScopeManager — encapsulates the symbol table (scope stack).
 // Extracted from Context to reduce god-object coupling.
 
-import type { SymbolInfo } from '../ast-types/symbol.js';
+import type { SymbolInfo } from '@tsclang/ast';
 
 export class ScopeManager {
   scopes: Map<string, SymbolInfo>[];

@@ -1,6 +1,6 @@
 // Context base interface for declaration merging.
 
-import type { SymbolInfo } from './symbol.js';
+import type { SymbolInfo } from '@tsclang/ast';
 
 export interface Context {
   // Core properties (constructor-initialized in codegen.ts)

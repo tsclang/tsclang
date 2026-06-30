@@ -2,7 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { compileTsc } from '../../compiler/compile.js';
+import { compileTsc } from '@tsclang/compiler';
 import { getPositionalAfter, isValidOptimizeLevel } from '../args.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 

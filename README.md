@@ -148,15 +148,17 @@ npm run test:engine       # on-the-fly generated tests
 ### Run compiler from source
 
 ```bash
-npx tsx packages/compiler/src/index.ts --version
-npx tsx packages/compiler/src/index.ts run hello.tsc
+npx tsx packages/cli/src/index.ts --version
+npx tsx packages/cli/src/index.ts run hello.tsc
 ```
 
 ### Repository structure
 
 ```
 packages/
-  compiler/      # TypeScript-like compiler (.tsc → C)
+  ast/           # Pure AST/token/symbol type definitions (@tsclang/ast)
+  compiler/      # Compiler core library: lexer, parser, codegen, runtime (.tsc → C)
+  cli/           # CLI binary: dispatcher, commands, LSP
   spec/          # Language specification + book/
   tests/         # Static tests (test/runner.ts + test/cases/)
   test-engine/   # On-the-fly test generator

@@ -1,4 +1,4 @@
-import { explainError, ERROR_CATALOG } from '../../compiler/error-catalog.js';
+import { explainError, ERROR_CATALOG } from '@tsclang/compiler';
 
 export function runExplainCommand(args: string[]): void {
   const code = args[1];

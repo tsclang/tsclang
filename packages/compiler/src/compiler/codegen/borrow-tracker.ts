@@ -1,7 +1,7 @@
 // BorrowTracker — encapsulates borrow checking state.
 // Extracted from Context to reduce god-object coupling.
 
-import type { SymbolInfo } from '../ast-types/symbol.js';
+import type { SymbolInfo } from '@tsclang/ast';
 import type { ScopeManager } from './scope-manager.js';
 
 export class BorrowTracker {

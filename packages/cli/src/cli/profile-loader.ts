@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join, dirname, resolve } from "path";
-import { parsePlatformDecl } from "../compiler/profile.js";
+import { parsePlatformDecl } from '@tsclang/compiler';
 
 export interface Capabilities {
   target?: string;

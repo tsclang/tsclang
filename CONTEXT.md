@@ -7,10 +7,11 @@
 ## 1. TL;DR
 
 **TSClang** = TypeScript-like language (`.tsc`) compiled to C. Stack: Node.js ESM.
-- **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). `strict: true`, ZERO @ts-nocheck.
+- **Monorepo (npm workspaces):** `@tsclang/ast` (pure AST/token/symbol types) · `@tsclang/compiler` (core library: lexer→parser→codegen→C + runtime + profiles) · `@tsclang/cli` (binary: dispatcher + commands + LSP) · `@tsclang/tests` / `@tsclang/test-engine` · `@tsclang/spec`
+- **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
-- **CLI:** `packages/compiler/src/index.ts` → `packages/compiler/src/cli/commands/*.ts`
-- **Tests:** 1764 spec-based tests (`--no-gcc`) + 127 engine tests
+- **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
+- **Tests:** 1764 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -138,6 +139,9 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
 - **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
 - **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
+- **Package model (monorepo).** `@tsclang/compiler` `exports` splits `types`→`dist/*.d.ts` (for tsc of consumers) and `default`→`src/index.ts` (for tsx runtime). Editing compiler source needs NO rebuild for tsx tests; run `npm run build` only to refresh declarations consumed by `@tsclang/cli` / `@tsclang/test-engine` typecheck.
+- **CLI runtime root.** `packages/cli/src/index.ts` resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
+- **KNOWN: `npm test -w` cwd bug (test-engine).** `npm run test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `npx tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
 
 ---
 
@@ -159,15 +163,15 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 | Fix async codegen | `async/scan.ts` + `async/async-stmt.ts` + `async/async-emit.ts` |
 | Add test | `packages/tests/test/cases/<NN>/<feature>/<name>/` |
 | Run tests | `npx tsx packages/tests/test/runner.ts 03-types` |
-| Compile manually | `npx tsx packages/compiler/src/index.ts build input.tsc --outDir .tsclang-tmp/` |
+| Compile manually | `npx tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/` |
 
 ---
 
 ## 11. CLI Architecture
 
-`packages/compiler/src/index.ts` — 94-line dispatcher. Commands: build, run, test, init, lint, format, explain, emit-dts, validate-config, install, update, search, publish, lsp.
+`packages/cli/src/index.ts` — slim dispatcher (lives in `@tsclang/cli`, separate from the compiler library). Resolves `COMPILER_ROOT` via `require.resolve('@tsclang/compiler')` to locate `runtime/`+`profiles/` (those stay in the compiler package). Commands: build, run, test, init, lint, format, explain, emit-dts, validate-config, install, update, search, publish, lsp.
 
-Module map: `cli/args.ts`, `cli/help.ts`, `cli/helpers.ts`, `cli/registry.ts`, `cli/config-validator.ts`, `cli/profile-loader.ts`, `cli/cmake.ts`, `semver.ts`, `cli/commands/*.ts`.
+Module map (all under `packages/cli/src/cli/`): `args.ts`, `help.ts`, `helpers.ts`, `registry.ts`, `config-validator.ts`, `profile-loader.ts`, `cmake.ts`, `semver.ts` (top-level `src/`), `formatter.ts` (top-level `src/`), `types/` (package-type, emit), `cli/commands/*.ts`, `lsp/server.ts`.
 
 ---
 

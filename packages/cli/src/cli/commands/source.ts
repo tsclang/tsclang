@@ -1,9 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, basename, extname, dirname, join } from 'path';
-import { lex } from '../../compiler/lexer.js';
-import { parse } from '../../compiler/parser.js';
-import { lint, applyFixes } from '../../compiler/linter.js';
-import { emitDtsSync } from '../../compiler/dts-emitter.js';
+import { lex, parse, lint, applyFixes, emitDtsSync } from '@tsclang/compiler';
 import { hasFlag, getPositional } from '../args.js';
 import { missingInput, reportErrors } from '../helpers.js';
 

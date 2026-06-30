@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
-import { renderDiagnostic } from '../compiler/error.js';
-import type { TscError } from '../compiler/error.js';
+import { renderDiagnostic } from '@tsclang/compiler';
+import type { TscError } from '@tsclang/compiler';
 
 export function missingInput(cmd: string): never {
   process.stderr.write(`tsclang ${cmd}: missing input file\n\nUsage: tsclang ${cmd} <input.tsc> [options]\nRun 'tsclang ${cmd} --help' for details.\n`);

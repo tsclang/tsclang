@@ -7,17 +7,19 @@
     "node": ">=18.0.0"
   },
   "workspaces": [
+    "packages/ast",
     "packages/compiler",
+    "packages/cli",
     "packages/spec",
     "packages/tests",
     "packages/test-engine"
   ],
   "scripts": {
-    "build": "npm run build -w @tsclang/compiler",
+    "build": "npm run build -w @tsclang/ast && npm run build -w @tsclang/compiler",
     "typecheck": "npm run typecheck -w @tsclang/compiler",
     "test": "npm test -w @tsclang/tests",
     "test:engine": "npm test -w @tsclang/test-engine",
-    "tsclang": "node packages/compiler/dist/index.js"
+    "tsclang": "tsx packages/cli/src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

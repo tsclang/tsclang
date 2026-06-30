@@ -2,7 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync, readdirSync, existsSync } from 'fs'
 import { join, resolve, basename } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { compileTsc } from '../../compiler/compile.js';
+import { compileTsc } from '@tsclang/compiler';
 
 function findTestFiles(dir: string): string[] {
   const files: string[] = [];

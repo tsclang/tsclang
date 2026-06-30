@@ -9,9 +9,7 @@ import { spawn, spawnSync } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { parsePlatformDecl } from '../../compiler/src/compiler/profile.js';
-import { compileTsc } from '../../compiler/src/compiler/compile.js';
-import { renderDiagnostic } from '../../compiler/src/compiler/error.js';
+import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');

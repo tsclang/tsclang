@@ -109,7 +109,7 @@ npx tsx packages/tests/test/runner.ts 04-ownership  # только 04-ownership
 npx tsx packages/tests/test/runner.ts --no-gcc      # только C-compare, без компиляции
 npx tsx packages/tests/test/runner.ts --verbose     # показывать diff при провале
 npm run typecheck                           # проверить типы (tsc --noEmit)
-npm run build                               # собрать компилятор в packages/compiler/dist/
+npm run build                               # собрать @tsclang/ast + декларации компилятора (dist/*.d.ts)
 npm run test:engine                         # запуск генератора тестов на лету
 ```
 
@@ -124,13 +124,13 @@ npm run test:engine                         # запуск генератора 
 При ручном запуске `tsclang build` ВСЕГДА указывай `--outDir` во временную папку:
 
 ```bash
-npx tsx packages/compiler/src/index.ts build input.tsc --outDir .tsclang-tmp/
+npx tsx packages/cli/src/index.ts build input.tsc --outDir .tsclang-tmp/
 ```
 
 Или используй программный API вместо CLI:
 
 ```js
-import { codegen } from './packages/compiler/src/compiler/codegen.ts';
+import { codegen } from '@tsclang/compiler';
 const result = codegen(ast, 'desktop');
 // result.c — C-код как строка
 ```
