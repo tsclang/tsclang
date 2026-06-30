@@ -10,7 +10,7 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ } from '@tsclang/shared';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from '@tsclang/shared';
 import { normalizeC, toWslPath } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -270,7 +270,7 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
     cFile, '-o', elfFile,
     '-I', incDir,
     `-mmcu=${DEFAULT_AVR_MCU}`, C_STANDARD_FLAG, '-Os',
-    '-DTSC_EMBEDDED',
+    `-D${TSC_DEFINES.EMBEDDED}`,
     ...defines,
     '-Wl,-u,vfprintf', '-lprintf_flt',
   ];
@@ -282,7 +282,7 @@ async function avrGccCompile(cFile, elfFile, defines = []) {
     const tmpOut = `/tmp/tsclang_${Date.now()}.elf`;
     const cpResult = await runWsl(`cp ${wSrc} ${tmpSrc}`);
     if (cpResult.code !== 0) return cpResult;
-    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=${DEFAULT_AVR_MCU} ${C_STANDARD_FLAG} -Os -DTSC_EMBEDDED ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
+    const result = await runWsl(`avr-gcc ${tmpSrc} -o ${tmpOut} -I ${wInc} -mmcu=${DEFAULT_AVR_MCU} ${C_STANDARD_FLAG} -Os -D${TSC_DEFINES.EMBEDDED} ${defines.join(' ')} -Wl,-u,vfprintf -lprintf_flt`);
     if (result.code === 0) {
       await runWsl(`cp ${tmpOut} ${wOut}`);
     }
@@ -523,7 +523,7 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
     if (flagNoGcc) return pass(testDir);
     // [F]: verify C compiles (skip if external libs required)
     const cSrc = await readFile(generatedC, 'utf8');
-    if (cSrc.includes('#define TSC_SCHEDULER_LIBUV')) return pass(testDir);
+    if (cSrc.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) return pass(testDir);
     if (!await checkGcc()) return { status: 'skip', testDir, reason: 'gcc not found' };
     const gccCheck = await gccCompile(generatedC, join(tmpBase, 'frag_bin'));
     if (gccCheck.code !== 0) return fail(testDir, 'gcc', 'C does not compile', gccCheck.stderr);

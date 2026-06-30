@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ } from "@tsclang/shared"
+import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from "@tsclang/shared"
 import { isInPath, isInWsl, wslExec, toWslPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
@@ -25,7 +25,7 @@ export class AvrGccBackend implements CompilerBackend {
 
     writeFileSync(cPath, cCode, "utf8")
 
-    const defines = ["-DTSC_EMBEDDED", "-DTSC_NO_POSIX", "-DTSC_NO_STRTOLL", ...(opts?.defines ?? [])]
+    const defines = [`-D${TSC_DEFINES.EMBEDDED}`, `-D${TSC_DEFINES.NO_POSIX}`, `-D${TSC_DEFINES.NO_STRTOLL}`, ...(opts?.defines ?? [])]
     const args = [`-mmcu=${this.mcu}`, "-Os", C_STANDARD_FLAG, ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
     if (opts?.includes) {
       for (const inc of opts.includes) args.splice(-2, 0, `-I${inc}`)

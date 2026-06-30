@@ -15,3 +15,11 @@ export const DEFAULT_AVR_MCU = 'atmega328p';
 export const DEFAULT_AVR_FREQ = 16000000;
 
 export const DEFAULT_CONSOLE_BAUD = 9600;
+
+export const TSC_DEFINES = {
+  EMBEDDED: 'TSC_EMBEDDED',
+  WASM: 'TSC_WASM',
+  SCHEDULER_LIBUV: 'TSC_SCHEDULER_LIBUV',
+  NO_POSIX: 'TSC_NO_POSIX',
+  NO_STRTOLL: 'TSC_NO_STRTOLL',
+} as const;

@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { C_STANDARD_FLAG, GCC_LINK_FLAGS } from "@tsclang/shared"
+import { C_STANDARD_FLAG, GCC_LINK_FLAGS, TSC_DEFINES } from "@tsclang/shared"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 export class ClangBackend implements CompilerBackend {
@@ -31,7 +31,7 @@ export class ClangBackend implements CompilerBackend {
     if (opts?.debug) args.push("-g")
     if (opts?.extraFlags) args.push(...opts.extraFlags)
 
-    const isEmbedded = opts?.defines?.includes("TSC_EMBEDDED") ?? false
+    const isEmbedded = opts?.defines?.includes(TSC_DEFINES.EMBEDDED) ?? false
     if (!isEmbedded) args.push(...GCC_LINK_FLAGS)
 
     const result = spawnSync("clang", args, { stdio: "pipe", shell: true })

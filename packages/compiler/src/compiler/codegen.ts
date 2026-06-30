@@ -9,7 +9,7 @@ import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
 import { TypeChecker } from './typechecker.js';
-import { RUNTIME_HEADER, RUNTIME_WASM_HEADER } from '@tsclang/shared';
+import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES } from '@tsclang/shared';
 
 const WASM_BARE_TARGET = 'wasm';
 
@@ -871,7 +871,7 @@ class Context {
     if (this._hasExplicitMain && this._explicitMainThrows) {
       _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes);
     }
-    if (this._asyncName === 'libuv') parts.push('#define TSC_SCHEDULER_LIBUV');
+    if (this._asyncName === 'libuv') parts.push(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
     parts.push(...[...this.includes].sort());
     parts.push('');
     _pushSection(this.typedefs, parts);

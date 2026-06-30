@@ -1,4 +1,6 @@
 // helpers.ts
+import { TSC_DEFINES } from '@tsclang/shared';
+
 const _RUNTIME_ET = new Set(['i32', 'f64', 'string']);
 const _RUNTIME_MAP = new Set(['i32_i32', 'i32_f64', 'f64_f64', 'string_string']);
 const _RUNTIME_FLATMAP = new Set(['i32_i32', 'f64_f64', 'string_string']);
@@ -259,7 +261,7 @@ export default {
     this.addTop('static inline bool tsc_unknown_get_bool(const tsc_unknown *self) { bool v; memcpy(&v, self->buffer, sizeof(v)); return v; }');
     this.addTop('static inline tsc_unknown tsc_unknown_from_char(char v) { tsc_unknown u = {.type_id = 16, .vtable = &_tsc_vt_char}; memcpy(u.buffer, &v, sizeof(v)); return u; }');
     this.addTop('static inline char tsc_unknown_get_char(const tsc_unknown *self) { char v; memcpy(&v, self->buffer, sizeof(v)); return v; }');
-    this.addTop('#ifdef TSC_EMBEDDED');
+    this.addTop(`#ifdef ${TSC_DEFINES.EMBEDDED}`);
     this.addTop('static void _tsc_unknown_drop_string(void *buf) { (void)buf; }');
     this.addTop('static void _tsc_unknown_clone_string(const void *src, void *dst) { memcpy(dst, src, sizeof(String)); }');
     this.addTop('static const tsc_unknown_vtable _tsc_vt_string = {_tsc_unknown_drop_string, _tsc_unknown_clone_string};');

@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -260,7 +260,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const cmakePath = join(outDir, 'CMakeLists.txt');
       if (!existsSync(cmakePath)) {
         const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
-        const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
+        const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
         const cmakeContent = generateBuildCmake({
           stem,
           runtimeDir: dirname(runtimeH),
@@ -274,7 +274,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const runtimeH = join(ROOT, 'src/runtime', RUNTIME_HEADER);
       const binPath = join(outDir, stem);
       const gccOptimize = optimize ? [`-${optimize}`] : [];
-      const useLibuv = c.includes('#define TSC_SCHEDULER_LIBUV');
+      const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
       const gcc = spawnSync('gcc', [
         cPath, '-o', binPath,
         '-I', dirname(runtimeH),
@@ -304,7 +304,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         '-I', dirname(runtimeH),
         '-sWASM=1',
         '-sSTANDALONE_WASM=1',
-        '-DTSC_WASM',
+        `-D${TSC_DEFINES.WASM}`,
         ...emccOpts,
         ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
@@ -331,7 +331,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         '-I', dirname(runtimeH),
         `-mmcu=${mcu}`,
         C_STANDARD_FLAG,
-        '-DTSC_EMBEDDED',
+        `-D${TSC_DEFINES.EMBEDDED}`,
         ...gccOptimize,
         ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
