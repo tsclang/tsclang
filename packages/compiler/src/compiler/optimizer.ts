@@ -5,54 +5,68 @@
 //   Phase 3: eliminate consts that have zero refs outside their own init
 //   Phase 4: dead branch elimination (if(false)/if(true))
 
+import type {
+  Program, Stmt, Expression, Literal, BaseNode,
+  VarDecl, Return, ExprStmt, If, Block, While, For,
+  ClassDecl, ClassMember, Method, Ident,
+} from '@tsclang/ast';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function numLit(value: any) {
+function numLit(value: number): Literal {
   return { kind: 'Literal', litType: 'number', value: String(value) };
 }
 
-function boolLit(value: any) {
+function boolLit(value: boolean): Literal {
   return { kind: 'Literal', litType: 'bool', value: value ? 'true' : 'false' };
 }
 
-function isNumLit(node: any) {
-  return node?.kind === 'Literal' && node.litType === 'number';
+function isNumLit(node: unknown): node is Literal {
+  return node != null && typeof node === 'object' &&
+    (node as BaseNode).kind === 'Literal' &&
+    (node as Literal).litType === 'number';
 }
 
-function isBoolLit(node: any) {
-  return node?.kind === 'Literal' && node.litType === 'bool';
+function isBoolLit(node: unknown): node is Literal {
+  return node != null && typeof node === 'object' &&
+    (node as BaseNode).kind === 'Literal' &&
+    (node as Literal).litType === 'bool';
 }
 
-function isLit(node: any) {
-  return node?.kind === 'Literal';
+function isLit(node: unknown): node is Literal {
+  return node != null && typeof node === 'object' &&
+    (node as BaseNode).kind === 'Literal';
 }
 
-function isPowerOf2(n: any) {
+function isPowerOf2(n: number): boolean {
   return n > 0 && (n & (n - 1)) === 0;
 }
 
 // Unwrap Export wrapper → inner decl
-function innerDecl(s: any) {
-  return s?.kind === 'Export' ? s.decl : s;
+function innerDecl(s: Stmt | undefined | null): Stmt | undefined {
+  return s != null && (s as BaseNode).kind === 'Export'
+    ? (s as { decl: Stmt }).decl
+    : (s ?? undefined);
 }
 
 // ---------------------------------------------------------------------------
 // Phase 1: fold constant expressions (bottom-up, in-place clone)
 // ---------------------------------------------------------------------------
 
-function foldExpr(node: any): any {
+function foldExpr(node: unknown): unknown {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(foldExpr);
 
-  const out: any = {};
-  for (const k of Object.keys(node)) {
-    out[k] = k === 'parent' ? node[k] : foldExpr(node[k]);
+  const src = node as Record<string, any>;
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(src)) {
+    out[k] = k === 'parent' ? src[k] : foldExpr(src[k]);
   }
 
   if (out.kind === 'Binary') {
-    const { left, right, op } = out;
+    const { left, right, op } = out as { op: string; left: Expression; right: Expression };
     if (isNumLit(left) && isNumLit(right)) {
       const l = Number(left.value);
       const r = Number(right.value);
@@ -97,8 +111,8 @@ function foldExpr(node: any): any {
   }
 
   if (out.kind === 'Unary') {
-    const { op } = out;
-    const operand = out.operand ?? out.expr;
+    const op: string = out.op;
+    const operand: Expression | undefined = out.operand ?? out.expr;
     if (isNumLit(operand)) {
       if (op === '-') return numLit(-Number(operand.value));
       if (op === '+') return numLit(+Number(operand.value));
@@ -111,20 +125,28 @@ function foldExpr(node: any): any {
   return out;
 }
 
+// Internal shape used for narrowing in foldExpr
+interface Binary { op: string; left: Expression; right: Expression; }
+
 // Apply foldExpr to every VarDecl init in a stmt list (non-recursive into functions).
-function foldInits(stmts: any) {
-  return stmts.map((s: any) => {
+function foldInits(stmts: Stmt[]): Stmt[] {
+  return stmts.map((s: Stmt): Stmt => {
     const decl = innerDecl(s);
-    if (decl?.kind === 'VarDecl' && decl.init) {
-      const newInit = foldExpr(decl.init);
-      const newDecl = { ...decl, init: newInit };
-      return decl === s ? newDecl : { ...s, decl: newDecl };
+    if (decl && (decl as BaseNode).kind === 'VarDecl') {
+      const vd = decl as VarDecl;
+      if (vd.init) {
+        const newInit = foldExpr(vd.init) as Expression;
+        const newDecl: VarDecl = { ...vd, init: newInit };
+        return decl === s ? newDecl : { ...(s as object), decl: newDecl } as unknown as Stmt;
+      }
     }
-    if (s?.kind === 'Return' && s.value) {
-      return { ...s, value: foldExpr(s.value) };
+    if ((s as BaseNode).kind === 'Return') {
+      const r = s as Return;
+      if (r.value) return { ...r, value: foldExpr(r.value) as Expression } as Stmt;
     }
-    if (s?.kind === 'ExprStmt' && s.expr) {
-      return { ...s, expr: foldExpr(s.expr) };
+    if ((s as BaseNode).kind === 'ExprStmt') {
+      const e = s as ExprStmt;
+      return { ...e, expr: foldExpr(e.expr) as Expression } as Stmt;
     }
     return s;
   });
@@ -134,29 +156,32 @@ function foldInits(stmts: any) {
 // Phase 2: propagate const literals into OTHER const initializers only
 // ---------------------------------------------------------------------------
 
-function substInExpr(node: any, constMap: any): any {
+function substInExpr(node: unknown, constMap: Map<string, Literal>): unknown {
   if (!node || typeof node !== 'object') return node;
-  if (Array.isArray(node)) return node.map((n: any) => substInExpr(n, constMap));
-  if (node.kind === 'Ident' && constMap.has(node.name)) {
-    return { ...constMap.get(node.name) };
+  if (Array.isArray(node)) return node.map(n => substInExpr(n, constMap));
+  const src = node as Record<string, any>;
+  if (src.kind === 'Ident' && constMap.has(src.name)) {
+    return { ...constMap.get(src.name)! };
   }
-  const out: any = {};
-  for (const k of Object.keys(node)) {
-    out[k] = k === 'parent' ? node[k] : substInExpr(node[k], constMap);
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(src)) {
+    out[k] = k === 'parent' ? src[k] : substInExpr(src[k], constMap);
   }
   return out;
 }
 
-function propagateConstToConst(stmts: any) {
-  const constMap = new Map(); // name → Literal (only literal-valued consts)
-  return stmts.map((s: any) => {
+function propagateConstToConst(stmts: Stmt[]): Stmt[] {
+  const constMap = new Map<string, Literal>();
+  return stmts.map((s: Stmt): Stmt => {
     const decl = innerDecl(s);
-    if (decl?.kind === 'VarDecl' && decl.varKind === 'const' && decl.init) {
-      // Substitute previously known consts into this init, then fold
-      const newInit = foldExpr(substInExpr(decl.init, constMap));
-      if (isLit(newInit)) constMap.set(decl.name, newInit);
-      const newDecl = { ...decl, init: newInit };
-      return decl === s ? newDecl : { ...s, decl: newDecl };
+    if (decl && (decl as BaseNode).kind === 'VarDecl') {
+      const vd = decl as VarDecl;
+      if (vd.varKind === 'const' && vd.init) {
+        const newInit = foldExpr(substInExpr(vd.init, constMap)) as Expression;
+        if (isLit(newInit)) constMap.set(vd.name, newInit);
+        const newDecl: VarDecl = { ...vd, init: newInit };
+        return decl === s ? newDecl : { ...(s as object), decl: newDecl } as unknown as Stmt;
+      }
     }
     return s;
   });
@@ -166,42 +191,48 @@ function propagateConstToConst(stmts: any) {
 // Phase 3: eliminate consts with zero refs outside their own init
 // ---------------------------------------------------------------------------
 
-function countIdents(node: any, counts: any) {
+function countIdents(node: unknown, counts: Map<string, number>): void {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) { node.forEach(n => countIdents(n, counts)); return; }
-  if (node.kind === 'Ident') {
-    counts.set(node.name, (counts.get(node.name) ?? 0) + 1);
+  const n = node as BaseNode;
+  if (n.kind === 'Ident') {
+    const ident = n as unknown as Ident;
+    counts.set(ident.name, (counts.get(ident.name) ?? 0) + 1);
     return;
   }
-  for (const k of Object.keys(node)) {
-    if (k !== 'parent') countIdents(node[k], counts);
+  for (const k of Object.keys(node as object)) {
+    if (k !== 'parent') countIdents((node as Record<string, unknown>)[k], counts);
   }
 }
 
-function eliminateUnusedConsts(stmts: any) {
-  // Count refs in: non-VarDecl stmts + VarDecl inits of non-const decls
-  const refs = new Map();
+function eliminateUnusedConsts(stmts: Stmt[]): Stmt[] {
+  const refs = new Map<string, number>();
   for (const s of stmts) {
     const decl = innerDecl(s);
-    if (decl?.kind === 'VarDecl') {
-      if (decl.varKind !== 'const' && decl.init) countIdents(decl.init, refs);
+    if (decl && (decl as BaseNode).kind === 'VarDecl') {
+      const vd = decl as VarDecl;
+      if (vd.varKind !== 'const' && vd.init) countIdents(vd.init, refs);
     } else {
       countIdents(s, refs);
     }
   }
-  // Also count refs in const inits that are NOT fully resolved (not a literal),
-  // because those chains still depend on earlier consts.
   for (const s of stmts) {
     const decl = innerDecl(s);
-    if (decl?.kind === 'VarDecl' && decl.varKind === 'const' && decl.init && !isLit(decl.init)) {
-      countIdents(decl.init, refs);
+    if (decl && (decl as BaseNode).kind === 'VarDecl') {
+      const vd = decl as VarDecl;
+      if (vd.varKind === 'const' && vd.init && !isLit(vd.init)) {
+        countIdents(vd.init, refs);
+      }
     }
   }
 
-  return stmts.filter((s: any) => {
+  return stmts.filter((s: Stmt) => {
     const decl = innerDecl(s);
-    if (decl?.kind === 'VarDecl' && decl.varKind === 'const' && isLit(decl.init)) {
-      return (refs.get(decl.name) ?? 0) > 0;
+    if (decl && (decl as BaseNode).kind === 'VarDecl') {
+      const vd = decl as VarDecl;
+      if (vd.varKind === 'const' && isLit(vd.init)) {
+        return (refs.get(vd.name) ?? 0) > 0;
+      }
     }
     return true;
   });
@@ -211,61 +242,67 @@ function eliminateUnusedConsts(stmts: any) {
 // Phase 4: dead branch elimination
 // ---------------------------------------------------------------------------
 
-function deadBranches(stmts: any): any {
-  const out: any[] = [];
+function deadBranches(stmts: Stmt[]): Stmt[] {
+  const out: Stmt[] = [];
   for (const s of stmts) {
-    if (s?.kind === 'If') {
-      const test = foldExpr(s.test);
+    const kind = (s as BaseNode).kind;
+    if (kind === 'If') {
+      const ifNode = s as If;
+      const test = foldExpr(ifNode.test) as Expression;
       if (isBoolLit(test)) {
         if (test.value === 'false') {
-          // Dropped; check alternate
-          if (s.alternate) {
-            const alt: any = s.alternate?.kind === 'Block'
-              ? deadBranches(s.alternate.body)
-              : deadBranches([s.alternate]);
+          if (ifNode.alternate) {
+            const altKind = (ifNode.alternate as BaseNode).kind;
+            const alt: Stmt[] = altKind === 'Block'
+              ? deadBranches((ifNode.alternate as Block).body)
+              : deadBranches([ifNode.alternate]);
             out.push(...alt);
           }
           continue;
         } else {
-          // Keep consequent body only
-          const body: any = s.consequent?.kind === 'Block'
-            ? deadBranches(s.consequent.body)
-            : deadBranches([s.consequent]);
+          const consKind = (ifNode.consequent as BaseNode).kind;
+          const body: Stmt[] = consKind === 'Block'
+            ? deadBranches((ifNode.consequent as Block).body)
+            : deadBranches([ifNode.consequent]);
           out.push(...body);
           const last = body[body.length - 1];
-          if (last?.kind === 'Return' || last?.kind === 'Throw' || last?.kind === 'Break' || last?.kind === 'Continue') break;
+          const lastKind = last ? (last as BaseNode).kind : '';
+          if (lastKind === 'Return' || lastKind === 'Throw' || lastKind === 'Break' || lastKind === 'Continue') break;
           continue;
         }
       }
-      // Non-constant condition: recurse
+      const consKind = (ifNode.consequent as BaseNode).kind;
+      const altKind = ifNode.alternate ? (ifNode.alternate as BaseNode).kind : '';
       out.push({
-        ...s,
+        ...ifNode,
         test,
-        consequent: s.consequent?.kind === 'Block'
-          ? { ...s.consequent, body: deadBranches(s.consequent.body) }
-          : s.consequent,
-        alternate: s.alternate?.kind === 'Block'
-          ? { ...s.alternate, body: deadBranches(s.alternate.body) }
-          : s.alternate
-            ? (deadBranches([s.alternate])[0] ?? null)
-            : null,
-      });
+        consequent: consKind === 'Block'
+          ? { ...(ifNode.consequent as object), body: deadBranches((ifNode.consequent as Block).body) }
+          : ifNode.consequent,
+        alternate: ifNode.alternate
+          ? (altKind === 'Block'
+              ? { ...(ifNode.alternate as object), body: deadBranches((ifNode.alternate as Block).body) }
+              : (deadBranches([ifNode.alternate])[0] ?? null))
+          : null,
+      } as unknown as If);
       continue;
     }
-    if (s?.kind === 'Block') {
-      out.push({ ...s, body: deadBranches(s.body) });
+    if (kind === 'Block') {
+      const block = s as Block;
+      out.push({ ...block, body: deadBranches(block.body) } as Block);
       continue;
     }
-    if (s?.kind === 'While' || s?.kind === 'For') {
-      const body: any = s.body?.kind === 'Block'
-        ? { ...s.body, body: deadBranches(s.body.body) }
-        : s.body;
-      out.push({ ...s, body });
+    if (kind === 'While' || kind === 'For') {
+      const loop = s as While | For;
+      const bodyKind = (loop.body as BaseNode).kind;
+      const body: Stmt = bodyKind === 'Block'
+        ? { ...(loop.body as object), body: deadBranches((loop.body as Block).body) } as unknown as Stmt
+        : loop.body;
+      out.push({ ...loop, body } as unknown as While | For);
       continue;
     }
     out.push(s);
-    // Remove unreachable code after terminator
-    if (s?.kind === 'Return' || s?.kind === 'Throw' || s?.kind === 'Break' || s?.kind === 'Continue') break;
+    if (kind === 'Return' || kind === 'Throw' || kind === 'Break' || kind === 'Continue') break;
   }
   return out;
 }
@@ -274,7 +311,7 @@ function deadBranches(stmts: any): any {
 // Apply all four phases to a function/method body's statement list
 // ---------------------------------------------------------------------------
 
-function optimizeBody(stmts: any) {
+function optimizeBody(stmts: Stmt[]): Stmt[] {
   let s = foldInits(stmts);
   s = propagateConstToConst(s);
   s = eliminateUnusedConsts(s);
@@ -283,22 +320,32 @@ function optimizeBody(stmts: any) {
 }
 
 // Recursively apply to function/class bodies
-function optimizeNode(node: any): any {
-  if (!node || typeof node !== 'object') return node;
-  if (Array.isArray(node)) return node.map(optimizeNode);
+// At runtime, FuncDecl/Method body is a Block node from parseBlock(),
+// even though AST types declare it as Stmt[]. This captures the real shape.
+interface BlockBody { kind: 'Block'; body: Stmt[] }
 
-  if ((node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') && node.body?.kind === 'Block') {
-    return { ...node, body: { ...node.body, body: optimizeBody(node.body.body).map(optimizeNode) } };
+function optimizeNode(node: Stmt): Stmt {
+  const kind = (node as BaseNode).kind;
+
+  if (kind === 'FuncDecl' || kind === 'ArrowFunc') {
+    const fn = node as BaseNode & Record<string, unknown>;
+    const body = fn.body as BlockBody | undefined;
+    if (body?.kind === 'Block') {
+      return { ...fn, body: { ...body, body: optimizeBody(body.body).map(optimizeNode) } } as unknown as Stmt;
+    }
   }
 
-  if (node.kind === 'ClassDecl') {
-    const members = (node.members ?? []).map((m: any) => {
-      if (m.kind === 'Method' && m.body?.kind === 'Block') {
-        return { ...m, body: { ...m.body, body: optimizeBody(m.body.body).map(optimizeNode) } };
+  if (kind === 'ClassDecl') {
+    const cls = node as ClassDecl;
+    const members = (cls.members ?? []).map((m: ClassMember) => {
+      if (m.kind !== 'Method') return m;
+      const mbody = m.body as unknown as BlockBody | undefined;
+      if (mbody?.kind === 'Block') {
+        return { ...m, body: { ...mbody, body: optimizeBody(mbody.body).map(optimizeNode) } } as unknown as Method;
       }
       return m;
     });
-    return { ...node, members };
+    return { ...cls, members } as ClassDecl;
   }
 
   return node;
@@ -308,7 +355,7 @@ function optimizeNode(node: any): any {
 // Entry point
 // ---------------------------------------------------------------------------
 
-export function optimize(ast: any) {
+export function optimize(ast: Program): Program {
   let body = optimizeBody(ast.body);
   body = body.map(optimizeNode);
   return { ...ast, body };
