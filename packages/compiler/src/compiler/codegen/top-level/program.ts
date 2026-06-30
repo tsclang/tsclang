@@ -1,11 +1,12 @@
 // program.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
+import type { Program } from '@tsclang/ast';
 export default {
-  visitProgram(this: any, ast: any) {
+  visitProgram(this: any, ast: Program) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
     this._fromEntriesConsumed = new Map();
     for (const node of ast.body) {
-      const stmt = node.kind === 'Export' ? node.decl : node;
+      const stmt: any = node.kind === 'Export' ? node.decl : node;
       if (stmt?.kind === 'VarDecl' &&
           stmt.init?.kind === 'Call' &&
           stmt.init.callee?.kind === 'Member' &&
@@ -281,7 +282,7 @@ export default {
     {
       const _hmDecls = new Map(); // varName → capacityNum
       for (const node of ast.body) {
-        const n = node.kind === 'Export' ? node.decl : node;
+        const n: any = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'VarDecl' && n.init?.kind === 'New' && n.init.name === 'HashMap') {
           const capLit = n.init.args?.[0]?.expr;
           const capNum = capLit?.litType === 'number' ? parseInt(capLit.value) : 0;

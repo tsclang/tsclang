@@ -1,6 +1,7 @@
 // stmt.ts
+import type { Stmt, Block } from '@tsclang/ast';
 export default {
-  visitBlock(this: any, block: any, lines: any, depth: any) {
+  visitBlock(this: any, block: Block, lines: any, depth: any) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
     const blockPoolVars: any[] = [];
@@ -58,7 +59,7 @@ export default {
     for (const l of lines) this.mainStmts.push(l);
   },
 
-  visitStmt(this: any, node: any, lines: any, depth: any) {
+  visitStmt(this: any, node: Stmt, lines: any, depth: any) {
     this._currentNode = node;
     if (!node) return;
 
@@ -95,7 +96,7 @@ export default {
     }
   },
 
-  visitStmtOrBlock(this: any, node: any, lines: any, depth: any) {
+  visitStmtOrBlock(this: any, node: Stmt, lines: any, depth: any) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
   },

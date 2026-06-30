@@ -108,11 +108,14 @@ export interface TypeFixedArray extends BaseNode {
 
 export interface Param {
   name: string;
-  typeAnn: TypeAnn;
+  typeAnn?: TypeAnn | null;
+  defaultVal?: Expression | null;
   default?: Expression;
   rest?: boolean;
   spread?: boolean;
   optional?: boolean;
+  destructArr?: ArrayPatternElement[] | null;
+  destructObj?: ObjPattern | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -483,11 +486,11 @@ export type Expression =
   | Literal | TemplateLit | Ident | Member | OptChain | Call | New
   | Index | RangeIndex | Binary | Unary | Ternary | Assign | Cast
   | ArrayLit | ObjLit | NonNull | Propagate | Typeof | Await | Yield
-  | Drop | Arrow | FuncExpr;
+  | Drop | Arrow | FuncExpr | Match | RawC;
 
 export interface Literal extends BaseNode {
   kind: 'Literal';
-  litType: 'number' | 'string' | 'boolean' | 'null' | 'int';
+  litType: 'number' | 'string' | 'boolean' | 'bool' | 'null' | 'int' | 'char';
   value: string;
 }
 
@@ -528,9 +531,11 @@ export interface Argument {
 
 export interface New extends BaseNode {
   kind: 'New';
-  callee: Expression;
+  name: string;
+  callee?: Expression;
   args: Argument[];
   typeArgs?: TypeAnn[];
+  arraySize?: Expression;
 }
 
 export interface Index extends BaseNode {
@@ -585,10 +590,12 @@ export interface ArrayLit extends BaseNode {
 }
 
 export interface ObjLitProp {
-  key: string;
-  value: Expression;
+  key?: string;
+  value?: Expression;
+  expr?: Expression;
   computed?: boolean;
   spread?: boolean;
+  isStringKey?: boolean;
 }
 
 export interface ObjLit extends BaseNode {
@@ -643,6 +650,11 @@ export interface FuncExpr extends BaseNode {
   returnType?: TypeAnn;
   body: Stmt[];
   async?: boolean;
+}
+
+export interface RawC extends BaseNode {
+  kind: 'RawC';
+  code: string;
 }
 
 // ---------------------------------------------------------------------------

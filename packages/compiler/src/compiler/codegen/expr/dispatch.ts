@@ -1,6 +1,7 @@
 // dispatch.ts
+import type { Expression } from '@tsclang/ast';
 export default {
-  exprToC(this: any, node: any, lines: any[] = [], depth: any = 0) {
+  exprToC(this: any, node: Expression, lines: any[] = [], depth: any = 0) {
     if (!node) return '0';
     this._currentNode = node;
     switch (node.kind) {
@@ -154,12 +155,12 @@ export default {
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
         if (sym?._mutQuarantined) {
-          throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+          throw this.error(`cannot access '${(node.object as any).name}' while a mutable borrow is active`, node);
         }
-        if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.object.name)) {
-          const _nc = this._narrowedUnknownVars.get(node.object.name);
-          if (_nc === '__array__') throw this.error(`Cannot access '.${node.prop}' on '${node.object.name}' after typeof "array"; use '${node.object.name} as Array<T>' first`, node);
-          if (_nc === '__object__') throw this.error(`Cannot access '.${node.prop}' on '${node.object.name}' after typeof "object"; use '${node.object.name} as ClassName' first`, node);
+        if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has((node.object as any).name)) {
+          const _nc = this._narrowedUnknownVars.get((node.object as any).name);
+          if (_nc === '__array__') throw this.error(`Cannot access '.${node.prop}' on '${(node.object as any).name}' after typeof "array"; use '${(node.object as any).name} as Array<T>' first`, node);
+          if (_nc === '__object__') throw this.error(`Cannot access '.${node.prop}' on '${(node.object as any).name}' after typeof "object"; use '${(node.object as any).name} as ClassName' first`, node);
         }
         // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
         if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
@@ -173,8 +174,8 @@ export default {
           if (node.prop === 'byteLength') return `(size_t)${objC}.byte_length`;
           if (node.prop === 'byteOffset') return `(size_t)${objC}.byte_offset`;
         }
-        this._checkMoved(sym, node, node.object.name);
-        this._checkFieldMoved(sym, node.prop, node, node.object.name);
+        this._checkMoved(sym, node, (node.object as any).name);
+        this._checkFieldMoved(sym, node.prop, node, (node.object as any).name);
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)
         if (sym?._alias && sym?.ctype) {
           const errClass = this.classes.get(sym.ctype);
@@ -200,7 +201,7 @@ export default {
         }
         // Rest param: .length → args_count
         if (sym?.rest && node.prop === 'length') {
-          return sym.countVar ?? `${node.object.name}_count`;
+          return sym.countVar ?? `${(node.object as any).name}_count`;
         }
         // Fixed-size array: .length → compile-time constant
         if (sym?.isFixedArray && node.prop === 'length') {
@@ -284,7 +285,7 @@ export default {
         if (this._stdUrlImported && sym?._isURL) {
           const _urlMutatedFields = ['search'];
           if (_urlMutatedFields.includes(node.prop)) {
-            return `tsc_url_search(&${node.object.name})`;
+            return `tsc_url_search(&${(node.object as any).name})`;
           }
         }
         if (!sym) {
@@ -302,7 +303,7 @@ export default {
         if (node.object.kind === 'Ident') {
           const _idxQSym = this.lookup(node.object.name);
           if (_idxQSym?._mutQuarantined) {
-            throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+          throw this.error(`cannot access '${(node.object as any).name}' while a mutable borrow is active`, node);
           }
           if (_idxQSym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.object.name)) {
             const _nc = this._narrowedUnknownVars.get(node.object.name);
@@ -538,7 +539,7 @@ export default {
                   lines.push(`${I}tsc_string_retain(${srcC}.${fn});`);
                 }
               }
-              if (sp.expr.kind === 'Ident') {
+              if (sp.expr?.kind === 'Ident') {
                 const srcSym = this.lookup(sp.expr.name);
                 if (srcSym && srcSym.varKind !== 'const') {
                   srcSym._moved = true;
@@ -670,7 +671,7 @@ export default {
             throw this.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
           }
         }
-        const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary' || node.expr.kind === 'Logical';
+        const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary';
         return needsParens ? `(${ct})(${exprC})` : `(${ct})${exprC}`;
       }
 
@@ -728,7 +729,7 @@ export default {
         throw this.error(`drop() can only be used on pool-allocated types`, node);
       }
       case 'NonNull': {
-        const innerExpr = node.expr;
+        const innerExpr: any = node.expr;
         const callee = innerExpr?.callee;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
         if (calleeSym?._isThrowsFunc) {
@@ -749,7 +750,7 @@ export default {
         if (this._inAsyncFunc) {
           throw this.error(`TypeError: '?' error propagation is not supported in async functions; use try/catch on await`);
         }
-        const innerExpr = node.expr;
+        const innerExpr: any = node.expr;
         const callee = innerExpr?.callee;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
         if (!calleeSym?._isThrowsFunc) {
@@ -804,7 +805,7 @@ export default {
       }
 
       default:
-        throw this.error(`internal: unhandled expression kind '${node.kind}'`, node);
+        throw this.error(`internal: unhandled expression kind '${(node as any).kind}'`, node);
     }
   },
 
