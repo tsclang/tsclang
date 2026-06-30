@@ -13,7 +13,7 @@ export interface SymbolInfo {
   // Function symbols
   funcName?: string;
   funcPtr?: boolean;
-  params?: unknown[];
+  params?: any[];
   isRefParam?: boolean;
   isMutParam?: boolean;
 
@@ -57,4 +57,7 @@ export interface SymbolInfo {
   _avrName?: string;
   _isVtable?: boolean;
   _isFsNamespace?: boolean;
+
+  // Codegen adds many dynamic properties (throws, channels, async, etc.)
+  [key: string]: any;
 }

@@ -3,6 +3,15 @@ import infer from './codegen/types/infer.js';
 
 export class TypeChecker {
   ctx: any;
+  // Mixin methods (from resolve.ts + infer.ts via Object.assign)
+  declare resolveType: (...args: any[]) => string;
+  declare resolveTupleType: (...args: any[]) => string;
+  declare typeDecl: (...args: any[]) => string;
+  declare inferType: (...args: any[]) => string;
+  declare _effectiveType: (...args: any[]) => string;
+  declare _inferCall: (...args: any[]) => string;
+  declare _inferMemberCall: (...args: any[]) => string;
+  declare inferTypeWithParams: (...args: any[]) => string;
 
   constructor(ctx: any) {
     this.ctx = ctx;

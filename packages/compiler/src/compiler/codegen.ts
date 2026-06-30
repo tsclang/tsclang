@@ -113,7 +113,134 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
 
 // ============================================================
 class Context {
-  [key: string]: any;  // allows mixin method access
+  [key: string]: any;  // TODO: [phase2.3] remove after typing all mixin methods
+
+  // Core state
+  filename!: string;
+  src!: string | null;
+  _currentNode!: any;
+
+  // Output
+  _output!: OutputBuffer;
+
+  // Counters
+  lambdaCount!: number;
+  restCount!: number;
+  closureCount!: number;
+  tempCount!: number;
+  loopCount!: number;
+  indent!: number;
+
+  // Scope & borrow tracking
+  _scopeMgr!: ScopeManager;
+  _borrowTracker!: BorrowTracker;
+  _languageBuiltins!: Set<string>;
+
+  // Symbol tables
+  classes!: Map<string, any>;
+  interfaces!: Map<string, any>;
+  lambdas!: any[];
+  inFunction!: boolean;
+  currentFuncName!: any;
+  currentFuncReturnType!: any;
+
+  // Cleanup
+  _blockCleanupStack!: any;
+  _usesGotoCleanup!: boolean;
+  _throwsOwnedVars!: any[];
+  _gotoCleanupPreDecls!: any;
+  _loopDepth!: number;
+  _loopCleanupStack!: any[];
+  _loopBodyCleanups!: any;
+
+  // Emitted structs tracking
+  _emittedArrayStructs!: Set<string>;
+  _emittedOptStructs!: Set<string>;
+  _emittedResultTypes!: Set<string>;
+  _emittedHelpers!: Set<string>;
+  _emittedImplicitVtables!: Set<string>;
+  _emittedTasksPolls!: Set<string>;
+  _emittedGenerics!: Set<string>;
+  _emittedPromiseTypes!: Set<string>;
+  _emittedResultErrKeys!: Set<string>;
+  _emittedGenericClasses!: Set<string>;
+  _emittedAtomicTypes!: Set<string>;
+  _emittedSignalTypedefs!: Set<string>;
+  _emittedTasksStructs!: Set<string>;
+  _emittedHashMaps!: Set<string>;
+  _emittedChannelTypes!: Set<string>;
+  _emittedStaticMaps!: Set<string>;
+  _emittedMapStructs!: Set<string>;
+  _emittedMapEntries!: Set<string>;
+  _emittedSliceStructs!: Set<string>;
+  _emittedTuples!: Set<string>;
+  _emittedBlobTypeDef!: boolean;
+  _emittedBufferTypeDef!: boolean;
+  _emittedDataViewTypeDef!: boolean;
+  _emittedTscClamp!: boolean;
+  _emittedTscSecureRandomDef!: boolean;
+  _emittedSliceU8!: boolean;
+  _emittedReaderVtable!: boolean;
+  _emittedWriterVtable!: boolean;
+  _mapHasSetCalls!: Set<string>;
+  _heapStringFuncs!: Set<string>;
+
+  // State tracking
+  _anonStructSigs!: Map<string, any>;
+  _anonStructCount!: number;
+  _cmpxchgCount!: number;
+  _tasksStateCount!: number;
+  _fromEntriesCount!: number;
+  _staticTasks!: any[];
+  _asyncFuncs!: Map<string, any>;
+  _generatorFuncs!: Map<string, any>;
+  _capturedSignalMap!: Map<string, any>;
+  _persistentCaptureRefs!: Map<string, any>;
+  _deferredAnons!: Map<string, any>;
+  _genericClasses!: Map<string, any>;
+  _genericFuncs!: Map<string, any>;
+  _pendingOverloads!: Map<string, any>;
+  _declaredModules!: Map<string, any>;
+  _extensions!: Map<string, any>;
+  _typeAliases!: Map<string, any>;
+  _pendingOptTypedefs!: Map<string, any>;
+  _resolvingTypes!: Set<string>;
+  _narrowedVars!: Set<string>;
+  _narrowedUnknownVars!: Map<string, any>;
+  _emittedUnknownStruct!: boolean;
+  _inDeclare!: boolean;
+
+  // Warnings & errors
+  _warnings!: any[];
+  _errors!: any[];
+  _maxErrors!: number;
+
+  // Library mode
+  _libraryMode!: boolean;
+  _libInitStmts!: any[];
+  _depInitFns!: any[];
+  _exports!: Map<string, any>;
+
+  // CLI/config opts
+  _optsTarget!: any;
+  _optsDefaultNumber!: any;
+  _optsAllocator!: any;
+  _optsAsync!: any;
+  _optsRamSize!: any;
+  _optsStackSize!: any;
+
+  // Explicit main
+  _hasExplicitMain!: boolean;
+  _explicitMainRetType!: any;
+  _explicitMainThrows!: boolean;
+  _explicitMainResultType!: any;
+  _explicitMainErrTypes!: any;
+
+  // Lex/parse & type checking
+  _lex!: any;
+  _parse!: any;
+  _typeChecker!: TypeChecker;
+
   constructor(filename: string, src: string | null = null, opts: any = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
