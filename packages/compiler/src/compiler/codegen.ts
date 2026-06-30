@@ -10,6 +10,7 @@ import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
 import { TypeChecker } from './typechecker.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
+import type { Program } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -29,7 +30,7 @@ export const DESKTOP_CAPABILITIES = {
 // opts.libraryMode — emit without #include and main() (for bundled deps)
 // opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
 // opts.sourceToPath    — { [importSource]: resolvedPath } for namespace import lookup
-export function codegen(ast: any, filename: string = 'input', src: string | null = null, opts: any = {}) {
+export function codegen(ast: Program, filename: string = 'input', src: string | null = null, opts: any = {}) {
   const ctx = new Context(filename, src, opts);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;

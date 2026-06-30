@@ -3,10 +3,11 @@
 
 import { TK, KEYWORDS } from './lexer.js';
 import { TscError } from './error.js';
+import type { Token, Program } from '@tsclang/ast';
 
-export function parse(tokens: any, filename: string = '<input>', src: string | null = null) {
+export function parse(tokens: Token[], filename: string = '<input>', src: string | null = null): { ast: Program; errors: TscError[] } {
   let pos = 0;
-  const errors: any[] = [];
+  const errors: TscError[] = [];
 
   const STMT_KEYWORDS = new Set([
     'let', 'const', 'var', 'function', 'async', 'class', 'interface', 'enum',
@@ -76,14 +77,14 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
     if (cur().type === TK.RSHIFT) {
       // '>>' → split into two '>' tokens, consume one
       tokens.splice(pos, 1,
-        { type: TK.GT, value: '>', line: cur().line, col: cur().col },
-        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 1 });
+        { type: TK.GT, value: '>', line: cur().line, col: cur().col, endCol: cur().col + 1 },
+        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 1, endCol: cur().col + 2 });
     } else if (cur().type === TK.RSHIFTU) {
       // '>>>' → split into three '>' tokens, consume one
       tokens.splice(pos, 1,
-        { type: TK.GT, value: '>', line: cur().line, col: cur().col },
-        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 1 },
-        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 2 });
+        { type: TK.GT, value: '>', line: cur().line, col: cur().col, endCol: cur().col + 1 },
+        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 1, endCol: cur().col + 2 },
+        { type: TK.GT, value: '>', line: cur().line, col: cur().col + 2, endCol: cur().col + 3 });
     }
     eat(TK.GT);
   }
@@ -335,7 +336,7 @@ export function parse(tokens: any, filename: string = '<input>', src: string | n
   // -------------------------------------------------------------------------
   // Statements
   // -------------------------------------------------------------------------
-  function parseProgram() {
+  function parseProgram(): Program {
     const body: any[] = [];
     while (!done()) {
       if (cur().type === TK.HASH) {

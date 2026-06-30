@@ -6,4 +6,5 @@ export interface Token {
   line: number;
   col: number;
   endCol: number;
+  parts?: unknown[];
 }
