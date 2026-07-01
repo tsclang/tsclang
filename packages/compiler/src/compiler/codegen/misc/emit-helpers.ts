@@ -1,12 +1,19 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Stmt, Expression, Param, Block, FuncDecl, TypeAnn, Arrow } from '@tsclang/ast';
+
+export interface IterMethod { body?: { body?: Stmt[]; stmts?: Stmt[] } | null; }
+interface LocalVar { name: string; ctype: string; initC: string; isConst: boolean; }
+export interface FreeVar { name: string; ctype: string; }
+interface EnvField { ctype: string; name: string; }
+
 // emit-helpers.ts
 export default {
-  _emitIterableImpl(this: CodeGenThis, className: any, iterMethod: any, elemCType: any) {
-    const stmts = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
+  _emitIterableImpl(this: CodeGenThis, className: string, iterMethod: IterMethod, elemCType: string) {
+    const stmts: Stmt[] = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
 
     // Find pre-return VarDecl stmts and the returned arrow
-    const preStmts: any[] = [];
-    let returnedArrow: any = null;
+    const preStmts: Stmt[] = [];
+    let returnedArrow: Arrow | null = null;
     for (const s of stmts) {
       if (s.kind === 'Return' && s.value?.kind === 'Arrow') { returnedArrow = s.value; break; }
       preStmts.push(s);
@@ -32,11 +39,11 @@ export default {
     this.pushScope();
     this.define('this', { ctype: `${className} *`, _cAlias: '_self', isPointer: true });
 
-    const localVars: any[] = [];
-    const factoryLines: any[] = [];
+    const localVars: LocalVar[] = [];
+    const factoryLines: string[] = [];
     for (const s of preStmts) {
       if (s.kind !== 'VarDecl') continue;
-      const tmpLines: any[] = [];
+      const tmpLines: string[] = [];
       const initC = s.init ? this.exprToC(s.init, tmpLines, 1) : '0';
       const ct = s.typeAnn ? this.resolveType(s.typeAnn)
                            : (s.init ? this.inferType(s.init) : null) ?? 'int32_t';
@@ -63,7 +70,7 @@ export default {
     this._iterNextOptType = optType;
     this._iterNextIsComplex = _isComplex;
 
-    const nextBodyLines: any[] = [];
+    const nextBodyLines: string[] = [];
     if (returnedArrow.body?.kind === 'Block') {
       this.visitBlock(returnedArrow.body, nextBodyLines, 0);
     } else {
@@ -97,7 +104,7 @@ export default {
   },
 
   // Emit `typedef struct {...} Promise_T;` once per type
-  _emitPromiseTypedef(this: CodeGenThis, promiseType: any, innerType: any) {
+  _emitPromiseTypedef(this: CodeGenThis, promiseType: string, innerType: string) {
 
     if (this._emittedPromiseTypes.has(promiseType)) return;
     this._emittedPromiseTypes.add(promiseType);
@@ -107,7 +114,7 @@ export default {
 
   // Emit a spawn block: generate env struct, fn, and call site code
   // Returns the C variable name of the thread handle
-  _emitSpawnBlock(this: CodeGenThis, varName: any, body: any, throwsTypes: any, lines: any, depth: any) {
+  _emitSpawnBlock(this: CodeGenThis, varName: string | null, body: Stmt, throwsTypes: TypeAnn[] | null, lines: string[], depth: number) {
     if (this._strictRules?.has('no-threads')) {
       throw this.error('threads are forbidden in strict mode (no-threads)', body);
     }
@@ -134,7 +141,7 @@ export default {
     // Validate captures
     const _sendSafeTypes = new Set(['int8_t','int16_t','int32_t','int64_t',
       'uint8_t','uint16_t','uint32_t','uint64_t','float','double','bool','size_t','String']);
-    const _checkSend = (ctype: any, seen: any = new Set()) => {
+    const _checkSend = (ctype: string, seen: Set<string> = new Set()): boolean => {
       if (_sendSafeTypes.has(ctype) || ctype.startsWith('Atomic') || ctype.startsWith('Readonly')) return true;
       if (ctype.startsWith('Array_') || ctype.startsWith('TscSet_') || ctype.startsWith('Map_') ||
           ctype.startsWith('TscMap_') || ctype.startsWith('opt_')) return false;
@@ -179,14 +186,14 @@ export default {
     const envVar = `_env_${idx}`;
     const threadVar = varName ?? `_t_${idx}`;
 
-    const hasThrows = throwsTypes?.length > 0;
-    let resultType: any = null;
-    let throwsTypeName: any = null;
-    if (hasThrows) {
-      throwsTypeName = throwsTypes[0]?.name ?? throwsTypes[0];
+    const hasThrows = !!throwsTypes && throwsTypes.length > 0;
+    let resultType: string | null = null;
+    let throwsTypeName: string | null = null;
+    if (hasThrows && throwsTypes) {
+      throwsTypeName = (throwsTypes[0] as { name?: string } | undefined)?.name ?? (throwsTypes[0] as unknown as string);
       resultType = `Result_void_${throwsTypeName}`;
 
-      if (!this._emittedResultErrKeys.has(throwsTypeName)) {
+      if (throwsTypeName && !this._emittedResultErrKeys.has(throwsTypeName)) {
         this._emittedResultErrKeys.add(throwsTypeName);
         this.addTop(`typedef struct { bool ok; union { int _dummy; ${throwsTypeName} error; }; } ${resultType};`);
         this.addTop('');
@@ -194,7 +201,7 @@ export default {
     }
 
     // Build env struct fields: [result if throws] + [captured vars]
-    const envFields: any[] = [];
+    const envFields: EnvField[] = [];
     if (hasThrows && resultType) envFields.push({ ctype: resultType, name: 'result' });
     for (const fv of freeVars) envFields.push(fv);
 
@@ -208,7 +215,7 @@ export default {
     this.addTop('');
 
     // Build spawn function
-    const fnLines: any[] = [];
+    const fnLines: string[] = [];
     fnLines.push(`static void *${fnName}(void *_arg) {`);
     fnLines.push(`    ${envType} *env = (${envType} *)_arg;`);
 
@@ -223,13 +230,13 @@ export default {
           const errC = this.exprToC(s.value);
           fnLines.push(`    env->result = (${resultType}){.ok = false, .error = ${errC}};`);
         } else {
-          const sl: any[] = [];
+          const sl: string[] = [];
           this.visitStmt(s, sl, 1);
           for (const l of sl) fnLines.push(l);
         }
       }
     } else {
-      const bodyLines2: any[] = [];
+      const bodyLines2: string[] = [];
       this.visitBlock(body.kind === 'Block' ? body : { kind: 'Block', body: bodyStmts }, bodyLines2, 1);
       for (const l of bodyLines2) fnLines.push(l);
       fnLines.push(`    free(env);`);
@@ -253,9 +260,9 @@ export default {
   },
 
   // Collect free (outer-scope) variables referenced in a lambda body
-  _collectFreeVars(this: CodeGenThis, lambda: any) {
-    const paramNames = new Set((lambda.params || []).map((p: any) => p.name));
-    const free: any[] = [];
+  _collectFreeVars(this: CodeGenThis, lambda: { params: Param[]; body: Block | Expression | null }) {
+    const paramNames = new Set((lambda.params || []).map((p: Param) => p.name));
+    const free: FreeVar[] = [];
     const seen = new Set(paramNames);
     const walkE = (e: any) => {
       if (!e) return;
@@ -285,7 +292,7 @@ export default {
     return free;
   },
 
-  _avrSleepModeToC(this: CodeGenThis, node: any) {
+  _avrSleepModeToC(this: CodeGenThis, node: Expression) {
     // SleepMode.Idle → SLEEP_MODE_IDLE, etc.
     if (node.kind === 'Member' && node.object.kind === 'Ident' && node.object.name === 'SleepMode') {
       const map = {

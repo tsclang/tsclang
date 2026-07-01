@@ -1,15 +1,21 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Stmt, Expression, Param, Block, Ident, ArrayPatternElement, Call, TypeRef, Await, Yield, Spawn } from '@tsclang/ast';
+
+export interface FieldInfo { name: string; ctype: string; }
+export interface SpawnInfo { userVar: string; threadVar: string; envType: string; fnName: string; envVar: string; freeVars: { name: string; ctype: string }[]; }
+export interface AwaitStateField { fieldName: string; stateType: string; isUnknown?: boolean; isGen?: boolean; }
+
 // scan.ts
 export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
-  _scanAsyncBody(this: CodeGenThis, params: any, body: any) {
-    const paramFields: any[] = [];
-    const bodyFields: any[] = [];
+  _scanAsyncBody(this: CodeGenThis, params: Param[], body: Block | null) {
+    const paramFields: FieldInfo[] = [];
+    const bodyFields: FieldInfo[] = [];
     const inlined = new Map();     // name → C literal string
     const inlinedTypes = new Map(); // name → raw TSclang type name (for error messages)
     const seen = new Set();
-    const spawnInfos: any[] = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
-    const extraPollParams: any[] = []; // free vars of spawn blocks that become extra poll params
+    const spawnInfos: SpawnInfo[] = [];      // { userVar, threadVar, envType, fnName, envVar, freeVars }
+    const extraPollParams: FieldInfo[] = []; // free vars of spawn blocks that become extra poll params
 
     // Pre-scan type map: tracks variable types as the walk progresses so that
     // _awaitInfoOf can look up types of variables not yet in the real scope.
@@ -22,7 +28,7 @@ export default {
       if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); preScanTypes.set(p.name, ct); }
     }
 
-    const walk = (stmts: any) => {
+    const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -39,7 +45,7 @@ export default {
           if (!seen.has(threadVar)) { seen.add(threadVar); bodyFields.push({ name: threadVar, ctype: 'tsc_thread_t' }); }
           spawnInfos.push({ userVar: s.name, threadVar, envType, fnName, envVar, freeVars: fvArr });
           for (const fv of fvArr) {
-            if (!paramFields.some((f: any) => f.name === fv.name) && !extraPollParams.some((f: any) => f.name === fv.name)) {
+            if (!paramFields.some((f: FieldInfo) => f.name === fv.name) && !extraPollParams.some((f: FieldInfo) => f.name === fv.name)) {
               extraPollParams.push({ name: fv.name, ctype: fv.ctype });
             }
           }
@@ -50,7 +56,7 @@ export default {
           const { varKind, name, typeAnn, init } = s;
           if (varKind === 'const' && this._isInlinableConst(init) && !seen.has(name)) {
             inlined.set(name, this._constLiteralC(init));
-            inlinedTypes.set(name, typeAnn?.name ?? 'i32');
+            inlinedTypes.set(name, (typeAnn as TypeRef | undefined)?.name ?? 'i32');
           } else if (!seen.has(name)) {
             seen.add(name);
             let ct;
@@ -80,13 +86,14 @@ export default {
             const elemIdent = arrType.slice(6);
             arrElemType = this._arrIdentToCType(elemIdent);
           }
-          for (const elem of (s.pattern || [])) {
+          const patElems = s.pattern as unknown as (ArrayPatternElement | null)[];
+          for (const elem of (patElems || [])) {
             if (!elem || seen.has(elem.name)) continue;
-            seen.add(elem.name);
+            seen.add(elem.name!);
             if (elem.rest && arrType?.startsWith('Array_')) {
-              bodyFields.push({ name: elem.name, ctype: arrType });
+              bodyFields.push({ name: elem.name!, ctype: arrType });
             } else {
-              bodyFields.push({ name: elem.name, ctype: arrElemType });
+              bodyFields.push({ name: elem.name!, ctype: arrElemType });
             }
           }
         }
@@ -98,14 +105,16 @@ export default {
             bodyFields.push({ name: idxName, ctype: 'size_t' });
             preScanTypes.set(idxName, 'size_t');
           }
-          if (s.binding?.kind === 'Ident' && !seen.has(s.binding.name)) {
-            seen.add(s.binding.name);
-            const iterSym = s.iterable?.kind === 'Ident' ? this.lookup(s.iterable.name) : null;
+          const bnd = s.binding as unknown as Ident | undefined;
+          const iter = s.iterable as Ident | Call | undefined;
+          if (bnd?.kind === 'Ident' && !seen.has(bnd.name)) {
+            seen.add(bnd.name);
+            const iterSym = iter?.kind === 'Ident' ? this.lookup(iter.name) : null;
             const arrType = iterSym?.arrElemCType
               || (iterSym?.ctype?.startsWith('Array_') ? this._arrIdentToCType(iterSym.ctype.slice(6)) : null)
               || 'int32_t';
-            bodyFields.push({ name: s.binding.name, ctype: arrType });
-            preScanTypes.set(s.binding.name, arrType);
+            bodyFields.push({ name: bnd.name, ctype: arrType });
+            preScanTypes.set(bnd.name, arrType);
           }
         }
         if (s.kind === 'Block') walk(s.body);
@@ -120,7 +129,8 @@ export default {
         if (s.kind === 'ForOf') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'DoWhile') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'Switch') {
-          for (const c of s.cases || []) walk(c.body);
+          const swCases = s.cases as unknown as { body: Stmt[] }[] | undefined;
+          for (const c of swCases || []) walk(c.body);
         }
         if (s.kind === 'TryCatch') {
           walk(s.body?.body || []);
@@ -157,7 +167,7 @@ export default {
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
   },
 
-  _scanExprIdents(this: CodeGenThis, node: any, touch: any) {
+  _scanExprIdents(this: CodeGenThis, node: Expression | Stmt | null | undefined, touch: (name: string) => void) {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'Ident') { touch(node.name); return; }
     if (node.kind === 'Literal' || node.kind === 'RawC') return;
@@ -175,11 +185,11 @@ export default {
     }
   },
 
-  _livenessScan(this: CodeGenThis, body: any, localVarNames: any) {
+  _livenessScan(this: CodeGenThis, body: Block | null, localVarNames: Set<string>) {
     const segs = new Map();
     let seg = 0;
 
-    const touch = (name: any) => {
+    const touch = (name: string) => {
       if (!localVarNames.has(name)) return;
       const info = segs.get(name);
       if (info) {
@@ -190,9 +200,9 @@ export default {
       }
     };
 
-    const scanExpr = (node: any) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: Expression | Stmt | null | undefined) => this._scanExprIdents(node, touch);
 
-    const walk = (stmts: any) => {
+    const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -201,26 +211,26 @@ export default {
         const isAwaitExpr = s.kind === 'ExprStmt' && s.expr?.kind === 'Await';
 
         if (isAwaitVarDecl) {
-          scanExpr(s.init.expr);
+          scanExpr((s.init as Await)?.expr);
           seg++;
           touch(s.name);
           continue;
         }
         if (isAwaitDestruct) {
-          scanExpr(s.init.expr);
+          scanExpr((s.init as Await)?.expr);
           seg++;
-          for (const elem of (s.pattern || [])) if (elem) touch(elem.name);
+          for (const elem of ((s.pattern as unknown as (ArrayPatternElement | null)[]) || [])) if (elem) touch(elem.name!);
           continue;
         }
         if (isAwaitExpr) {
-          scanExpr(s.expr.expr);
+          scanExpr((s.expr as Await).expr);
           seg++;
           continue;
         }
 
         if (s.kind === 'ForOf' && s.await) {
           seg++;
-          if (s.binding?.kind === 'Ident') touch(s.binding.name);
+          if ((s.binding as unknown as Ident | undefined)?.kind === 'Ident') touch((s.binding as unknown as Ident).name);
           continue;
         }
 
@@ -234,21 +244,21 @@ export default {
           if (s.init) scanExpr(s.init);
         }
         if (s.kind === 'VarDestructArr') {
-          for (const elem of (s.pattern || [])) if (elem) touch(elem.name);
+          for (const elem of ((s.pattern as unknown as (ArrayPatternElement | null)[]) || [])) if (elem) touch(elem.name!);
           if (s.init) scanExpr(s.init);
         }
         if (s.kind === 'ExprStmt') scanExpr(s.expr);
         if (s.kind === 'Return' && s.value) scanExpr(s.value);
         if (s.kind === 'Throw' && s.value) scanExpr(s.value);
         if (s.kind === 'If') {
-          scanExpr(s.test ?? s.cond);
+          scanExpr(s.test ?? (s as { cond?: Expression }).cond);
           const c = s.consequent;
           walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
           const a = s.alternate;
           if (a) walk(a?.kind === 'Block' ? a.body : [a]);
         }
         if (s.kind === 'While') {
-          scanExpr(s.test ?? s.cond);
+          scanExpr(s.test ?? (s as { cond?: Expression }).cond);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
         if (s.kind === 'For') {
@@ -260,7 +270,7 @@ export default {
         }
         if (s.kind === 'ForOf' && !s.await) {
           scanExpr(s.iterable);
-          if (s.binding?.kind === 'Ident') touch(s.binding.name);
+          if ((s.binding as unknown as Ident | undefined)?.kind === 'Ident') touch((s.binding as unknown as Ident).name);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
         if (s.kind === 'TryCatch') {
@@ -284,11 +294,11 @@ export default {
     return needsPromotion;
   },
 
-  _genLivenessScan(this: CodeGenThis, body: any, localVarNames: any) {
+  _genLivenessScan(this: CodeGenThis, body: Block | null, localVarNames: Set<string>) {
     const segs = new Map();
     let seg = 0;
 
-    const touch = (name: any) => {
+    const touch = (name: string) => {
       if (!localVarNames.has(name)) return;
       const info = segs.get(name);
       if (info) {
@@ -299,9 +309,9 @@ export default {
       }
     };
 
-    const scanExpr = (node: any) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: Expression | Stmt | null | undefined) => this._scanExprIdents(node, touch);
 
-    const walk = (stmts: any) => {
+    const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
 
@@ -309,18 +319,19 @@ export default {
         const isYieldVarDecl = s.kind === 'VarDecl' && s.init?.kind === 'Yield';
 
         if (isYieldVarDecl) {
-          if (s.init.value) scanExpr(s.init.value);
+          if ((s.init as Yield)?.value) scanExpr((s.init as Yield).value);
           seg++;
           touch(s.name);
           continue;
         }
         if (isYieldExpr) {
-          if (s.expr.value) scanExpr(s.expr.value);
+          if ((s.expr as Yield)?.value) scanExpr((s.expr as Yield).value);
           seg++;
           continue;
         }
-        if (s.kind === 'Yield') {
-          if (s.value) scanExpr(s.value);
+        if ((s as { kind: string }).kind === 'Yield') {
+          const y = s as unknown as Yield;
+          if (y.value) scanExpr(y.value);
           seg++;
           continue;
         }
@@ -330,21 +341,21 @@ export default {
           if (s.init) scanExpr(s.init);
         }
         if (s.kind === 'VarDestructArr') {
-          for (const elem of (s.pattern || [])) if (elem) touch(elem.name);
+          for (const elem of ((s.pattern as unknown as (ArrayPatternElement | null)[]) || [])) if (elem) touch(elem.name!);
           if (s.init) scanExpr(s.init);
         }
         if (s.kind === 'ExprStmt') scanExpr(s.expr);
         if (s.kind === 'Return' && s.value) scanExpr(s.value);
         if (s.kind === 'Throw' && s.value) scanExpr(s.value);
         if (s.kind === 'If') {
-          scanExpr(s.test ?? s.cond);
+          scanExpr(s.test ?? (s as { cond?: Expression }).cond);
           const c = s.consequent;
           walk(c?.kind === 'Block' ? c.body : (c ? [c] : []));
           const a = s.alternate;
           if (a) walk(a?.kind === 'Block' ? a.body : [a]);
         }
         if (s.kind === 'While') {
-          scanExpr(s.test ?? s.cond);
+          scanExpr(s.test ?? (s as { cond?: Expression }).cond);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
         if (s.kind === 'For') {
@@ -356,7 +367,7 @@ export default {
         }
         if (s.kind === 'ForOf' && !s.await) {
           scanExpr(s.iterable);
-          if (s.binding?.kind === 'Ident') touch(s.binding.name);
+          if ((s.binding as unknown as Ident | undefined)?.kind === 'Ident') touch((s.binding as unknown as Ident).name);
           walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         }
         if (s.kind === 'TryCatch') {
@@ -381,12 +392,12 @@ export default {
   },
 
   // Collect await sub-state field descriptors for the struct
-  _collectAwaitStates(this: CodeGenThis, body: any) {
-    const result: any[] = [];
+  _collectAwaitStates(this: CodeGenThis, body: Block | null) {
+    const result: AwaitStateField[] = [];
     let awaitIdx = 0;
     let genIdx = 0;
 
-    const walk = (stmts: any) => {
+    const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
         const ae = s.kind === 'VarDecl' && s.init?.kind === 'Await' ? s.init
@@ -411,8 +422,10 @@ export default {
           }
         }
         if (s.kind === 'ForOf' && s.await) {
-          const genName = s.iterable?.callee?.kind === 'Ident' ? s.iterable.callee.name
-                        : s.iterable?.kind === 'Ident' ? s.iterable.name : null;
+          const iter = s.iterable as Call | Ident | undefined;
+          const iterCallee = (iter as Call | undefined)?.callee;
+          const genName = iterCallee?.kind === 'Ident' ? iterCallee.name
+                        : iter?.kind === 'Ident' ? iter.name : null;
           const gi = genName && this._generatorFuncs?.has(genName)
             ? this._generatorFuncs.get(genName) : null;
           if (gi) result.push({ fieldName: `_gen_${genIdx++}`, stateType: gi.stateType, isGen: true });
@@ -422,7 +435,8 @@ export default {
         if (s.kind === 'For') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'ForOf') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
         if (s.kind === 'Switch') {
-          for (const c of s.cases || []) walk(c.body);
+          const swCases = s.cases as unknown as { body: Stmt[] }[] | undefined;
+          for (const c of swCases || []) walk(c.body);
         }
         if (s.kind === 'If') {
           const c = s.consequent;
@@ -446,7 +460,7 @@ export default {
     if (arr.length > 0 && arr[arr.length - 1] !== '') arr.push('');
   },
 
-  _emitStructMultiline(this: CodeGenThis, name: any, fields: any) {
+  _emitStructMultiline(this: CodeGenThis, name: string, fields: string[]) {
     this._topBlank();
     this.topLevel.push('typedef struct {');
     // First line: state/result/done header fields (up to bool _done)
@@ -462,12 +476,12 @@ export default {
     this.topLevel.push(`} ${name};`);
   },
 
-  _emitStructCompact(this: CodeGenThis, name: any, fields: any) {
+  _emitStructCompact(this: CodeGenThis, name: string, fields: string[]) {
     this._topBlank();
     this.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
   },
 
-  _emitTopFn(this: CodeGenThis, sig: any, bodyLines: any) {
+  _emitTopFn(this: CodeGenThis, sig: string, bodyLines: string[]) {
     this._topBlank();
     this.topLevel.push(`${sig} {`);
     for (const l of bodyLines) this.topLevel.push(l);

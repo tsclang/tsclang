@@ -1,4 +1,13 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { TemplateLit, Arrow, Expression, Param, TypeAnn } from '@tsclang/ast';
+
+interface TemplatePart { kind: string; value?: string; src?: string; }
+interface CompiledStrPart { kind: 'str'; value: string; }
+interface CompiledExprPart { kind: 'expr'; t: string; c: string; }
+type CompiledPart = CompiledStrPart | CompiledExprPart;
+interface CaptureInfo { name: string; typeAnn?: TypeAnn | null; }
+interface ExplicitCapture { name: string; mode: string; typeAnn: TypeAnn; }
+
 // closures.ts
 
 const SIMPLE_CTYPES = new Set([
@@ -8,7 +17,7 @@ const SIMPLE_CTYPES = new Set([
   'String', 'void *', 'tsc_unknown',
 ]);
 
-function _isComplexCtype(ct: any) {
+function _isComplexCtype(ct: string | null | undefined) {
   if (!ct) return false;
   if (SIMPLE_CTYPES.has(ct)) return false;
   if (ct.endsWith(' *')) return false;
@@ -17,18 +26,18 @@ function _isComplexCtype(ct: any) {
 }
 
 export default {
-  _templateToC(this: CodeGenThis, node: any, lines: any, depth: any) {
-    const parts = node.parts; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
-    const hasSubs = parts.some((p: any) => p.kind === 'expr');
+  _templateToC(this: CodeGenThis, node: TemplateLit, lines: string[], depth: number) {
+    const parts = node.parts as unknown as TemplatePart[]; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
+    const hasSubs = parts.some((p: TemplatePart) => p.kind === 'expr');
     if (!hasSubs) {
       // Plain string, no substitutions
-      const text = parts.map((p: any) => p.value ?? '').join('');
+      const text = parts.map((p: TemplatePart) => p.value ?? '').join('');
       return `STR_LIT("${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
     }
 
     // Parse and compile each expression part
-    const compiled = parts.map((p: any) => {
-      if (p.kind === 'str') return { kind: 'str', value: p.value };
+    const compiled = parts.map((p: TemplatePart): CompiledPart => {
+      if (p.kind === 'str') return { kind: 'str', value: p.value ?? '' };
       // Re-parse the expression source
       const toks = this._lex(p.src, this.filename);
       const { ast } = this._parse(toks);
@@ -49,9 +58,9 @@ export default {
     });
 
     // If all expressions are strings → use tsc_string_concat / tsc_string_concat_n
-    const allStrings = compiled.every((p: any) => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
+    const allStrings = compiled.every((p: CompiledPart) => p.kind === 'str' || p.t === 'String' || p.t === 'String *');
     if (allStrings) {
-      const pieces: any[] = [];
+      const pieces: string[] = [];
       for (const p of compiled) {
         if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${p.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`); }
         else if (p.t === 'String *') pieces.push(`(*${p.c})`);
@@ -65,7 +74,7 @@ export default {
 
     // Mixed types → use tsc_string_format
     let fmt = '';
-    const fmtArgs: any[] = [];
+    const fmtArgs: string[] = [];
     const isEmb = this._cap('bits') < 32;
     for (const p of compiled) {
       if (p.kind === 'str') {
@@ -103,13 +112,13 @@ export default {
 
   // Walk an AST node and collect all Ident references that are free variables
   // (defined in outer scope, not in params or locally defined within the body).
-  _findFreeVars(this: CodeGenThis, body: any, paramNames: any, selfName: any) {
+  _findFreeVars(this: CodeGenThis, body: Expression | null, paramNames: string[], selfName: string | null) {
     const params = new Set(paramNames);
     const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
     const captured = new Map(); // name → symInfo
     const seen = new Set();
 
-    const walk = (n: any, localDefs: any) => {
+    const walk = (n: any, localDefs: Set<string>) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach((x: any) => walk(x, localDefs)); return; }
       if (n.kind === 'Ident') {
@@ -148,24 +157,24 @@ export default {
 
   // Generate closure structs and fn for an Arrow, returning closure metadata.
   // Returns null if no captures (use regular hoistArrow).
-  hoistClosure(this: CodeGenThis, arrowNode: any, varName: any) {
-    const paramNames = (arrowNode.params ?? []).map((p: any) => p.name);
+  hoistClosure(this: CodeGenThis, arrowNode: Arrow, varName: string | null) {
+    const paramNames = (arrowNode.params ?? []).map((p: Param) => p.name);
     let captured;
-    let explicitCaptures: any = null;
-    if (arrowNode.captures?.length > 0) {
+    let explicitCaptures: ExplicitCapture[] | null = null;
+    if ((arrowNode.captures?.length ?? 0) > 0) {
       captured = new Map();
       explicitCaptures = [];
-      for (const cap of arrowNode.captures) {
+      for (const cap of arrowNode.captures as unknown as CaptureInfo[]) {
         const sym = this.lookup(cap.name);
         if (!sym) throw this.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
         captured.set(cap.name, sym);
-        let mode: any = null;
+        let mode: string | null = null;
         if (cap.typeAnn?.kind === 'TypeRef') {
           if (cap.typeAnn.name === 'Ref') mode = 'ref';
           else if (cap.typeAnn.name === 'Mut') mode = 'mut';
         }
         if (!mode) throw this.error(`Explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>`, arrowNode);
-        explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn });
+        explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn as TypeAnn });
         if (mode === 'mut') {
           this._trackMutQuarantine(sym, varName);
         }
@@ -191,11 +200,11 @@ export default {
 
     let ret = arrowNode.returnType ? this.resolveType(arrowNode.returnType) : this.inferArrowReturn(arrowNode);
 
-    const envFields: any[] = [];
-    const capturedStringFields: any[] = [];
+    const envFields: string[] = [];
+    const capturedStringFields: string[] = [];
     for (const [nm, sym] of captured) {
       const ct = sym.ctype ?? 'void *';
-      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo) {
         if (capInfo.mode === 'ref') {
           const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
@@ -240,7 +249,7 @@ export default {
 
     this.pushScope();
     for (const [nm, sym] of captured) {
-      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         const ct = sym.ctype ?? 'void *';
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
@@ -258,7 +267,7 @@ export default {
       const p = arrowNode.params[i];
       const hinted = this._lambdaParamHint?.[i];
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
-      const symInfo: any = { ctype: ct };
+      const symInfo: Record<string, unknown> = { ctype: ct };
       if (ct === 'String *') {
         symInfo.isPointer = true;
         symInfo.isRefParam = true;
@@ -266,7 +275,7 @@ export default {
       }
       this.define(p.name, symInfo);
     }
-    const bodyLines: any[] = [];
+    const bodyLines: string[] = [];
     if (arrowNode.body.kind === 'Block') {
       this.visitBlock(arrowNode.body, bodyLines, 0);
     } else {
@@ -285,7 +294,7 @@ export default {
     this.addLambda('}');
     this.addLambda('');
 
-    const retainLines: any[] = [];
+    const retainLines: string[] = [];
     for (const nm of capturedStringFields) {
       const sym = captured.get(nm);
       const src = sym?._closureEnvVar ? `env->${nm}` : nm;
@@ -293,7 +302,7 @@ export default {
     }
     const envInit = '{' + [...captured.entries()].map(([nm, sym]) => {
       const src = sym._closureEnvVar ? `env->${nm}` : nm;
-      const capInfo = explicitCaptures?.find((c: any) => c.name === nm);
+      const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         if (sym.ctype?.endsWith(' *')) return `.${nm} = ${nm}`;
         return `.${nm} = &${nm}`;
@@ -306,7 +315,7 @@ export default {
     }).join(', ') + '}';
 
     const captureModes = explicitCaptures
-      ? new Map(explicitCaptures.map((c: any) => [c.name, c.mode]))
+      ? new Map(explicitCaptures.map((c: ExplicitCapture) => [c.name, c.mode]))
       : null;
 
     return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,

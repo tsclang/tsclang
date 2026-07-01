@@ -1,9 +1,10 @@
+import type { Call, Argument, Expression, TypeAnn, TypeRef } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 export default {
-  mathCall(this: CodeGenThis, prop: any, args: any, lines: any, depth: any, node?: any) {
+  mathCall(this: CodeGenThis, prop: string, args: Argument[], lines: string[], depth: number, node?: Call) {
     const a0t = args[0] ? this.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? this.inferType(args[1].expr) : 'int32_t';
-    const isFloat = (t: any) => t === 'double' || t === 'float';
+    const isFloat = (t: string) => t === 'double' || t === 'float';
     const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const a1 = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
     const a2 = args[2] ? this.exprToC(args[2].expr, lines, depth) : '0';
@@ -28,7 +29,7 @@ export default {
       }
       const isMin = prop === 'min';
       const op = isMin ? '<' : '>';
-      const hasSpread = args.some((a: any) => a.spread);
+      const hasSpread = args.some((a: Argument) => a.spread);
       if (hasSpread) {
         if (args.length > 1) {
           throw this.error(`Math.${prop}/max does not support mixed spread and non-spread arguments`);
@@ -57,8 +58,8 @@ export default {
         lines.push(`${I}}`);
         return vname;
       }
-      const hasFloat = args.some((a: any) => isFloat(this.inferType(a.expr)));
-      const allC = args.map((a: any) => this.exprToC(a.expr, lines, depth));
+      const hasFloat = args.some((a: Argument) => isFloat(this.inferType(a.expr)));
+      const allC = args.map((a: Argument) => this.exprToC(a.expr, lines, depth));
       const resType = hasFloat ? 'double' : a0t;
       if (args.length === 1) return allC[0];
       if (args.length === 2) {
@@ -160,7 +161,7 @@ export default {
     return result;
   },
 
-  jsonCall(this: CodeGenThis, prop: any, typeArgs: any, args: any, lines: any, depth: any, node?: any) {
+  jsonCall(this: CodeGenThis, prop: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number, node?: Call) {
     if (prop === 'stringify') {
       const arg0 = args[0]?.expr;
       const a0 = arg0 ? this.exprToC(arg0, lines, depth) : 'STR_LIT("")';
@@ -172,7 +173,7 @@ export default {
       return `tsc_i32_to_string(${a0})`;
     }
     if (prop === 'parse') {
-      const typeName = typeArgs[0]?.name ?? 'i32';
+      const typeName = typeArgs[0]?.kind === 'TypeRef' ? (typeArgs[0] as TypeRef).name : 'i32';
       const a0 = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       if (typeName === 'f64' || typeName === 'f32') return `atof(${a0}.data)`;
       if (typeName === 'boolean') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
@@ -181,21 +182,23 @@ export default {
     throw this.error(`Unknown JSON method 'JSON.${prop}'`, node);
   },
 
-  labelUsed(this: CodeGenThis, node: any, label: any, kind: any) {
+  // NOTE: node stays `any` — generic recursive walk over arbitrary AST subtrees
+  // with computed-kind property access (node.label) cannot be narrowed by TS.
+  labelUsed(this: CodeGenThis, node: any, label: string, kind: string) {
     if (!node || typeof node !== 'object') return false;
     if (node.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && node.label === label) return true;
     if (node.kind === 'Labeled' && node.label === label) return false;
-    for (const val of Object.values(node) as any[]) {
+    for (const val of Object.values(node)) {
       if (Array.isArray(val)) {
         for (const item of val) { if (this.labelUsed(item, label, kind)) return true; }
-      } else if (val && typeof val === 'object' && val.kind) {
+      } else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) {
         if (this.labelUsed(val, label, kind)) return true;
       }
     }
     return false;
   },
 
-  isBareLiteralNumber(this: CodeGenThis, expr: any) {
+  isBareLiteralNumber(this: CodeGenThis, expr: Expression) {
     if (expr.kind === 'Literal' && expr.litType === 'number' &&
         expr.value !== 'NaN' && expr.value !== 'Infinity' &&
         !expr.value.includes('.') && !expr.value.includes('e') && !expr.value.includes('E') &&
@@ -207,7 +210,7 @@ export default {
     return false;
   },
 
-  bareNumberValue(this: CodeGenThis, expr: any) {
+  bareNumberValue(this: CodeGenThis, expr: Expression) {
     if (expr.kind === 'Literal') {
       return expr.value + '.0';
     }

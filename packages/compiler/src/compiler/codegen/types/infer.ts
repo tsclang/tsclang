@@ -1,8 +1,14 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident } from '@tsclang/ast';
 import { inferLiteralCType } from '../../types.js';
+
+interface RtField { name?: string; label?: string; typeAnn?: TypeAnn; ctype?: string; _ctype?: string; }
+interface RtMethod { name: string; returnType?: TypeAnn | null; }
+interface RtTypeParam { name: string; }
+
 // infer.ts
 export default {
-  inferType(this: CodeGenThis, node: any) {
+  inferType(this: CodeGenThis, node: Expression | null | undefined) {
     if (!node) return 'double';
     switch (node.kind) {
       case 'Literal':  return inferLiteralCType(node, this._defaultNumber);
@@ -48,7 +54,7 @@ export default {
           const innerIdent = objType.slice(4);
           const innerCType = this._arrIdentToCType(innerIdent);
           const classDef = this.classes.get(innerCType);
-          const field = classDef?.fields?.find((f: any) => f.name === node.prop);
+          const field = classDef?.fields?.find((f: RtField) => f.name === node.prop);
           const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
           return `opt_${this.cTypeToIdent(fieldCType)}`;
         }
@@ -110,19 +116,19 @@ export default {
           if (objSym) {
             const structDef = this.classes.get(objSym.ctype) ?? this.classes.get(objSym.derefType);
             if (structDef?.fields) {
-              const field = structDef.fields.find((f: any) => (f.name ?? f) === node.prop);
+              const field = structDef.fields.find((f: RtField) => (f.name ?? f) === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
               if (field?.ctype) return field.ctype;
               // Check inherited fields from superClass
               if (structDef.superClass) {
                 const baseDef = this.classes.get(structDef.superClass);
-                const baseField = baseDef?.fields?.find((f: any) => (f.name ?? f) === node.prop);
+                const baseField = baseDef?.fields?.find((f: RtField) => (f.name ?? f) === node.prop);
                 if (baseField?.typeAnn) return this.resolveType(baseField.typeAnn);
               }
             }
             // Labeled tuple access: p.x → type of field with label 'x'
             if (structDef?.isTuple) {
-              const field = structDef.fields.find((f: any) => f.label === node.prop);
+              const field = structDef.fields.find((f: RtField) => f.label === node.prop);
               if (field) return field.ctype.replace(' *', '');
             }
           }
@@ -185,7 +191,7 @@ export default {
               sd = this.classes.get(stripped);
             }
             if (sd?.fields) {
-              const f = sd.fields.find((ff: any) => (ff.name ?? ff) === node.prop);
+              const f = sd.fields.find((ff: RtField) => (ff.name ?? ff) === node.prop);
               if (f?.typeAnn) return this.resolveType(f.typeAnn);
               if (f?.ctype) return f.ctype;
             }
@@ -205,7 +211,7 @@ export default {
           return `Array_${this.cTypeToIdent(et)}`;
         }
         if (node.name === 'Map') {
-          const [kt, vt] = (node.typeArgs ?? []).map((t: any) => this.resolveType(t));
+          const [kt, vt] = (node.typeArgs ?? []).map((t: TypeAnn) => this.resolveType(t));
           const k = kt ? this.cTypeToIdent(kt) : 'string';
           const v = vt ? this.cTypeToIdent(vt) : 'i32';
           return `TscMap_${k}_${v}`;
@@ -214,14 +220,15 @@ export default {
           const et = node.typeArgs?.[0] ? this.resolveType(node.typeArgs[0]) : 'int32_t';
           return `TscSet_${this.cTypeToIdent(et)}`;
         }
-        if (this._genericClasses?.has(node.name) && node.typeArgs?.length > 0) {
+        const tArgs = node.typeArgs;
+        if (this._genericClasses?.has(node.name) && tArgs && tArgs.length > 0) {
           const tmpl = this._genericClasses.get(node.name);
           const subst = new Map();
           for (let i = 0; i < tmpl.typeParams.length; i++) {
-            const ct = node.typeArgs[i] ? this.resolveType(node.typeArgs[i]) : 'int32_t';
+            const ct = tArgs[i] ? this.resolveType(tArgs[i]) : 'int32_t';
             subst.set(tmpl.typeParams[i].name, ct);
           }
-          const suffix = tmpl.typeParams.map((tp: any) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+          const suffix = tmpl.typeParams.map((tp: RtTypeParam) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
           return `${node.name}_${suffix}`;
         }
         const poolCls = this.classes.get(node.name);
@@ -231,7 +238,7 @@ export default {
       }
       case 'ObjLit': return 'int32_t';
       case 'ArrayLit': {
-        const first = node.elems.find((e: any) => !e.spread);
+        const first = node.elems.find((e: { expr: Expression; spread?: boolean }) => !e.spread);
         const et = first ? this.inferType(first.expr) : 'int32_t';
         return `Array_${this.cTypeToIdent(et)}`;
       }
@@ -336,7 +343,7 @@ export default {
     }
   },
 
-  _effectiveType(this: CodeGenThis, node: any) {
+  _effectiveType(this: CodeGenThis, node: Expression | null | undefined) {
     if (!node) return 'double';
     const dn = this._defaultNumber;
     const floatDefault = dn === 'f64' || dn === 'f32';
@@ -384,7 +391,7 @@ export default {
     }
   },
 
-  _inferCall(this: CodeGenThis, node: any) {
+  _inferCall(this: CodeGenThis, node: Call) {
     if (node.callee.kind === 'OptChain') {
       const objType = this.inferType(node.callee.object);
       if (objType?.startsWith('opt_') && node.callee.prop === 'toString') return 'opt_string';
@@ -433,7 +440,8 @@ export default {
       if (genSym?._isGenState) return genSym._gi?.resultType ?? genSym._resultType ?? 'int32_t';
     }
     if (node.callee.kind === 'Member') {
-      const obj2 = node.callee.object;
+      const callee = node.callee;
+      const obj2 = callee.object;
       const sym2 = obj2.kind === 'Ident' ? this.lookup(obj2.name) : null;
       const objType2 = sym2?.ctype ?? this.inferType(obj2);
       let lookupType = objType2;
@@ -443,13 +451,13 @@ export default {
       }
       const cls2 = this.classes.get(lookupType);
       if (cls2?.methods) {
-        const m2 = cls2.methods.find((m: any) => m.name === node.callee.prop);
+        const m2 = cls2.methods.find((m: RtMethod) => m.name === callee.prop);
         if (m2?.returnType) return this.resolveType(m2.returnType);
       }
       const ifaceType = sym2?.ctype ?? objType2;
       const ifaceDef = this.interfaces.get(ifaceType);
       if (ifaceDef) {
-        const m3 = ifaceDef.find((m: any) => m.kind === 'MethodSig' && m.name === node.callee.prop);
+        const m3 = ifaceDef.find((m: RtMethod & { kind: string }) => m.kind === 'MethodSig' && m.name === callee.prop);
         if (m3?.returnType) return this.resolveType(m3.returnType);
       }
     }
@@ -465,9 +473,10 @@ export default {
     return 'int32_t';
   },
 
-  _inferMemberCall(this: CodeGenThis, node: any) {
-    const obj = node.callee.object;
-    const prop = node.callee.prop;
+  _inferMemberCall(this: CodeGenThis, node: Call) {
+    const callee = node.callee as Member;
+    const obj = callee.object;
+    const prop = callee.prop;
     if (obj.kind === 'Ident') {
       const nsSym2 = this.lookup(obj.name);
       if (nsSym2?._isNamespace) {
@@ -502,14 +511,14 @@ export default {
       if (prop === 'clz32' || prop === 'imul') return 'int32_t';
       if (prop === 'fround') return 'float';
       if (prop === 'saturatingCast') {
-        const tname = node.typeArgs?.[0]?.name ?? 'i32';
+        const tname = (node.typeArgs?.[0] as TypeRef | undefined)?.name ?? 'i32';
         const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
           u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
           f32:'float', f64:'double', bool:'bool', usize:'size_t' };
         return (primMap as Record<string, string>)[tname] ?? 'int32_t';
       }
       if (prop === 'checkedCast') {
-        const tname = node.typeArgs?.[0]?.name ?? 'i32';
+        const tname = (node.typeArgs?.[0] as TypeRef | undefined)?.name ?? 'i32';
         const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
           u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
           f32:'float', f64:'double', bool:'bool', usize:'size_t' };
@@ -537,7 +546,7 @@ export default {
     if (obj.kind === 'Ident' && obj.name === 'JSON') {
       if (prop === 'stringify') return 'String';
       if (prop === 'parse') {
-        const tname = node.typeArgs?.[0]?.name ?? 'i32';
+        const tname = (node.typeArgs?.[0] as TypeRef | undefined)?.name ?? 'i32';
         if (tname === 'f64' || tname === 'f32') return 'double';
         if (tname === 'boolean') return 'bool';
         return 'int32_t';
@@ -602,14 +611,14 @@ export default {
         if (prop === 'fill') return 'void';
       }
       if (_bSym?._isDataView || _bSym?.ctype === 'DataView') {
-        const dvGetTypes: Record<string, any> = { getU8:'uint8_t', getI8:'int8_t', getU16:'uint16_t', getI16:'int16_t', getU32:'uint32_t', getI32:'int32_t', getU64:'uint64_t', getI64:'int64_t', getF32:'float', getF64:'double', getU16LE:'uint16_t', getU32LE:'uint32_t', getF64LE:'double' };
+        const dvGetTypes: Record<string, string> = { getU8:'uint8_t', getI8:'int8_t', getU16:'uint16_t', getI16:'int16_t', getU32:'uint32_t', getI32:'int32_t', getU64:'uint64_t', getI64:'int64_t', getF32:'float', getF64:'double', getU16LE:'uint16_t', getU32LE:'uint32_t', getF64LE:'double' };
         if ((dvGetTypes as Record<string, string>)[prop]) return (dvGetTypes as Record<string, string>)[prop];
         if (prop.startsWith('set')) return 'void';
         if (prop === 'byteLength' || prop === 'byteOffset') return 'size_t';
       }
     }
-    if (node.callee?.kind === 'Index') {
-      const _idxObjType = this.inferType(node.callee?.object);
+    if (node.callee.kind === 'Index') {
+      const _idxObjType = this.inferType(node.callee.object);
       if (_idxObjType === 'Buffer' || _idxObjType === 'DataView') return 'uint8_t';
     }
     if (prop === 'at' && this.inferType(obj) === 'String') return 'opt_u8';
@@ -706,7 +715,7 @@ export default {
     if ((objSymA?.ctype === 'tsc_thread_t' || objSymA?._isThread) && prop === 'join') return 'void';
     const objSymAvr = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     if (objSymAvr?._isAvrObj) {
-      if (obj.name === 'ADC' && prop === 'read') return 'uint16_t';
+      if ((obj as Ident).name === 'ADC' && prop === 'read') return 'uint16_t';
       return 'void';
     }
     const objSymRnd = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
@@ -835,7 +844,7 @@ export default {
       }
     }
     if (objType === 'String' || objType === 'String *') {
-      const _sret: Record<string, any> = {
+      const _sret: Record<string, string> = {
         toLowerCase: 'String', toUpperCase: 'String', trim: 'String',
         trimStart: 'String', trimEnd: 'String', repeat: 'String',
         replace: 'String', replaceAll: 'String', padStart: 'String', padEnd: 'String',
@@ -852,42 +861,42 @@ export default {
       };
       if (Object.hasOwn(_sret, prop)) return (_sret as Record<string, string>)[prop];
     }
-    if (node.callee.prop === 'fromValue' && obj.kind === 'Ident') {
+    if (prop === 'fromValue' && obj.kind === 'Ident') {
       const ed = this.classes.get(obj.name);
       if (ed?.isEnum) return `opt_${obj.name}`;
     }
-    if (node.callee.prop === 'values' && obj.kind === 'Ident') {
+    if (prop === 'values' && obj.kind === 'Ident') {
       const ed = this.classes.get(obj.name);
       if (ed?.isEnum) return `${obj.name} *`;
     }
-    if (node.callee.prop === 'toString' && obj.kind === 'Ident') {
+    if (prop === 'toString' && obj.kind === 'Ident') {
       const objSym2 = this.lookup(obj.name) as any;
       const objEnumDef = objSym2 ? this.classes.get(objSym2.ctype) : null;
       if (objEnumDef?.isStringLiteralUnion) return 'const char *';
     }
-    if (node.callee.prop === 'toString' && obj.kind === 'Member') {
+    if (prop === 'toString' && obj.kind === 'Member') {
       const enumName = obj.object?.kind === 'Ident' ? obj.object.name : null;
       const ed = enumName ? this.classes.get(enumName) : null;
       if (ed?.isEnum) return 'const char *';
     }
-    if (node.callee.prop === 'toString') {
+    if (prop === 'toString') {
       const objType5 = this.inferType(obj);
       if (objType5 && !objType5.startsWith('Array_') && !this._mapSuffix(objType5) &&
           !objType5.startsWith('opt_') && objType5 !== 'void') {
         return 'String';
       }
     }
-    const primitiveMap2: Record<string, any> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
+    const primitiveMap2: Record<string, string> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                              'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                              'f32':'float','f64':'double' };
     if (obj.kind === 'Ident' && obj.name in primitiveMap2) {
       const cT = (primitiveMap2 as Record<string, string>)[obj.name];
       const etId = this.cTypeToIdent(cT);
-      if (node.callee.prop === 'parse') return cT;
-      if (node.callee.prop === 'tryParse') return `opt_${etId}`;
+      if (prop === 'parse') return cT;
+      if (prop === 'tryParse') return `opt_${etId}`;
     }
     const objTypePromise = this.inferType(obj);
-    if (objTypePromise?.startsWith('Promise_') && node.callee.prop === 'then') {
+    if (objTypePromise?.startsWith('Promise_') && prop === 'then') {
       const cbArg = node.args[0];
       if (cbArg?.expr?.kind === 'Arrow') {
         const retType = cbArg.expr.returnType ? this.resolveType(cbArg.expr.returnType) : null;
@@ -895,13 +904,13 @@ export default {
       }
       return objTypePromise;
     }
-    if (objTypePromise?.startsWith('Promise_') && (node.callee.prop === 'catch' || node.callee.prop === 'finally')) {
+    if (objTypePromise?.startsWith('Promise_') && (prop === 'catch' || prop === 'finally')) {
       return objTypePromise;
     }
     return null;
   },
 
-  inferTypeWithParams(this: CodeGenThis, arrowNode: any, paramCType: any) {
+  inferTypeWithParams(this: CodeGenThis, arrowNode: Arrow, paramCType: string) {
     const hasParams = arrowNode.params?.length > 0;
     if (hasParams) {
       this.pushScope();

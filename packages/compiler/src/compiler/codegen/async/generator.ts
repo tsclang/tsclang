@@ -1,8 +1,15 @@
+import type { FuncDecl, Param, Decorator, Stmt, Block, Expression, Yield } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // generator.ts
+
+interface FieldInfo { name: string; ctype: string; }
+export interface GenEmitCtx { caseNum: number; loopLabels: string[]; needTerminal: boolean; }
+// Generator statement walkers handle both Stmt and bare Yield (recursed from ExprStmt)
+export type GenNode = Stmt | Yield;
+
 export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
-  emitGeneratorFunc(this: CodeGenThis, node: any) {
+  emitGeneratorFunc(this: CodeGenThis, node: FuncDecl) {
     this._initAsync();
     const { name, params, returnType, body, throwsTypes } = node;
 
@@ -16,7 +23,7 @@ export default {
       }
     }
 
-    const throwsNames: any[] = [];
+    const throwsNames: string[] = [];
     for (const t of (throwsTypes || [])) {
       if (t.kind === 'TypeRef') throwsNames.push(t.name);
     }
@@ -30,9 +37,9 @@ export default {
     const nextFn = `${name}_next`;
 
     // Scan let vars (promoted to struct)
-    const letFields: any[] = [];
-    const seenLets = new Set();
-    const walkLets = (stmts: any) => {
+    const letFields: FieldInfo[] = [];
+    const seenLets = new Set<string>();
+    const walkLets = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl' && s.varKind === 'let' && !seenLets.has(s.name)) {
@@ -49,14 +56,14 @@ export default {
     walkLets(body?.kind === 'Block' ? body.body : []);
 
     if (letFields.length > 0) {
-      const localVarNames = new Set(letFields.map((f: any) => f.name));
+      const localVarNames = new Set(letFields.map((f: FieldInfo) => f.name));
       const needsPromotion = this._genLivenessScan(body, localVarNames);
       const safeLocal = new Set([
         'int32_t', 'int64_t', 'int8_t', 'int16_t',
         'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
         'float', 'double', 'size_t', 'bool', 'int', 'void',
       ]);
-      const filtered = letFields.filter((f: any) =>
+      const filtered = letFields.filter((f: FieldInfo) =>
         needsPromotion.has(f.name) || !safeLocal.has(f.ctype)
       );
       if (filtered.length < letFields.length) {
@@ -65,9 +72,9 @@ export default {
       }
     }
 
-    const stringFields: any[] = [];
-    const classFreeFields: any[] = [];
-    const arrayFields: any[] = [];
+    const stringFields: string[] = [];
+    const classFreeFields: { name: string; freeFn: string }[] = [];
+    const arrayFields: { name: string; elemIdent: string }[] = [];
     for (const f of letFields) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
@@ -134,14 +141,14 @@ export default {
     if (!body) return;
 
     // Build next function signature
-    const paramStrs = (params || []).map((p: any) => {
+    const paramStrs = (params || []).map((p: Param) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return `${ct} ${p.name}`;
     });
     const fnSig = `static ${resultType} ${nextFn}(${stateType} *self${paramStrs.length ? ', ' + paramStrs.join(', ') : ''})`;
 
     // Set up generator self context (let vars promoted)
-    const genPromoted = new Set(letFields.map((f: any) => f.name));
+    const genPromoted = new Set(letFields.map((f: FieldInfo) => f.name));
     this._selfCtx = { promoted: genPromoted, inlined: new Map(), stringFields, classFreeFields, hasCleanup };
 
     const nextLines = this._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
@@ -151,7 +158,7 @@ export default {
     this._emitTopFn(fnSig, nextLines);
 
     // @static generator: emit static instance in BSS
-    const _hasStaticDecGen = (node.decorators ?? []).some((d: any) =>
+    const _hasStaticDecGen = (node.decorators ?? []).some((d: Decorator) =>
       d.name === 'static');
     if (_hasStaticDecGen) {
       this.topLevel.push('');
@@ -159,10 +166,10 @@ export default {
     }
   },
 
-  _buildGenNext(this: CodeGenThis, body: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any) {
+  _buildGenNext(this: CodeGenThis, body: Block | null, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null) {
     const stmts = body?.kind === 'Block' ? body.body : [];
-    const lines: any[] = [];
-    const ctx = { caseNum: 0, loopLabels: [], needTerminal: true };
+    const lines: string[] = [];
+    const ctx: GenEmitCtx = { caseNum: 0, loopLabels: [], needTerminal: true };
 
     const zeroVal = yieldType === 'String' ? '(String){0}'
                   : yieldType === 'bool' ? 'false' : '0';
@@ -206,13 +213,13 @@ export default {
     return lines;
   },
 
-  _emitGenStmtList(this: CodeGenThis, stmts: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
+  _emitGenStmtList(this: CodeGenThis, stmts: GenNode[], lines: string[], ctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
     for (const s of stmts || []) {
       this._emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
     }
   },
 
-  _emitGenStmt(this: CodeGenThis, s: any, lines: any, ctx: any, I: any, yieldType: any, resultType: any, hasThrows: any, resultCt: any, zeroVal: any) {
+  _emitGenStmt(this: CodeGenThis, s: GenNode, lines: string[], ctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
     if (!s) return;
 
     // Unwrap ExprStmt(Yield(...))
@@ -243,7 +250,7 @@ export default {
       lines.push(`        case ${loopCase}:`);
       ctx.caseNum = loopCase;
       ctx.needTerminal = false;
-      const condC = this._selfE(s.test ?? s.cond);
+      const condC = this._selfE(s.test ?? (s as { cond?: Expression }).cond);
       const doneRet = hasThrows
         ? `return (${resultType}){(${resultCt}){.ok = false}, true};`
         : `return (${resultType}){${zeroVal}, true};`;
@@ -253,8 +260,8 @@ export default {
         lines.push(`${I}if (!(${condC})) { self->_done = true; ${doneRet} }`);
       }
 
-      const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
-      let postYieldStmts: any[] = [];
+      const whileBody: GenNode[] = s.body?.kind === 'Block' ? s.body.body : [s.body];
+      let postYieldStmts: GenNode[] = [];
       let yieldFound = false;
 
       for (const ws of whileBody) {
@@ -322,7 +329,7 @@ export default {
     this._emitGenRegStmt(s, lines, I);
   },
 
-  _emitGenRegStmt(this: CodeGenThis, stmt: any, lines: any, I: any) {
+  _emitGenRegStmt(this: CodeGenThis, stmt: GenNode, lines: string[], I: string) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { varKind, name, typeAnn, init } = stmt;
@@ -345,7 +352,7 @@ export default {
         lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name} = {0};`);
       }
     } else {
-      const tmp: any[] = [];
+      const tmp: string[] = [];
       this.visitStmt(stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }

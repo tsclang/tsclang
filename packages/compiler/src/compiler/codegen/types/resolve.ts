@@ -1,8 +1,24 @@
+import type { TypeAnn, TypeTuple, TypeRef } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
 // resolve.ts
+
+interface TupleField {
+  name: string;
+  ctype: string;
+  const?: boolean;
+  rest?: boolean;
+  elemType?: string;
+  tailLen?: boolean;
+  label?: string | null | undefined;
+}
+
+// NOTE: parser emits tuple elements with `typeAnn`/`label` (ast TupleElement says `type`);
+// this runtime-accurate shape avoids casts at every access site.
+interface RtTupleEl { name?: string; typeAnn: TypeAnn; label?: string | null; rest?: boolean; optional?: boolean; }
+
 export default {
-  resolveType(this: CodeGenThis, typeNode: any) {
+  resolveType(this: CodeGenThis, typeNode: TypeAnn | string | null | undefined) {
     if (!typeNode) return 'void';
     if (typeof typeNode === 'string') return toCType(typeNode);
 
@@ -21,7 +37,7 @@ export default {
         return 'size_t';
       }
       if (name === 'number') return PRIMITIVE_MAP[this._defaultNumber] || 'double';
-      if (!typeNode?._internal) {
+      if (!(typeNode as { _internal?: boolean })._internal) {
         if (name === 'bool') {
           throw this.error('"bool" is not a valid TSC type; use "boolean"', typeNode);
         }
@@ -248,16 +264,17 @@ export default {
   },
 
   // Build tuple struct name and emit typedef if needed
-  resolveTupleType(this: CodeGenThis, typeNode: any, namedAs = null) {
-    const { elements, readonly } = typeNode;
+  resolveTupleType(this: CodeGenThis, typeNode: TypeTuple, namedAs: string | null = null) {
+    const elements = typeNode.elements as unknown as RtTupleEl[];
+    const readonly = (typeNode as { readonly?: boolean }).readonly;
 
     // Build struct fields
-    const fields: any[] = [];
+    const fields: TupleField[] = [];
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
       if (el.rest) {
         // Rest element: ...T[] → T *_tail; int32_t _tail_len
-        const et = this.resolveType(el.typeAnn.element ?? el.typeAnn);
+        const et = this.resolveType((el.typeAnn as { element?: TypeAnn }).element ?? el.typeAnn);
         fields.push({ name: `_tail`, ctype: `${et} *`, const: false, rest: true, elemType: et });
         fields.push({ name: `_tail_len`, ctype: `int32_t`, const: false, tailLen: true });
       } else {
@@ -282,8 +299,8 @@ export default {
       structName = namedAs;
     } else {
       const elNames = elements
-        .filter((e: any) => !e.rest)
-        .map((e: any) => this.cTypeToIdent(this.resolveType(e.typeAnn)));
+        .filter((e: RtTupleEl) => !e.rest)
+        .map((e: RtTupleEl) => this.cTypeToIdent(this.resolveType(e.typeAnn)));
       const prefix = readonly ? 'readonly_tuple' : 'tuple';
       structName = `${prefix}_${elNames.join('_')}`;
     }
@@ -292,7 +309,7 @@ export default {
 
     if (!this._emittedTuples.has(structName)) {
       this._emittedTuples.add(structName);
-      const fieldDecls = fields.map((f: any) => {
+      const fieldDecls = fields.map((f: TupleField) => {
         const ct = f.ctype.endsWith(' *') ? f.ctype.trimEnd() : f.ctype;
         return `${f.const ? 'const ' : ''}${ct}${ct.endsWith('*') ? '' : ' '}${f.name};`;
       }).join(' ');
@@ -306,7 +323,7 @@ export default {
 
   // Generate a full C declarator: handles function pointer types correctly
   // e.g. typeDecl({kind:'TypeFunc', params:[i32], ret:i32}, 'f') → 'int32_t (*f)(int32_t)'
-  typeDecl(this: CodeGenThis, typeNode: any, name: any) {
+  typeDecl(this: CodeGenThis, typeNode: TypeAnn | null | undefined, name: string | null) {
     if (!typeNode) return `void *${name ? ' ' + name : ''}`;
     if (typeNode.kind === 'TypeFunc') {
       return `tsc_closure${name ? ' ' + name : ''}`;

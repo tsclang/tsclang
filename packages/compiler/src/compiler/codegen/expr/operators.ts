@@ -1,9 +1,10 @@
+import type { Binary, Unary, Expression } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // operators.ts
 export default {
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
-  binaryWidened(this: CodeGenThis, node: any, targetCtype: any, lines: any, depth: any) {
-    const widenOperand = (operand: any): any => {
+  binaryWidened(this: CodeGenThis, node: Binary, targetCtype: string, lines: string[], depth: number) {
+    const widenOperand = (operand: Expression): string => {
       if (operand.kind === 'Literal' && operand.litType === 'number') {
         return this.literalToCTyped(operand, targetCtype);
       }
@@ -17,7 +18,7 @@ export default {
     return `${lC} ${node.op} ${rC}`;
   },
 
-  binaryToC(this: CodeGenThis, node: any, lines: any, depth: any) {
+  binaryToC(this: CodeGenThis, node: Binary, lines: string[], depth: number) {
     this._checkNoBareThrows(node.left);
     this._checkNoBareThrows(node.right);
     // instanceof: obj instanceof TypeName
@@ -57,7 +58,7 @@ export default {
 
     // Optional type comparisons: opt_T != null → opt.has_value, opt_T == null → !opt.has_value
     if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
-      const isNull = (n: any) => n.kind === 'Literal' && n.litType === 'null';
+      const isNull = (n: Expression) => n.kind === 'Literal' && n.litType === 'null';
       const optSide = isNull(node.right) ? node.left : isNull(node.left) ? node.right : null;
       if (optSide) {
         const optType = this.inferType(optSide);
@@ -70,7 +71,7 @@ export default {
 
     // Pool opt_ref null check: p != null → p.has_value, p == null → !p.has_value
     if (node.op === '!=' || node.op === '!==' || node.op === '==' || node.op === '===') {
-      const _isNullLit = (n: any) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+      const _isNullLit = (n: Expression) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
       const _nullSide = _isNullLit(node.right) ? 'right' : _isNullLit(node.left) ? 'left' : null;
       if (_nullSide) {
         const _other = _nullSide === 'right' ? node.left : node.right;
@@ -135,7 +136,7 @@ export default {
     }
 
     // Wrap sub-expressions in parens when needed for precedence
-    const needsParens = (child: any, parentOp: any, isRight: any) => {
+    const needsParens = (child: Expression, parentOp: string, isRight: boolean) => {
       if (child.kind !== 'Binary') return child.kind === 'Assign';
       const prec: Record<string, number> = { '**':13, '*':12, '/':12, '%':12, '+':11, '-':11,
         '<<':10, '>>':10, '>>>':10, '<':9, '>':9, '<=':9, '>=':9,
@@ -165,7 +166,7 @@ export default {
           const leftIsLet  = node.left.kind  === 'Ident' && this.lookup(node.left.name)?.varKind  === 'let';
           const rightIsLet = node.right.kind === 'Ident' && this.lookup(node.right.name)?.varKind === 'let';
           if (leftIsLet || rightIsLet) {
-            const [tsA, tsB] = [a,b].map((t: any) => this.ctypeToTsName(t));
+            const [tsA, tsB] = [a,b].map((t: string) => this.ctypeToTsName(t));
             const widthA = a.match(/\d+/)?.[0];
             const widthB = b.match(/\d+/)?.[0];
             const reason = widthA === widthB
@@ -247,7 +248,7 @@ export default {
       const rt = this.inferType(node.right);
       const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
       if (!NUMERIC.has(lt) || !NUMERIC.has(rt)) {
-        const tsName = (t: any) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+        const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
         throw this.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(lt)}' and '${tsName(rt)}'`, node);
       }
       const needsCast = this._hasFloatVar(node.left) || this._hasFloatVar(node.right);
@@ -283,7 +284,7 @@ export default {
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
-    const _isIntOperand = (n: any, t: any) => {
+    const _isIntOperand = (n: Expression, t: string) => {
       if (intTypes.has(t)) return true;
       if (t === undefined) return true;
       if (t === 'double' || t === 'float') {
@@ -303,7 +304,7 @@ export default {
           const builtin = op === '+' ? '__builtin_add_overflow'
                         : op === '-' ? '__builtin_sub_overflow'
                         : '__builtin_mul_overflow';
-          const typeRank: Record<string, any> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
+          const typeRank: Record<string, number> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
           const resultType = (typeRank[lt] ?? 2) >= (typeRank[rt] ?? 2) ? (lt ?? 'int32_t') : (rt ?? 'int32_t');
           const tmp = `_math_${this.tempCount++}`;
           const opName = op === '+' ? 'add' : op === '-' ? 'sub' : 'mul';
@@ -318,7 +319,7 @@ export default {
       const slt = this.inferType(node.left);
       const srt = this.inferType(node.right);
       if (signedIntSet.has(slt) && signedIntSet.has(srt)) {
-        const typeRank: Record<string, any> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
+        const typeRank: Record<string, number> = { 'int8_t': 0, 'int16_t': 1, 'int32_t': 2, 'int64_t': 3 };
         const resultType = typeRank[slt] >= typeRank[srt] ? slt : srt;
         const uType = resultType.replace('int', 'uint');
         return `(${resultType})((${uType})${l} ${op} (${uType})${r})`;
@@ -369,7 +370,7 @@ export default {
     return `${l} ${op} ${r}`;
   },
 
-  _hasFloatVar(this: CodeGenThis, node: any) {
+  _hasFloatVar(this: CodeGenThis, node: Expression) {
     if (!node) return false;
     if (node.kind === 'Literal') return false;
     if (node.kind === 'Ident') {
@@ -382,7 +383,7 @@ export default {
     return t === 'double' || t === 'float';
   },
 
-  isStringExpr(this: CodeGenThis, node: any) {
+  isStringExpr(this: CodeGenThis, node: Expression) {
     if (node.kind === 'Literal' && (node.litType === 'string' || node.litType === 'char')) return true;
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
@@ -399,7 +400,7 @@ export default {
     return false;
   },
 
-  _derefStringPtr(this: CodeGenThis, node: any, cexpr: any) {
+  _derefStringPtr(this: CodeGenThis, node: Expression, cexpr: string) {
     if (node.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype === 'String *') return `(*${cexpr})`;
@@ -407,17 +408,17 @@ export default {
     return cexpr;
   },
 
-  _flattenStringConcat(this: CodeGenThis, node: any) {
+  _flattenStringConcat(this: CodeGenThis, node: Expression) {
     if (node.kind === 'Binary' && node.op === '+' && this.isStringExpr(node.left)) {
       return [...this._flattenStringConcat(node.left), node.right];
     }
     return [node];
   },
 
-  _stringConcatChain(this: CodeGenThis, operands: any, lines: any, depth: any) {
+  _stringConcatChain(this: CodeGenThis, operands: Expression[], lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
-    const parts: any[] = [];
-    const temps: any[] = [];
+    const parts: string[] = [];
+    const temps: string[] = [];
 
     for (const operand of operands) {
       const c = this.exprToC(operand, lines, depth);
@@ -459,7 +460,7 @@ export default {
   // ----------------------------------------------------------------
   // Unary
   // ----------------------------------------------------------------
-  unaryToC(this: CodeGenThis, node: any, lines: any, depth: any) {
+  unaryToC(this: CodeGenThis, node: Unary, lines: string[], depth: number) {
     this._checkNoBareThrows(node.expr);
     if (node.op === '&' || node.op === '*') {
       if (node.op === '*') {
@@ -467,7 +468,7 @@ export default {
         const ctype = sym?.ctype ?? this.inferType(node.expr);
         if (ctype?.startsWith('opt_ref_')) {
           const e = this.exprToC(node.expr, lines, depth);
-          if (this._narrowedVars?.has(node.expr.name)) {
+          if (node.expr.kind === 'Ident' && this._narrowedVars?.has(node.expr.name)) {
             return `*${e}`;
           }
           return `*${e}.value`;
@@ -488,7 +489,7 @@ export default {
         const et = this.inferType(node.expr);
         const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
         if (!NUMERIC.has(et)) {
-          const tsName = (t: any) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
+          const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
           const label = node.op === '~' ? `bitwise op '~'` : `unary '${node.op}'`;
           throw this.error(`TypeError: ${label} not applicable to '${tsName(et)}'`, node);
         }

@@ -1,12 +1,21 @@
+import type { Stmt, Expression, Switch, ObjLitProp, ArrayPatternElement, Argument, Call, Ident, Block } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
+import type { AsyncEmitCtx } from './async-emit.js';
 // async-stmt.ts
+
+interface SpawnInfo {
+  userVar: string; threadVar: string; envType: string; fnName: string; envVar: string;
+  freeVars: { name: string; ctype: string }[];
+}
+interface AsyncSub { stateType: string; pollFn: string; resultCType?: string; }
+
 export default {
-  _emitAsyncStmt(this: CodeGenThis, s: any, lines: any, ctx: any, I: any) {
+  _emitAsyncStmt(this: CodeGenThis, s: Stmt, lines: string[], ctx: AsyncEmitCtx, I: string) {
     if (!s) return;
 
     // ── spawn VarDecl: emit call site using pre-emitted env/fn ──
     if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
-      const si = this._selfCtx?.spawnInfos?.find((info: any) => info.userVar === s.name);
+      const si = this._selfCtx?.spawnInfos?.find((info: SpawnInfo) => info.userVar === s.name);
       if (!si) return;
       // Patch previous line (e.g. "        case 0:") to open a block
       if (lines.length > 0) lines[lines.length - 1] += ' {';
@@ -33,7 +42,7 @@ export default {
       // Promise.race / Promise.any: poll all, take first done's result
       if (ai.kind === 'promise-race' || ai.kind === 'promise-any') {
         const baseIdx = ctx.awaitIdx;
-        const doneConds: any[] = [];
+        const doneConds: { idx: number; sub: AsyncSub }[] = [];
         for (const item of ai.items) {
           const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
           const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
@@ -78,7 +87,7 @@ export default {
           const optsIdx = this._fetchOptsCount ?? 0;
           this._fetchOptsCount = optsIdx + 1;
           const optsVar = `_opts_${optsIdx}`;
-          const optsFields = (optsArg.props ?? []).map((p: any) => `.${p.key} = ${this._selfE(p.value)}`);
+          const optsFields = (optsArg.props ?? []).map((p: ObjLitProp) => `.${p.key} = ${this._selfE(p.value)}`);
           lines.push(`${I}TscFetchOptions ${optsVar} = { ${optsFields.join(', ')} };`);
           lines.push(`${I}self->_await_${awaitIdx} = tsc_fetch_async(${urlC}, &${optsVar});`);
           lines.push(`${I}self->_state = ${ctx.nextCase};`);
@@ -154,7 +163,7 @@ export default {
       this._emitAsyncTransition(lines, ctx, I);
 
       // Poll all + combined done check
-      const notDone: any[] = [];
+      const notDone: string[] = [];
       for (let j = 0; j < ai.items.length; j++) {
         const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
           ? ai.items[j].expr.callee.name : null;
@@ -168,8 +177,10 @@ export default {
       if (notDone.length) lines.push(`${I}if (${notDone.join(' || ')}) return;`);
 
       // Assign results to destructured vars (unwrap .value for Result_T_Err types)
-      for (let j = 0; j < (s.pattern || []).length; j++) {
-        const elem = s.pattern[j];
+      // NOTE: VarDestructArr.pattern is an array at runtime (parser emits elems directly)
+      const patElems = s.pattern as unknown as (ArrayPatternElement | null)[];
+      for (let j = 0; j < (patElems || []).length; j++) {
+        const elem = patElems[j];
         if (!elem) continue;
         const callName = ai.items[j]?.expr?.callee?.kind === 'Ident'
           ? ai.items[j].expr.callee.name : null;
@@ -203,7 +214,7 @@ export default {
       const awaitInner = s.expr.expr;
       if (awaitInner?.kind === 'Call' && awaitInner.callee?.kind === 'Member' && awaitInner.callee.prop === 'join') {
         const tObj = awaitInner.callee.object;
-        const alias = this._selfCtx?.spawnVarAlias?.get(tObj?.name);
+        const alias = this._selfCtx?.spawnVarAlias?.get((tObj as Ident | undefined)?.name);
         if (alias) {
           lines.push(`${I}if (!tsc_thread_done(self->${alias})) return;`);
           lines.push(`${I}tsc_thread_join(self->${alias});`);
@@ -218,14 +229,14 @@ export default {
       // Promise.allSettled / race / any as statement (no result capture)
       if (ai.kind === 'promise-allSettled' || ai.kind === 'promise-race' || ai.kind === 'promise-any') {
         const baseIdx = ctx.awaitIdx;
-        const subItems: any[] = [];
+        const subItems: { idx: number; sub: AsyncSub }[] = [];
         for (const item of ai.items) {
           const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
           const sub = callName && this._asyncFuncs?.has(callName) ? this._asyncFuncs.get(callName) : null;
           if (sub) { lines.push(`${I}self->_await_${ctx.awaitIdx++} = (${sub.stateType}){0};`); subItems.push({ idx: baseIdx + subItems.length, sub }); }
         }
         this._emitAsyncTransition(lines, ctx, I);
-        const notDone: any[] = [];
+        const notDone: string[] = [];
         for (const { idx, sub } of subItems) {
           lines.push(`${I}${sub.pollFn}(&self->_await_${idx});`);
           notDone.push(`!self->_await_${idx}._done`);
@@ -291,7 +302,7 @@ export default {
           }
         }
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
-        const catchEndsControl = (catchBody?.body || []).some((cs: any) => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
+        const catchEndsControl = (catchBody?.body || []).some((cs: Stmt) => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
         if (!catchEndsControl) {
           if (this._selfCtx.hasCleanup) {
             lines.push(`${I}    goto _cleanup;`);
@@ -310,14 +321,17 @@ export default {
 
     // ── for await ──
     if (s.kind === 'ForOf' && s.await) {
-      const genName = s.iterable?.callee?.kind === 'Ident' ? s.iterable.callee.name
-                    : s.iterable?.kind === 'Ident' ? s.iterable.name : null;
+      // NOTE: ForOf.binding is an Ident-like node at runtime (parser emits {kind:'Ident',name})
+      const iter = s.iterable as Call | Ident | undefined;
+      const iterCallee = (iter as Call | undefined)?.callee;
+      const genName = iterCallee?.kind === 'Ident' ? iterCallee.name
+                    : iter?.kind === 'Ident' ? iter.name : null;
       const gi = genName && this._generatorFuncs?.has(genName)
         ? this._generatorFuncs.get(genName) : null;
       if (!gi) return;
 
       const genIdx = ctx.genIdx++;
-      const genArgs = s.iterable?.kind === 'Call' ? (s.iterable.args || []) : [];
+      const genArgs = iter?.kind === 'Call' ? (iter.args || []) : [];
       const loopCase = ctx.nextCase;
 
       lines.push(`${I}self->_gen_${genIdx} = (${gi.stateType}){0};`);
@@ -327,7 +341,7 @@ export default {
       lines.push(`        case ${loopCase}: {`);
       ctx.nextCase++;
 
-      const genArgsC = genArgs.map((a: any) => this._selfE(a.expr)).join(', ');
+      const genArgsC = genArgs.map((a: Argument) => this._selfE(a.expr)).join(', ');
       const nextArgs = genArgsC ? `&self->_gen_${genIdx}, ${genArgsC}` : `&self->_gen_${genIdx}`;
       const nrVar = `_nr_${genIdx}`;
       lines.push(`${I}    ${gi.resultType} ${nrVar} = ${gi.nextFn}(${nextArgs});`);
@@ -337,12 +351,13 @@ export default {
         lines.push(`${I}    if (${nrVar}.done) { self->_done = true; return; }`);
       }
 
-      if (s.binding?.kind === 'Ident') {
-        lines.push(`${I}    const ${gi.valueType} ${s.binding.name} = ${nrVar}.value;`);
+      const bnd = s.binding as unknown as Ident | undefined;
+      if (bnd?.kind === 'Ident') {
+        lines.push(`${I}    const ${gi.valueType} ${bnd.name} = ${nrVar}.value;`);
       }
 
-      for (const bs of s.body?.body || []) {
-        const tmp: any[] = [];
+      for (const bs of (s.body as Block).body || []) {
+        const tmp: string[] = [];
         this.visitStmt(bs, tmp, 0);
         for (const l of tmp) lines.push(`${I}    ${l.trim()}`);
       }
@@ -409,7 +424,7 @@ export default {
   },
 
   // Emit a regular statement (non-VarDecl, non-Return, non-Await) in async context
-  _emitAsyncRegStmt(this: CodeGenThis, stmt: any, lines: any, I: any) {
+  _emitAsyncRegStmt(this: CodeGenThis, stmt: Stmt, lines: string[], I: string) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { name, init } = stmt;
@@ -433,7 +448,7 @@ export default {
           if (ct) this.define(name, { ctype: ct, varKind: stmt.varKind ?? 'const' });
         }
       } else {
-        const tmp: any[] = [];
+        const tmp: string[] = [];
         this.visitStmt(stmt, tmp, 0);
         for (const l of tmp) lines.push(I + l.trim());
       }
@@ -466,26 +481,28 @@ export default {
           lines.push(`${I}return;`);
         }
       } else {
-        const tmp: any[] = [];
+        const tmp: string[] = [];
         this.visitStmt(stmt, tmp, 0);
         for (const l of tmp) lines.push(I + l.trim());
       }
     } else {
-      const tmp: any[] = [];
+      const tmp: string[] = [];
       this.visitStmt(stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }
   },
 
-  _emitAsyncSwitch(this: CodeGenThis, node: any, lines: any, ctx: any, I: any) {
+  _emitAsyncSwitch(this: CodeGenThis, node: Switch, lines: string[], ctx: AsyncEmitCtx, I: string) {
     this._validateSwitchFallthrough(node);
     const discC = this._selfE(node.discriminant);
     const discType = this.inferType(node.discriminant);
     const discEnumDef = this.classes.get(discType);
 
     // Build grouped cases: consecutive empty cases + final non-empty case
-    const groups: any[] = [];
-    for (const c of node.cases) {
+    const groups: { tests: Expression[]; hasBody: boolean; body?: Stmt[] }[] = [];
+    // NOTE: SwitchCase.consequent in AST, but parser emits { test, body } at runtime
+    const cases = node.cases as unknown as { test: Expression | null; body: Stmt[] }[];
+    for (const c of cases) {
       if (c.body.length === 0) {
         // Empty case — starts a new group or extends current one
         if (groups.length === 0 || groups[groups.length - 1].hasBody) {
@@ -508,7 +525,7 @@ export default {
     let first = true;
     for (const g of groups) {
       const isDefault = g.tests.length === 0;
-      const condParts: any[] = [];
+      const condParts: string[] = [];
       for (const t of g.tests) {
         if (discEnumDef?.isStringLiteralUnion && t.kind === 'Literal' && t.litType === 'string') {
           condParts.push(`${discC} == ${discType}_${t.value}`);
@@ -563,9 +580,10 @@ export default {
   },
 
   // Evaluate an expression with the current _selfCtx substitution
-  _selfE(this: CodeGenThis, expr: any) {
+  _selfE(this: CodeGenThis, expr: Expression | null | undefined) {
     if (!expr) return '0';
     const r = this.exprToC(expr, [], 0);
     return r;
   },
 };
+

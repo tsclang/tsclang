@@ -1,8 +1,19 @@
+import type { FuncDecl, Decorator, Block, Stmt, While, DoWhile, For, ForOf, Expression, TypeRef } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // async-emit.ts
+
+export interface AsyncEmitCtx {
+  awaitIdx: number;
+  genIdx: number;
+  nextCase: number;
+  loopLabels: string[];
+  terminated: boolean;
+}
+interface FieldInfo { name: string; ctype: string; }
+
 export default {
   // ─── emitAsyncFunc ────────────────────────────────────────────────────────
-  emitAsyncFunc(this: CodeGenThis, node: any) {
+  emitAsyncFunc(this: CodeGenThis, node: FuncDecl) {
     this._initAsync();
     const { name, params, returnType, body } = node;
 
@@ -19,7 +30,7 @@ export default {
     // throws handling: async fn that throws → _result is Result_T_Err
     const throwsTypes = node.throwsTypes || [];
     const hasThrows = throwsTypes.length > 0;
-    const throwsKey = hasThrows ? (throwsTypes[0].name === 'Error' ? 'TscError' : throwsTypes[0].name) : null;
+    const throwsKey = hasThrows ? ((throwsTypes[0] as TypeRef).name === 'Error' ? 'TscError' : (throwsTypes[0] as TypeRef).name) : null;
 
     const innerResultCType = this._asyncRetType(returnType);
     // isVoidReturn: return type is void (no meaningful return value)
@@ -62,7 +73,7 @@ export default {
     // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
     if (innerResultCType && innerResultCType !== 'int32_t') {
       const returnedVars = new Set();
-      const scanReturns = (stmts: any): any => {
+      const scanReturns = (stmts: Stmt[]): void => {
         for (const s of stmts || []) {
           if (s.kind === 'Return' && s.value?.kind === 'Ident') returnedVars.add(s.value.name);
           if (s.kind === 'Block') scanReturns(s.body);
@@ -94,7 +105,7 @@ export default {
     }
 
     // Compact if no promoted body vars; multiline if any body vars exist
-    const _hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
+    const _hasStaticDec = (node.decorators ?? []).some((d: Decorator) => d.name === 'static');
     if (_hasStaticDec || bodyFields.length === 0) {
       this._emitStructCompact(stateType, sFields);
     } else {
@@ -111,7 +122,7 @@ export default {
     if (!body) return;
 
     // Check for unknown await targets (no poll function available)
-    const canEmitPoll = awaitStates.every((af: any) => !af.isUnknown);
+    const canEmitPoll = awaitStates.every((af: { isUnknown?: boolean }) => !af.isUnknown);
     if (!canEmitPoll) return;
 
     // Build promoted set
@@ -123,9 +134,9 @@ export default {
     const spawnVarAlias = new Map();
     for (const si of spawnInfos) spawnVarAlias.set(si.userVar, si.threadVar);
 
-    const stringFields: any[] = [];
-    const classFreeFields: any[] = [];
-    const arrayFields: any[] = [];
+    const stringFields: string[] = [];
+    const classFreeFields: { name: string; freeFn: string }[] = [];
+    const arrayFields: { name: string; elemIdent: string }[] = [];
     for (const f of [...paramFields, ...bodyFields]) {
       if (f.ctype === 'String') {
         stringFields.push(f.name);
@@ -147,7 +158,7 @@ export default {
       }
     }
     const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0 || arrayFields.length > 0;
-    const paramStringFields = stringFields.filter((n: any) => paramFields.some((f: any) => f.name === n));
+    const paramStringFields = stringFields.filter((n: string) => paramFields.some((f: FieldInfo) => f.name === n));
 
     this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, arrayFields, hasCleanup, paramStringFields };
     this._inAsyncFunc = true;
@@ -159,12 +170,12 @@ export default {
 
     // Extra poll params from spawn free vars
     const extraParamsStr = extraPollParams.length > 0
-      ? ', ' + extraPollParams.map((f: any) => `${f.ctype} ${f.name}`).join(', ')
+      ? ', ' + extraPollParams.map((f: FieldInfo) => `${f.ctype} ${f.name}`).join(', ')
       : '';
     this._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
 
     // @static cooperative task: emit static instance, register for main scheduler
-    const hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
+    const hasStaticDec = (node.decorators ?? []).some((d: Decorator) => d.name === 'static');
     if (hasStaticDec && this._asyncName === 'state_machine') {
       this.topLevel.push('');
       this.topLevel.push(`static ${stateType} _${name}_instance;`);
@@ -181,10 +192,10 @@ export default {
     }
   },
 
-  _buildAsyncPoll(this: CodeGenThis, body: any) {
+  _buildAsyncPoll(this: CodeGenThis, body: Block | null) {
     const stmts = body?.kind === 'Block' ? body.body : [];
-    const lines: any[] = [];
-    const ctx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
+    const lines: string[] = [];
+    const ctx: AsyncEmitCtx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
     const sc = this._selfCtx;
 
     lines.push('    switch (self->_state) {');
@@ -230,7 +241,7 @@ export default {
     return lines;
   },
 
-  _emitAsyncStmtList(this: CodeGenThis, stmts: any, lines: any, ctx: any, I: any) {
+  _emitAsyncStmtList(this: CodeGenThis, stmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
     for (let i = 0; i < stmts.length; i++) {
       const s = stmts[i];
       if (s?.kind === 'While') {
@@ -253,9 +264,9 @@ export default {
     }
   },
 
-  _emitAsyncWhile(this: CodeGenThis, s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
+  _emitAsyncWhile(this: CodeGenThis, s: While, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
     const loopCase = ctx.nextCase++;
-    const condC = this._selfE(s.cond ?? s.test);
+    const condC = this._selfE((s as { cond?: Expression }).cond ?? s.test);
     const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `while_${loopCase}_end`;
 
@@ -296,9 +307,9 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncDoWhile(this: CodeGenThis, s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
+  _emitAsyncDoWhile(this: CodeGenThis, s: DoWhile, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
     const loopCase = ctx.nextCase++;
-    const condC = this._selfE(s.cond ?? s.test);
+    const condC = this._selfE((s as { cond?: Expression }).cond ?? s.test);
     const doBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `dowhile_${loopCase}_end`;
     const contLabel = `dowhile_${loopCase}_cont`;
@@ -341,7 +352,7 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncFor(this: CodeGenThis, s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
+  _emitAsyncFor(this: CodeGenThis, s: For, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
     const loopCase = ctx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `for_${loopCase}_end`;
@@ -412,7 +423,7 @@ export default {
     if (!isNested) ctx.terminated = true;
   },
 
-  _emitAsyncForOf(this: CodeGenThis, s: any, remainingStmts: any, lines: any, ctx: any, I: any) {
+  _emitAsyncForOf(this: CodeGenThis, s: ForOf, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
     const loopCase = ctx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `forof_${loopCase}_end`;
@@ -453,7 +464,7 @@ export default {
 
     // Binding
     const qual = s.varKind === 'const' ? 'const ' : '';
-    const bindName = s.binding?.kind === 'Ident' ? s.binding.name : null;
+    const bindName = (s.binding as { kind: string; name?: string }).kind === 'Ident' ? (s.binding as { name?: string }).name : null;
     if (bindName) {
       const isComplex = !this._isSimpleCType(elemType);
       if (isComplex) {
@@ -512,7 +523,7 @@ export default {
   },
 
   // Emit: self->_state = N; /* fall through */ case N:
-  _emitAsyncTransition(this: CodeGenThis, lines: any, ctx: any, I: any) {
+  _emitAsyncTransition(this: CodeGenThis, lines: string[], ctx: AsyncEmitCtx, I: string) {
     lines.push(`${I}self->_state = ${ctx.nextCase};`);
     lines.push(`${I}/* fall through */`);
     lines.push(`        case ${ctx.nextCase}:`);
@@ -520,7 +531,7 @@ export default {
   },
 
   // Check for await on a non-async/non-callable expression and throw if found
-  _checkAwaitTarget(this: CodeGenThis, awaitNode: any) {
+  _checkAwaitTarget(this: CodeGenThis, awaitNode: { expr?: Expression } | null | undefined) {
     const expr = awaitNode?.expr;
     if (!expr) return;
     if (expr.kind === 'Ident') {
