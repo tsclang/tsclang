@@ -3,7 +3,12 @@
 
 import { TK, KEYWORDS } from './lexer.js';
 import { TscError } from './error.js';
-import type { Token, Program } from '@tsclang/ast';
+import type {
+  Token, Program, Stmt, Expression, TypeAnn, Block,
+  Param, Decorator, Argument, ObjLitProp, ImportName,
+  SwitchCase, CatchClause, ClassMember, ArrayPatternElement,
+  TypeRef,
+} from '@tsclang/ast';
 
 export function parse(tokens: Token[], filename: string = '<input>', src: string | null = null): { ast: Program; errors: TscError[] } {
   let pos = 0;
@@ -38,7 +43,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
   function peek(n = 1) { return tokens[pos + n]; }
   function done() { return cur().type === TK.EOF; }
 
-  function err(msg: any, tok = cur()) {
+  function err(msg: string, tok: Token = cur()) {
     throw new TscError(msg, {
       filename,
       line:   tok.line,
@@ -66,7 +71,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
 
   function eatSemi() { tryEat(TK.SEMI); } // optional semicolons
 
-  function checkThrowsTypes(types: any) {
+  function checkThrowsTypes(types: TypeAnn[]) {
     for (const t of types) {
       if (t.kind === 'TypeRef' && t.name === 'never') err('"never" cannot be used in "throws"');
     }
@@ -92,12 +97,12 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
   // -------------------------------------------------------------------------
   // Type annotation  e.g. : i32 | null, : string[], : Map<K,V>
   // -------------------------------------------------------------------------
-  function parseTypeAnnotation(): any {
+  function parseTypeAnnotation(): TypeAnn {
     return parseTypeUnion();
   }
 
-  function parseTypeUnion(): any {
-    let t = parseTypeSingle();
+  function parseTypeUnion(): TypeAnn {
+    let t: TypeAnn = parseTypeSingle();
     while (cur().type === TK.PIPE) {
       eat(TK.PIPE);
       const right = parseTypeSingle();
@@ -106,7 +111,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     return t;
   }
 
-  function parseTypeSingle(): any {
+  function parseTypeSingle(): TypeAnn {
     // Parenthesized type or function type: (T1, T2) => R or ((T) => R)[]
     if (cur().type === TK.LPAREN) {
       // Lookahead: scan for matching ')' and check if followed by '=>'
@@ -120,7 +125,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       if (afterParen === TK.ARROW) {
         // Function type: (T1, T2, ...) => R
         eat(TK.LPAREN);
-        const paramTypes: any[] = [];
+        const paramTypes: TypeAnn[] = [];
         while (cur().type !== TK.RPAREN) {
           // Allow optional param name before type: (x: i32) or just (i32)
           if (cur().type === TK.IDENT && peek().type === TK.COLON) {
@@ -132,7 +137,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         eat(TK.RPAREN);
         eat(TK.ARROW);
         const ret = parseTypeUnion();
-        let t = { kind: 'TypeFunc', params: paramTypes, ret };
+        let t: TypeAnn = { kind: 'TypeFunc', params: paramTypes, ret };
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
           t = { kind: 'TypeArray', element: t } as any;
@@ -141,7 +146,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       } else {
         // Grouped type: ((T) => R)[] — parse inner and apply array suffix
         eat(TK.LPAREN);
-        let t = parseTypeUnion();
+        let t: TypeAnn = parseTypeUnion();
         eat(TK.RPAREN);
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
@@ -185,9 +190,9 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       }
       if (cur().type === TK.LBRACK) {
         eat(TK.LBRACK);
-        const elements: any[] = [];
+        const elements: { typeAnn: TypeAnn; label: string | null; rest: boolean; optional: boolean }[] = [];
         while (cur().type !== TK.RBRACK) {
-          let label: any = null;
+          let label: string | null = null;
           let rest = false;
           let optional = false;
           if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; }
@@ -223,7 +228,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         for (const el of elements) {
           if (el.label === 'length') err('"length" is a reserved label for tuples');
         }
-        let t = { kind: 'TypeTuple', elements, readonly: isTupleReadonly };
+        let t: TypeAnn = { kind: 'TypeTuple', elements, readonly: isTupleReadonly } as unknown as TypeAnn;
         // Array suffix: [T1, T2][]
         while (cur().type === TK.LBRACK && peek().type === TK.RBRACK) {
           eat(TK.LBRACK); eat(TK.RBRACK);
@@ -238,7 +243,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     // Inline object type: { x: f64; y: f64 } or { getX(): i32; }
     if (cur().type === TK.LBRACE) {
       eat(TK.LBRACE);
-      const fields: any[] = [];
+      const fields: { name: string; typeAnn: TypeAnn; optional: boolean; isMethod?: boolean }[] = [];
       while (cur().type !== TK.RBRACE) {
         const fname = eat(TK.IDENT).value;
         const fopt = tryEat(TK.QUEST) !== null;
@@ -258,7 +263,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         tryEat(TK.SEMI); tryEat(TK.COMMA);
       }
       eat(TK.RBRACE);
-      return { kind: 'TypeObject', fields };
+      return { kind: 'TypeObject', fields } as unknown as TypeAnn;
     }
 
     // Optional prefix: Ref<T>, Mut<T>, Arc<T>, Weak<T>, etc.
@@ -266,7 +271,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     if (cur().type === TK.IDENT && cur().value === 'keyof') {
       eat(TK.IDENT);
       const target = parseTypeSingle();
-      return { kind: 'TypeKeyOf', target };
+      return { kind: 'TypeKeyOf', target } as unknown as TypeAnn;
     }
 
     // typeof X in type position (e.g. ReturnType<typeof fn>)
@@ -281,7 +286,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       name = eat(TK.IDENT).value;
     }
 
-    let typeArgs: any[] = [];
+    let typeArgs: TypeAnn[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       typeArgs.push(parseTypeUnion());
@@ -289,7 +294,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       eatGT();
     }
 
-    let t = { kind: 'TypeRef', name, typeArgs };
+    let t: TypeAnn = { kind: 'TypeRef', name, typeArgs };
 
     // Fixed-size array suffix: T[N]
     if (cur().type === TK.LBRACK && peek().type === TK.NUMBER) {
@@ -311,14 +316,14 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
   // -------------------------------------------------------------------------
   // Decorators  @name, @name(args)
   // -------------------------------------------------------------------------
-  function parseDecorators() {
-    const decorators: any[] = [];
+  function parseDecorators(): Decorator[] {
+    const decorators: Decorator[] = [];
     while (cur().type === TK.AT) {
       eat(TK.AT);
       let name = eat(TK.IDENT).value;
       // dotted decorators: @some.name etc.
       while (cur().type === TK.DOT) { eat(TK.DOT); name += '.' + eat(TK.IDENT).value; }
-      let args: any = null;
+      let args: Expression[] | null = null;
       if (cur().type === TK.LPAREN) {
         eat(TK.LPAREN);
         args = [];
@@ -328,7 +333,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         }
         eat(TK.RPAREN);
       }
-      decorators.push({ name, args });
+      decorators.push({ name, args } as unknown as Decorator);
     }
     return decorators;
   }
@@ -337,7 +342,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
   // Statements
   // -------------------------------------------------------------------------
   function parseProgram(): Program {
-    const body: any[] = [];
+    const body: Stmt[] = [];
     while (!done()) {
       if (cur().type === TK.HASH) {
         errors.push(new TscError(`SyntaxError: unexpected '#[...]' directive; use CLI flags (--target, --allocator, --scheduler) or tsc.package.json instead`, {
@@ -358,7 +363,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       }
       try {
         const s = parseStmt();
-        if (s.kind === 'VarDecls') s.decls.forEach((d: any) => body.push(d));
+        if (s.kind === 'VarDecls') s.decls.forEach(d => body.push(d));
         else body.push(s);
       } catch (e: any) {
         if (e.isTscError) {
@@ -374,34 +379,34 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     return { kind: 'Program', body };
   }
 
-  function parseStmt(preConsumedDecorators: any[] = []) {
+  function parseStmt(preConsumedDecorators: Decorator[] = []): Stmt {
     const decorators = preConsumedDecorators.length > 0 ? preConsumedDecorators : parseDecorators();
 
     const t = cur();
 
-    if (t.type === TK.IDENT && t.value === 'import') return parseImport();
-    if (t.type === TK.IDENT && t.value === 'export') return parseExport(decorators);
+    if (t.type === TK.IDENT && t.value === 'import') return parseImport() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'export') return parseExport(decorators) as Stmt;
     if (t.type === TK.IDENT && t.value === 'let')    return parseVarDecl('let', decorators);
     if (t.type === TK.IDENT && t.value === 'const')  return parseVarDecl('const', decorators);
     if (t.type === TK.IDENT && t.value === 'var')    return parseVarDecl('var', decorators);
-    if (t.type === TK.IDENT && t.value === 'function')  return parseFunctionDecl(decorators);
+    if (t.type === TK.IDENT && t.value === 'function')  return parseFunctionDecl(decorators) as Stmt;
     if (t.type === TK.IDENT && t.value === 'decorator' && pos + 1 < tokens.length && tokens[pos + 1]?.value === 'function') {
       pos++; // eat 'decorator'
-      const decl: any = parseFunctionDecl(decorators);
-      (decl as any).isDecorator = true;
+      const decl = parseFunctionDecl(decorators) as Stmt;
+      (decl as unknown as Record<string, unknown>).isDecorator = true;
       return decl;
     }
-    if (t.type === TK.IDENT && t.value === 'extension') return parseExtensionFunc();
-    if (t.type === TK.IDENT && t.value === 'async')  return parseAsyncDecl(decorators);
-    if (t.type === TK.IDENT && t.value === 'class')  return parseClassDecl(decorators);
-    if (t.type === TK.IDENT && t.value === 'interface') return parseInterface();
-    if (t.type === TK.IDENT && t.value === 'enum')   return parseEnum();
-    if (t.type === TK.IDENT && t.value === 'type')   return parseTypeAlias();
-    if (t.type === TK.IDENT && t.value === 'return') return parseReturn();
-    if (t.type === TK.IDENT && t.value === 'if')     return parseIf();
-    if (t.type === TK.IDENT && t.value === 'for')    return parseFor();
-    if (t.type === TK.IDENT && t.value === 'while')  return parseWhile();
-    if (t.type === TK.IDENT && t.value === 'do')     return parseDoWhile();
+    if (t.type === TK.IDENT && t.value === 'extension') return parseExtensionFunc() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'async')  return parseAsyncDecl(decorators) as Stmt;
+    if (t.type === TK.IDENT && t.value === 'class')  return parseClassDecl(decorators) as Stmt;
+    if (t.type === TK.IDENT && t.value === 'interface') return parseInterface() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'enum')   return parseEnum() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'type')   return parseTypeAlias() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'return') return parseReturn() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'if')     return parseIf() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'for')    return parseFor() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'while')  return parseWhile() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'do')     return parseDoWhile() as Stmt;
     if (t.type === TK.IDENT && t.value === 'break') {
       eat(TK.IDENT);
       const label = (cur().type === TK.IDENT && !KEYWORDS.has(cur().value) && cur().type !== TK.SEMI)
@@ -416,25 +421,25 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       eatSemi();
       return { kind: 'Continue', label };
     }
-    if (t.type === TK.IDENT && t.value === 'throw')  return parseThrow();
-    if (t.type === TK.IDENT && t.value === 'try')    return parseTryCatch();
-    if (t.type === TK.IDENT && t.value === 'switch') return parseSwitch();
-    if (t.type === TK.IDENT && t.value === 'native') return parseNative();
-    if (t.type === TK.IDENT && t.value === 'unsafe') return parseUnsafe();
-    if (t.type === TK.IDENT && t.value === 'spawn')  return parseSpawn();
+    if (t.type === TK.IDENT && t.value === 'throw')  return parseThrow() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'try')    return parseTryCatch() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'switch') return parseSwitch() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'native') return parseNative() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'unsafe') return parseUnsafe() as Stmt;
+    if (t.type === TK.IDENT && t.value === 'spawn')  return parseSpawn() as Stmt;
     if (t.type === TK.IDENT && t.value === 'declare') return parseDeclare();
     if (t.type === TK.LBRACE) return parseBlock();
 
     if (decorators.length > 0) {
       eatSemi();
-      return { kind: 'ExprStmt', expr: { kind: 'Literal', litType: 'int', value: 0 } };
+      return { kind: 'ExprStmt', expr: { kind: 'Literal', litType: 'int', value: '0' } };
     }
 
     // Labeled statement: IDENT: stmt
     if (t.type === TK.IDENT && !KEYWORDS.has(t.value) && peek().type === TK.COLON) {
       const label = eat(TK.IDENT).value;
       eat(TK.COLON);
-      const body: any = parseStmt();
+      const body: Stmt = parseStmt();
       return { kind: 'Labeled', label, body };
     }
 
@@ -445,42 +450,42 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     return { kind: 'ExprStmt', expr, line: exprLine };
   }
 
-  function parseDeclare() {
+  function parseDeclare(): Stmt {
     eat(TK.IDENT, 'declare');
     if (cur().type === TK.IDENT && (cur().value === 'const' || cur().value === 'let')) {
       const varKind = eat(TK.IDENT).value;
       const name = eat(TK.IDENT).value;
       eat(TK.COLON);
       const typeAnn = parseTypeAnnotation();
-      let init: any = null;
+      let init: Expression | null = null;
       if (tryEat(TK.EQ)) init = parseExpr();
       eatSemi();
-      return { kind: 'DeclareConst', name, typeAnn, init };
+      return { kind: 'DeclareConst', name, typeAnn, init } as unknown as Stmt;
     }
     if (cur().type === TK.IDENT && cur().value === 'function') {
       eat(TK.IDENT, 'function');
       const name = eat(TK.IDENT).value;
       const params = parseParams();
-      let returnType: any = null;
+      let returnType: TypeAnn | null = null;
       if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
       eatSemi();
-      return { kind: 'DeclareFunction', name, params, returnType };
+      return { kind: 'DeclareFunction', name, params, returnType } as unknown as Stmt;
     }
     // declare module "name" { ... } → ambient module declaration (declaration merging)
     if (cur().type === TK.IDENT && cur().value === 'module') {
       eat(TK.IDENT, 'module');
       const moduleName = eat(TK.STRING).value;
       eat(TK.LBRACE);
-      const body: any[] = [];
+      const body: Stmt[] = [];
       while (!done() && cur().type !== TK.RBRACE) {
         if (cur().type === TK.IDENT && cur().value === 'function') {
           eat(TK.IDENT, 'function');
           const name = eat(TK.IDENT).value;
           const params = parseParams();
-          let returnType: any = null;
+          let returnType: TypeAnn | null = null;
           if (tryEat(TK.COLON)) returnType = parseTypeAnnotation();
           eatSemi();
-          body.push({ kind: 'DeclareFunction', name, params, returnType });
+          body.push({ kind: 'DeclareFunction', name, params, returnType } as unknown as Stmt);
         } else if (cur().type === TK.IDENT && (cur().value === 'const' || cur().value === 'let')) {
           const varKind = eat(TK.IDENT).value;
           const name = eat(TK.IDENT).value;
@@ -500,16 +505,16 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     if (cur().type === TK.IDENT && cur().value === 'platform') {
       eat(TK.IDENT, 'platform');
       eat(TK.LBRACE);
-      const fields = {};
+      const fields: Record<string, unknown> = {};
       while (!done() && cur().type !== TK.RBRACE) {
         if (cur().type !== TK.IDENT) { pos++; continue; }
         const key = eat(TK.IDENT).value;
         if (!tryEat(TK.COLON)) continue;
-        let val: any = null;
+        let val: string | boolean | number | null = null;
         if (cur().type === TK.STRING)      val = eat(TK.STRING).value;
         else if (cur().type === TK.BOOL)   val = eat(TK.BOOL).value === 'true';
         else if (cur().type === TK.NUMBER) val = Number(eat(TK.NUMBER).value);
-        if (val !== null) (fields as Record<string, any>)[key] = val;
+        if (val !== null) fields[key] = val;
       }
       eat(TK.RBRACE);
       return { kind: 'DeclarePlatform', fields };
