@@ -34,7 +34,7 @@ export default {
           const ifaceName = objSym2.ctype;
           const className = typeName;
           const classDef = this.classes.get(className);
-          const hasExplicit = classDef?.implements_?.includes(ifaceName);
+          const hasExplicit = classDef?.implements_?.some(i => i.name === ifaceName);
           const vtableName = hasExplicit ? `${className}_${ifaceName}_vtable` : `_${className}_${ifaceName}_vtable`;
           if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
           const objC2 = this.exprToC(node.left, lines, depth);
@@ -47,7 +47,7 @@ export default {
       if (objSym2?.ctype && this.classes.has(objSym2.ctype)) {
         const className = objSym2.ctype;
         const classDef = this.classes.get(className);
-        const hasExplicit = classDef?.implements_?.includes(typeName);
+        const hasExplicit = classDef?.implements_?.some(i => i.name === typeName);
         const vtableName = hasExplicit ? `${className}_${typeName}_vtable` : `_${className}_${typeName}_vtable`;
         if (!hasExplicit) this._ensureImplicitVtable(className, typeName);
         return `${objC}.vtable == &${vtableName}`;

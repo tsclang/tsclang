@@ -179,7 +179,7 @@ export default {
             else if (item.expr?.kind) this._scanExprIdents(item.expr, touch);
           }
         }
-      } else if (val && typeof val === 'object' && (val as any).kind) {
+      } else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) {
         this._scanExprIdents(val, touch);
       }
     }

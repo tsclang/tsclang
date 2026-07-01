@@ -1,9 +1,9 @@
-import type { CodeGenThis } from '../codegen.js';
+import type { CodeGenThis, ClassMetaField } from '../codegen.js';
 import { mangleParams } from '../types.js';
-import type { Expression } from '@tsclang/ast';
+import type { Expression, TypeAnn, TypeRef, Argument, ObjLit, ObjLitProp, FuncDecl, ClassDecl, Param, ClassMember, Method, Field } from '@tsclang/ast';
 // generics.ts
 export default {
-  callGeneric(this: CodeGenThis, name: string, typeArgs: any[], args: any[], lines: string[], depth: number) {
+  callGeneric(this: CodeGenThis, name: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number) {
     const tmpl = this._genericFuncs.get(name);
     if (!tmpl) return `${name}(${this.argsToC(args, lines, depth)})`;
 
@@ -14,9 +14,10 @@ export default {
     }
 
     // Build substitution map: T → concrete C type
-    const subst = new Map();
-    for (let i = 0; i < tmpl.typeParams.length; i++) {
-      const tp = tmpl.typeParams[i];
+    const subst = new Map<string, string>();
+    const typeParams = tmpl.typeParams ?? [];
+    for (let i = 0; i < typeParams.length; i++) {
+      const tp = typeParams[i];
       let ctype;
       if (typeArgs[i]) {
         ctype = this.resolveType(typeArgs[i]);
@@ -34,8 +35,8 @@ export default {
     }
 
     // Handle structural constraint: T implements { ... } → use anonymous struct
-    for (const tp of tmpl.typeParams) {
-      if (tp.constraint?.kind === 'TypeObject' && !typeArgs[tmpl.typeParams.indexOf(tp)]) {
+    for (const tp of typeParams) {
+      if (tp.constraint?.kind === 'TypeObject' && !typeArgs[typeParams.indexOf(tp)]) {
         if (args[0]) {
           const argType = args[0].expr?.kind === 'ObjLit'
             ? this.inferObjLitType(args[0].expr)
@@ -46,10 +47,10 @@ export default {
     }
 
     // Compute suffix from resolved monomorphized parameter types (more accurate for utility types)
-    const nonThisParams = tmpl.params.filter((p: any) => p.name !== 'this' && p.name !== 'self' && p.typeAnn);
+    const nonThisParams = tmpl.params.filter((p: Param) => p.name !== 'this' && p.name !== 'self' && p.typeAnn);
     const suffix = nonThisParams.length > 0
-      ? nonThisParams.map((p: any) => this.cTypeToIdent(this.resolveType(this.substType(p.typeAnn, subst)))).join('_')
-      : tmpl.typeParams.map((tp: { name: string }) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+      ? nonThisParams.map((p: Param) => this.cTypeToIdent(this.resolveType(this.substType(p.typeAnn!, subst)))).join('_')
+      : typeParams.map((tp) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
     const monoName = `${name}_${suffix}`;
 
     // Emit monomorphized function if not already done
@@ -60,16 +61,16 @@ export default {
     }
 
     // Generate call args, casting ObjLit args to expected param struct types
-    const resolvedParamTypes = nonThisParams.map((p: any) =>
-      this.resolveType(this.substType(p.typeAnn, subst)));
-    const argsC = args.map((a: any, i: number) => {
+    const resolvedParamTypes = nonThisParams.map((p: Param) =>
+      this.resolveType(this.substType(p.typeAnn!, subst)));
+    const argsC = args.map((a: Argument, i: number) => {
       const expectedType = resolvedParamTypes[i];
       if (a.expr?.kind === 'ObjLit' && expectedType) {
         const structDef = this.classes.get(expectedType);
         if (structDef?.fields) {
-          const fieldNames = structDef.fields.map((f: { name?: string }) => f.name ?? f);
-          const filteredProps = a.expr.props.filter((p: { spread?: boolean; computed?: boolean; key: string; value?: Expression }) => !p.spread && !p.computed && fieldNames.includes(p.key));
-          const propsC = filteredProps.map((p: { key: string; value: Expression }) => `.${p.key} = ${this.exprToC(p.value, lines, depth)}`).join(', ');
+          const fieldNames = structDef.fields.map((f) => f.name ?? '');
+          const filteredProps = (a.expr as ObjLit).props.filter((p: ObjLitProp) => !p.spread && !p.computed && fieldNames.includes(String(p.key)));
+          const propsC = filteredProps.map((p: ObjLitProp) => `.${p.key} = ${this.exprToC(p.value!, lines, depth)}`).join(', ');
           return `(${expectedType}){${propsC}}`;
         }
       }
@@ -80,18 +81,18 @@ export default {
 
   // Create a virtual anonymous struct for field lookup (not emitted to C output)
   // Used internally by callGeneric to resolve utility types like Pick<T, K>
-  inferObjLitType(this: CodeGenThis, node: any) {
+  inferObjLitType(this: CodeGenThis, node: ObjLit) {
     const fields = node.props
-      .filter((p: { spread?: boolean; computed?: boolean }) => !p.spread && !p.computed)
-      .map((p: { key: string; value: Expression }) => ({ name: p.key, ctype: this.inferType(p.value) }));
+      .filter((p: ObjLitProp) => !p.spread && !p.computed)
+      .map((p: ObjLitProp) => ({ name: String(p.key), ctype: this.inferType(p.value!) }));
     const sig = fields.map((f: { name: string; ctype: string }) => `${f.ctype} ${f.name}`).join(';');
 
-    if (this._anonStructSigs.has(sig)) return this._anonStructSigs.get(sig);
+    if (this._anonStructSigs.has(sig)) return this._anonStructSigs.get(sig)!;
 
     const anonName = `_anon_${this._anonStructCount++}`;
     const structFields = fields.map((f: { name: string; ctype: string }) => ({
       name: f.name,
-      typeAnn: { kind: 'TypeRef', name: f.ctype, typeArgs: [], _internal: true },
+      typeAnn: { kind: 'TypeRef' as const, name: f.ctype, typeArgs: [] as TypeAnn[], _internal: true },
     }));
     // Register in classes for field lookup but do NOT emit typedef (only used internally)
     this.classes.set(anonName, { isStruct: true, fields: structFields, _virtual: true });
@@ -100,31 +101,30 @@ export default {
   },
 
   // Substitute type params in a type annotation
-  substType(this: CodeGenThis, typeNode: any, subst: any) {
+  substType(this: CodeGenThis, typeNode: TypeAnn | null | undefined, subst: Map<string, string>): TypeAnn | null | undefined {
     if (!typeNode) return typeNode;
     if (typeNode.kind === 'TypeRef') {
       if (subst.has(typeNode.name)) {
-        const ct = subst.get(typeNode.name);
-        // Convert C type back to TypeRef for resolveType
-        return { kind: 'TypeRef', name: ct, typeArgs: [], _internal: true };
+        const ct = subst.get(typeNode.name)!;
+        return { kind: 'TypeRef', name: ct, typeArgs: [], _internal: true } as TypeRef;
       }
-      return { ...typeNode, typeArgs: typeNode.typeArgs.map((t: any) => this.substType(t, subst)) };
+      return { ...typeNode, typeArgs: typeNode.typeArgs.map((t: TypeAnn) => this.substType(t, subst) as TypeAnn) };
     }
-    if (typeNode.kind === 'TypeArray') return { ...typeNode, element: this.substType(typeNode.element, subst) };
-    if (typeNode.kind === 'TypeUnion') return { ...typeNode, types: typeNode.types.map((t: any) => this.substType(t, subst)) };
+    if (typeNode.kind === 'TypeArray') return { ...typeNode, element: this.substType(typeNode.element, subst) as TypeAnn };
+    if (typeNode.kind === 'TypeUnion') return { ...typeNode, types: typeNode.types.map((t: TypeAnn) => this.substType(t, subst) as TypeAnn) };
     return typeNode;
   },
 
   // Substitute type params in an AST node
-  substNode(this: CodeGenThis, node: any, subst: any) {
+  substNode(this: CodeGenThis, node: unknown, subst: Map<string, string>): unknown {
     if (!node || typeof node !== 'object') return node;
-    if (Array.isArray(node)) return node.map((n: any) => this.substNode(n, subst));
-    const result: any = {};
-    for (const [k, v] of Object.entries(node)) {
+    if (Array.isArray(node)) return (node as unknown[]).map((n) => this.substNode(n, subst));
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
       if (k === 'typeAnn' || k === 'returnType' || k === 'castType') {
-        result[k] = this.substType(v, subst);
+        result[k] = this.substType(v as TypeAnn, subst);
       } else if (k === 'typeArgs') {
-        result[k] = Array.isArray(v) ? v.map((t: any) => this.substType(t, subst)) : v;
+        result[k] = Array.isArray(v) ? (v as TypeAnn[]).map((t) => this.substType(t, subst)) : v;
       } else {
         result[k] = this.substNode(v, subst);
       }
@@ -132,9 +132,9 @@ export default {
     return result;
   },
 
-  emitMonoFunc(this: CodeGenThis, tmpl: any, monoName: any, subst: any) {
+  emitMonoFunc(this: CodeGenThis, tmpl: FuncDecl, monoName: string, subst: Map<string, string>) {
     // Create a copy of the function with substituted type params
-    const monoParams = tmpl.params.map((p: any) => ({
+    const monoParams = tmpl.params.map((p: Param) => ({
       ...p,
       typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn,
     }));
@@ -155,12 +155,12 @@ export default {
     this.visitFuncDecl(monoNode, true);
   },
 
-  emitMonoClass(this: CodeGenThis, tmpl: any, monoName: any, subst: any) {
-    const fields  = tmpl.members.filter((m: any) => m.kind === 'Field');
-    const methods = tmpl.members.filter((m: any) => m.kind === 'Method');
+  emitMonoClass(this: CodeGenThis, tmpl: ClassDecl, monoName: string, subst: Map<string, string>) {
+    const fields  = tmpl.members.filter((m: ClassMember): m is Field => m.kind === 'Field');
+    const methods = tmpl.members.filter((m: ClassMember): m is Method => m.kind === 'Method');
 
     // Single-line typedef struct
-    const fieldDecls = fields.map((f: any) => {
+    const fieldDecls = fields.map((f: Field) => {
       const ct = this.resolveType(this.substType(f.typeAnn ?? { kind: 'TypeRef', name: 'int32_t', typeArgs: [] }, subst));
       return `${ct} ${f.name};`;
     }).join(' ');
@@ -169,11 +169,11 @@ export default {
 
     // Register class so method dispatch works
     this.classes.set(monoName, {
-      fields: fields.map((f: any) => ({ ...f, typeAnn: f.typeAnn ? this.substType(f.typeAnn, subst) : f.typeAnn })),
-      methods: methods.map((m: any) => ({
+      fields: fields.map((f: Field) => ({ ...f, typeAnn: f.typeAnn ? this.substType(f.typeAnn, subst) : f.typeAnn })) as unknown as ClassMetaField[],
+      methods: methods.map((m: Method) => ({
         ...m,
         returnType: m.returnType ? this.substType(m.returnType, subst) : m.returnType,
-        params: m.params.map((p: any) => ({
+        params: m.params.map((p: Param) => ({
           ...p,
           typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn,
         })),
@@ -182,13 +182,13 @@ export default {
     });
 
     // Constructor
-    const ctor = methods.find((m: any) => m.name === 'constructor');
+    const ctor = methods.find((m: Method) => m.name === 'constructor');
     if (ctor) {
       const ctorParams = ctor.params
-        .filter((p: any) => p.name !== 'this')
-        .map((p: any) => ({ ...p, typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn }));
+        .filter((p: Param) => p.name !== 'this')
+        .map((p: Param) => ({ ...p, typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn }));
       const paramDecls = ctorParams
-        .map((p: any) => `${p.typeAnn ? this.resolveType(p.typeAnn) : 'void *'} ${p.name}`)
+        .map((p: Param) => `${p.typeAnn ? this.resolveType(p.typeAnn) : 'void *'} ${p.name}`)
         .join(', ');
       const monoBody = this.substNode(ctor.body, subst);
       const bodyLines = this.emitFuncBody('new', monoBody, ctorParams, monoName, monoName);
@@ -202,7 +202,7 @@ export default {
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       const isStatic = m.modifiers?.includes('static');
-      const monoParams = m.params.map((p: any) => ({ ...p, typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn }));
+      const monoParams = m.params.map((p: Param) => ({ ...p, typeAnn: p.typeAnn ? this.substType(p.typeAnn, subst) : p.typeAnn }));
       const monoReturnType = m.returnType ? this.resolveType(this.substType(m.returnType, subst)) : 'void';
       const monoBody = this.substNode(m.body, subst);
 

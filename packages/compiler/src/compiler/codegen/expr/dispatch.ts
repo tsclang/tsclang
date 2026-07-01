@@ -1,6 +1,6 @@
 import type { CodeGenThis } from '../../codegen.js';
 // dispatch.ts
-import type { Expression } from '@tsclang/ast';
+import type { Expression, ObjLitProp } from '@tsclang/ast';
 export default {
   exprToC(this: CodeGenThis, node: Expression, lines: string[] = [], depth: number = 0) {
     if (!node) return '0';
@@ -56,12 +56,12 @@ export default {
         }
         // Deferred anon struct used outside destructuring: materialize now
         if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
-          const { fields, init: _init } = this._deferredAnons.get(node.name);
+          const { fields, init: _init } = this._deferredAnons.get(node.name)!;
           const ctype = sym.ctype;
           const fieldDecls = fields.map((f: { name: string; _ctype: string }) => `${f._ctype} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${ctype};`);
           this.addTop('');
-          const initParts = (_init.props ?? []).map((pr: { key: string; value: Expression }) => `.${pr.key} = ${this.exprToC(pr.value, lines, depth)}`);
+          const initParts = ((_init as unknown as { props?: { key: string; value: Expression }[] } | null)?.props ?? []).map((pr: { key: string; value: Expression }) => `.${pr.key} = ${this.exprToC(pr.value, lines, depth)}`);
           const I = ' '.repeat(this.indent * depth);
           lines.push(`${I}${ctype} ${node.name} = {${initParts.join(', ')}};`);
           sym.deferredAnon = false;
@@ -155,13 +155,14 @@ export default {
           throw this.error(`TypeError: 'Number.${node.prop}' is not a known constant`, node);
         }
         const sym = node.object.kind === 'Ident' ? this.lookup(node.object.name) : null;
+        const objName = node.object.kind === 'Ident' ? node.object.name : '';
         if (sym?._mutQuarantined) {
-          throw this.error(`cannot access '${(node.object as any).name}' while a mutable borrow is active`, node);
+          throw this.error(`cannot access '${objName}' while a mutable borrow is active`, node);
         }
-        if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has((node.object as any).name)) {
-          const _nc = this._narrowedUnknownVars.get((node.object as any).name);
-          if (_nc === '__array__') throw this.error(`Cannot access '.${node.prop}' on '${(node.object as any).name}' after typeof "array"; use '${(node.object as any).name} as Array<T>' first`, node);
-          if (_nc === '__object__') throw this.error(`Cannot access '.${node.prop}' on '${(node.object as any).name}' after typeof "object"; use '${(node.object as any).name} as ClassName' first`, node);
+        if (sym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(objName)) {
+          const _nc = this._narrowedUnknownVars.get(objName);
+          if (_nc === '__array__') throw this.error(`Cannot access '.${node.prop}' on '${objName}' after typeof "array"; use '${objName} as Array<T>' first`, node);
+          if (_nc === '__object__') throw this.error(`Cannot access '.${node.prop}' on '${objName}' after typeof "object"; use '${objName} as ClassName' first`, node);
         }
         // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
         if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
@@ -175,8 +176,8 @@ export default {
           if (node.prop === 'byteLength') return `(size_t)${objC}.byte_length`;
           if (node.prop === 'byteOffset') return `(size_t)${objC}.byte_offset`;
         }
-        this._checkMoved(sym, node, (node.object as any).name);
-        this._checkFieldMoved(sym, node.prop, node, (node.object as any).name);
+        this._checkMoved(sym, node, objName);
+        this._checkFieldMoved(sym, node.prop, node, objName);
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)
         if (sym?._alias && sym?.ctype) {
           const errClass = this.classes.get(sym.ctype);
@@ -202,7 +203,7 @@ export default {
         }
         // Rest param: .length → args_count
         if (sym?.rest && node.prop === 'length') {
-          return sym.countVar ?? `${(node.object as any).name}_count`;
+          return sym.countVar ?? `${objName}_count`;
         }
         // Fixed-size array: .length → compile-time constant
         if (sym?.isFixedArray && node.prop === 'length') {
@@ -221,7 +222,7 @@ export default {
           const symForLabel = this.lookup(node.object.name);
           const tupleDef3 = symForLabel ? this.classes.get(symForLabel.ctype!) : null;
           if (tupleDef3?.isTuple) {
-            const field = tupleDef3.fields.find((f: { label?: string; name: string }) => f.label === node.prop);
+            const field = tupleDef3.fields?.find((f) => f.label === node.prop);
             if (field) {
         const objC = this.exprToC(node.object, lines, depth);
               return `${objC}.${field.name}`;
@@ -286,7 +287,7 @@ export default {
         if (this._stdUrlImported && sym?._isURL) {
           const _urlMutatedFields = ['search'];
           if (_urlMutatedFields.includes(node.prop)) {
-            return `tsc_url_search(&${(node.object as any).name})`;
+            return `tsc_url_search(&${objName})`;
           }
         }
         if (!sym) {
@@ -304,7 +305,7 @@ export default {
         if (node.object.kind === 'Ident') {
           const _idxQSym = this.lookup(node.object.name);
           if (_idxQSym?._mutQuarantined) {
-          throw this.error(`cannot access '${(node.object as any).name}' while a mutable borrow is active`, node);
+            throw this.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
           }
           if (_idxQSym?.ctype === 'tsc_unknown' && this._narrowedUnknownVars?.has(node.object.name)) {
             const _nc = this._narrowedUnknownVars.get(node.object.name);
@@ -330,7 +331,7 @@ export default {
         }
         const obj = this.exprToC(node.object, lines, depth);
         // Detect negative literal index: -1 or -(literal)
-        const negLitVal = (idx: any): any => {
+        const negLitVal = (idx: Expression): number | null => {
           if (idx.kind === 'Literal' && idx.litType === 'number' && parseFloat(idx.value) < 0)
             return Math.abs(parseFloat(idx.value));
           if (idx.kind === 'Unary' && idx.op === '-' && idx.expr.kind === 'Literal' && idx.expr.litType === 'number')
@@ -399,7 +400,7 @@ export default {
         const start = node.start ? this.exprToC(node.start, lines, depth) : null;
         const end   = node.end   ? this.exprToC(node.end,   lines, depth) : null;
         // Compute length as literal if both bounds are numeric literals
-        const litLen = (startNode: any, endNode: any) => {
+        const litLen = (startNode: Expression | null | undefined, endNode: Expression | null | undefined): string | null => {
           if (startNode && endNode &&
               startNode.kind === 'Literal' && startNode.litType === 'number' &&
               endNode.kind === 'Literal' && endNode.litType === 'number') {
@@ -517,8 +518,8 @@ export default {
         const explicit = node.props.filter((p: { spread?: boolean; computed?: boolean }) => !p.spread && !p.computed);
         // If there are spread elements, expand struct fields inline
         if (spreads.length > 0) {
-          const explicitMap = new Map(explicit.map((p: any) => [p.key, p.value]));
-          const resultProps: any[] = [];
+          const explicitMap = new Map(explicit.map((p: ObjLitProp) => [String(p.key), p.value]));
+          const resultProps: [string, string, boolean][] = [];
           for (const sp of spreads) {
             const srcC = this.exprToC(sp.expr, lines, depth);
             const srcType = this.inferType(sp.expr);
@@ -556,7 +557,7 @@ export default {
           const props = resultProps.map(([k, v]) => `.${k} = ${v}`);
           return props.length > 0 ? `{${props.join(', ')}}` : `{}`;
         }
-        const props = node.props.map((p: any) => {
+        const props = node.props.map((p: ObjLitProp) => {
           if (p.computed) throw this.error(`computed object key '[...]' is not supported; use StaticMap or inline the value`, node);
           return `.${p.key} = ${this.exprToC(p.value, lines, depth)}`;
         });
@@ -725,13 +726,13 @@ export default {
           this._ensurePoolDrop(_dpcn);
           const _dc = this.classes.get(_dpcn);
           const _dropArg = dropExpr?.kind === 'Ident' ? dropExpr.name : this.exprToC(dropExpr, lines, depth);
-          return `${_dc._poolDropFn}(${_dropArg})`;
+          return `${_dc?._poolDropFn}(${_dropArg})`;
         }
         throw this.error(`drop() can only be used on pool-allocated types`, node);
       }
       case 'NonNull': {
-        const innerExpr: any = node.expr;
-        const callee = innerExpr?.callee;
+        const innerExpr: Expression = node.expr;
+        const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
         if (calleeSym?._isThrowsFunc) {
           if (this._inAsyncFunc) {
@@ -751,8 +752,8 @@ export default {
         if (this._inAsyncFunc) {
           throw this.error(`TypeError: '?' error propagation is not supported in async functions; use try/catch on await`);
         }
-        const innerExpr: any = node.expr;
-        const callee = innerExpr?.callee;
+        const innerExpr: Expression = node.expr;
+        const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;
         const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
         if (!calleeSym?._isThrowsFunc) {
           const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
@@ -788,7 +789,7 @@ export default {
           const innerIdent = objType.slice(4);
           const innerCType = this._arrIdentToCType(innerIdent);
           const classDef = this.classes.get(innerCType);
-          const field = classDef?.fields?.find((f: { name: string; typeAnn?: any; _ctype?: string }) => f.name === node.prop);
+          const field = classDef?.fields?.find((f) => f.name === node.prop);
           const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
           const fieldIdent = this.cTypeToIdent(fieldCType);
           const optFieldType = `opt_${fieldIdent}`;
@@ -806,11 +807,11 @@ export default {
       }
 
       default:
-        throw this.error(`internal: unhandled expression kind '${(node as any).kind}'`, node);
+        throw this.error(`internal: unhandled expression kind '${node.kind}'`, node);
     }
   },
 
-  _truthyToC(this: CodeGenThis, node: any, lines: string[] = [], depth: number = 0) {
+  _truthyToC(this: CodeGenThis, node: Expression, lines: string[] = [], depth: number = 0) {
     const type = this.inferType(node);
     if (!type || type === 'bool' || type === 'void *') {
       return this.exprToC(node, lines, depth);

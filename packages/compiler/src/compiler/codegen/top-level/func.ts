@@ -1,9 +1,11 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { ThrowsCtx } from './decorators.js';
 import { mangleParams } from '../../types.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
+import type { Enum, VarDecl, FuncDecl, ExtensionFunc, Param, TypeAnn, TypeRef, TypeFunc, Block } from '@tsclang/ast';
 // func.ts
 export default {
-  visitEnum(this: CodeGenThis, node: any) {
+  visitEnum(this: CodeGenThis, node: Enum) {
     const { name, members, isConst } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
       throw this.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
@@ -11,21 +13,22 @@ export default {
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     let counter = 0;
     // Detect string enum: first member with a string value
-    const isStringEnum = members.some((m: { value?: { litType?: string; value?: any } }) => m.value?.litType === 'string');
-    if (isStringEnum && members.some((m: { value?: { litType?: string; value?: any } }) => m.value && m.value.litType !== 'string')) {
+    const isStringEnum = members.some((m) => m.value?.kind === 'Literal' && m.value.litType === 'string');
+    if (isStringEnum && members.some((m) => m.value?.kind === 'Literal' && m.value.litType !== 'string')) {
       throw this.error(`mixed string and number values in enum "${name}" are not allowed`, node);
     }
-    const entries = members.map((m: { name: string; value?: { litType?: string; value?: any } }) => {
+    const entries = members.map((m) => {
+      const mLit = m.value?.kind === 'Literal' ? m.value : null;
       if (isStringEnum) {
-        const strVal = m.value ? m.value.value : m.name;
+        const strVal = mLit ? mLit.value : m.name;
         const idx = counter++;
         return { name: m.name, val: String(idx), strVal, numVal: idx };
       }
-      const val = m.value ? this.exprToC(m.value) : String(counter);
+      const val = mLit ? this.exprToC(m.value!) : String(counter);
       let numVal = counter;
-      if (m.value) {
-        if (typeof m.value.value === 'number') {
-          numVal = m.value.value;
+      if (mLit) {
+        if (typeof mLit.value === 'number') {
+          numVal = mLit.value;
           counter = numVal + 1;
         } else {
           const parsed = Number(val);
@@ -45,16 +48,16 @@ export default {
     let needsToString = false;
     if (!isConst) {
       if (isStringEnum) {
-        this.addTop(`static const char *${cname}_strings[] = { ${entries.map((e: { strVal: string }) => `"${e.strVal}"`).join(', ')} };`);
+        this.addTop(`static const char *${cname}_strings[] = { ${entries.map((e) => `"${e.strVal ?? e.name}"`).join(', ')} };`);
       } else {
-        this.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map((e: { name: string }) => `${cname}_${e.name}`).join(', ')} };`);
-        const numVals = entries.map((e: { numVal: number }) => e.numVal);
+        this.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map((e) => `${cname}_${e.name}`).join(', ')} };`);
+        const numVals = entries.map((e) => e.numVal);
         const isSequential = numVals.length > 0 && numVals.every((v: number, i: number) => v === i);
         if (isSequential) {
-          this.addTop(`static const char *${cname}_names[] = { ${entries.map((e: { name: string }) => `"${e.name}"`).join(', ')} };`);
+          this.addTop(`static const char *${cname}_names[] = { ${entries.map((e) => `"${e.name}"`).join(', ')} };`);
         } else {
           needsToString = true;
-          const cases = entries.map((e: { name: string }) => `        case ${cname}_${e.name}: return "${e.name}";`).join('\n');
+          const cases = entries.map((e) => `        case ${cname}_${e.name}: return "${e.name}";`).join('\n');
           this.addTop(`static const char *${cname}_toString(${cname} v) {\n    switch (v) {\n${cases}\n        default: return "unknown";\n    }\n}`);
         }
       }
@@ -66,7 +69,7 @@ export default {
   // ----------------------------------------------------------------
   // Global variables
   // ----------------------------------------------------------------
-  visitGlobalVar(this: CodeGenThis, node: any) {
+  visitGlobalVar(this: CodeGenThis, node: VarDecl) {
     const { varKind, name, typeAnn, init } = node;
     const isConst = varKind === 'const';
     const ctype = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
@@ -84,14 +87,14 @@ export default {
   // ----------------------------------------------------------------
   // Functions
   // ----------------------------------------------------------------
-  visitFuncDecl(this: CodeGenThis, node: any, isTopLevel = false, isExported = false) {
+  visitFuncDecl(this: CodeGenThis, node: FuncDecl, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
     // @platform(...) decorator: only emit for matching target
-    const platformDec = (decorators ?? []).find((d: { name: string }) => d.name === 'platform');
+    const platformDec = (decorators ?? []).find((d) => d.name === 'platform');
     if (platformDec) {
-      const allowed = (platformDec.args ?? []).map((a: { value?: string }) => a.value ?? a);
+      const allowed = (platformDec.args ?? []).map((a) => a.kind === 'Literal' ? a.value : String(a));
       const target = this._targetName ?? DEFAULT_TARGET;
       if (!allowed.includes(target)) {
         if (name) this._platformSkipped.set(name, allowed);
@@ -111,19 +114,24 @@ export default {
     }
 
     // Regular function with known decorators applied → emit as decorated standalone
-      const knownDecs = (decorators ?? []).filter((d: { name: string }) => this._decoratorFns?.has(d.name));
+      const knownDecs = (decorators ?? []).filter((d) => this._decoratorFns?.has(d.name));
     if (knownDecs.length > 0) {
       this._emitDecoratedStandaloneFunc(node, knownDecs);
       return;
     }
 
     // @isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
-    const isrDecorator = (decorators ?? []).find((d: { name: string }) => d.name === 'isr');
+    const isrDecorator = (decorators ?? []).find((d) => d.name === 'isr');
     if (isrDecorator) {
       if (node.async) throw this.error(`TypeError: Cannot use 'async' with @isr on '${name}'`);
       const vectorArg = isrDecorator.args?.[0];
-      const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
-      const bodyHasThrow = (stmts: any) => (stmts ?? []).some((s: any) => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
+      const vectorLit = vectorArg?.kind === 'Literal' ? vectorArg : null;
+      const vectorName = vectorLit?.litType === 'string' ? vectorLit.value : 'UNKNOWN';
+      const bodyHasThrow = (stmts: unknown): boolean => (Array.isArray(stmts) ? stmts : []).some((s: unknown) => {
+        const sn = s as Record<string, unknown> | undefined;
+        const snBody = sn?.body as Record<string, unknown> | undefined;
+        return sn?.kind === 'Throw' || bodyHasThrow(snBody?.body ?? snBody ?? []);
+      });
       if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @isr handlers`);
       const funcLines: string[] = [];
       this.pushScope();
@@ -140,10 +148,12 @@ export default {
     }
 
     // @stack("name", N) → emit static stack arrays in BSS
-    for (const dec of (node.decorators ?? [])) {
-      if (dec.name === 'stack' && dec.args?.length >= 2) {
-        const sName = dec.args[0]?.value ?? dec.args[0];
-        const sSize = dec.args[1]?.value ?? dec.args[1];
+    for (const dec of (decorators ?? [])) {
+      if (dec.name === 'stack' && (dec.args?.length ?? 0) >= 2) {
+        const a0 = dec.args![0];
+        const a1 = dec.args![1];
+        const sName = a0?.kind === 'Literal' ? a0.value : String(a0);
+        const sSize = a1?.kind === 'Literal' ? a1.value : String(a1);
         this._topBlank();
         this.topLevel.push(`static uintptr_t ${sName}_stack[${sSize}];`);
         this.topLevel.push(`static uint8_t ${sName}_stack_top = 0;`);
@@ -152,7 +162,7 @@ export default {
 
     // Async/generator dispatch — state machine codegen
     if (node.async || generator) {
-      const hasStaticDec = (node.decorators ?? []).some((d: { name: string }) => d.name === 'static');
+      const hasStaticDec = (decorators ?? []).some((d) => d.name === 'static');
       if (!hasStaticDec && this._allocatorName === 'static') {
         const kind = node.async && generator ? 'async generator' : node.async ? 'async function' : 'generator';
         throw this.error(`TypeError: ${kind} '${name}' must be annotated with @static when allocator is "static"`);
@@ -166,7 +176,7 @@ export default {
     if (pendingSigs?.length) {
       this._pendingOverloads.delete(name);
       const implRetType = returnType ? this.resolveType(returnType) : 'void';
-      const allOverloads: any[] = [];
+      const allOverloads: { funcName: string; params: Param[] }[] = [];
       for (const sig of pendingSigs) {
         // Build a synthetic node with this signature's params but the implementation's body
         const sigSuffix = mangleParams(sig.params, this._defaultNumber);
@@ -190,11 +200,11 @@ export default {
     }
 
     // Generic function: store as template, emit on demand at call sites
-    if (typeParams?.length > 0) {
+    if ((typeParams?.length ?? 0) > 0) {
       // Check: Pick<T, K> in return type where K is a generic param → error
       if (returnType?.kind === 'TypeRef' && returnType.name === 'Pick' && returnType.typeArgs?.length >= 2) {
         const keyArg = returnType.typeArgs[1];
-        const typeParamNames = new Set(typeParams.map((tp: { name: string }) => tp.name));
+        const typeParamNames = new Set((typeParams ?? []).map((tp) => tp.name));
         if (keyArg.kind === 'TypeRef' && typeParamNames.has(keyArg.name)) {
           throw this.error(`Pick with runtime key in return type is not supported`);
         }
@@ -210,38 +220,39 @@ export default {
       retType = this.resolveType(returnType);
     } else if (body) {
       const stmts = body.kind === 'Block' ? body.body : [body];
-      const retStmt = stmts.find((s: { kind: string; value?: any }) => s.kind === 'Return' && s.value);
-      retType = retStmt ? this.inferType(retStmt.value) : 'void';
+      const retStmt = stmts.find((s) => s?.kind === 'Return' && s?.value);
+      retType = retStmt?.kind === 'Return' && retStmt.value ? this.inferType(retStmt.value) : 'void';
     } else {
       retType = 'void';
     }
     const origRetType = retType;
     // Stack size: collect own bytes + callees for call-graph analysis
     let _ownBytes = 0;
-    const _callees = new Set();
+    const _callees = new Set<string>();
     if (this._stackSize != null && body) {
-      const _scanStack = (nd: any): any => {
+      const _scanStack = (nd: unknown): void => {
         if (!nd || typeof nd !== 'object') return;
-        if (Array.isArray(nd)) { nd.forEach(_scanStack); return; }
-        if (nd.kind === 'VarDecl') {
-          if (nd.typeAnn?.kind === 'TypeFixedArray') {
-            const et = this.resolveType(nd.typeAnn.element);
-            _ownBytes += nd.typeAnn.size * this._cTypeBytes(et);
-          } else if (nd.typeAnn) {
-            const ct = this.resolveType(nd.typeAnn);
+        if (Array.isArray(nd)) { (nd as unknown[]).forEach(_scanStack); return; }
+        const n = nd as Record<string, any>;
+        if (n.kind === 'VarDecl') {
+          if (n.typeAnn?.kind === 'TypeFixedArray') {
+            const et = this.resolveType(n.typeAnn.element);
+            _ownBytes += n.typeAnn.size * this._cTypeBytes(et);
+          } else if (n.typeAnn) {
+            const ct = this.resolveType(n.typeAnn);
             _ownBytes += this._stackSizeOf(ct);
-          } else if (nd.init) {
-            const ct = this.inferType(nd.init);
+          } else if (n.init) {
+            const ct = this.inferType(n.init);
             _ownBytes += this._stackSizeOf(ct);
           } else {
             _ownBytes += this._stackSizeOf(this._tsNameToCType(this._defaultNumber));
           }
         }
-        if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') {
-          _callees.add(nd.callee.name);
+        if (n.kind === 'Call' && n.callee?.kind === 'Ident') {
+          _callees.add(n.callee.name);
         }
-        if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
-        for (const v of Object.values(nd)) {
+        if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return;
+        for (const v of Object.values(n)) {
           if (v && typeof v === 'object') _scanStack(v);
         }
       };
@@ -264,7 +275,7 @@ export default {
 
     // Throws function handling
     const throwsTypes = node.throwsTypes ?? [];
-    let throwsCtx: any = null;
+    let throwsCtx: ThrowsCtx | null = null;
     if (throwsTypes.length > 0) {
       // Flatten throwsTypes (handles TypeUnion: throws A | B → [A, B])
       const throwsNames = (() => {
@@ -339,13 +350,13 @@ export default {
       }
     }
 
-    const hasScalarRest = params.some((p: any) => {
+    const hasScalarRest = params.some((p: Param) => {
       if (!p.rest) return false;
       const et2 = p.typeAnn?.kind === 'TypeArray' ? this.resolveType(p.typeAnn.element) : (p.typeAnn ? this.resolveType(p.typeAnn) : null);
       return et2 === 'Scalar';
     });
 
-    const paramStrs = params.map((p: any) => {
+    const paramStrs = params.map((p: Param) => {
       if (p.rest) {
         // ...args: T[] → T *args, int32_t args_count (unwrap the array type)
         let et = 'int32_t';
@@ -435,7 +446,7 @@ export default {
     this.addTop('');
   },
 
-  emitFuncBody(this: CodeGenThis, funcName: any, body: any, params: any, retType: any, className = null, isMoveMethod = false, isMut = false, throwsCtx: any = null, isNever = false) {
+  emitFuncBody(this: CodeGenThis, funcName: string, body: Block | null, params: Param[], retType: string, className: string | null = null, isMoveMethod = false, isMut = false, throwsCtx: ThrowsCtx | null = null, isNever = false) {
     const saved = { inFunction: this.inFunction, funcName: this.currentFuncName, retType: this.currentFuncReturnType, throwsCtx: this._throwsCtx, isNever: this._currentFuncIsNever,
       inMathTry: this._inMathTry, mathCatchLabel: this._mathCatchLabel, mathErrVar: this._mathErrVar };
     this.inFunction = true;
@@ -472,12 +483,12 @@ export default {
       if (isCtor) lines.push(`${className} self = {0};`);
     }
     // Detect Scalar[] rest param for va_list setup
-    const _scalarRest = params.find((p: any) => {
+    const _scalarRest = params.find((p: Param) => {
       if (!p.rest) return false;
       const _et = p.typeAnn?.kind === 'TypeArray' ? this.resolveType(p.typeAnn.element) : (p.typeAnn ? this.resolveType(p.typeAnn) : null);
       return _et === 'Scalar';
     });
-    const _nonRestParams = params.filter((p: any) => !p.rest);
+    const _nonRestParams = params.filter((p: Param) => !p.rest);
     const _lastNonRest = _nonRestParams[_nonRestParams.length - 1];
 
     for (const p of params) {
@@ -501,7 +512,7 @@ export default {
           const slot = p.destructArr[i];
           if (!slot) continue; // skip (,, c)
           lines.push(`${et} ${slot.name} = _arr[${i}];`);
-          this.define(slot.name, { ctype: et });
+          this.define(slot.name!, { ctype: et });
         }
       } else if (p.typeAnn) {
         const _isFuncParam = p.typeAnn.kind === 'TypeFunc';
@@ -512,10 +523,10 @@ export default {
         const _isArc = p.typeAnn.kind === 'TypeRef' && p.typeAnn.name === 'Arc';
         const _isBorrow = _isRef || _isMut;
         const _derefType = (_isBorrow || _isArc) && _ct.endsWith('*')
-          ? this.resolveType(p.typeAnn.typeArgs?.[0] ?? {})
+          ? this.resolveType((p.typeAnn as TypeRef).typeArgs?.[0] ?? {})
           : undefined;
-        const _funcRet = _isFuncParam ? (p.typeAnn.ret ? this.resolveType(p.typeAnn.ret) : 'void') : undefined;
-        const _funcParams = _isFuncParam ? (p.typeAnn.params ?? []).map((pt: any) => this.resolveType(pt)) : undefined;
+        const _funcRet = _isFuncParam ? ((p.typeAnn as TypeFunc).ret ? this.resolveType((p.typeAnn as TypeFunc).ret) : 'void') : undefined;
+        const _funcParams = _isFuncParam ? ((p.typeAnn as TypeFunc).params ?? []).map((pt: TypeAnn) => this.resolveType(pt)) : undefined;
         this.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
                               ...(_isMut ? { isMutParam: true } : {}),
                               ...(_isArc ? { isArc: true, derefType: _derefType } : {}),
@@ -530,9 +541,9 @@ export default {
     // Pre-scan owned vars for goto cleanup pattern in throws functions
     if (throwsCtx && !isCtor) {
       const _preDecls = new Map();
-      for (const stmt of body.body) {
+      for (const stmt of (body?.body ?? [])) {
         if (stmt.kind === 'VarDecl' && stmt.typeAnn) {
-          let _ctype: any = null;
+          let _ctype: string | null = null;
           if (stmt.typeAnn.kind === 'TypeArray') {
             const _et = this.resolveType(stmt.typeAnn.element);
             _ctype = `Array_${this.cTypeToIdent(_et)}`;
@@ -559,13 +570,13 @@ export default {
 
     if (this._usesGotoCleanup) {
       if (throwsCtx?.isVoid) {
-        const lastNonEmpty = [...lines].reverse().find((l: any) => l.trim() !== '');
+        const lastNonEmpty = [...lines].reverse().find((l: string) => l.trim() !== '');
         if (!lastNonEmpty?.trim().startsWith('goto cleanup')) {
           lines.push(`    _result = (${throwsCtx.resultType}){.ok = true};`);
           lines.push('    goto cleanup;');
         }
       }
-      if (this._funcMathThrow) {
+      if (this._funcMathThrow && throwsCtx) {
         lines.push(`${this._funcMathThrow.throwLabel}:`);
         if (throwsCtx.throwsNames.length > 1) {
           const _idx = throwsCtx.throwsNames.indexOf('MathError');
@@ -592,19 +603,19 @@ export default {
         lines.push('return self;');
       }
       if (_scalarRest && retType === 'void' && !throwsCtx) {
-        const lastNonEmpty = [...lines].reverse().find((l: any) => l.trim() !== '');
+        const lastNonEmpty = [...lines].reverse().find((l: string) => l.trim() !== '');
         if (!lastNonEmpty?.trim().startsWith('return ')) {
           lines.push('va_end(_va_args);');
         }
       }
       if (throwsCtx?.isVoid) {
-        const lastNonEmpty = [...lines].reverse().find((l: any) => l.trim() !== '');
+        const lastNonEmpty = [...lines].reverse().find((l: string) => l.trim() !== '');
         if (!lastNonEmpty?.trim().startsWith('return ')) {
           this._emitFuncCleanup(lines, '    ');
           lines.push(`return (${throwsCtx.resultType}){.ok = true};`);
         }
       }
-      if (this._funcMathThrow) {
+      if (this._funcMathThrow && throwsCtx) {
         lines.push(`${this._funcMathThrow.throwLabel}:`);
         if (throwsCtx.throwsNames.length > 1) {
           const _idx = throwsCtx.throwsNames.indexOf('MathError');
@@ -630,7 +641,7 @@ export default {
     return lines;
   },
 
-  visitExtensionFunc(this: CodeGenThis, node: any) {
+  visitExtensionFunc(this: CodeGenThis, node: ExtensionFunc) {
     const { name, thisType, params, returnType, body } = node;
     const thisCType = this.resolveType(thisType);
     const thisIdent = this.cTypeToIdent(thisCType);
@@ -638,7 +649,7 @@ export default {
     // Check for conflict with existing class method
     if (thisType.kind === 'TypeRef' && this.classes.has(thisType.name)) {
       const cls = this.classes.get(thisType.name);
-      if (cls._methodNames?.has(name)) {
+      if (cls?._methodNames?.has(name)) {
         throw this.error(`TypeError: extension '${name}' conflicts with existing method on ${thisType.name}`);
       }
     }
@@ -665,7 +676,7 @@ export default {
       const pt = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       this.define(p.name, { ctype: pt });
     }
-    const lines: any[] = [];
+    const lines: string[] = [];
     this.visitBlock(body, lines, 0);
     this.popScope();
     this.inFunction = saved.inFunction;

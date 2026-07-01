@@ -30,7 +30,7 @@ export default {
       const objSym = this.lookup(node.left.object.name);
       if (objSym?.ctype) {
         const classDef = this.classes.get(objSym.ctype);
-        const field = classDef?.fields?.find((f: ClassMember) => f.name === (node.left as { prop: string }).prop);
+        const field = classDef?.fields?.find((f) => f.name === (node.left as { prop: string }).prop);
         if (field?.modifiers?.includes('readonly')) {
           const thisSym = this.lookup('this') ?? this.lookup('self');
           const inCtor = this.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
@@ -68,7 +68,7 @@ export default {
         const enumDef = this.classes.get(sym.ctype!);
         if (enumDef?.isStringLiteralUnion) {
           const val = node.right.value;
-          if (!enumDef.members.includes(val)) {
+          if (!(enumDef.members as string[] | undefined)?.includes(val)) {
             throw this.error(`"${val}" is not a valid value for type ${sym.ctype}`, node);
           }
           const l = this.exprToC(node.left, lines, depth);

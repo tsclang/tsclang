@@ -1,39 +1,59 @@
 // linter.ts — AST-based lint rules for TSClang
 
+import type { Program } from '@tsclang/ast';
+
+interface LintDiagnostic {
+  rule?: string;
+  severity?: string;
+  line?: number;
+  col?: number;
+  message: string;
+  fixable?: boolean;
+  fixKind?: string;
+  fixLine?: number;
+}
+
+interface VarInfo {
+  name: string;
+  line: number;
+  col: number;
+}
+
 // Generic recursive AST walker
-function walkAst(node: any, visitor: any) {
+function walkAst(node: unknown, visitor: (node: Record<string, unknown>) => void) {
   if (!node || typeof node !== 'object') return;
-  visitor(node);
-  for (const val of Object.values(node) as any[]) {
+  visitor(node as Record<string, unknown>);
+  for (const val of Object.values(node) as unknown[]) {
     if (Array.isArray(val)) {
-      for (const item of val) walkAst(item, visitor);
-    } else if (val && typeof val === 'object' && val.kind) {
+      for (const item of val as unknown[]) walkAst(item, visitor);
+    } else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) {
       walkAst(val, visitor);
     }
   }
 }
 
 // Walk only the immediate statements of a Block (one level deep)
-function blockBody(node: any) {
+function blockBody(node: unknown): Record<string, unknown>[] {
   if (!node) return [];
-  if (node.kind === 'Block') return node.body || [];
-  if (Array.isArray(node)) return node;
-  return [node];
+  const n = node as Record<string, unknown>;
+  if (n.kind === 'Block') return (n.body as Record<string, unknown>[]) || [];
+  if (Array.isArray(node)) return node as Record<string, unknown>[];
+  return [n];
 }
 
 // ─── Rules ────────────────────────────────────────────────────────────────────
 
 // no-unreachable: code after return/throw/break/continue in the same block
-function checkNoUnreachable(ast: any) {
-  const results: any[] = [];
+function checkNoUnreachable(ast: Program): LintDiagnostic[] {
+  const results: LintDiagnostic[] = [];
   const TERMINATORS = new Set(['Return', 'Throw', 'Break', 'Continue']);
 
-  const checkBlock = (stmts: any) => {
+  const checkBlock = (stmts: Record<string, unknown>[]) => {
     for (let i = 0; i < stmts.length; i++) {
       const s = stmts[i];
       if (!s) continue;
       // Recurse into nested blocks first
-      if (s.kind === 'Block') checkBlock(s.body || []);
+      if (s.kind === 'Block') checkBlock((s.body as Record<string, unknown>[]) || []);
       if (s.kind === 'If') {
         checkBlock(blockBody(s.consequent));
         if (s.alternate) checkBlock(blockBody(s.alternate));
@@ -42,30 +62,30 @@ function checkNoUnreachable(ast: any) {
         checkBlock(blockBody(s.body));
       }
       if (s.kind === 'TryCatch') {
-        checkBlock(s.body?.body || []);
-        if (s.catches) for (const c of s.catches) checkBlock(c.body?.body || []);
-        if (s.finally) checkBlock(s.finally.body || []);
+        checkBlock(((s.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
+        if (s.catches) for (const c of (s.catches as Record<string, unknown>[])) checkBlock(((c.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
+        if (s.finally) checkBlock(((s.finally as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
       }
       if (s.kind === 'FuncDecl' || s.kind === 'ArrowFunc') {
         checkBlock(blockBody(s.body));
       }
       // Check for unreachable: terminator not at end of block
-      if (TERMINATORS.has(s.kind) && i < stmts.length - 1) {
+      if (TERMINATORS.has(s.kind as string) && i < stmts.length - 1) {
         const next = stmts[i + 1];
         if (next && next.line) {
-          results.push({ line: next.line, col: 1, message: `unreachable code after '${s.kind.toLowerCase()}'` });
+          results.push({ line: next.line as number, col: 1, message: `unreachable code after '${(s.kind as string).toLowerCase()}'` });
         }
         break; // report first unreachable, rest are redundant
       }
     }
   };
 
-  walkAst(ast, (node: any) => {
+  walkAst(ast, (node: Record<string, unknown>) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
       checkBlock(blockBody(node.body));
     }
     if (node.kind === 'ClassDecl') {
-      for (const m of node.methods || []) checkBlock(blockBody(m.body));
+      for (const m of ((node.methods as Record<string, unknown>[]) || [])) checkBlock(blockBody(m.body));
     }
   });
 
@@ -73,21 +93,21 @@ function checkNoUnreachable(ast: any) {
 }
 
 // prefer-const: let that is never reassigned after declaration
-function checkPreferConst(ast: any) {
-  const results: any[] = [];
+function checkPreferConst(ast: Program): LintDiagnostic[] {
+  const results: LintDiagnostic[] = [];
 
   // For each function scope, collect lets and assignments
-  const analyzeScope = (params: any, stmts: any, scopeName: any) => {
-    const lets: any[] = []; // { name, line, col }
-    const assigned = new Set(); // names that are reassigned
+  const analyzeScope = (params: unknown, stmts: Record<string, unknown>[], scopeName: unknown) => {
+    const lets: VarInfo[] = []; // { name, line, col }
+    const assigned = new Set<string>(); // names that are reassigned
 
-    const collectLets = (stmts: any) => {
+    const collectLets = (stmts: Record<string, unknown>[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl' && s.varKind === 'let') {
-          lets.push({ name: s.name, line: s.line || 0, col: s.col || 1 });
+          lets.push({ name: s.name as string, line: (s.line as number) || 0, col: (s.col as number) || 1 });
         }
-        if (s.kind === 'Block') collectLets(s.body);
+        if (s.kind === 'Block') collectLets((s.body as Record<string, unknown>[]) || []);
         if (s.kind === 'If') {
           collectLets(blockBody(s.consequent));
           if (s.alternate) collectLets(blockBody(s.alternate));
@@ -96,31 +116,32 @@ function checkPreferConst(ast: any) {
           collectLets(blockBody(s.body));
         }
         if (s.kind === 'TryCatch') {
-          collectLets(s.body?.body || []);
-          if (s.catches) for (const c of s.catches) collectLets(c.body?.body || []);
+          collectLets(((s.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
+          if (s.catches) for (const c of (s.catches as Record<string, unknown>[])) collectLets(((c.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
         }
       }
     };
 
-    const collectAssignments = (node: any) => {
+    const collectAssignments = (node: unknown) => {
       if (!node || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
       // Assign: x = ..., x += ..., x -= ...
-      if (node.kind === 'Assign' && node.target?.kind === 'Ident') {
-        assigned.add(node.target.name);
+      if (n.kind === 'Assign' && (n.target as Record<string, unknown> | undefined)?.kind === 'Ident') {
+        assigned.add((n.target as Record<string, unknown>).name as string);
       }
       // Unary ++ / -- on ident
-      if (node.kind === 'Unary' && (node.op === '++' || node.op === '--') &&
-          node.expr?.kind === 'Ident') {
-        assigned.add(node.expr.name);
+      if (n.kind === 'Unary' && (n.op === '++' || n.op === '--') &&
+          (n.expr as Record<string, unknown> | undefined)?.kind === 'Ident') {
+        assigned.add((n.expr as Record<string, unknown>).name as string);
       }
       // PostUnary ++ / --
-      if (node.kind === 'PostUnary' && (node.op === '++' || node.op === '--') &&
-          node.expr?.kind === 'Ident') {
-        assigned.add(node.expr.name);
+      if (n.kind === 'PostUnary' && (n.op === '++' || n.op === '--') &&
+          (n.expr as Record<string, unknown> | undefined)?.kind === 'Ident') {
+        assigned.add((n.expr as Record<string, unknown>).name as string);
       }
-      for (const val of Object.values(node) as any[]) {
-        if (Array.isArray(val)) for (const item of val) collectAssignments(item);
-        else if (val && typeof val === 'object' && val.kind) collectAssignments(val);
+      for (const val of Object.values(n) as unknown[]) {
+        if (Array.isArray(val)) for (const item of val as unknown[]) collectAssignments(item);
+        else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) collectAssignments(val);
       }
     };
 
@@ -135,37 +156,37 @@ function checkPreferConst(ast: any) {
   };
 
   // Analyze each function independently
-  walkAst(ast, (node: any) => {
+  walkAst(ast, (node: Record<string, unknown>) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
       analyzeScope(node.params || [], blockBody(node.body), node.name);
     }
   });
   // Also analyze top-level
-  analyzeScope([], ast.body || [], '<top>');
+  analyzeScope([], (ast.body || []) as unknown as Record<string, unknown>[], '<top>');
 
   return results;
 }
 
 // no-unused-var: let/const declared but never referenced elsewhere
-function checkNoUnusedVar(ast: any) {
-  const results: any[] = [];
+function checkNoUnusedVar(ast: Program): LintDiagnostic[] {
+  const results: LintDiagnostic[] = [];
 
-  const analyzeScope = (stmts: any, paramNames = new Set()) => {
-    const declared: any[] = []; // { name, line, col }
-    const usedNames = new Set();
+  const analyzeScope = (stmts: Record<string, unknown>[], paramNames = new Set<string>()) => {
+    const declared: VarInfo[] = []; // { name, line, col }
+    const usedNames = new Set<string>();
     const paramNamesLocal = new Set(paramNames);
 
-    const collectDecls = (stmts: any) => {
+    const collectDecls = (stmts: Record<string, unknown>[]) => {
       for (const s of stmts || []) {
         if (!s) continue;
         if (s.kind === 'VarDecl') {
-          declared.push({ name: s.name, line: s.line || 0, col: s.col || 1 });
+          declared.push({ name: s.name as string, line: (s.line as number) || 0, col: (s.col as number) || 1 });
         }
         if (s.kind === 'FuncDecl') {
           // Don't descend into nested functions — they have their own scope
           return;
         }
-        if (s.kind === 'Block') collectDecls(s.body);
+        if (s.kind === 'Block') collectDecls((s.body as Record<string, unknown>[]) || []);
         if (s.kind === 'If') {
           collectDecls(blockBody(s.consequent));
           if (s.alternate) collectDecls(blockBody(s.alternate));
@@ -174,28 +195,29 @@ function checkNoUnusedVar(ast: any) {
           collectDecls(blockBody(s.body));
         }
         if (s.kind === 'TryCatch') {
-          collectDecls(s.body?.body || []);
-          if (s.catches) for (const c of s.catches) collectDecls(c.body?.body || []);
+          collectDecls(((s.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
+          if (s.catches) for (const c of (s.catches as Record<string, unknown>[])) collectDecls(((c.body as Record<string, unknown> | undefined)?.body || []) as Record<string, unknown>[]);
         }
       }
     };
 
-    const collectUsages = (node: any, declLine: any) => {
+    const collectUsages = (node: unknown, declLine: unknown) => {
       if (!node || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
       // An Ident that is NOT the LHS of a VarDecl at its declaration line
-      if (node.kind === 'Ident') {
-        usedNames.add(node.name);
+      if (n.kind === 'Ident') {
+        usedNames.add(n.name as string);
         return;
       }
       // VarDecl: don't count the declared name on the LHS as a usage,
       // but DO walk the init expression for usages
-      if (node.kind === 'VarDecl') {
-        if (node.init) collectUsages(node.init, node.line);
+      if (n.kind === 'VarDecl') {
+        if (n.init) collectUsages(n.init, n.line);
         return;
       }
-      for (const val of Object.values(node) as any[]) {
-        if (Array.isArray(val)) for (const item of val) collectUsages(item, declLine);
-        else if (val && typeof val === 'object' && val.kind) collectUsages(val, declLine);
+      for (const val of Object.values(n) as unknown[]) {
+        if (Array.isArray(val)) for (const item of val as unknown[]) collectUsages(item, declLine);
+        else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) collectUsages(val, declLine);
       }
     };
 
@@ -210,12 +232,12 @@ function checkNoUnusedVar(ast: any) {
   };
 
   // Top-level scope
-  analyzeScope(ast.body || []);
+  analyzeScope((ast.body || []) as unknown as Record<string, unknown>[]);
 
   // Each function's scope
-  walkAst(ast, (node: any) => {
+  walkAst(ast, (node: Record<string, unknown>) => {
     if (node.kind === 'FuncDecl' || node.kind === 'ArrowFunc') {
-      const params = new Set((node.params || []).map((p: any) => p.name).filter(Boolean));
+      const params = new Set(((node.params || []) as Record<string, unknown>[]).map((p: Record<string, unknown>) => p.name as string).filter(Boolean));
       analyzeScope(blockBody(node.body), params);
     }
   });
@@ -225,16 +247,16 @@ function checkNoUnusedVar(ast: any) {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const RULES = {
+const RULES: Record<string, { severity: string; check: (ast: Program) => LintDiagnostic[] }> = {
   'no-unreachable': { severity: 'error',   check: checkNoUnreachable },
   'prefer-const':   { severity: 'warning', check: checkPreferConst   },
   'no-unused-var':  { severity: 'warning', check: checkNoUnusedVar   },
 };
 
-export function lint(ast: any, { rules = Object.keys(RULES) } = {}) {
-  const diagnostics: any[] = [];
+export function lint(ast: Program, { rules = Object.keys(RULES) }: { rules?: string[] } = {}): LintDiagnostic[] {
+  const diagnostics: LintDiagnostic[] = [];
   for (const name of rules) {
-    const rule = (RULES as Record<string, any>)[name];
+    const rule = RULES[name];
     if (!rule) continue;
     for (const d of rule.check(ast)) {
       diagnostics.push({ rule: name, severity: rule.severity, ...d });
@@ -243,7 +265,7 @@ export function lint(ast: any, { rules = Object.keys(RULES) } = {}) {
   return diagnostics.sort((a, b) => (a.line || 0) - (b.line || 0));
 }
 
-export function applyFixes(src: any, diagnostics: any) {
+export function applyFixes(src: string, diagnostics: LintDiagnostic[]): string {
   const lines = src.split('\n');
   for (const d of diagnostics) {
     if (!d.fixable || !d.fixLine) continue;

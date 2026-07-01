@@ -1,5 +1,6 @@
 import type { CodeGenThis } from '../../codegen.js';
-import type { Expression, SymbolInfo } from '@tsclang/ast';
+import type { Expression, SymbolInfo, Stmt, Switch } from '@tsclang/ast';
+import type { ThrowsCtx } from '../top-level/decorators.js';
 export default {
   _emitRetainIfNeeded(this: CodeGenThis, valC: string, valNode: Expression, p: (s: string) => void) {
     if (valNode.kind === 'Ident') {
@@ -14,7 +15,7 @@ export default {
     }
   },
 
-  _wrapErrForCaller(this: CodeGenThis, ctx: any, errExpr: string, calleeSym: SymbolInfo | null) {
+  _wrapErrForCaller(this: CodeGenThis, ctx: ThrowsCtx, errExpr: string, calleeSym: SymbolInfo | null) {
     if (ctx.throwsNames.length <= 1) return errExpr;
     const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
     if (calleeErrTypes.length > 1) return errExpr;
@@ -25,7 +26,7 @@ export default {
     return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
   },
 
-  _visitControlFlow(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _visitControlFlow(this: CodeGenThis, node: Stmt, lines: string[], depth: number) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: string) => lines.push(I + s);
@@ -45,9 +46,9 @@ export default {
             if (this._inMathTry && sym._resultErrTypes?.length === 1 && sym._resultErrTypes[0] === 'MathError') {
               p(`    ${this._mathErrVar} = ${resName}.error;`);
               p(`    goto ${this._mathCatchLabel};`);
-            } else if (ctx?._usesGotoCleanup ?? this._usesGotoCleanup) {
+            } else if (this._usesGotoCleanup) {
               this._emitFuncCleanup(lines, I + '    ');
-              p(`    _result = (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
+              p(`    _result = (${ctx!.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx!, `${resName}.error`, sym)}};`);
               p(`    goto cleanup;`);
             } else if (ctx) {
               this._emitFuncCleanup(lines, I + '    ');
@@ -55,7 +56,7 @@ export default {
             } else {
               const errTypes = sym._resultErrTypes?.map((t: string | { name: string }) => typeof t === 'string' ? t : t?.name).join(' | ') ?? 'unknown';
               throw this.error(
-                `TypeError: '${callee.name}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function`,
+                `TypeError: '${callee.kind === 'Ident' ? callee.name : 'unknown'}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function`,
                 expr
               );
             }
@@ -192,14 +193,14 @@ export default {
         }
         // goto cleanup pattern for throws functions with owned vars
         if (this._usesGotoCleanup) {
-          const ctx = this._throwsCtx;
+          const ctx = this._throwsCtx!;
           if (node.value) {
             this._inReturnContext = true;
             const retC = _wrapUnknownReturn(this.exprToC(node.value, lines, depth), node.value);
             this._inReturnContext = false;
             const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
             if (!_isUnknownReturn && !retIsOwnedIdent) this._emitRetainIfNeeded(retC, node.value, p);
-            if (retIsOwnedIdent) this._suppressCleanupFor(node.value.name);
+            if (retIsOwnedIdent && node.value.kind === 'Ident') this._suppressCleanupFor(node.value.name);
             this._markPoolVarMoved(node.value);
             p(`_result = (${ctx.resultType}){.ok = true, .value = ${retC}};`);
           } else {
@@ -216,7 +217,7 @@ export default {
           this._inReturnContext = false;
           const retType = _isUnknownReturn ? 'tsc_unknown' : (this.inferType(node.value) ?? 'int32_t');
           const retIsOwnedIdent = node.value.kind === 'Ident' && this._hasCleanupFor(node.value.name);
-          if (retIsOwnedIdent) {
+          if (retIsOwnedIdent && node.value.kind === 'Ident') {
             this._suppressCleanupFor(node.value.name);
             this._markPoolVarMoved(node.value);
             if (this._throwsCtx) {
@@ -276,7 +277,7 @@ export default {
 
       case 'If': {
         this._checkNoBareThrows(node.test);
-        const isNullLit = (n: { kind: string; litType?: string; name?: string }) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+        const isNullLit = (n: Expression) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
         let narrowVar: string | null = null;
         let upgradeReleaseVar: string | null = null;
         if (node.test.kind === 'Binary' && (node.test.op === '!=' || node.test.op === '!==')) {
@@ -305,7 +306,8 @@ export default {
         let unknownNarrowCtype: string | null = null;
         let unknownNarrowInElse = false;
         if (node.test.kind === 'Binary' && (node.test.op === '===' || node.test.op === '!==')) {
-          const _checkUnknownNarrow = (typeofSide: any, nameSide: any) => {
+          const _testOp = node.test.op;
+          const _checkUnknownNarrow = (typeofSide: Expression, nameSide: Expression) => {
             if (typeofSide.kind === 'Typeof' && typeofSide.expr.kind === 'Ident' &&
                 nameSide.kind === 'Literal' && nameSide.litType === 'string') {
               const sym = this.lookup(typeofSide.expr.name);
@@ -318,7 +320,7 @@ export default {
                 } else {
                   unknownNarrowCtype = this._tsNameToCType(nameSide.value);
                 }
-                unknownNarrowInElse = (node.test.op === '!==');
+                unknownNarrowInElse = (_testOp === '!==');
               }
             }
           };
@@ -336,7 +338,7 @@ export default {
         // Unknown narrowing: add to narrowedVars + narrowedUnknownVars for if-block
         if (unknownNarrowVar && !unknownNarrowInElse) {
           this._narrowedVars.add(unknownNarrowVar);
-          this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype);
+          this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype!);
           const _uSym = this.lookup(unknownNarrowVar);
           if (_uSym) this._trackRefBorrow(_uSym);
         }
@@ -412,7 +414,7 @@ export default {
           // Set up unknown narrowing for else-block
           if (unknownNarrowVar && unknownNarrowInElse) {
             this._narrowedVars.add(unknownNarrowVar);
-            this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype);
+            this._narrowedUnknownVars.set(unknownNarrowVar, unknownNarrowCtype!);
             const _uSym2 = this.lookup(unknownNarrowVar);
             if (_uSym2) this._trackRefBorrow(_uSym2);
             _unknownNarrowInElseActive = true;
@@ -460,7 +462,7 @@ export default {
       }
 
       case 'For': {
-        if (node.init) this._checkNoBareThrows(node.init.kind === 'ExprStmt' ? node.init.expr : node.init);
+        if (node.init) this._checkNoBareThrows(node.init.kind === 'ExprStmt' ? node.init.expr : node.init as unknown as Expression);
         if (node.test) this._checkNoBareThrows(node.test);
         if (node.update) this._checkNoBareThrows(node.update);
         const _savedAsyncBreak3 = this._asyncBreakStack;
@@ -470,12 +472,12 @@ export default {
         let initC = '';
         if (node.init) {
           if (node.init.kind === 'VarDecls') {
-            const simpleDecls = node.init.decls.filter((d: any) => d.kind === 'VarDecl');
-            const destructDecls = node.init.decls.filter((d: any) => d.kind !== 'VarDecl');
+            const simpleDecls = node.init.decls.filter((d) => d.kind === 'VarDecl');
+            const destructDecls = node.init.decls.filter((d) => d.kind !== 'VarDecl');
             for (const dd of destructDecls) {
               this._visitVarDestruct(dd, lines, depth);
             }
-            const parts = simpleDecls.map((d: any) => {
+            const parts = simpleDecls.map((d) => {
               const ctype = d.typeAnn ? this.resolveType(d.typeAnn) : (d.init ? this.inferType(d.init) : 'int32_t');
               const initExpr = d.init ? this.exprToC(d.init, lines, depth) : '0';
               this.define(d.name, { ctype, varKind: d.varKind });
@@ -578,11 +580,11 @@ export default {
             const [kElem, vElem] = node.binding.elems;
             if (kElem) {
               lines.push(`${II}${qual}${kCType} ${kElem.name} = ${entTmpName}.data[${ivar}].key;`);
-              this.define(kElem.name, { ctype: kCType, varKind: node.varKind });
+              this.define(kElem.name!, { ctype: kCType, varKind: node.varKind });
             }
             if (vElem) {
               lines.push(`${II}${qual}${vCType} ${vElem.name} = ${entTmpName}.data[${ivar}].value;`);
-              this.define(vElem.name, { ctype: vCType, varKind: node.varKind });
+              this.define(vElem.name!, { ctype: vCType, varKind: node.varKind });
             }
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             p('}');
@@ -642,7 +644,7 @@ export default {
           const urlObj = node.iterable.object;
           const urlSym = urlObj.kind === 'Ident' ? this.lookup(urlObj.name) : null;
           if (urlSym?._isURL) {
-            const urlName = urlObj.name;
+            const urlName = urlObj.kind === 'Ident' ? urlObj.name : '';
             const n = this.loopCount++;
             const iterVar = `_iter_${n}`;
             const paramVar = `_p_${n}`;
@@ -652,11 +654,11 @@ export default {
             const [kElem, vElem] = node.binding.elems;
             if (kElem) {
               lines.push(`${II}${qual}String ${kElem.name} = ${paramVar}.key;`);
-              this.define(kElem.name, { ctype: 'String', varKind: node.varKind });
+              this.define(kElem.name!, { ctype: 'String', varKind: node.varKind });
             }
             if (vElem) {
               lines.push(`${II}${qual}String ${vElem.name} = ${paramVar}.value;`);
-              this.define(vElem.name, { ctype: 'String', varKind: node.varKind });
+              this.define(vElem.name!, { ctype: 'String', varKind: node.varKind });
             }
             this.visitStmtOrBlock(node.body, lines, depth + 1);
             p('}');
@@ -715,11 +717,11 @@ export default {
             const [iElem, vElem] = node.binding.elems;
             if (iElem) {
               lines.push(`${II}${qual}int32_t ${iElem.name} = (int32_t)${ivar};`);
-              this.define(iElem.name, { ctype: 'int32_t', varKind: node.varKind });
+              this.define(iElem.name!, { ctype: 'int32_t', varKind: node.varKind });
             }
             if (vElem) {
               lines.push(`${II}${qual}${etCType} ${vElem.name} = ${entTmp}.data[${ivar}]._1;`);
-              this.define(vElem.name, { ctype: etCType, varKind: node.varKind });
+              this.define(vElem.name!, { ctype: etCType, varKind: node.varKind });
             }
             this._pushLoopCleanups();
             this._loopDepth++;
@@ -749,11 +751,11 @@ export default {
             const [aElem, bElem] = node.binding.elems;
             if (aElem) {
               lines.push(`${II}${qual}${_sElemCType} ${aElem.name} = ${entTmp}.data[${ivar}]._0;`);
-              this.define(aElem.name, { ctype: _sElemCType, varKind: node.varKind });
+              this.define(aElem.name!, { ctype: _sElemCType, varKind: node.varKind });
             }
             if (bElem) {
               lines.push(`${II}${qual}${_sElemCType} ${bElem.name} = ${entTmp}.data[${ivar}]._1;`);
-              this.define(bElem.name, { ctype: _sElemCType, varKind: node.varKind });
+              this.define(bElem.name!, { ctype: _sElemCType, varKind: node.varKind });
             }
             this._pushLoopCleanups();
             this._loopDepth++;
@@ -785,11 +787,11 @@ export default {
             p(`for (size_t ${_ivar} = 0; ${_ivar} < ${_mapC}.size; ${_ivar}++) {`);
             if (kElem) {
               lines.push(`${II}${qual}${_kCType} ${kElem.name} = ${_mapC}._keys[${_ivar}];`);
-              this.define(kElem.name, { ctype: _kCType, varKind: node.varKind });
+              this.define(kElem.name!, { ctype: _kCType, varKind: node.varKind });
             }
             if (vElem) {
               lines.push(`${II}${qual}${_vCType} ${vElem.name} = ${_mapC}._vals[${_ivar}];`);
-              this.define(vElem.name, { ctype: _vCType, varKind: node.varKind });
+              this.define(vElem.name!, { ctype: _vCType, varKind: node.varKind });
             }
             this._pushLoopCleanups();
             this._loopDepth++;
@@ -876,7 +878,7 @@ export default {
             const elem = node.binding.elems[i];
             if (!elem) continue;
             lines.push(`${II}${qual}int32_t ${elem.name} = ${iterC}.data[${ivar}]._${i};`);
-            this.define(elem.name, { ctype: 'int32_t', varKind: node.varKind });
+            this.define(elem.name!, { ctype: 'int32_t', varKind: node.varKind });
           }
         }
         this._pushLoopCleanups();
@@ -1122,7 +1124,7 @@ export default {
         }
 
         // Check if any catch clause catches MathError
-        const hasMathCatch = (node.catches ?? []).some((c: { typeAnn?: { name?: string } }) => c.typeAnn?.name === 'MathError');
+        const hasMathCatch = (node.catches ?? []).some((c) => c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === 'MathError');
 
         if (hasMathCatch) {
           const catchIdx = this.tempCount++;
@@ -1150,7 +1152,7 @@ export default {
           p(`goto ${catchEndLabel};`);
           p(`${catchLabel}:`);
           for (const c of node.catches ?? []) {
-            if (c.typeAnn?.name === 'MathError') {
+            if (c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === 'MathError') {
               this.pushScope();
               if (c.param) {
                 this.define(c.param, { ctype: 'MathError', _alias: errVar });
@@ -1171,7 +1173,7 @@ export default {
         }
 
         // Check if try body contains a call to a throws function
-        const _findThrowsFuncCall = (stmts: any[]): any => {
+        const _findThrowsFuncCall = (stmts: Stmt[]): Stmt | null => {
           for (const s of stmts) {
             if (s.kind === 'ExprStmt' && s.expr?.kind === 'Call') {
               const callee = s.expr.callee;
@@ -1192,7 +1194,7 @@ export default {
           // New Result-based pattern
           this._emitTryCatchResult(node, tryStmts, throwsFuncCallStmt, lines, depth);
         } else {
-          const _hasPoolNew = (stmts: any[]): boolean => {
+          const _hasPoolNew = (stmts: Stmt[]): boolean => {
             for (const s of stmts) {
               if (s.kind === 'VarDecl' && s.init?.kind === 'New') {
                 const cls = this.classes.get(s.init.name);
@@ -1224,14 +1226,15 @@ export default {
               const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
               if (isThrowNew) {
                 const val = s.value;
-                const errClass = val.name === 'Error' ? 'TscError' : val.name;
+                const valName = val?.kind === 'New' ? val.name : '';
+                const errClass = valName === 'Error' ? 'TscError' : valName;
                 const errVarName = `_err_${this.tempCount++}`;
-                const errC = this.exprToC(val, lines, depth);
+                const errC = this.exprToC(val!, lines, depth);
                 p(`${errClass} ${errVarName} = ${errC};`);
                 for (const c of catches) {
-                  if (!c.typeAnn || c.typeAnn.name === errClass || (errClass === 'TscError' && c.typeAnn?.name === 'Error')) {
+                  if (!c.typeAnn || (c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === errClass) || (errClass === 'TscError' && c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === 'Error')) {
                     this.pushScope();
-                    this.define(c.param, { ctype: errClass, _alias: errVarName });
+                    this.define(c.param!, { ctype: errClass, _alias: errVarName });
                     this.visitBlock(c.body, lines, depth);
                     this.popScope();
                   }
@@ -1249,7 +1252,7 @@ export default {
             for (const c of catches) {
               this.pushScope();
               if (c.param) {
-                const catchType = c.typeAnn?.name === 'Error' ? 'TscError' : (c.typeAnn?.name ?? 'TscError');
+                const catchType = (c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === 'Error') ? 'TscError' : (c.typeAnn?.kind === 'TypeRef' ? c.typeAnn.name : 'TscError');
                 this.define(c.param, { ctype: catchType, _alias: errVar });
               }
               this.visitBlock(c.body, lines, depth);
@@ -1268,14 +1271,15 @@ export default {
               const isThrowNew = s.kind === 'Throw' && s.value?.kind === 'New';
               if (isThrowNew) {
                 const val = s.value;
-                const errClass = val.name === 'Error' ? 'TscError' : val.name;
+                const valName = val?.kind === 'New' ? val.name : '';
+                const errClass = valName === 'Error' ? 'TscError' : valName;
                 const errVarName = `_err_${this.tempCount++}`;
-                const errC = this.exprToC(val, lines, depth);
+                const errC = this.exprToC(val!, lines, depth);
                 p(`${errClass} ${errVarName} = ${errC};`);
                 for (const c of node.catches) {
-                  if (!c.typeAnn || c.typeAnn.name === errClass || (errClass === 'TscError' && c.typeAnn?.name === 'Error')) {
+                  if (!c.typeAnn || (c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === errClass) || (errClass === 'TscError' && c.typeAnn?.kind === 'TypeRef' && c.typeAnn.name === 'Error')) {
                     this.pushScope();
-                    this.define(c.param, { ctype: errClass, _alias: errVarName });
+                    this.define(c.param!, { ctype: errClass, _alias: errVarName });
                     this.visitBlock(c.body, lines, depth);
                     this.popScope();
                   }
@@ -1337,15 +1341,15 @@ export default {
               nativeOut += part.value;
             } else if (part.kind === 'expr') {
               // Re-parse the expression source (same as _templateToC in misc/closures.ts)
-              const toks = this._lex(part.src, this.filename);
+              const toks = this._lex(part.src!, this.filename);
               const { ast } = this._parse(toks);
-              const exprNode = ast.body[0]?.expr ?? ast.body[0];
+              const exprNode = (ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0];
               nativeOut += this.exprToC(exprNode, lines, depth);
             }
           }
         } else {
           // native "..." тАФ verbatim string, unescape escaped quotes
-          nativeOut = node.content.replace(/\\"/g, '"');
+          nativeOut = (node.content ?? '').replace(/\\"/g, '"');
         }
         // Check for undeclared types used as pointer bases: word * varname
         const knownCTypes = new Set([
@@ -1399,7 +1403,7 @@ export default {
     'char', 'String', 'tsc_unknown',
   ]),
 
-  _validateSwitchFallthrough(this: CodeGenThis, node: any) {
+  _validateSwitchFallthrough(this: CodeGenThis, node: Switch) {
     if (this.inferType(node.discriminant) === 'double' || this.inferType(node.discriminant) === 'float') {
       throw this.error(`cannot switch on type 'f64'`, node);
     }

@@ -77,8 +77,9 @@ export interface TypeTuple extends BaseNode {
 
 export interface ObjectField {
   name: string;
-  type: TypeAnn;
+  typeAnn: TypeAnn;
   optional?: boolean;
+  isMethod?: boolean;
 }
 
 export interface TypeObject extends BaseNode {
@@ -201,6 +202,12 @@ export interface VarDestructArr extends BaseNode {
   init: Expression;
 }
 
+export interface TypeParam {
+  name: string;
+  constraint?: TypeAnn | null;
+  default?: TypeAnn | null;
+}
+
 export interface FuncDecl extends BaseNode {
   kind: 'FuncDecl';
   name: string;
@@ -211,7 +218,10 @@ export interface FuncDecl extends BaseNode {
   generator?: boolean;
   async?: boolean;
   decorators?: Decorator[];
-  typeParams?: string[];
+  typeParams?: TypeParam[];
+  isDecorator?: boolean;
+  _monoName?: string;
+  _noPrefix?: boolean;
 }
 
 export interface FuncOverload extends BaseNode {
@@ -362,8 +372,8 @@ export interface For extends BaseNode {
 
 export interface ForOf extends BaseNode {
   kind: 'ForOf';
-  varKind: string;
-  binding: VarDecl;
+  varKind: 'let' | 'const' | 'var';
+  binding: ForOfBinding;
   iterable: Expression;
   body: Stmt;
   await?: boolean;
@@ -371,8 +381,8 @@ export interface ForOf extends BaseNode {
 
 export interface ForIn extends BaseNode {
   kind: 'ForIn';
-  varKind: string;
-  binding: VarDecl;
+  varKind: 'let' | 'const' | 'var';
+  binding: ForOfBinding;
   iterable: Expression;
   body: Stmt;
 }
@@ -409,7 +419,7 @@ export interface TryCatch extends BaseNode {
 
 export interface SwitchCase {
   test?: Expression | null;
-  consequent: Stmt[];
+  body: Stmt[];
 }
 
 export interface Switch extends BaseNode {
@@ -418,10 +428,16 @@ export interface Switch extends BaseNode {
   cases: SwitchCase[];
 }
 
+export interface NativeTemplatePart {
+  kind: 'str' | 'expr';
+  value?: string;
+  src?: string;
+}
+
 export interface Native extends BaseNode {
   kind: 'Native';
   content?: string | null;
-  templateParts?: unknown[];
+  templateParts?: NativeTemplatePart[];
 }
 
 export interface Unsafe extends BaseNode {
@@ -756,6 +772,15 @@ export interface ObjPattern {
   kind: 'ObjPattern';
   properties: ObjPatternProp[];
 }
+
+// ---------------------------------------------------------------------------
+// For-of / For-in binding (parser emits these shapes, not VarDecl)
+// ---------------------------------------------------------------------------
+
+export type ForOfBinding =
+  | { kind: 'Ident'; name: string; typeAnn?: TypeAnn | null }
+  | { kind: 'ArrayPattern'; elems: (ArrayPatternElement | null)[] }
+  | { kind: 'ObjPattern'; props: ObjPatternProp[] };
 
 // ---------------------------------------------------------------------------
 // Convenience aliases

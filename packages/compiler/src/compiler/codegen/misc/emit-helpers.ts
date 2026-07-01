@@ -124,15 +124,19 @@ export default {
 
     // Collect variables that are WRITTEN in the spawn body (to detect mutable capture)
     const writtenVars = new Set();
-    const findWrites = (stmts: any) => {
-      for (const s of stmts ?? []) {
-        if (s.kind === 'ExprStmt' && s.expr?.kind === 'Assign') {
-          const lhs = s.expr.left;
+    const findWrites = (stmts: unknown) => {
+      for (const s of (Array.isArray(stmts) ? stmts : [])) {
+        const nd = s as Record<string, unknown>;
+        if (nd.kind === 'ExprStmt' && (nd.expr as Record<string, unknown>)?.kind === 'Assign') {
+          const lhs = nd.expr as Record<string, unknown>;
           if (lhs?.kind === 'Ident') writtenVars.add(lhs.name);
-          if (lhs?.kind === 'Member' && lhs.object?.kind === 'Ident') writtenVars.add(lhs.object.name);
+          if (lhs?.kind === 'Member') {
+            const obj = lhs.object as Record<string, unknown>;
+            if (obj?.kind === 'Ident') writtenVars.add(obj.name);
+          }
         }
-        findWrites(s.body?.body ?? []);
-        if (s.kind === 'If') { findWrites([s.consequent]); if (s.alternate) findWrites([s.alternate]); }
+        findWrites((nd.body as Record<string, unknown>)?.body ?? []);
+        if (nd.kind === 'If') { findWrites([nd.consequent]); if (nd.alternate) findWrites([nd.alternate]); }
       }
     };
     const bodyStmts = body.kind === 'Block' ? body.body : [body];
@@ -264,28 +268,30 @@ export default {
     const paramNames = new Set((lambda.params || []).map((p: Param) => p.name));
     const free: FreeVar[] = [];
     const seen = new Set(paramNames);
-    const walkE = (e: any) => {
-      if (!e) return;
-      if (e.kind === 'Ident' && !seen.has(e.name)) {
-        const sym = this.lookup(e.name);
-        if (sym?.ctype) { seen.add(e.name); free.push({ name: e.name, ctype: sym.ctype }); }
+    const walkE = (e: unknown) => {
+      if (!e || typeof e !== 'object') return;
+      const nd = e as Record<string, unknown>;
+      if (nd.kind === 'Ident' && !seen.has(nd.name as string)) {
+        const sym = this.lookup(nd.name as string);
+        if (sym?.ctype) { seen.add(nd.name as string); free.push({ name: nd.name as string, ctype: sym.ctype }); }
       }
-      if (e.callee) walkE(e.callee);
-      if (e.object) walkE(e.object);
-      if (e.left) walkE(e.left);
-      if (e.right) walkE(e.right);
-      if (e.test) walkE(e.test);
-      if (e.args) for (const a of (e.args || [])) walkE(a?.expr);
-      if (e.elems) for (const a of (e.elems || [])) walkE(a?.expr);
-      if (e.props) for (const p of (e.props || [])) walkE(p?.value);
+      if (nd.callee) walkE(nd.callee);
+      if (nd.object) walkE(nd.object);
+      if (nd.left) walkE(nd.left);
+      if (nd.right) walkE(nd.right);
+      if (nd.test) walkE(nd.test);
+      if (nd.args) for (const a of (nd.args as unknown[]) || []) walkE((a as Record<string, unknown>)?.expr);
+      if (nd.elems) for (const a of (nd.elems as unknown[]) || []) walkE((a as Record<string, unknown>)?.expr);
+      if (nd.props) for (const p of (nd.props as unknown[]) || []) walkE((p as Record<string, unknown>)?.value);
     };
-    const walkS = (s: any) => {
-      if (!s) return;
-      if (s.kind === 'ExprStmt') walkE(s.expr);
-      if (s.kind === 'VarDecl') walkE(s.init);
-      if (s.kind === 'Return') walkE(s.value);
-      if (s.kind === 'Block') for (const st of (s.body || [])) walkS(st);
-      if (s.kind === 'If') { walkS(s.consequent); if (s.alternate) walkS(s.alternate); }
+    const walkS = (s: unknown) => {
+      if (!s || typeof s !== 'object') return;
+      const nd = s as Record<string, unknown>;
+      if (nd.kind === 'ExprStmt') walkE(nd.expr);
+      if (nd.kind === 'VarDecl') walkE(nd.init);
+      if (nd.kind === 'Return') walkE(nd.value);
+      if (nd.kind === 'Block') for (const st of ((nd.body as unknown[]) || [])) walkS(st);
+      if (nd.kind === 'If') { walkS(nd.consequent); if (nd.alternate) walkS(nd.alternate); }
     };
     if (lambda.body?.kind === 'Block') for (const s of lambda.body.body || []) walkS(s);
     else if (lambda.body) walkE(lambda.body);

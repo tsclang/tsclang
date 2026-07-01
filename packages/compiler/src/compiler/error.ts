@@ -3,6 +3,56 @@
 
 import { isColorEnabled, makeColors } from './colors.js';
 
+export interface DiagSpan {
+  line?: number | null;
+  col?: number | null;
+  endCol?: number | null;
+  char?: string;
+  label?: string | null;
+}
+
+export interface TscErrorOptions {
+  filename?: string;
+  line?: number | null;
+  col?: number | null;
+  endCol?: number | null;
+  src?: string | null;
+  label?: string | null;
+  spans?: DiagSpan[];
+  help?: string[];
+  notes?: string[];
+  code?: string | null;
+  kind?: string;
+}
+
+export interface Diagnostic {
+  kind?: string;
+  code?: string | null;
+  message: string;
+  line?: number | null;
+  col?: number | null;
+  endCol?: number | null;
+  filename?: string;
+  src?: string | null;
+  label?: string | null;
+  spans: DiagSpan[];
+  help: string[];
+  notes: string[];
+}
+
+export interface RenderOptions {
+  color?: boolean;
+  contextLines?: number;
+}
+
+interface RenderSpan {
+  col: number;
+  endCol: number | null;
+  char: string;
+  label: string | null;
+  isPrimary: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // TscError
 // ---------------------------------------------------------------------------
@@ -14,13 +64,13 @@ export class TscError extends Error {
   endCol: number | null;
   src: string | null;
   label: string | null;
-  spans: any[];
+  spans: DiagSpan[];
   help: string[];
   notes: string[];
   code: string | null;
   kind: string;
 
-  constructor(message: string, opts: any = {}) {
+  constructor(message: string, opts: TscErrorOptions = {}) {
     super(message);
     this.name       = 'TscError';
     this.isTscError = true;
@@ -45,7 +95,7 @@ export class TscError extends Error {
 // ---------------------------------------------------------------------------
 const TAB_WIDTH = 4;
 
-function expandTabs(s: any) {
+function expandTabs(s: string) {
   let result = '', vcol = 0;
   for (const ch of s) {
     if (ch === '\t') {
@@ -62,7 +112,7 @@ function expandTabs(s: any) {
 
 // Visual column of a 1-based source column, accounting for tab expansion.
 // Returns the number of display characters before that column.
-function visualPosition(rawLine: any, col1based: any) {
+function visualPosition(rawLine: string, col1based: number) {
   const sliceLen = Math.max(0, col1based - 1);
   return expandTabs(rawLine.slice(0, sliceLen)).length;
 }
@@ -74,7 +124,7 @@ function visualPosition(rawLine: any, col1based: any) {
 //   color        — override color flag (default: from colors.js _enabled)
 //   contextLines — source lines of context around each span (default 1)
 // ---------------------------------------------------------------------------
-export function renderDiagnostic(diag: any, opts: any = {}) {
+export function renderDiagnostic(diag: Diagnostic, opts: RenderOptions = {}) {
   const contextLines = opts.contextLines ?? 1;
 
   // Resolve color: explicit opts.color overrides module-level _enabled
@@ -110,14 +160,14 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
     }
 
     // Expand each anchor ±contextLines, clamp to valid range
-    const showSet = new Set();
+    const showSet = new Set<number>();
     for (const anchor of anchors) {
       for (let d = -contextLines; d <= contextLines; d++) {
         const ln = anchor + d;
         if (ln >= 1 && ln <= srcLines.length) showSet.add(ln);
       }
     }
-    const showLines = [...showSet].sort((a: any, b: any) => a - b);
+    const showLines = [...showSet].sort((a, b) => a - b);
 
     // gutterWidth from max line number shown (tip 1: consistent | alignment)
     const maxLine    = showLines[showLines.length - 1] ?? diag.line;
@@ -125,16 +175,16 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
     const pad        = ' '.repeat(gw);
 
     // Gutter helpers
-    const lineGutter  = (num: any)     => C.cyan(String(num).padStart(gw)) + C.cyan(' | ');
+    const lineGutter  = (num: number)     => C.cyan(String(num).padStart(gw)) + C.cyan(' | ');
     const blankGutter = ()        => C.cyan(pad + '  |');
-    const gutterRow = (spaces: any, marks: any, labelStr: any) =>
+    const gutterRow = (spaces: string, marks: string, labelStr: string) =>
       C.cyan(pad + '  | ') + spaces + marks + labelStr;
 
     // Build span index: lineNum → [spanInfo, ...]
-    const spansByLine = new Map();
-    const addSpan = (line: any, sp: any) => {
+    const spansByLine = new Map<number, RenderSpan[]>();
+    const addSpan = (line: number, sp: RenderSpan) => {
       if (!spansByLine.has(line)) spansByLine.set(line, []);
-      spansByLine.get(line).push(sp);
+      spansByLine.get(line)!.push(sp);
     };
 
     // Primary span
@@ -161,7 +211,7 @@ export function renderDiagnostic(diag: any, opts: any = {}) {
     // Opening blank gutter
     out.push(blankGutter());
 
-    let prevLn: any = null;
+    let prevLn: number | null = null;
     for (const ln of showLines) {
       // Gap marker — only when lines are not consecutive (tip from plan)
       if (prevLn !== null && (ln as number) > (prevLn as number) + 1) {

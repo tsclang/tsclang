@@ -126,12 +126,12 @@ export default {
     if (!canEmitPoll) return;
 
     // Build promoted set
-    const promoted = new Set();
+    const promoted = new Set<string>();
     for (const f of paramFields) promoted.add(f.name);
     for (const f of bodyFields) promoted.add(f.name);
 
     // Build spawn alias map: userVar → threadVar (for await t.join() detection)
-    const spawnVarAlias = new Map();
+    const spawnVarAlias = new Map<string, string>();
     for (const si of spawnInfos) spawnVarAlias.set(si.userVar, si.threadVar);
 
     const stringFields: string[] = [];
@@ -196,12 +196,12 @@ export default {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines: string[] = [];
     const ctx: AsyncEmitCtx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
-    const sc = this._selfCtx;
+    const sc = this._selfCtx!;
 
     lines.push('    switch (self->_state) {');
     lines.push('        case 0:');
 
-    for (const name of sc.paramStringFields) {
+    for (const name of (sc.paramStringFields ?? [])) {
       lines.push(`            tsc_string_retain(self->${name});`);
     }
 
@@ -225,7 +225,7 @@ export default {
       for (const { name, freeFn } of sc.classFreeFields) {
         lines.push(`            ${freeFn}(&self->${name});`);
       }
-      for (const { name, elemIdent } of sc.arrayFields) {
+      for (const { name, elemIdent } of (sc.arrayFields ?? [])) {
         lines.push(`            tsc_array_free_${elemIdent}(&self->${name});`);
       }
       lines.push('            self->_done = true;');
@@ -297,7 +297,7 @@ export default {
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
     if (!ctx.terminated && !isNested) {
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
@@ -342,7 +342,7 @@ export default {
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
     if (!ctx.terminated && !isNested) {
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
@@ -413,7 +413,7 @@ export default {
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
     if (!ctx.terminated && !isNested) {
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
@@ -443,7 +443,7 @@ export default {
       elemType = this._arrIdentToCType(arrType.slice(6));
     }
 
-    const isPromoted = this._selfCtx.promoted.has(idxName);
+    const isPromoted = this._selfCtx!.promoted.has(idxName);
     const idxAccess = isPromoted ? `self->${idxName}` : idxName;
 
     // Init index
@@ -472,7 +472,7 @@ export default {
         lines.push(`${I}${ptrQual}${elemType} *${bindName} = &${iterC}.data[${idxAccess}];`);
         this.define(bindName, { ctype: `${elemType} *`, varKind: s.varKind });
       } else {
-        const bindPromoted = this._selfCtx.promoted.has(bindName);
+        const bindPromoted = this._selfCtx!.promoted.has(bindName);
         if (bindPromoted) {
           lines.push(`${I}self->${bindName} = ${iterC}.data[${idxAccess}];`);
         } else {
@@ -512,7 +512,7 @@ export default {
     ctx.terminated = false;
     for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
     if (!ctx.terminated && !isNested) {
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);

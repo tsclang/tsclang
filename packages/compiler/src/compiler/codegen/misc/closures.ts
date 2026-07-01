@@ -39,9 +39,9 @@ export default {
     const compiled = parts.map((p: TemplatePart): CompiledPart => {
       if (p.kind === 'str') return { kind: 'str', value: p.value ?? '' };
       // Re-parse the expression source
-      const toks = this._lex(p.src, this.filename);
+      const toks = this._lex(p.src!, this.filename);
       const { ast } = this._parse(toks);
-      const exprNode = ast.body[0]?.expr ?? ast.body[0];
+      const exprNode = ((ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0]) as Expression;
       this._checkNoBareThrows(exprNode);
       let t = this.inferType(exprNode);
       let c = this.exprToC(exprNode, lines, depth);
@@ -118,11 +118,12 @@ export default {
     const captured = new Map(); // name → symInfo
     const seen = new Set();
 
-    const walk = (n: any, localDefs: Set<string>) => {
+    const walk = (n: unknown, localDefs: Set<string>) => {
       if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) { n.forEach((x: any) => walk(x, localDefs)); return; }
-      if (n.kind === 'Ident') {
-        const nm = n.name;
+      if (Array.isArray(n)) { n.forEach((x) => walk(x, localDefs)); return; }
+      const nd = n as Record<string, unknown>;
+      if (nd.kind === 'Ident') {
+        const nm = nd.name as string;
         if (selfName && nm === selfName) return;
         if (!params.has(nm) && !localDefs.has(nm) && !builtins.has(nm) && !seen.has(nm)) {
           const sym = this.lookup(nm);
@@ -130,13 +131,14 @@ export default {
         }
         return;
       }
-      if (n.kind === 'TemplateLit') {
-        for (const part of (n.parts ?? [])) {
-          if (part.kind === 'expr' && part.src) {
+      if (nd.kind === 'TemplateLit') {
+        for (const part of ((nd.parts as unknown[]) ?? [])) {
+          const p = part as Record<string, unknown>;
+          if (p.kind === 'expr' && p.src) {
             try {
-              const toks = this._lex(part.src, this.filename);
+              const toks = this._lex(p.src as string, this.filename);
               const { ast } = this._parse(toks);
-              const exprNode = ast.body[0]?.expr ?? ast.body[0];
+      const exprNode = ((ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0]) as Expression;
               if (exprNode) walk(exprNode, localDefs);
             } catch (_) { /* ignore parse errors in template parts */ }
           }
@@ -144,10 +146,10 @@ export default {
         return;
       }
       const inner = new Set(localDefs);
-      if (n.kind === 'VarDecl') inner.add(n.name);
-      for (const key of Object.keys(n)) {
+      if (nd.kind === 'VarDecl') inner.add(nd.name as string);
+      for (const key of Object.keys(nd)) {
         if (key === 'kind') continue;
-        const child = n[key];
+        const child = nd[key];
         if (child && typeof child === 'object') walk(child, inner);
       }
     };

@@ -49,7 +49,7 @@ export default {
   // ─── Await info ───────────────────────────────────────────────────────────
 
   _awaitInfoOf(this: CodeGenThis, awaitNode: Await) {
-    const expr = awaitNode.expr as any;
+    const expr = awaitNode.expr;
     if (!expr) return null;
 
     if (expr.kind === 'Call') {
@@ -78,8 +78,8 @@ export default {
                  initFn: 'tsc_pipe_async', resultCType: null, args: expr.args };
       }
       // process.stdin.readLine() / process.stdout.write(s) / process.stderr.write(s)
-      if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Member' &&
-          expr.callee.object?.object?.name === 'process') {
+      if (expr?.callee?.kind === 'Member' && expr.callee.object?.kind === 'Member' &&
+          expr.callee.object?.object?.kind === 'Ident' && expr.callee.object?.object?.name === 'process') {
         const _streamProp = expr.callee.object.prop;
         const _streamFn = _streamProp === 'stdin' ? 'tsc_stdin()' :
                           _streamProp === 'stderr' ? 'tsc_stderr()' : 'tsc_stdout()';
@@ -148,34 +148,35 @@ export default {
         }
       }
       // std/net: net.connect(host, port)
-      if (expr.callee?.kind === 'Member' &&
-          expr.callee.object?.name === 'net' &&
+      if (expr?.callee?.kind === 'Member' &&
+          expr.callee.object?.kind === 'Ident' && expr.callee.object?.name === 'net' &&
           expr.callee.prop === 'connect') {
         return { kind: 'net-connect', stateType: 'TscConnectAwaitable', pollFn: 'tsc_net_connect_poll',
                  initFn: 'tsc_net_connect_async', resultCType: 'TscSocket', args: expr.args };
       }
-      if (expr.callee?.kind === 'Member' &&
-          expr.callee.object?.name === 'Promise' &&
+      if (expr?.callee?.kind === 'Member' &&
+          expr.callee.object?.kind === 'Ident' && expr.callee.object?.name === 'Promise' &&
           expr.callee.prop === 'all') {
-        const items = expr.args?.[0]?.expr?.elems || [];
+        const items = (expr.args?.[0]?.expr?.kind === 'ArrayLit' ? expr.args[0].expr.elems : null) || [];
         return { kind: 'promise-all', items };
       }
-      if (expr.callee?.kind === 'Member' &&
-          expr.callee.object?.name === 'Promise' &&
+      if (expr?.callee?.kind === 'Member' &&
+          expr.callee.object?.kind === 'Ident' && expr.callee.object?.name === 'Promise' &&
           (expr.callee.prop === 'race' || expr.callee.prop === 'any' || expr.callee.prop === 'allSettled')) {
         const prop = expr.callee.prop;
-        const items = expr.args?.[0]?.expr?.elems || [];
+        const items = (expr.args?.[0]?.expr?.kind === 'ArrayLit' ? expr.args[0].expr.elems : null) || [];
         let resultCType: string | null = null;
         if (prop !== 'allSettled') {
-          const firstName = items[0]?.expr?.callee?.kind === 'Ident' ? items[0].expr.callee.name : null;
+          const firstExpr = items[0]?.expr;
+          const firstName = firstExpr?.kind === 'Call' && firstExpr.callee?.kind === 'Ident' ? firstExpr.callee.name : null;
           if (firstName && this._asyncFuncs?.has(firstName)) {
-            resultCType = this._asyncFuncs.get(firstName).resultCType;
+            resultCType = this._asyncFuncs.get(firstName)!.resultCType;
           }
         }
         return { kind: `promise-${prop}`, items, resultCType };
       }
       if (callee && this._asyncFuncs?.has(callee)) {
-        const info = this._asyncFuncs.get(callee);
+        const info = this._asyncFuncs.get(callee)!;
         const isResult = info.resultCType?.startsWith('Result_');
         const valueCType = isResult ? info.innerResultCType : info.resultCType;
         return { kind: 'async', name: callee, stateType: info.stateType,

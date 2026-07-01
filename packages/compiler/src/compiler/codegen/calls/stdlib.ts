@@ -1,8 +1,9 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Call, Argument, Param, SymbolInfo } from '@tsclang/ast';
 import { DEFAULT_CONSOLE_BAUD } from '@tsclang/shared';
 
 export default {
-  _dispatchStdLib(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdLib(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     let _r;
     _r = this._dispatchStdIo(node, lines, depth);
@@ -38,7 +39,7 @@ export default {
     return null;
   },
 
-  _dispatchStdIo(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdIo(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (this._stdIoImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _ioSym = this.lookup(callee.object.name);
@@ -59,7 +60,7 @@ export default {
     return null;
   },
 
-  _dispatchStdHal(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdHal(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (this._stdHalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _halClass = callee.object.name;
@@ -108,7 +109,7 @@ export default {
           const cfgArg = args[0]?.expr;
           let baud = String(DEFAULT_CONSOLE_BAUD);
           if (cfgArg?.kind === 'ObjLit') {
-            const bp = cfgArg.props?.find((p: { key: string }) => p.key === 'baud');
+            const bp = cfgArg.props?.find((p) => p.key === 'baud');
             if (bp?.value) baud = this.exprToC(bp.value, lines, depth);
           }
           return `tsc_uart_init(${baud})`;
@@ -129,7 +130,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBlob(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdBlob(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _blobSym = this.lookup(callee.object.name);
@@ -169,7 +170,7 @@ export default {
     return null;
   },
 
-  _dispatchStdUrl(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdUrl(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // URL / URLSearchParams method calls
     if (this._stdUrlImported && callee.kind === 'Member') {
@@ -177,7 +178,7 @@ export default {
       if (callee.object.kind === 'Member' && callee.object.prop === 'searchParams') {
         const urlObj = callee.object.object;
         const urlSym = urlObj.kind === 'Ident' ? this.lookup(urlObj.name) : null;
-        if (urlSym?._isURL) {
+        if (urlObj.kind === 'Ident' && urlSym?._isURL) {
           const urlName = urlObj.name;
           const _spProp = callee.prop;
           if (_spProp === 'get') {
@@ -217,7 +218,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSignal(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdSignal(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // Signal methods: signal.get(), signal.set(val)
     if (this._stdReactiveImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -270,18 +271,23 @@ export default {
         // Find free Signal vars
         const paramNames = new Set((arrow.params ?? []).map((p: { name?: string }) => p.name));
         const capturedSignals = new Map();
-        const walkFreeVars = (node: any): any => {
+        const walkFreeVars = (node: unknown): void => {
           if (!node || typeof node !== 'object') return;
-          if (Array.isArray(node)) { node.forEach(walkFreeVars); return; }
-          if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee.object?.kind === 'Ident') {
-            const varName = node.callee.object.name;
-            if (!paramNames.has(varName)) {
-              const sym = this.lookup(varName);
-              if (sym?._isSignal) capturedSignals.set(varName, sym);
+          if (Array.isArray(node)) { (node as unknown[]).forEach(walkFreeVars); return; }
+          const n = node as Record<string, unknown>;
+          if (n.kind === 'Call') {
+            const callee = n.callee as Record<string, unknown> | undefined;
+            const obj = callee?.object as Record<string, unknown> | undefined;
+            if (callee?.kind === 'Member' && obj?.kind === 'Ident') {
+              const varName = obj.name as string;
+              if (!paramNames.has(varName)) {
+                const sym = this.lookup(varName);
+                if (sym?._isSignal) capturedSignals.set(varName, sym);
+              }
             }
           }
-          for (const key of Object.keys(node)) {
-            if (key !== 'kind') walkFreeVars(node[key]);
+          for (const key of Object.keys(n)) {
+            if (key !== 'kind') walkFreeVars(n[key]);
           }
         };
         walkFreeVars(arrow.body);
@@ -356,7 +362,7 @@ export default {
     return null;
   },
 
-  _dispatchStdWs(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdWs(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // WebSocket methods: ws.send(), ws.close(), ws.onMessage(), ws.onClose(), ws.sendBytes()
     if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -377,10 +383,10 @@ export default {
           const dataExprC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(_empty_arr)';
           return `tsc_ws_send_bytes(${wsRef}, ${dataExprC}.data, ${dataExprC}.length)`;
         }
-        const _wsHoistCb = (paramTypes: any): any => {
+        const _wsHoistCb = (paramTypes: string[] | undefined): string => {
           const cbArg = args[0]?.expr;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: { typeAnn?: any }) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: Param) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             const cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
             return cbName;
@@ -402,10 +408,10 @@ export default {
           const cbArg = args[0]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
+            const paramNames = (cbArg.params ?? []).map((p: Param, i: number) => p.name ?? `_p${i}`);
             const paramTypes = ['TscWebSocket *'];
-            const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i] ?? `_p${i}`}`);
-            const handlerLines: any[] = [];
+            const paramStrs = paramTypes.map((t: string, i: number) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines: string[] = [];
             this.pushScope();
             for (let i = 0; i < Math.min(paramNames.length, paramTypes.length); i++) {
               this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const', _isWebSocket: true });
@@ -431,7 +437,7 @@ export default {
     return null;
   },
 
-  _dispatchStdNet(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdNet(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // std/net: net.listen(port, handler) / net.connect handled via async
     if (this._stdNetImported && callee.kind === 'Member' &&
@@ -478,10 +484,10 @@ export default {
           this._handlerCount = n + 1;
           const handlerName = `_handler_${n}`;
           if (cbArg?.kind === 'Arrow') {
-            const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
+            const paramNames = (cbArg.params ?? []).map((p: Param, i: number) => p.name ?? `_p${i}`);
             const paramTypes = ['TscRequest *', 'TscResponse *'];
-            const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i] ?? `_p${i}`}`);
-            const handlerLines: any[] = [];
+            const paramStrs = paramTypes.map((t: string, i: number) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines: string[] = [];
             const savedInFunc = this.inFunction;
             const savedStackLen = this._blockCleanupStack.length;
             this.inFunction = true;
@@ -493,7 +499,7 @@ export default {
             if (cbArg.body.kind === 'Block') this.visitBlock(cbArg.body, handlerLines, 0);
             else { const c = this.exprToC(cbArg.body, handlerLines, 0); handlerLines.push(`return ${c};`); }
             const handlerCleanup = this._blockCleanupStack.pop();
-            for (let i = handlerCleanup.list.length - 1; i >= 0; i--) handlerLines.push(handlerCleanup.list[i] + ';');
+            for (let i = handlerCleanup!.list.length - 1; i >= 0; i--) handlerLines.push(handlerCleanup!.list[i] + ';');
             this.popScope();
             this.inFunction = savedInFunc;
             while (this._blockCleanupStack.length > savedStackLen) this._blockCleanupStack.pop();
@@ -530,7 +536,7 @@ export default {
     return null;
   },
 
-  _dispatchStdFs(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdFs(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // fs namespace: fs.watch(), fs.readFileSync(), fs.writeFileSync(), etc.
     if (this._stdFsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -544,7 +550,7 @@ export default {
           const cbArg = args[1]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = (cbArg.params ?? []).map((p: { typeAnn?: any }) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = (cbArg.params ?? []).map((p: Param) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
           } else {
@@ -568,7 +574,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTemporal(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdTemporal(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // Temporal static methods: PlainDate.from(), Instant.now(), etc.
     if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -612,17 +618,17 @@ export default {
       if (_tClass === 'Duration' && _tProp === 'from') {
         const objArg = args[0]?.expr;
         if (objArg?.kind === 'ObjLit') {
-          const props = {};
+          const props: Record<string, string> = {};
           for (const p of (objArg.props ?? [])) {
-            (props as Record<string, any>)[p.key] = p.value ? this.exprToC(p.value, lines, depth) : '0';
+            props[String(p.key)] = p.value ? this.exprToC(p.value, lines, depth) : '0';
           }
           _temporalSuppressConst();
           if ('days' in props && !('hours' in props) && !('minutes' in props)) {
-            return `tsc_duration_from_days(${(props as any).days ?? '0'})`;
+            return `tsc_duration_from_days(${props.days ?? '0'})`;
           }
-          const h = (props as any).hours ?? '0';
-          const m = (props as any).minutes ?? '0';
-          const s = (props as any).seconds ?? '0';
+          const h = props.hours ?? '0';
+          const m = props.minutes ?? '0';
+          const s = props.seconds ?? '0';
           return `tsc_duration_from_hms(${h}, ${m}, ${s})`;
         }
       }
@@ -651,7 +657,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBuffer(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdBuffer(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // Buffer method calls: buf.fill(), buf.slice()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -677,7 +683,7 @@ export default {
     return null;
   },
 
-  _dispatchStdDataView(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdDataView(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _dvSym = this.lookup(callee.object.name);
@@ -722,7 +728,7 @@ export default {
           const [dir, type, sz] = m;
           const leArgIdx = dir === 'get' ? 1 : 2;
           const leNode = args[leArgIdx]?.expr;
-          const le = leNode ? (leNode.kind === 'Literal' && (leNode.value === true || leNode.value === 'true')) : false;
+          const le = leNode ? (leNode.kind === 'Literal' && leNode.value === 'true') : false;
           return this._dvOp(_dvName, base, I, dir, type, le, args, lines, depth, _dvSym);
         }
       }
@@ -731,7 +737,7 @@ export default {
     return null;
   },
 
-  _dvOp(this: CodeGenThis, _dvName: string, base: string, I: string, dir: string, type: string, le: boolean, args: any[], lines: string[], depth: number, _dvSym: any) {
+  _dvOp(this: CodeGenThis, _dvName: string, base: string, I: string, dir: string, type: string, le: boolean, args: Argument[], lines: string[], depth: number, _dvSym: SymbolInfo) {
     const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const ptr = `(${base} + ${_dvIdx})`;
     const sz = ({ U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 } as Record<string, number>)[type];
@@ -797,7 +803,7 @@ export default {
     return `(void)0`;
   },
 
-  _dispatchStdHashMap(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdHashMap(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // HashMap method calls: m.set(), m.get(), m.has(), m.delete()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -835,7 +841,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSet(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdSet(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // Set method calls: s.add(), s.has(), s.delete(), s.clear()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -909,7 +915,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTasks(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdTasks(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // Tasks method calls: tasks.add(), tasks.run(), tasks.stop()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -948,7 +954,7 @@ export default {
     return null;
   },
 
-  _dispatchStdRegex(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchStdRegex(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     // TscRegex method calls: r.test(), r.match(), r.replace(), r.replaceAll()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {

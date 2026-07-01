@@ -45,14 +45,14 @@ export interface SymbolInfo {
 
   // Generator state
   _isGenState?: boolean;
-  _gi?: number;
+  _gi?: unknown;
   _genArgs?: unknown[];
 
   // Misc
   _suppressVoidWarning?: boolean;
   _isLibcFunc?: boolean;
   _isLibcVariadic?: boolean;
-  _isStackMacro?: boolean;
+  _isStackMacro?: string;
   _isAvrObj?: boolean;
   _avrName?: string;
   _isVtable?: boolean;

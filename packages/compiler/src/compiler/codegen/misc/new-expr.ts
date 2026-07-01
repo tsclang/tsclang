@@ -151,13 +151,15 @@ export default {
     // Generic class instantiation: new Box<i32>(42) → Box_i32_new(42)
     if (this._genericClasses?.has(name)) {
       const tmpl = this._genericClasses.get(name);
+      if (!tmpl) return `${name}_new(${argsC})`;
       const typeArgs = node.typeArgs ?? [];
       const subst = new Map();
-      for (let i = 0; i < tmpl.typeParams.length; i++) {
+      const typeParams = tmpl.typeParams ?? [];
+      for (let i = 0; i < typeParams.length; i++) {
         const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
-        subst.set(tmpl.typeParams[i].name, ct);
+        subst.set(typeParams[i], ct);
       }
-      const suffix = tmpl.typeParams.map((tp: RtTypeParam) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+      const suffix = typeParams.map((tp: string) => this.cTypeToIdent(subst.get(tp) ?? 'void')).join('_');
       const monoName = `${name}_${suffix}`;
       if (!this._emittedGenericClasses.has(monoName)) {
         this._emittedGenericClasses.add(monoName);
@@ -176,7 +178,7 @@ export default {
         const tmpName = `_heap_${this.tempCount++}`;
         this.includes.add('#include <stdlib.h>');
         lines.push(`${cname} *${tmpName} = (${cname} *)tsc_malloc(sizeof(${cname}));`);
-        const hasCtor = cls.methods?.some((m: RtCtorMethod) => m.name === 'constructor');
+        const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
         if (hasCtor) {
           const ctorArgs = node.args.map((a: Argument) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
           lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
@@ -198,29 +200,29 @@ export default {
         lines.push(`if (!${tmpName}.has_value) {`);
         const errC = `(TscError){ .message = STR_LIT("pool exhausted: ${name}") }`;
         if (this._usesGotoCleanup) {
-          lines.push(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${errC}};`);
+          lines.push(`    _result = (${this._throwsCtx!.resultType}){.ok = false, .error = ${errC}};`);
           lines.push(`    goto cleanup;`);
         } else if (this._throwsCtx) {
           lines.push(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${errC}};`);
         } else if (this._inTryBlock) {
-          lines.push(`    ${this._tryCatchInfo.errVar} = ${errC};`);
-          lines.push(`    goto ${this._tryCatchInfo.catchLabel};`);
+          lines.push(`    ${this._tryCatchInfo!.errVar} = ${errC};`);
+          lines.push(`    goto ${this._tryCatchInfo!.catchLabel};`);
         } else {
           lines.push(`    ${errC};`);
           lines.push(`    abort();`);
         }
         lines.push(`}`);
-        const hasCtor = cls.methods?.some((m: RtCtorMethod) => m.name === 'constructor');
+        const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
         if (hasCtor && node.args?.length > 0) {
           const argsC = node.args.map((a: Argument) => this.exprToC(a.expr ?? a, lines, depth)).join(', ');
           lines.push(`*${tmpName}.value = ${cname}_new(${argsC});`);
         }
         return tmpName;
       }
-      const hasCtor = cls.methods?.some((m: RtCtorMethod) => m.name === 'constructor');
+      const hasCtor = cls.methods?.some((m) => m.name === 'constructor');
       // Suppress const for class instances unless ALL fields are readonly
-      const allReadonly = cls.fields?.length > 0 &&
-        cls.fields.every((f: RtClassField) => f.modifiers?.includes('readonly'));
+      const allReadonly = (cls.fields?.length ?? 0) > 0 &&
+        cls.fields?.every((f) => f.modifiers?.includes('readonly'));
       if (!allReadonly) this._lastSuppressConst = true;
       if (hasCtor) return `${cname}_new(${argsC})`;
       // Throws classes have a synthesized _new(String msg) function
@@ -301,16 +303,17 @@ export default {
     return name;
   },
 
-  _scanReturnExpr(this: CodeGenThis, node: any) {
+  _scanReturnExpr(this: CodeGenThis, node: unknown) {
     if (!node || typeof node !== 'object') return null;
     if (Array.isArray(node)) {
       for (const child of node) { const r = this._scanReturnExpr(child); if (r) return r; }
       return null;
     }
-    if (node.kind === 'Return' && (node.expr || node.value)) return node.expr || node.value;
-    for (const key of Object.keys(node)) {
+    const n = node as Record<string, unknown>;
+    if (n.kind === 'Return' && (n.expr || n.value)) return n.expr || n.value;
+    for (const key of Object.keys(n)) {
       if (key === 'kind') continue;
-      const child = node[key];
+      const child = n[key];
       if (child && typeof child === 'object') { const r = this._scanReturnExpr(child); if (r) return r; }
     }
     return null;

@@ -127,7 +127,7 @@ export default {
       isStruct: true,
       fields: isVoidYield
         ? [{ name: '_dummy', ctype: 'int' }, { name: 'done', ctype: 'bool' }]
-        : [{ name: 'value', ctype: resValueType }, { name: 'done', ctype: 'bool' }],
+        : [{ name: 'value', ctype: resValueType ?? 'void' }, { name: 'done', ctype: 'bool' }],
     });
 
     // Register

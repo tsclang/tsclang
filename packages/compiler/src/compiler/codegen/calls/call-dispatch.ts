@@ -1,8 +1,8 @@
 import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Expression } from '@tsclang/ast';
+import type { Expression, Call, Argument, SymbolInfo, Param } from '@tsclang/ast';
 export default {
-  callToC(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  callToC(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
@@ -21,7 +21,7 @@ export default {
 
     // Generator .next() call: gen.next() в†’ genFn_next(&gen, ...storedArgs)
     if (callee.kind === 'Member' && callee.prop === 'next') {
-      const objName = callee.object?.name ?? callee.object;
+      const objName = callee.object?.kind === 'Ident' ? callee.object.name : null;
       const sym = typeof objName === 'string' ? this.lookup(objName) : null;
       if (sym?._isGenState) {
         const { gi, callExpr } = this._genNextCall(sym, this.exprToC(callee.object, lines, depth));
@@ -60,13 +60,13 @@ export default {
 
     // @platform check: calling a function skipped for current platform
     if (callee.kind === 'Ident' && this._platformSkipped?.has(callee.name)) {
-      const allowed = this._platformSkipped.get(callee.name).join('", "');
+      const allowed = this._platformSkipped.get(callee.name)!.join('", "');
       const target = this._targetName ?? DEFAULT_TARGET;
       throw this.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
     }
 
     if (callee.kind === 'Ident') {
-      const sym = this.lookup(callee.name) as any;
+      const sym = this.lookup(callee.name);
       if (sym?._isStackMacro) {
         const strArg = (i: number) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
         if (sym._isStackMacro === 'push') {
@@ -145,20 +145,20 @@ export default {
 
     // Plain function call вЂ” look up mangled name in scope
     let calleeC;
-    let sym: any = null;
+    let sym: SymbolInfo | null = null;
     if (callee.kind === 'Ident') {
       sym = this.lookup(callee.name);
       // Overload resolution: if there are multiple overloads, pick by arg count then type
       if (sym?.overloads && sym.overloads.length > 0) {
         const argCount = args.filter((a: { spread?: boolean }) => !a.spread).length;
         // First filter by arg count
-        const countMatches = sym.overloads.filter((o: { params: any[] }) => o.params.filter((p: { rest?: boolean }) => !p.rest).length === argCount);
+        const countMatches = sym.overloads.filter((o: { params: Param[] }) => o.params.filter((p: Param) => !p.rest).length === argCount);
         let match;
         if (countMatches.length === 1) {
           match = countMatches[0];
         } else if (countMatches.length > 1) {
           // Multiple count matches: pick by type
-          match = countMatches.find((o: { params: any[] }) =>
+          match = countMatches.find((o: { params: Param[] }) =>
             args.every((a: { expr: Expression }, i: number) => {
               const p = o.params[i];
               if (!p?.typeAnn) return true;
@@ -181,7 +181,7 @@ export default {
           throw this.error(`unknown identifier '${callee.name}'`);
         }
         // avr/hal direct calls that return values: set _lastHalRead so stmt.js emits (void)name;
-        if (sym?._suppressVoidWarning && sym.ctype !== 'void') this._lastHalRead = sym.ctype;
+        if (sym?._suppressVoidWarning && sym.ctype !== 'void') this._lastHalRead = sym.ctype ?? null;
       }
     } else {
       calleeC = this.exprToC(callee, lines, depth);
@@ -200,7 +200,7 @@ export default {
     // tsc_closure call: closure variable or func-ptr variable (not a regular function)
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = this.argsToC(args, lines, depth);
-      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: any) => this.inferType(a.expr) ?? 'void *');
+      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => this.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
       if (sym.isClosure || !sym.funcPtr) {
         this._releaseQuarantineBy(callee.name);
@@ -218,14 +218,14 @@ export default {
       const calleeType = this.inferType(callee);
       if (calleeType === 'tsc_closure') {
         const argsC = this.argsToC(args, lines, depth);
-        let paramTypes: any = null;
+        let paramTypes: string[] | null = null;
         let retType = this.inferType(node) ?? 'void';
         if (callee.kind === 'Index' && callee.object.kind === 'Ident') {
           const arrSym = this.lookup(callee.object.name);
           if (arrSym?._arrElemClosureParams) paramTypes = arrSym._arrElemClosureParams;
           if (arrSym?._arrElemClosureRet) retType = arrSym._arrElemClosureRet;
         }
-        if (!paramTypes) paramTypes = (node.args ?? []).map((a: any) => this.inferType(a.expr) ?? 'void *');
+        if (!paramTypes) paramTypes = (node.args ?? []).map((a: Argument) => this.inferType(a.expr) ?? 'void *');
         const sigArgs = paramTypes.join(', ') || 'void';
         return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
       }
@@ -234,7 +234,7 @@ export default {
     // Libc variadic call or user Scalar-variadic call: pass args as raw C values
     if (sym?._isLibcVariadic || sym?._isScalarVariadic) {
       const _libcVmap: Record<string, string> = { printf: 'vprintf', fprintf: 'vfprintf', sprintf: 'vsprintf', snprintf: 'vsnprintf', scanf: 'vscanf', sscanf: 'vsscanf', fscanf: 'vfscanf' };
-      const _toRawArg = (a: any): any => {
+      const _toRawArg = (a: Argument): { isVaList?: boolean; vaListName?: string; raw?: string } => {
         // Spread of a va_list в†’ va_list variable name (for v-variant forwarding)
         if (a.spread) {
           const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
@@ -249,15 +249,14 @@ export default {
         return { raw: at === 'String' ? `${ac}.data` : ac };
       };
       const processed = args.map(_toRawArg);
-      const vaListArg = processed.find((p: any) => p.isVaList);
+      const vaListArg = processed.find((p) => p.isVaList);
       if (vaListArg) {
-        // Forward to v-variant: printf(fmt, ...args) в†’ vprintf(fmt, _va_args)
         const vName = _libcVmap[calleeC] ?? ('v' + calleeC);
-        const normalParts = processed.filter((p: any) => !p.isVaList).map((p: any) => p.raw);
-        normalParts.push(vaListArg.vaListName);
+        const normalParts = processed.filter((p) => !p.isVaList).map((p) => p.raw!);
+        normalParts.push(vaListArg.vaListName!);
         return `${vName}(${normalParts.join(', ')})`;
       }
-      return `${calleeC}(${processed.map((p: any) => p.raw).join(', ')})`;
+      return `${calleeC}(${processed.map((p) => p.raw!).join(', ')})`;
     }
 
     // Check for any-typed params: cannot pass typed value as any
@@ -278,7 +277,7 @@ export default {
     const symParams = sym?.params;
     const restIdx = symParams ? symParams.findIndex((p: { rest?: boolean }) => p.rest) : -1;
     if (restIdx >= 0) {
-      const restParam = symParams[restIdx];
+      const restParam = symParams![restIdx];
       let et = 'int32_t';
       if (restParam.typeAnn?.kind === 'TypeArray') et = this.resolveType(restParam.typeAnn.element);
       else if (restParam.typeAnn) et = this.resolveType(restParam.typeAnn);
@@ -313,7 +312,7 @@ export default {
     const hasSpreadArgs = args.some((a: { spread?: boolean }) => a.spread);
     if (symParams && !hasSpreadArgs) {
       const I = ' '.repeat(this.indent * depth);
-      const _callMutBorrowedSyms: any[] = [];
+      const _callMutBorrowedSyms: SymbolInfo[] = [];
       // Pre-pass: detect same variable passed as Mut<T> to multiple params of the same call
       {
         const mutArgNames = new Map();
@@ -321,7 +320,7 @@ export default {
           const p = symParams[i];
           if (p?.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'Mut' &&
               args[i].expr.kind === 'Ident') {
-            const nm = args[i].expr.name;
+            const nm = (args[i].expr as { name: string }).name;
             const innerName = p.typeAnn.typeArgs?.[0]?.name;
             if (!innerName || !this.interfaces.has(innerName)) {
               if (mutArgNames.has(nm)) {
@@ -335,7 +334,7 @@ export default {
           }
         }
       }
-      const coercedArgs = args.map((a: any, i: number) => {
+      const coercedArgs = args.map((a: Argument, i: number) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
         if (a.expr.kind === 'Ident') {
@@ -348,7 +347,7 @@ export default {
         const paramEnumDef = paramType ? this.classes.get(paramType) : null;
         if (paramEnumDef?.isStringLiteralUnion && a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           const val = a.expr.value;
-          if (!paramEnumDef.members.includes(val)) {
+          if (!((paramEnumDef.members as string[] | undefined) ?? []).includes(val)) {
             throw this.error(`"${val}" is not a valid value for type ${paramType}`);
           }
           return `${paramType}_${val}`;
@@ -386,7 +385,7 @@ export default {
         if (ifaceName && this.interfaces.has(ifaceName) && rawArgExpr.kind === 'Ident') {
           const a2 = { ...a, expr: rawArgExpr };
           a = a2;
-          const argName = a.expr.name;
+          const argName = (a.expr as { name: string }).name;
           // Check: cannot pass const variable as Mut<Interface>
           if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut') {
             const argVarInfo = this.lookup(argName);
@@ -395,9 +394,9 @@ export default {
               throw this.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
             }
           }
-          const argSym3 = this.lookup(argName) as any;
+          const argSym3 = this.lookup(argName);
           const argClass = argSym3?.ctype ? this.classes.get(argSym3.ctype) : null;
-          if (argClass && !this.interfaces.has(argSym3.ctype)) {
+          if (argClass && argSym3?.ctype && !this.interfaces.has(argSym3.ctype)) {
             // Concrete class: wrap in fat pointer
             const className = argSym3.ctype;
             const hasExplicit = argClass.implements_?.includes(ifaceName);
@@ -578,7 +577,7 @@ export default {
     return `${calleeC}(${argsC})`;
   },
 
-  _dispatchArrayStatic(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchArrayStatic(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -619,12 +618,12 @@ export default {
     for (let i = 0; i < count; i++) {
       lines.push(`${I}${etCType} ${tmpArr}_${i} = ${itemsC[i]};`);
     }
-    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_: any, i: number) => `${tmpArr}_${i}`).join(', ')}};`);
+    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_, i: number) => `${tmpArr}_${i}`).join(', ')}};`);
     lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
     return `${tmpArr}`;
   },
 
-  _dispatchObjectStatic(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchObjectStatic(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -649,7 +648,7 @@ export default {
       lines.push(`${I}Array_string ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
       return `${tmpArr}`;
     }
-    const fieldTypes = fields.map((f: { typeAnn: any }) => this.resolveType(f.typeAnn));
+    const fieldTypes = fields.map((f) => this.resolveType(f.typeAnn));
     const firstType = fieldTypes[0];
     const allSame = fieldTypes.every((t: string) => t === firstType);
     if (!allSame) {
@@ -697,7 +696,7 @@ export default {
     return `${tmpArr}`;
   },
 
-  _dispatchGroupBy(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _dispatchGroupBy(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;

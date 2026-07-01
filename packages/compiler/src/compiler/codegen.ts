@@ -5,12 +5,15 @@ import { PRIMITIVE_MAP, toCType, fmtSpec, mangleType, mangleParams, inferLiteral
 import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
+import type { DiagSpan } from './error.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
 import { TypeChecker } from './typechecker.js';
+import type { Capabilities } from './profile.js';
+import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -30,7 +33,7 @@ export const DESKTOP_CAPABILITIES = {
 // opts.libraryMode — emit without #include and main() (for bundled deps)
 // opts.importedModules — { [resolvedPath]: exportMap } pre-compiled module exports
 // opts.sourceToPath    — { [importSource]: resolvedPath } for namespace import lookup
-export function codegen(ast: Program, filename: string = 'input', src: string | null = null, opts: any = {}) {
+export function codegen(ast: Program, filename: string = 'input', src: string | null = null, opts: CodeGenOptions = {}) {
   const ctx = new Context(filename, src, opts);
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
@@ -76,8 +79,8 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
   if (opts.importedModules) {
     for (const [resolvedPath, moduleExports] of Object.entries(opts.importedModules)) {
       if (!moduleExports) continue;
-      // Check if this module is imported as a namespace
-      let nsName: any = null;
+        // Check if this module is imported as a namespace
+        let nsName: string | null = null;
       for (const [name, path] of namespaceImports) {
         if (path === resolvedPath) { nsName = name; break; }
       }
@@ -90,10 +93,10 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
         for (const [name, entry] of Object.entries(moduleExports)) {
           const localName = renames?.get(name) ?? name;
           if (entry._isTypeAlias) {
-            ctx._typeAliases.set(localName, entry.cType);
+            ctx._typeAliases.set(localName, entry.cType!);
           } else if (entry.isStruct || entry.isEnum || entry.isScalarAlias) {
             // Type entry (class/interface/enum/struct) → register in type table
-            ctx.classes.set(localName, entry);
+            ctx.classes.set(localName, entry as unknown as ClassMeta);
           } else {
             ctx.define(localName, entry);
           }
@@ -112,12 +115,255 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
 }
 
 // ============================================================
+// Class metadata — typed shape for entries in the `classes` map
+// ============================================================
+
+export interface ClassMetaField {
+  name: string;
+  typeAnn?: TypeAnn | null;
+  ctype?: string;
+  _ctype?: string;
+  label?: string;
+  const?: boolean;
+  optional?: boolean;
+  isMethod?: boolean;
+  modifiers?: string[];
+  rest?: boolean;
+  elemType?: string;
+}
+
+export interface MethodInfo {
+  isStatic: boolean;
+  nameMangled: string;
+  isMut: boolean;
+  isExplicitMut: boolean;
+  isMoveMethod: boolean;
+  isIfaceMethod: boolean;
+  _isThrowsFunc?: boolean;
+  _resultType?: string;
+  _resultIsVoid?: boolean;
+  _resultValueType?: string;
+  _resultErrKey?: string;
+  _resultErrTypes?: string[];
+}
+
+export interface ClassMeta {
+  // Kind discriminants
+  isStruct?: boolean;
+  isTuple?: boolean;
+  isEnum?: boolean;
+  isScalarAlias?: boolean;
+  isMutable?: boolean;
+  isPartial?: boolean;
+  isConst?: boolean;
+  isStringEnum?: boolean;
+  isStringLiteralUnion?: boolean;
+  isKeyOf?: boolean;
+  readonly?: boolean;
+  needsToString?: boolean;
+
+  // Core data
+  fields?: ClassMetaField[];
+  methods?: Method[];
+  members?: string[] | { name: string; value?: unknown }[];
+  superClass?: string | null;
+  implements_?: TypeRef[];
+  innerType?: string;
+
+  // C name (module-prefixed)
+  _cname?: string;
+
+  // Enum values
+  values?: string[];
+
+  // Pool metadata
+  _isPool?: boolean;
+  _poolSize?: number;
+  _poolOptType?: string;
+  _poolAllocFn?: string;
+  _poolDropFn?: string;
+  _poolMaskVar?: string;
+  _poolVar?: string;
+  _poolMaskType?: string;
+  _poolAllocEmitted?: boolean;
+  _poolDropEmitted?: boolean;
+
+  // Heap metadata
+  _isHeap?: boolean;
+  _heapClassName?: string;
+  _heapDestructorEmitted?: boolean;
+
+  // Free/cleanup metadata
+  _classFreeEmitted?: boolean;
+  _stringFields?: string[];
+  _classFreeFn?: string;
+
+  // Method metadata
+  _methodNames?: Map<string, MethodInfo>;
+
+  // Iterable
+  _iterableElemType?: string;
+  _iterStructName?: string;
+
+  // Throws
+  _isThrowsClass?: boolean;
+
+  // Decorator
+  _decoratorInits?: { fieldName: string; cVal: string | boolean | number }[];
+
+  // Misc
+  _isInline?: boolean;
+  _isVtable?: boolean;
+  _vtableKind?: string;
+  _virtual?: boolean;
+}
+
+// ============================================================
+// Typed shapes for Context state
+// ============================================================
+
+export interface PoolVar {
+  name: string;
+  className: string;
+}
+
+export interface CleanupLevel {
+  list: string[];
+  set: Set<string>;
+}
+
+export interface StaticTask {
+  name: string;
+  stateType?: string;
+  pollFn: string;
+}
+
+export interface AsyncFuncInfo {
+  stateType: string;
+  pollFn: string;
+  resultCType: string | null;
+  innerResultCType?: string;
+  params: unknown[];
+}
+
+export interface GenFuncInfo {
+  stateType: string;
+  resultType: string;
+  nextFn: string;
+  valueType: string;
+  params: unknown[];
+  letFields: unknown[];
+}
+
+export interface DeferredAnon {
+  fields: { name: string; _ctype: string }[];
+  init: Expression | null;
+}
+
+export interface FromEntriesEntry {
+  typeAnn: TypeArray;
+  init: Expression | null | undefined;
+}
+
+export interface ExtInfo {
+  cFuncName: string;
+  thisCType: string;
+  thisIdent: string;
+  retCType: string;
+}
+
+export interface FuncStackInfo {
+  name: string;
+  ownBytes: number;
+  callees: string[];
+}
+
+export interface ThrowsClassInfo {
+  hasMessage: boolean;
+  hasStack: boolean;
+  needsNew: boolean;
+}
+
+export interface HmCapInfo {
+  count: number;
+  cap: number;
+}
+
+export interface ArcClassInfo {
+  arc?: boolean;
+  weak?: boolean;
+  refFirst?: boolean;
+}
+
+export interface DeclareModuleEntry {
+  kind: string;
+  name: string;
+  typeAnn?: TypeAnn | null;
+}
+
+export interface SelfCtx {
+  promoted: Set<string>;
+  inlined: Map<string, string>;
+  inlinedTypes?: Map<string, string>;
+  resultCType?: string | null;
+  hasThrows?: boolean;
+  throwsKey?: string | null;
+  spawnInfos?: SpawnInfo[];
+  spawnVarAlias?: Map<string, string>;
+  extraPollParams?: FieldInfo[];
+  stringFields: string[];
+  classFreeFields: { name: string; freeFn: string }[];
+  arrayFields?: { name: string; elemIdent: string }[];
+  hasCleanup?: boolean;
+  paramStringFields?: string[];
+}
+
+export interface TryCatchInfo {
+  catchLabel: string;
+  errVar: string;
+  catches: CatchClause[];
+}
+
+export interface FuncMathThrow {
+  errVar: string;
+  throwLabel: string;
+}
+
+export interface ErrorOpts {
+  label?: string | null;
+  spans?: DiagSpan[];
+  help?: string[];
+  notes?: string[];
+  code?: string | null;
+  secondary?: unknown;
+  [key: string]: unknown;
+}
+
+export interface CodeGenOptions {
+  maxErrors?: number;
+  debugLines?: boolean;
+  libraryMode?: boolean;
+  depInitFns?: string[];
+  modulePrefix?: string | null;
+  target?: string;
+  defaultNumber?: string;
+  allocator?: string;
+  scheduler?: string;
+  strict?: string[];
+  ramSize?: number;
+  stackSize?: number;
+  capabilities?: Capabilities;
+  importedModules?: Record<string, Record<string, SymbolInfo> | null>;
+  sourceToPath?: Record<string, string>;
+}
+
+// ============================================================
 class Context {
 
   // Core state
   filename!: string;
   src!: string | null;
-  _currentNode!: any;
+  _currentNode!: NodePos | null;
 
   // Output
   _output!: OutputBuffer;
@@ -136,21 +382,21 @@ class Context {
   _languageBuiltins!: Set<string>;
 
   // Symbol tables
-  classes!: Map<string, any>;
-  interfaces!: Map<string, any>;
-  lambdas!: any[];
+  classes!: Map<string, ClassMeta>;
+  interfaces!: Map<string, (MethodSig | PropSig)[]>;
+  lambdas!: string[];
   inFunction!: boolean;
-  currentFuncName!: any;
-  currentFuncReturnType!: any;
+  currentFuncName!: string | null;
+  currentFuncReturnType!: string | null;
 
   // Cleanup
-  _blockCleanupStack!: any;
+  _blockCleanupStack!: CleanupLevel[];
   _usesGotoCleanup!: boolean;
-  _throwsOwnedVars!: any[];
-  _gotoCleanupPreDecls!: any;
+  _throwsOwnedVars!: string[];
+  _gotoCleanupPreDecls!: Map<string, string> | null;
   _loopDepth!: number;
-  _loopCleanupStack!: any[];
-  _loopBodyCleanups!: any;
+  _loopCleanupStack!: string[][];
+  _loopBodyCleanups!: string[] | null;
 
   // Emitted structs tracking
   _emittedArrayStructs!: Set<string>;
@@ -185,67 +431,67 @@ class Context {
   _heapStringFuncs!: Set<string>;
 
   // State tracking
-  _anonStructSigs!: Map<string, any>;
+  _anonStructSigs!: Map<string, string>;
   _anonStructCount!: number;
   _cmpxchgCount!: number;
   _tasksStateCount!: number;
   _fromEntriesCount!: number;
-  _staticTasks!: any[];
-  _asyncFuncs!: Map<string, any>;
-  _generatorFuncs!: Map<string, any>;
-  _capturedSignalMap!: Map<string, any>;
-  _persistentCaptureRefs!: Map<string, any>;
-  _deferredAnons!: Map<string, any>;
-  _genericClasses!: Map<string, any>;
-  _genericFuncs!: Map<string, any>;
-  _pendingOverloads!: Map<string, any>;
-  _declaredModules!: Map<string, any>;
-  _extensions!: Map<string, any>;
-  _typeAliases!: Map<string, any>;
-  _pendingOptTypedefs!: Map<string, any>;
+  _staticTasks!: StaticTask[];
+  _asyncFuncs!: Map<string, AsyncFuncInfo>;
+  _generatorFuncs!: Map<string, GenFuncInfo>;
+  _capturedSignalMap!: Map<string, string>;
+  _persistentCaptureRefs!: Map<string, string>;
+  _deferredAnons!: Map<string, DeferredAnon>;
+  _genericClasses!: Map<string, ClassDecl>;
+  _genericFuncs!: Map<string, FuncDecl>;
+  _pendingOverloads!: Map<string, FuncOverload[]>;
+  _declaredModules!: Map<string, DeclareModuleEntry[]>;
+  _extensions!: Map<string, ExtInfo>;
+  _typeAliases!: Map<string, string>;
+  _pendingOptTypedefs!: Map<string, string>;
   _resolvingTypes!: Set<string>;
   _narrowedVars!: Set<string>;
-  _narrowedUnknownVars!: Map<string, any>;
+  _narrowedUnknownVars!: Map<string, string>;
   _emittedUnknownStruct!: boolean;
   _inDeclare!: boolean;
 
   // Warnings & errors
-  _warnings!: any[];
-  _errors!: any[];
+  _warnings!: TscError[];
+  _errors!: TscError[];
   _maxErrors!: number;
 
   // Library mode
   _libraryMode!: boolean;
-  _libInitStmts!: any[];
-  _depInitFns!: any[];
-  _exports!: Map<string, any>;
+  _libInitStmts!: string[];
+  _depInitFns!: string[];
+  _exports!: Map<string, SymbolInfo>;
 
   // CLI/config opts
-  _optsTarget!: any;
-  _optsDefaultNumber!: any;
-  _optsAllocator!: any;
-  _optsAsync!: any;
-  _optsRamSize!: any;
-  _optsStackSize!: any;
+  _optsTarget!: string | null;
+  _optsDefaultNumber!: string | null;
+  _optsAllocator!: string | null;
+  _optsAsync!: string | null;
+  _optsRamSize!: number | null;
+  _optsStackSize!: number | null;
 
   // Explicit main
   _hasExplicitMain!: boolean;
-  _explicitMainRetType!: any;
+  _explicitMainRetType!: string | null;
   _explicitMainThrows!: boolean;
-  _explicitMainResultType!: any;
-  _explicitMainErrTypes!: any;
+  _explicitMainResultType!: string | null;
+  _explicitMainErrTypes!: string[] | null;
 
   // Lex/parse & type checking
-  _lex!: any;
-  _parse!: any;
+  _lex!: typeof _lex;
+  _parse!: typeof _parse;
   _typeChecker!: TypeChecker;
 
   // Config-derived (set in codegen() and visitProgram)
   _debugLines!: boolean;
   _modulePrefix!: string | null;
   _strictRules!: Set<string> | null;
-  _capabilities!: Record<string, any>;
-  _importedModules!: Record<string, any>;
+  _capabilities!: Capabilities;
+  _importedModules!: Record<string, Record<string, SymbolInfo> | null>;
   _sourceToPath!: Record<string, string>;
   _targetName!: string;
   _allocatorName!: string;
@@ -256,37 +502,37 @@ class Context {
   _useArgcArgv!: boolean;
 
   // Registries (set in visitProgram pre-scans)
-  _fromEntriesConsumed!: Map<string, any>;
-  _arcClasses!: Map<string, any>;
-  _funcStackInfo!: Map<string, any>;
-  _throwsClasses!: Map<string, any>;
-  _decoratorFns!: Map<string, any>;
+  _fromEntriesConsumed!: Map<string, FromEntriesEntry | null>;
+  _arcClasses!: Map<string, ArcClassInfo>;
+  _funcStackInfo!: Map<string, FuncStackInfo>;
+  _throwsClasses!: Map<string, ThrowsClassInfo>;
+  _decoratorFns!: Map<string, unknown>;
   _decoratorNames!: Set<string>;
-  _hmCapViolations!: Map<string, any>;
+  _hmCapViolations!: Map<string, HmCapInfo>;
   _funcRefVars!: Set<string>;
-  _platformSkipped!: Map<string, any>;
+  _platformSkipped!: Map<string, string[]>;
   _emittedTasksTypedefs!: boolean;
 
   // Function-visit state
   _curFuncName!: string | null;
-  _throwsCtx!: any;
+  _throwsCtx!: ThrowsCtx | null;
   _currentFuncIsNever!: boolean;
-  _currentFuncLines!: any[];
+  _currentFuncLines!: string[];
   _funcDepth!: number;
-  _funcMathThrow!: any;
+  _funcMathThrow!: FuncMathThrow | null;
   _mathCatchLabel!: string | null;
   _mathErrVar!: string | null;
 
   // Async machinery
   _asyncCount!: number;
-  _preScanTypes!: Map<string, any> | null;
-  _selfCtx!: any;
+  _preScanTypes!: Map<string, string> | null;
+  _selfCtx!: SelfCtx | null;
   _inAsyncFunc!: boolean;
   _asyncMainPollFn!: string | null;
   _asyncMainStateType!: string | null;
   _asyncMainIsDesktop!: boolean;
-  _asyncBreakStack!: any[] | null;
-  _asyncContinueStack!: any[] | null;
+  _asyncBreakStack!: string[] | null;
+  _asyncContinueStack!: string[] | null;
   _forOfEmitCount!: number;
   _forOfCount!: number;
   _fetchOptsCount!: number;
@@ -305,7 +551,7 @@ class Context {
   _inFinallyBlock!: boolean;
   _inTryBlock!: boolean;
   _inMathTry!: boolean;
-  _tryCatchInfo!: any;
+  _tryCatchInfo!: TryCatchInfo | null;
   _inUnsafe!: boolean;
   _selectCount!: number;
   _inWeakUpgrade!: boolean;
@@ -313,18 +559,18 @@ class Context {
   _newArrayElemHint!: string | null | undefined;
 
   // Block/pool stacks
-  _currentBlockPoolVars!: any[] | null;
-  _currentBlockHeapVars!: any[] | null;
-  _poolVarStack!: any[];
-  _heapVarStack!: any[];
+  _currentBlockPoolVars!: PoolVar[] | null;
+  _currentBlockHeapVars!: PoolVar[] | null;
+  _poolVarStack!: PoolVar[][];
+  _heapVarStack!: PoolVar[][];
 
   // Calls / stdlib state
   _lastSuppressConst!: boolean | undefined;
   _lastHalRead!: string | null;
   _lambdaParamHint!: string[] | null | undefined;
   _inComputedFn!: boolean;
-  _lastComputedSigType!: string;
-  _lastComputedElemType!: string;
+  _lastComputedSigType: string | undefined;
+  _lastComputedElemType: string | undefined;
   _handlerCount!: number;
   _batchCount!: number;
   _reactiveClosureCount!: number;
@@ -340,13 +586,13 @@ class Context {
 
   // Misc state
   _inHoistedLambda!: boolean;
-  _pendingDecoratorInits!: any[] | null;
+  _pendingDecoratorInits!: { fieldName: string; cVal: string | boolean | number }[] | null;
   _blobStrN!: number;
   _bufDataCount!: number;
   _blobDataCount!: number;
   _bssUsage!: number;
   _noOptEmit!: boolean;
-  _postStmtCleanups!: any[];
+  _postStmtCleanups!: string[];
   _panicHelpers!: Set<string>;
 
   // Std module import flags (set when import is processed)
@@ -361,7 +607,7 @@ class Context {
   _stdEmbeddedImported!: boolean;
   _avrSleepModeImported!: boolean;
 
-  constructor(filename: string, src: string | null = null, opts: any = {}) {
+  constructor(filename: string, src: string | null = null, opts: CodeGenOptions = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
@@ -501,14 +747,14 @@ class Context {
   // ----------------------------------------------------------------
   // Type checking (delegated to TypeChecker)
   // ----------------------------------------------------------------
-  resolveType(...a: any[])       { return this._typeChecker.resolveType(...a); }
-  resolveTupleType(...a: any[])  { return this._typeChecker.resolveTupleType(...a); }
-  typeDecl(...a: any[])          { return this._typeChecker.typeDecl(...a); }
-  inferType(...a: any[])         { return this._typeChecker.inferType(...a); }
-  _effectiveType(...a: any[])    { return this._typeChecker._effectiveType(...a); }
-  _inferCall(...a: any[])        { return this._typeChecker._inferCall(...a); }
-  _inferMemberCall(...a: any[])  { return this._typeChecker._inferMemberCall(...a); }
-  inferTypeWithParams(...a: any[]) { return this._typeChecker.inferTypeWithParams(...a); }
+  resolveType(...a: unknown[]): string             { return this._typeChecker.resolveType(...a); }
+  resolveTupleType(...a: unknown[]): string        { return this._typeChecker.resolveTupleType(...a); }
+  typeDecl(...a: unknown[]): string                { return this._typeChecker.typeDecl(...a); }
+  inferType(...a: unknown[]): string               { return this._typeChecker.inferType(...a); }
+  _effectiveType(...a: unknown[]): string          { return this._typeChecker._effectiveType(...a); }
+  _inferCall(...a: unknown[]): string              { return this._typeChecker._inferCall(...a); }
+  _inferMemberCall(...a: unknown[]): string        { return this._typeChecker._inferMemberCall(...a); }
+  inferTypeWithParams(...a: unknown[]): string     { return this._typeChecker.inferTypeWithParams(...a); }
 
   // ----------------------------------------------------------------
   // Scope helpers (delegated to ScopeManager)
@@ -535,14 +781,14 @@ class Context {
     const scope = this._scopeMgr.popScope();
     this._borrowTracker.onScopeExit(scope);
   }
-  _trackRefBorrow(sym: any) { this._borrowTracker.trackRefBorrow(sym); }
-  _trackMutBorrow(sym: any) { this._borrowTracker.trackMutBorrow(sym); }
-  _trackMutQuarantine(sym: any, closureVarName: any = null) { this._borrowTracker.trackMutQuarantine(sym, closureVarName); }
-  _releaseQuarantineBy(closureVarName: any) { this._borrowTracker.releaseQuarantineBy(closureVarName); }
-  _derefStrPtr(sym: any, cexpr: any) {
+  _trackRefBorrow(sym: SymbolInfo | null) { this._borrowTracker.trackRefBorrow(sym); }
+  _trackMutBorrow(sym: SymbolInfo | null) { this._borrowTracker.trackMutBorrow(sym); }
+  _trackMutQuarantine(sym: SymbolInfo | null, closureVarName: string | null = null) { this._borrowTracker.trackMutQuarantine(sym, closureVarName); }
+  _releaseQuarantineBy(closureVarName: string) { this._borrowTracker.releaseQuarantineBy(closureVarName); }
+  _derefStrPtr(sym: SymbolInfo | null | undefined, cexpr: string) {
     return sym?.ctype === 'String *' ? `(*${cexpr})` : cexpr;
   }
-  _checkBorrowsAcrossAwait(awaitNode: any) {
+  _checkBorrowsAcrossAwait(awaitNode: Await) {
     for (const scopeLevel of this.scopes) {
       for (const [sname, sym] of scopeLevel) {
         if (sym._mutQuarantined) {
@@ -560,7 +806,7 @@ class Context {
       }
     }
   }
-  _trackBorrowForRefReturn(callNode: any, resultName: any, mode: any) {
+  _trackBorrowForRefReturn(callNode: Call, resultName: string, mode: string) {
     if (!callNode?.args?.length) return;
     const callee = callNode.callee;
     if (!callee || callee.kind !== 'Ident') return;
@@ -587,7 +833,7 @@ class Context {
       }
     }
   }
-  define(name: any, info: any) {
+  define(name: string, info: SymbolInfo) {
     // Auto-mark heap pointer vars (ctype is "ClassName *" where ClassName is @heap)
     if (info?.ctype?.endsWith(' *') && !info._isHeap && !info._isPointer) {
       const clsName = info.ctype.slice(0, -2);
@@ -602,15 +848,17 @@ class Context {
     }
     this._scopeMgr.define(name, info);
   }
-  _cap(key: any) { return (this._capabilities as Record<string, any>)[key] ?? (DESKTOP_CAPABILITIES as Record<string, any>)[key]; }
-  _errMsgField(errTypes: any) {
+  _cap<K extends keyof Capabilities>(key: K): NonNullable<Capabilities[K]> {
+    return ((this._capabilities as Capabilities)[key] ?? (DESKTOP_CAPABILITIES as Record<string, unknown>)[key]) as NonNullable<Capabilities[K]>;
+  }
+  _errMsgField(errTypes: string[]) {
     const errType = errTypes?.[0];
     return this._msgFieldFor(errType);
   }
-  _msgFieldFor(errType: any) {
+  _msgFieldFor(errType: string) {
     return (errType === 'TscError' || errType === 'MathError') ? 'message' : '_base.message';
   }
-  _panicMsgExpr(resExpr: any, errTypes: any) {
+  _panicMsgExpr(resExpr: string, errTypes: string[]) {
     if (!errTypes || errTypes.length <= 1) {
       return `${resExpr}.error.${this._msgFieldFor(errTypes?.[0])}`;
     }
@@ -620,7 +868,7 @@ class Context {
     if (!this._panicHelpers) this._panicHelpers = new Set();
     if (!this._panicHelpers.has(key)) {
       this._panicHelpers.add(key);
-      const cases = errTypes.map((et: any, i: any) =>
+      const cases = errTypes.map((et: string, i: number) =>
         `    case _Err_${et}: return e._${i}.${this._msgFieldFor(et)};`
       );
       this.addTop(`static String ${helperName}(${unionName} e) {\n    switch (e.tag) {\n${cases.join('\n')}\n    }\n    return STR_LIT("unknown error");\n}`);
@@ -632,11 +880,11 @@ class Context {
     return (m as Record<string, number>)[this._cap('usize')] ?? 4;
   }
   _isWasmBare() { return this._targetName === WASM_TARGET; }
-  lookup(name: any) {
+  lookup(name: string) {
     return this._scopeMgr.lookup(name);
   }
 
-  _checkNoBareThrows(expr: any) {
+  _checkNoBareThrows(expr: Expression | null | undefined) {
     if (!expr) return;
     switch (expr.kind) {
       case 'Call': {
@@ -687,7 +935,7 @@ class Context {
         this._checkNoBareThrows(expr.end);
         break;
       case 'ArrayLit':
-        for (const el of expr.elements ?? []) this._checkNoBareThrows(el);
+        for (const el of ((expr as { elements?: unknown[] }).elements ?? [])) this._checkNoBareThrows(el as Expression);
         break;
       case 'ObjLit':
         for (const p of expr.props ?? []) {
@@ -722,7 +970,7 @@ class Context {
         this._checkNoBareThrows(expr.expr);
         break;
       case 'TemplateLit':
-        for (const part of expr.parts ?? []) {
+        for (const part of (expr.parts as { expr?: Expression }[])) {
           if (part.expr) this._checkNoBareThrows(part.expr);
         }
         break;
@@ -742,8 +990,8 @@ class Context {
   // Throw a positioned TscError.
   // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
   // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }
-  error(msg: string, node?: any, opts: any = {}) {
-    const n = node ?? this._currentNode;
+  error(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
+    const n = (node ?? this._currentNode) as NodePos | null | undefined;
     const legacy = Array.isArray(opts);
     throw new TscError(msg, {
       filename: this.filename,
@@ -761,8 +1009,8 @@ class Context {
 
   // Collect a warning diagnostic (does not throw).
   // opts — same shape as error(): string[] (legacy notes) or { label, spans, help, notes, code }
-  warn(msg: string, node?: any, opts: any = {}) {
-    const n = node ?? this._currentNode;
+  warn(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
+    const n = (node ?? this._currentNode) as NodePos | null | undefined;
     const legacy = Array.isArray(opts);
     this._warnings.push(new TscError(msg, {
       kind:   'warning',
@@ -780,7 +1028,7 @@ class Context {
   }
 
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
-  _registerCleanup(stmt: any) {
+  _registerCleanup(stmt: string) {
     if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
     if (this._usesGotoCleanup && this._gotoCleanupPreDecls) {
       for (const vname of this._gotoCleanupPreDecls.keys()) {
@@ -811,26 +1059,26 @@ class Context {
     }
   }
 
-  _pushPostStmtCleanup(line: any) {
+  _pushPostStmtCleanup(line: string) {
     if (!this._postStmtCleanups) this._postStmtCleanups = [];
     this._postStmtCleanups.push(line);
   }
 
-  _flushPostStmtCleanups(lines: any) {
+  _flushPostStmtCleanups(lines: string[]) {
     if (this._postStmtCleanups?.length) {
       for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
       this._postStmtCleanups = [];
     }
   }
 
-  _genNextCall(sym: any, objC: any) {
-    const gi = sym._gi;
-    const nextArgs = [].concat(sym._genArgs || []);
+  _genNextCall(sym: SymbolInfo, objC: string) {
+    const gi = sym._gi as unknown as GenFuncInfo;
+    const nextArgs: string[] = [...((sym._genArgs as string[]) ?? [])];
     const callArgs = nextArgs.length ? `&${objC}, ${nextArgs.join(', ')}` : `&${objC}`;
     return { gi, callExpr: `${gi.nextFn}(${callArgs})` };
   }
 
-  _markPoolVarMoved(node: any) {
+  _markPoolVarMoved(node: Expression | null) {
     if (node?.kind === 'Ident') {
       const sym = this.lookup(node.name);
       if (sym?.ctype?.startsWith('opt_ref_')) {
@@ -841,10 +1089,10 @@ class Context {
     }
   }
 
-  _checkMoved(sym: any, node: any, name: any) {
+  _checkMoved(sym: SymbolInfo | null | undefined, node: NodePos | null, name: string) {
     if (sym?._closureEnvVar) return;
     if (sym?._moved) {
-      const ms = sym._movedSourceNode;
+      const ms = sym._movedSourceNode as NodePos | undefined;
       throw this.error(`use of moved value: "${name}"`, node, {
         label: 'use of moved value',
         spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
@@ -853,9 +1101,9 @@ class Context {
     }
   }
 
-  _checkFieldMoved(sym: any, prop: any, node: any, objName: any) {
-    if (sym?._movedFields?.has(prop)) {
-      const ms = sym._movedFieldSourceNode?.[prop];
+  _checkFieldMoved(sym: SymbolInfo | null | undefined, prop: string, node: NodePos | null, objName: string) {
+    if (sym?._movedFields && (sym._movedFields as unknown as { has(p: string): boolean }).has(prop)) {
+      const ms = (sym._movedFieldSourceNode as Record<string, NodePos> | undefined)?.[prop];
       throw this.error(`use of moved value: '${objName}.${prop}'`, node, {
         label: 'use of moved value',
         spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
@@ -891,7 +1139,7 @@ class Context {
     return false;
   }
 
-  _emitHeapCleanup(lines: any, I: any) {
+  _emitHeapCleanup(lines: string[], I: string) {
     if (!this._heapVarStack) return;
     for (let s = this._heapVarStack.length - 1; s >= 0; s--) {
       const vars = this._heapVarStack[s];
@@ -909,11 +1157,11 @@ class Context {
     }
   }
 
-  _suppressCleanupFor(varName: any) {
+  _suppressCleanupFor(varName: string) {
     const matchers = [
       `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
     ];
-    const matches = (s: any) => matchers.some(m => s.includes(m));
+    const matches = (s: string) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       const level = this._blockCleanupStack[b];
       for (let i = level.list.length - 1; i >= 0; i--) {
@@ -922,10 +1170,10 @@ class Context {
       level.set = new Set(level.list);
     }
     if (this._loopBodyCleanups) {
-      this._loopBodyCleanups = this._loopBodyCleanups.filter((s: any) => !matches(s));
+      this._loopBodyCleanups = this._loopBodyCleanups.filter((s) => !matches(s));
     }
     if (this._throwsOwnedVars) {
-      this._throwsOwnedVars = this._throwsOwnedVars.filter((s: any) => !matches(s));
+      this._throwsOwnedVars = this._throwsOwnedVars.filter((s) => !matches(s));
     }
   }
 
@@ -941,17 +1189,17 @@ class Context {
     return snapshot;
   }
 
-  _restoreHeapMoved(snapshot: any) {
+  _restoreHeapMoved(snapshot: Map<SymbolInfo, boolean>) {
     for (const [sym, moved] of snapshot) {
       sym._moved = moved;
     }
   }
 
-  _hasCleanupFor(varName: any) {
+  _hasCleanupFor(varName: string) {
     const matchers = [
       `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
     ];
-    const matches = (s: any) => matchers.some(m => s.includes(m));
+    const matches = (s: string) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
       for (const stmt of this._blockCleanupStack[b].list) {
         if (matches(stmt)) return true;
@@ -966,7 +1214,7 @@ class Context {
   }
 
   _pushLoopCleanups() {
-    const arr: any[] = [];
+    const arr: string[] = [];
     this._loopCleanupStack.push(arr);
     this._loopBodyCleanups = arr;
   }
@@ -978,7 +1226,7 @@ class Context {
       : null;
   }
 
-  _emitAllLoopCleanups(lines: any, indent: any) {
+  _emitAllLoopCleanups(lines: string[], indent: string) {
     for (let l = this._loopCleanupStack.length - 1; l >= 0; l--) {
       const arr = this._loopCleanupStack[l];
       for (let i = arr.length - 1; i >= 0; i--) {
@@ -987,14 +1235,14 @@ class Context {
     }
   }
 
-  _emitLoopBodyCleanups(lines: any, indent: any) {
+  _emitLoopBodyCleanups(lines: string[], indent: string) {
     if (!this._loopBodyCleanups?.length) return;
     for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
       lines.push(`${indent}${this._loopBodyCleanups[i]};`);
     }
   }
 
-  _emitPoolDrops(lines: any, I: any) {
+  _emitPoolDrops(lines: string[], I: string) {
     if (!this._poolVarStack?.length) return;
     for (let p = this._poolVarStack.length - 1; p >= 0; p--) {
       const poolVars = this._poolVarStack[p];
@@ -1012,7 +1260,7 @@ class Context {
     }
   }
 
-  _emitHeapDrops(lines: any, I: any) {
+  _emitHeapDrops(lines: string[], I: string) {
     if (!this._heapVarStack?.length) return;
     for (let p = this._heapVarStack.length - 1; p >= 0; p--) {
       const heapVars = this._heapVarStack[p];
@@ -1030,7 +1278,7 @@ class Context {
     }
   }
 
-  _emitFuncCleanup(lines: any, I: any) {
+  _emitFuncCleanup(lines: string[], I: string) {
     if (this._usesGotoCleanup) {
       if (this._loopBodyCleanups?.length) {
         for (let i = this._loopBodyCleanups.length - 1; i >= 0; i--) {
@@ -1062,10 +1310,10 @@ class Context {
   }
 
   _snapshotCleanups() {
-    return this._blockCleanupStack.map((l: any) => ({ list: [...l.list], set: new Set(l.set) }));
+    return this._blockCleanupStack.map((l: CleanupLevel) => ({ list: [...l.list], set: new Set(l.set) }));
   }
 
-  _restoreCleanups(snapshot: any) {
+  _restoreCleanups(snapshot: { list: string[]; set: Set<string> }[]) {
     for (let i = 0; i < this._blockCleanupStack.length; i++) {
       this._blockCleanupStack[i].list = snapshot[i].list;
       this._blockCleanupStack[i].set = snapshot[i].set;
@@ -1079,7 +1327,7 @@ class Context {
 
   emit() {
     // Trim trailing blanks then push section with trailing blank separator
-    const _pushSection = (arr: any, parts: any) => {
+    const _pushSection = (arr: string[], parts: string[]) => {
       const trimmed = [...arr];
       while (trimmed.length && trimmed[trimmed.length - 1] === '') trimmed.pop();
       if (trimmed.length === 0) return;
@@ -1089,7 +1337,7 @@ class Context {
 
     // Library mode: emit typedefs + lambdas + topLevel + __init (no includes, no main)
     if (this._libraryMode) {
-      const parts: any[] = [];
+      const parts: string[] = [];
       _pushSection(this.typedefs, parts);
       _pushSection(this.lambdaLines, parts);
       _pushSection(this.topLevel, parts);
@@ -1111,11 +1359,11 @@ class Context {
     }
 
     // Full emit: includes → typedefs → lambdas → topLevel → main
-    const parts: any[] = [];
+    const parts: string[] = [];
     // Pre-generate main's panic message expression (may addTop helper functions)
-    let _mainPanicMsg: any = null;
+    let _mainPanicMsg: string | null = null;
     if (this._hasExplicitMain && this._explicitMainThrows) {
-      _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes);
+      _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes ?? []);
     }
     if (this._asyncName === 'libuv') parts.push(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
     parts.push(...[...this.includes].sort());
@@ -1145,7 +1393,7 @@ class Context {
           parts.push(`${I}    ${t.pollFn}(&_${t.name}_instance);`);
           parts.push(`${I}}`);
         } else {
-          const cond = this._staticTasks.map((t: any) => `!_${t.name}_instance._done`).join(' || ');
+          const cond = this._staticTasks.map((t: StaticTask) => `!_${t.name}_instance._done`).join(' || ');
           parts.push(`${I}while (${cond}) {`);
           for (const t of this._staticTasks) {
             parts.push(`${I}    if (!_${t.name}_instance._done) ${t.pollFn}(&_${t.name}_instance);`);
@@ -1453,6 +1701,7 @@ import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
 import types     from './codegen/types.js';
 import asyncMixin from './codegen/async.js';
+import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
 
 const _mixinSources = [

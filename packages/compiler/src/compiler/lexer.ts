@@ -1,6 +1,8 @@
 // TSClang Lexer
 // Converts source text into a flat token array.
 
+import type { NativeTemplatePart } from '@tsclang/ast';
+
 export const TK = {
   // Literals
   NUMBER: 'NUMBER',       // 42, 3.14
@@ -66,7 +68,7 @@ export class Token {
   line: number;
   col: number;
   endCol: number;
-  parts?: any[];
+  parts?: NativeTemplatePart[];
 
   constructor(type: string, value: string, line: number, col: number) {
     this.type   = type;
@@ -116,7 +118,7 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
     // Template literal (backtick)
     if (ch === '`') {
       advance(); // consume `
-      const parts: any[] = [];
+      const parts: NativeTemplatePart[] = [];
       let str = '';
       while (i < src.length && cur() !== '`') {
         if (cur() === '\\') { advance(); str += '\\' + advance(); }

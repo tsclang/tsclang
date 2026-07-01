@@ -9,31 +9,72 @@ import { homedir } from 'os';
 import { lex } from './lexer.js';
 import { parse } from './parser.js';
 import { codegen } from './codegen.js';
+import type { SymbolInfo } from '@tsclang/ast';
 import { optimize } from './optimizer.js';
 
 const CACHE_DIR = process.env.TSCLANG_CACHE_DIR || join(homedir(), '.tsclang', 'cache');
 
 // ---------------------------------------------------------------------------
+// Type definitions
+// ---------------------------------------------------------------------------
+
+export interface PathAliases {
+  paths: Record<string, string | string[]>;
+  pkgDir: string;
+}
+
+export interface CachedModule {
+  c: string;
+  exports: Record<string, unknown>;
+  _initFn: string | null;
+}
+
+export interface CompileOptions {
+  optimize?: boolean;
+  libraryMode?: boolean;
+  modulePrefix?: string;
+  noCache?: boolean;
+  debugLines?: boolean;
+  sourcemap?: boolean;
+  importedModules?: Record<string, Record<string, SymbolInfo> | null>;
+  sourceToPath?: Record<string, string>;
+  depInitFns?: string[];
+  _compilingStack?: Set<string>;
+  _aliases?: PathAliases | null;
+  [key: string]: unknown;
+}
+
+export interface CompileResult {
+  c: string;
+  warnings: unknown[];
+  exports: Record<string, unknown>;
+  _cacheKey: string | null;
+  _initFn: string | null;
+  lineMap?: number[][] | null;
+  _sourceFiles?: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Incremental compilation cache
 // ---------------------------------------------------------------------------
 
-export function _cacheKey(src: any, modulePrefix: any, depKeys: any) {
+export function _cacheKey(src: string, modulePrefix: string, depKeys: [string, string][]): string {
   const depStr = depKeys.map(([p, k]: [string, string]) => `${p}:${k}`).sort().join('\n');
   return createHash('sha256').update(`${src}\n${modulePrefix}\n${depStr}`).digest('hex').slice(0, 24);
 }
 
-export function _cacheGet(key: any) {
+export function _cacheGet(key: string): CachedModule | null {
   const p = join(CACHE_DIR, key + '.json');
   if (!existsSync(p)) return null;
   try {
-    const reviver = (_: any, v: any) => v && typeof v === 'object' && '__bigint' in v ? BigInt(v.__bigint) : v;
+    const reviver = (_: string, v: unknown) => v && typeof v === 'object' && '__bigint' in v ? BigInt((v as Record<string, unknown>).__bigint as string) : v;
     return JSON.parse(readFileSync(p, 'utf8'), reviver);
   } catch { return null; }
 }
 
-export function _cacheSet(key: any, data: any) {
+export function _cacheSet(key: string, data: CachedModule): void {
   mkdirSync(CACHE_DIR, { recursive: true });
-  const replacer = (_: any, v: any) => typeof v === 'bigint' ? { __bigint: v.toString() } : v;
+  const replacer = (_: string, v: unknown) => typeof v === 'bigint' ? { __bigint: v.toString() } : v;
   writeFileSync(join(CACHE_DIR, key + '.json'), JSON.stringify(data, replacer), 'utf8');
 }
 
@@ -41,7 +82,7 @@ export function _cacheSet(key: any, data: any) {
 // Path resolution
 // ---------------------------------------------------------------------------
 
-export function findPackageJson(startDir: any) {
+export function findPackageJson(startDir: string): string | null {
   let dir = startDir;
   while (true) {
     const candidate = join(dir, PACKAGE_FILE);
@@ -52,7 +93,7 @@ export function findPackageJson(startDir: any) {
   }
 }
 
-export function loadPathAliases(inputPath: any) {
+export function loadPathAliases(inputPath: string): PathAliases | null {
   const pkgPath = findPackageJson(dirname(inputPath));
   if (!pkgPath) return null;
   try {
@@ -64,7 +105,7 @@ export function loadPathAliases(inputPath: any) {
   return null;
 }
 
-export function resolveAlias(source: any, aliases: any) {
+export function resolveAlias(source: string, aliases: PathAliases | null): string {
   if (!aliases) return source;
   const { paths, pkgDir } = aliases;
   for (const [pattern, targets] of Object.entries(paths)) {
@@ -85,7 +126,7 @@ export function resolveAlias(source: any, aliases: any) {
   return source;
 }
 
-export function resolveLocalImport(baseDir: any, source: any) {
+export function resolveLocalImport(baseDir: string, source: string): string | null {
   for (const candidate of [
     resolve(baseDir, source + '.tsc'),
     resolve(baseDir, source, 'index.tsc'),
@@ -95,7 +136,7 @@ export function resolveLocalImport(baseDir: any, source: any) {
   return null;
 }
 
-export function resolvePackageImport(pkgName: any, fromDir: any) {
+export function resolvePackageImport(pkgName: string, fromDir: string): string | null {
   let dir = fromDir;
   while (true) {
     const pkgDir = join(dir, PACKAGES_DIR, pkgName);
@@ -125,7 +166,7 @@ export function resolvePackageImport(pkgName: any, fromDir: any) {
 // Compile TSC → C string (recursive for local imports)
 // ---------------------------------------------------------------------------
 
-export function compileTsc(inputPath: string, opts: any = {}) {
+export function compileTsc(inputPath: string, opts: CompileOptions = {}): CompileResult {
   const src      = readFileSync(inputPath, 'utf8');
   const filename = basename(inputPath);
   const tokens   = lex(src, filename);
@@ -143,11 +184,11 @@ export function compileTsc(inputPath: string, opts: any = {}) {
   // Recursively compile local imports (./… or ../…) depth-first
   const importedModules = { ...(opts.importedModules || {}) };
   const sourceToPath = { ...(opts.sourceToPath || {}) };
-  const compilingStack = opts._compilingStack ?? new Set();
+  const compilingStack = opts._compilingStack ?? new Set<string>();
   const aliases = opts._aliases ?? loadPathAliases(inputPath);
-  const depCParts: any[] = [];
-  const depCacheKeys: any[] = [];
-  const depInitFns: any[] = [];
+  const depCParts: string[] = [];
+  const depCacheKeys: [string, string][] = [];
+  const depInitFns: string[] = [];
 
   if (compilingStack.has(inputPath)) {
     const cycle = [...compilingStack, inputPath].map(p => basename(p)).join(' → ');
@@ -185,7 +226,7 @@ export function compileTsc(inputPath: string, opts: any = {}) {
     const depPrefix = isPackageImport
       ? source.replace(/[^a-zA-Z0-9]/g, '_').replace(/^_+/, '') + '_'
       : basename(depPath, extname(depPath)).replace(/[^a-zA-Z0-9]/g, '_') + '_';
-    const depResult: any = compileTsc(depPath, {
+    const depResult = compileTsc(depPath, {
       ...opts,
       libraryMode: true,
       modulePrefix: depPrefix,
@@ -194,7 +235,7 @@ export function compileTsc(inputPath: string, opts: any = {}) {
       _compilingStack: compilingStack,
       _aliases: aliases,
     });
-    importedModules[depPath] = depResult.exports;
+    importedModules[depPath] = depResult.exports as Record<string, SymbolInfo>;
     depCParts.push(depResult.c);
     if (depResult._cacheKey) depCacheKeys.push([depPath, depResult._cacheKey]);
     if (depResult._initFn) depInitFns.push(depResult._initFn);
@@ -203,16 +244,16 @@ export function compileTsc(inputPath: string, opts: any = {}) {
 
   const modulePrefix = opts.modulePrefix ?? '';
   const noCache = opts.noCache || opts.debugLines;
-  let cacheKey: any = null;
+  let cacheKey: string | null = null;
   if (opts.libraryMode && !noCache) {
     cacheKey = _cacheKey(src, modulePrefix, depCacheKeys);
     const cached = _cacheGet(cacheKey);
     if (cached) {
       process.stdout.write('cache-hit-identical\n');
-      const cachedC: any = depCParts.length > 0
+      const cachedC = depCParts.length > 0
         ? (depCParts.join('\n').trimEnd() + '\n\n' + cached.c)
         : cached.c;
-      return { c: cachedC, warnings: [] as any[], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
+      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
     }
   }
 
@@ -244,11 +285,11 @@ export function compileTsc(inputPath: string, opts: any = {}) {
 // Source map helper
 // ---------------------------------------------------------------------------
 
-export function _buildLineMap(tscSrc: any, cSrc: any) {
+export function _buildLineMap(tscSrc: string, cSrc: string): number[][] {
   const tscLines = tscSrc.split('\n');
   const cLines   = cSrc.split('\n');
 
-  const tscStmtLines: any[] = [];
+  const tscStmtLines: number[] = [];
   for (let i = 0; i < tscLines.length; i++) {
     const t = tscLines[i].trim();
     if (t && !t.startsWith('//') && t !== '{' && t !== '}') {
@@ -256,7 +297,7 @@ export function _buildLineMap(tscSrc: any, cSrc: any) {
     }
   }
 
-  const cStmtLines: any[] = [];
+  const cStmtLines: number[] = [];
   for (let i = 0; i < cLines.length; i++) {
     const t = cLines[i].trim();
     if (t && !t.startsWith('#') && !t.startsWith('//') && t !== '{' && t !== '}') {
@@ -264,7 +305,7 @@ export function _buildLineMap(tscSrc: any, cSrc: any) {
     }
   }
 
-  const mappings: any[] = [];
+  const mappings: number[][] = [];
   const len = Math.min(tscStmtLines.length, cStmtLines.length);
   for (let i = 0; i < len; i++) {
     mappings.push([tscStmtLines[i], cStmtLines[i]]);

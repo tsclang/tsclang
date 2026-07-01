@@ -1,13 +1,10 @@
 import type { Stmt, Expression, Switch, ObjLitProp, ArrayPatternElement, Argument, Call, Ident, Block } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 import type { AsyncEmitCtx } from './async-emit.js';
+import type { SpawnInfo } from './scan.js';
 // async-stmt.ts
 
-interface SpawnInfo {
-  userVar: string; threadVar: string; envType: string; fnName: string; envVar: string;
-  freeVars: { name: string; ctype: string }[];
-}
-interface AsyncSub { stateType: string; pollFn: string; resultCType?: string; }
+interface AsyncSub { stateType: string; pollFn: string; resultCType?: string | null; }
 
 export default {
   _emitAsyncStmt(this: CodeGenThis, s: Stmt, lines: string[], ctx: AsyncEmitCtx, I: string) {
@@ -61,7 +58,7 @@ export default {
           for (let j = doneConds.length - 2; j >= 0; j--) {
             rhs = `self->_await_${doneConds[j].idx}._done ? self->_await_${doneConds[j].idx}._result : ${rhs}`;
           }
-          if (this._selfCtx.promoted.has(s.name)) {
+          if (this._selfCtx!.promoted.has(s.name)) {
             lines.push(`${I}self->${s.name} = ${rhs};`);
           } else {
             lines.push(`${I}${ai.resultCType} ${s.name} = ${rhs};`);
@@ -122,19 +119,19 @@ export default {
       lines.push(`${I}if (!self->_await_${awaitIdx}._done) return;`);
       if (ai.isResult) {
         if (!this._inAsyncTryCatch) {
-          if (this._selfCtx.hasCleanup) {
+          if (this._selfCtx!.hasCleanup) {
             lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { goto _cleanup; }`);
           } else {
             lines.push(`${I}if (!self->_await_${awaitIdx}._result.ok) { self->_done = true; return; }`);
           }
         }
-        if (this._selfCtx.promoted.has(s.name) && ai.resultCType) {
+        if (this._selfCtx!.promoted.has(s.name) && ai.resultCType) {
           lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result.value;`);
         } else if (ai.resultCType) {
           lines.push(`${I}${ai.resultCType} ${s.name} = self->_await_${awaitIdx}._result.value;`);
         }
       } else if (ai.resultCType) {
-        if (this._selfCtx.promoted.has(s.name)) {
+        if (this._selfCtx!.promoted.has(s.name)) {
           lines.push(`${I}self->${s.name} = self->_await_${awaitIdx}._result;`);
         } else {
           lines.push(`${I}${ai.resultCType} ${s.name} = self->_await_${awaitIdx}._result;`);
@@ -191,12 +188,12 @@ export default {
           const rhs = needsUnwrap
             ? `self->_await_${baseIdx + j}._result.value`
             : `self->_await_${baseIdx + j}._result`;
-          if (this._selfCtx.promoted.has(elem.name)) {
+          if (this._selfCtx!.promoted.has(elem.name!)) {
             lines.push(`${I}self->${elem.name} = ${rhs};`);
           } else {
             let et;
             if (needsUnwrap) {
-              const valIdent = sub.resultCType.slice(7, sub.resultCType.lastIndexOf('_'));
+              const valIdent = sub.resultCType!.slice(7, sub.resultCType!.lastIndexOf('_'));
               et = this._arrIdentToCType(valIdent);
             } else {
               et = sub.resultCType || 'int32_t';
@@ -214,7 +211,7 @@ export default {
       const awaitInner = s.expr.expr;
       if (awaitInner?.kind === 'Call' && awaitInner.callee?.kind === 'Member' && awaitInner.callee.prop === 'join') {
         const tObj = awaitInner.callee.object;
-        const alias = this._selfCtx?.spawnVarAlias?.get((tObj as Ident | undefined)?.name);
+        const alias = this._selfCtx?.spawnVarAlias?.get((tObj as Ident | undefined)?.name ?? '');
         if (alias) {
           lines.push(`${I}if (!tsc_thread_done(self->${alias})) return;`);
           lines.push(`${I}tsc_thread_join(self->${alias});`);
@@ -304,7 +301,7 @@ export default {
         for (const cs of catchBody?.body || []) this._emitAsyncRegStmt(cs, lines, I + '    ');
         const catchEndsControl = (catchBody?.body || []).some((cs: Stmt) => cs.kind === 'Return' || cs.kind === 'Break' || cs.kind === 'Throw');
         if (!catchEndsControl) {
-          if (this._selfCtx.hasCleanup) {
+          if (this._selfCtx!.hasCleanup) {
             lines.push(`${I}    goto _cleanup;`);
           } else {
             lines.push(`${I}    self->_done = true;`);
@@ -345,7 +342,7 @@ export default {
       const nextArgs = genArgsC ? `&self->_gen_${genIdx}, ${genArgsC}` : `&self->_gen_${genIdx}`;
       const nrVar = `_nr_${genIdx}`;
       lines.push(`${I}    ${gi.resultType} ${nrVar} = ${gi.nextFn}(${nextArgs});`);
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}    if (${nrVar}.done) { goto _cleanup; }`);
       } else {
         lines.push(`${I}    if (${nrVar}.done) { self->_done = true; return; }`);
@@ -371,7 +368,7 @@ export default {
     // ── throw (in async throws function) ──
     if (s.kind === 'Throw' && this._selfCtx?.hasThrows) {
       lines.push(`${I}self->_result = (${this._selfCtx.resultCType}){.ok = false, .error = ${this._selfE(s.value)}};`);
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
@@ -393,7 +390,7 @@ export default {
       } else if (retCtx?.hasThrows) {
         lines.push(`${I}self->_result = (${retCtx.resultCType}){.ok = true};`);
       }
-      if (this._selfCtx.hasCleanup) {
+      if (this._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);

@@ -5,58 +5,64 @@ import { lex }   from './lexer.js';
 import { parse } from './parser.js';
 
 // Convert a TypeRef AST node back to TSC syntax string
-function typeToStr(t: any): any {
+function typeToStr(t: unknown): string {
   if (!t) return 'any';
-  if (t.kind === 'TypeRef') {
-    if (!t.typeArgs?.length) return t.name;
-    return `${t.name}<${t.typeArgs.map(typeToStr).join(', ')}>`;
+  const n = t as Record<string, unknown>;
+  if (n.kind === 'TypeRef') {
+    const typeArgs = n.typeArgs as unknown[] | undefined;
+    if (!typeArgs?.length) return n.name as string;
+    return `${n.name as string}<${typeArgs.map(typeToStr).join(', ')}>`;
   }
-  if (t.kind === 'TypeUnion') return t.types.map(typeToStr).join(' | ');
-  if (t.kind === 'TypeIntersection') return t.types.map(typeToStr).join(' & ');
-  if (t.kind === 'ArrayType') return `${typeToStr(t.element)}[]`;
-  if (t.kind === 'TypeLiteral' || t.kind === 'TypeObject') {
-    const fields = (t.members ?? t.fields ?? []).map((m: any) => `${m.name}: ${typeToStr(m.typeAnn)}`).join('; ');
+  if (n.kind === 'TypeUnion') return (n.types as unknown[]).map(typeToStr).join(' | ');
+  if (n.kind === 'TypeIntersection') return (n.types as unknown[]).map(typeToStr).join(' & ');
+  if (n.kind === 'ArrayType') return `${typeToStr(n.element)}[]`;
+  if (n.kind === 'TypeLiteral' || n.kind === 'TypeObject') {
+    const members = (n.members ?? n.fields ?? []) as Record<string, unknown>[];
+    const fields = members.map(m => `${m.name as string}: ${typeToStr(m.typeAnn)}`).join('; ');
     return `{ ${fields} }`;
   }
-  if (t.kind === 'TupleType') return `[${(t.elements ?? []).map(typeToStr).join(', ')}]`;
-  if (t.kind === 'FunctionType') {
-    const params = (t.params ?? []).map((p: any) => `${p.name}: ${typeToStr(p.typeAnn)}`).join(', ');
-    return `(${params}) => ${typeToStr(t.returnType)}`;
+  if (n.kind === 'TupleType') return `[${((n.elements ?? []) as unknown[]).map(typeToStr).join(', ')}]`;
+  if (n.kind === 'FunctionType') {
+    const params = ((n.params ?? []) as Record<string, unknown>[]).map(p => `${p.name as string}: ${typeToStr(p.typeAnn)}`).join(', ');
+    return `(${params}) => ${typeToStr(n.returnType)}`;
   }
-  if (t.kind === 'OptionalType') return `${typeToStr(t.inner)}?`;
+  if (n.kind === 'OptionalType') return `${typeToStr(n.inner)}?`;
   return 'any';
 }
 
 // Format a parameter
-function paramStr(p: any) {
-  const name = p.name ?? p.binding?.name ?? '_';
-  const type = p.typeAnn ? `: ${typeToStr(p.typeAnn)}` : '';
+function paramStr(p: unknown): string {
+  const n = p as Record<string, unknown>;
+  const binding = n.binding as Record<string, unknown> | undefined;
+  const name = (n.name ?? binding?.name ?? '_') as string;
+  const type = n.typeAnn ? `: ${typeToStr(n.typeAnn)}` : '';
   return name + type;
 }
 
 // Emit declaration for a single exported node
-function emitDecl(node: any) {
+function emitDecl(node: unknown): string | null {
   if (!node) return null;
-  const n = node.kind === 'Export' ? node.decl : node;
+  const raw = node as Record<string, unknown>;
+  const n: Record<string, unknown> = raw.kind === 'Export' ? (raw.decl as Record<string, unknown>) : raw;
 
   if (n?.kind === 'FuncDecl') {
-    const params = (n.params ?? []).map(paramStr).join(', ');
+    const params = ((n.params ?? []) as Record<string, unknown>[]).map(paramStr).join(', ');
     const ret = n.returnType ? `: ${typeToStr(n.returnType)}` : ': void';
-    return `export declare function ${n.name}(${params})${ret};`;
+    return `export declare function ${n.name as string}(${params})${ret};`;
   }
 
   if (n?.kind === 'ClassDecl') {
-    const lines = [`export declare class ${n.name} {`];
-    for (const m of (n.members ?? [])) {
+    const lines = [`export declare class ${n.name as string} {`];
+    for (const m of (n.members ?? []) as Record<string, unknown>[]) {
       if (m.kind === 'Field') {
-        lines.push(`  ${m.name}: ${typeToStr(m.typeAnn)};`);
+        lines.push(`  ${m.name as string}: ${typeToStr(m.typeAnn)};`);
       } else if (m.kind === 'Constructor' || (m.kind === 'Method' && m.name === 'constructor')) {
-        const params = (m.params ?? []).map(paramStr).join(', ');
+        const params = ((m.params ?? []) as Record<string, unknown>[]).map(paramStr).join(', ');
         lines.push(`  constructor(${params});`);
       } else if (m.kind === 'Method' && m.name !== 'constructor') {
-        const params = (m.params ?? []).map(paramStr).join(', ');
+        const params = ((m.params ?? []) as Record<string, unknown>[]).map(paramStr).join(', ');
         const ret = m.returnType ? `: ${typeToStr(m.returnType)}` : ': void';
-        lines.push(`  ${m.name}(${params})${ret};`);
+        lines.push(`  ${m.name as string}(${params})${ret};`);
       }
     }
     lines.push('}');
@@ -64,18 +70,18 @@ function emitDecl(node: any) {
   }
 
   if (n?.kind === 'TypeAlias') {
-    return `export declare type ${n.name} = ${typeToStr(n.typeAnn)};`;
+    return `export declare type ${n.name as string} = ${typeToStr(n.typeAnn)};`;
   }
 
   if (n?.kind === 'VarDecl' && (n.varKind === 'const' || n.varKind === 'let')) {
     const type = n.typeAnn ? `: ${typeToStr(n.typeAnn)}` : '';
-    return `export declare const ${n.name}${type};`;
+    return `export declare const ${n.name as string}${type};`;
   }
 
   return null;
 }
 
-export function emitDtsSync(src: any, filename: any) {
+export function emitDtsSync(src: string, filename: string): string[] {
   const tokens = lex(src, filename);
   const { ast, errors: parseErrors } = parse(tokens, filename, src);
   if (parseErrors.length > 0) {
@@ -83,7 +89,7 @@ export function emitDtsSync(src: any, filename: any) {
     throw new Error(`Parse errors: ${msg}`);
   }
 
-  const decls: any[] = [];
+  const decls: string[] = [];
   for (const node of ast.body) {
     if (node.kind !== 'Export') continue;
     const d = emitDecl(node);

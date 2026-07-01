@@ -1,16 +1,18 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { TscError } from '../../error.js';
 // program.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Program } from '@tsclang/ast';
+import type { Program, ClassDecl, ClassMember, TypeAnn, Decorator, Field, Stmt } from '@tsclang/ast';
 export default {
   visitProgram(this: CodeGenThis, ast: Program) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
     this._fromEntriesConsumed = new Map();
     for (const node of ast.body) {
-      const stmt: any = node.kind === 'Export' ? node.decl : node;
+      const stmt = node.kind === 'Export' ? node.decl : node;
       if (stmt?.kind === 'VarDecl' &&
           stmt.init?.kind === 'Call' &&
           stmt.init.callee?.kind === 'Member' &&
+          stmt.init.callee?.object?.kind === 'Ident' &&
           stmt.init.callee?.object?.name === 'Object' &&
           stmt.init.callee?.prop === 'fromEntries' &&
           stmt.init.args?.[0]?.expr?.kind === 'Ident') {
@@ -20,20 +22,21 @@ export default {
 
     // Pre-scan: find Arc<T> and Weak<T> usage to know which classes need _refcount/_weakcount
     this._arcClasses = new Map();
-    const _scanArc = (n: any) => {
+    const _scanArc = (n: unknown) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_scanArc); return; }
-      if (n.kind === 'New' && (n.name === 'Arc' || n.name === 'Weak')) {
-        const tArg = n.typeArgs?.[0];
+      const nd = n as Record<string, any>;
+      if (nd.kind === 'New' && (nd.name === 'Arc' || nd.name === 'Weak')) {
+        const tArg = nd.typeArgs?.[0];
         if (tArg?.kind === 'TypeRef') {
           const info = this._arcClasses.get(tArg.name) ?? {};
-          if (n.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
-          if (n.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+          if (nd.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
+          if (nd.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
           this._arcClasses.set(tArg.name, info);
         }
       }
-      if (n.kind === 'VarDecl') {
-        const _checkTypeAnn = (ta: any) => {
+      if (nd.kind === 'VarDecl') {
+        const _checkTypeAnn = (ta: TypeAnn | null | undefined) => {
           if (!ta) return;
           if (ta.kind === 'TypeRef' && (ta.name === 'Arc' || ta.name === 'Weak')) {
             const tArg = ta.typeArgs?.[0];
@@ -45,19 +48,19 @@ export default {
             }
           }
         };
-        _checkTypeAnn(n.typeAnn);
+        _checkTypeAnn(nd.typeAnn);
       }
       // Also scan TypeRef fields for Weak<T>
-      if (n.kind === 'TypeRef' && n.name === 'Weak') {
-        const tArg = n.typeArgs?.[0];
+      if (nd.kind === 'TypeRef' && nd.name === 'Weak') {
+        const tArg = nd.typeArgs?.[0];
         if (tArg?.kind === 'TypeRef') {
           const info = this._arcClasses.get(tArg.name) ?? {};
           info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true;
           this._arcClasses.set(tArg.name, info);
         }
       }
-      for (const key of Object.keys(n)) {
-        const child = n[key];
+      for (const key of Object.keys(nd)) {
+        const child = nd[key];
         if (child && typeof child === 'object') _scanArc(child);
       }
     };
@@ -75,12 +78,12 @@ export default {
 
     // Pre-scan: detect inheritance chains > 1 level
     {
-      const classDecls: Record<string, any> = {};
+      const classDecls: Record<string, ClassDecl> = {};
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && !n.typeParams?.length) classDecls[n.name] = n;
       }
-      for (const [name, n] of Object.entries(classDecls) as [string, any][]) {
+      for (const [name, n] of Object.entries(classDecls)) {
         if (!n.superClass) continue;
         const parent = classDecls[n.superClass];
         if (parent?.superClass) {
@@ -105,24 +108,25 @@ export default {
     const noFloat = !this._cap('fpu');
     const noAsync = this._cap('async') === 'none';
     if (noFloat || noAsync) {
-      const _walkForRestrictions = (n: any) => {
+      const _walkForRestrictions = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
-        if (noFloat && n.kind === 'TypeRef' && (n.name === 'f32' || n.name === 'f64')) {
-          throw this.error(`TypeError: float types (${n.name}) are not supported (fpu: false)`);
+        const nd = n as Record<string, any>;
+        if (noFloat && nd.kind === 'TypeRef' && (nd.name === 'f32' || nd.name === 'f64')) {
+          throw this.error(`TypeError: float types (${nd.name}) are not supported (fpu: false)`);
         }
-        if (noFloat && n.kind === 'Literal' && n.litType === 'number') {
-          const v = n.value.replace(/_/g, '');
+        if (noFloat && nd.kind === 'Literal' && nd.litType === 'number') {
+          const v = String(nd.value).replace(/_/g, '');
           const isHex = /^0[xX]/.test(v);
           if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
-            throw this.error(`TypeError: float literal ${n.value} is not supported (fpu: false)`);
+            throw this.error(`TypeError: float literal ${nd.value} is not supported (fpu: false)`);
           }
         }
-        if (noAsync && n.kind === 'FuncDecl' && n.async) {
+        if (noAsync && nd.kind === 'FuncDecl' && nd.async) {
           throw this.error(`TypeError: async functions are not supported (async: "none")`);
         }
-        for (const k of Object.keys(n)) {
-          if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
+        for (const k of Object.keys(nd)) {
+          if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
         }
       };
       for (const node of ast.body) _walkForRestrictions(node);
@@ -130,14 +134,15 @@ export default {
 
     // Pre-scan: wasm bare restrictions
     if (this._isWasmBare()) {
-      const _walkWasm = (n: any) => {
+      const _walkWasm = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
-        if (n.kind === 'FuncDecl' && n.async) {
+        const nd = n as Record<string, any>;
+        if (nd.kind === 'FuncDecl' && nd.async) {
           throw this.error(`TypeError: async functions are not supported on wasm target`);
         }
-        for (const k of Object.keys(n)) {
-          if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkWasm(v); }
+        for (const k of Object.keys(nd)) {
+          if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkWasm(v); }
         }
       };
       for (const node of ast.body) _walkWasm(node);
@@ -147,13 +152,14 @@ export default {
     if (this._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames
       const callGraph = new Map();
-      const _collectCalls = (nd: any, result: Set<string>) => {
+      const _collectCalls = (nd: unknown, result: Set<string>) => {
         if (!nd || typeof nd !== 'object') return;
-        if (Array.isArray(nd)) { nd.forEach((x: any) => _collectCalls(x, result)); return; }
-        if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') result.add(nd.callee.name);
+        if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collectCalls(x, result)); return; }
+        const n = nd as Record<string, any>;
+        if (n.kind === 'Call' && n.callee?.kind === 'Ident') result.add(n.callee.name);
         // Don't recurse into nested function bodies
-        if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') return;
-        for (const v of Object.values(nd)) {
+        if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return;
+        for (const v of Object.values(n)) {
           if (v && typeof v === 'object') _collectCalls(v, result);
         }
       };
@@ -198,7 +204,7 @@ export default {
     this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
     const _throwsUnions: string[][] = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
-    const _flattenThrowsNames = (throwsTypes: any[]) => {
+    const _flattenThrowsNames = (throwsTypes: TypeAnn[]) => {
       const names: string[] = [];
       for (const t of throwsTypes ?? []) {
         if (t.kind === 'TypeRef') names.push(t.name);
@@ -208,7 +214,7 @@ export default {
       }
       return names;
     };
-    const _collectThrows = (throwsTypes: any[]) => {
+    const _collectThrows = (throwsTypes: TypeAnn[]) => {
       if (!throwsTypes?.length) return;
       const names = _flattenThrowsNames(throwsTypes);
       for (const n of names) {
@@ -230,25 +236,26 @@ export default {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
         const fields = (n.members ?? []).filter((m: { kind: string }) => m.kind === 'Field');
-        const hasStack = fields.some((f: any) => f.name === 'stack');
+        const hasStack = fields.some((f: ClassMember): f is Field => f.kind === 'Field' && f.name === 'stack');
         if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
         }
         const info = this._throwsClasses.get(n.name);
         if (info) {
-          info.hasMessage = fields.some((f: any) => f.name === 'message');
+          info.hasMessage = fields.some((f: ClassMember): f is Field => f.kind === 'Field' && f.name === 'message');
           info.hasStack = hasStack;
         }
       }
     }
     // Determine needsNew: walk AST for throw new X() nodes
     const _thrownClasses = new Set<string>();
-    const _walkThrows = (n: any) => {
+    const _walkThrows = (n: unknown) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_walkThrows); return; }
-      if (n.kind === 'Throw' && n.value?.kind === 'New') _thrownClasses.add(n.value.name);
-      for (const k of Object.keys(n)) {
-        if (k !== 'parent') { const v = n[k]; if (v && typeof v === 'object') _walkThrows(v); }
+      const nd = n as Record<string, any>;
+      if (nd.kind === 'Throw' && nd.value?.kind === 'New') _thrownClasses.add(nd.value.name);
+      for (const k of Object.keys(nd)) {
+        if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkThrows(v); }
       }
     };
     for (const node of ast.body) _walkThrows(node);
@@ -267,7 +274,7 @@ export default {
     this._decoratorNames = new Set(); // all names used with @
     this._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
     {
-      const scanDecs = (decs: any[] | undefined) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
+      const scanDecs = (decs: Decorator[] | undefined) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl') {
@@ -283,10 +290,10 @@ export default {
     {
       const _hmDecls = new Map(); // varName → capacityNum
       for (const node of ast.body) {
-        const n: any = node.kind === 'Export' ? node.decl : node;
+        const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'VarDecl' && n.init?.kind === 'New' && n.init.name === 'HashMap') {
           const capLit = n.init.args?.[0]?.expr;
-          const capNum = capLit?.litType === 'number' ? parseInt(capLit.value) : 0;
+          const capNum = capLit?.kind === 'Literal' && capLit.litType === 'number' ? parseInt(capLit.value) : 0;
           if (capNum > 0) _hmDecls.set(n.name, { count: 0, cap: capNum });
         }
         if (n?.kind === 'ExprStmt' && n.expr?.kind === 'Call') {
@@ -322,25 +329,26 @@ export default {
         }
         // Collect idents from body, skipping shadowed param names
         // Also skip nested function bodies (they have their own scopes)
-        const _collect = (nd: any, outerLocals: Set<string>) => {
+        const _collect = (nd: unknown, outerLocals: Set<string>) => {
           if (!nd || typeof nd !== 'object') return;
-          if (Array.isArray(nd)) { nd.forEach((x: any) => _collect(x, outerLocals)); return; }
-          if (nd.kind === 'Ident') {
-            if (!outerLocals.has(nd.name)) this._funcRefVars.add(nd.name);
+          if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collect(x, outerLocals)); return; }
+          const n = nd as Record<string, any>;
+          if (n.kind === 'Ident') {
+            if (!outerLocals.has(n.name)) this._funcRefVars.add(n.name);
             return;
           }
           // Nested function: collect with its own param scope merged
-          if (nd.kind === 'FuncDecl' || nd.kind === 'ArrowFunc') {
+          if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') {
             const inner = new Set(outerLocals);
-            for (const p of (nd.params ?? [])) {
+            for (const p of (n.params ?? [])) {
               if (p?.name) inner.add(p.name);
             }
-            if (nd.body) _collect(nd.body, inner);
+            if (n.body) _collect(n.body, inner);
             return;
           }
           // VarDecl: add declared name to local scope for subsequent siblings
           // (we don't track declaration order here — just collect all idents)
-          for (const v of Object.values(nd)) {
+          for (const v of Object.values(n)) {
             if (v && typeof v === 'object') _collect(v, outerLocals);
           }
         };
@@ -363,13 +371,14 @@ export default {
               }
             }
             const arrowParams = new Set((arrow.params ?? []).map((p: { name?: string }) => p.name));
-            const _collectArrow = (nd: any) => {
+            const _collectArrow = (nd: unknown) => {
               if (!nd || typeof nd !== 'object') return;
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
-              if (nd.kind === 'Ident' && !arrowParams.has(nd.name) && !_signalVarNames.has(nd.name)) {
-                this._funcRefVars.add(nd.name);
+              const n = nd as Record<string, any>;
+              if (n.kind === 'Ident' && !arrowParams.has(n.name) && !_signalVarNames.has(n.name)) {
+                this._funcRefVars.add(n.name);
               }
-              for (const v of Object.values(nd)) {
+              for (const v of Object.values(n)) {
                 if (v && typeof v === 'object') _collectArrow(v);
               }
             };
@@ -383,8 +392,8 @@ export default {
       try {
         this.visitTopLevel(node);
       } catch (e) {
-        if ((e as any)?.isTscError) {
-          this._errors.push(e);
+        if ((e as Record<string, unknown>)?.isTscError) {
+          this._errors.push(e as TscError);
           if (this._errors.length >= this._maxErrors) break;
         } else {
           throw e;
@@ -392,7 +401,7 @@ export default {
       }
     }
     if (this._errors.length > 0) {
-      const bag: any = new Error('compilation failed');
+      const bag = new Error('compilation failed') as Error & { isTscErrorBag: boolean; errors: unknown[] };
       bag.isTscErrorBag = true;
       bag.errors = this._errors;
       throw bag;

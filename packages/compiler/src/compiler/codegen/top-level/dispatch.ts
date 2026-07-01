@@ -1,5 +1,5 @@
 import type { Stmt, Param, Decorator, TypeAnn, TypeRef, FuncOverload, DeclareModule, DeclareConst, DeclareFunction, VarDeclItem } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenThis, DeclareModuleEntry } from '../../codegen.js';
 // dispatch.ts
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export default {
@@ -9,8 +9,8 @@ export default {
       case 'Import':
         // Check if source is a declared ambient module (declare module "name" { ... })
         if (this._declaredModules?.has(node.source)) {
-          const decls = this._declaredModules.get(node.source);
-          const requestedNames = new Set(node.names ?? []);
+          const decls = this._declaredModules.get(node.source)!;
+          const requestedNames = new Set((node.names ?? []).map((n: { name: string }) => n.name));
           for (const decl of decls) {
             if (!requestedNames.size || requestedNames.has(decl.name)) {
               if (decl.kind === 'DeclareFunction') this.visitDeclareFunction(decl);
@@ -49,7 +49,7 @@ export default {
             const exportName = typeof n === 'object' && n.alias ? n.alias : origName;
             let entry = this.lookup(origName);
             if (!entry) {
-              entry = this.classes.get(origName);
+              entry = this.classes.get(origName) ?? null;
               if (!entry && this._typeAliases?.has(origName)) {
                 entry = { _isTypeAlias: true, cType: this._typeAliases.get(origName) };
               }
@@ -74,7 +74,7 @@ export default {
           let _entry = this.lookup(_exportedName);
           if (!_entry) {
             // Types live in type tables, not scope
-            _entry = this.classes.get(_exportedName);
+            _entry = this.classes.get(_exportedName) ?? null;
             if (!_entry && this._typeAliases?.has(_exportedName)) {
               _entry = { _isTypeAlias: true, cType: this._typeAliases.get(_exportedName) };
             }
@@ -207,14 +207,15 @@ export default {
           // Detect non-constant initializer — C requires static globals to have
           // constant initializers. Split: zero-init declaration + runtime assignment.
           // Use AST inspection (not exprToC) to avoid codegen side effects.
-          const _hasCallNode = (nd: any): boolean => {
+          const _hasCallNode = (nd: unknown): boolean => {
             if (!nd || typeof nd !== 'object') return false;
             if (Array.isArray(nd)) return nd.some(_hasCallNode);
-            if (nd.kind === 'Call') return true;
-            if (nd.kind === 'Arrow' || nd.kind === 'FuncDecl') return false;
-            return _hasCallNode(nd.callee) || _hasCallNode(nd.object) || _hasCallNode(nd.expr) ||
-                   _hasCallNode(nd.left) || _hasCallNode(nd.right) || _hasCallNode(nd.init) ||
-                   _hasCallNode(nd.value) || _hasCallNode(nd.args) || _hasCallNode(nd.elems);
+            const n = nd as Record<string, unknown>;
+            if (n.kind === 'Call') return true;
+            if (n.kind === 'Arrow' || n.kind === 'FuncDecl') return false;
+            return _hasCallNode(n.callee) || _hasCallNode(n.object) || _hasCallNode(n.expr) ||
+                   _hasCallNode(n.left) || _hasCallNode(n.right) || _hasCallNode(n.init) ||
+                   _hasCallNode(n.value) || _hasCallNode(n.args) || _hasCallNode(n.elems);
           };
           let _splitInit: string | null = null;
           if (node.init && _hasCallNode(node.init)) {
@@ -279,7 +280,7 @@ export default {
 
   visitDeclareModule(this: CodeGenThis, node: DeclareModule) {
 
-    this._declaredModules.set(node.moduleName, node.body);
+    this._declaredModules.set(node.moduleName, node.body as unknown as DeclareModuleEntry[]);
   },
 
   visitDeclareConst(this: CodeGenThis, node: DeclareConst) {

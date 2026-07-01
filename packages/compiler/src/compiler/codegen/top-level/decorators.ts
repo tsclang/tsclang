@@ -1,4 +1,48 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Stmt, Expression, Method, Decorator, Param, FuncDecl, TypeRef, TypeAnn, Block, ArrayLit, Arrow, FuncExpr } from '@tsclang/ast';
+
+export type DecoratorFn = FuncDecl & { isDecorator?: boolean };
+export type CodeGenMethod = Method & { returnTypeOverride?: string };
+
+interface DeepSubstMarker {
+  _deepSubstApply: true;
+  stmt: Stmt;
+}
+type BeforeStmt = Stmt | DeepSubstMarker;
+
+export interface ClassDecField { fieldDecl: string; fieldName: string; cType: string; }
+export interface ClassDecInit { fieldName: string; cVal: string | boolean | number; }
+export interface ClassDecAnalysis { fields: ClassDecField[]; inits: ClassDecInit[]; }
+
+export interface DecoratorDescAnalysis {
+  style: 'desc';
+  befores: Expression[];
+  afters: Expression[];
+}
+export interface DecoratorPropDescAnalysis {
+  style: 'prop-desc';
+  beforeStmts: BeforeStmt[];
+  afterStmts: Stmt[];
+  applyIsReturn: boolean;
+  applyResultVar: string | null;
+  applyArgs: ArrayLit['elems'] | null;
+  allApplyDeep: boolean;
+  capturedBindings: Map<string, Expression>;
+  lambdaParams: Param[];
+}
+export interface DecoratorPassthroughAnalysis {
+  style: 'passthrough';
+}
+export type DecoratorAnalysis = DecoratorDescAnalysis | DecoratorPropDescAnalysis | DecoratorPassthroughAnalysis;
+
+export interface ThrowsCtx {
+  resultType: string;
+  throwsNames: string[];
+  errKey: string;
+  isVoid: boolean;
+  origRetType: string;
+}
+
 // decorators.ts
 export default {
   // ----------------------------------------------------------------
@@ -6,8 +50,8 @@ export default {
   // ----------------------------------------------------------------
 
   // Analyze a class decorator body and extract field mutations (target._field = value)
-  _analyzeClassDecorator(this: CodeGenThis, decFn: any) {
-    const fields: any[] = [], inits: any[] = [];
+  _analyzeClassDecorator(this: CodeGenThis, decFn: DecoratorFn): ClassDecAnalysis {
+    const fields: ClassDecField[] = [], inits: ClassDecInit[] = [];
     for (const stmt of (decFn.body?.body ?? [])) {
       if (stmt.kind !== 'ExprStmt') continue;
       const expr = stmt.expr;
@@ -16,12 +60,12 @@ export default {
         const fieldName = expr.left.prop;
         const valNode = expr.right;
         // Resolve value: literal true/false/number/string
-        let cVal: any = null, cType: any = null;
+        let cVal: string | boolean | number | null = null, cType: string | null = null;
         if (valNode?.kind === 'Literal') {
           if (valNode.litType === 'bool') { cVal = valNode.value; cType = 'bool'; }
           else if (valNode.litType === 'number') { cVal = valNode.value; cType = 'int32_t'; }
         }
-        if (cVal !== null) {
+        if (cVal !== null && cType !== null) {
           fields.push({ fieldDecl: `${cType} ${fieldName};`, fieldName, cType });
           inits.push({ fieldName, cVal });
         }
@@ -31,85 +75,95 @@ export default {
   },
 
   // Deep-substitute orig.apply(...) calls with a replacement expression
-  _deepSubstOrigApply(this: CodeGenThis, node: any, replacement: any, isVoid = false) {
+  _deepSubstOrigApply(this: CodeGenThis, node: unknown, replacement: Expression, isVoid = false): unknown {
     if (!node || typeof node !== 'object') return node;
-    if (Array.isArray(node)) return node.map((n: any) => this._deepSubstOrigApply(n, replacement, isVoid));
-    if (node.kind === 'Return' && node.value?.kind === 'Call' && node.value.callee?.prop === 'apply') {
+    if (Array.isArray(node)) return (node as unknown[]).map((n) => this._deepSubstOrigApply(n, replacement, isVoid));
+    const n = node as Record<string, unknown>;
+    const nValue = n.value as Record<string, unknown> | undefined;
+    const nExpr = n.expr as Record<string, unknown> | undefined;
+    if (n.kind === 'Return' && nValue?.kind === 'Call' && (nValue.callee as Record<string, unknown>)?.prop === 'apply') {
       // return orig.apply(...) → for void: just call; for non-void: return result
       return isVoid ? { kind: 'ExprStmt', expr: replacement } : { kind: 'Return', value: replacement };
     }
-    if (node.kind === 'ExprStmt' && node.expr?.kind === 'Call' && node.expr.callee?.prop === 'apply') {
+    if (n.kind === 'ExprStmt' && nExpr?.kind === 'Call' && (nExpr.callee as Record<string, unknown>)?.prop === 'apply') {
       return { kind: 'ExprStmt', expr: replacement };
     }
-    const result = {};
-    for (const [k, v] of Object.entries(node)) {
-      (result as any)[k] = (typeof v === 'object' && v !== null) ? this._deepSubstOrigApply(v, replacement, isVoid) : v;
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(n)) {
+      result[k] = (typeof v === 'object' && v !== null) ? this._deepSubstOrigApply(v, replacement, isVoid) : v;
     }
     return result;
   },
 
   // Recursively substitute Ident nodes in an AST
-  _substituteInAst(this: CodeGenThis, node: any, bindings: any) {
+  _substituteInAst(this: CodeGenThis, node: unknown, bindings: Map<string, Expression>): unknown {
     if (!node || typeof node !== 'object') return node;
-    if (Array.isArray(node)) return node.map((n: any) => this._substituteInAst(n, bindings));
-    if (node.kind === 'Ident' && bindings.has(node.name)) return bindings.get(node.name);
-    if (node.kind === 'Binary' && node.op === '+') {
-      const left  = this._substituteInAst(node.left,  bindings);
-      const right = this._substituteInAst(node.right, bindings);
-      const isStr = (t: any) => t.kind === 'Literal' && (t.litType === 'string' || t.litType === 'char');
-      if (isStr(left) && isStr(right)) {
-        return { kind: 'Literal', litType: 'string', value: left.value + right.value };
+    if (Array.isArray(node)) return (node as unknown[]).map((n) => this._substituteInAst(n, bindings));
+    const n = node as Record<string, unknown>;
+    if (n.kind === 'Ident' && bindings.has(n.name as string)) return bindings.get(n.name as string);
+    if (n.kind === 'Binary' && n.op === '+') {
+      const left  = this._substituteInAst(n.left,  bindings);
+      const right = this._substituteInAst(n.right, bindings);
+      const isStr = (t: Record<string, unknown>) => t.kind === 'Literal' && (t.litType === 'string' || t.litType === 'char');
+      const lRec = left as Record<string, unknown>;
+      const rRec = right as Record<string, unknown>;
+      if (isStr(lRec) && isStr(rRec)) {
+        return { kind: 'Literal', litType: 'string', value: (lRec.value as string) + (rRec.value as string) };
       }
-      return { ...node, left, right };
+      return { ...n, left, right };
     }
-    const result = {};
-    for (const [k, v] of Object.entries(node)) {
-      (result as any)[k] = (typeof v === 'object' && v !== null) ? this._substituteInAst(v, bindings) : v;
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(n)) {
+      result[k] = (typeof v === 'object' && v !== null) ? this._substituteInAst(v, bindings) : v;
     }
     return result;
   },
 
   // Check if a statement is `return orig.apply(this, ...)` or `orig.apply(this, ...)`
   // Check if orig.apply appears anywhere inside a stmt (for nested patterns like else branches)
-  _hasOrigApplyDeep(this: CodeGenThis, node: any) {
+  _hasOrigApplyDeep(this: CodeGenThis, node: unknown): boolean {
     if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some((n: any) => this._hasOrigApplyDeep(n));
-    if (node.kind === 'Call' && node.callee?.kind === 'Member' && node.callee?.prop === 'apply') return true;
-    return Object.values(node).some((v: any) => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
+    if (Array.isArray(node)) return (node as unknown[]).some((n) => this._hasOrigApplyDeep(n));
+    const n = node as Record<string, unknown>;
+    const callee = n.callee as Record<string, unknown> | undefined;
+    if (n.kind === 'Call' && callee?.kind === 'Member' && callee?.prop === 'apply') return true;
+    return Object.values(n).some((v) => v && typeof v === 'object' ? this._hasOrigApplyDeep(v) : false);
   },
 
-  _isOrigApply(this: CodeGenThis, stmt: any) {
-    const expr = stmt.kind === 'Return' ? stmt.value
-      : stmt.kind === 'ExprStmt' ? stmt.expr
-      : stmt.kind === 'VarDecl' ? stmt.init
+  _isOrigApply(this: CodeGenThis, stmt: unknown): boolean {
+    const s = stmt as Record<string, unknown>;
+    const expr = s.kind === 'Return' ? s.value
+      : s.kind === 'ExprStmt' ? s.expr
+      : s.kind === 'VarDecl' ? s.init
       : null;
     if (!expr) return false;
-    if (expr.kind !== 'Call') return false;
-    const callee = expr.callee;
-    return callee?.kind === 'Member' && callee.prop === 'apply';
+    const e = expr as Record<string, unknown>;
+    if (e.kind !== 'Call') return false;
+    const callee = e.callee as Record<string, unknown> | undefined;
+    return callee?.kind === 'Member' && callee?.prop === 'apply';
   },
 
   // Analyze a decorator function and extract wrapper info
   // Returns: { style, befores, afters } | { style, beforeStmts, afterStmts, applyIsReturn, paramBindings }
-  _analyzeDecorator(this: CodeGenThis, decFn: any, factoryArgs: any = null) {
+  _analyzeDecorator(this: CodeGenThis, decFn: DecoratorFn, factoryArgs: Expression[] | null = null): DecoratorAnalysis {
     // TSClang `decorator function` style
     if (decFn.isDecorator) {
-      const befores: any[] = [], afters: any[] = [];
+      const befores: Expression[] = [], afters: Expression[] = [];
       for (const stmt of (decFn.body?.body ?? [])) {
         if (stmt.kind !== 'ExprStmt') continue;
         const c = stmt.expr;
         if (c?.kind !== 'Call') continue;
         const callee = c.callee;
         if (callee?.kind !== 'Member') continue;
-        if (callee.prop === 'before' && c.args?.[0]) befores.push(c.args[0].expr ?? c.args[0]);
-        if (callee.prop === 'after'  && c.args?.[0]) afters.push(c.args[0].expr ?? c.args[0]);
+        if (callee.prop === 'before' && c.args?.[0]) befores.push((c.args[0].expr ?? c.args[0]) as Expression);
+        if (callee.prop === 'after'  && c.args?.[0]) afters.push((c.args[0].expr ?? c.args[0]) as Expression);
       }
       return { style: 'desc', befores, afters };
     }
 
     // Find the actual inner decorator body (handle factory pattern)
-    let innerBody = decFn.body?.body ?? [];
-    let capturedBindings = new Map();
+    let innerBody: Stmt[] = decFn.body?.body ?? [];
+    let capturedBindings = new Map<string, Expression>();
     if (factoryArgs !== null) {
       // Factory: look for `return function(target, method, desc) { ... }`
       for (const stmt of innerBody) {
@@ -126,8 +180,8 @@ export default {
     }
 
     // Find `desc.value = function(...) { BODY }` or `desc.value = function(x: T) { BODY }`
-    let wrapperBody: any = null;
-    let lambdaParams: any[] = [];
+    let wrapperBody: Stmt[] | null = null;
+    let lambdaParams: Param[] = [];
     for (const stmt of innerBody) {
       if (stmt.kind !== 'ExprStmt') continue;
       const expr = stmt.expr;
@@ -135,8 +189,8 @@ export default {
       if (expr.left?.kind !== 'Member' || expr.left.prop !== 'value') continue;
       const rhs = expr.right;
       if (rhs?.kind === 'FuncExpr' || rhs?.kind === 'Arrow') {
-        wrapperBody = (rhs.body?.body ?? rhs.body?.body) ?? (rhs.body?.kind === 'Block' ? rhs.body.body : [rhs.body]);
-        lambdaParams = (rhs.params ?? []).filter((p: any) => p.name && p.name !== 'this');
+        wrapperBody = rhs.body?.kind === 'Block' ? rhs.body.body : ([rhs.body] as unknown as Stmt[]);
+        lambdaParams = (rhs.params ?? []).filter((p) => p.name && p.name !== 'this');
         break;
       }
     }
@@ -144,8 +198,9 @@ export default {
     if (!wrapperBody) return { style: 'passthrough' };
 
     // Split at orig.apply(...)
-    const beforeStmts: any[] = [], afterStmts: any[] = [];
-    let foundApply = false, applyIsReturn = false, applyResultVar: any = null, applyArgs: any = null;
+    const beforeStmts: BeforeStmt[] = [], afterStmts: Stmt[] = [];
+    let foundApply = false, applyIsReturn = false, applyResultVar: string | null = null;
+    let applyArgs: ArrayLit['elems'] | null = null;
     let allApplyDeep = false;  // true when orig.apply only appears inside nested stmts
     for (const stmt of wrapperBody) {
       if (this._isOrigApply(stmt)) {
@@ -153,8 +208,8 @@ export default {
         applyIsReturn = stmt.kind === 'Return';
         if (stmt.kind === 'VarDecl') applyResultVar = stmt.name;
         // Extract explicit args from orig.apply(this, [arg1, arg2, ...])
-        const applyExpr = stmt.kind === 'Return' ? stmt.value : stmt.kind === 'ExprStmt' ? stmt.expr : stmt.init;
-        const argsArg = applyExpr?.args?.[1]?.expr;
+        const applyExpr = stmt.kind === 'Return' ? stmt.value : stmt.kind === 'ExprStmt' ? stmt.expr : stmt.kind === 'VarDecl' ? stmt.init : null;
+        const argsArg = applyExpr?.kind === 'Call' ? applyExpr.args?.[1]?.expr : undefined;
         if (argsArg?.kind === 'ArrayLit') applyArgs = argsArg.elems;
       } else if (!foundApply && this._hasOrigApplyDeep(stmt)) {
         // orig.apply is nested inside this stmt (e.g., in else branch) → deep substitute
@@ -170,7 +225,7 @@ export default {
   },
 
   // Build a synthetic body statement from an Arrow/FuncExpr lambda (for desc.before/after)
-  _extractLambdaBody(this: CodeGenThis, lambdaNode: any) {
+  _extractLambdaBody(this: CodeGenThis, lambdaNode: Arrow | FuncExpr | null): Stmt[] {
     if (!lambdaNode) return [];
     const body = lambdaNode.body;
     if (!body) return [];
@@ -179,9 +234,9 @@ export default {
   },
 
   // Build the C call to the inner function
-  _buildInnerCall(this: CodeGenThis, className: any, methodName: any, m: any, isStatic: any) {
+  _buildInnerCall(this: CodeGenThis, className: string, methodName: string, m: Method, isStatic: boolean): string {
     const innerFnName = `${className}_${methodName}_inner`;
-    const paramNames = (m.params ?? []).map((p: any) => p.name).filter(Boolean);
+    const paramNames = (m.params ?? []).map((p) => p.name).filter(Boolean);
     if (isStatic) {
       return `${innerFnName}(${paramNames.join(', ')})`;
     }
@@ -189,25 +244,26 @@ export default {
   },
 
   // Emit a decorated method: generates _inner + chain of wrappers
-  _emitDecoratedMethod(this: CodeGenThis, className: any, m: any, isStatic: any, explicitImplements: any, decs: any) {
+  _emitDecoratedMethod(this: CodeGenThis, className: string, m: Method, isStatic: boolean, explicitImplements: TypeRef[], decs: Decorator[]) {
+    const mname = m.name as string;
     // Check if a MethodDesc decorator is applied to a standalone function (error case handled in standalone)
     // decs: [D_1 (outermost/leftmost), ..., D_n (innermost/rightmost)]
 
     // Emit the original body as _inner
-    this.emitMethod(className, { ...m, name: m.name + '_inner', decorators: [] }, isStatic, explicitImplements);
+    this.emitMethod(className, { ...m, name: mname + '_inner', decorators: [] }, isStatic, explicitImplements);
 
-    let prevMethodName = m.name + '_inner';
+    let prevMethodName = mname + '_inner';
 
     // Apply decorators from innermost (rightmost) to outermost (leftmost)
     for (let i = decs.length - 1; i >= 0; i--) {
       const d = decs[i];
       const isOuter = i === 0;
-      const wrapperMethodName = isOuter ? m.name : m.name + '_' + d.name;
+      const wrapperMethodName = isOuter ? mname : mname + '_' + d.name;
 
       // Resolve factory args from decorator call args
-      const decFn = this._decoratorFns.get(d.name);
-      const factoryArgs = d.args ? d.args.map((a: any) => a) : null;
-      const analysis = this._analyzeDecorator(decFn, factoryArgs);
+      const decFn = this._decoratorFns.get(d.name) as DecoratorFn | undefined;
+      const factoryArgs = d.args ? d.args.map((a) => a) : null;
+      const analysis = this._analyzeDecorator(decFn!, factoryArgs);
 
       this._emitDecoratorWrapperFn(className, m, isStatic, wrapperMethodName, prevMethodName, analysis, d, i, decs.length);
       prevMethodName = wrapperMethodName;
@@ -216,13 +272,13 @@ export default {
     const cls = this.classes.get(className);
     if (cls) {
       if (!cls._methodNames) cls._methodNames = new Map();
-      const nameMangled = `${className}_${m.name}`;
-      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: false, isExplicitMut: false, isMoveMethod: false, isIfaceMethod: false });
+      const nameMangled = `${className}_${mname}`;
+      cls._methodNames.set(mname, { isStatic, nameMangled, isMut: false, isExplicitMut: false, isMoveMethod: false, isIfaceMethod: false });
     }
   },
 
   // Emit a single wrapper function
-  _emitDecoratorWrapperFn(this: CodeGenThis, className: any, m: any, isStatic: any, wrapperName: any, innerName: any, analysis: any, d: any, decIdx: any, totalDecs: any) {
+  _emitDecoratorWrapperFn(this: CodeGenThis, className: string, m: Method, isStatic: boolean, wrapperName: string, innerName: string, analysis: DecoratorAnalysis, d: Decorator, decIdx: number, totalDecs: number) {
     const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
     const isVoid = retType === 'void';
     const innerFnName = `${className}_${innerName}`;
@@ -230,17 +286,18 @@ export default {
     // For prop-desc style, use the lambda's params (may differ in name from m.params).
     // Exception: rest params (...args: any[]) mean the lambda captures all args generically —
     // fall back to original method params in that case.
-    const _hasRestLambdaParam = analysis.lambdaParams?.some((p: any) => p.rest);
-    const wrapperParamList = (analysis.style === 'prop-desc' && analysis.lambdaParams?.length > 0 && !_hasRestLambdaParam)
-      ? analysis.lambdaParams
+    const lambdaParams = analysis.style === 'prop-desc' ? analysis.lambdaParams : [];
+    const _hasRestLambdaParam = lambdaParams.some((p) => p.rest);
+    const wrapperParamList: Param[] = (analysis.style === 'prop-desc' && lambdaParams.length > 0 && !_hasRestLambdaParam)
+      ? lambdaParams
       : (m.params ?? []);
-    const paramNames = wrapperParamList.map((p: any) => p.name).filter(Boolean);
-    const paramCTypes = wrapperParamList.map((p: any) => {
+    const paramNames = wrapperParamList.map((p) => p.name).filter(Boolean);
+    const paramCTypes = wrapperParamList.map((p) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return `${ct} ${p.name}`;
     });
 
-    let selfParam, innerCall;
+    let selfParam: string, innerCall: string;
     if (isStatic) {
       selfParam = '';
       innerCall = `${innerFnName}(${paramNames.join(', ')})`;
@@ -252,16 +309,16 @@ export default {
     const allParams = [selfParam, ...paramCTypes].filter(Boolean).join(', ');
     const wrapperFnName = `${className}_${wrapperName}`;
 
-    const lines: any[] = [];
+    const lines: string[] = [];
     const I = '    ';
 
     if (analysis.style === 'desc') {
       // TSClang decorator function style: desc.before/after
-      const beforeBody = analysis.befores.flatMap((l: any) => this._extractLambdaBody(l));
-      const afterBody  = analysis.afters.flatMap((l: any) => this._extractLambdaBody(l));
+      const beforeBody = analysis.befores.flatMap((l: Expression) => this._extractLambdaBody(l));
+      const afterBody  = analysis.afters.flatMap((l: Expression) => this._extractLambdaBody(l));
 
       // Emit before stmts
-      const beforeLines: any[] = [], afterLines: any[] = [];
+      const beforeLines: string[] = [], afterLines: string[] = [];
       this.pushScope();
       this.visitBlock({ body: beforeBody }, beforeLines, 1);
       this.popScope();
@@ -278,12 +335,12 @@ export default {
     } else if (analysis.style === 'prop-desc') {
       // TypeScript PropertyDescriptor style
       // Build bindings: `method` param → actual method name, factory captures → literal values
-      const bindings = new Map();
+      const bindings = new Map<string, Expression>();
       // Find `method` parameter (2nd param of decorator = method name)
-      const decFn = this._decoratorFns.get(d.name);
+      const decFn = this._decoratorFns.get(d.name) as DecoratorFn | undefined;
       const methodParamName = decFn?.params?.[1]?.name;
       if (methodParamName) {
-        bindings.set(methodParamName, { kind: 'Literal', litType: 'string', value: m.name });
+        bindings.set(methodParamName, { kind: 'Literal', litType: 'string', value: m.name as string });
       }
       for (const [k, v] of analysis.capturedBindings) bindings.set(k, v);
 
@@ -294,14 +351,14 @@ export default {
       }
       // Build the actual inner call, using explicit args from orig.apply if provided
       if (analysis.applyArgs && analysis.applyArgs.length > 0) {
-        const tmpLines2: any[] = [];
+        const tmpLines2: string[] = [];
         this.pushScope();
         if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
         // Use lambda params in scope so type inference works for substituted args
         for (const p of wrapperParamList) {
           if (p.name) this.define(p.name, { ctype: p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t', varKind: 'let' });
         }
-        const argsC = analysis.applyArgs.map((a: any) => {
+        const argsC = analysis.applyArgs.map((a) => {
           const subA = this._substituteInAst(a.expr ?? a, bindings);
           return this.exprToC(subA, tmpLines2, 1);
         });
@@ -312,10 +369,10 @@ export default {
       }
 
       // Build the replacement AST node for deep-substitution (orig.apply in nested branches)
-      const innerCallExpr = { kind: 'RawC', code: innerCall };
+      const innerCallExpr: Expression = { kind: 'RawC', code: innerCall };
 
-      const subBefore = analysis.beforeStmts.map((s: any) => {
-        if (s._deepSubstApply) {
+      const subBefore = analysis.beforeStmts.map((s: BeforeStmt) => {
+        if (typeof s === 'object' && '_deepSubstApply' in s) {
           // Nested orig.apply: deep-replace it with the inner call
           const subStmt = this._substituteInAst(s.stmt, bindings);
           return this._deepSubstOrigApply(subStmt, innerCallExpr, isVoid);
@@ -323,15 +380,15 @@ export default {
         return this._substituteInAst(s, bindings);
       });
       // Filter afterStmts: if void and applyResultVar, drop `return <resultVar>` stmts
-      let afterFiltered = analysis.afterStmts;
+      let afterFiltered: Stmt[] = analysis.afterStmts;
       if (isVoid && analysis.applyResultVar) {
-        afterFiltered = analysis.afterStmts.filter((s: any) =>
+        afterFiltered = analysis.afterStmts.filter((s) =>
           !(s.kind === 'Return' && s.value?.kind === 'Ident' && s.value.name === analysis.applyResultVar)
         );
       }
-      const subAfter = afterFiltered.map((s: any) => this._substituteInAst(s, bindings));
+      const subAfter = afterFiltered.map((s) => this._substituteInAst(s, bindings));
 
-      const beforeLines: any[] = [], afterLines: any[] = [];
+      const beforeLines: string[] = [], afterLines: string[] = [];
       this.pushScope();
       if (!isStatic) this.define('self', { ctype: `${className} *`, varKind: 'const' });
       if (analysis.applyResultVar && !isVoid) this.define(analysis.applyResultVar, { ctype: retType });
@@ -370,18 +427,19 @@ export default {
   },
 
   // Emit a decorated standalone function
-  _emitDecoratedStandaloneFunc(this: CodeGenThis, node: any, decs: any) {
+  _emitDecoratedStandaloneFunc(this: CodeGenThis, node: FuncDecl, decs: Decorator[]) {
     const { name, params, returnType, body } = node;
     const retType = returnType ? this.resolveType(returnType) : 'void';
 
     // Check if all decorators are MethodDesc-only (cannot apply to standalone functions)
     for (const d of decs) {
-      const decFn = this._decoratorFns.get(d.name);
+      const decFn = this._decoratorFns.get(d.name) as DecoratorFn | undefined;
       if (!decFn) continue;
       if (decFn.isDecorator) {
         // Check param type: MethodDesc → error
         const descParam = decFn.params?.[0];
-        const descTypeName = descParam?.typeAnn?.name;
+        const descTypeAnn = descParam?.typeAnn;
+        const descTypeName = descTypeAnn?.kind === 'TypeRef' ? descTypeAnn.name : undefined;
         if (descTypeName === 'MethodDesc') {
           throw this.error(`"${d.name}" is a method decorator and cannot be applied to a standalone function`, node);
         }
@@ -389,7 +447,7 @@ export default {
     }
 
     // Mangle the function suffix from param types
-    const paramSuffix = params.map((p: any) => {
+    const paramSuffix = params.map((p) => {
       const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
       return ct === 'String' ? 'string' : ct.replace(/[^a-zA-Z0-9]/g, '_');
     }).join('_');
@@ -406,24 +464,24 @@ export default {
       const d = decs[i];
       const isOuter = i === 0;
       const wrapperFnName = isOuter ? mangledName : `${name}_${d.name}_${paramSuffix}`;
-      const decFn = this._decoratorFns.get(d.name);
-      const factoryArgs = d.args ? d.args.map((a: any) => a) : null;
-      const analysis = this._analyzeDecorator(decFn, factoryArgs);
+      const decFn = this._decoratorFns.get(d.name) as DecoratorFn | undefined;
+      const factoryArgs = d.args ? d.args.map((a) => a) : null;
+      const analysis = this._analyzeDecorator(decFn!, factoryArgs);
 
       const isVoid = retType === 'void';
-      const paramCDecls = params.map((p: any) => {
+      const paramCDecls = params.map((p) => {
         const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
         return `${ct} ${p.name}`;
       });
-      const paramNms = params.map((p: any) => p.name);
+      const paramNms = params.map((p) => p.name);
       const innerCall = `${prevName}(${paramNms.join(', ')})`;
 
-      const lines: any[] = [];
+      const lines: string[] = [];
       const I = '    ';
       if (analysis.style === 'desc') {
-        const beforeBody = analysis.befores.flatMap((l: any) => this._extractLambdaBody(l));
-        const afterBody  = analysis.afters.flatMap((l: any) => this._extractLambdaBody(l));
-        const beforeLines: any[] = [], afterLines: any[] = [];
+        const beforeBody = analysis.befores.flatMap((l: Expression) => this._extractLambdaBody(l));
+        const afterBody  = analysis.afters.flatMap((l: Expression) => this._extractLambdaBody(l));
+        const beforeLines: string[] = [], afterLines: string[] = [];
         this.pushScope();
         this.visitBlock({ body: beforeBody }, beforeLines, 1);
         this.popScope();
@@ -449,7 +507,7 @@ export default {
     this.define(name, { ctype: retType, funcName: mangledName, params });
   },
 
-  emitMethod(this: CodeGenThis, className: any, m: any, isStatic: any, explicitImplements = []) {
+  emitMethod(this: CodeGenThis, className: string, m: CodeGenMethod, isStatic: boolean, explicitImplements: TypeRef[] = []) {
     if (!m.body) return; // abstract / overload
 
     // Error: static methods cannot be mut
@@ -475,10 +533,10 @@ export default {
 
     // Build throwsCtx for throws methods
     const throwsTypes = m.throwsTypes ?? [];
-    let throwsCtx: any = null;
+    let throwsCtx: ThrowsCtx | null = null;
     if (throwsTypes.length > 0) {
       const throwsNames = (() => {
-        const names: any[] = [];
+        const names: string[] = [];
         for (const t of throwsTypes) {
           if (t.kind === 'TypeRef') names.push(t.name === 'Error' ? 'TscError' : t.name);
           else if (t.kind === 'TypeUnion') {
@@ -496,11 +554,11 @@ export default {
       if (!this._emittedResultErrKeys.has(errKey)) {
         this._emittedResultErrKeys.add(errKey);
         if (throwsNames.length > 1) {
-          const tagEntries = throwsNames.map((n: any, i: any) => `_Err_${n} = ${i}`).join(', ');
+          const tagEntries = throwsNames.map((n: string, i: number) => `_Err_${n} = ${i}`).join(', ');
           this.addTop(`typedef enum { ${tagEntries} } _ErrTag_${errKey};`);
           this.addTop(`typedef struct {`);
           this.addTop(`    _ErrTag_${errKey} tag;`);
-          this.addTop(`    union { ${throwsNames.map((n: any, i: any) => `${n} _${i};`).join(' ')} };`);
+          this.addTop(`    union { ${throwsNames.map((n: string, i: number) => `${n} _${i};`).join(' ')} };`);
           this.addTop(`} _ErrUnion_${errKey};`);
           this.typedefs.push('');
         }
@@ -524,16 +582,16 @@ export default {
     }
 
     // Emit body first so we can inspect it for self-mutation
-    const lines = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut, throwsCtx);
+    const lines: string[] = this.emitFuncBody(m.name, m.body, m.params, retType, className, isMoveMethod, isMut, throwsCtx);
 
     // Determine whether method mutates self
-    const mutatesself = isMut || lines.some((l: any) =>
+    const mutatesself = isMut || lines.some((l: string) =>
       /self->[\w]+ *[+\-*\/|&^%]?=(?!=)/.test(l) ||
       /self->[\w]+\+\+/.test(l) ||
       /self->[\w]+--/.test(l)
     );
 
-    const params: any[] = [];
+    const params: string[] = [];
     if (!isStatic && m.name !== 'new') {
       if (isMoveMethod) {
         params.push(`${className} self`);
@@ -553,10 +611,10 @@ export default {
     }
 
     // For iface-style methods: always prepend self cast (vtable requires void *_self signature)
-    let finalLines = lines;
+    let finalLines: string[] = lines;
     if (isIfaceMethod) {
       finalLines = [`${className} *self = (${className} *)_self;`, `(void)self;`, ...lines];
-    } else if (!isStatic && m.name !== 'new' && !lines.some((l: any) => /\bself\b/.test(l))) {
+    } else if (!isStatic && m.name !== 'new' && !lines.some((l: string) => /\bself\b/.test(l))) {
       finalLines = ['(void)self;', ...lines];
     }
 
@@ -564,7 +622,7 @@ export default {
     const cls = this.classes.get(className);
     if (cls) {
       if (!cls._methodNames) cls._methodNames = new Map();
-      cls._methodNames.set(m.name, { isStatic, nameMangled, isMut: mutatesself, isExplicitMut: isMut, isMoveMethod, isIfaceMethod, ...(throwsCtx ? { _isThrowsFunc: true, _resultType: throwsCtx.resultType, _resultIsVoid: throwsCtx.isVoid, _resultValueType: throwsCtx.origRetType, _resultErrKey: throwsCtx.errKey, _resultErrTypes: throwsCtx.throwsNames } : {}) });
+      cls._methodNames.set(m.name as string, { isStatic, nameMangled, isMut: mutatesself, isExplicitMut: isMut, isMoveMethod, isIfaceMethod, ...(throwsCtx ? { _isThrowsFunc: true, _resultType: throwsCtx.resultType, _resultIsVoid: throwsCtx.isVoid, _resultValueType: throwsCtx.origRetType, _resultErrKey: throwsCtx.errKey, _resultErrTypes: throwsCtx.throwsNames } : {}) });
     }
     this.addTop(`static ${retType} ${nameMangled}(${params.join(', ') || 'void'}) {`);
     for (const l of finalLines) this.addTop('    ' + l);

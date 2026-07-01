@@ -1,5 +1,7 @@
 import type { CodeGenThis } from '../../codegen.js';
-import type { Expression, MatchCase, MatchPattern } from '@tsclang/ast';
+import type { ClassMeta } from '../../codegen.js';
+import type { Expression, MatchCase, MatchPattern, VarDecl, Stmt, CatchClause, Match, TryCatch } from '@tsclang/ast';
+import type { SymbolInfo } from '@tsclang/ast';
 export default {
   _emitMatchCore(this: CodeGenThis, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
                  discC: string, discType: string, resultType: string, resultVar: string,
@@ -13,7 +15,7 @@ export default {
     const isEnum = enumDef?.isEnum && !enumDef?.isConst && !enumDef?.isStringLiteralUnion;
 
     if (isEnum) {
-      const allValues = (enumDef.members ?? []).map((m: { name: string }) => m.name);
+      const allValues = ((enumDef.members ?? []) as { name: string }[]).map((m) => m.name);
       const coveredEnumCases = new Set<string>();
       let hasWild = false;
       for (const c of cases) {
@@ -92,8 +94,9 @@ export default {
     }
   },
 
-  emitMatchVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  emitMatchVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
     const { name, typeAnn, init } = node;
+    if (init?.kind !== 'Match') return;
     const { discriminant, cases, hasParens } = init;
 
     const discC = this.exprToC(discriminant, lines, depth);
@@ -108,7 +111,7 @@ export default {
     this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, name, lines, depth);
   },
 
-  _matchExprToC(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  _matchExprToC(this: CodeGenThis, node: Match, lines: string[], depth: number) {
     const { discriminant, cases, hasParens } = node;
 
     const discC = this.exprToC(discriminant, lines, depth);
@@ -125,7 +128,7 @@ export default {
   // -----------------------------------------------------------------------
   // Result-based TryCatch emission
   // -----------------------------------------------------------------------
-  _emitTryCatchResult(this: CodeGenThis, node: any, tryStmts: any[], callStmt: any, lines: string[], depth: number) {
+  _emitTryCatchResult(this: CodeGenThis, node: TryCatch, tryStmts: Stmt[], callStmt: Stmt, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
     const p = (s: string) => lines.push(I + s);
     const II = ' '.repeat(this.indent * (depth + 1));
@@ -139,13 +142,13 @@ export default {
 
     // Determine if this is a void ExprStmt call or a VarDecl call
     const isVoidCall = callStmt.kind === 'ExprStmt';
-    const callExpr = isVoidCall ? callStmt.expr : callStmt.init;
-    const varName = isVoidCall ? null : callStmt.name;
-    const varKind = isVoidCall ? null : callStmt.varKind;
+    const callExpr = isVoidCall ? (callStmt as { expr: Expression }).expr : (callStmt as VarDecl).init;
+    const varName = isVoidCall ? null : (callStmt as VarDecl).name;
+    const varKind = isVoidCall ? undefined : (callStmt as VarDecl).varKind;
 
     // Get callee symbol for result type info
-    const callee = callExpr.callee;
-    const calleeSym = callee.kind === 'Ident' ? this.lookup(callee.name) : null;
+    const callee = callExpr?.kind === 'Call' ? callExpr.callee : undefined;
+    const calleeSym = callee?.kind === 'Ident' ? this.lookup(callee.name) : null;
     const resultType = calleeSym?._resultType ?? 'int';
     const isResultVoid = calleeSym?._resultIsVoid ?? true;
 
@@ -178,7 +181,7 @@ export default {
         const qualifier = (varKind === 'const' && valType !== 'String') ? 'const ' : '';
         lines.push(`${II}${qualifier}${valType} ${varName} = ${resName}.value;`);
         this.pushScope();
-        this.define(varName, { ctype: valType, varKind });
+        this.define(varName!, { ctype: valType, varKind });
         for (const s of restStmts) this.visitStmt(s, lines, depth + 1);
         this.popScope();
         p('} else {');
@@ -195,7 +198,7 @@ export default {
     }
   },
 
-  _emitCatchBodies(this: CodeGenThis, catches: any, resName: string, calleeSym: any, lines: string[], depth: number) {
+  _emitCatchBodies(this: CodeGenThis, catches: CatchClause[], resName: string, calleeSym: SymbolInfo | null, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
     const II = ' '.repeat(this.indent * (depth + 1));
     const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
@@ -211,7 +214,7 @@ export default {
         this.visitBlock(c.body, lines, depth);
         this.popScope();
       } else {
-        const errClass = c.typeAnn?.name ?? 'void';
+        const errClass = (c.typeAnn?.kind === 'TypeRef' ? c.typeAnn.name : null) ?? 'void';
         const errExpr = isUnion
           ? `${resName}.error._${calleeSym?._resultErrTypes?.indexOf(errClass) ?? 0}`
           : `${resName}.error`;
@@ -223,7 +226,7 @@ export default {
           lines.push(`${I}(void)${errExpr};`);
         }
         this.pushScope();
-        this.define(c.param, { ctype: errClass });
+        this.define(c.param!, { ctype: errClass });
         this.visitBlock(c.body, lines, depth);
         this.popScope();
       }
@@ -231,7 +234,7 @@ export default {
       // Multiple catch clauses → union tag dispatch (if/else if chain)
       for (let i = 0; i < catches.length; i++) {
         const c = catches[i];
-        const errClass = c.typeAnn?.name ?? 'void';
+        const errClass = (c.typeAnn?.kind === 'TypeRef' ? c.typeAnn.name : null) ?? 'void';
         if (i === 0) {
           lines.push(`${I}if (${resName}.error.tag == _Err_${errClass}) {`);
         } else {
@@ -246,7 +249,7 @@ export default {
           lines.push(`${II}(void)${errExpr};`);
         }
         this.pushScope();
-        this.define(c.param, { ctype: errClass });
+        this.define(c.param!, { ctype: errClass });
         this.visitBlock(c.body, lines, depth + 1);
         this.popScope();
       }
@@ -257,16 +260,16 @@ export default {
   // -----------------------------------------------------------------------
   // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
   // -----------------------------------------------------------------------
-  emitPropagateVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  emitPropagateVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
     const { varKind, name, typeAnn, init } = node;
     const I = ' '.repeat(this.indent * depth);
     const p = (s: string) => lines.push(I + s);
 
-    const isProp = init.kind === 'Propagate';
-    const innerExpr = init.expr; // the inner Call (or other) expression
+    const isProp = init?.kind === 'Propagate';
+    const innerExpr = init?.kind === 'Propagate' ? init.expr : undefined;
 
     // Get callee symbol
-    const callee = innerExpr?.callee;
+    const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;
     const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
 
     if (!calleeSym?._isThrowsFunc) {
@@ -360,7 +363,7 @@ export default {
   },
 
   // Generate a C condition expression for a match pattern
-  _matchPatternCond(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string, enumDef: any) {
+  _matchPatternCond(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string, enumDef: ClassMeta | undefined) {
     switch (pattern.kind) {
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
@@ -422,11 +425,11 @@ export default {
   },
 
   // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
-  emitSelectVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
+  emitSelectVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
     const { name, varKind, init } = node;
-    const objArg = init.args?.[0]?.expr;
-    const props = objArg?.props ?? [];
+    const objArg = init?.kind === 'Call' ? init.args?.[0]?.expr : undefined;
+    const props = objArg?.kind === 'ObjLit' ? objArg.props ?? [] : [];
 
     const selIdx = this._selectCount ?? 0;
     this._selectCount = selIdx + 1;
@@ -434,7 +437,7 @@ export default {
     const doneLabel = `_sel${selIdx}_done`;
 
     // Determine field types from channel receive() calls
-    const fields: { key: string; ident: string; ctype: string; valExpr: any }[] = [];
+    const fields: { key: string; ident: string; ctype: string; valExpr: Expression }[] = [];
     for (const prop of props) {
       const key = prop.key;
       // prop.value is ch.receive() call; infer channel element type from ch variable
@@ -442,12 +445,12 @@ export default {
       let ident = 'i32';
       if (val?.kind === 'Call' && val.callee?.kind === 'Member' && val.callee.prop === 'receive') {
         const chObj = val.callee.object;
-        const chSym = this.lookup(chObj?.name ?? '');
+        const chSym = chObj?.kind === 'Ident' ? this.lookup(chObj.name) : null;
         const m = chSym?.ctype?.match(/^Channel_(\w+)$/);
         if (m) ident = m[1];
       }
       const ctype = this.resolveType({ kind: 'TypeRef', name: ident }) ?? 'int32_t';
-      fields.push({ key, ident, ctype, valExpr: val });
+      fields.push({ key: typeof key === 'string' ? key : '', ident, ctype, valExpr: val as Expression });
     }
 
     // Emit typedef
@@ -469,7 +472,7 @@ export default {
     // Emit tryReceive chain (if-else, first ready wins)
     for (let i = 0; i < fields.length; i++) {
       const { key, ident, valExpr } = fields[i];
-      const chObj = valExpr?.callee?.object;
+      const chObj = valExpr?.kind === 'Call' && valExpr.callee?.kind === 'Member' ? valExpr.callee.object : undefined;
       const chC = this.exprToC(chObj, lines, depth);
       const optType = `opt_${ident}`;
       // Ensure opt_T typedef

@@ -1,5 +1,5 @@
-import type { TypeAnn, TypeTuple, TypeRef } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
+import type { TypeAnn, TypeTuple, TypeRef, ObjectField } from '@tsclang/ast';
+import type { CodeGenThis, ClassMetaField } from '../../codegen.js';
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
 // resolve.ts
 
@@ -115,8 +115,8 @@ export default {
         if (baseDef?.fields) {
           const structKey = `_partial_${this.cTypeToIdent(baseType)}`;
           if (!this.classes.has(structKey)) {
-            const fieldDecls = baseDef.fields.flatMap((f: any) => {
-              const fname = f.name ?? f;
+            const fieldDecls = baseDef.fields.flatMap((f: ClassMetaField) => {
+              const fname = f.name ?? '';
               const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
               return [`bool has_${fname};`, `${ftype} ${fname};`];
             }).join(' ');
@@ -134,12 +134,12 @@ export default {
         if (baseDef?.fields) {
           const keyNames = this.getStringLiteralMembers(typeArgs[1]);
           const picked = name === 'Pick'
-            ? baseDef.fields.filter((f: any) => keyNames.length === 0 || keyNames.includes(f.name ?? f))
-            : baseDef.fields.filter((f: any) => !keyNames.includes(f.name ?? f));
+            ? baseDef.fields.filter((f: ClassMetaField) => keyNames.length === 0 || keyNames.includes(f.name ?? ''))
+            : baseDef.fields.filter((f: ClassMetaField) => !keyNames.includes(f.name ?? ''));
           const structKey = `_${name.toLowerCase()}_${keyNames.join('_')}`;
           if (!this.classes.has(structKey)) {
-            const fieldDecls = picked.map((f: any) => {
-              const fname = f.name ?? f;
+            const fieldDecls = picked.map((f: ClassMetaField) => {
+              const fname = f.name ?? '';
               const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
               return `${ftype} ${fname};`;
             }).join(' ');
@@ -154,13 +154,13 @@ export default {
 
       // Transparent type alias (NonNullable, Record, etc.)
       if (this._typeAliases?.has(name)) {
-        const aliased = this._typeAliases.get(name);
+        const aliased = this._typeAliases.get(name)!;
         // Lazily emit opt typedef if needed (but not when inside NonNullable processing)
         if (!this._noOptEmit && aliased.startsWith('opt_') && this._pendingOptTypedefs?.has(aliased)) {
 
           if (!this._emittedOptStructs.has(aliased)) {
             this._emittedOptStructs.add(aliased);
-            const optInner = this._pendingOptTypedefs.get(aliased);
+            const optInner = this._pendingOptTypedefs.get(aliased)!;
             this.addTop(`typedef struct { bool has_value; ${optInner} value; } ${aliased};`);
             this.addTop('');
           }
@@ -171,12 +171,14 @@ export default {
       // Generic class with typeArgs → trigger monomorphization
       if (typeArgs?.length > 0 && this._genericClasses?.has(name)) {
         const tmpl = this._genericClasses.get(name);
+        if (!tmpl) return name;
         const gSubst = new Map();
-        for (let i = 0; i < tmpl.typeParams.length; i++) {
+        const typeParams = tmpl.typeParams ?? [];
+        for (let i = 0; i < typeParams.length; i++) {
           const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
-          gSubst.set(tmpl.typeParams[i].name, ct);
+          gSubst.set(typeParams[i], ct);
         }
-        const suffix = tmpl.typeParams.map((tp: any) => this.cTypeToIdent(gSubst.get(tp.name) ?? 'void')).join('_');
+        const suffix = typeParams.map((tp) => this.cTypeToIdent(gSubst.get(tp) ?? 'void')).join('_');
         const monoName = `${name}_${suffix}`;
         if (!this._emittedGenericClasses.has(monoName)) {
           this._emittedGenericClasses.add(monoName);
@@ -217,7 +219,7 @@ export default {
 
     if (typeNode.kind === 'TypeObject') {
       // Inline struct type — return 'struct { ... }' (anonymous)
-      const fields = typeNode.fields.map((f: any) => {
+      const fields = typeNode.fields.map((f: ObjectField) => {
         const ct = this.resolveType(f.typeAnn);
         return `${ct} ${f.name}`;
       }).join('; ');
@@ -231,7 +233,7 @@ export default {
     if (typeNode.kind === 'TypeUnion') {
       // T | null → opt_T
       const allLeaves = this.flattenUnion(typeNode);
-      const nonNull = allLeaves.filter((t: any) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
+      const nonNull = allLeaves.filter((t: TypeAnn) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
                                           && !(t.kind === 'TypeLiteral' && t.value === 'null'));
       const hasNull = allLeaves.length !== nonNull.length;
       if (hasNull && nonNull.length === 1) {
@@ -315,7 +317,7 @@ export default {
       }).join(' ');
       this.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
       // Register in classes for index/field access
-      this.classes.set(structName, { isTuple: true, fields, readonly: !!readonly });
+      this.classes.set(structName, { isTuple: true, fields: fields as unknown as ClassMetaField[], readonly: !!readonly });
     }
 
     return structName;

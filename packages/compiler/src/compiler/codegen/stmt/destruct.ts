@@ -40,8 +40,8 @@ export default {
         if (init.kind === 'Ident') {
           const _dSym = this.lookup(init.name);
           if (_dSym?.deferredAnon && this._deferredAnons?.has(init.name)) {
-            const _dAnon = this._deferredAnons.get(init.name);
-            const propMap2 = new Map((_dAnon.init.props ?? []).map((pr: ObjLitProp) => [pr.key, pr.value]));
+            const _dAnon = this._deferredAnons.get(init.name)!;
+            const propMap2 = new Map(((_dAnon.init as unknown as { props?: ObjLitProp[] } | null)?.props ?? []).map((pr: ObjLitProp) => [pr.key, pr.value]));
             for (const { name: fname } of _dAnon.fields) {
               const propVal2 = propMap2.get(fname);
               const propC2 = propVal2 ? this.exprToC(propVal2, lines, depth) : '0';
@@ -169,8 +169,8 @@ export default {
           for (let i = 0; i < pattern.length; i++) {
             const elem = pattern[i];
             if (!elem) continue;
-            const field = tupleDef0.fields[i];
-            const ctype = field ? field.ctype.replace(' *', '') : 'int32_t';
+            const field = tupleDef0.fields?.[i];
+            const ctype = field ? (field.ctype ?? 'int32_t').replace(' *', '') : 'int32_t';
             p(`${qual}${ctype} ${elem.name} = ${initC}._${i};`);
             this.define(elem.name, { ctype, varKind });
             if (ctype === 'String') {

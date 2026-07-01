@@ -1,5 +1,5 @@
 import type { CodeGenThis } from '../../codegen.js';
-import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident } from '@tsclang/ast';
+import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident, MethodSig } from '@tsclang/ast';
 import { inferLiteralCType } from '../../types.js';
 
 interface RtField { name?: string; label?: string; typeAnn?: TypeAnn; ctype?: string; _ctype?: string; }
@@ -54,7 +54,7 @@ export default {
           const innerIdent = objType.slice(4);
           const innerCType = this._arrIdentToCType(innerIdent);
           const classDef = this.classes.get(innerCType);
-          const field = classDef?.fields?.find((f: RtField) => f.name === node.prop);
+          const field = classDef?.fields?.find((f) => f.name === node.prop);
           const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
           return `opt_${this.cTypeToIdent(fieldCType)}`;
         }
@@ -112,24 +112,24 @@ export default {
           const enumDef = this.classes.get(node.object.name);
           if (enumDef?.isEnum) return node.object.name;
           // Struct member access: p.x where p is a struct type
-          const objSym = this.lookup(node.object.name) as any;
+          const objSym = this.lookup(node.object.name);
           if (objSym) {
-            const structDef = this.classes.get(objSym.ctype) ?? this.classes.get(objSym.derefType);
+            const structDef = (objSym.ctype ? this.classes.get(objSym.ctype) : null) ?? (objSym.derefType ? this.classes.get(objSym.derefType) : null);
             if (structDef?.fields) {
-              const field = structDef.fields.find((f: RtField) => (f.name ?? f) === node.prop);
+              const field = structDef.fields.find((f) => f.name === node.prop);
               if (field?.typeAnn) return this.resolveType(field.typeAnn);
               if (field?.ctype) return field.ctype;
               // Check inherited fields from superClass
               if (structDef.superClass) {
                 const baseDef = this.classes.get(structDef.superClass);
-                const baseField = baseDef?.fields?.find((f: RtField) => (f.name ?? f) === node.prop);
+                const baseField = baseDef?.fields?.find((f) => f.name === node.prop);
                 if (baseField?.typeAnn) return this.resolveType(baseField.typeAnn);
               }
             }
             // Labeled tuple access: p.x → type of field with label 'x'
             if (structDef?.isTuple) {
-              const field = structDef.fields.find((f: RtField) => f.label === node.prop);
-              if (field) return field.ctype.replace(' *', '');
+              const field = structDef.fields?.find((f) => f.label === node.prop);
+              if (field?.ctype) return field.ctype.replace(' *', '');
             }
           }
         }
@@ -191,7 +191,7 @@ export default {
               sd = this.classes.get(stripped);
             }
             if (sd?.fields) {
-              const f = sd.fields.find((ff: RtField) => (ff.name ?? ff) === node.prop);
+              const f = sd.fields.find((ff) => ff.name === node.prop);
               if (f?.typeAnn) return this.resolveType(f.typeAnn);
               if (f?.ctype) return f.ctype;
             }
@@ -223,12 +223,14 @@ export default {
         const tArgs = node.typeArgs;
         if (this._genericClasses?.has(node.name) && tArgs && tArgs.length > 0) {
           const tmpl = this._genericClasses.get(node.name);
+          if (!tmpl) return `${node.name}`;
           const subst = new Map();
-          for (let i = 0; i < tmpl.typeParams.length; i++) {
+          const typeParams = tmpl.typeParams ?? [];
+          for (let i = 0; i < typeParams.length; i++) {
             const ct = tArgs[i] ? this.resolveType(tArgs[i]) : 'int32_t';
-            subst.set(tmpl.typeParams[i].name, ct);
+            subst.set(typeParams[i], ct);
           }
-          const suffix = tmpl.typeParams.map((tp: RtTypeParam) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+          const suffix = typeParams.map((tp: string) => this.cTypeToIdent(subst.get(tp) ?? 'void')).join('_');
           return `${node.name}_${suffix}`;
         }
         const poolCls = this.classes.get(node.name);
@@ -252,8 +254,8 @@ export default {
         // Tuple index: pair[0] → type of field _0
         const tupleDef2 = this.classes.get(objType);
         if (tupleDef2?.isTuple && node.index.kind === 'Literal' && node.index.litType === 'number') {
-          const field = tupleDef2.fields[parseInt(node.index.value, 10)];
-          if (field) return field.ctype.replace(' *', '');
+          const field = tupleDef2.fields?.[parseInt(node.index.value, 10)];
+          if (field?.ctype) return field.ctype.replace(' *', '');
         }
         // Buffer/DataView/String indexing → uint8_t
         if (objType === 'Buffer' || objType === 'DataView' || objType === 'String') return 'uint8_t';
@@ -398,7 +400,7 @@ export default {
       return 'int32_t';
     }
     if (node.callee.kind === 'Ident') {
-      const sym = this.lookup(node.callee.name) as any;
+      const sym = this.lookup(node.callee.name);
       if (sym?._isStackMacro === 'push') return 'void';
       if (sym?._isStackMacro === 'empty') return 'bool';
       if (sym?._isStackMacro === 'pop') {
@@ -414,9 +416,11 @@ export default {
     }
     if (node.callee.kind === 'Ident' && this._genericFuncs?.has(node.callee.name)) {
       const tmpl = this._genericFuncs.get(node.callee.name);
+      if (!tmpl) return 'int32_t';
       const subst = new Map();
-      for (let i = 0; i < tmpl.typeParams.length; i++) {
-        const tp = tmpl.typeParams[i];
+      const typeParams = tmpl.typeParams ?? [];
+      for (let i = 0; i < typeParams.length; i++) {
+        const tp = typeParams[i];
         const typeArgs = node.typeArgs ?? [];
         let ctype;
         if (typeArgs[i]) ctype = this.resolveType(typeArgs[i]);
@@ -436,8 +440,11 @@ export default {
     }
     if (node.callee.kind === 'Member' && node.callee.prop === 'next') {
       const genObj = node.callee.object;
-      const genSym: any = genObj.kind === 'Ident' ? this.lookup(genObj.name) : null;
-      if (genSym?._isGenState) return genSym._gi?.resultType ?? genSym._resultType ?? 'int32_t';
+      const genSym = genObj.kind === 'Ident' ? this.lookup(genObj.name) : null;
+      if (genSym?._isGenState) {
+        const gi = genSym._gi as unknown as { resultType?: string } | undefined;
+        return gi?.resultType ?? genSym._resultType ?? 'int32_t';
+      }
     }
     if (node.callee.kind === 'Member') {
       const callee = node.callee;
@@ -451,13 +458,13 @@ export default {
       }
       const cls2 = this.classes.get(lookupType);
       if (cls2?.methods) {
-        const m2 = cls2.methods.find((m: RtMethod) => m.name === callee.prop);
+        const m2 = cls2.methods.find((m) => m.name === callee.prop);
         if (m2?.returnType) return this.resolveType(m2.returnType);
       }
       const ifaceType = sym2?.ctype ?? objType2;
       const ifaceDef = this.interfaces.get(ifaceType);
       if (ifaceDef) {
-        const m3 = ifaceDef.find((m: RtMethod & { kind: string }) => m.kind === 'MethodSig' && m.name === callee.prop);
+        const m3 = ifaceDef.find((m): m is MethodSig => m.kind === 'MethodSig' && m.name === callee.prop);
         if (m3?.returnType) return this.resolveType(m3.returnType);
       }
     }
@@ -572,8 +579,8 @@ export default {
         if (argExpr) {
           const objType = this.inferType(argExpr);
           const cls = objType ? this.classes.get(objType) : null;
-          if (cls?.fields?.length > 0) {
-            const firstType = this.resolveType(cls.fields[0].typeAnn);
+          if ((cls?.fields?.length ?? 0) > 0) {
+            const firstType = this.resolveType(cls!.fields![0].typeAnn);
             const etIdent = this.cTypeToIdent(firstType);
             if (prop === 'values') return `Array_ref_${etIdent}`;
             const tupleName = `Tuple_string_ref_${etIdent}`;
@@ -802,7 +809,7 @@ export default {
     const objSym = obj.kind === 'Ident' ? this.lookup(obj.name) : null;
     let objType = objSym?.ctype ?? this.inferType(obj);
     if (objSym?.ctype === 'tsc_unknown' && obj.kind === 'Ident' && this._narrowedUnknownVars?.has(obj.name)) {
-      objType = this._narrowedUnknownVars.get(obj.name);
+      objType = this._narrowedUnknownVars.get(obj.name)!;
     }
     if (objType?.startsWith('Array_')) {
       const et = objSym?.elemType ?? objType.slice(6);
@@ -870,8 +877,8 @@ export default {
       if (ed?.isEnum) return `${obj.name} *`;
     }
     if (prop === 'toString' && obj.kind === 'Ident') {
-      const objSym2 = this.lookup(obj.name) as any;
-      const objEnumDef = objSym2 ? this.classes.get(objSym2.ctype) : null;
+      const objSym2 = this.lookup(obj.name);
+      const objEnumDef = objSym2?.ctype ? this.classes.get(objSym2.ctype) : null;
       if (objEnumDef?.isStringLiteralUnion) return 'const char *';
     }
     if (prop === 'toString' && obj.kind === 'Member') {

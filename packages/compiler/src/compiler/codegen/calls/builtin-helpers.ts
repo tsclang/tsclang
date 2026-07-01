@@ -184,11 +184,12 @@ export default {
 
   // NOTE: node stays `any` — generic recursive walk over arbitrary AST subtrees
   // with computed-kind property access (node.label) cannot be narrowed by TS.
-  labelUsed(this: CodeGenThis, node: any, label: string, kind: string) {
+  labelUsed(this: CodeGenThis, node: unknown, label: string, kind: string) {
     if (!node || typeof node !== 'object') return false;
-    if (node.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && node.label === label) return true;
-    if (node.kind === 'Labeled' && node.label === label) return false;
-    for (const val of Object.values(node)) {
+    const n = node as Record<string, unknown>;
+    if (n.kind === kind.charAt(0).toUpperCase() + kind.slice(1) && n.label === label) return true;
+    if (n.kind === 'Labeled' && n.label === label) return false;
+    for (const val of Object.values(n)) {
       if (Array.isArray(val)) {
         for (const item of val) { if (this.labelUsed(item, label, kind)) return true; }
       } else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) {

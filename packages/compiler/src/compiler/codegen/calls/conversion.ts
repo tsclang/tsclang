@@ -41,7 +41,7 @@ export default {
         if (enumDef?.isEnum) {
           if (enumDef.isConst) throw this.error(`"fromValue()" is not available on const enum`);
           const ec = enumDef._cname ?? enumName;
-          const n = enumDef.members.length;
+          const n = (enumDef.members ?? []).length;
           const helperName = `${ec}_fromValue`;
           // Emit helper if not already emitted
           if (!this._emittedHelpers.has(helperName)) {
@@ -202,7 +202,7 @@ export default {
         const _pcn = argType?.startsWith('opt_ref_') ? argType.slice(8) : null;
         if (_pcn && this.classes.get(_pcn)?._isPool) {
           this._ensurePoolDrop(_pcn);
-          return `${this.classes.get(_pcn)._poolDropFn}(${this.exprToC(argNode, lines, depth)})`;
+          return `${this.classes.get(_pcn)?._poolDropFn}(${this.exprToC(argNode, lines, depth)})`;
         }
       }
     }

@@ -21,8 +21,8 @@ export const STDLIB_MODULES = {
       decodeURIComponent: { func: 'tsc_url_decode_component', include: 'std/url.h',    returns: 'String' },
       encodeURI:          { func: 'tsc_url_encode',           include: 'std/url.h',    returns: 'String' },
       decodeURI:          { func: 'tsc_url_decode',           include: 'std/url.h',    returns: 'String' },
-      decodeUtf8:         { func: 'tsc_decode_utf8',          include: null as any,           returns: 'String', special: '_stdStringDecodeUtf8' },
-      encodeUtf8:         { func: 'tsc_encode_utf8',          include: null as any,           returns: 'Array_u8', special: '_stdStringEncodeUtf8' },
+      decodeUtf8:         { func: 'tsc_decode_utf8',          include: null as string | null,  returns: 'String', special: '_stdStringDecodeUtf8' },
+      encodeUtf8:         { func: 'tsc_encode_utf8',          include: null as string | null,  returns: 'Array_u8', special: '_stdStringEncodeUtf8' },
       Regex:              { special: '_stdStringRegex' },
     },
   },
@@ -206,7 +206,7 @@ export const STDLIB_HANDLERS = {
 
   _handleStdFs(this: CodeGenThis, node: Import) {
     if (node.namespace && node.names.length > 0) {
-      this.define(node.names[0], { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
+      this.define(node.names[0].name, { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
     this.classes.set('TscFileStat', { isStruct: true,
       fields: [{ name: 'size', ctype: 'int64_t' }, { name: 'isFile', ctype: 'bool' },
@@ -263,7 +263,7 @@ export const STDLIB_HANDLERS = {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
-      this.define(nm, { ctype: 'int32_t', funcName: nm, params: null, _isLibcFunc: true, _isLibcVariadic: isVar });
+      this.define(nm, { ctype: 'int32_t', funcName: nm, _isLibcFunc: true, _isLibcVariadic: isVar });
     }
   },
 

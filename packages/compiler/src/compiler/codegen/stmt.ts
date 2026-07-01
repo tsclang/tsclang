@@ -41,8 +41,8 @@ export default {
       }
     }
     const blockCleanup = this._blockCleanupStack.pop();
-    for (let i = blockCleanup.list.length - 1; i >= 0; i--) {
-      lines.push(`${I}${blockCleanup.list[i]};`);
+    for (let i = blockCleanup!.list.length - 1; i >= 0; i--) {
+      lines.push(`${I}${blockCleanup!.list[i]};`);
     }
     this._currentBlockPoolVars = prevPoolVars;
     this._currentBlockHeapVars = prevHeapVars;

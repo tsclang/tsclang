@@ -1,32 +1,35 @@
 import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Expression } from '@tsclang/ast';
+import type { Expression, Argument, TypeAnn, Member } from '@tsclang/ast';
+import type { SymbolInfo } from '@tsclang/ast';
 export default {
-  methodCall(this: CodeGenThis, callee: any, args: any[], lines: string[], depth: number) {
+  methodCall(this: CodeGenThis, callee: Member, args: Argument[], lines: string[], depth: number) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
-      const chainLinks: any[] = [];
+      const chainLinks: Expression[] = [];
       while (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
         chainLinks.push(baseObject);
         baseObject = baseObject.callee.object;
       }
       for (let i = chainLinks.length - 1; i >= 0; i--) {
         const link = chainLinks[i];
+        if (link.kind !== 'Call' || link.callee?.kind !== 'Member') continue;
         const flatCallee = { ...link.callee, object: baseObject };
         const innerC = this.methodCall(flatCallee, link.args, lines, depth);
         const resultType = this.inferType(link);
-        const nextProp = (i > 0) ? chainLinks[i - 1].callee.prop : callee.prop;
+        const prevLink = i > 0 ? chainLinks[i - 1] : null;
+        const nextProp = (prevLink?.kind === 'Call' && prevLink.callee?.kind === 'Member') ? prevLink.callee.prop : callee.prop;
         const nextTargetClass = this.classes.get(resultType);
         const nextTargetIface = this.interfaces.get(resultType);
-        const hasNextMethod = (nextTargetClass?.methods?.some((m: { name: string }) => m.name === nextProp))
+        const hasNextMethod = (nextTargetClass?.methods?.some((m) => m.name === nextProp))
           || (nextTargetIface?.some((m: { kind: string; name?: string }) => m.kind === 'MethodSig' && m.name === nextProp))
           || (resultType.startsWith('Array_') && ['map','filter','slice','join','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap','keys','values','entries','flat','concat','includes','indexOf','lastIndexOf','at','with','toReversed','toSorted','toSpliced','clone','pop','shift','unshift','splice','reverse','push','resize','reallocate','fill','set','view','viewMut','length','capacity'].includes(nextProp))
           || (resultType === 'String' && ['slice','indexOf','lastIndexOf','at','includes','startsWith','endsWith','split','trim','toUpperCase','toLowerCase','replace','padStart','padEnd','repeat','charAt','charCodeAt','concat','codePoints','graphemes','replaceAll','substring','trimStart','trimEnd','search','match','matchAll','length','toString'].includes(nextProp));
         if (hasNextMethod) {
           const tmpName = `_chain_${this.tempCount++}`;
           lines.push(`${I}${resultType} ${tmpName} = ${innerC};`);
-          const chainDef: any = { ctype: resultType, varKind: 'const' };
+          const chainDef: SymbolInfo = { ctype: resultType, varKind: 'const' };
           if (resultType.startsWith('Array_')) {
             const chainElemIdent = resultType.slice(6);
             chainDef.elemType = chainElemIdent;
@@ -57,12 +60,12 @@ export default {
       baseObject = { kind: 'Ident', name: tmpName };
     }
     const prop  = callee.prop;
-    const sym: any   = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
+    const sym: SymbolInfo | null = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = true;
     const objC = this.exprToC(baseObject, lines, depth);
     if (prop === 'upgrade' && sym?.isWeak) this._inWeakUpgrade = false;
     if (sym?._mutQuarantined) {
-      throw this.error(`cannot access '${baseObject.name}' while a mutable borrow is active`, baseObject);
+      throw this.error(`cannot access '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a mutable borrow is active`, baseObject);
     }
     let et    = sym?.elemType ?? 'i32';
     let etC   = sym?.arrElemCType ?? 'int32_t';
@@ -122,7 +125,7 @@ export default {
       switch (prop) {
         case 'push': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+            throw this.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
           let elemC = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
           if (et === 'tsc_unknown' && args[0]) {
             const _argType = this.inferType(args[0].expr);
@@ -162,7 +165,7 @@ export default {
         }
         case 'pop': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+            throw this.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
           if (!this._isOptType(etC)) {
             this._ensureOptStruct(`opt_${et}`, etC);
           }
@@ -171,7 +174,7 @@ export default {
         }
         case 'remove': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+            throw this.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
           const idxC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           this._lastArrayElemReturn = true;
           this._ensureArrayRemoveMacro(et, etC);
@@ -348,14 +351,14 @@ export default {
         case 'unshift': {
           this._ensureArrayUnshiftMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
-            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+            throw this.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
           const uv = args[0] ? this.exprToC(args[0].expr, [], depth) : '0';
           return `tsc_array_unshift_${et}(&${objC}, ${uv})`;
         }
         case 'splice': {
           this._ensureArraySpliceMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
-            throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
+            throw this.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
           const spStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const spDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
           const spItems = argsForC.slice(2).map((a: { spread?: boolean; expr: Expression }) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
@@ -506,7 +509,7 @@ export default {
                      const rArg = args[0]?.expr;
                      const rC = this.exprToC(rArg, lines, depth);
                      const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
-                     if (rSym?._isRegex) return `tsc_regex_search(&${rArg.name}, ${strObjC})`;
+                      if (rSym?._isRegex && rArg?.kind === 'Ident') return `tsc_regex_search(&${rArg.name}, ${strObjC})`;
                      return `tsc_regex_search(&(TscRegex){0}, ${strObjC})`;
                    },
       match:       () => {
@@ -515,7 +518,7 @@ export default {
                      const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
                      this._ensureArrayStruct('Array_string', 'String');
                      this._ensureOptStruct('opt_Array_string', 'Array_string');
-                     if (rSym?._isRegex) return `tsc_regex_match(&${rArg.name}, ${strObjC})`;
+                      if (rSym?._isRegex && rArg?.kind === 'Ident') return `tsc_regex_match(&${rArg.name}, ${strObjC})`;
                      return `tsc_regex_match(&(TscRegex){0}, ${strObjC})`;
                    },
       matchAll:    () => {
@@ -523,7 +526,7 @@ export default {
                      const rSym = rArg?.kind === 'Ident' ? this.lookup(rArg.name) : null;
                      this._ensureArrayStruct('Array_string', 'String');
                      this._ensureArrayStruct('Array_Array_string', 'Array_string');
-                     if (rSym?._isRegex) return `tsc_regex_match_all(&${rArg.name}, ${strObjC})`;
+                      if (rSym?._isRegex && rArg?.kind === 'Ident') return `tsc_regex_match_all(&${rArg.name}, ${strObjC})`;
                      return `tsc_regex_match_all(&(TscRegex){0}, ${strObjC})`;
                    },
     };
@@ -586,7 +589,7 @@ export default {
     const _smSym = baseObject.kind === 'Ident' ? this.lookup(baseObject.name) : null;
     if (_smSym?._isStaticMap) {
       const sfx = _smSym._smSuffix;
-      const varName = baseObject.name;
+      const varName = baseObject.kind === 'Ident' ? baseObject.name : '';
       if (prop === 'set')    return `tsc_staticmap_set_${sfx}(&${varName}, ${argsC})`;
       if (prop === 'get')    return `tsc_staticmap_get_${sfx}(&${varName}, ${argsC})`;
       if (prop === 'has')    return `tsc_staticmap_has_${sfx}(&${varName}, ${argsC})`;
@@ -714,7 +717,7 @@ export default {
         return `${methodInfo.nameMangled}(${argsC})`;
       }
       if (this._platformSkipped?.has(`${baseObject.name}.${prop}`)) {
-        const allowed = this._platformSkipped.get(`${baseObject.name}.${prop}`).join('", "');
+        const allowed = this._platformSkipped.get(`${baseObject.name}.${prop}`)!.join('", "');
         const target = this._targetName ?? DEFAULT_TARGET;
         throw this.error(`TypeError: '${baseObject.name}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
       }
@@ -764,7 +767,7 @@ export default {
         const methodInfo = poolCls._methodNames?.get(prop);
         if (methodInfo?.isMoveMethod) {
           if (classSym.varKind === 'const') {
-            throw this.error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+            throw this.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
           }
           return `${methodInfo.nameMangled}(*${objC}${argsC ? ', ' + argsC : ''})`;
         }
@@ -783,7 +786,7 @@ export default {
         const methodInfo = poolCls._methodNames?.get(prop);
         if (methodInfo?.isMoveMethod) {
           if (classSym.varKind === 'const') {
-            throw this.error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+            throw this.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
           }
           return `${methodInfo.nameMangled}(*${objC}.value${argsC ? ', ' + argsC : ''})`;
         }
@@ -800,7 +803,7 @@ export default {
       const methodInfo2 = classDef2?._methodNames?.get(prop);
       if (methodInfo2?.isMoveMethod) {
         if (classSym.varKind === 'const') {
-          throw this.error(`TypeError: Cannot move '${baseObject.name}': variable is declared const`);
+          throw this.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
         }
         return `${methodInfo2.nameMangled}(${objC}${argsC ? ', ' + argsC : ''})`;
       }
@@ -826,7 +829,7 @@ export default {
 
     if (classSym?.ctype && this.classes.has(classSym.ctype)) {
       if (this._platformSkipped?.has(`${classSym.ctype}.${prop}`)) {
-        const allowed = this._platformSkipped.get(`${classSym.ctype}.${prop}`).join('", "');
+        const allowed = this._platformSkipped.get(`${classSym.ctype}.${prop}`)!.join('", "');
         const target = this._targetName ?? DEFAULT_TARGET;
         throw this.error(`TypeError: '${classSym.ctype}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
       }
@@ -835,14 +838,14 @@ export default {
     return `${objC}.${prop}(${argsC})`;
   },
 
-  argsToC(this: CodeGenThis, args: any[], lines: string[], depth: number) {
+  argsToC(this: CodeGenThis, args: Argument[], lines: string[], depth: number) {
     const parts: string[] = [];
     const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
       if (a.spread) {
         const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
         if (spreadSym?.isArray && spreadSym.arraySize >= 0) {
-          const n = a.expr.name;
+          const n = a.expr?.kind === 'Ident' ? a.expr.name : '';
           const useData = spreadSym.ctype?.startsWith('Array_');
           for (let i = 0; i < spreadSym.arraySize; i++)
             parts.push(useData ? `${n}.data[${i}]` : `${n}[${i}]`);
@@ -863,7 +866,7 @@ export default {
     return parts.join(', ');
   },
 
-  _getIfaceParamName(this: CodeGenThis, typeAnn: any) {
+  _getIfaceParamName(this: CodeGenThis, typeAnn: TypeAnn | null | undefined) {
     if (!typeAnn || typeAnn.kind !== 'TypeRef') return null;
     if (this.interfaces.has(typeAnn.name)) return typeAnn.name;
     if ((typeAnn.name === 'Mut' || typeAnn.name === 'Ref') && typeAnn.typeArgs?.[0]?.kind === 'TypeRef') {
@@ -873,7 +876,7 @@ export default {
     return null;
   },
 
-  _extractCallbackFn(this: CodeGenThis, arg: any, lines: string[], depth: number) {
+  _extractCallbackFn(this: CodeGenThis, arg: Argument, lines: string[], depth: number) {
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
       if (this._strictRules?.has('no-closures')) {
@@ -897,7 +900,7 @@ export default {
           ? hint.map((ct: string, i: number) => `${ct} _p${i}`).join(', ')
           : 'void *_elem';
         const adapterArgs = hint.length > 0
-          ? hint.map((_: any, i: number) => `_p${i}`).join(', ')
+          ? hint.map((_ct: string, i: number) => `_p${i}`).join(', ')
           : '_elem';
         const adapterName = `${closure.closureName}_adapter`;
         this.addLambda(`static ${closure.ret} ${adapterName}(${adapterParams}) {`);
@@ -934,15 +937,15 @@ export default {
     const ifaceMethods = ifaceDef.filter((m: { kind: string }) => m.kind === 'MethodSig');
     const classDef = this.classes.get(className);
     for (const im of ifaceMethods) {
-      const methodExists = classDef?.methods?.some((mm: { name: string }) => mm.name === im.name);
+      const methodExists = classDef?.methods?.some((mm) => mm.name === im.name);
       if (!methodExists) {
         throw this.error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
       }
     }
     const vtableName = `_${className}_${ifaceName}_vtable`;
 
-    const entries = ifaceMethods.map((m: { name: string; returnType?: any }) => {
-      const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
+    const entries = ifaceMethods.map((m) => {
+      const retType = ('returnType' in m && m.returnType) ? this.resolveType(m.returnType) : 'void';
       return `    .${m.name} = (${retType} (*)(void *))${className}_${m.name}`;
     });
     this.topLevel.push(
