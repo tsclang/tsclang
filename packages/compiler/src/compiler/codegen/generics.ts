@@ -1,8 +1,9 @@
 import type { CodeGenThis } from '../codegen.js';
 import { mangleParams } from '../types.js';
+import type { Expression } from '@tsclang/ast';
 // generics.ts
 export default {
-  callGeneric(this: CodeGenThis, name: any, typeArgs: any, args: any, lines: any, depth: any) {
+  callGeneric(this: CodeGenThis, name: string, typeArgs: any[], args: any[], lines: string[], depth: number) {
     const tmpl = this._genericFuncs.get(name);
     if (!tmpl) return `${name}(${this.argsToC(args, lines, depth)})`;
 
@@ -48,7 +49,7 @@ export default {
     const nonThisParams = tmpl.params.filter((p: any) => p.name !== 'this' && p.name !== 'self' && p.typeAnn);
     const suffix = nonThisParams.length > 0
       ? nonThisParams.map((p: any) => this.cTypeToIdent(this.resolveType(this.substType(p.typeAnn, subst)))).join('_')
-      : tmpl.typeParams.map((tp: any) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
+      : tmpl.typeParams.map((tp: { name: string }) => this.cTypeToIdent(subst.get(tp.name) ?? 'void')).join('_');
     const monoName = `${name}_${suffix}`;
 
     // Emit monomorphized function if not already done
@@ -61,14 +62,14 @@ export default {
     // Generate call args, casting ObjLit args to expected param struct types
     const resolvedParamTypes = nonThisParams.map((p: any) =>
       this.resolveType(this.substType(p.typeAnn, subst)));
-    const argsC = args.map((a: any, i: any) => {
+    const argsC = args.map((a: any, i: number) => {
       const expectedType = resolvedParamTypes[i];
       if (a.expr?.kind === 'ObjLit' && expectedType) {
         const structDef = this.classes.get(expectedType);
         if (structDef?.fields) {
-          const fieldNames = structDef.fields.map((f: any) => f.name ?? f);
-          const filteredProps = a.expr.props.filter((p: any) => !p.spread && !p.computed && fieldNames.includes(p.key));
-          const propsC = filteredProps.map((p: any) => `.${p.key} = ${this.exprToC(p.value, lines, depth)}`).join(', ');
+          const fieldNames = structDef.fields.map((f: { name?: string }) => f.name ?? f);
+          const filteredProps = a.expr.props.filter((p: { spread?: boolean; computed?: boolean; key: string; value?: Expression }) => !p.spread && !p.computed && fieldNames.includes(p.key));
+          const propsC = filteredProps.map((p: { key: string; value: Expression }) => `.${p.key} = ${this.exprToC(p.value, lines, depth)}`).join(', ');
           return `(${expectedType}){${propsC}}`;
         }
       }
@@ -81,14 +82,14 @@ export default {
   // Used internally by callGeneric to resolve utility types like Pick<T, K>
   inferObjLitType(this: CodeGenThis, node: any) {
     const fields = node.props
-      .filter((p: any) => !p.spread && !p.computed)
-      .map((p: any) => ({ name: p.key, ctype: this.inferType(p.value) }));
-    const sig = fields.map((f: any) => `${f.ctype} ${f.name}`).join(';');
+      .filter((p: { spread?: boolean; computed?: boolean }) => !p.spread && !p.computed)
+      .map((p: { key: string; value: Expression }) => ({ name: p.key, ctype: this.inferType(p.value) }));
+    const sig = fields.map((f: { name: string; ctype: string }) => `${f.ctype} ${f.name}`).join(';');
 
     if (this._anonStructSigs.has(sig)) return this._anonStructSigs.get(sig);
 
     const anonName = `_anon_${this._anonStructCount++}`;
-    const structFields = fields.map((f: any) => ({
+    const structFields = fields.map((f: { name: string; ctype: string }) => ({
       name: f.name,
       typeAnn: { kind: 'TypeRef', name: f.ctype, typeArgs: [], _internal: true },
     }));
@@ -205,7 +206,7 @@ export default {
       const monoReturnType = m.returnType ? this.resolveType(this.substType(m.returnType, subst)) : 'void';
       const monoBody = this.substNode(m.body, subst);
 
-      const paramDecls: any[] = [];
+      const paramDecls: string[] = [];
       if (!isStatic) paramDecls.push(`${monoName} *self`);
       for (const p of monoParams) {
         if (p.name === 'this') continue;

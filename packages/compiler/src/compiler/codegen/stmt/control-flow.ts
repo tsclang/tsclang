@@ -1,6 +1,7 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Expression, SymbolInfo } from '@tsclang/ast';
 export default {
-  _emitRetainIfNeeded(this: CodeGenThis, valC: any, valNode: any, p: any) {
+  _emitRetainIfNeeded(this: CodeGenThis, valC: string, valNode: Expression, p: (s: string) => void) {
     if (valNode.kind === 'Ident') {
       const sym = this.lookup(valNode.name);
       if (sym?.isArc) {
@@ -13,7 +14,7 @@ export default {
     }
   },
 
-  _wrapErrForCaller(this: CodeGenThis, ctx: any, errExpr: any, calleeSym: any) {
+  _wrapErrForCaller(this: CodeGenThis, ctx: any, errExpr: string, calleeSym: SymbolInfo | null) {
     if (ctx.throwsNames.length <= 1) return errExpr;
     const calleeErrTypes = calleeSym?._resultErrTypes ?? [];
     if (calleeErrTypes.length > 1) return errExpr;
@@ -24,10 +25,10 @@ export default {
     return `(_ErrUnion_${ctx.errKey}){.tag = _Err_${errType}, ._${idx} = ${errExpr}}`;
   },
 
-  _visitControlFlow(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _visitControlFlow(this: CodeGenThis, node: any, lines: string[], depth: number) {
     this._currentNode = node;
     const I = ' '.repeat(this.indent * depth);
-    const p = (s: any) => lines.push(I + s);
+    const p = (s: string) => lines.push(I + s);
     switch (node.kind) {
       case 'ExprStmt': {
         const expr = node.expr;
@@ -52,7 +53,7 @@ export default {
               this._emitFuncCleanup(lines, I + '    ');
               p(`    return (${ctx.resultType}){.ok = false, .error = ${this._wrapErrForCaller(ctx, `${resName}.error`, sym)}};`);
             } else {
-              const errTypes = sym._resultErrTypes?.map((t: any) => typeof t === 'string' ? t : t?.name).join(' | ') ?? 'unknown';
+              const errTypes = sym._resultErrTypes?.map((t: string | { name: string }) => typeof t === 'string' ? t : t?.name).join(' | ') ?? 'unknown';
               throw this.error(
                 `TypeError: '${callee.name}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function`,
                 expr
@@ -146,7 +147,7 @@ export default {
         }
         // Unknown return: auto-wrap primitive in tsc_unknown_from_XXX
         const _isUnknownReturn = this.currentFuncReturnType === 'tsc_unknown';
-        const _wrapUnknownReturn = (valC: any, valNode: any) => {
+        const _wrapUnknownReturn = (valC: string, valNode: Expression) => {
           if (!_isUnknownReturn) return valC;
           const valType = this.inferType(valNode);
           const packer = this._unknownPackerFor(valType);
@@ -275,9 +276,9 @@ export default {
 
       case 'If': {
         this._checkNoBareThrows(node.test);
-        const isNullLit = (n: any) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
-        let narrowVar: any = null;
-        let upgradeReleaseVar: any = null;
+        const isNullLit = (n: { kind: string; litType?: string; name?: string }) => (n.kind === 'Literal' && n.litType === 'null') || (n.kind === 'Ident' && n.name === 'null');
+        let narrowVar: string | null = null;
+        let upgradeReleaseVar: string | null = null;
         if (node.test.kind === 'Binary' && (node.test.op === '!=' || node.test.op === '!==')) {
           const nullSide = isNullLit(node.test.right) ? 'right' : isNullLit(node.test.left) ? 'left' : null;
           if (nullSide) {
@@ -300,8 +301,8 @@ export default {
           }
         }
         // Detect unknown narrowing: typeof x === "typename" → narrow x inside if-block
-        let unknownNarrowVar: any = null;
-        let unknownNarrowCtype: any = null;
+        let unknownNarrowVar: string | null = null;
+        let unknownNarrowCtype: string | null = null;
         let unknownNarrowInElse = false;
         if (node.test.kind === 'Binary' && (node.test.op === '===' || node.test.op === '!==')) {
           const _checkUnknownNarrow = (typeofSide: any, nameSide: any) => {
@@ -440,7 +441,7 @@ export default {
             p('}');
           }
           // Remove unknown narrowing from else-block
-          if (_unknownNarrowInElseActive) {
+          if (_unknownNarrowInElseActive && unknownNarrowVar) {
             this._narrowedVars.delete(unknownNarrowVar);
             this._narrowedUnknownVars.delete(unknownNarrowVar);
           }
@@ -480,9 +481,9 @@ export default {
               this.define(d.name, { ctype, varKind: d.varKind });
               return { ctype, name: d.name, initExpr };
             });
-            const allSameType = parts.every((pt: any) => pt.ctype === parts[0].ctype);
+            const allSameType = parts.every((pt: { ctype: string }) => pt.ctype === parts[0].ctype);
             if (allSameType) {
-              initC = `${parts[0].ctype} ` + parts.map((pt: any) => `${pt.name} = ${pt.initExpr}`).join(', ');
+              initC = `${parts[0].ctype} ` + parts.map((pt: { name: string; initExpr: string }) => `${pt.name} = ${pt.initExpr}`).join(', ');
             } else {
               const I = ' '.repeat(this.indent * depth);
               for (const pt of parts) {
@@ -506,14 +507,14 @@ export default {
           this._loopDepth++;
           const IS = ' '.repeat(this.indent * (depth + 1));
           if (node.test) {
-            const testLines: any[] = [];
+            const testLines: string[] = [];
             const testC = this._truthyToC(node.test, testLines, depth + 1);
             for (const tl of testLines) lines.push(tl);
             lines.push(`${IS}if (!(${testC})) break;`);
           }
           this.visitStmtOrBlock(node.body, lines, depth + 1);
           if (node.update) {
-            const updLines: any[] = [];
+            const updLines: string[] = [];
             const updC = this.exprToC(node.update, updLines, depth + 1);
             if (updLines.length > 0) {
               for (const ul of updLines) lines.push(ul);
@@ -804,10 +805,10 @@ export default {
 
         // Iterable<T> protocol: class implements Iterable<T>
         {
-          const _forOfSym: any = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
+          const _forOfSym = node.iterable.kind === 'Ident' ? this.lookup(node.iterable.name) : null;
           const _forOfClass = _forOfSym?.ctype ? this.classes.get(_forOfSym.ctype) : null;
           if (_forOfClass?._iterStructName && _forOfClass._iterableElemType) {
-            const _clsName = _forOfSym.ctype;
+            const _clsName = _forOfSym!.ctype;
             const _elemC = _forOfClass._iterableElemType;
             const _elemIdent = this.cTypeToIdent(_elemC);
             const _isComplex = !this._isSimpleCType(_elemC);
@@ -906,7 +907,7 @@ export default {
           p('while (1) {');
           this._pushLoopCleanups();
           this._loopDepth++;
-          const condLines: any[] = [];
+          const condLines: string[] = [];
           const testC = this._truthyToC(node.test, condLines, depth + 1);
           for (const cl of condLines) lines.push(cl);
           const IS = ' '.repeat(this.indent * (depth + 1));
@@ -944,7 +945,7 @@ export default {
           this._loopDepth++;
           this.visitStmtOrBlock(node.body, lines, depth + 1);
           const IS = ' '.repeat(this.indent * (depth + 1));
-          const condLines: any[] = [];
+          const condLines: string[] = [];
           const testC = this._truthyToC(node.test, condLines, depth + 1);
           for (const cl of condLines) lines.push(cl);
           lines.push(`${IS}if (!(${testC})) break;`);
@@ -1017,7 +1018,7 @@ export default {
           p(headerLine);
           this._pushLoopCleanups();
           this._loopDepth++;
-          const bodyLines: any[] = [];
+          const bodyLines: string[] = [];
           this.visitStmtOrBlock(inner.body, bodyLines, depth + 1);
           for (const bl of bodyLines) lines.push(bl);
           this._emitLoopBodyCleanups(lines, ' '.repeat(this.indent * (depth + 1)));
@@ -1121,7 +1122,7 @@ export default {
         }
 
         // Check if any catch clause catches MathError
-        const hasMathCatch = (node.catches ?? []).some((c: any) => c.typeAnn?.name === 'MathError');
+        const hasMathCatch = (node.catches ?? []).some((c: { typeAnn?: { name?: string } }) => c.typeAnn?.name === 'MathError');
 
         if (hasMathCatch) {
           const catchIdx = this.tempCount++;
@@ -1170,7 +1171,7 @@ export default {
         }
 
         // Check if try body contains a call to a throws function
-        const _findThrowsFuncCall = (stmts: any): any => {
+        const _findThrowsFuncCall = (stmts: any[]): any => {
           for (const s of stmts) {
             if (s.kind === 'ExprStmt' && s.expr?.kind === 'Call') {
               const callee = s.expr.callee;
@@ -1191,7 +1192,7 @@ export default {
           // New Result-based pattern
           this._emitTryCatchResult(node, tryStmts, throwsFuncCallStmt, lines, depth);
         } else {
-          const _hasPoolNew = (stmts: any): any => {
+          const _hasPoolNew = (stmts: any[]): boolean => {
             for (const s of stmts) {
               if (s.kind === 'VarDecl' && s.init?.kind === 'New') {
                 const cls = this.classes.get(s.init.name);
@@ -1418,7 +1419,7 @@ export default {
     }
   },
 
-  _isSimpleCType(this: CodeGenThis, ct: any) {
+  _isSimpleCType(this: CodeGenThis, ct: string) {
     return this._SIMPLE_C_TYPES.has(ct);
   },
 };

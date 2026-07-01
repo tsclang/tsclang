@@ -25,7 +25,7 @@ export default {
 
     // @readonly on methods is invalid
     for (const m of (node.members ?? [])) {
-      if (m.kind === 'Method' && (m.decorators ?? []).some((d: any) => d.name === 'readonly')) {
+      if (m.kind === 'Method' && (m.decorators ?? []).some((d: { name: string }) => d.name === 'readonly')) {
         throw this.error(`"@readonly" can only be applied to properties`, m);
       }
     }
@@ -44,8 +44,8 @@ export default {
     }
 
     // Process @embedded.* decorators
-    const inlineDec = decorators?.find((d: any) => d.name === 'struct');
-    const poolDec   = decorators?.find((d: any) => d.name === 'pool');
+    const inlineDec = decorators?.find((d: { name: string; args?: any[] }) => d.name === 'struct');
+    const poolDec   = decorators?.find((d: { name: string; args?: any[] }) => d.name === 'pool');
     const isEmbedded = this._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
@@ -60,7 +60,7 @@ export default {
     }
 
     // @heap: only valid on allocator: "heap"
-    const heapDec = decorators?.find((d: any) => d.name === 'heap');
+    const heapDec = decorators?.find((d: { name: string; args?: any[] }) => d.name === 'heap');
     if (heapDec && this._allocatorName === 'static') {
       throw this.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
     }
@@ -74,15 +74,15 @@ export default {
       throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {
-      const badMethods = members.filter((m: any) => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
+      const badMethods = members.filter((m: { kind: string; name?: string; body?: any }) => m.kind === 'Method' && m.name !== 'constructor' && m.body?.body?.length > 0);
       if (badMethods.length > 0) {
         throw this.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
       }
     }
 
     // Process @packed and @align decorators
-    const packedDec = decorators?.find((d: any) => d.name === 'packed');
-    const alignDec  = decorators?.find((d: any) => d.name === 'align');
+    const packedDec = decorators?.find((d: { name: string; args?: any[] }) => d.name === 'packed');
+    const alignDec  = decorators?.find((d: { name: string; args?: any[] }) => d.name === 'align');
     if (packedDec && alignDec) {
       throw this.error('@packed and @align cannot be used together');
     }
@@ -98,8 +98,8 @@ export default {
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
 
-    const allFields_ = members.filter((m: any) => m.kind === 'Field');
-    const methods = members.filter((m: any) => m.kind === 'Method');
+    const allFields_ = members.filter((m: { kind: string }) => m.kind === 'Field');
+    const methods = members.filter((m: { kind: string }) => m.kind === 'Method');
     const seen = new Set();
     for (const m of [...allFields_, ...methods]) {
       const n = typeof m.name === 'string' ? m.name : null;
@@ -118,7 +118,7 @@ export default {
       // Always treat as if extending Error (TscError _base)
       effectiveSuperClass = 'Error';
       // Remove 'message' field — it's replaced by _base.message via TscError
-      fields = allFields_.filter((f: any) => f.name !== 'message');
+      fields = allFields_.filter((f: { name: string }) => f.name !== 'message');
     }
 
     // Register as struct (isStruct:true allows const qualifier in VarDecl)
@@ -149,7 +149,7 @@ export default {
     const arcInfo = this._arcClasses?.get(name);
 
     // All-static class with no fields → skip struct unless class name used as a type
-    const _allStatic = methods.length > 0 && methods.every((m: any) => m.modifiers.includes('static'));
+    const _allStatic = methods.length > 0 && methods.every((m: { modifiers: string[] }) => m.modifiers.includes('static'));
     const _hasUserFields = fields.length > 0 || cBase;
     const _usedAsType = !_allStatic || _hasUserFields || (() => {
       const scanType = (node: any): any => {
@@ -173,7 +173,7 @@ export default {
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
           throw this.error(`"never" cannot be used as a field type`);
         }
-        const isReadonly = (f.decorators ?? []).some((d: any) => d.name === 'readonly');
+        const isReadonly = (f.decorators ?? []).some((d: { name: string }) => d.name === 'readonly');
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         const constPfx = isReadonly ? 'const ' : '';
         if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);
@@ -243,7 +243,7 @@ export default {
     }
 
     // Constructor if present
-    const ctor = methods.find((m: any) => m.name === 'constructor');
+    const ctor = methods.find((m: { name: string }) => m.name === 'constructor');
     if (ctor) {
       if (ctor.decorators?.length > 0) {
         throw this.error('decorators on constructors are not supported', ctor);
@@ -283,9 +283,9 @@ export default {
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
-      const platformDec = (m.decorators ?? []).find((d: any) => d.name === 'platform');
+      const platformDec = (m.decorators ?? []).find((d: { name: string; args?: any[] }) => d.name === 'platform');
       if (platformDec) {
-        const allowed = (platformDec.args ?? []).map((a: any) => a.value ?? a);
+        const allowed = (platformDec.args ?? []).map((a: { value?: string }) => a.value ?? a);
         const target = this._targetName ?? DEFAULT_TARGET;
         if (!allowed.includes(target)) {
           if (!this._platformSkipped) this._platformSkipped = new Map();
@@ -294,7 +294,7 @@ export default {
         }
       }
       const isStatic = m.modifiers.includes('static');
-      const mDecs = (m.decorators ?? []).filter((d: any) => this._decoratorFns?.has(d.name));
+      const mDecs = (m.decorators ?? []).filter((d: { name: string }) => this._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
         this._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
       } else {

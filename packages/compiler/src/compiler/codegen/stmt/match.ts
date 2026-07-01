@@ -1,10 +1,11 @@
 import type { CodeGenThis } from '../../codegen.js';
+import type { Expression, MatchCase, MatchPattern } from '@tsclang/ast';
 export default {
-  _emitMatchCore(this: CodeGenThis, discriminant: any, cases: any, hasParens: any,
-                 discC: any, discType: any, resultType: any, resultVar: any,
-                 lines: any, depth: any) {
+  _emitMatchCore(this: CodeGenThis, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
+                 discC: string, discType: string, resultType: string, resultVar: string,
+                 lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
-    const p = (s: any) => lines.push(I + s);
+    const p = (s: string) => lines.push(I + s);
 
     p(`${resultType} ${resultVar} = {0};`);
 
@@ -12,17 +13,17 @@ export default {
     const isEnum = enumDef?.isEnum && !enumDef?.isConst && !enumDef?.isStringLiteralUnion;
 
     if (isEnum) {
-      const allValues = (enumDef.members ?? []).map((m: any) => m.name);
-      const coveredEnumCases = new Set();
+      const allValues = (enumDef.members ?? []).map((m: { name: string }) => m.name);
+      const coveredEnumCases = new Set<string>();
       let hasWild = false;
       for (const c of cases) {
         if (c.pattern.kind === 'MatchWild') hasWild = true;
         if (c.pattern.kind === 'MatchEnum') coveredEnumCases.add(c.pattern.caseName);
       }
       if (!hasWild) {
-        const missing = allValues.filter((v: any) => !coveredEnumCases.has(v));
+        const missing = allValues.filter((v: string) => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: any) => `'${v}'`).join(', ')}`);
+          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: string) => `'${v}'`).join(', ')}`);
         }
       }
     }
@@ -64,7 +65,7 @@ export default {
         } else {
           const cond = this._matchPatternCond(c.pattern, discUse, discType, enumDef);
           if (needsBindings) {
-            const armLines: any[] = [];
+            const armLines: string[] = [];
             const armI = ' '.repeat(this.indent * (depth + 1));
             this.pushScope();
             const bindings = this._matchPatternBindings(c.pattern, discUse, discType);
@@ -91,7 +92,7 @@ export default {
     }
   },
 
-  emitMatchVarDecl(this: CodeGenThis, node: any, lines: any, depth: any) {
+  emitMatchVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { name, typeAnn, init } = node;
     const { discriminant, cases, hasParens } = init;
 
@@ -107,7 +108,7 @@ export default {
     this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, name, lines, depth);
   },
 
-  _matchExprToC(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _matchExprToC(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { discriminant, cases, hasParens } = node;
 
     const discC = this.exprToC(discriminant, lines, depth);
@@ -124,9 +125,9 @@ export default {
   // -----------------------------------------------------------------------
   // Result-based TryCatch emission
   // -----------------------------------------------------------------------
-  _emitTryCatchResult(this: CodeGenThis, node: any, tryStmts: any, callStmt: any, lines: any, depth: any) {
+  _emitTryCatchResult(this: CodeGenThis, node: any, tryStmts: any[], callStmt: any, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
-    const p = (s: any) => lines.push(I + s);
+    const p = (s: string) => lines.push(I + s);
     const II = ' '.repeat(this.indent * (depth + 1));
 
     // Require explicit type annotation in catch clauses
@@ -194,7 +195,7 @@ export default {
     }
   },
 
-  _emitCatchBodies(this: CodeGenThis, catches: any, resName: any, calleeSym: any, lines: any, depth: any) {
+  _emitCatchBodies(this: CodeGenThis, catches: any, resName: string, calleeSym: any, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
     const II = ' '.repeat(this.indent * (depth + 1));
     const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
@@ -256,10 +257,10 @@ export default {
   // -----------------------------------------------------------------------
   // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
   // -----------------------------------------------------------------------
-  emitPropagateVarDecl(this: CodeGenThis, node: any, lines: any, depth: any) {
+  emitPropagateVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { varKind, name, typeAnn, init } = node;
     const I = ' '.repeat(this.indent * depth);
-    const p = (s: any) => lines.push(I + s);
+    const p = (s: string) => lines.push(I + s);
 
     const isProp = init.kind === 'Propagate';
     const innerExpr = init.expr; // the inner Call (or other) expression
@@ -326,15 +327,15 @@ export default {
 
   // Generate field binding declarations for patterns that destructure (MatchClass, MatchObjLit)
   // Returns array of C declaration strings, or empty array if no bindings needed
-  _matchPatternBindings(this: CodeGenThis, pattern: any, discC: any, discType: any) {
+  _matchPatternBindings(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string) {
     if (pattern.kind === 'MatchClass') {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const className = pattern.className;
       const ifaceDef = this.interfaces?.get(discType) ?? null;
       const classDef = this.classes.get(className);
-      return fields.map((f: any) => {
-        const fieldDef = classDef?.fields?.find((fd: any) => fd.name === f);
+      return fields.map((f: string) => {
+        const fieldDef = classDef?.fields?.find((fd: { name: string }) => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = ifaceDef
           ? `((${className}*)${discC}.self)->${f}`
@@ -347,8 +348,8 @@ export default {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const structDef = this.classes.get(discType);
-      return fields.map((f: any) => {
-        const fieldDef = structDef?.fields?.find((fd: any) => fd.name === f);
+      return fields.map((f: string) => {
+        const fieldDef = structDef?.fields?.find((fd: { name: string }) => fd.name === f);
         const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = `${discC}.${f}`;
         this.define(f, { ctype, varKind: 'const' });
@@ -359,7 +360,7 @@ export default {
   },
 
   // Generate a C condition expression for a match pattern
-  _matchPatternCond(this: CodeGenThis, pattern: any, discC: any, discType: any, enumDef: any) {
+  _matchPatternCond(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string, enumDef: any) {
     switch (pattern.kind) {
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
@@ -376,13 +377,13 @@ export default {
       case 'MatchIdent': {
         // Bare identifier: check if it's a known enum value or treat as wildcard
         if (enumDef) {
-          const allValues = enumDef.values?.map((v: any) => typeof v === 'string' ? v : v.name) ?? [];
+          const allValues = enumDef.values?.map((v: string | { name: string }) => typeof v === 'string' ? v : v.name) ?? [];
           if (allValues.includes(pattern.name)) return `${discC} == ${discType}_${pattern.name}`;
         }
         return null; // treat as wildcard
       }
       case 'MatchOr': {
-        const parts = pattern.patterns.map((p: any) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
+        const parts = pattern.patterns.map((p: MatchPattern) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
         return parts.join(' || ');
       }
       case 'MatchClass': {
@@ -398,7 +399,7 @@ export default {
       case 'MatchObjLit': {
         // Object literal pattern: check discriminator fields
         if (pattern.discriminators.length === 0) return null;
-        const conds = pattern.discriminators.map((d: any) => {
+        const conds = pattern.discriminators.map((d: { key: string; value: string; litType: string }) => {
           if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${d.value}"))`;
           return `${discC}.${d.key} == ${d.value}`;
         });
@@ -406,7 +407,7 @@ export default {
       }
       case 'MatchTuple': {
         // Check each non-wildcard element against the corresponding tuple field
-        const conds: any[] = [];
+        const conds: string[] = [];
         for (let i = 0; i < pattern.elements.length; i++) {
           const el = pattern.elements[i];
           if (el.kind === 'MatchWild') continue;
@@ -416,12 +417,12 @@ export default {
         }
         return conds.length > 0 ? conds.join(' && ') : '1';
       }
-      default: throw this.error(`internal: unhandled match pattern kind '${pattern.kind}'`, pattern);
+      default: throw this.error(`internal: unhandled match pattern kind '${(pattern as MatchPattern).kind}'`, pattern as MatchPattern);
     }
   },
 
   // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
-  emitSelectVarDecl(this: CodeGenThis, node: any, lines: any, depth: any) {
+  emitSelectVarDecl(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
     const { name, varKind, init } = node;
     const objArg = init.args?.[0]?.expr;
@@ -433,7 +434,7 @@ export default {
     const doneLabel = `_sel${selIdx}_done`;
 
     // Determine field types from channel receive() calls
-    const fields: any[] = [];
+    const fields: { key: string; ident: string; ctype: string; valExpr: any }[] = [];
     for (const prop of props) {
       const key = prop.key;
       // prop.value is ch.receive() call; infer channel element type from ch variable
@@ -450,14 +451,14 @@ export default {
     }
 
     // Emit typedef
-    const fieldDecls = [`int32_t _arm`, ...fields.map((f: any) => `${f.ctype} ${f.key}`)].join('; ');
+    const fieldDecls = [`int32_t _arm`, ...fields.map((f: { ctype: string; key: string }) => `${f.ctype} ${f.key}`)].join('; ');
     this.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
 
     // Register struct type so inferType works for field access
     this.classes.set(structName, {
       fields: [
         { name: '_arm', ctype: 'int32_t' },
-        ...fields.map((f: any) => ({ name: f.key, ctype: f.ctype })),
+        ...fields.map((f: { key: string; ctype: string }) => ({ name: f.key, ctype: f.ctype })),
       ],
     });
 

@@ -1,7 +1,8 @@
 import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
+import type { Expression } from '@tsclang/ast';
 export default {
-  callToC(this: CodeGenThis, node: any, lines: any, depth: any) {
+  callToC(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
@@ -67,7 +68,7 @@ export default {
     if (callee.kind === 'Ident') {
       const sym = this.lookup(callee.name) as any;
       if (sym?._isStackMacro) {
-        const strArg = (i: any) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
+        const strArg = (i: number) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
         if (sym._isStackMacro === 'push') {
           const sName = strArg(0);
           const val = this.exprToC(args[1].expr, lines, depth);
@@ -130,7 +131,7 @@ export default {
       const closure = this.hoistClosure(callee, `_iife_${this.closureCount ?? 0}`);
       if (closure) {
         const argsC = this.argsToC(args, lines, depth);
-        const paramTypes = args.map((a: any) => this.inferType(a.expr) ?? 'void *');
+      const paramTypes = args.map((a: { expr: Expression }) => this.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
         const envName = `_iife_env_${this.closureCount - 1}`;
         lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
@@ -149,16 +150,16 @@ export default {
       sym = this.lookup(callee.name);
       // Overload resolution: if there are multiple overloads, pick by arg count then type
       if (sym?.overloads && sym.overloads.length > 0) {
-        const argCount = args.filter((a: any) => !a.spread).length;
+        const argCount = args.filter((a: { spread?: boolean }) => !a.spread).length;
         // First filter by arg count
-        const countMatches = sym.overloads.filter((o: any) => o.params.filter((p: any) => !p.rest).length === argCount);
+        const countMatches = sym.overloads.filter((o: { params: any[] }) => o.params.filter((p: { rest?: boolean }) => !p.rest).length === argCount);
         let match;
         if (countMatches.length === 1) {
           match = countMatches[0];
         } else if (countMatches.length > 1) {
           // Multiple count matches: pick by type
-          match = countMatches.find((o: any) =>
-            args.every((a: any, i: any) => {
+          match = countMatches.find((o: { params: any[] }) =>
+            args.every((a: { expr: Expression }, i: number) => {
               const p = o.params[i];
               if (!p?.typeAnn) return true;
               const expectedCtype = this.resolveType(p.typeAnn);
@@ -275,29 +276,29 @@ export default {
 
     // Check if callee has a rest param вЂ” if so, bundle variadic args into a temp array
     const symParams = sym?.params;
-    const restIdx = symParams ? symParams.findIndex((p: any) => p.rest) : -1;
+    const restIdx = symParams ? symParams.findIndex((p: { rest?: boolean }) => p.rest) : -1;
     if (restIdx >= 0) {
       const restParam = symParams[restIdx];
       let et = 'int32_t';
       if (restParam.typeAnn?.kind === 'TypeArray') et = this.resolveType(restParam.typeAnn.element);
       else if (restParam.typeAnn) et = this.resolveType(restParam.typeAnn);
       // Normal args before rest
-      const normalArgs = args.slice(0, restIdx).map((a: any) => this.exprToC(a.expr, lines, depth));
+      const normalArgs = args.slice(0, restIdx).map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth));
       // Variadic args from restIdx onward
       const varArgs = args.slice(restIdx);
       const I = ' '.repeat(this.indent * depth);
       const restName = `_rest_${this.restCount++}`;
-      const varArgsC = varArgs.map((a: any) => this.exprToC(a.expr, lines, depth)).join(', ');
+      const varArgsC = varArgs.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)).join(', ');
       lines.push(`${I}${et} ${restName}[] = {${varArgsC}};`);
       const allArgs = [...normalArgs, restName, String(varArgs.length)];
       return `${calleeC}(${allArgs.join(', ')})`;
     }
 
     // Fill in default params at call site if fewer args are provided (skip if any spread arg)
-    const hasSpread = args.some((a: any) => a.spread);
-    if (!hasSpread && symParams && args.length < symParams.filter((p: any) => !p.rest).length) {
-      const normalParams = symParams.filter((p: any) => !p.rest);
-      const filled = normalParams.map((p: any, i: any) => {
+    const hasSpread = args.some((a: { spread?: boolean }) => a.spread);
+    if (!hasSpread && symParams && args.length < symParams.filter((p: { rest?: boolean }) => !p.rest).length) {
+      const normalParams = symParams.filter((p: { rest?: boolean }) => !p.rest);
+      const filled = normalParams.map((p: { defaultVal?: Expression }, i: number) => {
         if (i < args.length) {
           return this.exprToC(args[i].expr, lines, depth);
         }
@@ -309,7 +310,7 @@ export default {
 
     // If we have symParams, coerce string literals to enum values for string-literal-union params
     // (only when no spread args вЂ” spread needs argsToC expansion)
-    const hasSpreadArgs = args.some((a: any) => a.spread);
+    const hasSpreadArgs = args.some((a: { spread?: boolean }) => a.spread);
     if (symParams && !hasSpreadArgs) {
       const I = ' '.repeat(this.indent * depth);
       const _callMutBorrowedSyms: any[] = [];
@@ -334,7 +335,7 @@ export default {
           }
         }
       }
-      const coercedArgs = args.map((a: any, i: any) => {
+      const coercedArgs = args.map((a: any, i: number) => {
         const param = symParams[i];
         if (!param) return this.exprToC(a.expr, lines, depth);
         if (a.expr.kind === 'Ident') {
@@ -577,7 +578,7 @@ export default {
     return `${calleeC}(${argsC})`;
   },
 
-  _dispatchArrayStatic(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchArrayStatic(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -612,18 +613,18 @@ export default {
     }
 
     // Array.of
-    const itemsC = args.map((a: any) => this.exprToC(a.expr, lines, depth));
+    const itemsC = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth));
     const count = itemsC.length;
     const tmpArr = `_of_${this.tempCount++}`;
     for (let i = 0; i < count; i++) {
       lines.push(`${I}${etCType} ${tmpArr}_${i} = ${itemsC[i]};`);
     }
-    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_: any, i: any) => `${tmpArr}_${i}`).join(', ')}};`);
+    lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_: any, i: number) => `${tmpArr}_${i}`).join(', ')}};`);
     lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
     return `${tmpArr}`;
   },
 
-  _dispatchObjectStatic(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchObjectStatic(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -642,15 +643,15 @@ export default {
       const tmpObj = `_obj_${this.tempCount++}`;
       lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
       this._ensureArrayStruct('Array_string', 'String');
-      const keysData = fields.map((f: any) => `STR_LIT("${f.name}")`).join(', ');
+      const keysData = fields.map((f: { name: string }) => `STR_LIT("${f.name}")`).join(', ');
       const tmpArr = `_keys_${this.tempCount++}`;
       lines.push(`${I}String ${tmpArr}_data[] = {${keysData}};`);
       lines.push(`${I}Array_string ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
       return `${tmpArr}`;
     }
-    const fieldTypes = fields.map((f: any) => this.resolveType(f.typeAnn));
+    const fieldTypes = fields.map((f: { typeAnn: any }) => this.resolveType(f.typeAnn));
     const firstType = fieldTypes[0];
-    const allSame = fieldTypes.every((t: any) => t === firstType);
+    const allSame = fieldTypes.every((t: string) => t === firstType);
     if (!allSame) {
       throw this.error('Object.values/entries requires uniform field types', node);
     }
@@ -670,7 +671,7 @@ export default {
       srcExpr = tmpObj;
     }
     if (prop === 'values') {
-      const valsData = fields.map((f: any) => `&${srcExpr}.${f.name}`).join(', ');
+      const valsData = fields.map((f: { name: string }) => `&${srcExpr}.${f.name}`).join(', ');
       const tmpArr = `_vals_${this.tempCount++}`;
       lines.push(`${I}${firstType} *${tmpArr}_data[] = {${valsData}};`);
       lines.push(`${I}${refArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
@@ -689,14 +690,14 @@ export default {
       ], readonly: false });
     }
     this._ensureArrayStruct(tupleArrName, tupleName);
-    const entriesData = fields.map((f: any) => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
+    const entriesData = fields.map((f: { name: string }) => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
     const tmpArr = `_entries_${this.tempCount++}`;
     lines.push(`${I}${tupleName} ${tmpArr}_data[] = {${entriesData}};`);
     lines.push(`${I}${tupleArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
     return `${tmpArr}`;
   },
 
-  _dispatchGroupBy(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchGroupBy(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;

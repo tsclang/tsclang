@@ -9,13 +9,13 @@ export default {
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     this.interfaces.set(name, members);
 
-    const props = members.filter((m: any) => m.kind === 'PropSig');
-    const methods = members.filter((m: any) => m.kind === 'MethodSig');
+    const props = members.filter((m: { kind: string }) => m.kind === 'PropSig');
+    const methods = members.filter((m: { kind: string }) => m.kind === 'MethodSig');
 
     // Pure struct interface (no methods) → emit typedef struct
     if (methods.length === 0 && props.length > 0) {
       this._resolvingTypes.add(name);
-      const fieldParts: any[] = [];
+      const fieldParts: string[] = [];
       for (const f of props) {
         const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
         if (ct === name) {
@@ -43,9 +43,9 @@ export default {
     }
 
     // vtable typedef (single-line)
-    const vtableFields = methods.map((m: any) => {
+    const vtableFields = methods.map((m: { name: string; returnType?: any; params: any[] }) => {
       const ret = m.returnType ? this.resolveType(m.returnType) : 'void';
-      const params = m.params.map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+      const params = m.params.map((p: { typeAnn?: any }) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
       return `${ret} (*${m.name})(void *self${params ? ', ' + params : ''});`;
     });
     this.addTop(`typedef struct { ${vtableFields.join(' ')} } ${cname}_vtable;`);
@@ -68,18 +68,18 @@ export default {
     // → typedef enum + static const char* values[]
     if (this.isStringLiteralUnion(typeAnn)) {
       const members = this.getStringLiteralMembers(typeAnn);
-      const enumVals = members.map((v: any) => `${cname}_${v}`).join(', ');
+      const enumVals = members.map((v: string) => `${cname}_${v}`).join(', ');
       this.addTop(`typedef enum { ${enumVals} } ${cname};`);
-      const strVals = members.map((v: any) => `"${v}"`).join(', ');
+      const strVals = members.map((v: string) => `"${v}"`).join(', ');
       this.addTop(`static const char *${cname}_values[] = { ${strVals} };`);
       this.addTop('');
       this.classes.set(name, { isEnum: true, _cname: cname, isStringLiteralUnion: true, members });
     } else if (typeAnn?.kind === 'TypeObject') {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
-      const hasMethod = typeAnn.fields.some((f: any) => f.isMethod);
+      const hasMethod = typeAnn.fields.some((f: { isMethod?: boolean }) => f.isMethod);
       if (hasMethod) throw this.error(`"type" alias cannot contain methods; use "interface" instead`);
       this._resolvingTypes.add(name);
-      const fields = typeAnn.fields.map((f: any) => {
+      const fields = typeAnn.fields.map((f: { typeAnn: any; name: string }) => {
         const ct = this.resolveType(f.typeAnn);
         if (ct === name) {
           this._resolvingTypes.delete(name);

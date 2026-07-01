@@ -2,7 +2,7 @@ import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_CONSOLE_BAUD } from '@tsclang/shared';
 
 export default {
-  _dispatchStdLib(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdLib(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     let _r;
     _r = this._dispatchStdIo(node, lines, depth);
@@ -38,7 +38,7 @@ export default {
     return null;
   },
 
-  _dispatchStdIo(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdIo(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (this._stdIoImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _ioSym = this.lookup(callee.object.name);
@@ -59,7 +59,7 @@ export default {
     return null;
   },
 
-  _dispatchStdHal(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdHal(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (this._stdHalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _halClass = callee.object.name;
@@ -108,7 +108,7 @@ export default {
           const cfgArg = args[0]?.expr;
           let baud = String(DEFAULT_CONSOLE_BAUD);
           if (cfgArg?.kind === 'ObjLit') {
-            const bp = cfgArg.props?.find((p: any) => p.key === 'baud');
+            const bp = cfgArg.props?.find((p: { key: string }) => p.key === 'baud');
             if (bp?.value) baud = this.exprToC(bp.value, lines, depth);
           }
           return `tsc_uart_init(${baud})`;
@@ -129,7 +129,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBlob(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdBlob(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _blobSym = this.lookup(callee.object.name);
@@ -169,7 +169,7 @@ export default {
     return null;
   },
 
-  _dispatchStdUrl(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdUrl(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // URL / URLSearchParams method calls
     if (this._stdUrlImported && callee.kind === 'Member') {
@@ -217,7 +217,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSignal(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdSignal(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // Signal methods: signal.get(), signal.set(val)
     if (this._stdReactiveImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -245,7 +245,7 @@ export default {
         if (callee.name === 'batch') {
           // batch: emit static fn that accesses already-captured signal refs
           this._batchCount = (this._batchCount ?? 0) + 1;
-          const batchLines: any[] = [];
+          const batchLines: string[] = [];
           if (arrow?.kind === 'Arrow') {
             // Use persistent capture refs inside batch body
             const _savedMap = this._capturedSignalMap;
@@ -268,7 +268,7 @@ export default {
         this._reactiveClosureCount = (this._reactiveClosureCount ?? 0) + 1;
 
         // Find free Signal vars
-        const paramNames = new Set((arrow.params ?? []).map((p: any) => p.name));
+        const paramNames = new Set((arrow.params ?? []).map((p: { name?: string }) => p.name));
         const capturedSignals = new Map();
         const walkFreeVars = (node: any): any => {
           if (!node || typeof node !== 'object') return;
@@ -292,7 +292,7 @@ export default {
         if (capturedSignals.size > 0) {
           const envName = `_closure_${n}_env`;
           const fields = [...capturedSignals.entries()].map(([nm, sym]) => `${sym.ctype} *${nm};`).join(' ');
-          const hasGlobalsBefore = this.topLevel.some((l: any) => l.trim().length > 0);
+          const hasGlobalsBefore = this.topLevel.some((l: string) => l.trim().length > 0);
           if (hasGlobalsBefore) {
             this.topLevel.push(`typedef struct { ${fields} } ${envName};`);
             this.topLevel.push(`static ${envName} _closure_${n}_captured;`);
@@ -314,7 +314,7 @@ export default {
         const sigType = callee.name === 'computed' ? `Signal_${etIdent}` : null;
 
         if (callee.name === 'computed') this._inComputedFn = true;
-        const fnLines: any[] = [];
+        const fnLines: string[] = [];
         this.pushScope();
         if (arrow.body.kind === 'Block') this.visitBlock(arrow.body, fnLines, 0);
         else { const c = this.exprToC(arrow.body, fnLines, 0); fnLines.push(`return ${c};`); }
@@ -335,7 +335,7 @@ export default {
 
         // Emit env init in current scope (main/function body)
         if (capturedSignals.size > 0) {
-          const envInit = `(_closure_${n}_env){ ${[...capturedSignals.keys()].map((nm: any) => `.${nm} = &${nm}`).join(', ')} }`;
+          const envInit = `(_closure_${n}_env){ ${[...capturedSignals.keys()].map((nm: string) => `.${nm} = &${nm}`).join(', ')} }`;
           lines.push(' '.repeat(this.indent * depth) + `_closure_${n}_captured = ${envInit};`);
           // Track persistent captures for batch fns (separate from fn-body map)
           for (const nm of capturedSignals.keys()) {
@@ -356,7 +356,7 @@ export default {
     return null;
   },
 
-  _dispatchStdWs(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdWs(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // WebSocket methods: ws.send(), ws.close(), ws.onMessage(), ws.onClose(), ws.sendBytes()
     if (this._stdWsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -380,7 +380,7 @@ export default {
         const _wsHoistCb = (paramTypes: any): any => {
           const cbArg = args[0]?.expr;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: { typeAnn?: any }) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             const cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
             return cbName;
@@ -431,7 +431,7 @@ export default {
     return null;
   },
 
-  _dispatchStdNet(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdNet(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // std/net: net.listen(port, handler) / net.connect handled via async
     if (this._stdNetImported && callee.kind === 'Member' &&
@@ -445,9 +445,9 @@ export default {
         const handlerName = `_handler_${n}`;
         if (cbArg?.kind === 'Arrow') {
           const paramTypes = ['TscSocket *'];
-          const paramNames = (cbArg.params ?? []).map((p: any, i: any) => p.name ?? `_p${i}`);
-          const paramStrs = paramTypes.map((t: any, i: any) => `${t}${paramNames[i]}`);
-          const handlerLines: any[] = [];
+            const paramNames = (cbArg.params ?? []).map((p: { name?: string }, i: number) => p.name ?? `_p${i}`);
+            const paramStrs = paramTypes.map((t: string, i: number) => `${t}${paramNames[i] ?? `_p${i}`}`);
+            const handlerLines: string[] = [];
           this.pushScope();
           for (let i = 0; i < paramNames.length; i++) {
             this.define(paramNames[i], { ctype: paramTypes[i], varKind: 'const' });
@@ -530,7 +530,7 @@ export default {
     return null;
   },
 
-  _dispatchStdFs(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdFs(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // fs namespace: fs.watch(), fs.readFileSync(), fs.writeFileSync(), etc.
     if (this._stdFsImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -544,7 +544,7 @@ export default {
           const cbArg = args[1]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            this._lambdaParamHint = (cbArg.params ?? []).map((p: any) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
+            this._lambdaParamHint = (cbArg.params ?? []).map((p: { typeAnn?: any }) => p.typeAnn ? this.resolveType(p.typeAnn) : 'String');
             cbName = this.hoistArrow(cbArg, 'void');
             this._lambdaParamHint = null;
           } else {
@@ -568,7 +568,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTemporal(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdTemporal(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // Temporal static methods: PlainDate.from(), Instant.now(), etc.
     if (this._stdTemporalImported && callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -651,7 +651,7 @@ export default {
     return null;
   },
 
-  _dispatchStdBuffer(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdBuffer(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // Buffer method calls: buf.fill(), buf.slice()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -677,7 +677,7 @@ export default {
     return null;
   },
 
-  _dispatchStdDataView(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdDataView(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const _dvSym = this.lookup(callee.object.name);
@@ -688,7 +688,7 @@ export default {
         const I = ' '.repeat(this.indent * depth);
 
         // Backward compat: *LE aliases
-        const leAliases: Record<string, any> = {
+        const leAliases: Record<string, [string, string, boolean]> = {
           getU16LE: ['get', 'U16', true], setU16LE: ['set', 'U16', true],
           getU32LE: ['get', 'U32', true], setU32LE: ['set', 'U32', true],
           getF64LE: ['get', 'F64', true], setF64LE: ['set', 'F64', true],
@@ -701,7 +701,7 @@ export default {
         }
 
         // Standard methods: getU8, getI8, getU16, getI16, ..., setU8, setI8, ...
-        const dvMethods: Record<string, any> = {
+        const dvMethods: Record<string, [string, string, number]> = {
           getU8:['get','U8',1], getI8:['get','I8',1],
           getU16:['get','U16',2], getI16:['get','I16',2],
           getU32:['get','U32',4], getI32:['get','I32',4],
@@ -731,7 +731,7 @@ export default {
     return null;
   },
 
-  _dvOp(this: CodeGenThis, _dvName: any, base: any, I: any, dir: any, type: any, le: any, args: any, lines: any, depth: any, _dvSym: any) {
+  _dvOp(this: CodeGenThis, _dvName: string, base: string, I: string, dir: string, type: string, le: boolean, args: any[], lines: string[], depth: number, _dvSym: any) {
     const _dvIdx = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
     const ptr = `(${base} + ${_dvIdx})`;
     const sz = ({ U8:1, I8:1, U16:2, I16:2, U32:4, I32:4, U64:8, I64:8, F32:4, F64:8 } as Record<string, number>)[type];
@@ -797,7 +797,7 @@ export default {
     return `(void)0`;
   },
 
-  _dispatchStdHashMap(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdHashMap(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // HashMap method calls: m.set(), m.get(), m.has(), m.delete()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -835,7 +835,7 @@ export default {
     return null;
   },
 
-  _dispatchStdSet(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdSet(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // Set method calls: s.add(), s.has(), s.delete(), s.clear()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -909,7 +909,7 @@ export default {
     return null;
   },
 
-  _dispatchStdTasks(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdTasks(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // Tasks method calls: tasks.add(), tasks.run(), tasks.stop()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
@@ -948,7 +948,7 @@ export default {
     return null;
   },
 
-  _dispatchStdRegex(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchStdRegex(this: CodeGenThis, node: any, lines: string[], depth: number) {
     const { callee, args } = node;
     // TscRegex method calls: r.test(), r.match(), r.replace(), r.replaceAll()
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {

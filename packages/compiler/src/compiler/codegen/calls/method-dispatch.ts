@@ -1,7 +1,8 @@
 import type { CodeGenThis } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
+import type { Expression } from '@tsclang/ast';
 export default {
-  methodCall(this: CodeGenThis, callee: any, args: any, lines: any, depth: any) {
+  methodCall(this: CodeGenThis, callee: any, args: any[], lines: string[], depth: number) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
       const I = ' '.repeat(this.indent * depth);
@@ -18,8 +19,8 @@ export default {
         const nextProp = (i > 0) ? chainLinks[i - 1].callee.prop : callee.prop;
         const nextTargetClass = this.classes.get(resultType);
         const nextTargetIface = this.interfaces.get(resultType);
-        const hasNextMethod = (nextTargetClass?.methods?.some((m: any) => m.name === nextProp))
-          || (nextTargetIface?.some((m: any) => m.kind === 'MethodSig' && m.name === nextProp))
+        const hasNextMethod = (nextTargetClass?.methods?.some((m: { name: string }) => m.name === nextProp))
+          || (nextTargetIface?.some((m: { kind: string; name?: string }) => m.kind === 'MethodSig' && m.name === nextProp))
           || (resultType.startsWith('Array_') && ['map','filter','slice','join','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap','keys','values','entries','flat','concat','includes','indexOf','lastIndexOf','at','with','toReversed','toSorted','toSpliced','clone','pop','shift','unshift','splice','reverse','push','resize','reallocate','fill','set','view','viewMut','length','capacity'].includes(nextProp))
           || (resultType === 'String' && ['slice','indexOf','lastIndexOf','at','includes','startsWith','endsWith','split','trim','toUpperCase','toLowerCase','replace','padStart','padEnd','repeat','charAt','charCodeAt','concat','codePoints','graphemes','replaceAll','substring','trimStart','trimEnd','search','match','matchAll','length','toString'].includes(nextProp));
         if (hasNextMethod) {
@@ -74,7 +75,7 @@ export default {
       arrObjC = `(*${objC})`;
     }
 
-    const lambdaOutET = (argsC: any): any => {
+    const lambdaOutET = (argsC: string): string => {
       const m = argsC.match(/_lambda_\d+_(\w+)/);
       return m ? m[1] : et;
     };
@@ -82,7 +83,7 @@ export default {
     const isArrayObj = sym?.isArray || this.inferType(baseObject)?.startsWith('Array_')
                      || (sym?.isRefParam && sym?.derefType?.startsWith('Array_'));
     const arrayCallbackProps = new Set(['filter','map','every','some','find','findIndex','forEach','sort','reduce','reduceRight','findLast','findLastIndex','flatMap']);
-    let cbFnName: any = null;
+    let cbFnName: string | null = null;
     let cbExtraArgs = '';
     let argsForC = args;
     if (isArrayObj && arrayCallbackProps.has(prop) && args.length > 0) {
@@ -101,7 +102,7 @@ export default {
       if (cbFnName) {
         argsForC = args.slice(1);
         if (argsForC.length > 0) {
-          cbExtraArgs = argsForC.map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth)).join(', ');
+          cbExtraArgs = argsForC.map((a: { spread?: boolean; expr: Expression }) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth)).join(', ');
         }
       }
     }
@@ -357,7 +358,7 @@ export default {
             throw this.error(`cannot mutate '${baseObject.name}' while a borrow is active`, baseObject);
           const spStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const spDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const spItems = argsForC.slice(2).map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const spItems = argsForC.slice(2).map((a: { spread?: boolean; expr: Expression }) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
           const spArgs = spItems.length > 0 ? `${spStart}, ${spDel}, ${spItems.join(', ')}` : `${spStart}, ${spDel}`;
           return `tsc_array_splice_${et}(&${objC}, ${spArgs})`;
         }
@@ -406,7 +407,7 @@ export default {
           this._ensureArrayToSplicedMacro(et, etC);
           const tsStart = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
           const tsDel = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
-          const tsItems = argsForC.slice(2).map((a: any) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
+          const tsItems = argsForC.slice(2).map((a: { spread?: boolean; expr: Expression }) => a.spread ? `/* ...${this.exprToC(a.expr, lines, depth)} */` : this.exprToC(a.expr, lines, depth));
           const tsArgs = tsItems.length > 0 ? `${tsStart}, ${tsDel}, ${tsItems.join(', ')}` : `${tsStart}, ${tsDel}`;
           return `tsc_array_to_spliced_${et}(${arrObjC}, ${tsArgs})`;
         }
@@ -458,9 +459,9 @@ export default {
 
     const _isStrPtr = sym?.ctype === 'String *';
     const strObjC = _isStrPtr ? `(*${objC})` : objC;
-    const strMethods: Record<string, any> = {
+    const strMethods: Record<string, () => string> = {
       length:     () => `${_isStrPtr ? objC + '->' : objC + '.'}length`,
-      slice:      () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
+      slice:      () => { const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)); return `tsc_string_slice(${strObjC}, ${a[0]??0}, ${a[1]??'(int32_t)'+strObjC+'.length'})`; },
       indexOf:      () => `(int)tsc_string_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       lastIndexOf:  () => `(int)tsc_string_last_index_of(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       at:           () => {
@@ -480,18 +481,18 @@ export default {
       trim:       () => `tsc_string_trim(${strObjC})`,
       toUpperCase:() => `tsc_string_to_upper(${strObjC})`,
       toLowerCase:() => `tsc_string_to_lower(${strObjC})`,
-      replace:    () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${strObjC}, ${a[0]}, ${a[1]})`; },
-      padStart:   () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
-      padEnd:     () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      replace:    () => { const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace(${strObjC}, ${a[0]}, ${a[1]})`; },
+      padStart:   () => { const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_start(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
+      padEnd:     () => { const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)); return `tsc_string_pad_end(${strObjC}, ${a[0]}, ${a[1]??'STR_LIT(" ")'})`; },
       repeat:     () => `tsc_string_repeat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       charAt:     () => `tsc_string_char_at(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       charCodeAt: () => { const idxC = this.exprToC(args[0].expr, lines, depth); return `(unsigned)(uint8_t)TSC_STRING_GET_CHAR(${strObjC}, ${idxC})`; },
       concat:     () => `tsc_string_concat(${strObjC}, ${this.exprToC(args[0].expr, lines, depth)})`,
       codePoints:  () => `tsc_codepoints(${strObjC})`,
       graphemes:   () => `tsc_graphemes(${strObjC})`,
-      replaceAll:  () => { const a = args.map((a: any) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${strObjC}, ${a[0]}, ${a[1]})`; },
+      replaceAll:  () => { const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)); return `tsc_string_replace_all(${strObjC}, ${a[0]}, ${a[1]})`; },
       substring:   () => {
-                     const a = args.map((a: any) => this.exprToC(a.expr, lines, depth));
+                     const a = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth));
                      if (a[1] === undefined && baseObject.kind !== 'Ident') {
                        const tmp = `_tsc_str_${this.tempCount++}`;
                        lines.push(`${' '.repeat(this.indent * depth)}String ${tmp} = ${strObjC};`);
@@ -541,7 +542,7 @@ export default {
         this.addTop('typedef struct { bool has_value; int32_t value; } opt_i32;');
         this.addTop('');
 
-        const djb2 = (s: any): any => {
+        const djb2 = (s: string): number => {
           let h = 5381;
           for (let i = 0; i < s.length; i++) {
             h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0;
@@ -556,7 +557,7 @@ export default {
           bucketMap.get(b).push(e);
         }
 
-        const fnLines: any[] = [];
+        const fnLines: string[] = [];
         fnLines.push(`static opt_i32 ${fnName}(String key) {`);
         fnLines.push(`    uint32_t _h = tsc_djb2(key);`);
         fnLines.push(`    switch (_h % ${buckets}) {`);
@@ -650,7 +651,7 @@ export default {
       if (prop === 'entries') return `tsc_map_entries_${mapSuffix}(&${objC})`;
     }
 
-    const numMethods: Record<string, any> = {
+    const numMethods: Record<string, () => string> = {
       toFixed: () => {
         const objType = this.inferType(baseObject);
         if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
@@ -676,7 +677,7 @@ export default {
       },
     };
 
-    const hasOwn = (obj: any, k: any) => Object.prototype.hasOwnProperty.call(obj, k);
+    const hasOwn = (obj: Record<string, unknown>, k: string) => Object.prototype.hasOwnProperty.call(obj, k);
     if (hasOwn(strMethods, prop) && strMethods[prop]) return strMethods[prop]();
     if (hasOwn(numMethods, prop) && numMethods[prop]) return numMethods[prop]();
 
@@ -834,8 +835,8 @@ export default {
     return `${objC}.${prop}(${argsC})`;
   },
 
-  argsToC(this: CodeGenThis, args: any, lines: any, depth: any) {
-    const parts: any[] = [];
+  argsToC(this: CodeGenThis, args: any[], lines: string[], depth: number) {
+    const parts: string[] = [];
     const I = ' '.repeat(this.indent * depth);
     for (const a of args) {
       if (a.spread) {
@@ -872,7 +873,7 @@ export default {
     return null;
   },
 
-  _extractCallbackFn(this: CodeGenThis, arg: any, lines: any, depth: any) {
+  _extractCallbackFn(this: CodeGenThis, arg: any, lines: string[], depth: number) {
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
       if (this._strictRules?.has('no-closures')) {
@@ -893,10 +894,10 @@ export default {
         lines.push(`${' '.repeat(this.indent * depth)}${envGlobal} = ${envLocal};`);
         const hint = this._lambdaParamHint ?? [];
         const adapterParams = hint.length > 0
-          ? hint.map((ct: any, i: any) => `${ct} _p${i}`).join(', ')
+          ? hint.map((ct: string, i: number) => `${ct} _p${i}`).join(', ')
           : 'void *_elem';
         const adapterArgs = hint.length > 0
-          ? hint.map((_: any, i: any) => `_p${i}`).join(', ')
+          ? hint.map((_: any, i: number) => `_p${i}`).join(', ')
           : '_elem';
         const adapterName = `${closure.closureName}_adapter`;
         this.addLambda(`static ${closure.ret} ${adapterName}(${adapterParams}) {`);
@@ -923,30 +924,30 @@ export default {
     return null;
   },
 
-  _ensureImplicitVtable(this: CodeGenThis, className: any, ifaceName: any) {
+  _ensureImplicitVtable(this: CodeGenThis, className: string, ifaceName: string) {
     const key = `${className}_${ifaceName}`;
     if (this._emittedImplicitVtables.has(key)) return;
     this._emittedImplicitVtables.add(key);
 
     const ifaceDef = this.interfaces.get(ifaceName);
     if (!ifaceDef) return;
-    const ifaceMethods = ifaceDef.filter((m: any) => m.kind === 'MethodSig');
+    const ifaceMethods = ifaceDef.filter((m: { kind: string }) => m.kind === 'MethodSig');
     const classDef = this.classes.get(className);
     for (const im of ifaceMethods) {
-      const methodExists = classDef?.methods?.some((mm: any) => mm.name === im.name);
+      const methodExists = classDef?.methods?.some((mm: { name: string }) => mm.name === im.name);
       if (!methodExists) {
         throw this.error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
       }
     }
     const vtableName = `_${className}_${ifaceName}_vtable`;
 
-    const entries = ifaceMethods.map((m: any) => {
+    const entries = ifaceMethods.map((m: { name: string; returnType?: any }) => {
       const retType = m.returnType ? this.resolveType(m.returnType) : 'void';
       return `    .${m.name} = (${retType} (*)(void *))${className}_${m.name}`;
     });
     this.topLevel.push(
       `static const ${ifaceName}_vtable ${vtableName} = {`,
-      ...entries.map((e: any) => e + ','),
+      ...entries.map((e: string) => e + ','),
       `};`,
       ``
     );

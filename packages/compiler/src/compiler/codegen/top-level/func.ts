@@ -11,11 +11,11 @@ export default {
     const cname = this._modulePrefix ? this._modulePrefix + name : name;
     let counter = 0;
     // Detect string enum: first member with a string value
-    const isStringEnum = members.some((m: any) => m.value?.litType === 'string');
-    if (isStringEnum && members.some((m: any) => m.value && m.value.litType !== 'string')) {
+    const isStringEnum = members.some((m: { value?: { litType?: string; value?: any } }) => m.value?.litType === 'string');
+    if (isStringEnum && members.some((m: { value?: { litType?: string; value?: any } }) => m.value && m.value.litType !== 'string')) {
       throw this.error(`mixed string and number values in enum "${name}" are not allowed`, node);
     }
-    const entries = members.map((m: any) => {
+    const entries = members.map((m: { name: string; value?: { litType?: string; value?: any } }) => {
       if (isStringEnum) {
         const strVal = m.value ? m.value.value : m.name;
         const idx = counter++;
@@ -41,20 +41,20 @@ export default {
       }
       return { name: m.name, val, numVal };
     });
-    this.addTop(`typedef enum { ${entries.map((e: any) => `${cname}_${e.name} = ${e.val}`).join(', ')} } ${cname};`);
+    this.addTop(`typedef enum { ${entries.map((e: { name: string; val: string }) => `${cname}_${e.name} = ${e.val}`).join(', ')} } ${cname};`);
     let needsToString = false;
     if (!isConst) {
       if (isStringEnum) {
-        this.addTop(`static const char *${cname}_strings[] = { ${entries.map((e: any) => `"${e.strVal}"`).join(', ')} };`);
+        this.addTop(`static const char *${cname}_strings[] = { ${entries.map((e: { strVal: string }) => `"${e.strVal}"`).join(', ')} };`);
       } else {
-        this.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map((e: any) => `${cname}_${e.name}`).join(', ')} };`);
-        const numVals = entries.map((e: any) => e.numVal);
-        const isSequential = numVals.length > 0 && numVals.every((v: any, i: any) => v === i);
+        this.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map((e: { name: string }) => `${cname}_${e.name}`).join(', ')} };`);
+        const numVals = entries.map((e: { numVal: number }) => e.numVal);
+        const isSequential = numVals.length > 0 && numVals.every((v: number, i: number) => v === i);
         if (isSequential) {
-          this.addTop(`static const char *${cname}_names[] = { ${entries.map((e: any) => `"${e.name}"`).join(', ')} };`);
+          this.addTop(`static const char *${cname}_names[] = { ${entries.map((e: { name: string }) => `"${e.name}"`).join(', ')} };`);
         } else {
           needsToString = true;
-          const cases = entries.map((e: any) => `        case ${cname}_${e.name}: return "${e.name}";`).join('\n');
+          const cases = entries.map((e: { name: string }) => `        case ${cname}_${e.name}: return "${e.name}";`).join('\n');
           this.addTop(`static const char *${cname}_toString(${cname} v) {\n    switch (v) {\n${cases}\n        default: return "unknown";\n    }\n}`);
         }
       }
@@ -89,9 +89,9 @@ export default {
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
 
     // @platform(...) decorator: only emit for matching target
-    const platformDec = (decorators ?? []).find((d: any) => d.name === 'platform');
+    const platformDec = (decorators ?? []).find((d: { name: string }) => d.name === 'platform');
     if (platformDec) {
-      const allowed = (platformDec.args ?? []).map((a: any) => a.value ?? a);
+      const allowed = (platformDec.args ?? []).map((a: { value?: string }) => a.value ?? a);
       const target = this._targetName ?? DEFAULT_TARGET;
       if (!allowed.includes(target)) {
         if (name) this._platformSkipped.set(name, allowed);
@@ -111,24 +111,24 @@ export default {
     }
 
     // Regular function with known decorators applied → emit as decorated standalone
-    const knownDecs = (decorators ?? []).filter((d: any) => this._decoratorFns?.has(d.name));
+      const knownDecs = (decorators ?? []).filter((d: { name: string }) => this._decoratorFns?.has(d.name));
     if (knownDecs.length > 0) {
       this._emitDecoratedStandaloneFunc(node, knownDecs);
       return;
     }
 
     // @isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
-    const isrDecorator = (decorators ?? []).find((d: any) => d.name === 'isr');
+    const isrDecorator = (decorators ?? []).find((d: { name: string }) => d.name === 'isr');
     if (isrDecorator) {
       if (node.async) throw this.error(`TypeError: Cannot use 'async' with @isr on '${name}'`);
       const vectorArg = isrDecorator.args?.[0];
       const vectorName = vectorArg?.litType === 'string' ? vectorArg.value : 'UNKNOWN';
       const bodyHasThrow = (stmts: any) => (stmts ?? []).some((s: any) => s.kind === 'Throw' || bodyHasThrow(s.body?.body ?? s.body ?? []));
       if (bodyHasThrow(body?.body ?? [])) throw this.error(`"throw" is not allowed inside @isr handlers`);
-      const funcLines: any[] = [];
+      const funcLines: string[] = [];
       this.pushScope();
       for (const p2 of (params ?? [])) this.define(p2.name, { ctype: p2.typeAnn ? this.resolveType(p2.typeAnn) : 'int32_t', varKind: 'let' });
-      const bodyLines: any[] = [];
+      const bodyLines: string[] = [];
       this.visitBlock(body, bodyLines, 1);
       this.popScope();
       funcLines.push(`ISR(${vectorName}_vect) {`);
@@ -152,7 +152,7 @@ export default {
 
     // Async/generator dispatch — state machine codegen
     if (node.async || generator) {
-      const hasStaticDec = (node.decorators ?? []).some((d: any) => d.name === 'static');
+      const hasStaticDec = (node.decorators ?? []).some((d: { name: string }) => d.name === 'static');
       if (!hasStaticDec && this._allocatorName === 'static') {
         const kind = node.async && generator ? 'async generator' : node.async ? 'async function' : 'generator';
         throw this.error(`TypeError: ${kind} '${name}' must be annotated with @static when allocator is "static"`);
@@ -194,7 +194,7 @@ export default {
       // Check: Pick<T, K> in return type where K is a generic param → error
       if (returnType?.kind === 'TypeRef' && returnType.name === 'Pick' && returnType.typeArgs?.length >= 2) {
         const keyArg = returnType.typeArgs[1];
-        const typeParamNames = new Set(typeParams.map((tp: any) => tp.name));
+        const typeParamNames = new Set(typeParams.map((tp: { name: string }) => tp.name));
         if (keyArg.kind === 'TypeRef' && typeParamNames.has(keyArg.name)) {
           throw this.error(`Pick with runtime key in return type is not supported`);
         }
@@ -210,7 +210,7 @@ export default {
       retType = this.resolveType(returnType);
     } else if (body) {
       const stmts = body.kind === 'Block' ? body.body : [body];
-      const retStmt = stmts.find((s: any) => s.kind === 'Return' && s.value);
+      const retStmt = stmts.find((s: { kind: string; value?: any }) => s.kind === 'Return' && s.value);
       retType = retStmt ? this.inferType(retStmt.value) : 'void';
     } else {
       retType = 'void';
@@ -268,7 +268,7 @@ export default {
     if (throwsTypes.length > 0) {
       // Flatten throwsTypes (handles TypeUnion: throws A | B → [A, B])
       const throwsNames = (() => {
-        const names: any[] = [];
+         const names: string[] = [];
         for (const t of throwsTypes) {
           if (t.kind === 'TypeRef') names.push(t.name === 'Error' ? 'TscError' : t.name);
           else if (t.kind === 'TypeUnion') {
@@ -289,11 +289,11 @@ export default {
       if (!this._emittedResultErrKeys.has(errKey)) {
         this._emittedResultErrKeys.add(errKey);
         if (throwsNames.length > 1) {
-          const tagEntries = throwsNames.map((n: any, i: any) => `_Err_${n} = ${i}`).join(', ');
+          const tagEntries = throwsNames.map((n: string, i: number) => `_Err_${n} = ${i}`).join(', ');
           this.addTop(`typedef enum { ${tagEntries} } _ErrTag_${errKey};`);
           this.addTop(`typedef struct {`);
           this.addTop(`    _ErrTag_${errKey} tag;`);
-          this.addTop(`    union { ${throwsNames.map((n: any, i: any) => `${n} _${i};`).join(' ')} };`);
+          this.addTop(`    union { ${throwsNames.map((n: string, i: number) => `${n} _${i};`).join(' ')} };`);
           this.addTop(`} _ErrUnion_${errKey};`);
           this.typedefs.push('');
         }
@@ -411,8 +411,8 @@ export default {
                        'tsc_string_pad','tsc_string_to_','tsc_i32_to_string','tsc_f64_to_string',
                        'tsc_i64_to_string','tsc_u32_to_string','tsc_u64_to_string',
                        'tsc_bool_to_string','tsc_char_to_string'];
-      const heapsString = lines.some((l: any) => l.trimStart().startsWith('return ') &&
-                                          heapOps.some((op: any) => l.includes(op)));
+      const heapsString = lines.some((l: string) => l.trimStart().startsWith('return ') &&
+                                          heapOps.some((op: string) => l.includes(op)));
 
       if (heapsString) this._heapStringFuncs.add(cname);
     }
@@ -443,7 +443,7 @@ export default {
     this.currentFuncReturnType = retType;
     this._throwsCtx = throwsCtx; // null for non-throws, ctx object for throws functions
     this._currentFuncIsNever = isNever;
-    const lines: any[] = [];
+    const lines: string[] = [];
     this._currentFuncLines = lines;
     this._funcDepth = 0;
 

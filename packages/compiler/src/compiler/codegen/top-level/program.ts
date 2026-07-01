@@ -75,7 +75,7 @@ export default {
 
     // Pre-scan: detect inheritance chains > 1 level
     {
-      const classDecls: any = {};
+      const classDecls: Record<string, any> = {};
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && !n.typeParams?.length) classDecls[n.name] = n;
@@ -147,7 +147,7 @@ export default {
     if (this._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames
       const callGraph = new Map();
-      const _collectCalls = (nd: any, result: any) => {
+      const _collectCalls = (nd: any, result: Set<string>) => {
         if (!nd || typeof nd !== 'object') return;
         if (Array.isArray(nd)) { nd.forEach((x: any) => _collectCalls(x, result)); return; }
         if (nd.kind === 'Call' && nd.callee?.kind === 'Ident') result.add(nd.callee.name);
@@ -160,7 +160,7 @@ export default {
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'FuncDecl' && n.body) {
-          const calls = new Set();
+          const calls = new Set<string>();
           _collectCalls(n.body, calls);
           callGraph.set(n.name, calls);
         }
@@ -168,8 +168,8 @@ export default {
       // Detect cycles via DFS
       const visited = new Set();
       const inStack = new Map(); // funcName → index in path
-      const path: any[] = [];
-      const _dfs = (fn: any) => {
+      const path: string[] = [];
+      const _dfs = (fn: string) => {
         if (inStack.has(fn)) {
           const cycleStart = inStack.get(fn);
           const cycle = path.slice(cycleStart);
@@ -196,10 +196,10 @@ export default {
     // Pre-scan: collect all classes used in throws clauses → _throwsClasses
     // Also collect union groups for _new determination
     this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
-    const _throwsUnions: any[] = []; // each element = array of class names from one throws clause
+    const _throwsUnions: string[][] = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
-    const _flattenThrowsNames = (throwsTypes: any) => {
-      const names: any[] = [];
+    const _flattenThrowsNames = (throwsTypes: any[]) => {
+      const names: string[] = [];
       for (const t of throwsTypes ?? []) {
         if (t.kind === 'TypeRef') names.push(t.name);
         else if (t.kind === 'TypeUnion') {
@@ -208,7 +208,7 @@ export default {
       }
       return names;
     };
-    const _collectThrows = (throwsTypes: any) => {
+    const _collectThrows = (throwsTypes: any[]) => {
       if (!throwsTypes?.length) return;
       const names = _flattenThrowsNames(throwsTypes);
       for (const n of names) {
@@ -218,10 +218,10 @@ export default {
     };
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
-      if (n?.kind === 'FuncDecl') _collectThrows(n.throwsTypes);
+      if (n?.kind === 'FuncDecl') _collectThrows(n.throwsTypes ?? []);
       if (n?.kind === 'ClassDecl') {
         for (const m of (n.members ?? [])) {
-          if (m.kind === 'Method') _collectThrows(m.throwsTypes);
+          if (m.kind === 'Method') _collectThrows(m.throwsTypes ?? []);
         }
       }
     }
@@ -229,7 +229,7 @@ export default {
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'ClassDecl') {
-        const fields = (n.members ?? []).filter((m: any) => m.kind === 'Field');
+        const fields = (n.members ?? []).filter((m: { kind: string }) => m.kind === 'Field');
         const hasStack = fields.some((f: any) => f.name === 'stack');
         if (hasStack && this._cap('os') === false) {
           throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
@@ -242,7 +242,7 @@ export default {
       }
     }
     // Determine needsNew: walk AST for throw new X() nodes
-    const _thrownClasses = new Set();
+    const _thrownClasses = new Set<string>();
     const _walkThrows = (n: any) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_walkThrows); return; }
@@ -254,7 +254,7 @@ export default {
     for (const node of ast.body) _walkThrows(node);
     // For each union: if any member thrown → all get needsNew
     for (const union of _throwsUnions) {
-      if (union.some((name: any) => _thrownClasses.has(name))) {
+      if (union.some((name: string) => _thrownClasses.has(name))) {
         for (const name of union) {
           const info = this._throwsClasses.get(name);
           if (info) info.needsNew = true;
@@ -267,7 +267,7 @@ export default {
     this._decoratorNames = new Set(); // all names used with @
     this._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
     {
-      const scanDecs = (decs: any) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
+      const scanDecs = (decs: any[] | undefined) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl') {
@@ -311,7 +311,7 @@ export default {
       const n = node.kind === 'Export' ? node.decl : node;
       if ((n?.kind === 'FuncDecl' || n?.kind === 'ExtensionFunc') && n.body) {
         // Exclude parameter names — they shadow globals and must not trigger promotion
-        const localNames = new Set();
+        const localNames = new Set<string>();
         const srcParams = n.kind === 'ExtensionFunc'
           ? [{ name: 'this' }, ...(n.params ?? [])]
           : (n.params ?? []);
@@ -322,7 +322,7 @@ export default {
         }
         // Collect idents from body, skipping shadowed param names
         // Also skip nested function bodies (they have their own scopes)
-        const _collect = (nd: any, outerLocals: any) => {
+        const _collect = (nd: any, outerLocals: Set<string>) => {
           if (!nd || typeof nd !== 'object') return;
           if (Array.isArray(nd)) { nd.forEach((x: any) => _collect(x, outerLocals)); return; }
           if (nd.kind === 'Ident') {
@@ -362,7 +362,7 @@ export default {
                 _signalVarNames.add(sd.name);
               }
             }
-            const arrowParams = new Set((arrow.params ?? []).map((p: any) => p.name));
+            const arrowParams = new Set((arrow.params ?? []).map((p: { name?: string }) => p.name));
             const _collectArrow = (nd: any) => {
               if (!nd || typeof nd !== 'object') return;
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
@@ -401,7 +401,7 @@ export default {
     if (this._stackSize != null && this._funcStackInfo.size > 0) {
       const _worstCase = new Map();
       const _visiting = new Set();
-      const _computeWorst = (astName: any, path: any) => {
+      const _computeWorst = (astName: string, path: string[]) => {
         if (_worstCase.has(astName)) return _worstCase.get(astName);
         const info = this._funcStackInfo.get(astName);
         if (!info) return 0;

@@ -2,7 +2,7 @@ import type { CodeGenThis } from '../../codegen.js';
 // dispatch.ts
 import type { Expression } from '@tsclang/ast';
 export default {
-  exprToC(this: CodeGenThis, node: Expression, lines: any[] = [], depth: any = 0) {
+  exprToC(this: CodeGenThis, node: Expression, lines: string[] = [], depth: number = 0) {
     if (!node) return '0';
     this._currentNode = node;
     switch (node.kind) {
@@ -58,10 +58,10 @@ export default {
         if (sym?.deferredAnon && this._deferredAnons?.has(node.name)) {
           const { fields, init: _init } = this._deferredAnons.get(node.name);
           const ctype = sym.ctype;
-          const fieldDecls = fields.map((f: any) => `${f._ctype} ${f.name};`).join(' ');
+          const fieldDecls = fields.map((f: { name: string; _ctype: string }) => `${f._ctype} ${f.name};`).join(' ');
           this.addTop(`typedef struct { ${fieldDecls} } ${ctype};`);
           this.addTop('');
-          const initParts = (_init.props ?? []).map((pr: any) => `.${pr.key} = ${this.exprToC(pr.value, lines, depth)}`);
+          const initParts = (_init.props ?? []).map((pr: { key: string; value: Expression }) => `.${pr.key} = ${this.exprToC(pr.value, lines, depth)}`);
           const I = ' '.repeat(this.indent * depth);
           lines.push(`${I}${ctype} ${node.name} = {${initParts.join(', ')}};`);
           sym.deferredAnon = false;
@@ -180,7 +180,7 @@ export default {
         // Error subclass: e.message → _err_0._base.message (parent fields via _base)
         if (sym?._alias && sym?.ctype) {
           const errClass = this.classes.get(sym.ctype);
-          const isOwnField = errClass?.fields?.some((f: any) => f.name === node.prop);
+          const isOwnField = errClass?.fields?.some((f: { name: string }) => f.name === node.prop);
           if (!isOwnField) {
             // Field is on parent (TscError._base): route through _alias._base.prop
             return `${sym._alias}._base.${node.prop}`;
@@ -190,8 +190,8 @@ export default {
         // Check private field access from outside the class
         if (sym?.ctype) {
           const classDef = this.classes.get(sym.ctype);
-          const field = classDef?.fields?.find((f: any) => f.name === node.prop);
-          if (field?.modifiers?.includes('private')) {
+          const field = classDef?.fields?.find((f: { name: string; modifiers?: string[] }) => f.name === node.prop);
+            if (field?.modifiers?.includes('private')) {
             // We are inside the class if 'this' or 'self' in scope has the same ctype
             const thisSym = this.lookup('this') ?? this.lookup('self');
             const inMethod = thisSym?.ctype === sym.ctype;
@@ -221,7 +221,7 @@ export default {
           const symForLabel = this.lookup(node.object.name);
           const tupleDef3 = symForLabel ? this.classes.get(symForLabel.ctype!) : null;
           if (tupleDef3?.isTuple) {
-            const field = tupleDef3.fields.find((f: any) => f.label === node.prop);
+            const field = tupleDef3.fields.find((f: { label?: string; name: string }) => f.label === node.prop);
             if (field) {
         const objC = this.exprToC(node.object, lines, depth);
               return `${objC}.${field.name}`;
@@ -245,7 +245,7 @@ export default {
           const poolCls = this.classes.get(poolClassName);
           if (poolCls?._isPool) {
             // Check if this prop exists on the pool class itself (not on opt_ref wrapper)
-            const isClassField = poolCls.fields?.some((f: any) => f.name === node.prop);
+            const isClassField = poolCls.fields?.some((f: { name: string }) => f.name === node.prop);
             if (isClassField || node.prop !== 'value') {
               // Use raw variable name (not narrowed form) to avoid double-indirection
               const rawName = node.object.kind === 'Ident' ? node.object.name : this.exprToC(node.object, lines, depth);
@@ -265,9 +265,9 @@ export default {
         const isPtr = sym?.isPointer;
         // Inherited field access: if prop not in own fields, check base class
         const symCls = sym ? this.classes.get(sym.ctype!) : null;
-        if (symCls?.superClass && symCls.fields && !symCls.fields.some((f: any) => f.name === node.prop)) {
+        if (symCls?.superClass && symCls.fields && !symCls.fields.some((f: { name: string }) => f.name === node.prop)) {
           const baseCls = this.classes.get(symCls.superClass);
-          if (baseCls?.fields?.some((f: any) => f.name === node.prop)) {
+          if (baseCls?.fields?.some((f: { name: string }) => f.name === node.prop)) {
             return isPtr ? `${objC}->_base.${node.prop}` : `${objC}._base.${node.prop}`;
           }
         }
@@ -438,7 +438,7 @@ export default {
 
       case 'ArrayLit': {
         for (const el of node.elems ?? []) this._checkNoBareThrows(el.expr ?? el);
-        const elems = node.elems.filter((e: any) => !e.spread);
+        const elems = node.elems.filter((e: { spread?: boolean }) => !e.spread);
         let elemType;
         if (this._expectedType?.startsWith('Array_')) {
           elemType = this._arrIdentToCType(this._expectedType.slice(6));
@@ -447,12 +447,12 @@ export default {
         if (elemType === 'String *') elemType = 'String';
         if (!elemType) elemType = 'int32_t';
         if (!this._expectedType?.startsWith('Array_') && elems.length > 1) {
-          const elemTypes = elems.map((e: any) => {
+          const elemTypes = elems.map((e: { expr: Expression }) => {
             const t = this.inferType(e.expr);
             return t === 'String *' ? 'String' : t;
           });
-          if (elemTypes.some((t: any) => t !== elemTypes[0])) {
-            const tsName = (ct: any) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct);
+          if (elemTypes.some((t: string) => t !== elemTypes[0])) {
+            const tsName = (ct: string) => (ct === 'double' || ct === 'float') ? 'number' : this.ctypeToTsName(ct);
             const unique = [...new Set(elemTypes.map(tsName))];
             throw this.error(`mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]`, node);
           }
@@ -464,7 +464,7 @@ export default {
         if (arrType?.startsWith('Array_') && this._expectedType?.startsWith('Array_')) {
           this._expectedType = arrType;
         }
-        const items = elems.map((e: any) => {
+        const items = elems.map((e: { expr: Expression }) => {
           let c = this.exprToC(e.expr, lines, depth);
           if (e.expr.kind === 'Ident') {
             const sym = this.lookup(e.expr.name);
@@ -490,7 +490,7 @@ export default {
         }
         if (this._inHoistedLambda) {
           lines.push(`${elemType} *${dataVar} = (${elemType}*)malloc(${elems.length} * sizeof(${elemType}));`);
-          const assignItems = elems.map((e: any, i: any) => {
+          const assignItems = elems.map((e: { expr: Expression }, i: number) => {
             const c = this.exprToC(e.expr, lines, depth);
             if (e.expr.kind === 'Ident') {
               const sym = this.lookup(e.expr.name);
@@ -513,8 +513,8 @@ export default {
         if (node.props.length === 0) {
           throw this.error(`empty object literal is forbidden; use a typed variable or Map<K, V>`, node);
         }
-        const spreads = node.props.filter((p: any) => p.spread);
-        const explicit = node.props.filter((p: any) => !p.spread && !p.computed);
+        const spreads = node.props.filter((p: { spread?: boolean }) => p.spread);
+        const explicit = node.props.filter((p: { spread?: boolean; computed?: boolean }) => !p.spread && !p.computed);
         // If there are spread elements, expand struct fields inline
         if (spreads.length > 0) {
           const explicitMap = new Map(explicit.map((p: any) => [p.key, p.value]));
@@ -524,7 +524,7 @@ export default {
             const srcType = this.inferType(sp.expr);
             const cls = this.classes.get(srcType);
             if (cls?.fields) {
-              const stringFields: any[] = [];
+              const stringFields: string[] = [];
               for (const f of cls.fields) {
                 if (!explicitMap.has(f.name)) {
                   const ftype = f._ctype || (f.typeAnn ? this.resolveType(f.typeAnn) : null);
@@ -668,7 +668,7 @@ export default {
             ['size_t','int32_t'],['size_t','int16_t'],['size_t','int8_t'],
           ];
           if (LOSSY.some(([s,t]) => srcType === s && ct === t)) {
-            const tsName = (c: any) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
+            const tsName = (c: string) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
             throw this.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
           }
         }
@@ -788,7 +788,7 @@ export default {
           const innerIdent = objType.slice(4);
           const innerCType = this._arrIdentToCType(innerIdent);
           const classDef = this.classes.get(innerCType);
-          const field = classDef?.fields?.find((f: any) => f.name === node.prop);
+          const field = classDef?.fields?.find((f: { name: string; typeAnn?: any; _ctype?: string }) => f.name === node.prop);
           const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : (field?._ctype ?? 'int32_t');
           const fieldIdent = this.cTypeToIdent(fieldCType);
           const optFieldType = `opt_${fieldIdent}`;
@@ -810,7 +810,7 @@ export default {
     }
   },
 
-  _truthyToC(this: CodeGenThis, node: any, lines: any[] = [], depth: any = 0) {
+  _truthyToC(this: CodeGenThis, node: any, lines: string[] = [], depth: number = 0) {
     const type = this.inferType(node);
     if (!type || type === 'bool' || type === 'void *') {
       return this.exprToC(node, lines, depth);
