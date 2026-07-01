@@ -114,7 +114,7 @@ export interface Param {
   rest?: boolean;
   spread?: boolean;
   optional?: boolean;
-  destructArr?: ArrayPatternElement[] | null;
+  destructArr?: (ArrayPatternElement | null)[] | null;
   destructObj?: ObjPattern | null;
 }
 
@@ -173,7 +173,7 @@ export interface VarDecl extends BaseNode {
   kind: 'VarDecl';
   varKind: 'let' | 'const' | 'var';
   name: string;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   init?: Expression | null;
   decorators?: Decorator[];
 }
@@ -189,7 +189,7 @@ export interface VarDestructObj extends BaseNode {
   kind: 'VarDestructObj';
   varKind: 'let' | 'const' | 'var';
   pattern: ObjPattern;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   init: Expression;
 }
 
@@ -197,7 +197,7 @@ export interface VarDestructArr extends BaseNode {
   kind: 'VarDestructArr';
   varKind: 'let' | 'const' | 'var';
   pattern: ArrayPattern;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   init: Expression;
 }
 
@@ -205,7 +205,7 @@ export interface FuncDecl extends BaseNode {
   kind: 'FuncDecl';
   name: string;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   throwsTypes?: TypeAnn[];
   body: Block | null;
   generator?: boolean;
@@ -218,7 +218,7 @@ export interface FuncOverload extends BaseNode {
   kind: 'FuncOverload';
   name: string;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
 }
 
 export interface ExtensionFunc extends BaseNode {
@@ -226,7 +226,7 @@ export interface ExtensionFunc extends BaseNode {
   name: string;
   thisType: TypeAnn;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   body: Block;
 }
 
@@ -242,12 +242,14 @@ export interface ClassDecl extends BaseNode {
 
 export type ClassMember = Method | Field;
 
+export type MemberName = string | { computed: boolean; expr: Expression };
+
 export interface Method extends BaseNode {
   kind: 'Method';
-  name: string;
+  name: MemberName;
   modifiers: string[];
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   throwsTypes?: TypeAnn[];
   body: Block | null;
   generator?: boolean;
@@ -258,9 +260,9 @@ export interface Method extends BaseNode {
 
 export interface Field extends BaseNode {
   kind: 'Field';
-  name: string;
+  name: MemberName;
   modifiers: string[];
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   optional?: boolean;
   init?: Expression | null;
   decorators?: Decorator[];
@@ -278,7 +280,8 @@ export interface MethodSig extends BaseNode {
   kind: 'MethodSig';
   name: string;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
+  optional?: boolean;
   isStatic?: boolean;
   isMut?: boolean;
 }
@@ -286,7 +289,8 @@ export interface MethodSig extends BaseNode {
 export interface PropSig extends BaseNode {
   kind: 'PropSig';
   name: string;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
+  optional?: boolean;
   isReadonly?: boolean;
 }
 
@@ -299,7 +303,7 @@ export interface Enum extends BaseNode {
 
 export interface EnumMember {
   name: string;
-  value?: number | string;
+  value?: Expression | null;
 }
 
 export interface TypeAlias extends BaseNode {
@@ -312,7 +316,7 @@ export interface TypeAlias extends BaseNode {
 export interface DeclareConst extends BaseNode {
   kind: 'DeclareConst';
   name: string;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   init?: Expression;
 }
 
@@ -320,7 +324,7 @@ export interface DeclareFunction extends BaseNode {
   kind: 'DeclareFunction';
   name: string;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   isExtern?: boolean;
   isVariadic?: boolean;
 }
@@ -392,7 +396,7 @@ export interface Throw extends BaseNode {
 
 export interface CatchClause {
   param?: string | null;
-  typeAnn?: TypeAnn;
+  typeAnn?: TypeAnn | null;
   body: Block;
 }
 
@@ -468,7 +472,7 @@ export interface Noop extends BaseNode {
 export interface MatchCase {
   pattern: MatchPattern;
   guard?: Expression | null;
-  body: Stmt[];
+  body: Expression;
 }
 
 export interface Match extends BaseNode {
@@ -486,7 +490,7 @@ export type Expression =
   | Literal | TemplateLit | Ident | Member | OptChain | Call | New
   | Index | RangeIndex | Binary | Unary | Ternary | Assign | Cast
   | ArrayLit | ObjLit | NonNull | Propagate | Typeof | Await | Yield
-  | Drop | Arrow | FuncExpr | Match | RawC;
+  | Drop | Arrow | FuncExpr | Match | RawC | Spawn;
 
 export interface Literal extends BaseNode {
   kind: 'Literal';
@@ -535,7 +539,7 @@ export interface New extends BaseNode {
   callee?: Expression;
   args: Argument[];
   typeArgs?: TypeAnn[];
-  arraySize?: Expression;
+  arraySize?: Expression | null;
 }
 
 export interface Index extends BaseNode {
@@ -556,6 +560,7 @@ export interface Binary extends BaseNode {
   op: string;
   left: Expression;
   right: Expression;
+  _paren?: boolean;
 }
 
 export interface Unary extends BaseNode {
@@ -590,7 +595,7 @@ export interface ArrayLit extends BaseNode {
 }
 
 export interface ObjLitProp {
-  key?: string;
+  key?: string | Expression;
   value?: Expression;
   expr?: Expression;
   computed?: boolean;
@@ -636,9 +641,9 @@ export interface Drop extends BaseNode {
 
 export interface Arrow extends BaseNode {
   kind: 'Arrow';
-  captures: unknown[];
+  captures?: unknown[];
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   body: Block | Expression;
   async?: boolean;
 }
@@ -647,7 +652,7 @@ export interface FuncExpr extends BaseNode {
   kind: 'FuncExpr';
   name?: string | null;
   params: Param[];
-  returnType?: TypeAnn;
+  returnType?: TypeAnn | null;
   body: Block;
   async?: boolean;
 }
@@ -680,25 +685,26 @@ export interface MatchTuple extends BaseNode {
 
 export interface MatchRange extends BaseNode {
   kind: 'MatchRange';
-  lo: Expression;
-  hi: Expression;
+  lo: string;
+  hi: string;
 }
 
 export interface MatchLit extends BaseNode {
   kind: 'MatchLit';
-  value: Expression;
+  value: string;
   litType: 'number' | 'string' | 'boolean';
 }
 
 export interface MatchObjLitDiscriminator {
   key: string;
-  value: MatchPattern;
+  value: string;
+  litType: string;
 }
 
 export interface MatchObjLit extends BaseNode {
   kind: 'MatchObjLit';
   discriminators: MatchObjLitDiscriminator[];
-  fields: { name: string; pattern: MatchPattern }[];
+  fields: string[];
 }
 
 export interface MatchEnum extends BaseNode {
@@ -711,7 +717,7 @@ export interface MatchEnum extends BaseNode {
 export interface MatchClass extends BaseNode {
   kind: 'MatchClass';
   className: string;
-  fields: { name: string; pattern: MatchPattern }[];
+  fields: string[];
 }
 
 export interface MatchIdent extends BaseNode {
@@ -737,7 +743,7 @@ export interface ArrayPatternElement {
 
 export interface ArrayPattern {
   kind: 'ArrayPattern';
-  elements: ArrayPatternElement[];
+  elements: (ArrayPatternElement | null)[];
 }
 
 export interface ObjPatternProp {
