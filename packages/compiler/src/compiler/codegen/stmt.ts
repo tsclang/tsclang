@@ -1,12 +1,12 @@
 // stmt.ts
-import type { Stmt, Block } from '@tsclang/ast';
+import type { Stmt, Block, VarDeclItem } from '@tsclang/ast';
 import type { CodeGenThis } from '../codegen.js';
 export default {
-  visitBlock(this: CodeGenThis, block: Block, lines: any, depth: any) {
+  visitBlock(this: CodeGenThis, block: Block, lines: string[], depth: number) {
     this.pushScope();
     this._blockCleanupStack.push({ list: [], set: new Set() });
-    const blockPoolVars: any[] = [];
-    const blockHeapVars: any[] = [];
+    const blockPoolVars: { name: string; className: string }[] = [];
+    const blockHeapVars: { name: string; className: string }[] = [];
     const prevPoolVars = this._currentBlockPoolVars;
     const prevHeapVars = this._currentBlockHeapVars;
     this._currentBlockPoolVars = blockPoolVars;
@@ -51,8 +51,8 @@ export default {
     this.popScope();
   },
 
-  visitStmtInMain(this: CodeGenThis, node: any) {
-    const lines: any[] = [];
+  visitStmtInMain(this: CodeGenThis, node: Stmt) {
+    const lines: string[] = [];
     if (this._debugLines && node?.line) {
       this.mainStmts.push(`#line ${node.line} "${this.filename}"`);
     }
@@ -60,13 +60,13 @@ export default {
     for (const l of lines) this.mainStmts.push(l);
   },
 
-  visitStmt(this: CodeGenThis, node: Stmt, lines: any, depth: any) {
+  visitStmt(this: CodeGenThis, node: Stmt, lines: string[], depth: number) {
     this._currentNode = node;
     if (!node) return;
 
     switch (node.kind) {
       case 'VarDecl': this._visitVarDecl(node, lines, depth); break;
-      case 'VarDecls': node.decls.forEach((d: any) => {
+      case 'VarDecls': node.decls.forEach((d: VarDeclItem) => {
         if (d.kind === 'VarDestructObj' || d.kind === 'VarDestructArr') this._visitVarDestruct(d, lines, depth);
         else this._visitVarDecl(d, lines, depth);
       }); break;
@@ -97,7 +97,7 @@ export default {
     }
   },
 
-  visitStmtOrBlock(this: CodeGenThis, node: Stmt, lines: any, depth: any) {
+  visitStmtOrBlock(this: CodeGenThis, node: Stmt, lines: string[], depth: number) {
     if (node.kind === 'Block') this.visitBlock(node, lines, depth);
     else this.visitStmt(node, lines, depth);
   },

@@ -1,5 +1,9 @@
+import type { TypeAnn, TypeRef, Await } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // helpers.ts
+
+// Covers Literal plus legacy Num/Bool node kinds (value may be string or boolean at runtime)
+type InitNode = { kind: string; litType?: string; value: string | boolean };
 export default {
   _initAsync(this: CodeGenThis) {
 
@@ -11,12 +15,12 @@ export default {
   // C result type for async _result field.
   // Returns null for Promise<void> (no _result field).
   // Returns 'int' for void (placeholder).
-  _asyncRetType(this: CodeGenThis, rt: any) {
+  _asyncRetType(this: CodeGenThis, rt: TypeAnn | null) {
     if (!rt) return 'int';
     if (rt.kind === 'TypeRef') {
       if (rt.name === 'Promise') {
         const inner = rt.typeArgs?.[0];
-        if (!inner || inner.name === 'void') return null;
+        if (!inner || (inner as TypeRef).name === 'void') return null;
         return this.resolveType(inner);
       }
       if (rt.name === 'void') return 'int';
@@ -26,13 +30,13 @@ export default {
 
   // ─── Inlinable const detection ────────────────────────────────────────────
 
-  _isInlinableConst(this: CodeGenThis, init: any) {
+  _isInlinableConst(this: CodeGenThis, init: InitNode | null) {
     if (!init) return false;
     if (init.kind === 'Literal') return init.litType === 'number' || init.litType === 'boolean';
     return init.kind === 'Num' || init.kind === 'Bool';
   },
 
-  _constLiteralC(this: CodeGenThis, init: any) {
+  _constLiteralC(this: CodeGenThis, init: InitNode) {
     if (init.kind === 'Literal') {
       if (init.litType === 'number') return String(init.value);
       if (init.litType === 'boolean') return init.value === 'true' || init.value === true ? 'true' : 'false';
@@ -44,8 +48,8 @@ export default {
 
   // ─── Await info ───────────────────────────────────────────────────────────
 
-  _awaitInfoOf(this: CodeGenThis, awaitNode: any) {
-    const expr = awaitNode.expr;
+  _awaitInfoOf(this: CodeGenThis, awaitNode: Await) {
+    const expr = awaitNode.expr as any;
     if (!expr) return null;
 
     if (expr.kind === 'Call') {
@@ -129,7 +133,7 @@ export default {
           (this._preScanTypes?.get(expr.callee.object.name) === '__fs_namespace__' ? { _isFsNamespace: true } : null);
         if (_fsSym3?._isFsNamespace) {
           const _fp = expr.callee.prop;
-          const _fsAsync = (initFn: any, pollFn: any, stateType: any, resultCType: any) =>
+          const _fsAsync = (initFn: string, pollFn: string, stateType: string, resultCType: string | null) =>
             ({ kind: `fs-${_fp}`, stateType, pollFn, initFn, resultCType, args: expr.args });
           if (_fp === 'readFile')     return _fsAsync('tsc_fs_read_async',    'tsc_fs_read_poll',    'TscFsReadAwaitable',    'String');
           if (_fp === 'readFileBytes') return _fsAsync('tsc_fs_read_bytes_async', 'tsc_fs_read_bytes_poll', 'TscFsReadBytesAwaitable', 'Array_u8');
@@ -161,7 +165,7 @@ export default {
           (expr.callee.prop === 'race' || expr.callee.prop === 'any' || expr.callee.prop === 'allSettled')) {
         const prop = expr.callee.prop;
         const items = expr.args?.[0]?.expr?.elems || [];
-        let resultCType: any = null;
+        let resultCType: string | null = null;
         if (prop !== 'allSettled') {
           const firstName = items[0]?.expr?.callee?.kind === 'Ident' ? items[0].expr.callee.name : null;
           if (firstName && this._asyncFuncs?.has(firstName)) {

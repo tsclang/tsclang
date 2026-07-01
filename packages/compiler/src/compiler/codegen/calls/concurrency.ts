@@ -1,3 +1,4 @@
+import type { Call, Argument, Arrow } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 const ORDERING_MAP = {
   'LoadOrdering.Acquire': 'memory_order_acquire',
@@ -12,7 +13,7 @@ const ORDERING_MAP = {
 };
 
 export default {
-  _dispatchConcurrency(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchConcurrency(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       const objName2 = callee.object?.kind === 'Ident' ? callee.object.name : null;
@@ -22,7 +23,7 @@ export default {
         const isPtr = atomicSym._isArcAtomic;
         const ref = isPtr ? `${objName2}->value` : `${objName2}.value`;
 
-        const resolveOrdering = (argNode: any, op: any) => {
+        const resolveOrdering = (argNode: Argument | undefined, op: string) => {
           if (!argNode) return null;
           const expr = argNode.expr ?? argNode;
           if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
@@ -105,7 +106,7 @@ export default {
         const inner = aaSym._atomicArrayInner ?? 'int32_t';
         const ref = `${objNameAA}.data`;
 
-        const resolveOrd = (argNode: any, _op?: string) => {
+        const resolveOrd = (argNode: Argument | undefined, _op?: string) => {
           if (!argNode) return null;
           const expr = argNode.expr ?? argNode;
           if (expr.kind === 'Member' && expr.object?.kind === 'Ident') {
@@ -254,7 +255,7 @@ export default {
         callee.prop === 'spawn') {
       const lambdaArg = args[0]?.expr;
       if (lambdaArg) {
-        const spawnResult = this._emitSpawnBlock(null, lambdaArg.body ?? lambdaArg, [], lines, depth);
+        const spawnResult = this._emitSpawnBlock(null, (lambdaArg as Arrow).body ?? lambdaArg, [], lines, depth);
         return `(void)${spawnResult}`;
       }
       return '/* Thread.spawn */';

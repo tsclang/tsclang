@@ -1,8 +1,9 @@
+import type { Literal, Binary, Expression } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // literals.ts
 export default {
   // Unescape a char literal value to numeric code
-  _charCode(this: CodeGenThis, raw: any) {
+  _charCode(this: CodeGenThis, raw: string) {
     if (raw === '\\n') return 10;
     if (raw === '\\t') return 9;
     if (raw === '\\r') return 13;
@@ -20,12 +21,12 @@ export default {
     throw this.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
   },
 
-  _charLiteralToSTR_LIT(this: CodeGenThis, value: any) {
+  _charLiteralToSTR_LIT(this: CodeGenThis, value: string) {
     const escaped = value.replace(/\\(?![ntr0'"\\abfvxuU0-7])/g, '\\\\').replace(/"/g, '\\"');
     return `STR_LIT("${escaped}")`;
   },
 
-  _stringLiteralToByte(this: CodeGenThis, node: any) {
+  _stringLiteralToByte(this: CodeGenThis, node: Literal) {
     const raw = node.value;
     if (raw.length === 0) {
       throw this.error(`cannot convert empty string to char/u8`, node);
@@ -43,7 +44,7 @@ export default {
     return code;
   },
 
-  literalToC(this: CodeGenThis, node: any) {
+  literalToC(this: CodeGenThis, node: Literal) {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
     if (node.litType === 'char')   return this._charLiteralToSTR_LIT(node.value);
     if (node.litType === 'bool')   return node.value;
@@ -56,7 +57,7 @@ export default {
   },
 
   // Emit a number literal with the correct suffix for the given target C type
-  literalToCTyped(this: CodeGenThis, node: any, ctype: any) {
+  literalToCTyped(this: CodeGenThis, node: Literal, ctype: string) {
     // Char literals: convert to numeric value
     if (node.litType === 'char') {
       if (ctype === 'String') return this._charLiteralToSTR_LIT(node.value);
@@ -95,7 +96,7 @@ export default {
     return v;
   },
 
-  _checkLiteralFitsType(this: CodeGenThis, node: any, ctype: any) {
+  _checkLiteralFitsType(this: CodeGenThis, node: Expression, ctype: string) {
     const INT_RANGES = {
       'int8_t':   { min: -128n,                    max: 127n,                    ts: 'i8' },
       'int16_t':  { min: -32768n,                  max: 32767n,                  ts: 'i16' },
@@ -113,7 +114,7 @@ export default {
     if (!isLit && !isNegLit) return;
     const val = this.constVal(node);
     if (val === null) return;
-    const r = (INT_RANGES as Record<string, any>)[ctype];
+    const r = (INT_RANGES as Record<string, { min: bigint; max: bigint; ts: string }>)[ctype];
     if (val < r.min || val > r.max) {
       throw this.error(`literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})`, node);
     }
@@ -123,7 +124,7 @@ export default {
   // Binary
   // ----------------------------------------------------------------
   // Get compile-time constant value of a const-literal variable or literal node (BigInt or null)
-  constVal(this: CodeGenThis, node: any) {
+  constVal(this: CodeGenThis, node: Expression) {
     if (node.kind === 'Literal' && node.litType === 'number') {
       const raw = node.value.replace(/_/g, '');
       try { return BigInt(raw); } catch(_) {
@@ -132,7 +133,7 @@ export default {
       }
     }
     if (node.kind === 'Unary' && node.op === '-') {
-      const v = this.constVal(node.expr ?? node.operand);
+      const v = this.constVal(node.expr ?? (node as { operand?: Expression }).operand);
       return v !== null ? -v : null;
     }
     if (node.kind === 'Ident') {
@@ -144,7 +145,7 @@ export default {
 
   // For const-context mixed integer binary expressions: cast operands and result explicitly.
   // Returns null if not applicable.
-  tryConstMixedBinary(this: CodeGenThis, node: any, targetCtype: any, lines: any, depth: any) {
+  tryConstMixedBinary(this: CodeGenThis, node: Binary, targetCtype: string, lines: string[], depth: number) {
     const lt = this.inferType(node.left);
     const rt = this.inferType(node.right);
     // Only applies to arithmetic ops with const operands (not let variables)

@@ -1,6 +1,7 @@
+import type { Call } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 export default {
-  _dispatchBuiltin(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchBuiltin(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
       return this.consoleCall(callee.prop, args, lines, depth);

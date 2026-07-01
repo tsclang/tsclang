@@ -1,8 +1,35 @@
+import type { Expression, TypeAnn, ObjLitProp } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
+
+export interface ObjDestructField {
+  name: string;
+  alias: string;
+  defaultVal?: Expression | null;
+}
+export interface ArrDestructElem {
+  name: string;
+  rest?: boolean;
+}
+export interface VarDestructObjNode {
+  kind: 'VarDestructObj';
+  varKind: 'let' | 'const' | 'var';
+  pattern: ObjDestructField[];
+  typeAnn?: TypeAnn | null;
+  init: Expression;
+}
+export interface VarDestructArrNode {
+  kind: 'VarDestructArr';
+  varKind: 'let' | 'const' | 'var';
+  pattern: (ArrDestructElem | null)[];
+  typeAnn?: TypeAnn | null;
+  init: Expression;
+}
+export type DestructNode = VarDestructObjNode | VarDestructArrNode;
+
 export default {
-  _visitVarDestruct(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _visitVarDestruct(this: CodeGenThis, node: DestructNode, lines: string[], depth: number) {
     const I = ' '.repeat(this.indent * depth);
-    const p = (s: any) => lines.push(I + s);
+    const p = (s: string) => lines.push(I + s);
     if (node.kind === 'VarDestructObj') {
         const { varKind, pattern, typeAnn, init } = node;
         const qual = varKind === 'const' ? 'const ' : '';
@@ -14,7 +41,7 @@ export default {
           const _dSym = this.lookup(init.name);
           if (_dSym?.deferredAnon && this._deferredAnons?.has(init.name)) {
             const _dAnon = this._deferredAnons.get(init.name);
-            const propMap2 = new Map((_dAnon.init.props ?? []).map((pr: any) => [pr.key, pr.value]));
+            const propMap2 = new Map((_dAnon.init.props ?? []).map((pr: ObjLitProp) => [pr.key, pr.value]));
             for (const { name: fname } of _dAnon.fields) {
               const propVal2 = propMap2.get(fname);
               const propC2 = propVal2 ? this.exprToC(propVal2, lines, depth) : '0';
@@ -38,7 +65,7 @@ export default {
 
         // ObjLit init: expand props directly as _obj_field variables (no anonymous struct)
         if (init.kind === 'ObjLit') {
-          const propMap = new Map((init.props ?? []).map((pr: any) => [pr.key, pr.value]));
+          const propMap = new Map((init.props ?? []).map((pr: ObjLitProp) => [pr.key, pr.value]));
           // First pass: emit temp vars for each prop
           for (const { name } of pattern) {
             const propVal = propMap.get(name);
@@ -64,9 +91,9 @@ export default {
         // Ident init with type annotation: move semantics (copy fields + zero-out source)
         if (typeAnn && init.kind === 'Ident' && structDef?.fields) {
           const srcName = init.name;
-          const stringFields: any[] = [];
+          const stringFields: { src: string; alias: string }[] = [];
           for (const { name, alias } of pattern) {
-            const field = structDef.fields.find((f: any) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const field = structDef.fields.find((f: string | { name?: string }) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
             if (fieldCType === 'String') {
               p(`tsc_string_retain(${srcName}.${name});`);
@@ -90,7 +117,7 @@ export default {
         if (init.kind === 'Ident' && structDef?.fields) {
           const srcName = init.name;
           for (const { name, alias } of pattern) {
-            const field = structDef.fields.find((f: any) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
+            const field = structDef.fields.find((f: string | { name?: string }) => (typeof f === 'string' ? f : (f.name ?? f)) === name);
             const fieldCType = field?.typeAnn ? this.resolveType(field.typeAnn) : 'int32_t';
             p(`${qual}${fieldCType} *${alias} = &${srcName}.${name};`);
             this.define(alias, { ctype: `${fieldCType} *`, varKind, isPointer: true, derefType: fieldCType });

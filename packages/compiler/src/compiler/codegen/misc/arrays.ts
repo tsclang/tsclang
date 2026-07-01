@@ -1,15 +1,16 @@
+import type { ArrayLit, Expression, Ident } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 // arrays.ts
 export default {
-  arrayLitToC(this: CodeGenThis, node: any, _elemType: any, lines: any, depth: any) {
-    const result: any[] = [];
+  arrayLitToC(this: CodeGenThis, node: ArrayLit, _elemType: string, lines: string[], depth: number) {
+    const result: string[] = [];
     for (const e of node.elems) {
       if (e.spread) {
         const sym = e.expr?.kind === 'Ident' ? this.lookup(e.expr.name) : null;
         if (sym?.isArray && sym.arraySize >= 0) {
           const useData = sym.ctype?.startsWith('Array_');
           for (let i = 0; i < sym.arraySize; i++) {
-            result.push(useData ? `${e.expr.name}.data[${i}]` : `${e.expr.name}[${i}]`);
+            result.push(useData ? `${(e.expr as Ident).name}.data[${i}]` : `${(e.expr as Ident).name}[${i}]`);
           }
         } else {
           result.push(`/* ...${this.exprToC(e.expr, lines, depth)} */`);
@@ -34,7 +35,7 @@ export default {
   },
 
   // Count the static size of an ArrayLit (expanding spread if possible)
-  arrayLitSize(this: CodeGenThis, node: any) {
+  arrayLitSize(this: CodeGenThis, node: ArrayLit) {
     let count = 0;
     for (const e of node.elems) {
       if (e.spread) {
@@ -49,7 +50,7 @@ export default {
   },
 
   // Returns true if the expression will produce a heap-allocated String
-  _isHeapStringInit(this: CodeGenThis, node: any) {
+  _isHeapStringInit(this: CodeGenThis, node: Expression | null) {
     if (!node) return false;
     if (node.kind === 'Binary' && node.op === '+') {
       const lt = this.inferType(node.left);
@@ -57,7 +58,7 @@ export default {
       return lt === 'String' || rt === 'String';
     }
     if (node.kind === 'TemplateLit') {
-      return node.parts.some((p: any) => p.kind === 'expr');
+      return node.parts.some((p: unknown) => (p as { kind?: string }).kind === 'expr');
     }
     if (node.kind === 'Call') {
       if (node.callee.kind === 'Ident' && node.callee.name === 'String') return true;
@@ -69,7 +70,7 @@ export default {
           const funcName = sym.funcName ?? node.callee.name;
           if (this._heapStringFuncs?.has(funcName)) return true;
           // Check overloads
-          if (sym.overloads?.some((o: any) => this._heapStringFuncs?.has(o.funcName))) return true;
+          if (sym.overloads?.some((o: { funcName: string }) => this._heapStringFuncs?.has(o.funcName))) return true;
         }
       }
       if (node.callee.kind === 'Member') {

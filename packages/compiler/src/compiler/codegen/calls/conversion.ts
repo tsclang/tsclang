@@ -1,15 +1,16 @@
+import type { Call, Expression } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 export default {
-  _dispatchConversion(this: CodeGenThis, node: any, lines: any, depth: any) {
+  _dispatchConversion(this: CodeGenThis, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       // variable.toString() where variable is a string-literal-union type
       if (callee.prop === 'toString' && callee.object.kind === 'Ident') {
-        const objSym = this.lookup(callee.object.name) as any;
-        const objEnumDef = objSym ? this.classes.get(objSym.ctype) : null;
+        const objSym = this.lookup(callee.object.name);
+        const objEnumDef = objSym ? this.classes.get(objSym.ctype!) : null;
         if (objEnumDef?.isStringLiteralUnion) {
           const objC = this.exprToC(callee.object, lines, depth);
-          return `STR_LIT_RUNTIME(${objSym.ctype}_values[(int)${objC}]).data`;
+          return `STR_LIT_RUNTIME(${objSym!.ctype}_values[(int)${objC}]).data`;
         }
       }
       // EnumMember.toString() вЂ” callee.object is Member (Dir.North), prop is 'toString'
@@ -88,11 +89,11 @@ export default {
           const closureIdx = this.lambdaCount++;
           const prefix = `_closure_${closureIdx}`;
           const envType = `${prefix}_env`;
-          const fieldDecls = freeVars.map((v: any) => `${v.ctype} ${v.name};`);
+          const fieldDecls = freeVars.map((v: { name: string; ctype: string }) => `${v.ctype} ${v.name};`);
           this._topBlank();
           this.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
           this.topLevel.push(`static ${envType} ${prefix}_captured;`);
-          const closureLines: any[] = [];
+          const closureLines: string[] = [];
           this.pushScope();
           for (const v of freeVars) {
             this.define(v.name, { ctype: v.ctype, _cAlias: `${prefix}_captured.${v.name}`, varKind: 'let' });
@@ -105,7 +106,7 @@ export default {
           this.topLevel.push('}');
           if (lines !== undefined) {
             const I = ' '.repeat(this.indent * depth);
-            const inits = freeVars.map((v: any) => `.${v.name} = ${v.name}`).join(', ');
+            const inits = freeVars.map((v: { name: string; ctype: string }) => `.${v.name} = ${v.name}`).join(', ');
             lines.push(`${I}${prefix}_captured = (${envType}){ ${inits} };`);
           }
           const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
@@ -139,7 +140,7 @@ export default {
     // parseFloat / tryParseFloat / parseInt / tryParseInt / Number
     // Helper: set _lastOptIsNull=true when arg is a string literal that can't parse as number.
     // Supports 0x/0b/0o prefixes (runtime handles them; JS parseFloat/parseInt don't, so we check manually).
-    const _setOptIsNullHint = (argNode: any) => {
+    const _setOptIsNullHint = (argNode: Expression | undefined) => {
       if (argNode?.kind === 'Literal' && argNode.litType === 'string') {
         const s = argNode.value;
         if (/^0x[0-9a-fA-F]+$/i.test(s) || /^0b[01]+$/i.test(s) || /^0o[0-7]+$/i.test(s)) {
@@ -158,8 +159,8 @@ export default {
         const argExpr = args[0]?.expr;
         const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
           : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
-        if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every((e: any) => e?.expr?.kind === 'Literal')) {
-          const bytes = _decLitArr.elems.map((e: any) => parseInt(e.expr.value));
+        if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every((e: { expr?: { kind?: string } }) => e?.expr?.kind === 'Literal')) {
+          const bytes = _decLitArr.elems.map((e: { expr: { value: string } }) => parseInt(e.expr.value));
           let i = 0;
           while (i < bytes.length) {
             const b = bytes[i];

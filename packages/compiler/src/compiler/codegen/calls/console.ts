@@ -1,6 +1,7 @@
+import type { Argument, Expression, Literal } from '@tsclang/ast';
 import type { CodeGenThis } from '../../codegen.js';
 export default {
-  consoleCall(this: CodeGenThis, method: any, args: any, lines: any, depth: any) {
+  consoleCall(this: CodeGenThis, method: string, args: Argument[], lines: string[], depth: number) {
     if (method === 'time') {
       const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
       return `tsc_console_time(${label})`;
@@ -23,8 +24,8 @@ export default {
       return isErr ? 'fprintf(stderr, "\\n")' : 'printf("\\n")';
     }
 
-    const fmtParts: any[] = [];
-    const fmtArgs: any[] = [];
+    const fmtParts: string[] = [];
+    const fmtArgs: string[] = [];
     let needSpace = false;
 
     for (const arg of args) {
@@ -37,7 +38,7 @@ export default {
       }
 
       // Unwrap throws function calls: store Result, check ok, use .value
-      let unwrapRes: any = null;
+      let unwrapRes: string | null = null;
       if (expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
         const calleeSym = this.lookup(expr.callee.name);
         if (calleeSym?._isThrowsFunc && ctype?.startsWith('Result_')) {
@@ -51,7 +52,7 @@ export default {
       }
 
       if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
-        const flattenConcat = (n: any): any[] => {
+        const flattenConcat = (n: Expression): Expression[] => {
           if (n.kind === 'Binary' && n.op === '+' && this.isStringExpr(n)) {
             return [...flattenConcat(n.left), ...flattenConcat(n.right)];
           }
@@ -59,10 +60,10 @@ export default {
         };
         const segments = flattenConcat(expr);
         // Only flatten when every segment is a string literal (safe to merge into format string)
-        if (segments.every((seg: any) => seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char'))) {
+        if (segments.every((seg: Expression) => seg.kind === 'Literal' && (seg.litType === 'string' || seg.litType === 'char'))) {
           let concatFmt = '';
           for (const seg of segments) {
-            concatFmt += seg.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%');
+            concatFmt += (seg as Literal).value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%');
           }
           fmtParts.push(concatFmt);
           continue;
@@ -88,7 +89,7 @@ export default {
       const cexpr = unwrapRes ? `${unwrapRes}.value` : this.exprToC(expr, lines, depth);
 
       if (expr.kind === 'Binary' && ['&','|','^','<<','>>','>>>'].includes(expr.op)) {
-        const hasTypedVar = (n: any): boolean => {
+        const hasTypedVar = (n: Expression | null): boolean => {
           if (!n) return false;
           if (n.kind === 'Ident') {
             const s = this.lookup(n.name);
