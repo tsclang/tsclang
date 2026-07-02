@@ -1,11 +1,4 @@
-import vardecl      from './vardecl.js';
-import destruct     from './destruct.js';
-import controlFlow  from './control-flow.js';
-import match        from './match.js';
-
-export default {
-  ...vardecl,
-  ...destruct,
-  ...controlFlow,
-  ...match,
-};
+export * from './vardecl.js';
+export * from './destruct.js';
+export * from './control-flow.js';
+export * from './match.js';

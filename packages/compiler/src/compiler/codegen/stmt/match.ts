@@ -1,17 +1,16 @@
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenContext } from '../../codegen.js';
 import type { ClassMeta } from '../../codegen.js';
 import type { Expression, MatchCase, MatchPattern, VarDecl, Stmt, CatchClause, Match, TryCatch } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
-export default {
-  _emitMatchCore(this: CodeGenThis, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
-                 discC: string, discType: string, resultType: string, resultVar: string,
-                 lines: string[], depth: number) {
-    const I = ' '.repeat(this.indent * depth);
+export function _emitMatchCore(ctx: CodeGenContext, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
+                               discC: string, discType: string, resultType: string, resultVar: string,
+                               lines: string[], depth: number) {
+    const I = ' '.repeat(ctx.indent * depth);
     const p = (s: string) => lines.push(I + s);
 
     p(`${resultType} ${resultVar} = {0};`);
 
-    const enumDef = this.classes.get(discType);
+    const enumDef = ctx.classes.get(discType);
     const isEnum = enumDef?.isEnum && !enumDef?.isConst && !enumDef?.isStringLiteralUnion;
 
     if (isEnum) {
@@ -25,7 +24,7 @@ export default {
       if (!hasWild) {
         const missing = allValues.filter((v: string) => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw this.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: string) => `'${v}'`).join(', ')}`);
+          throw ctx.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: string) => `'${v}'`).join(', ')}`);
         }
       }
     }
@@ -34,9 +33,9 @@ export default {
       let hasDefault = false;
       p(`switch (${discC}) {`);
       for (const c of cases) {
-        const bodyC = this.exprToC(c.body, lines, depth);
+        const bodyC = ctx.exprToC(c.body, lines, depth);
         if (c.pattern.kind === 'MatchEnum') {
-          const _enumDef = this.classes.get(c.pattern.enumName);
+          const _enumDef = ctx.classes.get(c.pattern.enumName);
           const _enumCname = _enumDef?._cname ?? c.pattern.enumName;
           p(`    case ${_enumCname}_${c.pattern.caseName}: ${resultVar} = ${bodyC}; break;`);
         } else if (c.pattern.kind === 'MatchWild') {
@@ -44,14 +43,14 @@ export default {
           p(`    default: ${resultVar} = ${bodyC}; break;`);
         }
       }
-      if (!hasDefault && this._strictRules?.has('switch-default')) {
+      if (!hasDefault && ctx._strictRules?.has('switch-default')) {
         p('    default: break;');
       }
       p('}');
     } else {
       let discUse = discC;
       if (!['Ident', 'Literal'].includes(discriminant.kind)) {
-        const discTmp = `_tsc_disc_${this.tempCount++}`;
+        const discTmp = `_tsc_disc_${ctx.tempCount++}`;
         p(`${discType} ${discTmp} = ${discC};`);
         discUse = discTmp;
       }
@@ -62,19 +61,19 @@ export default {
         const needsBindings = c.pattern.kind === 'MatchClass' || c.pattern.kind === 'MatchObjLit';
 
         if (isLast && (c.pattern.kind === 'MatchWild' || (isEnum && c.pattern.kind === 'MatchEnum'))) {
-          const bodyC = this.exprToC(c.body, lines, depth);
+          const bodyC = ctx.exprToC(c.body, lines, depth);
           p(`else { ${resultVar} = ${bodyC}; }`);
         } else {
-          const cond = this._matchPatternCond(c.pattern, discUse, discType, enumDef);
+          const cond = ctx._matchPatternCond(c.pattern, discUse, discType, enumDef);
           if (needsBindings) {
             const armLines: string[] = [];
-            const armI = ' '.repeat(this.indent * (depth + 1));
-            this.pushScope();
-            const bindings = this._matchPatternBindings(c.pattern, discUse, discType);
+            const armI = ' '.repeat(ctx.indent * (depth + 1));
+            ctx.pushScope();
+            const bindings = ctx._matchPatternBindings(c.pattern, discUse, discType);
             for (const b of bindings) armLines.push(armI + b);
-            const bodyC = this.exprToC(c.body, armLines, depth + 1);
+            const bodyC = ctx.exprToC(c.body, armLines, depth + 1);
             armLines.push(`${armI}${resultVar} = ${bodyC};`);
-            this.popScope();
+            ctx.popScope();
             if (cond === null) {
               p(`else {`);
             } else {
@@ -83,60 +82,60 @@ export default {
             lines.push(...armLines);
             p('}');
           } else if (cond === null) {
-            const bodyC = this.exprToC(c.body, lines, depth);
+            const bodyC = ctx.exprToC(c.body, lines, depth);
             p(`else { ${resultVar} = ${bodyC}; }`);
           } else {
-            const bodyC = this.exprToC(c.body, lines, depth);
+            const bodyC = ctx.exprToC(c.body, lines, depth);
             p(`${prefix} (${cond}) { ${resultVar} = ${bodyC}; }`);
           }
         }
       }
     }
-  },
+}
 
-  emitMatchVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
+export function emitMatchVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[], depth: number) {
     const { name, typeAnn, init } = node;
     if (init?.kind !== 'Match') return;
     const { discriminant, cases, hasParens } = init;
 
-    const discC = this.exprToC(discriminant, lines, depth);
-    const discType = this.inferType(discriminant);
+    const discC = ctx.exprToC(discriminant, lines, depth);
+    const discType = ctx.inferType(discriminant);
 
     const resultType = typeAnn
-      ? this.resolveType(typeAnn)
-      : (cases.length > 0 ? this.inferType(cases[0].body) : 'int32_t');
+      ? ctx.resolveType(typeAnn)
+      : (cases.length > 0 ? ctx.inferType(cases[0].body) : 'int32_t');
 
-    this.define(name, { ctype: resultType, varKind: 'let' });
+    ctx.define(name, { ctype: resultType, varKind: 'let' });
 
-    this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, name, lines, depth);
-  },
+    ctx._emitMatchCore(discriminant, cases, hasParens ?? false, discC, discType, resultType, name, lines, depth);
+}
 
-  _matchExprToC(this: CodeGenThis, node: Match, lines: string[], depth: number) {
+export function _matchExprToC(ctx: CodeGenContext, node: Match, lines: string[], depth: number) {
     const { discriminant, cases, hasParens } = node;
 
-    const discC = this.exprToC(discriminant, lines, depth);
-    const discType = this.inferType(discriminant);
+    const discC = ctx.exprToC(discriminant, lines, depth);
+    const discType = ctx.inferType(discriminant);
 
-    const resultType = cases.length > 0 ? this._effectiveType(cases[0].body) : 'int32_t';
-    const resultVar = `_match_${this.tempCount++}`;
+    const resultType = cases.length > 0 ? ctx._effectiveType(cases[0].body) : 'int32_t';
+    const resultVar = `_match_${ctx.tempCount++}`;
 
-    this._emitMatchCore(discriminant, cases, hasParens, discC, discType, resultType, resultVar, lines, depth);
+    ctx._emitMatchCore(discriminant, cases, hasParens ?? false, discC, discType, resultType, resultVar, lines, depth);
 
     return resultVar;
-  },
+}
 
   // -----------------------------------------------------------------------
   // Result-based TryCatch emission
   // -----------------------------------------------------------------------
-  _emitTryCatchResult(this: CodeGenThis, node: TryCatch, tryStmts: Stmt[], callStmt: Stmt, lines: string[], depth: number) {
-    const I = ' '.repeat(this.indent * depth);
+export function _emitTryCatchResult(ctx: CodeGenContext, node: TryCatch, tryStmts: Stmt[], callStmt: Stmt, lines: string[], depth: number) {
+    const I = ' '.repeat(ctx.indent * depth);
     const p = (s: string) => lines.push(I + s);
-    const II = ' '.repeat(this.indent * (depth + 1));
+    const II = ' '.repeat(ctx.indent * (depth + 1));
 
     // Require explicit type annotation in catch clauses
     for (const c of node.catches ?? []) {
       if (c.param && !c.typeAnn) {
-        throw this.error(`TypeError: catch clause requires explicit error type`, c);
+        throw ctx.error(`TypeError: catch clause requires explicit error type`, c);
       }
     }
 
@@ -148,13 +147,13 @@ export default {
 
     // Get callee symbol for result type info
     const callee = callExpr?.kind === 'Call' ? callExpr.callee : undefined;
-    const calleeSym = callee?.kind === 'Ident' ? this.lookup(callee.name) : null;
+    const calleeSym = callee?.kind === 'Ident' ? ctx.lookup(callee.name) : null;
     const resultType = calleeSym?._resultType ?? 'int';
     const isResultVoid = calleeSym?._resultIsVoid ?? true;
 
     // Emit: ResultType _res_N = call();
-    const resName = `_res_${this.tempCount++}`;
-    const callC = this.exprToC(callExpr!, lines, depth);
+    const resName = `_res_${ctx.tempCount++}`;
+    const callC = ctx.exprToC(callExpr!, lines, depth);
     p(`${resultType} ${resName} = ${callC};`);
 
     const catches = node.catches ?? [];
@@ -163,7 +162,7 @@ export default {
     if (isVoidCall || isResultVoid) {
       // Simple: if (!ok) { catch }
       p(`if (!${resName}.ok) {`);
-      this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+      ctx._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
       p('}');
     } else {
       // Non-void: value is used; check if there are subsequent statements
@@ -172,7 +171,7 @@ export default {
       if (restStmts.length === 0) {
         // No rest stmts: if (!ok) { catch }
         p(`if (!${resName}.ok) {`);
-        this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+        ctx._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
         p('}');
       } else {
         // Rest stmts: if (ok) { var = value; rest... } else { catch }
@@ -180,27 +179,27 @@ export default {
         const valType = calleeSym?._resultValueType ?? 'int32_t';
         const qualifier = (varKind === 'const' && valType !== 'String') ? 'const ' : '';
         lines.push(`${II}${qualifier}${valType} ${varName} = ${resName}.value;`);
-        this.pushScope();
-        this.define(varName!, { ctype: valType, varKind });
-        for (const s of restStmts) this.visitStmt(s, lines, depth + 1);
-        this.popScope();
+        ctx.pushScope();
+        ctx.define(varName!, { ctype: valType, varKind });
+        for (const s of restStmts) ctx.visitStmt(s, lines, depth + 1);
+        ctx.popScope();
         p('} else {');
-        this._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
+        ctx._emitCatchBodies(catches, resName, calleeSym, lines, depth + 1);
         p('}');
       }
     }
 
     // Finally block (always emitted, never inside if)
     if (node.finally) {
-      this._inFinallyBlock = true;
-      this.visitBlock(node.finally, lines, depth);
-      this._inFinallyBlock = false;
+      ctx._inFinallyBlock = true;
+      ctx.visitBlock(node.finally, lines, depth);
+      ctx._inFinallyBlock = false;
     }
-  },
+}
 
-  _emitCatchBodies(this: CodeGenThis, catches: CatchClause[], resName: string, calleeSym: SymbolInfo | null, lines: string[], depth: number) {
-    const I = ' '.repeat(this.indent * depth);
-    const II = ' '.repeat(this.indent * (depth + 1));
+export function _emitCatchBodies(ctx: CodeGenContext, catches: CatchClause[], resName: string, calleeSym: SymbolInfo | null, lines: string[], depth: number) {
+    const I = ' '.repeat(ctx.indent * depth);
+    const II = ' '.repeat(ctx.indent * (depth + 1));
     const isUnion = (calleeSym?._resultErrTypes?.length ?? 0) > 1;
 
     if (catches.length === 0) return;
@@ -210,9 +209,9 @@ export default {
       // Union catch clause: catch (e: ErrA | ErrB) — no binding, just body
       const isUnionCatch = c.typeAnn?.kind === 'TypeUnion';
       if (isUnionCatch) {
-        this.pushScope();
-        this.visitBlock(c.body, lines, depth);
-        this.popScope();
+        ctx.pushScope();
+        ctx.visitBlock(c.body, lines, depth);
+        ctx.popScope();
       } else {
         const errClass = (c.typeAnn?.kind === 'TypeRef' ? c.typeAnn.name : null) ?? 'void';
         const errExpr = isUnion
@@ -225,10 +224,10 @@ export default {
         } else {
           lines.push(`${I}(void)${errExpr};`);
         }
-        this.pushScope();
-        this.define(c.param!, { ctype: errClass });
-        this.visitBlock(c.body, lines, depth);
-        this.popScope();
+        ctx.pushScope();
+        ctx.define(c.param!, { ctype: errClass });
+        ctx.visitBlock(c.body, lines, depth);
+        ctx.popScope();
       }
     } else {
       // Multiple catch clauses → union tag dispatch (if/else if chain)
@@ -248,21 +247,21 @@ export default {
         } else {
           lines.push(`${II}(void)${errExpr};`);
         }
-        this.pushScope();
-        this.define(c.param!, { ctype: errClass });
-        this.visitBlock(c.body, lines, depth + 1);
-        this.popScope();
+        ctx.pushScope();
+        ctx.define(c.param!, { ctype: errClass });
+        ctx.visitBlock(c.body, lines, depth + 1);
+        ctx.popScope();
       }
       lines.push(`${I}}`);
     }
-  },
+}
 
   // -----------------------------------------------------------------------
   // Propagate/NonNull VarDecl: const x = throwsFunc()?  or  !
   // -----------------------------------------------------------------------
-  emitPropagateVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
+export function emitPropagateVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[], depth: number) {
     const { varKind, name, typeAnn, init } = node;
-    const I = ' '.repeat(this.indent * depth);
+    const I = ' '.repeat(ctx.indent * depth);
     const p = (s: string) => lines.push(I + s);
 
     const isProp = init?.kind === 'Propagate';
@@ -270,100 +269,100 @@ export default {
 
     // Get callee symbol
     const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;
-    const calleeSym = (callee?.kind === 'Ident') ? this.lookup(callee.name) : null;
+    const calleeSym = (callee?.kind === 'Ident') ? ctx.lookup(callee.name) : null;
 
     if (!calleeSym?._isThrowsFunc) {
       if (isProp) {
         const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
-        throw this.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+        throw ctx.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
       }
       // NonNull on non-throws: just emit normally
-      const c = this.exprToC(innerExpr!, lines, depth);
-      const ctype = typeAnn ? this.resolveType(typeAnn) : this.inferType(innerExpr!);
+      const c = ctx.exprToC(innerExpr!, lines, depth);
+      const ctype = typeAnn ? ctx.resolveType(typeAnn) : ctx.inferType(innerExpr!);
       const qualifier = (varKind === 'const' && ctype !== 'String') ? 'const ' : '';
       p(`${qualifier}${ctype} ${name} = ${c};`);
-      this.define(name, { ctype, varKind });
+      ctx.define(name, { ctype, varKind });
       return;
     }
 
     // Throws function: emit Result-based propagation
     const resultType = calleeSym._resultType;
-    const resName = `_res_${this.tempCount++}`;
-    const callC = this.exprToC(innerExpr!, lines, depth);
+    const resName = `_res_${ctx.tempCount++}`;
+    const callC = ctx.exprToC(innerExpr!, lines, depth);
     p(`${resultType} ${resName} = ${callC};`);
 
-    if (this._throwsCtx) {
-      const _wrappedErr = this._wrapErrForCaller(this._throwsCtx, `${resName}.error`, calleeSym);
-      if (this._usesGotoCleanup) {
-        const _hasBlock = this._hasPendingCleanups();
+    if (ctx._throwsCtx) {
+      const _wrappedErr = ctx._wrapErrForCaller(ctx._throwsCtx, `${resName}.error`, calleeSym);
+      if (ctx._usesGotoCleanup) {
+        const _hasBlock = ctx._hasPendingCleanups();
         if (_hasBlock) {
           p(`if (!${resName}.ok) {`);
-          this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
-          p(`    _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
+          ctx._emitFuncCleanup(lines, I + ' '.repeat(ctx.indent));
+          p(`    _result = (${ctx._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
           p(`    goto cleanup;`);
           p(`}`);
         } else {
-          p(`if (!${resName}.ok) { _result = (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; goto cleanup; }`);
+          p(`if (!${resName}.ok) { _result = (${ctx._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; goto cleanup; }`);
         }
-      } else if (this._hasPendingCleanups()) {
+      } else if (ctx._hasPendingCleanups()) {
         p(`if (!${resName}.ok) {`);
-        this._emitFuncCleanup(lines, I + ' '.repeat(this.indent));
-        p(`    return (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
+        ctx._emitFuncCleanup(lines, I + ' '.repeat(ctx.indent));
+        p(`    return (${ctx._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}};`);
         p(`}`);
       } else {
-        p(`if (!${resName}.ok) { return (${this._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; }`);
+        p(`if (!${resName}.ok) { return (${ctx._throwsCtx.resultType}){.ok = false, .error = ${_wrappedErr}}; }`);
       }
     } else {
       if (isProp) {
-        const fnName = this.currentFuncName ?? '<function>';
-        throw this.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
+        const fnName = ctx.currentFuncName ?? '<function>';
+        throw ctx.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
       }
-      p(`if (!${resName}.ok) { tsc_panic(${this._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
+      p(`if (!${resName}.ok) { tsc_panic(${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
     }
 
     // Bind the value
     const valueType = calleeSym._resultValueType ?? 'int32_t';
     const qualifier = (varKind === 'const' && valueType !== 'String') ? 'const ' : '';
     p(`${qualifier}${valueType} ${name} = ${resName}.value;`);
-    this.define(name, { ctype: valueType, varKind });
-  },
+    ctx.define(name, { ctype: valueType, varKind });
+}
 
   // Generate field binding declarations for patterns that destructure (MatchClass, MatchObjLit)
   // Returns array of C declaration strings, or empty array if no bindings needed
-  _matchPatternBindings(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string) {
+export function _matchPatternBindings(ctx: CodeGenContext, pattern: MatchPattern, discC: string, discType: string) {
     if (pattern.kind === 'MatchClass') {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
       const className = pattern.className;
-      const ifaceDef = this.interfaces?.get(discType) ?? null;
-      const classDef = this.classes.get(className);
+      const ifaceDef = ctx.interfaces?.get(discType) ?? null;
+      const classDef = ctx.classes.get(className);
       return fields.map((f: string) => {
         const fieldDef = classDef?.fields?.find((fd: { name: string }) => fd.name === f);
-        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
+        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? ctx.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = ifaceDef
           ? `((${className}*)${discC}.self)->${f}`
           : `${discC}.${f}`;
-        this.define(f, { ctype, varKind: 'const' });
+        ctx.define(f, { ctype, varKind: 'const' });
         return `${ctype} ${f} = ${access};`;
       });
     }
     if (pattern.kind === 'MatchObjLit') {
       const fields = pattern.fields ?? [];
       if (fields.length === 0) return [];
-      const structDef = this.classes.get(discType);
+      const structDef = ctx.classes.get(discType);
       return fields.map((f: string) => {
         const fieldDef = structDef?.fields?.find((fd: { name: string }) => fd.name === f);
-        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? this.resolveType(fieldDef.typeAnn) : 'int32_t');
+        const ctype = fieldDef?.ctype ?? (fieldDef?.typeAnn ? ctx.resolveType(fieldDef.typeAnn) : 'int32_t');
         const access = `${discC}.${f}`;
-        this.define(f, { ctype, varKind: 'const' });
+        ctx.define(f, { ctype, varKind: 'const' });
         return `${ctype} ${f} = ${access};`;
       });
     }
     return [];
-  },
+}
 
   // Generate a C condition expression for a match pattern
-  _matchPatternCond(this: CodeGenThis, pattern: MatchPattern, discC: string, discType: string, enumDef: ClassMeta | undefined) {
+export function _matchPatternCond(ctx: CodeGenContext, pattern: MatchPattern, discC: string, discType: string | null, enumDef: ClassMeta | undefined): string | null {
     switch (pattern.kind) {
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
@@ -373,7 +372,7 @@ export default {
       }
       case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} < ${pattern.hi}`;
       case 'MatchEnum': {
-        const _enumDef = this.classes.get(pattern.enumName);
+        const _enumDef = ctx.classes.get(pattern.enumName);
         const _enumCname = _enumDef?._cname ?? pattern.enumName;
         return `${discC} == ${_enumCname}_${pattern.caseName}`;
       }
@@ -386,12 +385,12 @@ export default {
         return null; // treat as wildcard
       }
       case 'MatchOr': {
-        const parts = pattern.patterns.map((p: MatchPattern) => this._matchPatternCond(p, discC, discType, enumDef)).filter(Boolean);
+        const parts = pattern.patterns.map((p: MatchPattern) => _matchPatternCond(ctx, p, discC, discType, enumDef)).filter(Boolean);
         return parts.join(' || ');
       }
       case 'MatchClass': {
         // Class pattern: check vtable for interface fat pointers
-        const ifaceDef = this.interfaces?.get(discType) ?? null;
+        const ifaceDef = discType ? (ctx.interfaces?.get(discType) ?? null) : null;
         if (ifaceDef) {
           // Interface fat pointer: discC.vtable == &ClassName_InterfaceName_vtable
           return `${discC}.vtable == &${pattern.className}_${discType}_vtable`;
@@ -415,24 +414,24 @@ export default {
           const el = pattern.elements[i];
           if (el.kind === 'MatchWild') continue;
           const fieldC = `${discC}._${i}`;
-          const cond = this._matchPatternCond(el, fieldC, null, null);
+          const cond = ctx._matchPatternCond(el, fieldC, null, undefined);
           if (cond) conds.push(cond);
         }
         return conds.length > 0 ? conds.join(' && ') : '1';
       }
-      default: throw this.error(`internal: unhandled match pattern kind '${(pattern as MatchPattern).kind}'`, pattern as MatchPattern);
+      default: throw ctx.error(`internal: unhandled match pattern kind '${(pattern as MatchPattern).kind}'`, pattern as MatchPattern);
     }
-  },
+}
 
   // ── select({key: ch.receive(), ...}) → _SelectResult_N struct + tryReceive chain ──
-  emitSelectVarDecl(this: CodeGenThis, node: VarDecl, lines: string[], depth: number) {
-    const I = ' '.repeat(this.indent * depth);
+export function emitSelectVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[], depth: number) {
+    const I = ' '.repeat(ctx.indent * depth);
     const { name, varKind, init } = node;
     const objArg = init?.kind === 'Call' ? init.args?.[0]?.expr : undefined;
     const props = objArg?.kind === 'ObjLit' ? objArg.props ?? [] : [];
 
-    const selIdx = this._selectCount ?? 0;
-    this._selectCount = selIdx + 1;
+    const selIdx = ctx._selectCount ?? 0;
+    ctx._selectCount = selIdx + 1;
     const structName = `_SelectResult_${selIdx}`;
     const doneLabel = `_sel${selIdx}_done`;
 
@@ -445,20 +444,20 @@ export default {
       let ident = 'i32';
       if (val?.kind === 'Call' && val.callee?.kind === 'Member' && val.callee.prop === 'receive') {
         const chObj = val.callee.object;
-        const chSym = chObj?.kind === 'Ident' ? this.lookup(chObj.name) : null;
+        const chSym = chObj?.kind === 'Ident' ? ctx.lookup(chObj.name) : null;
         const m = chSym?.ctype?.match(/^Channel_(\w+)$/);
         if (m) ident = m[1];
       }
-      const ctype = this.resolveType({ kind: 'TypeRef', name: ident }) ?? 'int32_t';
+      const ctype = ctx.resolveType({ kind: 'TypeRef', name: ident }) ?? 'int32_t';
       fields.push({ key: typeof key === 'string' ? key : '', ident, ctype, valExpr: val as Expression });
     }
 
     // Emit typedef
     const fieldDecls = [`int32_t _arm`, ...fields.map((f: { ctype: string; key: string }) => `${f.ctype} ${f.key}`)].join('; ');
-    this.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
+    ctx.addTop(`typedef struct { ${fieldDecls}; } ${structName};`);
 
     // Register struct type so inferType works for field access
-    this.classes.set(structName, {
+    ctx.classes.set(structName, {
       fields: [
         { name: '_arm', ctype: 'int32_t' },
         ...fields.map((f: { key: string; ctype: string }) => ({ name: f.key, ctype: f.ctype })),
@@ -473,10 +472,10 @@ export default {
     for (let i = 0; i < fields.length; i++) {
       const { key, ident, valExpr } = fields[i];
       const chObj = valExpr?.kind === 'Call' && valExpr.callee?.kind === 'Member' ? valExpr.callee.object : undefined;
-      const chC = this.exprToC(chObj!, lines, depth);
+      const chC = ctx.exprToC(chObj!, lines, depth);
       const optType = `opt_${ident}`;
       // Ensure opt_T typedef
-      this._ensureOptStruct?.(optType, fields[i].ctype);
+      ctx._ensureOptStruct?.(optType, fields[i].ctype);
       const selVar = `_sel_${key}`;
       if (i === 0) {
         lines.push(`${I}{ ${optType} ${selVar} = tsc_channel_try_receive_${ident}(${chC}._inner); if (${selVar}.has_value) { ${name}.${key} = ${selVar}.value; ${name}._arm = ${i}; } }`);
@@ -486,7 +485,6 @@ export default {
     }
 
     // Register the result variable in scope
-    this.define(name, { ctype: structName, varKind });
-  },
+    ctx.define(name, { ctype: structName, varKind });
+}
 
-};

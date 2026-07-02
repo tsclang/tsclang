@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1563,13 +1563,30 @@ class Context {
   visitStmt(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmt(this, node, lines, depth); }
   visitStmtOrBlock(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmtOrBlock(this, node, lines, depth); }
 
+  // Delegating methods: stmtSubFns
+  _visitVarDecl(node: VarDecl, lines: string[], depth: number) { return stmtSubFns._visitVarDecl(this, node, lines, depth); }
+  _visitVarDestruct(node: Parameters<typeof stmtSubFns._visitVarDestruct>[1], lines: string[], depth: number) { return stmtSubFns._visitVarDestruct(this, node, lines, depth); }
+  _emitRetainIfNeeded(valC: string, valNode: Expression, p: (s: string) => void) { return stmtSubFns._emitRetainIfNeeded(this, valC, valNode, p); }
+  _wrapErrForCaller(throwsCtx: Parameters<typeof stmtSubFns._wrapErrForCaller>[1], errExpr: string, calleeSym: SymbolInfo | null) { return stmtSubFns._wrapErrForCaller(this, throwsCtx, errExpr, calleeSym); }
+  _visitControlFlow(node: Stmt, lines: string[], depth: number) { return stmtSubFns._visitControlFlow(this, node, lines, depth); }
+  _validateSwitchFallthrough(node: Switch) { return stmtSubFns._validateSwitchFallthrough(this, node); }
+  _isSimpleCType(ct: string) { return stmtSubFns._isSimpleCType(this, ct); }
+  _emitMatchCore(discriminant: Expression, cases: MatchCase[], hasParens: boolean, discC: string, discType: string, resultType: string, resultVar: string, lines: string[], depth: number) { return stmtSubFns._emitMatchCore(this, discriminant, cases, hasParens, discC, discType, resultType, resultVar, lines, depth); }
+  emitMatchVarDecl(node: VarDecl, lines: string[], depth: number) { return stmtSubFns.emitMatchVarDecl(this, node, lines, depth); }
+  _matchExprToC(node: Match, lines: string[], depth: number) { return stmtSubFns._matchExprToC(this, node, lines, depth); }
+  _emitTryCatchResult(node: TryCatch, tryStmts: Stmt[], callStmt: Stmt, lines: string[], depth: number) { return stmtSubFns._emitTryCatchResult(this, node, tryStmts, callStmt, lines, depth); }
+  _emitCatchBodies(catches: CatchClause[], resName: string, calleeSym: SymbolInfo | null, lines: string[], depth: number) { return stmtSubFns._emitCatchBodies(this, catches, resName, calleeSym, lines, depth); }
+  emitPropagateVarDecl(node: VarDecl, lines: string[], depth: number) { return stmtSubFns.emitPropagateVarDecl(this, node, lines, depth); }
+  _matchPatternBindings(pattern: MatchPattern, discC: string, discType: string) { return stmtSubFns._matchPatternBindings(this, pattern, discC, discType); }
+  _matchPatternCond(pattern: MatchPattern, discC: string, discType: string | null, enumDef: Parameters<typeof stmtSubFns._matchPatternCond>[4]) { return stmtSubFns._matchPatternCond(this, pattern, discC, discType, enumDef); }
+  emitSelectVarDecl(node: VarDecl, lines: string[], depth: number) { return stmtSubFns.emitSelectVarDecl(this, node, lines, depth); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
 // All signatures use loose (...args: any[]) for now — individual methods can be
 // tightened later. This gives method-name checking and IDE autocomplete.
 interface Context {
-  _SIMPLE_C_TYPES: Set<string>;
   _asyncGenRetType: string | null;
   _analyzeClassDecorator(...args: any[]): any;
   _analyzeDecorator(...args: any[]): any;
@@ -1615,20 +1632,16 @@ interface Context {
   _emitAsyncSwitch(...args: any[]): any;
   _emitAsyncTransition(...args: any[]): any;
   _emitAsyncWhile(...args: any[]): any;
-  _emitCatchBodies(...args: any[]): any;
   _emitDecoratedMethod(...args: any[]): any;
   _emitDecoratedStandaloneFunc(...args: any[]): any;
   _emitDecoratorWrapperFn(...args: any[]): any;
   _emitGenRegStmt(...args: any[]): any;
   _emitGenStmt(...args: any[]): any;
   _emitGenStmtList(...args: any[]): any;
-  _emitMatchCore(...args: any[]): any;
   _emitPoolClass(...args: any[]): any;
-  _emitRetainIfNeeded(...args: any[]): any;
   _emitStructCompact(...args: any[]): any;
   _emitStructMultiline(...args: any[]): any;
   _emitTopFn(...args: any[]): any;
-  _emitTryCatchResult(...args: any[]): any;
   _ensureClassFree(...args: any[]): any;
   _ensureHeapDestructor(...args: any[]): any;
   _ensureImplicitVtable(...args: any[]): any;
@@ -1650,22 +1663,13 @@ interface Context {
   _initAsync(...args: any[]): any;
   _isInlinableConst(...args: any[]): any;
   _isOrigApply(...args: any[]): any;
-  _isSimpleCType(...args: any[]): any;
   _livenessScan(...args: any[]): any;
   _markHeapClass(...args: any[]): any;
-  _matchExprToC(...args: any[]): any;
-  _matchPatternBindings(...args: any[]): any;
-  _matchPatternCond(...args: any[]): any;
   _scanAsyncBody(...args: any[]): any;
   _scanExprIdents(...args: any[]): any;
   _selfE(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
   _topBlank(...args: any[]): any;
-  _validateSwitchFallthrough(...args: any[]): any;
-  _visitControlFlow(...args: any[]): any;
-  _visitVarDecl(...args: any[]): any;
-  _visitVarDestruct(...args: any[]): any;
-  _wrapErrForCaller(...args: any[]): any;
   argsToC(...args: any[]): any;
   bareNumberValue(...args: any[]): any;
   callToC(...args: any[]): any;
@@ -1673,10 +1677,7 @@ interface Context {
   emitAsyncFunc(...args: any[]): any;
   emitFuncBody(...args: any[]): any;
   emitGeneratorFunc(...args: any[]): any;
-  emitMatchVarDecl(...args: any[]): any;
   emitMethod(...args: any[]): any;
-  emitPropagateVarDecl(...args: any[]): any;
-  emitSelectVarDecl(...args: any[]): any;
   emitVtableConstant(...args: any[]): any;
   flattenUnion(...args: any[]): any;
   getStringLiteralMembers(...args: any[]): any;
@@ -1706,7 +1707,7 @@ export type CodeGenContext = Context;
 
 import topLevel  from './codegen/top-level.js';
 import * as stmtFns from './codegen/stmt.js';
-import stmtSub   from './codegen/stmt/index.js';
+import * as stmtSubFns from './codegen/stmt/index.js';
 import calls     from './codegen/calls/index.js';
 import asyncMixin from './codegen/async.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
@@ -1719,7 +1720,6 @@ import * as helpers from './codegen/types/helpers.js';
 
 const _mixinSources = [
   ['topLevel',  topLevel],
-  ['stmtSub',   stmtSub],
   ['calls',     calls],
   ['async',     asyncMixin],
 ];
@@ -1737,4 +1737,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmtSub, calls, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, calls, asyncMixin, STDLIB_HANDLERS);
