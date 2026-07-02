@@ -1,9 +1,8 @@
 import type { Literal, Binary, Expression } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenContext } from '../../codegen.js';
 // literals.ts
-export default {
   // Unescape a char literal value to numeric code
-  _charCode(this: CodeGenThis, raw: string) {
+export function _charCode(ctx: CodeGenContext, raw: string) {
     if (raw === '\\n') return 10;
     if (raw === '\\t') return 9;
     if (raw === '\\r') return 13;
@@ -15,38 +14,38 @@ export default {
     if (raw.startsWith('\\u')) return parseInt(raw.slice(2), 16);
     if (raw.length === 1) {
       const code = raw.charCodeAt(0);
-      if (code > 127) throw this.error(`non-ASCII character cannot be used as u8 — use double quotes for multi-byte strings`);
+      if (code > 127) throw ctx.error(`non-ASCII character cannot be used as u8 — use double quotes for multi-byte strings`);
       return code;
     }
-    throw this.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
-  },
+    throw ctx.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
+}
 
-  _charLiteralToSTR_LIT(this: CodeGenThis, value: string) {
+export function _charLiteralToSTR_LIT(ctx: CodeGenContext, value: string) {
     const escaped = value.replace(/\\(?![ntr0'"\\abfvxuU0-7])/g, '\\\\').replace(/"/g, '\\"');
     return `STR_LIT("${escaped}")`;
-  },
+}
 
-  _stringLiteralToByte(this: CodeGenThis, node: Literal) {
+export function _stringLiteralToByte(ctx: CodeGenContext, node: Literal) {
     const raw = node.value;
     if (raw.length === 0) {
-      throw this.error(`cannot convert empty string to char/u8`, node);
+      throw ctx.error(`cannot convert empty string to char/u8`, node);
     }
     if (raw.startsWith('\\')) {
-      return this._charCode(raw);
+      return ctx._charCode(raw);
     }
     if (raw.length !== 1) {
-      throw this.error(`cannot convert multi-character string to char/u8 — use single character or escape sequence`, node);
+      throw ctx.error(`cannot convert multi-character string to char/u8 — use single character or escape sequence`, node);
     }
     const code = raw.charCodeAt(0);
     if (code > 127) {
-      throw this.error(`non-ASCII character cannot be used as char/u8 — multi-byte UTF-8 characters require string type`, node);
+      throw ctx.error(`non-ASCII character cannot be used as char/u8 — multi-byte UTF-8 characters require string type`, node);
     }
     return code;
-  },
+}
 
-  literalToC(this: CodeGenThis, node: Literal) {
+export function literalToC(ctx: CodeGenContext, node: Literal): string {
     if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
-    if (node.litType === 'char')   return this._charLiteralToSTR_LIT(node.value);
+    if (node.litType === 'char')   return ctx._charLiteralToSTR_LIT(node.value);
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';
     const v = node.value;
@@ -54,14 +53,14 @@ export default {
     if (v === 'Infinity') return 'INFINITY';
     if (v.startsWith('0o') || v.startsWith('0O')) return '0' + v.slice(2);
     return v;
-  },
+}
 
   // Emit a number literal with the correct suffix for the given target C type
-  literalToCTyped(this: CodeGenThis, node: Literal, ctype: string) {
+export function literalToCTyped(ctx: CodeGenContext, node: Literal, ctype: string): string {
     // Char literals: convert to numeric value
     if (node.litType === 'char') {
-      if (ctype === 'String') return this._charLiteralToSTR_LIT(node.value);
-      const code = this._charCode(node.value);
+      if (ctype === 'String') return ctx._charLiteralToSTR_LIT(node.value);
+      const code = ctx._charCode(node.value);
       if (ctype === 'uint8_t' || ctype === 'char') return code + 'U';
       return String(code);
     }
@@ -94,9 +93,9 @@ export default {
     if (ctype === 'uint32_t' || ctype === 'uint16_t' || ctype === 'uint8_t') return v + 'U';
     if (ctype === 'size_t') return v + 'U';  // usize literals always get U suffix
     return v;
-  },
+}
 
-  _checkLiteralFitsType(this: CodeGenThis, node: Expression, ctype: string) {
+export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, ctype: string) {
     const INT_RANGES = {
       'int8_t':   { min: -128n,                    max: 127n,                    ts: 'i8' },
       'int16_t':  { min: -32768n,                  max: 32767n,                  ts: 'i16' },
@@ -112,19 +111,19 @@ export default {
     const isNegLit = node.kind === 'Unary' && node.op === '-'
       && node.expr?.kind === 'Literal' && node.expr.litType === 'number';
     if (!isLit && !isNegLit) return;
-    const val = this.constVal(node);
+    const val = ctx.constVal(node);
     if (val === null) return;
     const r = (INT_RANGES as Record<string, { min: bigint; max: bigint; ts: string }>)[ctype];
     if (val < r.min || val > r.max) {
-      throw this.error(`literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})`, node);
+      throw ctx.error(`literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})`, node);
     }
-  },
+}
 
   // ----------------------------------------------------------------
   // Binary
   // ----------------------------------------------------------------
   // Get compile-time constant value of a const-literal variable or literal node (BigInt or null)
-  constVal(this: CodeGenThis, node: Expression) {
+export function constVal(ctx: CodeGenContext, node: Expression): bigint | null {
     if (node.kind === 'Literal' && node.litType === 'number') {
       const raw = node.value.replace(/_/g, '');
       try { return BigInt(raw); } catch(_) {
@@ -133,32 +132,32 @@ export default {
       }
     }
     if (node.kind === 'Unary' && node.op === '-') {
-      const v = this.constVal(node.expr ?? (node as { operand?: Expression }).operand);
+      const v = ctx.constVal(node.expr ?? (node as { operand?: Expression }).operand);
       return v !== null ? -v : null;
     }
     if (node.kind === 'Ident') {
-      const sym = this.lookup(node.name);
+      const sym = ctx.lookup(node.name);
       return sym?.constValue ?? null;
     }
     return null;
-  },
+}
 
   // For const-context mixed integer binary expressions: cast operands and result explicitly.
   // Returns null if not applicable.
-  tryConstMixedBinary(this: CodeGenThis, node: Binary, targetCtype: string, lines: string[], depth: number) {
-    const lt = this.inferType(node.left);
-    const rt = this.inferType(node.right);
+export function tryConstMixedBinary(ctx: CodeGenContext, node: Binary, targetCtype: string, lines: string[], depth: number) {
+    const lt = ctx.inferType(node.left);
+    const rt = ctx.inferType(node.right);
     // Only applies to arithmetic ops with const operands (not let variables)
     const arithOps = ['+', '-', '*', '/', '%'];
     if (!arithOps.includes(node.op)) return null;
-    const leftIsLet  = node.left.kind  === 'Ident' && this.lookup(node.left.name)?.varKind === 'let';
-    const rightIsLet = node.right.kind === 'Ident' && this.lookup(node.right.name)?.varKind === 'let';
+    const leftIsLet  = node.left.kind  === 'Ident' && ctx.lookup(node.left.name)?.varKind === 'let';
+    const rightIsLet = node.right.kind === 'Ident' && ctx.lookup(node.right.name)?.varKind === 'let';
     if (leftIsLet || rightIsLet) return null; // let vars handled separately (error or binaryWidened)
 
     // i64 + u32 or u32 + i64
     if ((lt === 'int64_t' && rt === 'uint32_t') || (lt === 'uint32_t' && rt === 'int64_t')) {
       // Compile-time overflow check if values are known
-      const lv = this.constVal(node.left), rv = this.constVal(node.right);
+      const lv = ctx.constVal(node.left), rv = ctx.constVal(node.right);
       if (lv !== null && rv !== null) {
         const result = node.op === '+' ? lv + rv : node.op === '-' ? lv - rv :
                        node.op === '*' ? lv * rv : node.op === '/' ? lv / rv : lv % rv;
@@ -167,10 +166,10 @@ export default {
         const typeMin = { 'uint32_t': 0n, 'uint8_t': 0n, 'uint16_t': 0n,
                           'int32_t': -2147483648n, 'int64_t': -9223372036854775808n };
         if (targetCtype in typeMax && (result > (typeMax as Record<string, bigint>)[targetCtype] || result < (typeMin as Record<string, bigint>)[targetCtype])) {
-          throw this.error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`, node);
+          throw ctx.error(`const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}`, node);
         }
       }
-      const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
+      const [lC, rC] = [ctx.exprToC(node.left, lines, depth), ctx.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int64_t' ? [lC, `(int64_t)${rC}`] : [`(int64_t)${lC}`, rC];
       const inner = `${lCast} ${node.op} ${rCast}`;
       return targetCtype === 'uint32_t' ? `(uint32_t)(${inner})` : `(${targetCtype})(${inner})`;
@@ -179,11 +178,11 @@ export default {
     if ((lt === 'int32_t' && rt === 'uint32_t') || (lt === 'uint32_t' && rt === 'int32_t')) {
       // Check if the u32 operand fits in i32 range
       const u32Node = lt === 'uint32_t' ? node.left : node.right;
-      const u32Val = this.constVal(u32Node);
+      const u32Val = ctx.constVal(u32Node);
       if (u32Val !== null && u32Val > 2147483647n) {
-        throw this.error(`cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges`, node);
+        throw ctx.error(`cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges`, node);
       }
-      const [lC, rC] = [this.exprToC(node.left, lines, depth), this.exprToC(node.right, lines, depth)];
+      const [lC, rC] = [ctx.exprToC(node.left, lines, depth), ctx.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int32_t' ? [lC, `(int32_t)${rC}`] : [`(int32_t)${lC}`, rC];
       const inner = `${lCast} ${node.op} ${rCast}`;
       return targetCtype === 'int32_t' ? inner : `(${targetCtype})(${inner})`;
@@ -192,15 +191,14 @@ export default {
     if (targetCtype === 'uint8_t' || targetCtype === 'uint16_t') {
       const typeMax = { 'uint8_t': 255n, 'uint16_t': 65535n };
       const typeMin = { 'uint8_t': 0n, 'uint16_t': 0n };
-      const lv = this.constVal(node.left), rv = this.constVal(node.right);
+      const lv = ctx.constVal(node.left), rv = ctx.constVal(node.right);
       if (lv !== null && rv !== null) {
         const result = node.op === '+' ? lv + rv : node.op === '-' ? lv - rv :
                        node.op === '*' ? lv * rv : node.op === '/' ? lv / rv : lv % rv;
         if (result > (typeMax as Record<string, bigint>)[targetCtype] || result < (typeMin as Record<string, bigint>)[targetCtype]) {
-          throw this.error(`const expression result ${result} overflows ${this.ctypeToTsName(targetCtype)}`, node);
+          throw ctx.error(`const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}`, node);
         }
       }
     }
     return null;
-  },
-};
+}

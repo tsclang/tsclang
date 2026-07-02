@@ -261,7 +261,7 @@ export default {
               const keyName = typeof keyExpr === 'object' && keyExpr?.kind === 'Ident' ? keyExpr.name : '?';
               throw this.error(`TypeError: StaticMap keys must be compile-time string literals; dynamic key '[${keyName}]' is not allowed`);
             }
-            const valC = this.exprToC(prop.value, lines, depth);
+            const valC = this.exprToC(prop.value!, lines, depth);
             entries.push({ key: prop.key ?? '', valC });
           }
           const idx = this._staticMapInlineCount ?? 0;
@@ -278,7 +278,7 @@ export default {
           let portC = '8080';
           if (optsArg?.kind === 'ObjLit') {
             const portProp = (optsArg.props ?? []).find((pr) => pr.key === 'port');
-            if (portProp) portC = this.exprToC(portProp.value, lines, depth);
+            if (portProp) portC = this.exprToC(portProp.value!, lines, depth);
           }
           p(`TscHttpServer ${name} = tsc_http_server_create(${portC});`);
           this.define(name, { ctype: 'TscHttpServer', varKind, _isHttpServer: true });
@@ -1302,7 +1302,7 @@ export default {
             const provided = new Map();
             for (const prop of init.props) {
               if (!prop.spread && !prop.computed) {
-                provided.set(prop.key, this.exprToC(prop.value, lines, depth));
+                provided.set(prop.key, this.exprToC(prop.value!, lines, depth));
               }
             }
             const initParts: string[] = [];

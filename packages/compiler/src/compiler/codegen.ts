@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1536,6 +1536,27 @@ class Context {
   _collectFreeVars(lambda: { params: Param[]; body: Block | Expression | null }) { return miscFns._collectFreeVars(this, lambda); }
   _avrSleepModeToC(node: Expression) { return miscFns._avrSleepModeToC(this, node); }
 
+  // Delegating methods: exprFns
+  exprToC(node: Expression, lines: string[] = [], depth: number = 0) { return exprFns.exprToC(this, node, lines, depth); }
+  _truthyToC(node: Expression, lines: string[] = [], depth: number = 0) { return exprFns._truthyToC(this, node, lines, depth); }
+  _charCode(raw: string) { return exprFns._charCode(this, raw); }
+  _charLiteralToSTR_LIT(value: string) { return exprFns._charLiteralToSTR_LIT(this, value); }
+  _stringLiteralToByte(node: Literal) { return exprFns._stringLiteralToByte(this, node); }
+  literalToC(node: Literal) { return exprFns.literalToC(this, node); }
+  literalToCTyped(node: Literal, ctype: string) { return exprFns.literalToCTyped(this, node, ctype); }
+  _checkLiteralFitsType(node: Expression, ctype: string) { return exprFns._checkLiteralFitsType(this, node, ctype); }
+  constVal(node: Expression) { return exprFns.constVal(this, node); }
+  tryConstMixedBinary(node: Binary, targetCtype: string, lines: string[], depth: number) { return exprFns.tryConstMixedBinary(this, node, targetCtype, lines, depth); }
+  binaryWidened(node: Binary, targetCtype: string, lines: string[], depth: number) { return exprFns.binaryWidened(this, node, targetCtype, lines, depth); }
+  binaryToC(node: Binary, lines: string[], depth: number) { return exprFns.binaryToC(this, node, lines, depth); }
+  _hasFloatVar(node: Expression) { return exprFns._hasFloatVar(this, node); }
+  isStringExpr(node: Expression) { return exprFns.isStringExpr(this, node); }
+  _derefStringPtr(node: Expression, cexpr: string) { return exprFns._derefStringPtr(this, node, cexpr); }
+  _flattenStringConcat(node: Expression) { return exprFns._flattenStringConcat(this, node); }
+  _stringConcatChain(operands: Expression[], lines: string[], depth: number) { return exprFns._stringConcatChain(this, operands, lines, depth); }
+  unaryToC(node: Unary, lines: string[], depth: number) { return exprFns.unaryToC(this, node, lines, depth); }
+  assignToC(node: Assign, lines: string[], depth: number) { return exprFns.assignToC(this, node, lines, depth); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1543,7 +1564,6 @@ class Context {
 // tightened later. This gives method-name checking and IDE autocomplete.
 interface Context {
   _SIMPLE_C_TYPES: Set<string>;
-  _derefStringPtr(...args: any[]): any;
   _asyncGenRetType: string | null;
   _analyzeClassDecorator(...args: any[]): any;
   _analyzeDecorator(...args: any[]): any;
@@ -1552,10 +1572,7 @@ interface Context {
   _buildAsyncPoll(...args: any[]): any;
   _buildGenNext(...args: any[]): any;
   _buildInnerCall(...args: any[]): any;
-  _charCode(...args: any[]): any;
-  _charLiteralToSTR_LIT(...args: any[]): any;
   _checkAwaitTarget(...args: any[]): any;
-  _checkLiteralFitsType(...args: any[]): any;
   _classHasInheritance(...args: any[]): any;
   _collectAwaitStates(...args: any[]): any;
   _constLiteralC(...args: any[]): any;
@@ -1613,11 +1630,9 @@ interface Context {
   _ensurePoolDrop(...args: any[]): any;
   _extractCallbackFn(...args: any[]): any;
   _extractLambdaBody(...args: any[]): any;
-  _flattenStringConcat(...args: any[]): any;
   _genLivenessScan(...args: any[]): any;
   _getIfaceParamName(...args: any[]): any;
   _getStringFields(...args: any[]): any;
-  _hasFloatVar(...args: any[]): any;
   _hasOrigApplyDeep(...args: any[]): any;
   _handleStdAvr(...args: any[]): any;
   _handleStdFs(...args: any[]): any;
@@ -1638,24 +1653,17 @@ interface Context {
   _scanAsyncBody(...args: any[]): any;
   _scanExprIdents(...args: any[]): any;
   _selfE(...args: any[]): any;
-  _stringConcatChain(...args: any[]): any;
-  _stringLiteralToByte(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
   _topBlank(...args: any[]): any;
-  _truthyToC(...args: any[]): any;
   _validateSwitchFallthrough(...args: any[]): any;
   _visitControlFlow(...args: any[]): any;
   _visitVarDecl(...args: any[]): any;
   _visitVarDestruct(...args: any[]): any;
   _wrapErrForCaller(...args: any[]): any;
   argsToC(...args: any[]): any;
-  assignToC(...args: any[]): any;
   bareNumberValue(...args: any[]): any;
-  binaryToC(...args: any[]): any;
-  binaryWidened(...args: any[]): any;
   callToC(...args: any[]): any;
   consoleCall(...args: any[]): any;
-  constVal(...args: any[]): any;
   emitAsyncFunc(...args: any[]): any;
   emitFuncBody(...args: any[]): any;
   emitGeneratorFunc(...args: any[]): any;
@@ -1664,21 +1672,15 @@ interface Context {
   emitPropagateVarDecl(...args: any[]): any;
   emitSelectVarDecl(...args: any[]): any;
   emitVtableConstant(...args: any[]): any;
-  exprToC(...args: any[]): any;
   flattenUnion(...args: any[]): any;
   getStringLiteralMembers(...args: any[]): any;
   getStructFields(...args: any[]): any;
   isBareLiteralNumber(...args: any[]): any;
-  isStringExpr(...args: any[]): any;
   isStringLiteralUnion(...args: any[]): any;
   jsonCall(...args: any[]): any;
   labelUsed(...args: any[]): any;
-  literalToC(...args: any[]): any;
-  literalToCTyped(...args: any[]): any;
   mathCall(...args: any[]): any;
   methodCall(...args: any[]): any;
-  tryConstMixedBinary(...args: any[]): any;
-  unaryToC(...args: any[]): any;
   visitBlock(...args: any[]): any;
   visitClassDecl(...args: any[]): any;
   visitDeclareConst(...args: any[]): any;
@@ -1703,11 +1705,11 @@ export type CodeGenContext = Context;
 import topLevel  from './codegen/top-level.js';
 import stmt      from './codegen/stmt.js';
 import stmtSub   from './codegen/stmt/index.js';
-import expr      from './codegen/expr.js';
 import calls     from './codegen/calls/index.js';
 import asyncMixin from './codegen/async.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
+import * as exprFns from './codegen/expr/index.js';
 import * as miscFns from './codegen/misc/index.js';
 import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
@@ -1717,7 +1719,6 @@ const _mixinSources = [
   ['topLevel',  topLevel],
   ['stmt',      stmt],
   ['stmtSub',   stmtSub],
-  ['expr',      expr],
   ['calls',     calls],
   ['async',     asyncMixin],
 ];
@@ -1735,4 +1736,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, calls, asyncMixin, STDLIB_HANDLERS);

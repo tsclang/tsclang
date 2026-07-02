@@ -154,7 +154,7 @@ export default {
 
     // Emit: ResultType _res_N = call();
     const resName = `_res_${this.tempCount++}`;
-    const callC = this.exprToC(callExpr, lines, depth);
+    const callC = this.exprToC(callExpr!, lines, depth);
     p(`${resultType} ${resName} = ${callC};`);
 
     const catches = node.catches ?? [];
@@ -278,8 +278,8 @@ export default {
         throw this.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
       }
       // NonNull on non-throws: just emit normally
-      const c = this.exprToC(innerExpr, lines, depth);
-      const ctype = typeAnn ? this.resolveType(typeAnn) : this.inferType(innerExpr);
+      const c = this.exprToC(innerExpr!, lines, depth);
+      const ctype = typeAnn ? this.resolveType(typeAnn) : this.inferType(innerExpr!);
       const qualifier = (varKind === 'const' && ctype !== 'String') ? 'const ' : '';
       p(`${qualifier}${ctype} ${name} = ${c};`);
       this.define(name, { ctype, varKind });
@@ -289,7 +289,7 @@ export default {
     // Throws function: emit Result-based propagation
     const resultType = calleeSym._resultType;
     const resName = `_res_${this.tempCount++}`;
-    const callC = this.exprToC(innerExpr, lines, depth);
+    const callC = this.exprToC(innerExpr!, lines, depth);
     p(`${resultType} ${resName} = ${callC};`);
 
     if (this._throwsCtx) {
@@ -473,7 +473,7 @@ export default {
     for (let i = 0; i < fields.length; i++) {
       const { key, ident, valExpr } = fields[i];
       const chObj = valExpr?.kind === 'Call' && valExpr.callee?.kind === 'Member' ? valExpr.callee.object : undefined;
-      const chC = this.exprToC(chObj, lines, depth);
+      const chC = this.exprToC(chObj!, lines, depth);
       const optType = `opt_${ident}`;
       // Ensure opt_T typedef
       this._ensureOptStruct?.(optType, fields[i].ctype);

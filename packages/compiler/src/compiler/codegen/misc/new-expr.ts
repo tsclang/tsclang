@@ -6,7 +6,7 @@ interface RtClassField { name?: string; modifiers?: string[]; init?: Expression;
 interface RtTypeParam { name: string; }
 
 // new-expr.ts
-export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: number) {
+export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: number): string {
     const { name, args } = node;
     for (const a of args ?? []) ctx._checkNoBareThrows(a.expr ?? a);
     const argsC = ctx.argsToC(args, lines, depth);
@@ -233,7 +233,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
         f.init && (f.decorators ?? []).some((d: { name: string }) => d.name === 'readonly')
       );
       if (readonlyInits.length > 0) {
-        const parts = readonlyInits.map((f: RtClassField) => `.${f.name} = ${ctx.exprToC(f.init, lines, depth)}`);
+        const parts = readonlyInits.map((f: RtClassField) => `.${f.name} = ${ctx.exprToC(f.init!, lines, depth)}`);
         return `{ ${parts.join(', ')} }`;
       }
       // In return context, compound literal syntax is required; in declarations, {0} works too

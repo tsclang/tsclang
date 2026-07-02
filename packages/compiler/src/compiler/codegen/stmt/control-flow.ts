@@ -107,9 +107,9 @@ export default {
             lines.push(`${I}return (${optType}){false, 0};`);
           } else {
             this._inReturnContext = true;
-            const valC = this.exprToC(node.value, lines, depth);
+            const valC = this.exprToC(node.value!, lines, depth);
             this._inReturnContext = false;
-            this._emitRetainIfNeeded(valC, node.value, p);
+            this._emitRetainIfNeeded(valC, node.value!, p);
             const retVal = this._iterNextIsComplex ? `&(${valC})` : valC;
             lines.push(`${I}return (${optType}){true, ${retVal}};`);
           }
@@ -1343,7 +1343,7 @@ export default {
               // Re-parse the expression source (same as _templateToC in misc/closures.ts)
               const toks = this._lex(part.src!, this.filename);
               const { ast } = this._parse(toks);
-              const exprNode = (ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0];
+              const exprNode = ((ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0]) as Expression;
               nativeOut += this.exprToC(exprNode, lines, depth);
             }
           }

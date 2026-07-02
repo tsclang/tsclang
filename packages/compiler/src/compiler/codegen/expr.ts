@@ -1,1 +1,1 @@
-export { default } from './expr/index.js';
+export * from './expr/index.js';
