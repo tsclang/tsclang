@@ -1,5 +1,5 @@
 import type { CodeGenThis } from '../../codegen.js';
-import type { Expression, TypeAnn, VarDecl, ObjectField, Call } from '@tsclang/ast';
+import type { Expression, TypeAnn, VarDecl, ObjectField, Call, Block } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
@@ -41,7 +41,7 @@ export default {
         // spawn { ... } / spawn throws T { ... } as VarDecl init
         if (init?.kind === 'Spawn') {
           const hasThrows = (init.throwsTypes?.length ?? 0) > 0;
-          const threadVar = this._emitSpawnBlock(hasThrows ? null : name, init.body, init.throwsTypes, lines, depth);
+          const threadVar = this._emitSpawnBlock(hasThrows ? null : name, init.body, init.throwsTypes ?? null, lines, depth);
           if (hasThrows) {
             this.define(name, { ctype: 'tsc_thread_t', varKind, _cAlias: threadVar, _isThread: true });
             p(`(void)${threadVar};`);
@@ -59,7 +59,7 @@ export default {
           const lambdaArg = init.args?.[0]?.expr;
           const lambdaBody = (lambdaArg?.kind === 'Arrow' || lambdaArg?.kind === 'FuncExpr') ? (lambdaArg.body ?? { kind: 'Block', body: [] }) : { kind: 'Block', body: [] };
           const idx = this._spawnCount ?? 0;
-          const threadVar2 = this._emitSpawnBlock(null, lambdaBody, [], lines, depth);
+          const threadVar2 = this._emitSpawnBlock(null, lambdaBody as Block, [], lines, depth);
           this.define(name, { ctype: 'tsc_thread_t', varKind, _cAlias: threadVar2, _isThread: true });
           return;
         }

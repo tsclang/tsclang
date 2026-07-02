@@ -1,5 +1,5 @@
-import type { CodeGenThis } from '../../codegen.js';
-import type { TemplateLit, Arrow, Expression, Param, TypeAnn } from '@tsclang/ast';
+import type { CodeGenContext } from '../../codegen.js';
+import type { TemplateLit, Arrow, FuncExpr, Expression, Param, TypeAnn, Block } from '@tsclang/ast';
 
 interface TemplatePart { kind: string; value?: string; src?: string; }
 interface CompiledStrPart { kind: 'str'; value: string; }
@@ -25,8 +25,7 @@ function _isComplexCtype(ct: string | null | undefined) {
   return true;
 }
 
-export default {
-  _templateToC(this: CodeGenThis, node: TemplateLit, lines: string[], depth: number) {
+export function _templateToC(ctx: CodeGenContext, node: TemplateLit, lines: string[], depth: number) {
     const parts = node.parts as unknown as TemplatePart[]; // [{kind:'str',value:'...'} | {kind:'expr',src:'...'}]
     const hasSubs = parts.some((p: TemplatePart) => p.kind === 'expr');
     if (!hasSubs) {
@@ -39,19 +38,19 @@ export default {
     const compiled = parts.map((p: TemplatePart): CompiledPart => {
       if (p.kind === 'str') return { kind: 'str', value: p.value ?? '' };
       // Re-parse the expression source
-      const toks = this._lex(p.src!, this.filename);
-      const { ast } = this._parse(toks);
+      const toks = ctx._lex(p.src!, ctx.filename);
+      const { ast } = ctx._parse(toks);
       const exprNode = ((ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0]) as Expression;
-      this._checkNoBareThrows(exprNode);
-      let t = this.inferType(exprNode);
-      let c = this.exprToC(exprNode, lines, depth);
+      ctx._checkNoBareThrows(exprNode);
+      let t = ctx.inferType(exprNode);
+      let c = ctx.exprToC(exprNode, lines, depth);
       // TscBlob in template → tsc_blob_to_string
-      if (t === 'TscBlob' || (exprNode.kind === 'Ident' && this.lookup(exprNode.name)?._isTscBlob)) {
-        const n = this._blobStrN = (this._blobStrN ?? 0); this._blobStrN++;
+      if (t === 'TscBlob' || (exprNode.kind === 'Ident' && ctx.lookup(exprNode.name)?._isTscBlob)) {
+        const n = ctx._blobStrN = (ctx._blobStrN ?? 0); ctx._blobStrN++;
         const tmp = `_blob_str_${n}`;
-        const I = ' '.repeat(this.indent * depth);
+        const I = ' '.repeat(ctx.indent * depth);
         lines.push(`${I}String ${tmp} = tsc_blob_to_string(&${c});`);
-        this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
+        ctx._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
         t = 'String'; c = tmp;
       }
       return { kind: 'expr', t, c };
@@ -75,7 +74,7 @@ export default {
     // Mixed types → use tsc_string_format
     let fmt = '';
     const fmtArgs: string[] = [];
-    const isEmb = this._cap('bits') < 32;
+    const isEmb = ctx._cap('bits') < 32;
     for (const p of compiled) {
       if (p.kind === 'str') {
         fmt += p.value.replace(/%/g, '%%');
@@ -86,10 +85,10 @@ export default {
         else if (t === 'uint32_t') { if (isEmb) { fmt += '%lu'; fmtArgs.push(`(unsigned long)${c}`); } else { fmt += '%u'; fmtArgs.push(c); } }
         else if (t === 'uint16_t' || t === 'uint8_t') { fmt += '%u'; fmtArgs.push(c); }
         else if (t === 'int64_t') {
-          if (isEmb) { const s = `_tsf_${this.tempCount++}`; lines.push(`${' '.repeat(this.indent * depth)}String ${s} = tsc_i64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
+          if (isEmb) { const s = `_tsf_${ctx.tempCount++}`; lines.push(`${' '.repeat(ctx.indent * depth)}String ${s} = tsc_i64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
           else { fmt += '%lld'; fmtArgs.push(`(long long)${c}`); }
         } else if (t === 'uint64_t') {
-          if (isEmb) { const s = `_tsf_${this.tempCount++}`; lines.push(`${' '.repeat(this.indent * depth)}String ${s} = tsc_u64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
+          if (isEmb) { const s = `_tsf_${ctx.tempCount++}`; lines.push(`${' '.repeat(ctx.indent * depth)}String ${s} = tsc_u64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
           else { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
         } else if (t === 'double')   { fmt += '%s'; fmtArgs.push(`tsc_dtoa(${c})`); }
         else if (t === 'float')    { fmt += '%s'; fmtArgs.push(`tsc_dtoa((double)${c})`); }
@@ -104,7 +103,7 @@ export default {
       }
     }
     return `tsc_string_format("${fmt}", ${fmtArgs.join(', ')})`;
-  },
+}
 
   // ----------------------------------------------------------------
   // Closure helpers
@@ -112,7 +111,7 @@ export default {
 
   // Walk an AST node and collect all Ident references that are free variables
   // (defined in outer scope, not in params or locally defined within the body).
-  _findFreeVars(this: CodeGenThis, body: Expression | null, paramNames: string[], selfName: string | null) {
+export function _findFreeVars(ctx: CodeGenContext, body: Expression | Block | null, paramNames: string[], selfName: string | null) {
     const params = new Set(paramNames);
     const builtins = new Set(['true','false','null','undefined','this','self','console','Math','Object','Array','String','Number','Boolean','NaN','Infinity']);
     const captured = new Map(); // name → symInfo
@@ -126,7 +125,7 @@ export default {
         const nm = nd.name as string;
         if (selfName && nm === selfName) return;
         if (!params.has(nm) && !localDefs.has(nm) && !builtins.has(nm) && !seen.has(nm)) {
-          const sym = this.lookup(nm);
+          const sym = ctx.lookup(nm);
           if (sym) { seen.add(nm); captured.set(nm, sym); }
         }
         return;
@@ -136,8 +135,8 @@ export default {
           const p = part as Record<string, unknown>;
           if (p.kind === 'expr' && p.src) {
             try {
-              const toks = this._lex(p.src as string, this.filename);
-              const { ast } = this._parse(toks);
+              const toks = ctx._lex(p.src as string, ctx.filename);
+              const { ast } = ctx._parse(toks);
       const exprNode = ((ast.body[0] as unknown as { expr?: Expression })?.expr ?? ast.body[0]) as Expression;
               if (exprNode) walk(exprNode, localDefs);
             } catch (_) { /* ignore parse errors in template parts */ }
@@ -155,52 +154,52 @@ export default {
     };
     walk(body, new Set());
     return captured;
-  },
+}
 
   // Generate closure structs and fn for an Arrow, returning closure metadata.
   // Returns null if no captures (use regular hoistArrow).
-  hoistClosure(this: CodeGenThis, arrowNode: Arrow, varName: string | null) {
+export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, varName: string | null) {
     const paramNames = (arrowNode.params ?? []).map((p: Param) => p.name);
     let captured;
     let explicitCaptures: ExplicitCapture[] | null = null;
-    if ((arrowNode.captures?.length ?? 0) > 0) {
+    if (((arrowNode as Arrow).captures?.length ?? 0) > 0) {
       captured = new Map();
       explicitCaptures = [];
-      for (const cap of arrowNode.captures as unknown as CaptureInfo[]) {
-        const sym = this.lookup(cap.name);
-        if (!sym) throw this.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
+      for (const cap of (arrowNode as Arrow).captures as unknown as CaptureInfo[]) {
+        const sym = ctx.lookup(cap.name);
+        if (!sym) throw ctx.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
         captured.set(cap.name, sym);
         let mode: string | null = null;
         if (cap.typeAnn?.kind === 'TypeRef') {
           if (cap.typeAnn.name === 'Ref') mode = 'ref';
           else if (cap.typeAnn.name === 'Mut') mode = 'mut';
         }
-        if (!mode) throw this.error(`Explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>`, arrowNode);
+        if (!mode) throw ctx.error(`Explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>`, arrowNode);
         explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn as TypeAnn });
         if (mode === 'mut') {
-          this._trackMutQuarantine(sym, varName);
+          ctx._trackMutQuarantine(sym, varName);
         }
         if (mode === 'ref') {
-          this._trackRefBorrow(sym);
+          ctx._trackRefBorrow(sym);
         }
       }
     } else {
-      captured = this._findFreeVars(arrowNode.body, paramNames, varName);
+      captured = ctx._findFreeVars(arrowNode.body, paramNames, varName);
     }
     if (captured.size === 0) return null;
 
-    if (this._inReturnContext && this._curFuncName) {
-      const fnSym = this.lookup(this._curFuncName);
+    if (ctx._inReturnContext && ctx._curFuncName) {
+      const fnSym = ctx.lookup(ctx._curFuncName);
       if (fnSym) fnSym._returnsCapturingClosure = true;
     }
 
-    const n = this.closureCount++;
-    const _pfx = this._modulePrefix ?? '';
+    const n = ctx.closureCount++;
+    const _pfx = ctx._modulePrefix ?? '';
     const closureName = `${_pfx}_closure_${n}`;
     const envName = `${closureName}_env`;
     const fnName = `${closureName}_fn`;
 
-    let ret = arrowNode.returnType ? this.resolveType(arrowNode.returnType) : this.inferArrowReturn(arrowNode);
+    let ret = arrowNode.returnType ? ctx.resolveType(arrowNode.returnType) : ctx.inferArrowReturn(arrowNode);
 
     const envFields: string[] = [];
     const capturedStringFields: string[] = [];
@@ -226,75 +225,75 @@ export default {
       }
     }
     const hasStringCapture = capturedStringFields.length > 0;
-    this.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
-    this.addLambda('');
+    ctx.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
+    ctx.addLambda('');
 
     const destroyFnName = `${closureName}_destroy`;
     {
-      this.addLambda(`static void ${destroyFnName}(void *_env) {`);
-      this.addLambda(`    ${envName} *env = (${envName} *)_env;`);
+      ctx.addLambda(`static void ${destroyFnName}(void *_env) {`);
+      ctx.addLambda(`    ${envName} *env = (${envName} *)_env;`);
       for (const nm of capturedStringFields) {
-        this.addLambda(`    tsc_string_release(env->${nm});`);
+        ctx.addLambda(`    tsc_string_release(env->${nm});`);
       }
-      this.addLambda('    free(env);');
-      this.addLambda('}');
-      this.addLambda('');
+      ctx.addLambda('    free(env);');
+      ctx.addLambda('}');
+      ctx.addLambda('');
     }
 
     const paramStrs = [`${envName} *env`];
     for (let i = 0; i < (arrowNode.params ?? []).length; i++) {
       const p = arrowNode.params[i];
-      const hinted = this._lambdaParamHint?.[i];
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
+      const hinted = ctx._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : (hinted ?? 'void *');
       paramStrs.push(ct === 'String *' ? `${ct}${p.name}` : `${ct} ${p.name}`);
     }
 
-    this.pushScope();
+    ctx.pushScope();
     for (const [nm, sym] of captured) {
       const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         const ct = sym.ctype ?? 'void *';
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
-        this.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
+        ctx.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
       } else {
         const ct = sym.ctype ?? 'void *';
         if (_isComplexCtype(ct) && !ct.endsWith(' *')) {
-          this.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm });
+          ctx.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm });
         } else {
-          this.define(nm, { ...sym, _closureEnvVar: nm });
+          ctx.define(nm, { ...sym, _closureEnvVar: nm });
         }
       }
     }
     for (let i = 0; i < (arrowNode.params ?? []).length; i++) {
       const p = arrowNode.params[i];
-      const hinted = this._lambdaParamHint?.[i];
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : (hinted ?? 'void *');
+      const hinted = ctx._lambdaParamHint?.[i];
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : (hinted ?? 'void *');
       const symInfo: Record<string, unknown> = { ctype: ct };
       if (ct === 'String *') {
         symInfo.isPointer = true;
         symInfo.isRefParam = true;
         symInfo.derefType = 'String';
       }
-      this.define(p.name, symInfo);
+      ctx.define(p.name, symInfo);
     }
     const bodyLines: string[] = [];
     if (arrowNode.body.kind === 'Block') {
-      this.visitBlock(arrowNode.body, bodyLines, 0);
+      ctx.visitBlock(arrowNode.body, bodyLines, 0);
     } else {
-      const c = this.exprToC(arrowNode.body, bodyLines, 0);
+      const c = ctx.exprToC(arrowNode.body, bodyLines, 0);
       if (ret === 'void') {
         bodyLines.push(`${c};`);
       } else {
-        const bodySym = arrowNode.body.kind === 'Ident' ? this.lookup(arrowNode.body.name) : null;
-        bodyLines.push(`return ${this._derefStrPtr(bodySym, c)};`);
+        const bodySym = arrowNode.body.kind === 'Ident' ? ctx.lookup(arrowNode.body.name) : null;
+        bodyLines.push(`return ${ctx._derefStrPtr(bodySym, c)};`);
       }
     }
-    this.popScope();
+    ctx.popScope();
 
-    this.addLambda(`static ${ret} ${fnName}(${paramStrs.join(', ')}) {`);
-    for (const l of bodyLines) this.addLambda('    ' + l);
-    this.addLambda('}');
-    this.addLambda('');
+    ctx.addLambda(`static ${ret} ${fnName}(${paramStrs.join(', ')}) {`);
+    for (const l of bodyLines) ctx.addLambda('    ' + l);
+    ctx.addLambda('}');
+    ctx.addLambda('');
 
     const retainLines: string[] = [];
     for (const nm of capturedStringFields) {
@@ -322,9 +321,8 @@ export default {
 
     return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,
              retainLines, hasStringCapture, destroyFnName, capturedStringFields, envName, captureModes };
-  },
+}
 
   // Special codegen for iter() method of Iterable<T> class.
   // Generates: ClassName_iter_t struct + ClassName_iter_next + ClassName_iter factory.
   // Returns true if the pattern was recognized and emitted.
-};

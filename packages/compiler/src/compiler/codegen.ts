@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1517,6 +1517,25 @@ class Context {
   emitMonoFunc(tmpl: FuncDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoFunc(this, tmpl, monoName, subst); }
   emitMonoClass(tmpl: ClassDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoClass(this, tmpl, monoName, subst); }
 
+  // Delegating methods: miscFns
+  newToC(node: New, lines: string[], depth: number) { return miscFns.newToC(this, node, lines, depth); }
+  hoistArrow(node: Arrow | FuncExpr, retType: string | null | undefined, hint?: unknown) { return miscFns.hoistArrow(this, node, retType, hint); }
+  _scanReturnExpr(node: unknown) { return miscFns._scanReturnExpr(this, node); }
+  inferArrowReturn(node: Arrow | FuncExpr) { return miscFns.inferArrowReturn(this, node); }
+  varDecl(qualifier: string, ctype: string, name: string) { return miscFns.varDecl(this, qualifier, ctype, name); }
+  arrowParamTypes(node: Arrow) { return miscFns.arrowParamTypes(this, node); }
+  arrayLitToC(node: ArrayLit, _elemType: string, lines: string[], depth: number) { return miscFns.arrayLitToC(this, node, _elemType, lines, depth); }
+  arrayLitSize(node: ArrayLit) { return miscFns.arrayLitSize(this, node); }
+  _isHeapStringInit(node: Expression | null) { return miscFns._isHeapStringInit(this, node); }
+  _templateToC(node: TemplateLit, lines: string[], depth: number) { return miscFns._templateToC(this, node, lines, depth); }
+  _findFreeVars(body: Expression | Block | null, paramNames: string[], selfName: string | null) { return miscFns._findFreeVars(this, body, paramNames, selfName); }
+  hoistClosure(arrowNode: Arrow | FuncExpr, varName: string | null) { return miscFns.hoistClosure(this, arrowNode, varName); }
+  _emitIterableImpl(className: string, iterMethod: IterMethod, elemCType: string) { return miscFns._emitIterableImpl(this, className, iterMethod, elemCType); }
+  _emitPromiseTypedef(promiseType: string, innerType: string) { return miscFns._emitPromiseTypedef(this, promiseType, innerType); }
+  _emitSpawnBlock(varName: string | null, body: Stmt | Expression, throwsTypes: TypeAnn[] | null, lines: string[], depth: number) { return miscFns._emitSpawnBlock(this, varName, body, throwsTypes, lines, depth); }
+  _collectFreeVars(lambda: { params: Param[]; body: Block | Expression | null }) { return miscFns._collectFreeVars(this, lambda); }
+  _avrSleepModeToC(node: Expression) { return miscFns._avrSleepModeToC(this, node); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1529,7 +1548,6 @@ interface Context {
   _analyzeClassDecorator(...args: any[]): any;
   _analyzeDecorator(...args: any[]): any;
   _asyncRetType(...args: any[]): any;
-  _avrSleepModeToC(...args: any[]): any;
   _awaitInfoOf(...args: any[]): any;
   _buildAsyncPoll(...args: any[]): any;
   _buildGenNext(...args: any[]): any;
@@ -1540,7 +1558,6 @@ interface Context {
   _checkLiteralFitsType(...args: any[]): any;
   _classHasInheritance(...args: any[]): any;
   _collectAwaitStates(...args: any[]): any;
-  _collectFreeVars(...args: any[]): any;
   _constLiteralC(...args: any[]): any;
   _deepSubstOrigApply(...args: any[]): any;
   _dispatchArrayStatic(...args: any[]): any;
@@ -1582,12 +1599,9 @@ interface Context {
   _emitGenRegStmt(...args: any[]): any;
   _emitGenStmt(...args: any[]): any;
   _emitGenStmtList(...args: any[]): any;
-  _emitIterableImpl(...args: any[]): any;
   _emitMatchCore(...args: any[]): any;
   _emitPoolClass(...args: any[]): any;
-  _emitPromiseTypedef(...args: any[]): any;
   _emitRetainIfNeeded(...args: any[]): any;
-  _emitSpawnBlock(...args: any[]): any;
   _emitStructCompact(...args: any[]): any;
   _emitStructMultiline(...args: any[]): any;
   _emitTopFn(...args: any[]): any;
@@ -1599,7 +1613,6 @@ interface Context {
   _ensurePoolDrop(...args: any[]): any;
   _extractCallbackFn(...args: any[]): any;
   _extractLambdaBody(...args: any[]): any;
-  _findFreeVars(...args: any[]): any;
   _flattenStringConcat(...args: any[]): any;
   _genLivenessScan(...args: any[]): any;
   _getIfaceParamName(...args: any[]): any;
@@ -1614,7 +1627,6 @@ interface Context {
   _handleStdLibc(...args: any[]): any;
   _handleStdStack(...args: any[]): any;
   _initAsync(...args: any[]): any;
-  _isHeapStringInit(...args: any[]): any;
   _isInlinableConst(...args: any[]): any;
   _isOrigApply(...args: any[]): any;
   _isSimpleCType(...args: any[]): any;
@@ -1625,12 +1637,10 @@ interface Context {
   _matchPatternCond(...args: any[]): any;
   _scanAsyncBody(...args: any[]): any;
   _scanExprIdents(...args: any[]): any;
-  _scanReturnExpr(...args: any[]): any;
   _selfE(...args: any[]): any;
   _stringConcatChain(...args: any[]): any;
   _stringLiteralToByte(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
-  _templateToC(...args: any[]): any;
   _topBlank(...args: any[]): any;
   _truthyToC(...args: any[]): any;
   _validateSwitchFallthrough(...args: any[]): any;
@@ -1639,9 +1649,6 @@ interface Context {
   _visitVarDestruct(...args: any[]): any;
   _wrapErrForCaller(...args: any[]): any;
   argsToC(...args: any[]): any;
-  arrayLitSize(...args: any[]): any;
-  arrayLitToC(...args: any[]): any;
-  arrowParamTypes(...args: any[]): any;
   assignToC(...args: any[]): any;
   bareNumberValue(...args: any[]): any;
   binaryToC(...args: any[]): any;
@@ -1661,9 +1668,6 @@ interface Context {
   flattenUnion(...args: any[]): any;
   getStringLiteralMembers(...args: any[]): any;
   getStructFields(...args: any[]): any;
-  hoistArrow(...args: any[]): any;
-  hoistClosure(...args: any[]): any;
-  inferArrowReturn(...args: any[]): any;
   isBareLiteralNumber(...args: any[]): any;
   isStringExpr(...args: any[]): any;
   isStringLiteralUnion(...args: any[]): any;
@@ -1673,10 +1677,8 @@ interface Context {
   literalToCTyped(...args: any[]): any;
   mathCall(...args: any[]): any;
   methodCall(...args: any[]): any;
-  newToC(...args: any[]): any;
   tryConstMixedBinary(...args: any[]): any;
   unaryToC(...args: any[]): any;
-  varDecl(...args: any[]): any;
   visitBlock(...args: any[]): any;
   visitClassDecl(...args: any[]): any;
   visitDeclareConst(...args: any[]): any;
@@ -1703,10 +1705,11 @@ import stmt      from './codegen/stmt.js';
 import stmtSub   from './codegen/stmt/index.js';
 import expr      from './codegen/expr.js';
 import calls     from './codegen/calls/index.js';
-import misc      from './codegen/misc.js';
 import asyncMixin from './codegen/async.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
+import * as miscFns from './codegen/misc/index.js';
+import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
 
@@ -1716,7 +1719,6 @@ const _mixinSources = [
   ['stmtSub',   stmtSub],
   ['expr',      expr],
   ['calls',     calls],
-  ['misc',      misc],
   ['async',     asyncMixin],
 ];
 
@@ -1733,4 +1735,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, misc, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, asyncMixin, STDLIB_HANDLERS);

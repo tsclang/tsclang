@@ -36,11 +36,11 @@ export default {
         if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
           if (!seen.has(s.name)) seen.add(s.name);
           const spawnIdx = this._spawnCount ?? 0;
-          const threadVar = this._emitSpawnBlock(null, s.init.body, s.init.throwsTypes, [], 0);
+          const threadVar = this._emitSpawnBlock(null, s.init.body, s.init.throwsTypes ?? null, [], 0);
           const envType = `_spawn_${spawnIdx}_env`;
           const fnName  = `_spawn_${spawnIdx}_fn`;
           const envVar  = `_env_${spawnIdx}`;
-          const synLambda = { params: [], body: s.init.body.kind === 'Block' ? s.init.body : { kind: 'Block', body: [s.init.body] } };
+          const synLambda = { params: [] as Param[], body: s.init.body.kind === 'Block' ? s.init.body : { kind: 'Block' as const, body: [s.init.body] } };
           const fvArr = this._collectFreeVars(synLambda);
           if (!seen.has(threadVar)) { seen.add(threadVar); bodyFields.push({ name: threadVar, ctype: 'tsc_thread_t' }); }
           spawnInfos.push({ userVar: s.name, threadVar, envType, fnName, envVar, freeVars: fvArr });

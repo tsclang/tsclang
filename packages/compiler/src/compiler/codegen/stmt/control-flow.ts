@@ -1385,7 +1385,7 @@ export default {
       }
 
       case 'Spawn': {
-        const threadVar = this._emitSpawnBlock(null, node.body, node.throwsTypes, lines, depth);
+        const threadVar = this._emitSpawnBlock(null, node.body, node.throwsTypes ?? null, lines, depth);
         p(`(void)${threadVar};`);
         break;
       }
