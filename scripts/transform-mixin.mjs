@@ -41,7 +41,7 @@ if (defaultExportStart < 0 || defaultExportEnd < 0) {
 // Phase 2: Extract method names + parameter signatures
 const methods = [];
 for (let i = defaultExportStart + 1; i < defaultExportEnd; i++) {
-  const m = lines[i].match(/^  (\w+)\(this:\s*CodeGenContext\s*,?\s*(.*?)\)\s*\{/);
+  const m = lines[i].match(/^  (\w+)\(this:\s*CodeGenContext\s*,?\s*(.*?)\)\s*(?::[^{]+)?\{/);
   if (m) {
     methods.push({ name: m[1], params: m[2].trim(), lineIdx: i });
   }
@@ -60,13 +60,14 @@ for (let i = 0; i < defaultExportStart; i++) {
 for (let i = defaultExportStart + 1; i < defaultExportEnd; i++) {
   let line = lines[i];
 
-  // Method definition: `  methodName(this: CodeGenContext, params) {`
-  const methodMatch = line.match(/^  (\w+)\(this:\s*CodeGenContext\s*,?\s*(.*?)\)\s*\{(.*)$/);
+  // Method definition: `  methodName(this: CodeGenContext, params) [: ReturnType] {`
+  const methodMatch = line.match(/^  (\w+)\(this:\s*CodeGenContext\s*,?\s*(.*?)\)(\s*(?::[^{]+)?\s*)\{(.*)$/);
   if (methodMatch) {
     const name = methodMatch[1];
     const params = methodMatch[2].trim();
-    const rest = methodMatch[3];
-    line = `export function ${name}(ctx: CodeGenContext${params ? ', ' + params : ''}) {${rest}`;
+    const retAnnot = methodMatch[3]; // includes leading whitespace + optional ": RetType"
+    const rest = methodMatch[4];
+    line = `export function ${name}(ctx: CodeGenContext${params ? ', ' + params : ''})${retAnnot}{${rest}`;
   }
 
   // Method closing: `  },` or `  }` at exactly 2-space indent
@@ -100,10 +101,24 @@ const moduleVar = file
   .replace(/-/g, '');
 
 // Delegating methods for Context class body
+function splitParams(paramList) {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of paramList) {
+    if (ch === '<') depth++;
+    else if (ch === '>') depth--;
+    if (ch === ',' && depth === 0) { parts.push(current); current = ''; }
+    else current += ch;
+  }
+  if (current.trim()) parts.push(current);
+  return parts.map(p => p.trim());
+}
+
 const delegators = methods.map(m => {
   const paramList = m.params || '';
   const argNames = paramList
-    ? paramList.split(',').map(p => p.trim().split(/[:\s=]/)[0].replace(/^\.{3}/, '...')).join(', ')
+    ? splitParams(paramList).map(p => p.split(/[:\s=]/)[0].replace(/^\.{3}/, '...')).join(', ')
     : '';
   return `  ${m.name}(${paramList}) { return ${moduleVar}.${m.name}(this${argNames ? ', ' + argNames : ''}); }`;
 }).join('\n');

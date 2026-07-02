@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1509,6 +1509,14 @@ class Context {
   _ensureArraySetMacro(et: string, etC: string) { return helpers._ensureArraySetMacro(this, et, etC); }
 
 
+  // Delegating methods: genericsFns
+  callGeneric(name: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number) { return genericsFns.callGeneric(this, name, typeArgs, args, lines, depth); }
+  inferObjLitType(node: ObjLit) { return genericsFns.inferObjLitType(this, node); }
+  substType(typeNode: TypeAnn | null | undefined, subst: Map<string, string>) { return genericsFns.substType(this, typeNode, subst); }
+  substNode(node: unknown, subst: Map<string, string>) { return genericsFns.substNode(this, node, subst); }
+  emitMonoFunc(tmpl: FuncDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoFunc(this, tmpl, monoName, subst); }
+  emitMonoClass(tmpl: ClassDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoClass(this, tmpl, monoName, subst); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1638,7 +1646,6 @@ interface Context {
   bareNumberValue(...args: any[]): any;
   binaryToC(...args: any[]): any;
   binaryWidened(...args: any[]): any;
-  callGeneric(...args: any[]): any;
   callToC(...args: any[]): any;
   consoleCall(...args: any[]): any;
   constVal(...args: any[]): any;
@@ -1647,8 +1654,6 @@ interface Context {
   emitGeneratorFunc(...args: any[]): any;
   emitMatchVarDecl(...args: any[]): any;
   emitMethod(...args: any[]): any;
-  emitMonoClass(...args: any[]): any;
-  emitMonoFunc(...args: any[]): any;
   emitPropagateVarDecl(...args: any[]): any;
   emitSelectVarDecl(...args: any[]): any;
   emitVtableConstant(...args: any[]): any;
@@ -1659,7 +1664,6 @@ interface Context {
   hoistArrow(...args: any[]): any;
   hoistClosure(...args: any[]): any;
   inferArrowReturn(...args: any[]): any;
-  inferObjLitType(...args: any[]): any;
   isBareLiteralNumber(...args: any[]): any;
   isStringExpr(...args: any[]): any;
   isStringLiteralUnion(...args: any[]): any;
@@ -1670,8 +1674,6 @@ interface Context {
   mathCall(...args: any[]): any;
   methodCall(...args: any[]): any;
   newToC(...args: any[]): any;
-  substNode(...args: any[]): any;
-  substType(...args: any[]): any;
   tryConstMixedBinary(...args: any[]): any;
   unaryToC(...args: any[]): any;
   varDecl(...args: any[]): any;
@@ -1701,11 +1703,11 @@ import stmt      from './codegen/stmt.js';
 import stmtSub   from './codegen/stmt/index.js';
 import expr      from './codegen/expr.js';
 import calls     from './codegen/calls/index.js';
-import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
 import asyncMixin from './codegen/async.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
+import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
 
 const _mixinSources = [
@@ -1714,7 +1716,6 @@ const _mixinSources = [
   ['stmtSub',   stmtSub],
   ['expr',      expr],
   ['calls',     calls],
-  ['generics',  generics],
   ['misc',      misc],
   ['async',     asyncMixin],
 ];
@@ -1732,4 +1733,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, misc, asyncMixin, STDLIB_HANDLERS);
