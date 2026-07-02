@@ -1,24 +1,23 @@
 import type { Call, Expression } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
-export default {
-  _dispatchConversion(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+import type { CodeGenContext } from '../../codegen.js';
+export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member') {
       // variable.toString() where variable is a string-literal-union type
       if (callee.prop === 'toString' && callee.object.kind === 'Ident') {
-        const objSym = this.lookup(callee.object.name);
-        const objEnumDef = objSym ? this.classes.get(objSym.ctype!) : null;
+        const objSym = ctx.lookup(callee.object.name);
+        const objEnumDef = objSym ? ctx.classes.get(objSym.ctype!) : null;
         if (objEnumDef?.isStringLiteralUnion) {
-          const objC = this.exprToC(callee.object, lines, depth);
+          const objC = ctx.exprToC(callee.object, lines, depth);
           return `STR_LIT_RUNTIME(${objSym!.ctype}_values[(int)${objC}]).data`;
         }
       }
       // EnumMember.toString() вЂ” callee.object is Member (Dir.North), prop is 'toString'
       if (callee.prop === 'toString' && callee.object.kind === 'Member') {
         const enumName = callee.object.object.kind === 'Ident' ? callee.object.object.name : null;
-        const enumDef = enumName ? this.classes.get(enumName) : null;
+        const enumDef = enumName ? ctx.classes.get(enumName) : null;
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw this.error(`"toString()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.error(`"toString()" is not available on const enum`);
           const ec = enumDef._cname ?? enumName;
           const memberC = `${ec}_${callee.object.prop}`;
           if (enumDef.isStringEnum) return `${ec}_strings[(int)${memberC}]`;
@@ -28,32 +27,32 @@ export default {
       }
       // Enum.values()
       if (callee.prop === 'values' && callee.object.kind === 'Ident') {
-        const enumDef = this.classes.get(callee.object.name);
+        const enumDef = ctx.classes.get(callee.object.name);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw this.error(`"values()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.error(`"values()" is not available on const enum`);
           return `${enumDef._cname ?? callee.object.name}_values`;
         }
       }
       // Enum.fromValue(n) вЂ” needs helper function emitted at top
       if (callee.prop === 'fromValue' && callee.object.kind === 'Ident') {
         const enumName = callee.object.name;
-        const enumDef = this.classes.get(enumName);
+        const enumDef = ctx.classes.get(enumName);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw this.error(`"fromValue()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.error(`"fromValue()" is not available on const enum`);
           const ec = enumDef._cname ?? enumName;
           const n = (enumDef.members ?? []).length;
           const helperName = `${ec}_fromValue`;
           // Emit helper if not already emitted
-          if (!this._emittedHelpers.has(helperName)) {
-            this._emittedHelpers.add(helperName);
-            this.addTop(`typedef struct { bool has_value; ${ec} value; } opt_${ec};`);
-            this.addTop(`static inline opt_${ec} ${helperName}(int32_t v) {`);
-            this.addTop(`    for (int i = 0; i < ${n}; i++) { if ((int32_t)${ec}_values[i] == v) return (opt_${ec}){true, ${ec}_values[i]}; }`);
-            this.addTop(`    return (opt_${ec}){false, 0};`);
-            this.addTop(`}`);
-            this.addTop(``);
+          if (!ctx._emittedHelpers.has(helperName)) {
+            ctx._emittedHelpers.add(helperName);
+            ctx.addTop(`typedef struct { bool has_value; ${ec} value; } opt_${ec};`);
+            ctx.addTop(`static inline opt_${ec} ${helperName}(int32_t v) {`);
+            ctx.addTop(`    for (int i = 0; i < ${n}; i++) { if ((int32_t)${ec}_values[i] == v) return (opt_${ec}){true, ${ec}_values[i]}; }`);
+            ctx.addTop(`    return (opt_${ec}){false, 0};`);
+            ctx.addTop(`}`);
+            ctx.addTop(``);
           }
-          const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const argC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
           return `${helperName}(${argC})`;
         }
       }
@@ -61,79 +60,79 @@ export default {
 
     // setTimeout / setInterval / clearTimeout
     if (callee.kind === 'Ident' && (callee.name === 'setTimeout' || callee.name === 'setInterval')) {
-      if (this._cap('async') !== 'libuv') {
-        throw this.error(`"${callee.name}" is not available on embedded targets`, node);
+      if (ctx._cap('async') !== 'libuv') {
+        throw ctx.error(`"${callee.name}" is not available on embedded targets`, node);
       }
     }
     if (callee.kind === 'Ident' && callee.name === 'setTimeout') {
       let fn;
       const cbExpr = args[0]?.expr;
       if (cbExpr?.kind === 'Arrow') {
-        const closure = this.hoistClosure(cbExpr, `_cb_${this.closureCount ?? 0}`);
+        const closure = ctx.hoistClosure(cbExpr, `_cb_${ctx.closureCount ?? 0}`);
         if (closure) {
           fn = closure.fnName;
         } else {
-          fn = this.hoistArrow(cbExpr, 'void', '_cb');
+          fn = ctx.hoistArrow(cbExpr, 'void', '_cb');
         }
       } else {
-        fn = this.exprToC(args[0].expr, lines, depth);
+        fn = ctx.exprToC(args[0].expr, lines, depth);
       }
-      const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+      const ms = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_timeout(${fn}, ${ms})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'setInterval') {
       const lambdaArg = args[0]?.expr;
       if (lambdaArg?.kind === 'Arrow') {
-        const freeVars = this._collectFreeVars(lambdaArg);
+        const freeVars = ctx._collectFreeVars(lambdaArg);
         if (freeVars.length > 0) {
-          const closureIdx = this.lambdaCount++;
+          const closureIdx = ctx.lambdaCount++;
           const prefix = `_closure_${closureIdx}`;
           const envType = `${prefix}_env`;
           const fieldDecls = freeVars.map((v: { name: string; ctype: string }) => `${v.ctype} ${v.name};`);
-          this._topBlank();
-          this.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
-          this.topLevel.push(`static ${envType} ${prefix}_captured;`);
+          ctx._topBlank();
+          ctx.topLevel.push(`typedef struct { ${fieldDecls.join(' ')} } ${envType};`);
+          ctx.topLevel.push(`static ${envType} ${prefix}_captured;`);
           const closureLines: string[] = [];
-          this.pushScope();
+          ctx.pushScope();
           for (const v of freeVars) {
-            this.define(v.name, { ctype: v.ctype, _cAlias: `${prefix}_captured.${v.name}`, varKind: 'let' });
+            ctx.define(v.name, { ctype: v.ctype, _cAlias: `${prefix}_captured.${v.name}`, varKind: 'let' });
           }
-          if (lambdaArg.body?.kind === 'Block') this.visitBlock(lambdaArg.body, closureLines, 0);
-          this.popScope();
-          this._topBlank();
-          this.topLevel.push(`static void ${prefix}_fn(void) {`);
-          for (const l of closureLines) this.topLevel.push('    ' + l);
-          this.topLevel.push('}');
+          if (lambdaArg.body?.kind === 'Block') ctx.visitBlock(lambdaArg.body, closureLines, 0);
+          ctx.popScope();
+          ctx._topBlank();
+          ctx.topLevel.push(`static void ${prefix}_fn(void) {`);
+          for (const l of closureLines) ctx.topLevel.push('    ' + l);
+          ctx.topLevel.push('}');
           if (lines !== undefined) {
-            const I = ' '.repeat(this.indent * depth);
+            const I = ' '.repeat(ctx.indent * depth);
             const inits = freeVars.map((v: { name: string; ctype: string }) => `.${v.name} = ${v.name}`).join(', ');
             lines.push(`${I}${prefix}_captured = (${envType}){ ${inits} };`);
           }
-          const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const ms = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
           return `tsc_set_interval(${prefix}_fn, ${ms})`;
         }
       }
       let fn;
       const lambdaArg2 = args[0]?.expr;
       if (lambdaArg2?.kind === 'Arrow') {
-        const closure = this.hoistClosure(lambdaArg2, `_cb_${this.closureCount ?? 0}`);
+        const closure = ctx.hoistClosure(lambdaArg2, `_cb_${ctx.closureCount ?? 0}`);
         if (closure) {
           fn = closure.fnName;
         } else {
-          fn = this.hoistArrow(lambdaArg2, 'void', '_cb');
+          fn = ctx.hoistArrow(lambdaArg2, 'void', '_cb');
         }
       } else {
-        fn = this.exprToC(args[0].expr, lines, depth);
+        fn = ctx.exprToC(args[0].expr, lines, depth);
       }
-      const ms = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+      const ms = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
       return `tsc_set_interval(${fn}, ${ms})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'clearTimeout') {
-      const id = this.exprToC(args[0].expr, lines, depth);
+      const id = ctx.exprToC(args[0].expr, lines, depth);
       return `tsc_clear_timeout(${id})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'clearInterval') {
-      const id = this.exprToC(args[0].expr, lines, depth);
+      const id = ctx.exprToC(args[0].expr, lines, depth);
       return `tsc_clear_interval(${id})`;
     }
 
@@ -144,21 +143,21 @@ export default {
       if (argNode?.kind === 'Literal' && argNode.litType === 'string') {
         const s = argNode.value;
         if (/^0x[0-9a-fA-F]+$/i.test(s) || /^0b[01]+$/i.test(s) || /^0o[0-7]+$/i.test(s)) {
-          this._lastOptIsNull = false; // prefixed integer literals always parse successfully
+          ctx._lastOptIsNull = false; // prefixed integer literals always parse successfully
         } else {
-          this._lastOptIsNull = isNaN(parseFloat(s));
+          ctx._lastOptIsNull = isNaN(parseFloat(s));
         }
       }
     };
     // std/string: url.encode(), url.decode(), url.encodeComponent(), url.decodeComponent()
     // std/string: decodeUtf8, encodeUtf8 (special: static validation for decodeUtf8)
     if (callee.kind === 'Ident' && callee.name === 'decodeUtf8') {
-      const sym = this.lookup('decodeUtf8');
+      const sym = ctx.lookup('decodeUtf8');
       if (sym?.funcName === 'tsc_decode_utf8') {
-        this._lastSuppressConst = true;
+        ctx._lastSuppressConst = true;
         const argExpr = args[0]?.expr;
         const _decLitArr = argExpr?.kind === 'ArrayLit' ? argExpr
-          : (argExpr?.kind === 'Ident' ? this.lookup(argExpr.name)?.initNode : null);
+          : (argExpr?.kind === 'Ident' ? ctx.lookup(argExpr.name)?.initNode : null);
         if (_decLitArr?.kind === 'ArrayLit' && _decLitArr.elems?.every((e: { expr?: { kind?: string } }) => e?.expr?.kind === 'Literal')) {
           const bytes = _decLitArr.elems.map((e: { expr: { value: string } }) => parseInt(e.expr.value));
           let i = 0;
@@ -171,24 +170,24 @@ export default {
             else if (b < 0xF0) { seqLen = 3; }
             else if (b < 0xF5) { seqLen = 4; }
             else { seqLen = -1; }
-            if (seqLen < 0) throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
+            if (seqLen < 0) throw ctx.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
             for (let j = 1; j < seqLen; j++) {
               if (i + j >= bytes.length || (bytes[i + j] & 0xC0) !== 0x80)
-                throw this.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
+                throw ctx.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
             }
             i += seqLen;
           }
         }
-        const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : '(Array_u8){0}';
+        const arg = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '(Array_u8){0}';
         return `tsc_decode_utf8(${arg})`;
       }
     }
     if (callee.kind === 'Ident' && callee.name === 'encodeUtf8') {
-      const sym = this.lookup('encodeUtf8');
+      const sym = ctx.lookup('encodeUtf8');
       if (sym?.funcName === 'tsc_encode_utf8') {
-        this._ensureArrayStruct('Array_u8', 'uint8_t');
-        this._lastSuppressConst = true;
-        const arg = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        ctx._ensureArrayStruct('Array_u8', 'uint8_t');
+        ctx._lastSuppressConst = true;
+        const arg = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
         return `tsc_encode_utf8(${arg})`;
       }
     }
@@ -197,57 +196,57 @@ export default {
     if (callee.kind === 'Ident' && callee.name === 'drop') {
       const argNode = args[0]?.expr;
       if (argNode) {
-        const argSym = argNode.kind === 'Ident' ? this.lookup(argNode.name) : null;
-        const argType = argSym?.ctype ?? this.inferType(argNode);
+        const argSym = argNode.kind === 'Ident' ? ctx.lookup(argNode.name) : null;
+        const argType = argSym?.ctype ?? ctx.inferType(argNode);
         const _pcn = argType?.startsWith('opt_ref_') ? argType.slice(8) : null;
-        if (_pcn && this.classes.get(_pcn)?._isPool) {
-          this._ensurePoolDrop(_pcn);
-          return `${this.classes.get(_pcn)?._poolDropFn}(${this.exprToC(argNode, lines, depth)})`;
+        if (_pcn && ctx.classes.get(_pcn)?._isPool) {
+          ctx._ensurePoolDrop(_pcn);
+          return `${ctx.classes.get(_pcn)?._poolDropFn}(${ctx.exprToC(argNode, lines, depth)})`;
         }
       }
     }
     if (callee.kind === 'Ident' && callee.name === 'parseFloat') {
       // With explicit f64 type annotation, use panic version returning double
-      if (this._expectedType === 'double') {
-        return `tsc_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
+      if (ctx._expectedType === 'double') {
+        return `tsc_parse_f64(${ctx.exprToC(args[0].expr, lines, depth)})`;
       }
-      this._ensureOptStruct('opt_f64', 'double');
+      ctx._ensureOptStruct('opt_f64', 'double');
       _setOptIsNullHint(args[0]?.expr);
-      return `tsc_parse_float(${this.exprToC(args[0].expr, lines, depth)})`;
+      return `tsc_parse_float(${ctx.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'tryParseFloat') {
-      this._ensureOptStruct('opt_f64', 'double');
+      ctx._ensureOptStruct('opt_f64', 'double');
       _setOptIsNullHint(args[0]?.expr);
-      return `tsc_try_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
+      return `tsc_try_parse_f64(${ctx.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'parseInt') {
-      this._ensureOptStruct('opt_i32', 'int32_t');
+      ctx._ensureOptStruct('opt_i32', 'int32_t');
       _setOptIsNullHint(args[0]?.expr);
-      return `tsc_parse_int(${this.exprToC(args[0].expr, lines, depth)})`;
+      return `tsc_parse_int(${ctx.exprToC(args[0].expr, lines, depth)})`;
     }
     if (callee.kind === 'Ident' && callee.name === 'tryParseInt') {
-      this._ensureOptStruct('opt_i32', 'int32_t');
+      ctx._ensureOptStruct('opt_i32', 'int32_t');
       _setOptIsNullHint(args[0]?.expr);
-      return `tsc_try_parse_i32(${this.exprToC(args[0].expr, lines, depth)})`;
+      return `tsc_try_parse_i32(${ctx.exprToC(args[0].expr, lines, depth)})`;
     }
     // Number(s) в†’ alias for parseFloat(s) в†’ f64 | null
     if (callee.kind === 'Ident' && callee.name === 'Number' && args.length === 1) {
-      this._ensureOptStruct('opt_f64', 'double');
+      ctx._ensureOptStruct('opt_f64', 'double');
       _setOptIsNullHint(args[0]?.expr);
-      return `tsc_try_parse_f64(${this.exprToC(args[0].expr, lines, depth)})`;
+      return `tsc_try_parse_f64(${ctx.exprToC(args[0].expr, lines, depth)})`;
     }
 
     // structuredClone(x) в†’ C struct copy for primitives/structs, array clone for arrays
     if (callee.kind === 'Ident' && callee.name === 'structuredClone' && args.length === 1) {
       const argNode = args[0].expr;
-      const argType = this.inferType(argNode);
-      let argC = this.exprToC(argNode, lines, depth);
+      const argType = ctx.inferType(argNode);
+      let argC = ctx.exprToC(argNode, lines, depth);
       if (argType?.startsWith('Array_')) {
         const et = argType.slice(6);
-        const etIdent = this.cTypeToIdent(et);
+        const etIdent = ctx.cTypeToIdent(et);
         if (!['Ident', 'Literal'].includes(argNode.kind)) {
-          const tmp = `_tsc_clone_${this.tempCount++}`;
-          lines.push(`${' '.repeat(this.indent * depth)}${argType} ${tmp} = ${argC};`);
+          const tmp = `_tsc_clone_${ctx.tempCount++}`;
+          lines.push(`${' '.repeat(ctx.indent * depth)}${argType} ${tmp} = ${argC};`);
           argC = tmp;
         }
         return `tsc_array_slice_${etIdent}(${argC}, 0, (int32_t)${argC}.length)`;
@@ -259,15 +258,15 @@ export default {
     // String(n) constructor в†’ tsc_T_to_string(n)
     if (callee.kind === 'Ident' && callee.name === 'String' && args.length === 1) {
       const argNode = args[0].expr;
-      const argType = this.inferType(argNode);
-      const argIdent = this.cTypeToIdent(argType);
-      const argC = this.exprToC(argNode, lines, depth);
+      const argType = ctx.inferType(argNode);
+      const argIdent = ctx.cTypeToIdent(argType);
+      const argC = ctx.exprToC(argNode, lines, depth);
       return `tsc_${argIdent}_to_string(${argC})`;
     }
 
     // String.fromCharCode(code) → tsc_string_from_char_code(code)
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'String' && callee.prop === 'fromCharCode' && args.length === 1) {
-      const argC = this.exprToC(args[0].expr, lines, depth);
+      const argC = ctx.exprToC(args[0].expr, lines, depth);
       return `tsc_string_from_char_code(${argC})`;
     }
 
@@ -279,16 +278,16 @@ export default {
                               'f32':'float','f64':'double' };
       if (typeName in primitiveMap) {
         const ctype = (primitiveMap as Record<string, string>)[typeName];
-        const ident = this.cTypeToIdent(ctype);
+        const ident = ctx.cTypeToIdent(ctype);
         if (callee.prop === 'parse') {
-          const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-          this._lastSuppressConst = true; // parse() panics; result is non-const in C
+          const argC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          ctx._lastSuppressConst = true; // parse() panics; result is non-const in C
           return `tsc_${ident}_parse(${argC})`;
         }
         if (callee.prop === 'tryParse') {
-          this._ensureOptStruct(`opt_${ident}`, ctype);
+          ctx._ensureOptStruct(`opt_${ident}`, ctype);
           _setOptIsNullHint(args[0]?.expr);
-          const argC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+          const argC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
           return `tsc_${ident}_try_parse(${argC})`;
         }
       }
@@ -296,14 +295,13 @@ export default {
 
     // sleep()
     if (callee.kind === 'Ident' && callee.name === 'sleep') {
-      const ms = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+      const ms = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
       return `tsc_sleep_awaitable(${ms})`;
     }
 
     // Method call on known object
     if (callee.kind === 'Member') {
-      return this.methodCall(callee, args, lines, depth);
+      return ctx.methodCall(callee, args, lines, depth);
     }
     return null;
-  },
-};
+}

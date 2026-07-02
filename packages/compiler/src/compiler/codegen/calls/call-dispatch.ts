@@ -1,20 +1,19 @@
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenContext } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Expression, Call, Argument, SymbolInfo, Param } from '@tsclang/ast';
-export default {
-  callToC(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+import type { Expression, Call, Argument, SymbolInfo, Param, TypeRef } from '@tsclang/ast';
+export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth: number): string {
     const { callee, args } = node;
 
     // Namespace import: Lib.someFunc(...) в†’ desugar to Ident call
     if (callee.kind === 'Member' && callee.object?.kind === 'Ident') {
-      const nsSym = this.lookup(callee.object.name);
+      const nsSym = ctx.lookup(callee.object.name);
       if (nsSym?._isNamespace) {
         const nsEntry = nsSym._namespaceExports?.[callee.prop];
         if (nsEntry) {
-          this.define(callee.prop, nsEntry);
+          ctx.define(callee.prop, nsEntry);
           // Re-dispatch as Ident call so mangling and type inference work normally
-          const syntheticCall = { ...node, callee: { kind: 'Ident', name: callee.prop } };
-          return this.callToC(syntheticCall, lines, depth);
+          const syntheticCall = { ...node, callee: { kind: 'Ident', name: callee.prop } } as Call;
+          return ctx.callToC(syntheticCall, lines, depth);
         }
       }
     }
@@ -22,14 +21,14 @@ export default {
     // Generator .next() call: gen.next() в†’ genFn_next(&gen, ...storedArgs)
     if (callee.kind === 'Member' && callee.prop === 'next') {
       const objName = callee.object?.kind === 'Ident' ? callee.object.name : null;
-      const sym = typeof objName === 'string' ? this.lookup(objName) : null;
+      const sym = typeof objName === 'string' ? ctx.lookup(objName) : null;
       if (sym?._isGenState) {
-        const { gi, callExpr } = this._genNextCall(sym, this.exprToC(callee.object, lines, depth));
+        const { gi, callExpr } = ctx._genNextCall(sym, ctx.exprToC(callee.object, lines, depth));
         if (lines !== undefined) {
-          const I = ' '.repeat(this.indent * depth);
-          const rVar = `_r_${(this._genResultCount = (this._genResultCount || 0) + 1) - 1}`;
+          const I = ' '.repeat(ctx.indent * depth);
+          const rVar = `_r_${(ctx._genResultCount = (ctx._genResultCount || 0) + 1) - 1}`;
           lines.push(`${I}${gi.resultType} ${rVar} = ${callExpr};`);
-          this.define(rVar, { ctype: gi.resultType, varKind: 'let' });
+          ctx.define(rVar, { ctype: gi.resultType, varKind: 'let' });
           return rVar;
         }
         return callExpr;
@@ -39,39 +38,39 @@ export default {
     // Optional chaining: x?.method() where x is opt_T
     if (callee.kind === 'OptChain') {
       const obj = callee.object;
-      const objType = this.inferType(obj);
-      let objC = this.exprToC(obj, lines, depth);
+      const objType = ctx.inferType(obj);
+      let objC = ctx.exprToC(obj, lines, depth);
       if (objType?.startsWith('opt_')) {
         const innerIdent = objType.slice(4);
         if (callee.prop === 'toString') {
           const fnName = `tsc_${innerIdent}_to_string`;
           if (!['Ident', 'Literal'].includes(obj.kind)) {
-            const tmp = `_tsc_opt_${this.tempCount++}`;
-            lines.push(`${' '.repeat(this.indent * depth)}${objType} ${tmp} = ${objC};`);
+            const tmp = `_tsc_opt_${ctx.tempCount++}`;
+            lines.push(`${' '.repeat(ctx.indent * depth)}${objType} ${tmp} = ${objC};`);
             objC = tmp;
           }
           return `${objC}.has_value ? (opt_string){true, ${fnName}(${objC}.value)} : (opt_string){false, STR_LIT("")}`;
         }
       }
       // Fallback: treat as non-optional
-      const objC2 = this.exprToC(obj, lines, depth);
-      return `${objC2}.${callee.prop}(${this.argsToC(args, lines, depth)})`;
+      const objC2 = ctx.exprToC(obj, lines, depth);
+      return `${objC2}.${callee.prop}(${ctx.argsToC(args, lines, depth)})`;
     }
 
     // @platform check: calling a function skipped for current platform
-    if (callee.kind === 'Ident' && this._platformSkipped?.has(callee.name)) {
-      const allowed = this._platformSkipped.get(callee.name)!.join('", "');
-      const target = this._targetName ?? DEFAULT_TARGET;
-      throw this.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
+    if (callee.kind === 'Ident' && ctx._platformSkipped?.has(callee.name)) {
+      const allowed = ctx._platformSkipped.get(callee.name)!.join('", "');
+      const target = ctx._targetName ?? DEFAULT_TARGET;
+      throw ctx.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
     }
 
     if (callee.kind === 'Ident') {
-      const sym = this.lookup(callee.name);
+      const sym = ctx.lookup(callee.name);
       if (sym?._isStackMacro) {
         const strArg = (i: number) => args[i]?.expr?.kind === 'Literal' ? args[i].expr.value : '??';
         if (sym._isStackMacro === 'push') {
           const sName = strArg(0);
-          const val = this.exprToC(args[1].expr, lines, depth);
+          const val = ctx.exprToC(args[1].expr, lines, depth);
           return `(${sName}_stack[${sName}_stack_top++] = (uintptr_t)(${val}))`;
         }
         if (sym._isStackMacro === 'empty') {
@@ -81,7 +80,7 @@ export default {
         if (sym._isStackMacro === 'pop') {
           const sName = strArg(0);
           const tArg = node.typeArgs?.[0];
-          const ct = tArg ? this.resolveType(tArg) : 'int32_t';
+          const ct = tArg ? ctx.resolveType(tArg) : 'int32_t';
           return `((${ct})${sName}_stack[--${sName}_stack_top])`;
         }
       }
@@ -89,57 +88,57 @@ export default {
 
     // super(args) in constructor в†’ initialize base struct
     if (callee.kind === 'Ident' && callee.name === 'super') {
-      const selfSym = this.lookup('self');
-      const cls = selfSym ? this.classes.get(selfSym.ctype!) : null;
+      const selfSym = ctx.lookup('self');
+      const cls = selfSym ? ctx.classes.get(selfSym.ctype!) : null;
       const superClass = cls?.superClass;
       if (superClass === 'Error') {
         // super(msg) в†’ self._base.message = msg
-        const msgC = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        const msgC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
         return `self._base.message = ${msgC}`;
       } else if (superClass) {
         // super(args) в†’ self._base = BaseClass_new(args)
-        const argsC = this.argsToC(args, lines, depth);
+        const argsC = ctx.argsToC(args, lines, depth);
         return `self._base = ${superClass}_new(${argsC})`;
       }
-      throw this.error(`super() can only be called in a class with a superclass`, node);
+      throw ctx.error(`super() can only be called in a class with a superclass`, node);
     }
 
 
-    const _r = this._dispatchConcurrency(node, lines, depth); if (_r !== null) return _r;
-    const _af = this._dispatchArrayStatic(node, lines, depth); if (_af !== null) return _af;
-    const _os = this._dispatchObjectStatic(node, lines, depth); if (_os !== null) return _os;
-    const _gb = this._dispatchGroupBy(node, lines, depth); if (_gb !== null) return _gb;
-    const _r2 = this._dispatchBuiltin(node, lines, depth); if (_r2 !== null) return _r2;
-    const _r3 = this._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
-    const _r4 = this._dispatchConversion(node, lines, depth); if (_r4 !== null) return _r4;
+    const _r = ctx._dispatchConcurrency(node, lines, depth); if (_r !== null) return _r;
+    const _af = ctx._dispatchArrayStatic(node, lines, depth); if (_af !== null) return _af;
+    const _os = ctx._dispatchObjectStatic(node, lines, depth); if (_os !== null) return _os;
+    const _gb = ctx._dispatchGroupBy(node, lines, depth); if (_gb !== null) return _gb;
+    const _r2 = ctx._dispatchBuiltin(node, lines, depth); if (_r2 !== null) return _r2;
+    const _r3 = ctx._dispatchStdLib(node, lines, depth); if (_r3 !== null) return _r3;
+    const _r4 = ctx._dispatchConversion(node, lines, depth); if (_r4 !== null) return _r4;
 
     // Check for bare throws calls as arguments (must use ! or ?)
     for (const a of args) {
-      this._checkNoBareThrows(a.expr ?? a);
+      ctx._checkNoBareThrows(a.expr ?? a);
     }
 
     // Generic function call: monomorphize
-    if (callee.kind === 'Ident' && this._genericFuncs?.has(callee.name)) {
-      return this.callGeneric(callee.name, node.typeArgs ?? [], args, lines, depth);
+    if (callee.kind === 'Ident' && ctx._genericFuncs?.has(callee.name)) {
+      return ctx.callGeneric(callee.name, node.typeArgs ?? [], args, lines, depth);
     }
 
     // IIFE: (x => expr)(args) — hoist and call directly
     if (callee.kind === 'Arrow') {
-      if (this._strictRules?.has('no-closures')) {
-        throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+      if (ctx._strictRules?.has('no-closures')) {
+        throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
       }
-      const closure = this.hoistClosure(callee, `_iife_${this.closureCount ?? 0}`);
+      const closure = ctx.hoistClosure(callee, `_iife_${ctx.closureCount ?? 0}`);
       if (closure) {
-        const argsC = this.argsToC(args, lines, depth);
-      const paramTypes = args.map((a: { expr: Expression }) => this.inferType(a.expr) ?? 'void *');
+        const argsC = ctx.argsToC(args, lines, depth);
+      const paramTypes = args.map((a: { expr: Expression }) => ctx.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
-        const envName = `_iife_env_${this.closureCount - 1}`;
-        lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
-        lines.push(`${' '.repeat(this.indent * depth)}*${envName} = (${closure.envName})${closure.envInit};`);
+        const envName = `_iife_env_${ctx.closureCount - 1}`;
+        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(ctx.indent * depth)}*${envName} = (${closure.envName})${closure.envInit};`);
         return `((${closure.ret} (*)(${sigArgs}))${closure.fnName})(${envName}${argsC ? ', ' + argsC : ''})`;
       }
-      const fnName = this.hoistArrow(callee, 'void', '_iife');
-      const argsC = this.argsToC(args, lines, depth);
+      const fnName = ctx.hoistArrow(callee, 'void', '_iife');
+      const argsC = ctx.argsToC(args, lines, depth);
       return `${fnName}(${argsC})`;
     }
 
@@ -147,7 +146,7 @@ export default {
     let calleeC;
     let sym: SymbolInfo | null = null;
     if (callee.kind === 'Ident') {
-      sym = this.lookup(callee.name);
+      sym = ctx.lookup(callee.name);
       // Overload resolution: if there are multiple overloads, pick by arg count then type
       if (sym?.overloads && sym.overloads.length > 0) {
         const argCount = args.filter((a: { spread?: boolean }) => !a.spread).length;
@@ -162,8 +161,8 @@ export default {
             args.every((a: { expr: Expression }, i: number) => {
               const p = o.params[i];
               if (!p?.typeAnn) return true;
-              const expectedCtype = this.resolveType(p.typeAnn);
-              const actualCtype = this.inferType(a.expr);
+              const expectedCtype = ctx.resolveType(p.typeAnn);
+              const actualCtype = ctx.inferType(a.expr);
               return expectedCtype === actualCtype || expectedCtype.includes(actualCtype) || actualCtype.includes(expectedCtype);
             })
           ) ?? countMatches[0];
@@ -177,20 +176,20 @@ export default {
         // funcPtr variables hold the name directly; functions use their mangled name
         calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
         // Unknown identifier check: callee not in scope and not a language builtin
-        if (!sym && !this._languageBuiltins.has(callee.name)) {
-          throw this.error(`unknown identifier '${callee.name}'`);
+        if (!sym && !ctx._languageBuiltins.has(callee.name)) {
+          throw ctx.error(`unknown identifier '${callee.name}'`);
         }
         // avr/hal direct calls that return values: set _lastHalRead so stmt.js emits (void)name;
-        if (sym?._suppressVoidWarning && sym.ctype !== 'void') this._lastHalRead = sym.ctype ?? null;
+        if (sym?._suppressVoidWarning && sym.ctype !== 'void') ctx._lastHalRead = sym.ctype ?? null;
       }
     } else {
-      calleeC = this.exprToC(callee, lines, depth);
+      calleeC = ctx.exprToC(callee, lines, depth);
     }
 
     // Recursive self-call: direct static call (no function pointer indirection)
     if (sym?._isRecursiveSelf && sym?._closureFnName && callee.kind === 'Ident') {
-      const argsC = this.argsToC(args, lines, depth);
-      this._releaseQuarantineBy(callee.name);
+      const argsC = ctx.argsToC(args, lines, depth);
+      ctx._releaseQuarantineBy(callee.name);
       if (sym.isClosure) {
         return `${sym._closureFnName}(env${argsC ? ', ' + argsC : ''})`;
       }
@@ -199,33 +198,33 @@ export default {
 
     // tsc_closure call: closure variable or func-ptr variable (not a regular function)
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
-      const argsC = this.argsToC(args, lines, depth);
-      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => this.inferType(a.expr) ?? 'void *');
-      const retType = sym.closureRetType ?? this.inferType(node) ?? 'void';
+      const argsC = ctx.argsToC(args, lines, depth);
+      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
+      const retType = sym.closureRetType ?? ctx.inferType(node) ?? 'void';
       if (sym.isClosure || !sym.funcPtr) {
-        this._releaseQuarantineBy(callee.name);
+        ctx._releaseQuarantineBy(callee.name);
         const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
         const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
         return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
       }
-      this._releaseQuarantineBy(callee.name);
+      ctx._releaseQuarantineBy(callee.name);
       const sigArgs = paramTypes.join(', ') || 'void';
       return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${argsC})`;
     }
 
     // tsc_closure call from expression (e.g. arr[0](args))
     if (callee.kind !== 'Ident' && !sym?.funcName) {
-      const calleeType = this.inferType(callee);
+      const calleeType = ctx.inferType(callee);
       if (calleeType === 'tsc_closure') {
-        const argsC = this.argsToC(args, lines, depth);
+        const argsC = ctx.argsToC(args, lines, depth);
         let paramTypes: string[] | null = null;
-        let retType = this.inferType(node) ?? 'void';
+        let retType = ctx.inferType(node) ?? 'void';
         if (callee.kind === 'Index' && callee.object.kind === 'Ident') {
-          const arrSym = this.lookup(callee.object.name);
+          const arrSym = ctx.lookup(callee.object.name);
           if (arrSym?._arrElemClosureParams) paramTypes = arrSym._arrElemClosureParams;
           if (arrSym?._arrElemClosureRet) retType = arrSym._arrElemClosureRet;
         }
-        if (!paramTypes) paramTypes = (node.args ?? []).map((a: Argument) => this.inferType(a.expr) ?? 'void *');
+        if (!paramTypes) paramTypes = (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
         const sigArgs = paramTypes.join(', ') || 'void';
         return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
       }
@@ -237,15 +236,15 @@ export default {
       const _toRawArg = (a: Argument): { isVaList?: boolean; vaListName?: string; raw?: string } => {
         // Spread of a va_list в†’ va_list variable name (for v-variant forwarding)
         if (a.spread) {
-          const spreadSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          const spreadSym = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
           if (spreadSym?._isVaList) return { isVaList: true, vaListName: spreadSym._vaListName };
-          throw this.error(`spread '...' requires a va_list in variadic function calls`, a.expr ?? a);
+          throw ctx.error(`spread '...' requires a va_list in variadic function calls`, a.expr ?? a);
         }
         if (a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           return { raw: `"${a.expr.value.replace(/"/g, '\\"')}"` };
         }
-        const ac = this.exprToC(a.expr, lines, depth);
-        const at = this.inferType(a.expr);
+        const ac = ctx.exprToC(a.expr, lines, depth);
+        const at = ctx.inferType(a.expr);
         return { raw: at === 'String' ? `${ac}.data` : ac };
       };
       const processed = args.map(_toRawArg);
@@ -264,10 +263,10 @@ export default {
       for (let i = 0; i < sym.params.length && i < args.length; i++) {
         const p = sym.params[i];
         if (p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'any') {
-          const argType = this.inferType(args[i].expr);
+          const argType = ctx.inferType(args[i].expr);
           if (argType !== 'void *' && argType !== null && argType !== undefined) {
-            const tsType = this.ctypeToTsName(argType);
-            throw this.error(`cannot pass ${tsType} as "any": any is opaque across function boundaries`);
+            const tsType = ctx.ctypeToTsName(argType);
+            throw ctx.error(`cannot pass ${tsType} as "any": any is opaque across function boundaries`);
           }
         }
       }
@@ -279,15 +278,15 @@ export default {
     if (restIdx >= 0) {
       const restParam = symParams![restIdx];
       let et = 'int32_t';
-      if (restParam.typeAnn?.kind === 'TypeArray') et = this.resolveType(restParam.typeAnn.element);
-      else if (restParam.typeAnn) et = this.resolveType(restParam.typeAnn);
+      if (restParam.typeAnn?.kind === 'TypeArray') et = ctx.resolveType(restParam.typeAnn.element);
+      else if (restParam.typeAnn) et = ctx.resolveType(restParam.typeAnn);
       // Normal args before rest
-      const normalArgs = args.slice(0, restIdx).map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth));
+      const normalArgs = args.slice(0, restIdx).map((a: { expr: Expression }) => ctx.exprToC(a.expr, lines, depth));
       // Variadic args from restIdx onward
       const varArgs = args.slice(restIdx);
-      const I = ' '.repeat(this.indent * depth);
-      const restName = `_rest_${this.restCount++}`;
-      const varArgsC = varArgs.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth)).join(', ');
+      const I = ' '.repeat(ctx.indent * depth);
+      const restName = `_rest_${ctx.restCount++}`;
+      const varArgsC = varArgs.map((a: { expr: Expression }) => ctx.exprToC(a.expr, lines, depth)).join(', ');
       lines.push(`${I}${et} ${restName}[] = {${varArgsC}};`);
       const allArgs = [...normalArgs, restName, String(varArgs.length)];
       return `${calleeC}(${allArgs.join(', ')})`;
@@ -299,9 +298,9 @@ export default {
       const normalParams = symParams.filter((p: { rest?: boolean }) => !p.rest);
       const filled = normalParams.map((p: { defaultVal?: Expression }, i: number) => {
         if (i < args.length) {
-          return this.exprToC(args[i].expr, lines, depth);
+          return ctx.exprToC(args[i].expr, lines, depth);
         }
-        if (p.defaultVal) return this.exprToC(p.defaultVal, lines, depth);
+        if (p.defaultVal) return ctx.exprToC(p.defaultVal, lines, depth);
         return '0'; // fallback (shouldn't happen if type-checked)
       });
       return `${calleeC}(${filled.join(', ')})`;
@@ -311,7 +310,7 @@ export default {
     // (only when no spread args вЂ” spread needs argsToC expansion)
     const hasSpreadArgs = args.some((a: { spread?: boolean }) => a.spread);
     if (symParams && !hasSpreadArgs) {
-      const I = ' '.repeat(this.indent * depth);
+      const I = ' '.repeat(ctx.indent * depth);
       const _callMutBorrowedSyms: SymbolInfo[] = [];
       // Pre-pass: detect same variable passed as Mut<T> to multiple params of the same call
       {
@@ -322,9 +321,9 @@ export default {
               args[i].expr.kind === 'Ident') {
             const nm = (args[i].expr as { name: string }).name;
             const innerName = p.typeAnn.typeArgs?.[0]?.name;
-            if (!innerName || !this.interfaces.has(innerName)) {
+            if (!innerName || !ctx.interfaces.has(innerName)) {
               if (mutArgNames.has(nm)) {
-                throw this.error(
+                throw ctx.error(
                   `TypeError: Cannot create two simultaneous mutable borrows of '${nm}'`,
                   args[i].expr
                 );
@@ -336,32 +335,32 @@ export default {
       }
       const coercedArgs = args.map((a: Argument, i: number) => {
         const param = symParams[i];
-        if (!param) return this.exprToC(a.expr, lines, depth);
+        if (!param) return ctx.exprToC(a.expr, lines, depth);
         if (a.expr.kind === 'Ident') {
-          const _argQSym = this.lookup(a.expr.name);
+          const _argQSym = ctx.lookup(a.expr.name);
           if (_argQSym?._mutQuarantined) {
-            throw this.error(`cannot access '${a.expr.name}' while a mutable borrow is active`, a.expr);
+            throw ctx.error(`cannot access '${a.expr.name}' while a mutable borrow is active`, a.expr);
           }
         }
-        const paramType = param.typeAnn ? this.resolveType(param.typeAnn) : null;
-        const paramEnumDef = paramType ? this.classes.get(paramType) : null;
+        const paramType = param.typeAnn ? ctx.resolveType(param.typeAnn) : null;
+        const paramEnumDef = paramType ? ctx.classes.get(paramType) : null;
         if (paramEnumDef?.isStringLiteralUnion && a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           const val = a.expr.value;
           if (!((paramEnumDef.members as string[] | undefined) ?? []).includes(val)) {
-            throw this.error(`"${val}" is not a valid value for type ${paramType}`);
+            throw ctx.error(`"${val}" is not a valid value for type ${paramType}`);
           }
           return `${paramType}_${val}`;
         }
         // ObjLit arg to struct param: prefix with (StructType)
         if (paramEnumDef?.isStruct && a.expr.kind === 'ObjLit') {
-          const initC = this.exprToC(a.expr, lines, depth);
+          const initC = ctx.exprToC(a.expr, lines, depth);
           return `(${paramType})${initC}`;
         }
         // Array struct arg to destructured array param (int32_t *_arr): pass .data
         if (param.destructArr) {
-          const argSym = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          const argSym = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
           if (argSym?.ctype?.startsWith('Array_')) {
-            return `${this.exprToC(a.expr, lines, depth)}.data`;
+            return `${ctx.exprToC(a.expr, lines, depth)}.data`;
           }
         }
         // Borrow check: cannot pass const variable as Mut<T> (non-interface only;
@@ -369,61 +368,61 @@ export default {
         if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut' &&
             a.expr.kind === 'Ident') {
           const innerCheck = param.typeAnn.typeArgs?.[0]?.name;
-          if (!innerCheck || !this.interfaces.has(innerCheck)) {
-            const argSym = this.lookup(a.expr.name);
+          if (!innerCheck || !ctx.interfaces.has(innerCheck)) {
+            const argSym = ctx.lookup(a.expr.name);
             if (argSym?.varKind === 'const') {
-              throw this.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+              throw ctx.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
             }
           }
         }
         // Interface param (or Mut<Interface>): wrap concrete class arg in fat pointer
         // Also handle `c as Shape` cast вЂ” unwrap to the inner ident
-        const ifaceName = this._getIfaceParamName(param.typeAnn);
+        const ifaceName = ctx._getIfaceParamName(param.typeAnn);
         const rawArgExpr = (ifaceName && a.expr.kind === 'Cast' &&
           a.expr.castType?.kind === 'TypeRef' && a.expr.castType.name === ifaceName)
           ? a.expr.expr : a.expr;
-        if (ifaceName && this.interfaces.has(ifaceName) && rawArgExpr.kind === 'Ident') {
+        if (ifaceName && ctx.interfaces.has(ifaceName) && rawArgExpr.kind === 'Ident') {
           const a2 = { ...a, expr: rawArgExpr };
           a = a2;
           const argName = (a.expr as { name: string }).name;
           // Check: cannot pass const variable as Mut<Interface>
           if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Mut') {
-            const argVarInfo = this.lookup(argName);
+            const argVarInfo = ctx.lookup(argName);
             if (argVarInfo?.varKind === 'const') {
               const mutIfaceName = param.typeAnn.typeArgs?.[0]?.name ?? ifaceName;
-              throw this.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
+              throw ctx.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
             }
           }
-          const argSym3 = this.lookup(argName);
-          const argClass = argSym3?.ctype ? this.classes.get(argSym3.ctype) : null;
-          if (argClass && argSym3?.ctype && !this.interfaces.has(argSym3.ctype)) {
+          const argSym3 = ctx.lookup(argName);
+          const argClass = argSym3?.ctype ? ctx.classes.get(argSym3.ctype) : null;
+          if (argClass && argSym3?.ctype && !ctx.interfaces.has(argSym3.ctype)) {
             // Concrete class: wrap in fat pointer
             const className = argSym3.ctype;
-            const hasExplicit = argClass.implements_?.includes(ifaceName);
+            const hasExplicit = argClass.implements_?.some((i: TypeRef) => i.name === ifaceName);
             const vtableName = hasExplicit
               ? `${className}_${ifaceName}_vtable`
               : `_${className}_${ifaceName}_vtable`;
-            if (!hasExplicit) this._ensureImplicitVtable(className, ifaceName);
+            if (!hasExplicit) ctx._ensureImplicitVtable(className, ifaceName);
             const fatName = `_${param.name}_${argName}`;
             // Reuse existing fat-ptr variable if already declared in scope
-            if (!this.lookup(fatName)) {
+            if (!ctx.lookup(fatName)) {
               lines.push(`${I}${ifaceName} ${fatName} = { .self = &${argName}, .vtable = &${vtableName} };`);
-              this.define(fatName, { ctype: ifaceName });
+              ctx.define(fatName, { ctype: ifaceName });
             }
             return fatName;
           }
         }
         if (param.typeAnn?.kind === 'TypeRef' && param.typeAnn.name === 'Arc') {
-          const argSymSh = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          const argSymSh = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
           if (argSymSh && a.expr.kind === 'Ident') {
             if (argSymSh.isRefParam) {
-              throw this.error(
+              throw ctx.error(
                 `TypeError: Cannot pass Ref<T> '${a.expr.name}' as Arc<T> — incompatible borrow types`,
                 a.expr
               );
             }
             if (argSymSh.isMutParam) {
-              throw this.error(
+              throw ctx.error(
                 `TypeError: Cannot pass Mut<T> '${a.expr.name}' as Arc<T> — mutable borrow cannot become shared reference`,
                 a.expr
               );
@@ -434,32 +433,32 @@ export default {
         if (param.typeAnn?.kind === 'TypeRef' &&
             (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut')) {
           const innerName2 = param.typeAnn.typeArgs?.[0]?.name;
-          if (!innerName2 || !this.interfaces.has(innerName2)) {
-            const argSym2 = a.expr?.kind === 'Ident' ? this.lookup(a.expr.name) : null;
+          if (!innerName2 || !ctx.interfaces.has(innerName2)) {
+            const argSym2 = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
             if (argSym2 && a.expr.kind === 'Ident') {
               if (param.typeAnn.name === 'Mut') {
                 if (argSym2.isRefParam) {
-                  throw this.error(
+                  throw ctx.error(
                     `TypeError: Cannot re-borrow Ref<T> '${a.expr.name}' as Mut<T> — immutable borrow cannot become mutable`,
                     a.expr
                   );
                 }
                 if (argSym2.isArc) {
-                  throw this.error(
+                  throw ctx.error(
                     `TypeError: Cannot create mutable borrow of Arc<T> '${a.expr.name}' — Arc does not give exclusive access`,
                     a.expr
                   );
                 }
                 // Cannot mutably borrow while an immutable borrow is active
                 if ((argSym2._refBorrowCount || 0) > 0) {
-                  throw this.error(
+                  throw ctx.error(
                     `TypeError: Cannot create mutable borrow of '${a.expr.name}' while immutable borrow is active`,
                     a.expr
                   );
                 }
                 // Cannot pass to two *different* Mut<T> borrowers in the same scope
                 if (argSym2._mutBorrowedBy && argSym2._mutBorrowedBy !== calleeC) {
-                  throw this.error(
+                  throw ctx.error(
                     `TypeError: Cannot create two simultaneous mutable borrows of '${a.expr.name}'`,
                     a.expr
                   );
@@ -468,17 +467,17 @@ export default {
                 _callMutBorrowedSyms.push(argSym2);
               } else {
                 // Ref<T>: mark as immutably borrowed (for future Mut<T> checks)
-                this._trackRefBorrow(argSym2);
+                ctx._trackRefBorrow(argSym2);
               }
             }
-            const argC2 = this.exprToC(a.expr, lines, depth);
+            const argC2 = ctx.exprToC(a.expr, lines, depth);
             if (!argSym2?.isPointer && !argSym2?.ctype?.endsWith('*')) return `&${argC2}`;
             return argC2;
           }
         }
         // tsc_closure param: wrap closure/func arg into tsc_closure
         if (paramType === 'tsc_closure' && a.expr.kind === 'Ident') {
-          const argSym = this.lookup(a.expr.name);
+          const argSym = ctx.lookup(a.expr.name);
           if (argSym?.isClosure && argSym._closureEnvName) {
             return `(tsc_closure){.env = ${a.expr.name}_env, .fn = (void*)${argSym._closureFnName}}`;
           }
@@ -490,67 +489,67 @@ export default {
           }
         }
         if (paramType === 'tsc_closure' && a.expr.kind === 'Arrow') {
-          if (this._strictRules?.has('no-closures')) {
-            throw this.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+          if (ctx._strictRules?.has('no-closures')) {
+            throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
           }
-          const closure = this.hoistClosure(a.expr, `_cb_${this.closureCount ?? 0}`);
+          const closure = ctx.hoistClosure(a.expr, `_cb_${ctx.closureCount ?? 0}`);
           if (closure) {
             if (closure.retainLines?.length) {
-              const I = ' '.repeat(this.indent * depth);
+              const I = ' '.repeat(ctx.indent * depth);
               for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
             }
-            lines.push(`${' '.repeat(this.indent * depth)}${closure.envName} *_cb_env_${this.closureCount - 1} = tsc_malloc(sizeof(${closure.envName}));`);
-            lines.push(`${' '.repeat(this.indent * depth)}*_cb_env_${this.closureCount - 1} = (${closure.envName})${closure.envInit};`);
-            return `(tsc_closure){.env = _cb_env_${this.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
+            lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *_cb_env_${ctx.closureCount - 1} = tsc_malloc(sizeof(${closure.envName}));`);
+            lines.push(`${' '.repeat(ctx.indent * depth)}*_cb_env_${ctx.closureCount - 1} = (${closure.envName})${closure.envInit};`);
+            return `(tsc_closure){.env = _cb_env_${ctx.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
           }
-          const lambdaName = this.hoistArrow(a.expr, 'void', '_cb');
+          const lambdaName = ctx.hoistArrow(a.expr, 'void', '_cb');
           return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
         }
-        const _prevExpected = this._expectedType;
-        if (paramType?.startsWith('Array_')) this._expectedType = paramType;
-        const _argC = this.exprToC(a.expr, lines, depth);
-        this._expectedType = _prevExpected;
+        const _prevExpected = ctx._expectedType;
+        if (paramType?.startsWith('Array_')) ctx._expectedType = paramType;
+        const _argC = ctx.exprToC(a.expr, lines, depth);
+        ctx._expectedType = _prevExpected;
         if (paramType === 'tsc_unknown') {
-          const _argType = this.inferType(a.expr);
+          const _argType = ctx.inferType(a.expr);
           if (_argType !== 'tsc_unknown') {
-            this._ensureUnknownStruct();
-            const _packer = this._unknownPackerFor(_argType);
+            ctx._ensureUnknownStruct();
+            const _packer = ctx._unknownPackerFor(_argType);
             return `${_packer}(${_argC})`;
           }
         }
         // Move semantics: class/array-by-value arg passed to function → mark source as moved
         if (a.expr.kind === 'Ident' && paramType) {
-          const _moveClassDef = this.classes.get(paramType);
+          const _moveClassDef = ctx.classes.get(paramType);
           const _hasFields = !!_moveClassDef?.fields;
           const _isArray = paramType.startsWith('Array_');
           const _isBorrow = param.typeAnn?.kind === 'TypeRef' &&
             (param.typeAnn.name === 'Ref' || param.typeAnn.name === 'Mut' || param.typeAnn.name === 'Arc');
           if ((_hasFields || _isArray) && !_isBorrow) {
-            const _moveArgSym = this.lookup(a.expr.name);
+            const _moveArgSym = ctx.lookup(a.expr.name);
             if (_moveArgSym) {
               if (_moveArgSym.isRefParam) {
-                throw this.error(
+                throw ctx.error(
                   `TypeError: Cannot pass Ref<T> '${a.expr.name}' as owned parameter — borrow cannot be consumed`,
                   a.expr
                 );
               }
               if (_moveArgSym.isMutParam) {
-                throw this.error(
+                throw ctx.error(
                   `TypeError: Cannot pass Mut<T> '${a.expr.name}' as owned parameter — mutable borrow cannot be consumed`,
                   a.expr
                 );
               }
               if (_moveArgSym.isArc) {
-                throw this.error(
+                throw ctx.error(
                   `TypeError: Cannot pass Arc<T> '${a.expr.name}' as owned parameter — shared reference cannot be consumed`,
                   a.expr
                 );
               }
               if (_moveArgSym.varKind === 'const') {
-                throw this.error(`cannot move out of "const" binding`, a.expr, { code: 'E003' });
+                throw ctx.error(`cannot move out of "const" binding`, a.expr, { code: 'E003' });
               }
               if (_moveArgSym._moved) {
-                throw this.error(
+                throw ctx.error(
                   `use of moved value: "${a.expr.name}"`,
                   a.expr,
                   { code: 'E002', secondary: _moveArgSym._movedSourceNode, secondaryLine: _moveArgSym._movedLine }
@@ -560,8 +559,8 @@ export default {
               _moveArgSym._movedLine = a.expr.line;
               _moveArgSym._movedSourceNode = a.expr;
               if (_moveArgSym.varKind === 'let' && _hasFields) {
-                if (!this._postStmtCleanups) this._postStmtCleanups = [];
-                this._postStmtCleanups.push(`${I}${a.expr.name} = (${paramType}){0};`);
+                if (!ctx._postStmtCleanups) ctx._postStmtCleanups = [];
+                ctx._postStmtCleanups.push(`${I}${a.expr.name} = (${paramType}){0};`);
               }
             }
           }
@@ -573,11 +572,11 @@ export default {
       return result;
     }
 
-    const argsC = this.argsToC(args, lines, depth);
+    const argsC = ctx.argsToC(args, lines, depth);
     return `${calleeC}(${argsC})`;
-  },
+}
 
-  _dispatchArrayStatic(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+export function _dispatchArrayStatic(ctx: CodeGenContext, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'from' && callee.prop !== 'of') return null;
@@ -585,22 +584,22 @@ export default {
     if (obj?.kind !== 'Ident' || obj.name !== 'Array') return null;
 
     const typeArg = node.typeArgs?.[0];
-    const etCType = typeArg ? this.resolveType(typeArg) : (args.length > 0 ? this.inferType(args[0].expr) : 'int32_t');
+    const etCType = typeArg ? ctx.resolveType(typeArg) : (args.length > 0 ? ctx.inferType(args[0].expr) : 'int32_t');
     if (etCType?.startsWith('Array_')) {
       const inner = etCType.slice(6);
-      const innerC = this._arrIdentToCType(inner);
-      this._ensureArrayStruct(etCType, innerC);
+      const innerC = ctx._arrIdentToCType(inner);
+      ctx._ensureArrayStruct(etCType, innerC);
     }
-    const etIdent = this.cTypeToIdent(etCType);
+    const etIdent = ctx.cTypeToIdent(etCType);
     const arrName = `Array_${etIdent}`;
-    this._ensureArrayStruct(arrName, etCType);
-    const I = ' '.repeat(this.indent * depth);
+    ctx._ensureArrayStruct(arrName, etCType);
+    const I = ' '.repeat(ctx.indent * depth);
 
     if (callee.prop === 'from') {
       if (args.length < 1) return null;
       const srcExpr = args[0].expr;
-      const srcC = this.exprToC(srcExpr, lines, depth);
-      const srcType = this.inferType(srcExpr);
+      const srcC = ctx.exprToC(srcExpr, lines, depth);
+      const srcType = ctx.inferType(srcExpr);
       if (srcType?.startsWith('Array_')) {
         if (srcType === arrName) {
           return `tsc_array_slice_${etIdent}(${srcC}, 0, (int32_t)${srcC}.length)`;
@@ -612,18 +611,18 @@ export default {
     }
 
     // Array.of
-    const itemsC = args.map((a: { expr: Expression }) => this.exprToC(a.expr, lines, depth));
+    const itemsC = args.map((a: { expr: Expression }) => ctx.exprToC(a.expr, lines, depth));
     const count = itemsC.length;
-    const tmpArr = `_of_${this.tempCount++}`;
+    const tmpArr = `_of_${ctx.tempCount++}`;
     for (let i = 0; i < count; i++) {
       lines.push(`${I}${etCType} ${tmpArr}_${i} = ${itemsC[i]};`);
     }
     lines.push(`${I}${etCType} ${tmpArr}_data[] = {${itemsC.map((_, i: number) => `${tmpArr}_${i}`).join(', ')}};`);
     lines.push(`${I}${arrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${count}, .capacity = ${count}};`);
     return `${tmpArr}`;
-  },
+}
 
-  _dispatchObjectStatic(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+export function _dispatchObjectStatic(ctx: CodeGenContext, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     const obj = callee.object;
@@ -632,71 +631,71 @@ export default {
     if (prop !== 'keys' && prop !== 'values' && prop !== 'entries') return null;
     if (args.length < 1) return null;
     const argExpr = args[0].expr;
-    const objType = this.inferType(argExpr);
-    const cls = objType ? this.classes.get(objType) : null;
+    const objType = ctx.inferType(argExpr);
+    const cls = objType ? ctx.classes.get(objType) : null;
     if (!cls || !cls.fields || cls.fields.length === 0) return null;
     const fields = cls.fields;
-    const I = ' '.repeat(this.indent * depth);
+    const I = ' '.repeat(ctx.indent * depth);
     if (prop === 'keys') {
-      const argC = this.exprToC(argExpr, lines, depth);
-      const tmpObj = `_obj_${this.tempCount++}`;
+      const argC = ctx.exprToC(argExpr, lines, depth);
+      const tmpObj = `_obj_${ctx.tempCount++}`;
       lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
-      this._ensureArrayStruct('Array_string', 'String');
+      ctx._ensureArrayStruct('Array_string', 'String');
       const keysData = fields.map((f: { name: string }) => `STR_LIT("${f.name}")`).join(', ');
-      const tmpArr = `_keys_${this.tempCount++}`;
+      const tmpArr = `_keys_${ctx.tempCount++}`;
       lines.push(`${I}String ${tmpArr}_data[] = {${keysData}};`);
       lines.push(`${I}Array_string ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
       return `${tmpArr}`;
     }
-    const fieldTypes = fields.map((f) => this.resolveType(f.typeAnn));
+    const fieldTypes = fields.map((f) => ctx.resolveType(f.typeAnn));
     const firstType = fieldTypes[0];
     const allSame = fieldTypes.every((t: string) => t === firstType);
     if (!allSame) {
-      throw this.error('Object.values/entries requires uniform field types', node);
+      throw ctx.error('Object.values/entries requires uniform field types', node);
     }
-    const etIdent = this.cTypeToIdent(firstType);
+    const etIdent = ctx.cTypeToIdent(firstType);
     const refArrName = `Array_ref_${etIdent}`;
-    this._ensureRefArrayStruct(refArrName, firstType);
+    ctx._ensureRefArrayStruct(refArrName, firstType);
     let srcExpr;
     const srcIsIdent = argExpr.kind === 'Ident';
     if (srcIsIdent) {
       srcExpr = argExpr.name;
-      const srcSym = this.lookup(argExpr.name);
-      if (srcSym) this._trackRefBorrow(srcSym);
+      const srcSym = ctx.lookup(argExpr.name);
+      if (srcSym) ctx._trackRefBorrow(srcSym);
     } else {
-      const argC = this.exprToC(argExpr, lines, depth);
-      const tmpObj = `_obj_${this.tempCount++}`;
+      const argC = ctx.exprToC(argExpr, lines, depth);
+      const tmpObj = `_obj_${ctx.tempCount++}`;
       lines.push(`${I}${objType} ${tmpObj} = ${argC};`);
       srcExpr = tmpObj;
     }
     if (prop === 'values') {
       const valsData = fields.map((f: { name: string }) => `&${srcExpr}.${f.name}`).join(', ');
-      const tmpArr = `_vals_${this.tempCount++}`;
+      const tmpArr = `_vals_${ctx.tempCount++}`;
       lines.push(`${I}${firstType} *${tmpArr}_data[] = {${valsData}};`);
       lines.push(`${I}${refArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
       return `${tmpArr}`;
     }
     const tupleName = `Tuple_string_ref_${etIdent}`;
     const tupleArrName = `Array_${tupleName}`;
-    if (!this._emittedTuples?.has(tupleName)) {
-      if (!this._emittedTuples) this._emittedTuples = new Set();
-      this._emittedTuples.add(tupleName);
-      this.addTop(`typedef struct { String _0; ${firstType} *_1; } ${tupleName};`);
-      this.addTop('');
-      this.classes.set(tupleName, { isTuple: true, fields: [
+    if (!ctx._emittedTuples?.has(tupleName)) {
+      if (!ctx._emittedTuples) ctx._emittedTuples = new Set();
+      ctx._emittedTuples.add(tupleName);
+      ctx.addTop(`typedef struct { String _0; ${firstType} *_1; } ${tupleName};`);
+      ctx.addTop('');
+      ctx.classes.set(tupleName, { isTuple: true, fields: [
         { name: '_0', label: undefined, ctype: 'String', const: false },
         { name: '_1', label: undefined, ctype: `${firstType} *`, const: false }
       ], readonly: false });
     }
-    this._ensureArrayStruct(tupleArrName, tupleName);
+    ctx._ensureArrayStruct(tupleArrName, tupleName);
     const entriesData = fields.map((f: { name: string }) => `{STR_LIT("${f.name}"), &${srcExpr}.${f.name}}`).join(', ');
-    const tmpArr = `_entries_${this.tempCount++}`;
+    const tmpArr = `_entries_${ctx.tempCount++}`;
     lines.push(`${I}${tupleName} ${tmpArr}_data[] = {${entriesData}};`);
     lines.push(`${I}${tupleArrName} ${tmpArr} = {.data = ${tmpArr}_data, .length = ${fields.length}, .capacity = ${fields.length}};`);
     return `${tmpArr}`;
-  },
+}
 
-  _dispatchGroupBy(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+export function _dispatchGroupBy(ctx: CodeGenContext, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee?.kind !== 'Member') return null;
     if (callee.prop !== 'groupBy') return null;
@@ -704,24 +703,23 @@ export default {
     if (obj?.kind !== 'Ident') return null;
     if (obj.name !== 'Map' && obj.name !== 'Object') return null;
     if (args.length < 2) return null;
-    if (this._cap('allocator') !== 'heap') {
-      throw this.error(`'${obj.name}.groupBy()' is not available on embedded targets`, node);
+    if (ctx._cap('allocator') !== 'heap') {
+      throw ctx.error(`'${obj.name}.groupBy()' is not available on embedded targets`, node);
     }
     const arrExpr = args[0].expr;
-    const arrType = this.inferType(arrExpr);
+    const arrType = ctx.inferType(arrExpr);
     if (!arrType?.startsWith('Array_')) return null;
     const etIdent = arrType.slice(6);
-    const etCType = this._arrIdentToCType(etIdent);
+    const etCType = ctx._arrIdentToCType(etIdent);
     const arrName = `Array_${etIdent}`;
-    this._ensureArrayStruct(arrName, etCType);
+    ctx._ensureArrayStruct(arrName, etCType);
     const keyFnArg = args[1];
-    this._lambdaParamHint = etCType === 'String' ? ['String *'] : [etCType];
-    const cbFnName = this._extractCallbackFn(keyFnArg, lines, depth);
-    this._lambdaParamHint = null;
+    ctx._lambdaParamHint = etCType === 'String' ? ['String *'] : [etCType];
+    const cbFnName = ctx._extractCallbackFn(keyFnArg, lines, depth);
+    ctx._lambdaParamHint = null;
     if (!cbFnName) return null;
-    this._ensureGroupByMapStruct(etIdent, etCType);
-    const arrC = this.exprToC(arrExpr, lines, depth);
+    ctx._ensureGroupByMapStruct(etIdent, etCType);
+    const arrC = ctx.exprToC(arrExpr, lines, depth);
     const macroSuffix = etIdent;
     return `tsc_map_group_by_${macroSuffix}(${arrC}, ${cbFnName})`;
-  },
-};
+}

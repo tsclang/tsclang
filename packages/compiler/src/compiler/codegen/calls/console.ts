@@ -1,20 +1,19 @@
 import type { Argument, Expression, Literal } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
-export default {
-  consoleCall(this: CodeGenThis, method: string, args: Argument[], lines: string[], depth: number) {
+import type { CodeGenContext } from '../../codegen.js';
+export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[], lines: string[], depth: number) {
     if (method === 'time') {
-      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
+      const label = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
       return `tsc_console_time(${label})`;
     }
     if (method === 'timeEnd') {
-      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
+      const label = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("default")';
       return `tsc_console_time_end(${label})`;
     }
     if (method === 'trace') {
-      if (this._cap('os') === false || this._isWasmBare()) {
-        throw this.error(`"console.trace()" is not available on ${this._targetName} targets`);
+      if (ctx._cap('os') === false || ctx._isWasmBare()) {
+        throw ctx.error(`"console.trace()" is not available on ${ctx._targetName} targets`);
       }
-      const label = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      const label = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       return `tsc_console_trace(${label})`;
     }
 
@@ -30,7 +29,7 @@ export default {
 
     for (const arg of args) {
       const expr  = arg.expr;
-      let ctype = this.inferType(expr);
+      let ctype = ctx.inferType(expr);
 
       if (expr.kind === 'Literal' && expr.litType === 'string') {
         fmtParts.push(expr.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%'));
@@ -40,20 +39,20 @@ export default {
       // Unwrap throws function calls: store Result, check ok, use .value
       let unwrapRes: string | null = null;
       if (expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
-        const calleeSym = this.lookup(expr.callee.name);
+        const calleeSym = ctx.lookup(expr.callee.name);
         if (calleeSym?._isThrowsFunc && ctype?.startsWith('Result_')) {
-          const I = ' '.repeat(this.indent * depth);
-          unwrapRes = `_unwrap_${this.tempCount++}`;
-          const callC = this.exprToC(expr, lines, depth);
+          const I = ' '.repeat(ctx.indent * depth);
+          unwrapRes = `_unwrap_${ctx.tempCount++}`;
+          const callC = ctx.exprToC(expr, lines, depth);
           lines.push(`${I}${calleeSym._resultType} ${unwrapRes} = ${callC};`);
-          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${this._panicMsgExpr(unwrapRes, calleeSym._resultErrTypes)}); }`);
+          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${ctx._panicMsgExpr(unwrapRes, calleeSym._resultErrTypes)}); }`);
           ctype = calleeSym._resultValueType ?? 'int32_t';
         }
       }
 
-      if (expr.kind === 'Binary' && expr.op === '+' && this.isStringExpr(expr)) {
+      if (expr.kind === 'Binary' && expr.op === '+' && ctx.isStringExpr(expr)) {
         const flattenConcat = (n: Expression): Expression[] => {
-          if (n.kind === 'Binary' && n.op === '+' && this.isStringExpr(n)) {
+          if (n.kind === 'Binary' && n.op === '+' && ctx.isStringExpr(n)) {
             return [...flattenConcat(n.left), ...flattenConcat(n.right)];
           }
           return [n];
@@ -73,33 +72,33 @@ export default {
       }
 
       if (expr.kind === 'Typeof') {
-        const _tofSym = expr.expr.kind === 'Ident' ? this.lookup(expr.expr.name) : null;
-        const _tofCt = _tofSym?.ctype ?? this.inferType(expr.expr);
-        fmtParts.push(this.ctypeToTsName(_tofCt));
+        const _tofSym = expr.expr.kind === 'Ident' ? ctx.lookup(expr.expr.name) : null;
+        const _tofCt = _tofSym?.ctype ?? ctx.inferType(expr.expr);
+        fmtParts.push(ctx.ctypeToTsName(_tofCt));
         continue;
       }
 
-      if (this.isBareLiteralNumber(expr)) {
-        const v = this.bareNumberValue(expr);
+      if (ctx.isBareLiteralNumber(expr)) {
+        const v = ctx.bareNumberValue(expr);
         fmtParts.push('%s');
         fmtArgs.push(`tsc_dtoa(${v})`);
         continue;
       }
 
-      const cexpr = unwrapRes ? `${unwrapRes}.value` : this.exprToC(expr, lines, depth);
+      const cexpr = unwrapRes ? `${unwrapRes}.value` : ctx.exprToC(expr, lines, depth);
 
       if (expr.kind === 'Binary' && ['&','|','^','<<','>>','>>>'].includes(expr.op)) {
         const hasTypedVar = (n: Expression | null): boolean => {
           if (!n) return false;
           if (n.kind === 'Ident') {
-            const s = this.lookup(n.name);
+            const s = ctx.lookup(n.name);
             return s?.ctype != null && s.ctype !== 'double' && s.ctype !== 'void *';
           }
           if (n.kind === 'Binary') return hasTypedVar(n.left) || hasTypedVar(n.right);
           return false;
         };
         if (hasTypedVar(expr)) {
-          if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+          if (ctx._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
           else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
         } else {
           fmtParts.push('%s');
@@ -109,7 +108,7 @@ export default {
       }
 
       if (ctype?.endsWith(' *') && !ctype.startsWith('void') && !ctype.startsWith('const char')) {
-        const sym = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+        const sym = expr.kind === 'Ident' ? ctx.lookup(expr.name) : null;
         const derefType = sym?.derefType ?? ctype.replace(/^(const )?/, '').replace(/ \*$/, '');
         if (derefType === 'String') {
           fmtParts.push('%s');
@@ -118,8 +117,8 @@ export default {
           fmtParts.push('%s');
           fmtArgs.push(`tsc_dtoa(*${cexpr})`);
         } else if (derefType === 'int64_t') {
-          if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
-            throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+          if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
+            throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
           }
           fmtParts.push('%lld');
           fmtArgs.push(`(long long)*${cexpr}`);
@@ -127,37 +126,37 @@ export default {
           fmtParts.push('%s');
           fmtArgs.push(`*${cexpr} ? "true" : "false"`);
         } else {
-          if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)*${cexpr}`); }
+          if (ctx._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)*${cexpr}`); }
           else { fmtParts.push('%d'); fmtArgs.push(`*${cexpr}`); }
         }
         continue;
       }
 
       if (ctype === 'String') {
-        if (this._cap('allocator') !== 'heap') {
+        if (ctx._cap('allocator') !== 'heap') {
           if (fmtParts.length > 0) {
             fmtParts.push('');
             const flushFmt = '"' + fmtParts.join(' ') + '"';
             const flushArgs = fmtArgs.length > 0 ? [flushFmt, ...fmtArgs].join(', ') : flushFmt;
-            const I = ' '.repeat(this.indent * depth);
+            const I = ' '.repeat(ctx.indent * depth);
             lines.push(`${I}${isErr ? 'fprintf(stderr, ' : 'printf('}${flushArgs});`);
             fmtParts.length = 0;
             fmtArgs.length = 0;
           }
-          const I = ' '.repeat(this.indent * depth);
+          const I = ' '.repeat(ctx.indent * depth);
           lines.push(`${I}tsc_print_str(${cexpr});`);
           continue;
         }
-        const strSym = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+        const strSym = expr.kind === 'Ident' ? ctx.lookup(expr.name) : null;
         if (strSym?.isStringRef) {
           fmtParts.push('%.*s');
           fmtArgs.push(`(int)${cexpr}.length`, `${cexpr}.data`);
-        } else if (this._isHeapStringInit(expr)) {
-          const tmp = `_tmp_${this.tempCount++}`;
-          const I = ' '.repeat(this.indent * depth);
+        } else if (ctx._isHeapStringInit(expr)) {
+          const tmp = `_tmp_${ctx.tempCount++}`;
+          const I = ' '.repeat(ctx.indent * depth);
           const cexprStr = cexpr;
           lines.push(`${I}String ${tmp} = ${cexprStr};`);
-          this._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
+          ctx._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
           fmtParts.push('%s');
           fmtArgs.push(`${tmp}.data`);
         } else {
@@ -179,14 +178,14 @@ export default {
         fmtParts.push('%s');
         fmtArgs.push(`tsc_dtoa((double)${cexpr})`);
       } else if (ctype === 'int64_t') {
-        if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
-          throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+        if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
+          throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
         }
         fmtParts.push('%lld');
         fmtArgs.push(`(long long)${cexpr}`);
       } else if (ctype === 'uint64_t') {
-        if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
-          throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+        if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
+          throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
         }
         fmtParts.push('%llu');
         fmtArgs.push(`(unsigned long long)${cexpr}`);
@@ -194,7 +193,7 @@ export default {
         fmtParts.push('%u');
         fmtArgs.push(`(unsigned)${cexpr}`);
       } else if (ctype === 'uint32_t') {
-        if (this._cap('bits') < 32) { fmtParts.push('%lu'); fmtArgs.push(`(unsigned long)${cexpr}`); }
+        if (ctx._cap('bits') < 32) { fmtParts.push('%lu'); fmtArgs.push(`(unsigned long)${cexpr}`); }
         else { fmtParts.push('%u'); fmtArgs.push(cexpr); }
       } else if (ctype === 'int8_t' || ctype === 'int16_t') {
         fmtParts.push('%d');
@@ -203,13 +202,13 @@ export default {
         fmtParts.push('%c');
         fmtArgs.push(cexpr);
       } else if (ctype === 'size_t') {
-        if (this._cap('bits') < 32) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
+        if (ctx._cap('bits') < 32) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
         else { fmtParts.push('%zu'); fmtArgs.push(cexpr); }
       } else {
         if (ctype.startsWith('opt_ref_')) {
           const innerIdent = ctype.slice(8);
-          const innerCType = this._arrIdentToCType(innerIdent);
-          const sym2 = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+          const innerCType = ctx._arrIdentToCType(innerIdent);
+          const sym2 = expr.kind === 'Ident' ? ctx.lookup(expr.name) : null;
           if (sym2?.optIsNull) {
             fmtParts.push('%s');
             fmtArgs.push(`${cexpr}.has_value ? "some" : "null"`);
@@ -220,22 +219,22 @@ export default {
             fmtParts.push('%s');
             fmtArgs.push(`${cexpr}.has_value ? tsc_dtoa((double)(*${cexpr}.value)) : "null"`);
           } else {
-            if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
+            if (ctx._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)(${cexpr}.has_value ? *${cexpr}.value : -1)`); }
             else { fmtParts.push('%d'); fmtArgs.push(`${cexpr}.has_value ? *${cexpr}.value : -1`); }
           }
           continue;
         }
         if (ctype.startsWith('opt_')) {
           const innerIdent = ctype.slice(4);
-          const ed = this.classes.get(innerIdent);
-          const sym2 = expr.kind === 'Ident' ? this.lookup(expr.name) : null;
+          const ed = ctx.classes.get(innerIdent);
+          const sym2 = expr.kind === 'Ident' ? ctx.lookup(expr.name) : null;
           const isNullLiteral = expr.kind === 'Literal' && expr.litType === 'null';
           if (ed?.isEnum) {
             fmtParts.push('%d');
             fmtArgs.push(`${cexpr}.has_value ? (int)${cexpr}.value : -1`);
           } else if (sym2?.optIsNull || isNullLiteral || (() => {
               if (expr.kind === 'Index' && expr.object.kind === 'Ident' && expr.index.kind === 'Literal') {
-                const tSym = this.lookup(expr.object.name);
+                const tSym = ctx.lookup(expr.object.name);
                 return tSym?.nullOptFields?.has(`_${expr.index.value}`);
               }
               return false;
@@ -246,22 +245,22 @@ export default {
             fmtParts.push('%s');
             fmtArgs.push(`${cexpr}.has_value ? ${cexpr}.value.data : "null"`);
           } else {
-            const innerCType = this._arrIdentToCType(innerIdent);
+            const innerCType = ctx._arrIdentToCType(innerIdent);
             let valExpr = cexpr;
             const isOptArrayIndex = expr.kind === 'Index' && (() => {
-              const objType = expr.object ? this.inferType(expr.object) : null;
+              const objType = expr.object ? ctx.inferType(expr.object) : null;
               return objType?.startsWith('Array_opt_');
             })();
             if (isOptArrayIndex) {
               if (needSpace) { lines.push('printf(" ");'); needSpace = false; }
-              const tmp = `_v_${this.tempCount++}`;
+              const tmp = `_v_${ctx.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               let valFmt;
               let valCast;
               if (innerCType === 'double' || innerCType === 'float') { valFmt = '%s'; valCast = `tsc_dtoa((double)${tmp}.value)`; }
               else if (innerCType === 'int64_t') { valFmt = '%lld'; valCast = `(long long)${tmp}.value`; }
               else if (innerCType === 'uint8_t' || innerCType === 'uint16_t') { valFmt = '%u'; valCast = `(unsigned)${tmp}.value`; }
-              else if (this._cap('bits') < 32) { valFmt = '%ld'; valCast = `(long)${tmp}.value`; }
+              else if (ctx._cap('bits') < 32) { valFmt = '%ld'; valCast = `(long)${tmp}.value`; }
               else { valFmt = '%d'; valCast = `${tmp}.value`; }
               if (fmtParts.length > 0) {
                 const prevFmt = '"' + fmtParts.join(' ') + ' "';
@@ -277,7 +276,7 @@ export default {
             if (expr.kind === 'Call') {
               const _calleeProp = expr.callee?.kind === 'Member' ? expr.callee.prop : null;
               const _tmpPfx = _calleeProp === 'at' ? '_at_' : '_v_';
-              const tmp = `${_tmpPfx}${this.tempCount++}`;
+              const tmp = `${_tmpPfx}${ctx.tempCount++}`;
               lines.push(`${ctype} ${tmp} = ${cexpr};`);
               valExpr = tmp;
             }
@@ -285,8 +284,8 @@ export default {
               fmtParts.push('%s');
               fmtArgs.push(`tsc_dtoa((double)(${valExpr}.value))`);
             } else if (innerCType === 'int64_t') {
-              if (this._strictRules?.has('no-i64-print') || this._cap('bits') < 32) {
-                throw this.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+              if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
+                throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
               }
               fmtParts.push('%lld');
               fmtArgs.push(`(long long)${valExpr}.value`);
@@ -294,13 +293,13 @@ export default {
               fmtParts.push('%u');
               fmtArgs.push(`(unsigned)${valExpr}.value`);
             } else {
-              if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
+              if (ctx._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${valExpr}.value`); }
               else { fmtParts.push('%d'); fmtArgs.push(`${valExpr}.value`); }
             }
           }
           continue;
         } else {
-          const enumDef = this.classes.get(ctype);
+          const enumDef = ctx.classes.get(ctype);
           if (enumDef?.isStringLiteralUnion) {
             fmtParts.push('%s');
             fmtArgs.push(`${ctype}_values[(int)${cexpr}]`);
@@ -308,7 +307,7 @@ export default {
             fmtParts.push('%d');
             fmtArgs.push(`(int)${cexpr}`);
           } else {
-            if (this._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
+            if (ctx._cap('bits') < 32) { fmtParts.push('%ld'); fmtArgs.push(`(long)${cexpr}`); }
             else { fmtParts.push('%d'); fmtArgs.push(cexpr); }
           }
         }
@@ -325,5 +324,4 @@ export default {
     }
     const allArgs = [fmt, ...fmtArgs].join(', ');
     return isErr ? `fprintf(stderr, ${allArgs})` : `printf(${allArgs})`;
-  },
-};
+}

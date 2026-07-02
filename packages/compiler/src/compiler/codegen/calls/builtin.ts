@@ -1,10 +1,9 @@
 import type { Call } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
-export default {
-  _dispatchBuiltin(this: CodeGenThis, node: Call, lines: string[], depth: number) {
+import type { CodeGenContext } from '../../codegen.js';
+export function _dispatchBuiltin(ctx: CodeGenContext, node: Call, lines: string[], depth: number) {
     const { callee, args } = node;
     if (callee.kind === 'Member' && callee.object.kind === 'Ident' && callee.object.name === 'console') {
-      return this.consoleCall(callee.prop, args, lines, depth);
+      return ctx.consoleCall(callee.prop, args, lines, depth);
     }
 
     // performance.now() / performance.mark() / performance.measure()
@@ -13,14 +12,14 @@ export default {
       const prop = callee.prop;
       if (prop === 'now') return 'tsc_performance_now()';
       if (prop === 'mark') {
-        const name = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        const name = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
         return `tsc_performance_mark(${name})`;
       }
       if (prop === 'measure') {
-        this._lastSuppressConst = true;
-        const name  = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
-        const start = args[1] ? this.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
-        const end   = args[2] ? this.exprToC(args[2].expr, lines, depth) : 'STR_LIT("")';
+        ctx._lastSuppressConst = true;
+        const name  = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+        const start = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : 'STR_LIT("")';
+        const end   = args[2] ? ctx.exprToC(args[2].expr, lines, depth) : 'STR_LIT("")';
         return `tsc_performance_measure(${name}, ${start}, ${end})`;
       }
     }
@@ -29,26 +28,26 @@ export default {
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
       const objName = callee.object.name;
       const prop = callee.prop;
-      const objSym = this.lookup(objName);
+      const objSym = ctx.lookup(objName);
       if (objSym?._isAvrObj) {
         if (objName === 'avr' && prop === 'sleep') {
-          this.includes.add('#include <avr/sleep.h>');
+          ctx.includes.add('#include <avr/sleep.h>');
           const modeArg = args[0]?.expr;
-          const modeC = modeArg ? this._avrSleepModeToC(modeArg) : 'SLEEP_MODE_IDLE';
-          lines.push(`${' '.repeat(this.indent * depth)}set_sleep_mode(${modeC});`);
+          const modeC = modeArg ? ctx._avrSleepModeToC(modeArg) : 'SLEEP_MODE_IDLE';
+          lines.push(`${' '.repeat(ctx.indent * depth)}set_sleep_mode(${modeC});`);
           return 'sleep_mode()';
         }
         if (objName === 'avr' && prop === 'watchdogReset') {
-          this.includes.add('#include <avr/wdt.h>');
+          ctx.includes.add('#include <avr/wdt.h>');
           return 'wdt_reset()';
         }
         if (objName === 'ADC' && prop === 'read') {
-          const ch = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+          const ch = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
           return `tsc_adc_read(${ch})`;
         }
         if (objName === 'PWM' && prop === 'setDuty') {
-          const ch = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
-          const duty = args[1] ? this.exprToC(args[1].expr, lines, depth) : '0';
+          const ch = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
+          const duty = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
           return `tsc_pwm_set_duty(${ch}, ${duty})`;
         }
       }
@@ -56,15 +55,15 @@ export default {
 
     // TscRandom method calls: r.nextI32(), r.nextF64(), r.range(lo, hi)
     if (callee.kind === 'Member' && callee.object.kind === 'Ident') {
-      const _rndSym = this.lookup(callee.object.name);
+      const _rndSym = ctx.lookup(callee.object.name);
       if (_rndSym?._isRandom) {
         const _rndName = callee.object.name;
         const _rndProp = callee.prop;
         if (_rndProp === 'nextI32') return `tsc_random_next_i32(&${_rndName})`;
         if (_rndProp === 'nextF64') return `tsc_random_next_f64(&${_rndName})`;
         if (_rndProp === 'range') {
-          const lo = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
-          const hi = args[1] ? this.exprToC(args[1].expr, lines, depth) : '1';
+          const lo = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
+          const hi = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '1';
           return `tsc_random_range_i32(&${_rndName}, ${lo}, ${hi})`;
         }
       }
@@ -75,13 +74,13 @@ export default {
         callee.object.kind === 'Member' &&
         callee.object.object.kind === 'Ident' && callee.object.object.name === 'process' &&
         callee.object.prop === 'env') {
-      if (this._cap('os') === false) {
-        throw this.error(`"process.env" is not available on embedded targets`);
+      if (ctx._cap('os') === false) {
+        throw ctx.error(`"process.env" is not available on embedded targets`);
       }
-      this.includes.add('#include <stdlib.h>');
-      const key = args[0] ? this.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
+      ctx.includes.add('#include <stdlib.h>');
+      const key = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       if (callee.prop === 'get') {
-        this._lastSuppressConst = true;
+        ctx._lastSuppressConst = true;
         return `tsc_env_get(${key})`;
       }
       if (callee.prop === 'has') return `tsc_env_has(${key})`;
@@ -91,18 +90,18 @@ export default {
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'process' &&
         callee.prop === 'exit') {
-      if (this._cap('os') === false) {
-        throw this.error(`"process.exit" is not available on embedded targets`);
+      if (ctx._cap('os') === false) {
+        throw ctx.error(`"process.exit" is not available on embedded targets`);
       }
-      this.includes.add('#include <stdlib.h>');
-      const code = args.length ? this.exprToC(args[0].expr, lines, depth) : '0';
+      ctx.includes.add('#include <stdlib.h>');
+      const code = args.length ? ctx.exprToC(args[0].expr, lines, depth) : '0';
       return `exit(${code})`;
     }
 
     // Math.xxx
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'Math') {
-      return this.mathCall(callee.prop, args, lines, depth, node);
+      return ctx.mathCall(callee.prop, args, lines, depth, node);
     }
 
     // Date.now() static call
@@ -115,7 +114,7 @@ export default {
     // Date instance method calls: d.getFullYear(), d.setMonth(2), etc.
     if (callee.kind === 'Member') {
       const dateObjName = callee.object?.kind === 'Ident' ? callee.object.name : null;
-      const dateSym = dateObjName ? this.lookup(dateObjName) : null;
+      const dateSym = dateObjName ? ctx.lookup(dateObjName) : null;
       if (dateSym?.ctype === 'Date') {
         const prop = callee.prop;
         const objC = dateObjName;
@@ -142,7 +141,7 @@ export default {
         if (fn) {
           const isSetter = prop.startsWith('set');
           if (isSetter) {
-            const valC = args[0] ? this.exprToC(args[0].expr, lines, depth) : '0';
+            const valC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
             return `${fn}(&${objC}, ${valC})`;
           }
           return `${fn}(${objC})`;
@@ -153,9 +152,8 @@ export default {
     // JSON.stringify / JSON.parse
     if (callee.kind === 'Member' &&
         callee.object.kind === 'Ident' && callee.object.name === 'JSON') {
-      return this.jsonCall(callee.prop, node.typeArgs ?? [], args, lines, depth, node);
+      return ctx.jsonCall(callee.prop, node.typeArgs ?? [], args, lines, depth, node);
     }
 
     return null;
-  },
-};
+}

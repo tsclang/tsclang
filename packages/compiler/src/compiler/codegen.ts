@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf, Member } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1615,6 +1615,43 @@ class Context {
   _emitGenStmt(s: Parameters<typeof asyncFns._emitGenStmt>[1], lines: string[], gctx: Parameters<typeof asyncFns._emitGenStmt>[3], I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) { return asyncFns._emitGenStmt(this, s, lines, gctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal); }
   _emitGenRegStmt(stmt: Parameters<typeof asyncFns._emitGenRegStmt>[1], lines: string[], I: string) { return asyncFns._emitGenRegStmt(this, stmt, lines, I); }
 
+  // Delegating methods: callsFns
+  mathCall(prop: string, args: Argument[], lines: string[], depth: number, node?: Call) { return callsFns.mathCall(this, prop, args, lines, depth, node); }
+  jsonCall(prop: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number, node?: Call) { return callsFns.jsonCall(this, prop, typeArgs, args, lines, depth, node); }
+  labelUsed(node: unknown, label: string, kind: string) { return callsFns.labelUsed(this, node, label, kind); }
+  isBareLiteralNumber(expr: Expression) { return callsFns.isBareLiteralNumber(this, expr); }
+  bareNumberValue(expr: Expression) { return callsFns.bareNumberValue(this, expr); }
+  _dispatchBuiltin(node: Call, lines: string[], depth: number) { return callsFns._dispatchBuiltin(this, node, lines, depth); }
+  callToC(node: Call, lines: string[], depth: number) { return callsFns.callToC(this, node, lines, depth); }
+  _dispatchArrayStatic(node: Call, lines: string[], depth: number) { return callsFns._dispatchArrayStatic(this, node, lines, depth); }
+  _dispatchObjectStatic(node: Call, lines: string[], depth: number) { return callsFns._dispatchObjectStatic(this, node, lines, depth); }
+  _dispatchGroupBy(node: Call, lines: string[], depth: number) { return callsFns._dispatchGroupBy(this, node, lines, depth); }
+  _dispatchConcurrency(node: Call, lines: string[], depth: number) { return callsFns._dispatchConcurrency(this, node, lines, depth); }
+  consoleCall(method: string, args: Argument[], lines: string[], depth: number) { return callsFns.consoleCall(this, method, args, lines, depth); }
+  _dispatchConversion(node: Call, lines: string[], depth: number) { return callsFns._dispatchConversion(this, node, lines, depth); }
+  methodCall(callee: Member, args: Argument[], lines: string[], depth: number) { return callsFns.methodCall(this, callee, args, lines, depth); }
+  argsToC(args: Argument[], lines: string[], depth: number) { return callsFns.argsToC(this, args, lines, depth); }
+  _getIfaceParamName(typeAnn: TypeAnn | null | undefined) { return callsFns._getIfaceParamName(this, typeAnn); }
+  _extractCallbackFn(arg: Argument, lines: string[], depth: number) { return callsFns._extractCallbackFn(this, arg, lines, depth); }
+  _ensureImplicitVtable(className: string, ifaceName: string) { return callsFns._ensureImplicitVtable(this, className, ifaceName); }
+  _dispatchStdLib(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdLib(this, node, lines, depth); }
+  _dispatchStdIo(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdIo(this, node, lines, depth); }
+  _dispatchStdHal(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdHal(this, node, lines, depth); }
+  _dispatchStdBlob(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdBlob(this, node, lines, depth); }
+  _dispatchStdUrl(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdUrl(this, node, lines, depth); }
+  _dispatchStdSignal(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdSignal(this, node, lines, depth); }
+  _dispatchStdWs(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdWs(this, node, lines, depth); }
+  _dispatchStdNet(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdNet(this, node, lines, depth); }
+  _dispatchStdFs(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdFs(this, node, lines, depth); }
+  _dispatchStdTemporal(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdTemporal(this, node, lines, depth); }
+  _dispatchStdBuffer(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdBuffer(this, node, lines, depth); }
+  _dispatchStdDataView(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdDataView(this, node, lines, depth); }
+  _dvOp(_dvName: string, base: string, I: string, dir: string, type: string, le: boolean, args: Argument[], lines: string[], depth: number, _dvSym: SymbolInfo) { return callsFns._dvOp(this, _dvName, base, I, dir, type, le, args, lines, depth, _dvSym); }
+  _dispatchStdHashMap(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdHashMap(this, node, lines, depth); }
+  _dispatchStdSet(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdSet(this, node, lines, depth); }
+  _dispatchStdTasks(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdTasks(this, node, lines, depth); }
+  _dispatchStdRegex(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdRegex(this, node, lines, depth); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1627,41 +1664,15 @@ interface Context {
   _buildInnerCall(...args: any[]): any;
   _classHasInheritance(...args: any[]): any;
   _deepSubstOrigApply(...args: any[]): any;
-  _dispatchArrayStatic(...args: any[]): any;
-  _dispatchBuiltin(...args: any[]): any;
-  _dispatchConcurrency(...args: any[]): any;
-  _dispatchConversion(...args: any[]): any;
-  _dispatchGroupBy(...args: any[]): any;
-  _dispatchObjectStatic(...args: any[]): any;
-  _dispatchStdBlob(...args: any[]): any;
-  _dispatchStdBuffer(...args: any[]): any;
-  _dispatchStdDataView(...args: any[]): any;
-  _dispatchStdFs(...args: any[]): any;
-  _dispatchStdHal(...args: any[]): any;
-  _dispatchStdHashMap(...args: any[]): any;
-  _dispatchStdIo(...args: any[]): any;
-  _dispatchStdLib(...args: any[]): any;
-  _dispatchStdNet(...args: any[]): any;
-  _dispatchStdRegex(...args: any[]): any;
-  _dispatchStdSet(...args: any[]): any;
-  _dispatchStdSignal(...args: any[]): any;
-  _dispatchStdTasks(...args: any[]): any;
-  _dispatchStdTemporal(...args: any[]): any;
-  _dispatchStdUrl(...args: any[]): any;
-  _dispatchStdWs(...args: any[]): any;
-  _dvOp(...args: any[]): any;
   _emitDecoratedMethod(...args: any[]): any;
   _emitDecoratedStandaloneFunc(...args: any[]): any;
   _emitDecoratorWrapperFn(...args: any[]): any;
   _emitPoolClass(...args: any[]): any;
   _ensureClassFree(...args: any[]): any;
   _ensureHeapDestructor(...args: any[]): any;
-  _ensureImplicitVtable(...args: any[]): any;
   _ensurePoolAlloc(...args: any[]): any;
   _ensurePoolDrop(...args: any[]): any;
-  _extractCallbackFn(...args: any[]): any;
   _extractLambdaBody(...args: any[]): any;
-  _getIfaceParamName(...args: any[]): any;
   _getStringFields(...args: any[]): any;
   _hasOrigApplyDeep(...args: any[]): any;
   _handleStdAvr(...args: any[]): any;
@@ -1674,22 +1685,13 @@ interface Context {
   _isOrigApply(...args: any[]): any;
   _markHeapClass(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
-  argsToC(...args: any[]): any;
-  bareNumberValue(...args: any[]): any;
-  callToC(...args: any[]): any;
-  consoleCall(...args: any[]): any;
   emitFuncBody(...args: any[]): any;
   emitMethod(...args: any[]): any;
   emitVtableConstant(...args: any[]): any;
   flattenUnion(...args: any[]): any;
   getStringLiteralMembers(...args: any[]): any;
   getStructFields(...args: any[]): any;
-  isBareLiteralNumber(...args: any[]): any;
   isStringLiteralUnion(...args: any[]): any;
-  jsonCall(...args: any[]): any;
-  labelUsed(...args: any[]): any;
-  mathCall(...args: any[]): any;
-  methodCall(...args: any[]): any;
   visitClassDecl(...args: any[]): any;
   visitDeclareConst(...args: any[]): any;
   visitDeclareFunction(...args: any[]): any;
@@ -1710,7 +1712,7 @@ export type CodeGenContext = Context;
 import topLevel  from './codegen/top-level.js';
 import * as stmtFns from './codegen/stmt.js';
 import * as stmtSubFns from './codegen/stmt/index.js';
-import calls     from './codegen/calls/index.js';
+import * as callsFns from './codegen/calls/index.js';
 import * as asyncFns from './codegen/async/index.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
@@ -1720,9 +1722,8 @@ import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
 
-const _mixinSources = [
+const _mixinSources: [string, object][] = [
   ['topLevel',  topLevel],
-  ['calls',     calls],
 ];
 
 {
@@ -1738,4 +1739,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, calls, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, STDLIB_HANDLERS);
