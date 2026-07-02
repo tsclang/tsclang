@@ -353,7 +353,7 @@ export default {
       }
     } else {
       const tmp: string[] = [];
-      this.visitStmt(stmt, tmp, 0);
+      this.visitStmt(stmt as Stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }
   },

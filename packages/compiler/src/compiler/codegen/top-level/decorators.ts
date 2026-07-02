@@ -320,10 +320,10 @@ export default {
       // Emit before stmts
       const beforeLines: string[] = [], afterLines: string[] = [];
       this.pushScope();
-      this.visitBlock({ body: beforeBody }, beforeLines, 1);
+      this.visitBlock({ body: beforeBody } as Block, beforeLines, 1);
       this.popScope();
       this.pushScope();
-      this.visitBlock({ body: afterBody }, afterLines, 1);
+      this.visitBlock({ body: afterBody } as Block, afterLines, 1);
       this.popScope();
 
       lines.push(`static ${retType} ${wrapperFnName}(${allParams}) {`);
@@ -395,8 +395,8 @@ export default {
       for (const p of wrapperParamList) {
         if (p.name) this.define(p.name, { ctype: p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t', varKind: 'let' });
       }
-      this.visitBlock({ body: subBefore }, beforeLines, 1);
-      this.visitBlock({ body: subAfter }, afterLines, 1);
+      this.visitBlock({ body: subBefore } as Block, beforeLines, 1);
+      this.visitBlock({ body: subAfter } as Block, afterLines, 1);
       this.popScope();
 
       lines.push(`static ${retType} ${wrapperFnName}(${allParams}) {`);
@@ -483,10 +483,10 @@ export default {
         const afterBody  = analysis.afters.flatMap((l: Expression) => this._extractLambdaBody(l));
         const beforeLines: string[] = [], afterLines: string[] = [];
         this.pushScope();
-        this.visitBlock({ body: beforeBody }, beforeLines, 1);
+        this.visitBlock({ body: beforeBody } as Block, beforeLines, 1);
         this.popScope();
         this.pushScope();
-        this.visitBlock({ body: afterBody }, afterLines, 1);
+        this.visitBlock({ body: afterBody } as Block, afterLines, 1);
         this.popScope();
         lines.push(`static ${retType} ${wrapperFnName}(${paramCDecls.join(', ')}) {`);
         for (const l of beforeLines) lines.push(l);

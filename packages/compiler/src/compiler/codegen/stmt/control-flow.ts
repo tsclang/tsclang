@@ -1,5 +1,5 @@
 import type { CodeGenThis } from '../../codegen.js';
-import type { Expression, SymbolInfo, Stmt, Switch } from '@tsclang/ast';
+import type { Expression, SymbolInfo, Stmt, Switch, Block } from '@tsclang/ast';
 import type { ThrowsCtx } from '../top-level/decorators.js';
 export default {
   _emitRetainIfNeeded(this: CodeGenThis, valC: string, valNode: Expression, p: (s: string) => void) {
@@ -347,7 +347,7 @@ export default {
         if (hasBraces) {
           p(`if (${testC}) {`);
           const _snap = this._snapshotCleanups();
-          this.visitBlock(node.consequent, lines, depth + 1);
+          this.visitBlock(node.consequent as Block, lines, depth + 1);
           this._restoreCleanups(_snap);
           if (upgradeReleaseVar) {
             const innerI = ' '.repeat(this.indent * (depth + 1));

@@ -1557,6 +1557,12 @@ class Context {
   unaryToC(node: Unary, lines: string[], depth: number) { return exprFns.unaryToC(this, node, lines, depth); }
   assignToC(node: Assign, lines: string[], depth: number) { return exprFns.assignToC(this, node, lines, depth); }
 
+  // Delegating methods: stmtFns
+  visitBlock(block: Block, lines: string[], depth: number) { return stmtFns.visitBlock(this, block, lines, depth); }
+  visitStmtInMain(node: Stmt) { return stmtFns.visitStmtInMain(this, node); }
+  visitStmt(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmt(this, node, lines, depth); }
+  visitStmtOrBlock(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmtOrBlock(this, node, lines, depth); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1681,7 +1687,6 @@ interface Context {
   labelUsed(...args: any[]): any;
   mathCall(...args: any[]): any;
   methodCall(...args: any[]): any;
-  visitBlock(...args: any[]): any;
   visitClassDecl(...args: any[]): any;
   visitDeclareConst(...args: any[]): any;
   visitDeclareFunction(...args: any[]): any;
@@ -1692,9 +1697,6 @@ interface Context {
   visitGlobalVar(...args: any[]): any;
   visitInterface(...args: any[]): any;
   visitProgram(...args: any[]): any;
-  visitStmt(...args: any[]): any;
-  visitStmtInMain(...args: any[]): any;
-  visitStmtOrBlock(...args: any[]): any;
   visitTopLevel(...args: any[]): any;
   visitTypeAlias(...args: any[]): any;
 }
@@ -1703,7 +1705,7 @@ export type CodeGenThis = Context;
 export type CodeGenContext = Context;
 
 import topLevel  from './codegen/top-level.js';
-import stmt      from './codegen/stmt.js';
+import * as stmtFns from './codegen/stmt.js';
 import stmtSub   from './codegen/stmt/index.js';
 import calls     from './codegen/calls/index.js';
 import asyncMixin from './codegen/async.js';
@@ -1717,7 +1719,6 @@ import * as helpers from './codegen/types/helpers.js';
 
 const _mixinSources = [
   ['topLevel',  topLevel],
-  ['stmt',      stmt],
   ['stmtSub',   stmtSub],
   ['calls',     calls],
   ['async',     asyncMixin],
@@ -1736,4 +1737,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, calls, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, stmtSub, calls, asyncMixin, STDLIB_HANDLERS);

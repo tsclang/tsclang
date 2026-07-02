@@ -234,13 +234,13 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
           fnLines.push(`    env->result = (${resultType}){.ok = false, .error = ${errC}};`);
         } else {
           const sl: string[] = [];
-          ctx.visitStmt(s, sl, 1);
+          ctx.visitStmt(s as Stmt, sl, 1);
           for (const l of sl) fnLines.push(l);
         }
       }
     } else {
       const bodyLines2: string[] = [];
-      ctx.visitBlock(body.kind === 'Block' ? body : { kind: 'Block', body: bodyStmts }, bodyLines2, 1);
+      ctx.visitBlock((body.kind === 'Block' ? body : { kind: 'Block', body: bodyStmts }) as Block, bodyLines2, 1);
       for (const l of bodyLines2) fnLines.push(l);
       fnLines.push(`    free(env);`);
     }

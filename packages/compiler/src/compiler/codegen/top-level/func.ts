@@ -566,7 +566,7 @@ export default {
       }
     }
 
-    this.visitBlock(body, lines, 0);
+    this.visitBlock(body!, lines, 0);
 
     if (this._usesGotoCleanup) {
       if (throwsCtx?.isVoid) {
