@@ -2,7 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { ThrowsCtx } from './decorators.js';
 import { mangleParams } from '../../types.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Enum, VarDecl, FuncDecl, ExtensionFunc, Param, TypeAnn, TypeRef, TypeFunc, Block } from '@tsclang/ast';
+import type { Enum, VarDecl, FuncDecl, ExtensionFunc, Param, TypeAnn, TypeRef, TypeFunc, Block, Expression } from '@tsclang/ast';
 // func.ts
 export function visitEnum(ctx: CodeGenContext, node: Enum) {
     const { name, members, isConst } = node;
@@ -232,23 +232,25 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
       const _scanStack = (nd: unknown): void => {
         if (!nd || typeof nd !== 'object') return;
         if (Array.isArray(nd)) { (nd as unknown[]).forEach(_scanStack); return; }
-        const n = nd as Record<string, any>;
+        const n = nd as Record<string, unknown> & { kind?: string };
         if (n.kind === 'VarDecl') {
-          if (n.typeAnn?.kind === 'TypeFixedArray') {
-            const et = ctx.resolveType(n.typeAnn.element);
-            _ownBytes += n.typeAnn.size * ctx._cTypeBytes(et);
-          } else if (n.typeAnn) {
-            const ct = ctx.resolveType(n.typeAnn);
+          const ta = n.typeAnn as Record<string, unknown> | undefined;
+          if (ta?.kind === 'TypeFixedArray') {
+            const et = ctx.resolveType(ta.element as TypeAnn);
+            _ownBytes += (ta.size as number) * ctx._cTypeBytes(et);
+          } else if (ta) {
+            const ct = ctx.resolveType(ta as unknown as TypeAnn);
             _ownBytes += ctx._stackSizeOf(ct);
           } else if (n.init) {
-            const ct = ctx.inferType(n.init);
+            const ct = ctx.inferType(n.init as Expression);
             _ownBytes += ctx._stackSizeOf(ct);
           } else {
             _ownBytes += ctx._stackSizeOf(ctx._tsNameToCType(ctx._defaultNumber));
           }
         }
-        if (n.kind === 'Call' && n.callee?.kind === 'Ident') {
-          _callees.add(n.callee.name);
+        if (n.kind === 'Call') {
+          const callee = n.callee as Record<string, unknown> | undefined;
+          if (callee?.kind === 'Ident') _callees.add(callee.name as string);
         }
         if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return;
         for (const v of Object.values(n)) {

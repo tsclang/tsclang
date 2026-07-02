@@ -11,8 +11,13 @@ export interface AwaitInfo {
   rawArgs?: string[];
   isResult?: boolean;
   name?: string;
-  // TODO: [async] tighten items type — callers access Call-specific properties
-  items?: any[];
+  items?: { expr: Expression; spread?: boolean }[];
+}
+
+export function _awaitItemCallName(expr: Expression | undefined): string | null {
+  if (!expr || expr.kind !== 'Call') return null;
+  const callee = expr.callee;
+  return callee.kind === 'Ident' ? callee.name : null;
 }
 
 type InitNode = { kind: string; litType?: string; value: string | boolean };

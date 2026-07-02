@@ -1,5 +1,6 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { Stmt, Expression, Param, Block, Ident, ArrayPatternElement, Call, TypeRef, Await, Yield, Spawn } from '@tsclang/ast';
+import { _awaitItemCallName } from './helpers.js';
 
 export interface FieldInfo { name: string; ctype: string; }
 export interface SpawnInfo { userVar: string; threadVar: string; envType: string; fnName: string; envVar: string; freeVars: { name: string; ctype: string }[]; }
@@ -409,7 +410,7 @@ export function _collectAwaitStates(ctx: CodeGenContext, body: Block | null) {
                                   ai?.kind === 'promise-any' || ai?.kind === 'promise-allSettled';
           if (_isMultiPromise) {
             for (const item of ai!.items ?? []) {
-              const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+              const callName = _awaitItemCallName(item?.expr);
               const sub = callName && ctx._asyncFuncs?.has(callName)
                 ? ctx._asyncFuncs.get(callName) : null;
               result.push({ fieldName: `_await_${awaitIdx++}`,

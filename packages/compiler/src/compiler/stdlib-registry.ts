@@ -1,6 +1,21 @@
 import type { CodeGenContext } from './codegen.js';
 import type { Import, ImportName } from '@tsclang/ast';
 
+interface StdlibExport {
+  func?: string;
+  include?: string | null;
+  returns?: string;
+  special?: string;
+}
+
+interface StdlibModule {
+  include?: string;
+  flag?: string;
+  platformCheck?: string;
+  handler?: string;
+  exports?: Record<string, StdlibExport>;
+}
+
 export const LANGUAGE_BUILTINS = new Set([
   'true', 'false', 'null', 'undefined',
   'console', 'Math', 'performance', 'Date', 'JSON', 'process', 'Object',
@@ -12,7 +27,7 @@ export const LANGUAGE_BUILTINS = new Set([
   'NaN', 'Infinity',
 ]);
 
-export const STDLIB_MODULES = {
+export const STDLIB_MODULES: Record<string, StdlibModule> = {
   'std/string': {
     exports: {
       atob:               { func: 'tsc_atob',                 include: 'std/base64.h', returns: 'String' },
@@ -122,14 +137,14 @@ const _AVR_RETURN_TYPES = {
 };
 
 export function resolveImportName(source: string, rawName: string | ImportName) {
-  const mod = (STDLIB_MODULES as Record<string, any>)[source];
+  const mod = STDLIB_MODULES[source];
   if (!mod?.exports) return null;
   const name = typeof rawName === 'object' ? rawName.name : rawName;
   return mod.exports[name] ?? null;
 }
 
 export function handleStdlibImport(ctx: CodeGenContext, node: Import) {
-  const mod = (STDLIB_MODULES as Record<string, any>)[node.source];
+  const mod = STDLIB_MODULES[node.source];
   if (!mod) return false;
 
   if (mod.platformCheck === 'not-embedded-not-wasm') {
@@ -177,7 +192,7 @@ export function handleStdlibImport(ctx: CodeGenContext, node: Import) {
           ctype: exp.returns ?? 'void',
           funcName: exp.func,
           varKind: 'const',
-          _suppressVoidWarning: exp.returns && exp.returns !== 'void',
+          _suppressVoidWarning: !!(exp.returns && exp.returns !== 'void'),
         });
       }
     }

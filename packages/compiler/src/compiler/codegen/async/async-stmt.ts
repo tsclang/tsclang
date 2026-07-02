@@ -2,6 +2,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { AsyncEmitCtx } from './async-emit.js';
 import type { SpawnInfo } from './scan.js';
+import { _awaitItemCallName } from './helpers.js';
 // async-stmt.ts
 
 interface AsyncSub { stateType: string; pollFn: string; resultCType?: string | null; }
@@ -40,7 +41,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
         const baseIdx = actx.awaitIdx;
         const doneConds: { idx: number; sub: AsyncSub }[] = [];
         for (const item of ai!.items!) {
-          const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+          const callName = _awaitItemCallName(item?.expr);
           const sub = callName && ctx._asyncFuncs?.has(callName) ? ctx._asyncFuncs.get(callName) : null;
           if (sub) {
             lines.push(`${I}self->_await_${actx.awaitIdx++} = (${sub.stateType}){0};`);
@@ -150,8 +151,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
       const baseIdx = actx.awaitIdx;
       // Init all sub-states
       for (let j = 0; j < ai!.items!.length; j++) {
-        const callName = ai!.items![j]?.expr?.callee?.kind === 'Ident'
-          ? ai!.items![j].expr.callee.name : null;
+        const callName = _awaitItemCallName(ai!.items![j]?.expr);
         const sub = callName && ctx._asyncFuncs?.has(callName)
           ? ctx._asyncFuncs.get(callName) : null;
         if (sub) lines.push(`${I}self->_await_${actx.awaitIdx++} = (${sub.stateType}){0};`);
@@ -161,8 +161,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
       // Poll all + combined done check
       const notDone: string[] = [];
       for (let j = 0; j < ai!.items!.length; j++) {
-        const callName = ai!.items![j]?.expr?.callee?.kind === 'Ident'
-          ? ai!.items![j].expr.callee.name : null;
+        const callName = _awaitItemCallName(ai!.items![j]?.expr);
         const sub = callName && ctx._asyncFuncs?.has(callName)
           ? ctx._asyncFuncs.get(callName) : null;
         if (sub) {
@@ -178,8 +177,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
       for (let j = 0; j < (patElems || []).length; j++) {
         const elem = patElems[j];
         if (!elem) continue;
-        const callName = ai!.items![j]?.expr?.callee?.kind === 'Ident'
-          ? ai!.items![j].expr.callee.name : null;
+        const callName = _awaitItemCallName(ai!.items![j]?.expr);
         const sub = callName && ctx._asyncFuncs?.has(callName)
           ? ctx._asyncFuncs.get(callName) : null;
         if (sub) {
@@ -227,7 +225,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
         const baseIdx = actx.awaitIdx;
         const subItems: { idx: number; sub: AsyncSub }[] = [];
         for (const item of ai!.items!) {
-          const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
+          const callName = _awaitItemCallName(item?.expr);
           const sub = callName && ctx._asyncFuncs?.has(callName) ? ctx._asyncFuncs.get(callName) : null;
           if (sub) { lines.push(`${I}self->_await_${actx.awaitIdx++} = (${sub.stateType}){0};`); subItems.push({ idx: baseIdx + subItems.length, sub }); }
         }

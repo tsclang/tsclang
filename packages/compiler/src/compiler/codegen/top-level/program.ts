@@ -24,14 +24,15 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     const _scanArc = (n: unknown) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_scanArc); return; }
-      const nd = n as Record<string, any>;
+      const nd = n as Record<string, unknown>;
       if (nd.kind === 'New' && (nd.name === 'Arc' || nd.name === 'Weak')) {
-        const tArg = nd.typeArgs?.[0];
+        const tArg = (nd.typeArgs as Record<string, unknown>[] | undefined)?.[0];
         if (tArg?.kind === 'TypeRef') {
-          const info = ctx._arcClasses.get(tArg.name) ?? {};
+          const tName = tArg.name as string;
+          const info = ctx._arcClasses.get(tName) ?? {};
           if (nd.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
           if (nd.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
-          ctx._arcClasses.set(tArg.name, info);
+          ctx._arcClasses.set(tName, info);
         }
       }
       if (nd.kind === 'VarDecl') {
@@ -47,15 +48,16 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
             }
           }
         };
-        _checkTypeAnn(nd.typeAnn);
+        _checkTypeAnn(nd.typeAnn as TypeAnn | null | undefined);
       }
       // Also scan TypeRef fields for Weak<T>
       if (nd.kind === 'TypeRef' && nd.name === 'Weak') {
-        const tArg = nd.typeArgs?.[0];
+        const tArg = (nd.typeArgs as Record<string, unknown>[] | undefined)?.[0];
         if (tArg?.kind === 'TypeRef') {
-          const info = ctx._arcClasses.get(tArg.name) ?? {};
+          const tName = tArg.name as string;
+          const info = ctx._arcClasses.get(tName) ?? {};
           info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true;
-          ctx._arcClasses.set(tArg.name, info);
+          ctx._arcClasses.set(tName, info);
         }
       }
       for (const key of Object.keys(nd)) {
@@ -110,15 +112,15 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       const _walkForRestrictions = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
-        const nd = n as Record<string, any>;
+        const nd = n as Record<string, unknown>;
         if (noFloat && nd.kind === 'TypeRef' && (nd.name === 'f32' || nd.name === 'f64')) {
-          throw ctx.error(`TypeError: float types (${nd.name}) are not supported (fpu: false)`);
+          throw ctx.error(`TypeError: float types (${nd.name as string}) are not supported (fpu: false)`);
         }
         if (noFloat && nd.kind === 'Literal' && nd.litType === 'number') {
           const v = String(nd.value).replace(/_/g, '');
           const isHex = /^0[xX]/.test(v);
           if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
-            throw ctx.error(`TypeError: float literal ${nd.value} is not supported (fpu: false)`);
+            throw ctx.error(`TypeError: float literal ${nd.value as string} is not supported (fpu: false)`);
           }
         }
         if (noAsync && nd.kind === 'FuncDecl' && nd.async) {
@@ -136,7 +138,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       const _walkWasm = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
-        const nd = n as Record<string, any>;
+        const nd = n as Record<string, unknown>;
         if (nd.kind === 'FuncDecl' && nd.async) {
           throw ctx.error(`TypeError: async functions are not supported on wasm target`);
         }
@@ -154,8 +156,9 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       const _collectCalls = (nd: unknown, result: Set<string>) => {
         if (!nd || typeof nd !== 'object') return;
         if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collectCalls(x, result)); return; }
-        const n = nd as Record<string, any>;
-        if (n.kind === 'Call' && n.callee?.kind === 'Ident') result.add(n.callee.name);
+        const n = nd as Record<string, unknown>;
+        const callee = n.callee as Record<string, unknown> | undefined;
+        if (n.kind === 'Call' && callee?.kind === 'Ident') result.add(callee.name as string);
         // Don't recurse into nested function bodies
         if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return;
         for (const v of Object.values(n)) {
@@ -251,8 +254,9 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     const _walkThrows = (n: unknown) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_walkThrows); return; }
-      const nd = n as Record<string, any>;
-      if (nd.kind === 'Throw' && nd.value?.kind === 'New') _thrownClasses.add(nd.value.name);
+      const nd = n as Record<string, unknown>;
+      const val = nd.value as Record<string, unknown> | undefined;
+      if (nd.kind === 'Throw' && val?.kind === 'New') _thrownClasses.add(val.name as string);
       for (const k of Object.keys(nd)) {
         if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkThrows(v); }
       }
@@ -331,16 +335,16 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         const _collect = (nd: unknown, outerLocals: Set<string>) => {
           if (!nd || typeof nd !== 'object') return;
           if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collect(x, outerLocals)); return; }
-          const n = nd as Record<string, any>;
+          const n = nd as Record<string, unknown>;
           if (n.kind === 'Ident') {
-            if (!outerLocals.has(n.name)) ctx._funcRefVars.add(n.name);
+            if (!outerLocals.has(n.name as string)) ctx._funcRefVars.add(n.name as string);
             return;
           }
           // Nested function: collect with its own param scope merged
           if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') {
             const inner = new Set(outerLocals);
-            for (const p of (n.params ?? [])) {
-              if (p?.name) inner.add(p.name);
+            for (const p of (n.params as Record<string, unknown>[] | undefined) ?? []) {
+              if (p?.name) inner.add(p.name as string);
             }
             if (n.body) _collect(n.body, inner);
             return;
@@ -373,9 +377,9 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
             const _collectArrow = (nd: unknown) => {
               if (!nd || typeof nd !== 'object') return;
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
-              const n = nd as Record<string, any>;
-              if (n.kind === 'Ident' && !arrowParams.has(n.name) && !_signalVarNames.has(n.name)) {
-                ctx._funcRefVars.add(n.name);
+              const n = nd as Record<string, unknown>;
+              if (n.kind === 'Ident' && !arrowParams.has(n.name as string) && !_signalVarNames.has(n.name as string)) {
+                ctx._funcRefVars.add(n.name as string);
               }
               for (const v of Object.values(n)) {
                 if (v && typeof v === 'object') _collectArrow(v);
