@@ -583,6 +583,7 @@ class Context {
   _lastAtNonNeg!: boolean | undefined;
   _lastCbRetType!: string;
   _genResultCount!: number;
+  _asyncGenRetType!: string | null;
 
   // Misc state
   _inHoistedLambda!: boolean;
@@ -1694,20 +1695,6 @@ class Context {
 
 }
 
-// Declaration merging: mixin methods added via Object.assign at bottom of file.
-// All signatures use loose (...args: any[]) for now — individual methods can be
-// tightened later. This gives method-name checking and IDE autocomplete.
-interface Context {
-  _asyncGenRetType: string | null;
-  _handleStdAvr(...args: any[]): any;
-  _handleStdFs(...args: any[]): any;
-  _handleStdIo(...args: any[]): any;
-  _handleStdReactive(...args: any[]): any;
-  _handleStdNet(...args: any[]): any;
-  _handleStdLibc(...args: any[]): any;
-  _handleStdStack(...args: any[]): any;
-}
-
 export type CodeGenThis = Context;
 export type CodeGenContext = Context;
 
@@ -1717,11 +1704,9 @@ import * as stmtSubFns from './codegen/stmt/index.js';
 import * as callsFns from './codegen/calls/index.js';
 import * as asyncFns from './codegen/async/index.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
-import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
+import { LANGUAGE_BUILTINS } from './stdlib-registry.js';
 import * as exprFns from './codegen/expr/index.js';
 import * as miscFns from './codegen/misc/index.js';
 import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
-
-Object.assign(Context.prototype, STDLIB_HANDLERS);

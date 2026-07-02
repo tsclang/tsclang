@@ -1,4 +1,4 @@
-import type { CodeGenThis } from './codegen.js';
+import type { CodeGenContext } from './codegen.js';
 import type { Import, ImportName } from '@tsclang/ast';
 
 export const LANGUAGE_BUILTINS = new Set([
@@ -128,7 +128,7 @@ export function resolveImportName(source: string, rawName: string | ImportName) 
   return mod.exports[name] ?? null;
 }
 
-export function handleStdlibImport(ctx: CodeGenThis, node: Import) {
+export function handleStdlibImport(ctx: CodeGenContext, node: Import) {
   const mod = (STDLIB_MODULES as Record<string, any>)[node.source];
   if (!mod) return false;
 
@@ -156,7 +156,7 @@ export function handleStdlibImport(ctx: CodeGenThis, node: Import) {
   if (mod.flag) (ctx as unknown as Record<string, unknown>)[mod.flag] = true;
 
   if (mod.handler) {
-    (ctx as unknown as Record<string, (node: Import) => void>)[mod.handler](node);
+    STDLIB_HANDLERS[mod.handler](ctx, node);
   } else if (mod.exports) {
     const names = node.names ?? [];
     const usedIncludes = new Set();
@@ -186,96 +186,96 @@ export function handleStdlibImport(ctx: CodeGenThis, node: Import) {
   return true;
 }
 
-export const STDLIB_HANDLERS = {
-  _handleStdAvr(this: CodeGenThis, node: Import) {
+export const STDLIB_HANDLERS: Record<string, (ctx: CodeGenContext, node: Import) => void> = {
+  _handleStdAvr(ctx, node) {
     const names = node.names ?? [];
     for (const n of names) {
       const name = typeof n === 'object' ? n.name : n;
-      if (name === 'SleepMode') { this._avrSleepModeImported = true; continue; }
+      if (name === 'SleepMode') { ctx._avrSleepModeImported = true; continue; }
       if ((_AVR_FUNC_MAP as Record<string, string>)[name]) {
         const _rt = (_AVR_RETURN_TYPES as Record<string, string>)[name];
-        this.define(name, {
+        ctx.define(name, {
           ctype: _rt ?? 'void', funcName: (_AVR_FUNC_MAP as Record<string, string>)[name], varKind: 'const',
           _suppressVoidWarning: !!_rt,
         });
       } else {
-        this.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
+        ctx.define(name, { ctype: '_avr_' + name, varKind: 'const', _isAvrObj: true, _avrName: name });
       }
     }
   },
 
-  _handleStdFs(this: CodeGenThis, node: Import) {
+  _handleStdFs(ctx, node) {
     if (node.namespace && node.names.length > 0) {
-      this.define(node.names[0].name, { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
+      ctx.define(node.names[0].name, { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
-    this.classes.set('TscFileStat', { isStruct: true,
+    ctx.classes.set('TscFileStat', { isStruct: true,
       fields: [{ name: 'size', ctype: 'int64_t' }, { name: 'isFile', ctype: 'bool' },
                { name: 'isDirectory', ctype: 'bool' }, { name: 'mtime', ctype: 'int64_t' }] });
   },
 
-  _handleStdIo(this: CodeGenThis, node: Import) {
+  _handleStdIo(ctx, node) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'Reader') {
-        if (!this._emittedReaderVtable) {
-          this._emittedReaderVtable = true;
-          this._ensureArrayStruct('Array_u8', 'uint8_t');
-          this.typedefs.push('');
-          this.addTop('typedef struct {');
-          this.addTop('    size_t (*read)(void *self, uint8_t *buf, size_t len);');
-          this.addTop('} Reader_vtable;');
-          this.addTop('typedef struct { void *self; const Reader_vtable *vtable; } Reader;');
-          this.addTop('');
+        if (!ctx._emittedReaderVtable) {
+          ctx._emittedReaderVtable = true;
+          ctx._ensureArrayStruct('Array_u8', 'uint8_t');
+          ctx.typedefs.push('');
+          ctx.addTop('typedef struct {');
+          ctx.addTop('    size_t (*read)(void *self, uint8_t *buf, size_t len);');
+          ctx.addTop('} Reader_vtable;');
+          ctx.addTop('typedef struct { void *self; const Reader_vtable *vtable; } Reader;');
+          ctx.addTop('');
         }
-        this.classes.set('Reader', { isStruct: true, _isVtable: true, _vtableKind: 'Reader',
+        ctx.classes.set('Reader', { isStruct: true, _isVtable: true, _vtableKind: 'Reader',
           fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Reader_vtable *' }] });
       }
       if (nm === 'Writer') {
-        if (!this._emittedWriterVtable) {
-          this._emittedWriterVtable = true;
-          this._ensureArrayStruct('Array_u8', 'uint8_t');
-          this.typedefs.push('');
-          this.addTop('typedef struct {');
-          this.addTop('    size_t (*write)(void *self, const uint8_t *buf, size_t len);');
-          this.addTop('} Writer_vtable;');
-          this.addTop('typedef struct { void *self; const Writer_vtable *vtable; } Writer;');
-          this.addTop('');
+        if (!ctx._emittedWriterVtable) {
+          ctx._emittedWriterVtable = true;
+          ctx._ensureArrayStruct('Array_u8', 'uint8_t');
+          ctx.typedefs.push('');
+          ctx.addTop('typedef struct {');
+          ctx.addTop('    size_t (*write)(void *self, const uint8_t *buf, size_t len);');
+          ctx.addTop('} Writer_vtable;');
+          ctx.addTop('typedef struct { void *self; const Writer_vtable *vtable; } Writer;');
+          ctx.addTop('');
         }
-        this.classes.set('Writer', { isStruct: true, _isVtable: true, _vtableKind: 'Writer',
+        ctx.classes.set('Writer', { isStruct: true, _isVtable: true, _vtableKind: 'Writer',
           fields: [{ name: 'self', ctype: 'void *' }, { name: 'vtable', ctype: 'const Writer_vtable *' }] });
       }
     }
   },
 
-  _handleStdReactive(this: CodeGenThis, node: Import) {
-    this._reactiveClosureCount = 0;
-    this._capturedSignalMap = new Map();
+  _handleStdReactive(ctx, _node) {
+    ctx._reactiveClosureCount = 0;
+    ctx._capturedSignalMap = new Map();
   },
 
-  _handleStdNet(this: CodeGenThis, node: Import) {
-    this.classes.set('TscResponse', {
+  _handleStdNet(ctx, _node) {
+    ctx.classes.set('TscResponse', {
       isStruct: true,
       fields: [{ name: 'ok', ctype: 'bool' }, { name: 'status', ctype: 'int32_t' }],
     });
   },
 
-  _handleStdLibc(this: CodeGenThis, node: Import) {
+  _handleStdLibc(ctx, node) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       const isVar = _LIBC_VARIADIC.has(nm);
-      this.define(nm, { ctype: 'int32_t', funcName: nm, _isLibcFunc: true, _isLibcVariadic: isVar });
+      ctx.define(nm, { ctype: 'int32_t', funcName: nm, _isLibcFunc: true, _isLibcVariadic: isVar });
     }
   },
 
-  _handleStdStack(this: CodeGenThis, node: Import) {
+  _handleStdStack(ctx, node) {
     for (const n of (node.names ?? [])) {
       const nm = typeof n === 'object' ? n.name : n;
       if (nm === 'push') {
-        this.define('push', { ctype: 'void', varKind: 'const', _isStackMacro: 'push' });
+        ctx.define('push', { ctype: 'void', varKind: 'const', _isStackMacro: 'push' });
       } else if (nm === 'pop') {
-        this.define('pop', { ctype: 'void', varKind: 'const', _isStackMacro: 'pop' });
+        ctx.define('pop', { ctype: 'void', varKind: 'const', _isStackMacro: 'pop' });
       } else if (nm === 'empty') {
-        this.define('empty', { ctype: 'bool', varKind: 'const', _isStackMacro: 'empty' });
+        ctx.define('empty', { ctype: 'bool', varKind: 'const', _isStackMacro: 'empty' });
       }
     }
   },

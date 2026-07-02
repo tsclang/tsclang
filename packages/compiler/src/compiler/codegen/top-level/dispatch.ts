@@ -1,7 +1,7 @@
 import type { Stmt, Param, Decorator, TypeAnn, TypeRef, FuncOverload, DeclareModule, DeclareConst, DeclareFunction, VarDeclItem } from '@tsclang/ast';
 import type { CodeGenContext, DeclareModuleEntry } from '../../codegen.js';
 // dispatch.ts
-import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
+import { handleStdlibImport, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
 export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
     if (!node) return;
     switch (node.kind) {
