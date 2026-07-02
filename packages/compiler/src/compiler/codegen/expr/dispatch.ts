@@ -30,6 +30,7 @@ export default {
             if (narrowedCtype === '__array__' || narrowedCtype === '__object__') {
               return node.name;
             }
+            if (!narrowedCtype) return node.name;
             const getter = this._unknownGetterFor(narrowedCtype);
             return `${getter}(&${node.name})`;
           }

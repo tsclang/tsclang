@@ -1451,7 +1451,7 @@ export default {
               this._lastComputedElemType = undefined;
               if (!this._emittedSignalTypedefs.has(_sigType)) {
                 this._emittedSignalTypedefs.add(_sigType);
-                const _sigElemCType = this._arrIdentToCType(_sigElemIdent);
+                const _sigElemCType = this._arrIdentToCType(_sigElemIdent!);
                 this.addTop(`typedef struct { ${_sigElemCType} _value; void (**_effects)(void); size_t _effect_count; ${_sigElemCType} (*_compute)(void); } ${_sigType};`);
                 this.addTop('');
               }

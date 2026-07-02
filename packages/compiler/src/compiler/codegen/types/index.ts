@@ -1,5 +1,1 @@
-import helpers from './helpers.js';
-
-export default {
-  ...helpers,
-};
+export * from './helpers.js';

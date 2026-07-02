@@ -1445,6 +1445,70 @@ class Context {
   addTop(line: string) { this._output.addTop(line); }
   addLambda(line: string) { this._output.addLambda(line); }
 
+  // Delegating methods: types/helpers → functional
+  _cTypeBytes(ct: string) { return helpers._cTypeBytes(this, ct); }
+  _stackSizeOf(ct: string) { return helpers._stackSizeOf(this, ct); }
+  cTypeToIdent(ctype: string) { return helpers.cTypeToIdent(this, ctype); }
+  ctypeToTsName(ctype: string) { return helpers.ctypeToTsName(this, ctype); }
+  _numericTypeInfo(ct: string) { return helpers._numericTypeInfo(this, ct); }
+  _isSafeWidening(src: string, dst: string) { return helpers._isSafeWidening(this, src, dst); }
+  _arrIdentToCType(ident: string) { return helpers._arrIdentToCType(this, ident); }
+  _mapSuffix(ctype: string) { return helpers._mapSuffix(this, ctype); }
+  _ensureMapStruct(suffix: string) { return helpers._ensureMapStruct(this, suffix); }
+  _ensureMapEntry(suffix: string, kCType: string, vCType: string) { return helpers._ensureMapEntry(this, suffix, kCType, vCType); }
+  _ensureRefArrayStruct(arrName: string, et: string) { return helpers._ensureRefArrayStruct(this, arrName, et); }
+  _ensureArrayStruct(arrName: string, et: string) { return helpers._ensureArrayStruct(this, arrName, et); }
+  _ensureArrayFreeMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayFreeMacro(this, elemIdent, arrName, et); }
+  _ensureArrayPushMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayPushMacro(this, elemIdent, arrName, et); }
+  _isOptType(elemType: string) { return helpers._isOptType(this, elemType); }
+  _wrapOptValue(cExpr: string, exprNode: Expression, elemType: string) { return helpers._wrapOptValue(this, cExpr, exprNode, elemType); }
+  _ensureOptArrayMacros(elemIdent: string, arrName: string, et: string) { return helpers._ensureOptArrayMacros(this, elemIdent, arrName, et); }
+  _ensureArrayPopMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayPopMacro(this, elemIdent, arrName, et); }
+  _ensureOptStruct(optName: string, ctype: string) { return helpers._ensureOptStruct(this, optName, ctype); }
+  _ensureSliceStruct(slName: string, etC: string, mutable = false) { return helpers._ensureSliceStruct(this, slName, etC, mutable); }
+  _ensureSliceU8Struct() { return helpers._ensureSliceU8Struct(this); }
+  _ensureOptRefStruct(optName: string, ctype: string) { return helpers._ensureOptRefStruct(this, optName, ctype); }
+  _ensureUnknownStruct() { return helpers._ensureUnknownStruct(this); }
+  _tsNameToTypeId(tsName: string) { return helpers._tsNameToTypeId(this, tsName); }
+  _tsNameToCType(tsName: string) { return helpers._tsNameToCType(this, tsName); }
+  _unknownPackerFor(ctype: string) { return helpers._unknownPackerFor(this, ctype); }
+  _unknownGetterFor(ctype: string) { return helpers._unknownGetterFor(this, ctype); }
+  _ensureUnknownPackerArray(elemIdent: string, arrName: string, et: string) { return helpers._ensureUnknownPackerArray(this, elemIdent, arrName, et); }
+  _ensureUnknownPackerClass(className: string) { return helpers._ensureUnknownPackerClass(this, className); }
+  _ensureGroupByMapStruct(etIdent: string, etCType: string) { return helpers._ensureGroupByMapStruct(this, etIdent, etCType); }
+  _emitArrayMacro(macroName: string, lines: string[]) { return helpers._emitArrayMacro(this, macroName, lines); }
+  _arrElem(etC: string) { return helpers._arrElem(this, etC); }
+  _ensureArrayMapMacro(fromEt: string, toEt: string, fromCType: string, toCType: string) { return helpers._ensureArrayMapMacro(this, fromEt, toEt, fromCType, toCType); }
+  _ensureArrayFlatMapMacro(fromEt: string, toEt: string, fromCType: string, toCType: string) { return helpers._ensureArrayFlatMapMacro(this, fromEt, toEt, fromCType, toCType); }
+  _ensureArrayFilterMacro(et: string, etC: string) { return helpers._ensureArrayFilterMacro(this, et, etC); }
+  _ensureArrayForeachMacro(et: string, etC: string) { return helpers._ensureArrayForeachMacro(this, et, etC); }
+  _ensureArrayReduceMacro(et: string, toEt: string, etC: string, toCType: string, isRight: boolean) { return helpers._ensureArrayReduceMacro(this, et, toEt, etC, toCType, isRight); }
+  _ensureArrayEveryMacro(et: string, etC: string) { return helpers._ensureArrayEveryMacro(this, et, etC); }
+  _ensureArraySomeMacro(et: string, etC: string) { return helpers._ensureArraySomeMacro(this, et, etC); }
+  _ensureArrayFindMacro(et: string, etC: string, isLast: boolean) { return helpers._ensureArrayFindMacro(this, et, etC, isLast); }
+  _ensureArrayFindIndexMacro(et: string, etC: string, isLast: boolean) { return helpers._ensureArrayFindIndexMacro(this, et, etC, isLast); }
+  _ensureArrayIncludesMacro(et: string, etC: string) { return helpers._ensureArrayIncludesMacro(this, et, etC); }
+  _ensureArrayIndexOfMacro(et: string, etC: string, isLast: boolean) { return helpers._ensureArrayIndexOfMacro(this, et, etC, isLast); }
+  _ensureArrayConcatMacro(et: string, etC: string) { return helpers._ensureArrayConcatMacro(this, et, etC); }
+  _ensureArraySliceMacro(et: string, etC: string) { return helpers._ensureArraySliceMacro(this, et, etC); }
+  _ensureArrayFlatMacro(et: string, etC: string) { return helpers._ensureArrayFlatMacro(this, et, etC); }
+  _ensureArrayAtMacro(et: string, etC: string) { return helpers._ensureArrayAtMacro(this, et, etC); }
+  _ensureArrayWithMacro(et: string, etC: string) { return helpers._ensureArrayWithMacro(this, et, etC); }
+  _ensureArrayToReversedMacro(et: string, etC: string) { return helpers._ensureArrayToReversedMacro(this, et, etC); }
+  _ensureArrayToSplicedMacro(et: string, etC: string) { return helpers._ensureArrayToSplicedMacro(this, et, etC); }
+  _ensureArrayKeysMacro(et: string, etC: string) { return helpers._ensureArrayKeysMacro(this, et, etC); }
+  _ensureArrayValuesMacro(et: string, etC: string) { return helpers._ensureArrayValuesMacro(this, et, etC); }
+  _ensureArrayReverseMacro(et: string, etC: string) { return helpers._ensureArrayReverseMacro(this, et, etC); }
+  _ensureArrayFillMacro(et: string, etC: string) { return helpers._ensureArrayFillMacro(this, et, etC); }
+  _ensureArrayResizeMacro(et: string, etC: string) { return helpers._ensureArrayResizeMacro(this, et, etC); }
+  _ensureArrayReallocateMacro(et: string, etC: string) { return helpers._ensureArrayReallocateMacro(this, et, etC); }
+  _ensureArraySpliceMacro(et: string, etC: string) { return helpers._ensureArraySpliceMacro(this, et, etC); }
+  _ensureArrayShiftMacro(et: string, etC: string) { return helpers._ensureArrayShiftMacro(this, et, etC); }
+  _ensureArrayUnshiftMacro(et: string, etC: string) { return helpers._ensureArrayUnshiftMacro(this, et, etC); }
+  _ensureArrayRemoveMacro(et: string, etC: string) { return helpers._ensureArrayRemoveMacro(this, et, etC); }
+  _ensureArraySetMacro(et: string, etC: string) { return helpers._ensureArraySetMacro(this, et, etC); }
+
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1456,15 +1520,12 @@ interface Context {
   _asyncGenRetType: string | null;
   _analyzeClassDecorator(...args: any[]): any;
   _analyzeDecorator(...args: any[]): any;
-  _arrElem(...args: any[]): any;
-  _arrIdentToCType(...args: any[]): any;
   _asyncRetType(...args: any[]): any;
   _avrSleepModeToC(...args: any[]): any;
   _awaitInfoOf(...args: any[]): any;
   _buildAsyncPoll(...args: any[]): any;
   _buildGenNext(...args: any[]): any;
   _buildInnerCall(...args: any[]): any;
-  _cTypeBytes(...args: any[]): any;
   _charCode(...args: any[]): any;
   _charLiteralToSTR_LIT(...args: any[]): any;
   _checkAwaitTarget(...args: any[]): any;
@@ -1497,7 +1558,6 @@ interface Context {
   _dispatchStdUrl(...args: any[]): any;
   _dispatchStdWs(...args: any[]): any;
   _dvOp(...args: any[]): any;
-  _emitArrayMacro(...args: any[]): any;
   _emitAsyncDoWhile(...args: any[]): any;
   _emitAsyncFor(...args: any[]): any;
   _emitAsyncForOf(...args: any[]): any;
@@ -1524,56 +1584,11 @@ interface Context {
   _emitStructMultiline(...args: any[]): any;
   _emitTopFn(...args: any[]): any;
   _emitTryCatchResult(...args: any[]): any;
-  _ensureArrayAtMacro(...args: any[]): any;
-  _ensureArrayConcatMacro(...args: any[]): any;
-  _ensureArrayEveryMacro(...args: any[]): any;
-  _ensureArrayFillMacro(...args: any[]): any;
-  _ensureArrayFilterMacro(...args: any[]): any;
-  _ensureArrayFindIndexMacro(...args: any[]): any;
-  _ensureArrayFindMacro(...args: any[]): any;
-  _ensureArrayFlatMacro(...args: any[]): any;
-  _ensureArrayFlatMapMacro(...args: any[]): any;
-  _ensureArrayForeachMacro(...args: any[]): any;
-  _ensureArrayFreeMacro(...args: any[]): any;
-  _ensureArrayIncludesMacro(...args: any[]): any;
-  _ensureArrayIndexOfMacro(...args: any[]): any;
-  _ensureArrayKeysMacro(...args: any[]): any;
-  _ensureArrayMapMacro(...args: any[]): any;
-  _ensureArrayPopMacro(...args: any[]): any;
-  _ensureArrayPushMacro(...args: any[]): any;
-  _ensureArrayReallocateMacro(...args: any[]): any;
-  _ensureArrayReduceMacro(...args: any[]): any;
-  _ensureArrayRemoveMacro(...args: any[]): any;
-  _ensureArrayResizeMacro(...args: any[]): any;
-  _ensureArrayReverseMacro(...args: any[]): any;
-  _ensureArraySetMacro(...args: any[]): any;
-  _ensureArrayShiftMacro(...args: any[]): any;
-  _ensureArraySliceMacro(...args: any[]): any;
-  _ensureArraySomeMacro(...args: any[]): any;
-  _ensureArraySpliceMacro(...args: any[]): any;
-  _ensureArrayStruct(...args: any[]): any;
-  _ensureArrayToReversedMacro(...args: any[]): any;
-  _ensureArrayToSplicedMacro(...args: any[]): any;
-  _ensureArrayUnshiftMacro(...args: any[]): any;
-  _ensureArrayValuesMacro(...args: any[]): any;
-  _ensureArrayWithMacro(...args: any[]): any;
   _ensureClassFree(...args: any[]): any;
-  _ensureGroupByMapStruct(...args: any[]): any;
   _ensureHeapDestructor(...args: any[]): any;
   _ensureImplicitVtable(...args: any[]): any;
-  _ensureMapEntry(...args: any[]): any;
-  _ensureMapStruct(...args: any[]): any;
-  _ensureOptArrayMacros(...args: any[]): any;
-  _ensureOptRefStruct(...args: any[]): any;
-  _ensureOptStruct(...args: any[]): any;
   _ensurePoolAlloc(...args: any[]): any;
   _ensurePoolDrop(...args: any[]): any;
-  _ensureRefArrayStruct(...args: any[]): any;
-  _ensureSliceStruct(...args: any[]): any;
-  _ensureSliceU8Struct(...args: any[]): any;
-  _ensureUnknownPackerArray(...args: any[]): any;
-  _ensureUnknownPackerClass(...args: any[]): any;
-  _ensureUnknownStruct(...args: any[]): any;
   _extractCallbackFn(...args: any[]): any;
   _extractLambdaBody(...args: any[]): any;
   _findFreeVars(...args: any[]): any;
@@ -1593,38 +1608,28 @@ interface Context {
   _initAsync(...args: any[]): any;
   _isHeapStringInit(...args: any[]): any;
   _isInlinableConst(...args: any[]): any;
-  _isOptType(...args: any[]): any;
   _isOrigApply(...args: any[]): any;
-  _isSafeWidening(...args: any[]): any;
   _isSimpleCType(...args: any[]): any;
   _livenessScan(...args: any[]): any;
-  _mapSuffix(...args: any[]): any;
   _markHeapClass(...args: any[]): any;
   _matchExprToC(...args: any[]): any;
   _matchPatternBindings(...args: any[]): any;
   _matchPatternCond(...args: any[]): any;
-  _numericTypeInfo(...args: any[]): any;
   _scanAsyncBody(...args: any[]): any;
   _scanExprIdents(...args: any[]): any;
   _scanReturnExpr(...args: any[]): any;
   _selfE(...args: any[]): any;
-  _stackSizeOf(...args: any[]): any;
   _stringConcatChain(...args: any[]): any;
   _stringLiteralToByte(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
   _templateToC(...args: any[]): any;
   _topBlank(...args: any[]): any;
   _truthyToC(...args: any[]): any;
-  _tsNameToCType(...args: any[]): any;
-  _tsNameToTypeId(...args: any[]): any;
-  _unknownGetterFor(...args: any[]): any;
-  _unknownPackerFor(...args: any[]): any;
   _validateSwitchFallthrough(...args: any[]): any;
   _visitControlFlow(...args: any[]): any;
   _visitVarDecl(...args: any[]): any;
   _visitVarDestruct(...args: any[]): any;
   _wrapErrForCaller(...args: any[]): any;
-  _wrapOptValue(...args: any[]): any;
   argsToC(...args: any[]): any;
   arrayLitSize(...args: any[]): any;
   arrayLitToC(...args: any[]): any;
@@ -1633,12 +1638,10 @@ interface Context {
   bareNumberValue(...args: any[]): any;
   binaryToC(...args: any[]): any;
   binaryWidened(...args: any[]): any;
-  cTypeToIdent(...args: any[]): any;
   callGeneric(...args: any[]): any;
   callToC(...args: any[]): any;
   consoleCall(...args: any[]): any;
   constVal(...args: any[]): any;
-  ctypeToTsName(...args: any[]): any;
   emitAsyncFunc(...args: any[]): any;
   emitFuncBody(...args: any[]): any;
   emitGeneratorFunc(...args: any[]): any;
@@ -1691,6 +1694,7 @@ interface Context {
 }
 
 export type CodeGenThis = Context;
+export type CodeGenContext = Context;
 
 import topLevel  from './codegen/top-level.js';
 import stmt      from './codegen/stmt.js';
@@ -1699,10 +1703,10 @@ import expr      from './codegen/expr.js';
 import calls     from './codegen/calls/index.js';
 import generics  from './codegen/generics.js';
 import misc      from './codegen/misc.js';
-import types     from './codegen/types.js';
 import asyncMixin from './codegen/async.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
+import * as helpers from './codegen/types/helpers.js';
 
 const _mixinSources = [
   ['topLevel',  topLevel],
@@ -1712,7 +1716,6 @@ const _mixinSources = [
   ['calls',     calls],
   ['generics',  generics],
   ['misc',      misc],
-  ['types',     types],
   ['async',     asyncMixin],
 ];
 
@@ -1729,4 +1732,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, types, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, stmt, stmtSub, expr, calls, generics, misc, asyncMixin, STDLIB_HANDLERS);
