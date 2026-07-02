@@ -1,54 +1,67 @@
-import type { TypeAnn, TypeRef, Await } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
-// helpers.ts
+import type { TypeAnn, TypeRef, Await, Argument, Expression } from '@tsclang/ast';
+import type { CodeGenContext } from '../../codegen.js';
 
-// Covers Literal plus legacy Num/Bool node kinds (value may be string or boolean at runtime)
+export interface AwaitInfo {
+  kind: string;
+  stateType?: string;
+  pollFn?: string;
+  initFn?: string;
+  resultCType?: string | null;
+  args?: Argument[];
+  rawArgs?: string[];
+  isResult?: boolean;
+  name?: string;
+  // TODO: [async] tighten items type — callers access Call-specific properties
+  items?: any[];
+}
+
 type InitNode = { kind: string; litType?: string; value: string | boolean };
-export default {
-  _initAsync(this: CodeGenThis) {
+export function _initAsync(ctx: CodeGenContext) {
 
 
-  },
+}
 
   // ─── Return type helpers ──────────────────────────────────────────────────
 
   // C result type for async _result field.
   // Returns null for Promise<void> (no _result field).
   // Returns 'int' for void (placeholder).
-  _asyncRetType(this: CodeGenThis, rt: TypeAnn | null) {
+export function _asyncRetType(ctx: CodeGenContext, rt: TypeAnn | null) {
     if (!rt) return 'int';
     if (rt.kind === 'TypeRef') {
       if (rt.name === 'Promise') {
         const inner = rt.typeArgs?.[0];
         if (!inner || (inner as TypeRef).name === 'void') return null;
-        return this.resolveType(inner);
+        return ctx.resolveType(inner);
       }
       if (rt.name === 'void') return 'int';
     }
-    return this.resolveType(rt);
-  },
+    return ctx.resolveType(rt);
+}
 
   // ─── Inlinable const detection ────────────────────────────────────────────
 
-  _isInlinableConst(this: CodeGenThis, init: InitNode | null) {
+export function _isInlinableConst(ctx: CodeGenContext, init: Expression | null | undefined) {
     if (!init) return false;
-    if (init.kind === 'Literal') return init.litType === 'number' || init.litType === 'boolean';
-    return init.kind === 'Num' || init.kind === 'Bool';
-  },
+    const n = init as unknown as InitNode;
+    if (n.kind === 'Literal') return n.litType === 'number' || n.litType === 'boolean';
+    return n.kind === 'Num' || n.kind === 'Bool';
+}
 
-  _constLiteralC(this: CodeGenThis, init: InitNode) {
-    if (init.kind === 'Literal') {
-      if (init.litType === 'number') return String(init.value);
-      if (init.litType === 'boolean') return init.value === 'true' || init.value === true ? 'true' : 'false';
+export function _constLiteralC(ctx: CodeGenContext, init: Expression) {
+    const n = init as unknown as InitNode;
+    if (n.kind === 'Literal') {
+      if (n.litType === 'number') return String(n.value);
+      if (n.litType === 'boolean') return n.value === 'true' || n.value === true ? 'true' : 'false';
     }
-    if (init.kind === 'Num') return String(init.value);
-    if (init.kind === 'Bool') return init.value ? 'true' : 'false';
+    if (n.kind === 'Num') return String(n.value);
+    if (n.kind === 'Bool') return n.value ? 'true' : 'false';
     return null;
-  },
+}
 
   // ─── Await info ───────────────────────────────────────────────────────────
 
-  _awaitInfoOf(this: CodeGenThis, awaitNode: Await) {
+export function _awaitInfoOf(ctx: CodeGenContext, awaitNode: Await): AwaitInfo | null {
     const expr = awaitNode.expr;
     if (!expr) return null;
 
@@ -60,7 +73,7 @@ export default {
                  resultCType: null, args: expr.args };
       }
       // std/net: fetch(url, opts?) — only if NOT a user-defined async function
-      if (callee === 'fetch' && !this._asyncFuncs?.has('fetch')) {
+      if (callee === 'fetch' && !ctx._asyncFuncs?.has('fetch')) {
         return { kind: 'net-fetch', stateType: 'TscFetchAwaitable', pollFn: 'tsc_fetch_poll',
                  initFn: 'tsc_fetch_async', resultCType: 'TscResponse', isResult: true, args: expr.args };
       }
@@ -101,8 +114,8 @@ export default {
       }
       // TscSocket methods: sock.readLine(), sock.write(s)
       if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Ident') {
-        const _sockSym = this.lookup(expr.callee.object.name);
-        const _sockCtype = _sockSym?.ctype ?? this._preScanTypes?.get(expr.callee.object.name);
+        const _sockSym = ctx.lookup(expr.callee.object.name);
+        const _sockCtype = _sockSym?.ctype ?? ctx._preScanTypes?.get(expr.callee.object.name);
         const _sockName = expr.callee.object.name;
         if (_sockCtype === 'TscSocket') {
           const _sp = expr.callee.prop;
@@ -129,8 +142,8 @@ export default {
       }
       // fs namespace async methods: fs.readFile(), fs.writeFile(), etc.
       if (expr.callee?.kind === 'Member' && expr.callee.object?.kind === 'Ident') {
-        const _fsSym3 = this.lookup(expr.callee.object.name) ??
-          (this._preScanTypes?.get(expr.callee.object.name) === '__fs_namespace__' ? { _isFsNamespace: true } : null);
+        const _fsSym3 = ctx.lookup(expr.callee.object.name) ??
+          (ctx._preScanTypes?.get(expr.callee.object.name) === '__fs_namespace__' ? { _isFsNamespace: true } : null);
         if (_fsSym3?._isFsNamespace) {
           const _fp = expr.callee.prop;
           const _fsAsync = (initFn: string, pollFn: string, stateType: string, resultCType: string | null) =>
@@ -169,14 +182,14 @@ export default {
         if (prop !== 'allSettled') {
           const firstExpr = items[0]?.expr;
           const firstName = firstExpr?.kind === 'Call' && firstExpr.callee?.kind === 'Ident' ? firstExpr.callee.name : null;
-          if (firstName && this._asyncFuncs?.has(firstName)) {
-            resultCType = this._asyncFuncs.get(firstName)!.resultCType;
+          if (firstName && ctx._asyncFuncs?.has(firstName)) {
+            resultCType = ctx._asyncFuncs.get(firstName)!.resultCType;
           }
         }
         return { kind: `promise-${prop}`, items, resultCType };
       }
-      if (callee && this._asyncFuncs?.has(callee)) {
-        const info = this._asyncFuncs.get(callee)!;
+      if (callee && ctx._asyncFuncs?.has(callee)) {
+        const info = ctx._asyncFuncs.get(callee)!;
         const isResult = info.resultCType?.startsWith('Result_');
         const valueCType = isResult ? info.innerResultCType : info.resultCType;
         return { kind: 'async', name: callee, stateType: info.stateType,
@@ -188,5 +201,4 @@ export default {
       }
     }
     return null;
-  },
-};
+}

@@ -1,4 +1,4 @@
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenContext } from '../../codegen.js';
 import type { Stmt, Expression, Param, Block, Ident, ArrayPatternElement, Call, TypeRef, Await, Yield, Spawn } from '@tsclang/ast';
 
 export interface FieldInfo { name: string; ctype: string; }
@@ -6,9 +6,8 @@ export interface SpawnInfo { userVar: string; threadVar: string; envType: string
 export interface AwaitStateField { fieldName: string; stateType: string; isUnknown?: boolean; isGen?: boolean; }
 
 // scan.ts
-export default {
   // ─── Body scan: fields to promote and inlinable consts ────────────────────
-  _scanAsyncBody(this: CodeGenThis, params: Param[], body: Block | null) {
+export function _scanAsyncBody(ctx: CodeGenContext, params: Param[], body: Block | null) {
     const paramFields: FieldInfo[] = [];
     const bodyFields: FieldInfo[] = [];
     const inlined = new Map();     // name → C literal string
@@ -20,11 +19,11 @@ export default {
     // Pre-scan type map: tracks variable types as the walk progresses so that
     // _awaitInfoOf can look up types of variables not yet in the real scope.
     const preScanTypes = new Map();
-    this._preScanTypes = preScanTypes;
+    ctx._preScanTypes = preScanTypes;
 
     for (const p of (params || [])) {
       if (p.rest || p.destructArr) continue;
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : 'int32_t';
       if (!seen.has(p.name)) { seen.add(p.name); paramFields.push({ name: p.name, ctype: ct }); preScanTypes.set(p.name, ct); }
     }
 
@@ -35,13 +34,13 @@ export default {
         // Spawn VarDecl: pre-emit env struct + fn to topLevel, add thread var to body fields
         if (s.kind === 'VarDecl' && s.init?.kind === 'Spawn') {
           if (!seen.has(s.name)) seen.add(s.name);
-          const spawnIdx = this._spawnCount ?? 0;
-          const threadVar = this._emitSpawnBlock(null, s.init.body, s.init.throwsTypes ?? null, [], 0);
+          const spawnIdx = ctx._spawnCount ?? 0;
+          const threadVar = ctx._emitSpawnBlock(null, s.init.body, s.init.throwsTypes ?? null, [], 0);
           const envType = `_spawn_${spawnIdx}_env`;
           const fnName  = `_spawn_${spawnIdx}_fn`;
           const envVar  = `_env_${spawnIdx}`;
           const synLambda = { params: [] as Param[], body: s.init.body.kind === 'Block' ? s.init.body : { kind: 'Block' as const, body: [s.init.body] } };
-          const fvArr = this._collectFreeVars(synLambda);
+          const fvArr = ctx._collectFreeVars(synLambda);
           if (!seen.has(threadVar)) { seen.add(threadVar); bodyFields.push({ name: threadVar, ctype: 'tsc_thread_t' }); }
           spawnInfos.push({ userVar: s.name, threadVar, envType, fnName, envVar, freeVars: fvArr });
           for (const fv of fvArr) {
@@ -54,20 +53,20 @@ export default {
 
         if (s.kind === 'VarDecl') {
           const { varKind, name, typeAnn, init } = s;
-          if (varKind === 'const' && this._isInlinableConst(init) && !seen.has(name)) {
-            inlined.set(name, this._constLiteralC(init));
+          if (varKind === 'const' && ctx._isInlinableConst(init) && !seen.has(name)) {
+            inlined.set(name, ctx._constLiteralC(init!));
             inlinedTypes.set(name, (typeAnn as TypeRef | undefined)?.name ?? 'i32');
           } else if (!seen.has(name)) {
             seen.add(name);
             let ct;
             if (init?.kind === 'Await') {
-              const ai = this._awaitInfoOf(init);
+              const ai = ctx._awaitInfoOf(init);
               ct = ai?.resultCType || 'int32_t';
               if (!ct) ct = 'int32_t';
             } else if (typeAnn) {
-              ct = this.resolveType(typeAnn);
+              ct = ctx.resolveType(typeAnn);
             } else if (init) {
-              ct = this.inferType(init) || 'int32_t';
+              ct = ctx.inferType(init) || 'int32_t';
             } else ct = 'int32_t';
             bodyFields.push({ name, ctype: ct });
             preScanTypes.set(name, ct);
@@ -76,15 +75,15 @@ export default {
         // VarDestructArr (const [x, y] = ...)
         if (s.kind === 'VarDestructArr') {
           let arrElemType = 'int32_t';
-          const initType = s.init ? this.inferType(s.init) : null;
-          const initSym = s.init?.kind === 'Ident' ? this.lookup(s.init.name) : null;
+          const initType = s.init ? ctx.inferType(s.init) : null;
+          const initSym = s.init?.kind === 'Ident' ? ctx.lookup(s.init.name) : null;
           let arrType = initType;
           if (initSym?.isRefParam && initSym?.derefType?.startsWith('Array_')) {
             arrType = initSym.derefType;
           }
           if (arrType?.startsWith('Array_')) {
             const elemIdent = arrType.slice(6);
-            arrElemType = this._arrIdentToCType(elemIdent);
+            arrElemType = ctx._arrIdentToCType(elemIdent);
           }
           const patElems = s.pattern as unknown as (ArrayPatternElement | null)[];
           for (const elem of (patElems || [])) {
@@ -98,8 +97,8 @@ export default {
           }
         }
         if (s.kind === 'ForOf' && !s.await) {
-          const idxName = `_forof_idx_${this._forOfCount ?? 0}`;
-          this._forOfCount = (this._forOfCount ?? 0) + 1;
+          const idxName = `_forof_idx_${ctx._forOfCount ?? 0}`;
+          ctx._forOfCount = (ctx._forOfCount ?? 0) + 1;
           if (!seen.has(idxName)) {
             seen.add(idxName);
             bodyFields.push({ name: idxName, ctype: 'size_t' });
@@ -109,9 +108,9 @@ export default {
           const iter = s.iterable as Ident | Call | undefined;
           if (bnd?.kind === 'Ident' && !seen.has(bnd.name)) {
             seen.add(bnd.name);
-            const iterSym = iter?.kind === 'Ident' ? this.lookup(iter.name) : null;
+            const iterSym = iter?.kind === 'Ident' ? ctx.lookup(iter.name) : null;
             const arrType = iterSym?.arrElemCType
-              || (iterSym?.ctype?.startsWith('Array_') ? this._arrIdentToCType(iterSym.ctype.slice(6)) : null)
+              || (iterSym?.ctype?.startsWith('Array_') ? ctx._arrIdentToCType(iterSym.ctype.slice(6)) : null)
               || 'int32_t';
             bodyFields.push({ name: bnd.name, ctype: arrType });
             preScanTypes.set(bnd.name, arrType);
@@ -144,7 +143,7 @@ export default {
 
     if (bodyFields.length > 0) {
       const localVarNames = new Set(bodyFields.map((f) => f.name));
-      const needsPromotion = this._livenessScan(body, localVarNames);
+      const needsPromotion = ctx._livenessScan(body, localVarNames);
       const safeLocal = new Set([
         'int32_t', 'int64_t', 'int8_t', 'int16_t',
         'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
@@ -163,11 +162,11 @@ export default {
     }
 
     // Note: _preScanTypes is intentionally kept alive so _collectAwaitStates (called next) can use it.
-    // The caller must clear this._preScanTypes after calling _collectAwaitStates.
+    // The caller must clear ctx._preScanTypes after calling _collectAwaitStates.
     return { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams };
-  },
+}
 
-  _scanExprIdents(this: CodeGenThis, node: Expression | Stmt | null | undefined, touch: (name: string) => void) {
+export function _scanExprIdents(ctx: CodeGenContext, node: Expression | Stmt | null | undefined, touch: (name: string) => void) {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'Ident') { touch(node.name); return; }
     if (node.kind === 'Literal' || node.kind === 'RawC') return;
@@ -175,17 +174,17 @@ export default {
       if (Array.isArray(val)) {
         for (const item of val) {
           if (item && typeof item === 'object') {
-            if (item.kind) this._scanExprIdents(item, touch);
-            else if (item.expr?.kind) this._scanExprIdents(item.expr, touch);
+            if (item.kind) ctx._scanExprIdents(item, touch);
+            else if (item.expr?.kind) ctx._scanExprIdents(item.expr, touch);
           }
         }
       } else if (val && typeof val === 'object' && (val as Record<string, unknown>).kind) {
-        this._scanExprIdents(val, touch);
+        ctx._scanExprIdents(val, touch);
       }
     }
-  },
+}
 
-  _livenessScan(this: CodeGenThis, body: Block | null, localVarNames: Set<string>) {
+export function _livenessScan(ctx: CodeGenContext, body: Block | null, localVarNames: Set<string>) {
     const segs = new Map();
     let seg = 0;
 
@@ -200,7 +199,7 @@ export default {
       }
     };
 
-    const scanExpr = (node: Expression | Stmt | null | undefined) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: Expression | Stmt | null | undefined) => ctx._scanExprIdents(node, touch);
 
     const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
@@ -292,9 +291,9 @@ export default {
       if (max > min) needsPromotion.add(name);
     }
     return needsPromotion;
-  },
+}
 
-  _genLivenessScan(this: CodeGenThis, body: Block | null, localVarNames: Set<string>) {
+export function _genLivenessScan(ctx: CodeGenContext, body: Block | null, localVarNames: Set<string>) {
     const segs = new Map();
     let seg = 0;
 
@@ -309,7 +308,7 @@ export default {
       }
     };
 
-    const scanExpr = (node: Expression | Stmt | null | undefined) => this._scanExprIdents(node, touch);
+    const scanExpr = (node: Expression | Stmt | null | undefined) => ctx._scanExprIdents(node, touch);
 
     const walk = (stmts: Stmt[]) => {
       for (const s of stmts || []) {
@@ -389,10 +388,10 @@ export default {
       if (max > min) needsPromotion.add(name);
     }
     return needsPromotion;
-  },
+}
 
   // Collect await sub-state field descriptors for the struct
-  _collectAwaitStates(this: CodeGenThis, body: Block | null) {
+export function _collectAwaitStates(ctx: CodeGenContext, body: Block | null) {
     const result: AwaitStateField[] = [];
     let awaitIdx = 0;
     let genIdx = 0;
@@ -405,19 +404,19 @@ export default {
                  : s.kind === 'ExprStmt' && s.expr?.kind === 'Await' ? s.expr
                  : null;
         if (ae) {
-          const ai = this._awaitInfoOf(ae);
+          const ai = ctx._awaitInfoOf(ae);
           const _isMultiPromise = ai?.kind === 'promise-all' || ai?.kind === 'promise-race' ||
                                   ai?.kind === 'promise-any' || ai?.kind === 'promise-allSettled';
           if (_isMultiPromise) {
-            for (const item of ai.items) {
+            for (const item of ai!.items ?? []) {
               const callName = item?.expr?.callee?.kind === 'Ident' ? item.expr.callee.name : null;
-              const sub = callName && this._asyncFuncs?.has(callName)
-                ? this._asyncFuncs.get(callName) : null;
+              const sub = callName && ctx._asyncFuncs?.has(callName)
+                ? ctx._asyncFuncs.get(callName) : null;
               result.push({ fieldName: `_await_${awaitIdx++}`,
                             stateType: sub?.stateType ?? `${callName}_state` });
             }
           } else if (ai) {
-            result.push({ fieldName: `_await_${awaitIdx++}`, stateType: ai.stateType,
+            result.push({ fieldName: `_await_${awaitIdx++}`, stateType: ai.stateType ?? 'tsc_unknown',
                           isUnknown: ai.kind === 'unknown' });
           }
         }
@@ -426,8 +425,8 @@ export default {
           const iterCallee = (iter as Call | undefined)?.callee;
           const genName = iterCallee?.kind === 'Ident' ? iterCallee.name
                         : iter?.kind === 'Ident' ? iter.name : null;
-          const gi = genName && this._generatorFuncs?.has(genName)
-            ? this._generatorFuncs.get(genName) : null;
+          const gi = genName && ctx._generatorFuncs?.has(genName)
+            ? ctx._generatorFuncs.get(genName) : null;
           if (gi) result.push({ fieldName: `_gen_${genIdx++}`, stateType: gi.stateType, isGen: true });
         }
         if (s.kind === 'While') walk(s.body?.kind === 'Block' ? s.body.body : [s.body]);
@@ -452,17 +451,17 @@ export default {
 
     walk(body?.kind === 'Block' ? body.body : []);
     return result;
-  },
+}
 
   // ─── Top-level emitters ───────────────────────────────────────────────────
 
-  _topBlank(this: CodeGenThis, arr = this.topLevel) {
+export function _topBlank(ctx: CodeGenContext, arr = ctx.topLevel) {
     if (arr.length > 0 && arr[arr.length - 1] !== '') arr.push('');
-  },
+}
 
-  _emitStructMultiline(this: CodeGenThis, name: string, fields: string[]) {
-    this._topBlank();
-    this.topLevel.push('typedef struct {');
+export function _emitStructMultiline(ctx: CodeGenContext, name: string, fields: string[]) {
+    ctx._topBlank();
+    ctx.topLevel.push('typedef struct {');
     // First line: state/result/done header fields (up to bool _done)
     let headerEnd = 0;
     for (let i = 0; i < fields.length; i++) {
@@ -471,20 +470,19 @@ export default {
     }
     const headerFields = fields.slice(0, headerEnd + 1);
     const bodyFields = fields.slice(headerEnd + 1);
-    this.topLevel.push(`    ${headerFields.join('; ')};`);
-    for (const f of bodyFields) this.topLevel.push(`    ${f};`);
-    this.topLevel.push(`} ${name};`);
-  },
+    ctx.topLevel.push(`    ${headerFields.join('; ')};`);
+    for (const f of bodyFields) ctx.topLevel.push(`    ${f};`);
+    ctx.topLevel.push(`} ${name};`);
+}
 
-  _emitStructCompact(this: CodeGenThis, name: string, fields: string[]) {
-    this._topBlank();
-    this.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
-  },
+export function _emitStructCompact(ctx: CodeGenContext, name: string, fields: string[]) {
+    ctx._topBlank();
+    ctx.topLevel.push(`typedef struct { ${fields.join('; ')}; } ${name};`);
+}
 
-  _emitTopFn(this: CodeGenThis, sig: string, bodyLines: string[]) {
-    this._topBlank();
-    this.topLevel.push(`${sig} {`);
-    for (const l of bodyLines) this.topLevel.push(l);
-    this.topLevel.push('}');
-  },
-};
+export function _emitTopFn(ctx: CodeGenContext, sig: string, bodyLines: string[]) {
+    ctx._topBlank();
+    ctx.topLevel.push(`${sig} {`);
+    for (const l of bodyLines) ctx.topLevel.push(l);
+    ctx.topLevel.push('}');
+}

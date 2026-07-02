@@ -1,4 +1,4 @@
-// TSClang Code Generator
+﻿// TSClang Code Generator
 // Walks the AST and produces C source.
 
 import { PRIMITIVE_MAP, toCType, fmtSpec, mangleType, mangleParams, inferLiteralCType } from './types.js';
@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1581,6 +1581,40 @@ class Context {
   _matchPatternCond(pattern: MatchPattern, discC: string, discType: string | null, enumDef: Parameters<typeof stmtSubFns._matchPatternCond>[4]) { return stmtSubFns._matchPatternCond(this, pattern, discC, discType, enumDef); }
   emitSelectVarDecl(node: VarDecl, lines: string[], depth: number) { return stmtSubFns.emitSelectVarDecl(this, node, lines, depth); }
 
+  // Delegating methods: asyncFns
+  _initAsync() { return asyncFns._initAsync(this); }
+  _asyncRetType(rt: TypeAnn | null) { return asyncFns._asyncRetType(this, rt); }
+  _isInlinableConst(init: Parameters<typeof asyncFns._isInlinableConst>[1]) { return asyncFns._isInlinableConst(this, init); }
+  _constLiteralC(init: Parameters<typeof asyncFns._constLiteralC>[1]) { return asyncFns._constLiteralC(this, init); }
+  _awaitInfoOf(awaitNode: Await) { return asyncFns._awaitInfoOf(this, awaitNode); }
+  _scanAsyncBody(params: Param[], body: Block | null) { return asyncFns._scanAsyncBody(this, params, body); }
+  _scanExprIdents(node: Expression | Stmt | null | undefined, touch: (name: string) => void) { return asyncFns._scanExprIdents(this, node, touch); }
+  _livenessScan(body: Block | null, localVarNames: Set<string>) { return asyncFns._livenessScan(this, body, localVarNames); }
+  _genLivenessScan(body: Block | null, localVarNames: Set<string>) { return asyncFns._genLivenessScan(this, body, localVarNames); }
+  _collectAwaitStates(body: Block | null) { return asyncFns._collectAwaitStates(this, body); }
+  _topBlank(arr?: Parameters<typeof asyncFns._topBlank>[1]) { return asyncFns._topBlank(this, arr); }
+  _emitStructMultiline(name: string, fields: string[]) { return asyncFns._emitStructMultiline(this, name, fields); }
+  _emitStructCompact(name: string, fields: string[]) { return asyncFns._emitStructCompact(this, name, fields); }
+  _emitTopFn(sig: string, bodyLines: string[]) { return asyncFns._emitTopFn(this, sig, bodyLines); }
+  emitAsyncFunc(node: FuncDecl) { return asyncFns.emitAsyncFunc(this, node); }
+  _buildAsyncPoll(body: Block | null) { return asyncFns._buildAsyncPoll(this, body); }
+  _emitAsyncStmtList(stmts: Stmt[], lines: string[], actx: Parameters<typeof asyncFns._emitAsyncStmtList>[3], I: string) { return asyncFns._emitAsyncStmtList(this, stmts, lines, actx, I); }
+  _emitAsyncWhile(s: While, remainingStmts: Stmt[], lines: string[], actx: Parameters<typeof asyncFns._emitAsyncWhile>[4], I: string) { return asyncFns._emitAsyncWhile(this, s, remainingStmts, lines, actx, I); }
+  _emitAsyncDoWhile(s: DoWhile, remainingStmts: Stmt[], lines: string[], actx: Parameters<typeof asyncFns._emitAsyncDoWhile>[4], I: string) { return asyncFns._emitAsyncDoWhile(this, s, remainingStmts, lines, actx, I); }
+  _emitAsyncFor(s: For, remainingStmts: Stmt[], lines: string[], actx: Parameters<typeof asyncFns._emitAsyncFor>[4], I: string) { return asyncFns._emitAsyncFor(this, s, remainingStmts, lines, actx, I); }
+  _emitAsyncForOf(s: ForOf, remainingStmts: Stmt[], lines: string[], actx: Parameters<typeof asyncFns._emitAsyncForOf>[4], I: string) { return asyncFns._emitAsyncForOf(this, s, remainingStmts, lines, actx, I); }
+  _emitAsyncTransition(lines: string[], actx: Parameters<typeof asyncFns._emitAsyncTransition>[2], I: string) { return asyncFns._emitAsyncTransition(this, lines, actx, I); }
+  _checkAwaitTarget(awaitNode: Parameters<typeof asyncFns._checkAwaitTarget>[1]) { return asyncFns._checkAwaitTarget(this, awaitNode); }
+  _emitAsyncStmt(s: Stmt, lines: string[], actx: Parameters<typeof asyncFns._emitAsyncStmt>[3], I: string) { return asyncFns._emitAsyncStmt(this, s, lines, actx, I); }
+  _emitAsyncRegStmt(stmt: Stmt, lines: string[], I: string) { return asyncFns._emitAsyncRegStmt(this, stmt, lines, I); }
+  _emitAsyncSwitch(node: Switch, lines: string[], actx: Parameters<typeof asyncFns._emitAsyncSwitch>[3], I: string) { return asyncFns._emitAsyncSwitch(this, node, lines, actx, I); }
+  _selfE(expr: Expression | null | undefined) { return asyncFns._selfE(this, expr); }
+  emitGeneratorFunc(node: FuncDecl) { return asyncFns.emitGeneratorFunc(this, node); }
+  _buildGenNext(body: Block | null, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null) { return asyncFns._buildGenNext(this, body, yieldType, resultType, hasThrows, resultCt); }
+  _emitGenStmtList(stmts: Parameters<typeof asyncFns._emitGenStmtList>[1], lines: string[], gctx: Parameters<typeof asyncFns._emitGenStmtList>[3], I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) { return asyncFns._emitGenStmtList(this, stmts, lines, gctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal); }
+  _emitGenStmt(s: Parameters<typeof asyncFns._emitGenStmt>[1], lines: string[], gctx: Parameters<typeof asyncFns._emitGenStmt>[3], I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) { return asyncFns._emitGenStmt(this, s, lines, gctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal); }
+  _emitGenRegStmt(stmt: Parameters<typeof asyncFns._emitGenRegStmt>[1], lines: string[], I: string) { return asyncFns._emitGenRegStmt(this, stmt, lines, I); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1590,15 +1624,8 @@ interface Context {
   _asyncGenRetType: string | null;
   _analyzeClassDecorator(...args: any[]): any;
   _analyzeDecorator(...args: any[]): any;
-  _asyncRetType(...args: any[]): any;
-  _awaitInfoOf(...args: any[]): any;
-  _buildAsyncPoll(...args: any[]): any;
-  _buildGenNext(...args: any[]): any;
   _buildInnerCall(...args: any[]): any;
-  _checkAwaitTarget(...args: any[]): any;
   _classHasInheritance(...args: any[]): any;
-  _collectAwaitStates(...args: any[]): any;
-  _constLiteralC(...args: any[]): any;
   _deepSubstOrigApply(...args: any[]): any;
   _dispatchArrayStatic(...args: any[]): any;
   _dispatchBuiltin(...args: any[]): any;
@@ -1623,25 +1650,10 @@ interface Context {
   _dispatchStdUrl(...args: any[]): any;
   _dispatchStdWs(...args: any[]): any;
   _dvOp(...args: any[]): any;
-  _emitAsyncDoWhile(...args: any[]): any;
-  _emitAsyncFor(...args: any[]): any;
-  _emitAsyncForOf(...args: any[]): any;
-  _emitAsyncRegStmt(...args: any[]): any;
-  _emitAsyncStmt(...args: any[]): any;
-  _emitAsyncStmtList(...args: any[]): any;
-  _emitAsyncSwitch(...args: any[]): any;
-  _emitAsyncTransition(...args: any[]): any;
-  _emitAsyncWhile(...args: any[]): any;
   _emitDecoratedMethod(...args: any[]): any;
   _emitDecoratedStandaloneFunc(...args: any[]): any;
   _emitDecoratorWrapperFn(...args: any[]): any;
-  _emitGenRegStmt(...args: any[]): any;
-  _emitGenStmt(...args: any[]): any;
-  _emitGenStmtList(...args: any[]): any;
   _emitPoolClass(...args: any[]): any;
-  _emitStructCompact(...args: any[]): any;
-  _emitStructMultiline(...args: any[]): any;
-  _emitTopFn(...args: any[]): any;
   _ensureClassFree(...args: any[]): any;
   _ensureHeapDestructor(...args: any[]): any;
   _ensureImplicitVtable(...args: any[]): any;
@@ -1649,7 +1661,6 @@ interface Context {
   _ensurePoolDrop(...args: any[]): any;
   _extractCallbackFn(...args: any[]): any;
   _extractLambdaBody(...args: any[]): any;
-  _genLivenessScan(...args: any[]): any;
   _getIfaceParamName(...args: any[]): any;
   _getStringFields(...args: any[]): any;
   _hasOrigApplyDeep(...args: any[]): any;
@@ -1660,23 +1671,14 @@ interface Context {
   _handleStdNet(...args: any[]): any;
   _handleStdLibc(...args: any[]): any;
   _handleStdStack(...args: any[]): any;
-  _initAsync(...args: any[]): any;
-  _isInlinableConst(...args: any[]): any;
   _isOrigApply(...args: any[]): any;
-  _livenessScan(...args: any[]): any;
   _markHeapClass(...args: any[]): any;
-  _scanAsyncBody(...args: any[]): any;
-  _scanExprIdents(...args: any[]): any;
-  _selfE(...args: any[]): any;
   _substituteInAst(...args: any[]): any;
-  _topBlank(...args: any[]): any;
   argsToC(...args: any[]): any;
   bareNumberValue(...args: any[]): any;
   callToC(...args: any[]): any;
   consoleCall(...args: any[]): any;
-  emitAsyncFunc(...args: any[]): any;
   emitFuncBody(...args: any[]): any;
-  emitGeneratorFunc(...args: any[]): any;
   emitMethod(...args: any[]): any;
   emitVtableConstant(...args: any[]): any;
   flattenUnion(...args: any[]): any;
@@ -1709,7 +1711,7 @@ import topLevel  from './codegen/top-level.js';
 import * as stmtFns from './codegen/stmt.js';
 import * as stmtSubFns from './codegen/stmt/index.js';
 import calls     from './codegen/calls/index.js';
-import asyncMixin from './codegen/async.js';
+import * as asyncFns from './codegen/async/index.js';
 import type { SpawnInfo, FieldInfo } from './codegen/async/scan.js';
 import { STDLIB_HANDLERS, LANGUAGE_BUILTINS } from './stdlib-registry.js';
 import * as exprFns from './codegen/expr/index.js';
@@ -1721,7 +1723,6 @@ import * as helpers from './codegen/types/helpers.js';
 const _mixinSources = [
   ['topLevel',  topLevel],
   ['calls',     calls],
-  ['async',     asyncMixin],
 ];
 
 {
@@ -1737,4 +1738,4 @@ const _mixinSources = [
   }
 }
 
-Object.assign(Context.prototype, topLevel, calls, asyncMixin, STDLIB_HANDLERS);
+Object.assign(Context.prototype, topLevel, calls, STDLIB_HANDLERS);

@@ -1,5 +1,5 @@
-import type { FuncDecl, Decorator, Block, Stmt, While, DoWhile, For, ForOf, Expression, TypeRef } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
+﻿import type { FuncDecl, Decorator, Block, Stmt, While, DoWhile, For, ForOf, Expression, TypeRef } from '@tsclang/ast';
+import type { CodeGenContext } from '../../codegen.js';
 // async-emit.ts
 
 export interface AsyncEmitCtx {
@@ -11,18 +11,17 @@ export interface AsyncEmitCtx {
 }
 interface FieldInfo { name: string; ctype: string; }
 
-export default {
   // ─── emitAsyncFunc ────────────────────────────────────────────────────────
-  emitAsyncFunc(this: CodeGenThis, node: FuncDecl) {
-    this._initAsync();
+export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
+    ctx._initAsync();
     const { name, params, returnType, body } = node;
 
     // AVR: max 8 async state machines
-    if (this._targetName === 'avr') {
-      this._asyncCount = (this._asyncCount || 0) + 1;
-      if (this._asyncCount > 8) {
-        throw this.error(
-          `TypeError: Too many concurrent async state machines for AVR target: max 8, got ${this._asyncCount}`
+    if (ctx._targetName === 'avr') {
+      ctx._asyncCount = (ctx._asyncCount || 0) + 1;
+      if (ctx._asyncCount > 8) {
+        throw ctx.error(
+          `TypeError: Too many concurrent async state machines for AVR target: max 8, got ${ctx._asyncCount}`
         );
       }
     }
@@ -32,21 +31,21 @@ export default {
     const hasThrows = throwsTypes.length > 0;
     const throwsKey = hasThrows ? ((throwsTypes[0] as TypeRef).name === 'Error' ? 'TscError' : (throwsTypes[0] as TypeRef).name) : null;
 
-    const innerResultCType = this._asyncRetType(returnType);
+    const innerResultCType = ctx._asyncRetType(returnType ?? null);
     // isVoidReturn: return type is void (no meaningful return value)
     const isVoidReturn = !returnType
       || (returnType?.kind === 'TypeRef' && (returnType.name === 'void' || returnType.name === 'Promise'));
     let resultCType;
     if (hasThrows) {
-      const innerIdent = isVoidReturn ? 'void' : this.cTypeToIdent(innerResultCType ?? 'int');
+      const innerIdent = isVoidReturn ? 'void' : ctx.cTypeToIdent(innerResultCType ?? 'int');
       resultCType = `Result_${innerIdent}_${throwsKey}`;
       // Emit Result typedef only once (deduplicate across functions sharing same Result type)
 
-      if (!this._emittedResultTypes.has(resultCType)) {
-        this._emittedResultTypes.add(resultCType);
+      if (!ctx._emittedResultTypes.has(resultCType)) {
+        ctx._emittedResultTypes.add(resultCType);
         const innerDecl = isVoidReturn ? 'int _dummy' : `${innerResultCType} value`;
-        this._topBlank();
-        this.topLevel.push(`typedef struct { bool ok; union { ${innerDecl}; ${throwsKey} error; }; } ${resultCType};`);
+        ctx._topBlank();
+        ctx.topLevel.push(`typedef struct { bool ok; union { ${innerDecl}; ${throwsKey} error; }; } ${resultCType};`);
       }
     } else {
       resultCType = innerResultCType;
@@ -56,19 +55,19 @@ export default {
     const pollFn = `${name}_poll`;
 
     // Ref<T>/Mut<T> across await: borrow types can't cross await
-    const awaitStatesCount = this._collectAwaitStates(body).length;
+    const awaitStatesCount = ctx._collectAwaitStates(body).length;
     if (awaitStatesCount > 0) {
       for (const p of (params || [])) {
         if (p.typeAnn?.kind === 'TypeRef' && (p.typeAnn.name === 'Ref' || p.typeAnn.name === 'Mut')) {
-          throw this.error(`"${p.typeAnn.name}<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
+          throw ctx.error(`"${p.typeAnn.name}<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
         }
       }
     }
 
     // Scan fields and collect sub-state fields (also pre-emits any spawn env/fn)
-    const { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams } = this._scanAsyncBody(params, body);
-    const awaitStates = this._collectAwaitStates(body);
-    this._preScanTypes = null;
+    const { paramFields, bodyFields, inlined, inlinedTypes, spawnInfos, extraPollParams } = ctx._scanAsyncBody(params, body);
+    const awaitStates = ctx._collectAwaitStates(body);
+    ctx._preScanTypes = null;
 
     // Propagate inner return type to body vars assigned from unknown awaits (default int32_t)
     if (innerResultCType && innerResultCType !== 'int32_t') {
@@ -96,8 +95,8 @@ export default {
       sFields.push(`${f.ctype} ${f.name}`);
       if (f.ctype.startsWith('Array_')) {
         const elemIdent = f.ctype.slice(6);
-        const etC = this._arrIdentToCType(elemIdent);
-        this._ensureArrayStruct(f.ctype, etC);
+        const etC = ctx._arrIdentToCType(elemIdent);
+        ctx._ensureArrayStruct(f.ctype, etC);
       }
     }
     for (const af of awaitStates) {
@@ -107,14 +106,14 @@ export default {
     // Compact if no promoted body vars; multiline if any body vars exist
     const _hasStaticDec = (node.decorators ?? []).some((d: Decorator) => d.name === 'static');
     if (_hasStaticDec || bodyFields.length === 0) {
-      this._emitStructCompact(stateType, sFields);
+      ctx._emitStructCompact(stateType, sFields);
     } else {
-      this._emitStructMultiline(stateType, sFields);
+      ctx._emitStructMultiline(stateType, sFields);
     }
 
     // Register
-    this._asyncFuncs.set(name, { stateType, pollFn, resultCType, innerResultCType, params });
-    this.define(name, {
+    ctx._asyncFuncs.set(name, { stateType, pollFn, resultCType, innerResultCType: innerResultCType ?? undefined, params });
+    ctx.define(name, {
       ctype: resultCType ?? 'int', funcName: name,
       _isAsync: true, _stateType: stateType, _pollFn: pollFn, params,
     });
@@ -142,16 +141,16 @@ export default {
         stringFields.push(f.name);
       } else if (f.ctype.startsWith('Array_')) {
         const elemIdent = f.ctype.slice(6);
-        const etC = this._arrIdentToCType(elemIdent);
-        this._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
+        const etC = ctx._arrIdentToCType(elemIdent);
+        ctx._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
         arrayFields.push({ name: f.name, elemIdent });
       } else {
-        const cls = this.classes.get(f.ctype);
+        const cls = ctx.classes.get(f.ctype);
         if (cls) {
-          const sFields2 = this._getStringFields(f.ctype);
+          const sFields2 = ctx._getStringFields(f.ctype);
           if (sFields2.length > 0) {
-            this._ensureClassFree(f.ctype);
-            const freeFn = this.classes.get(f.ctype)?._classFreeFn;
+            ctx._ensureClassFree(f.ctype);
+            const freeFn = ctx.classes.get(f.ctype)?._classFreeFn;
             if (freeFn) classFreeFields.push({ name: f.name, freeFn });
           }
         }
@@ -160,43 +159,43 @@ export default {
     const hasCleanup = stringFields.length > 0 || classFreeFields.length > 0 || arrayFields.length > 0;
     const paramStringFields = stringFields.filter((n: string) => paramFields.some((f: FieldInfo) => f.name === n));
 
-    this._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, arrayFields, hasCleanup, paramStringFields };
-    this._inAsyncFunc = true;
+    ctx._selfCtx = { promoted, inlined, inlinedTypes, resultCType, hasThrows, throwsKey, spawnInfos, spawnVarAlias, extraPollParams, stringFields, classFreeFields, arrayFields, hasCleanup, paramStringFields };
+    ctx._inAsyncFunc = true;
 
-    const pollLines = this._buildAsyncPoll(body);
+    const pollLines = ctx._buildAsyncPoll(body);
 
-    this._inAsyncFunc = false;
-    this._selfCtx = null;
+    ctx._inAsyncFunc = false;
+    ctx._selfCtx = null;
 
     // Extra poll params from spawn free vars
     const extraParamsStr = extraPollParams.length > 0
       ? ', ' + extraPollParams.map((f: FieldInfo) => `${f.ctype} ${f.name}`).join(', ')
       : '';
-    this._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
+    ctx._emitTopFn(`static void ${pollFn}(${stateType} *self${extraParamsStr})`, pollLines);
 
     // @static cooperative task: emit static instance, register for main scheduler
     const hasStaticDec = (node.decorators ?? []).some((d: Decorator) => d.name === 'static');
-    if (hasStaticDec && this._asyncName === 'state_machine') {
-      this.topLevel.push('');
-      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+    if (hasStaticDec && ctx._asyncName === 'state_machine') {
+      ctx.topLevel.push('');
+      ctx.topLevel.push(`static ${stateType} _${name}_instance;`);
 
-      this._staticTasks.push({ name, stateType, pollFn });
+      ctx._staticTasks.push({ name, stateType, pollFn });
       return;
     }
 
     // Async main handling
     if (name === 'main') {
-      this._asyncMainPollFn = pollFn;
-      this._asyncMainStateType = stateType;
-      this._asyncMainIsDesktop = (resultCType === null); // Promise<void>
+      ctx._asyncMainPollFn = pollFn;
+      ctx._asyncMainStateType = stateType;
+      ctx._asyncMainIsDesktop = (resultCType === null); // Promise<void>
     }
-  },
+}
 
-  _buildAsyncPoll(this: CodeGenThis, body: Block | null) {
+export function _buildAsyncPoll(ctx: CodeGenContext, body: Block | null) {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines: string[] = [];
-    const ctx: AsyncEmitCtx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
-    const sc = this._selfCtx!;
+    const actx: AsyncEmitCtx = { awaitIdx: 0, genIdx: 0, nextCase: 1, loopLabels: [], terminated: false };
+    const sc = ctx._selfCtx!;
 
     lines.push('    switch (self->_state) {');
     lines.push('        case 0:');
@@ -205,10 +204,10 @@ export default {
       lines.push(`            tsc_string_retain(self->${name});`);
     }
 
-    this._emitAsyncStmtList(stmts, lines, ctx, '            ');
+    ctx._emitAsyncStmtList(stmts, lines, actx, '            ');
 
     // Implicit done at end of function (if not already terminated by explicit return)
-    if (!ctx.terminated) {
+    if (!actx.terminated) {
       if (sc.hasCleanup) {
         lines.push('            goto _cleanup;');
       } else {
@@ -232,41 +231,41 @@ export default {
       lines.push('            return;');
     }
 
-    if (this._strictRules?.has('switch-default')) {
+    if (ctx._strictRules?.has('switch-default')) {
       lines.push('        default: break;');
     }
 
     lines.push('    }');
 
     return lines;
-  },
+}
 
-  _emitAsyncStmtList(this: CodeGenThis, stmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
+export function _emitAsyncStmtList(ctx: CodeGenContext, stmts: Stmt[], lines: string[], actx: AsyncEmitCtx, I: string) {
     for (let i = 0; i < stmts.length; i++) {
       const s = stmts[i];
       if (s?.kind === 'While') {
-        this._emitAsyncWhile(s, stmts.slice(i + 1), lines, ctx, I);
+        ctx._emitAsyncWhile(s, stmts.slice(i + 1), lines, actx, I);
         return;
       }
       if (s?.kind === 'DoWhile') {
-        this._emitAsyncDoWhile(s, stmts.slice(i + 1), lines, ctx, I);
+        ctx._emitAsyncDoWhile(s, stmts.slice(i + 1), lines, actx, I);
         return;
       }
       if (s?.kind === 'For') {
-        this._emitAsyncFor(s, stmts.slice(i + 1), lines, ctx, I);
+        ctx._emitAsyncFor(s, stmts.slice(i + 1), lines, actx, I);
         return;
       }
       if (s?.kind === 'ForOf' && !s.await) {
-        this._emitAsyncForOf(s, stmts.slice(i + 1), lines, ctx, I);
+        ctx._emitAsyncForOf(s, stmts.slice(i + 1), lines, actx, I);
         return;
       }
-      this._emitAsyncStmt(s, lines, ctx, I);
+      ctx._emitAsyncStmt(s, lines, actx, I);
     }
-  },
+}
 
-  _emitAsyncWhile(this: CodeGenThis, s: While, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
-    const loopCase = ctx.nextCase++;
-    const condC = this._selfE((s as { cond?: Expression }).cond ?? s.test);
+export function _emitAsyncWhile(ctx: CodeGenContext, s: While, remainingStmts: Stmt[], lines: string[], actx: AsyncEmitCtx, I: string) {
+    const loopCase = actx.nextCase++;
+    const condC = ctx._selfE((s as { cond?: Expression }).cond ?? s.test);
     const whileBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `while_${loopCase}_end`;
 
@@ -277,39 +276,39 @@ export default {
 
     lines.push(`${I}if (!(${condC})) { goto ${endLabel}; }`);
 
-    this._asyncBreakStack = this._asyncBreakStack || [];
-    this._asyncContinueStack = this._asyncContinueStack || [];
-    this._asyncBreakStack.push(endLabel);
-    this._asyncContinueStack.push(`case_${loopCase}`);
-    const savedTerminated = ctx.terminated;
-    ctx.terminated = false;
-    this._emitAsyncStmtList(whileBody, lines, ctx, I);
-    this._asyncBreakStack.pop();
-    this._asyncContinueStack.pop();
-    const isNested = this._asyncBreakStack?.length > 0;
+    ctx._asyncBreakStack = ctx._asyncBreakStack || [];
+    ctx._asyncContinueStack = ctx._asyncContinueStack || [];
+    ctx._asyncBreakStack.push(endLabel);
+    ctx._asyncContinueStack.push(`case_${loopCase}`);
+    const savedTerminated = actx.terminated;
+    actx.terminated = false;
+    ctx._emitAsyncStmtList(whileBody, lines, actx, I);
+    ctx._asyncBreakStack.pop();
+    ctx._asyncContinueStack.pop();
+    const isNested = ctx._asyncBreakStack?.length > 0;
 
-    if (!ctx.terminated) {
+    if (!actx.terminated) {
       lines.push(`${I}self->_state = ${loopCase};`);
       lines.push(`${I}goto case_${loopCase};`);
     }
 
     lines.push(`${endLabel}:`);
-    ctx.terminated = false;
-    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated && !isNested) {
-      if (this._selfCtx!.hasCleanup) {
+    actx.terminated = false;
+    for (const rs of remainingStmts) ctx._emitAsyncStmt(rs, lines, actx, I);
+    if (!actx.terminated && !isNested) {
+      if (ctx._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return;`);
       }
     }
-    if (!isNested) ctx.terminated = true;
-  },
+    if (!isNested) actx.terminated = true;
+}
 
-  _emitAsyncDoWhile(this: CodeGenThis, s: DoWhile, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
-    const loopCase = ctx.nextCase++;
-    const condC = this._selfE((s as { cond?: Expression }).cond ?? s.test);
+export function _emitAsyncDoWhile(ctx: CodeGenContext, s: DoWhile, remainingStmts: Stmt[], lines: string[], actx: AsyncEmitCtx, I: string) {
+    const loopCase = actx.nextCase++;
+    const condC = ctx._selfE((s as { cond?: Expression }).cond ?? s.test);
     const doBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `dowhile_${loopCase}_end`;
     const contLabel = `dowhile_${loopCase}_cont`;
@@ -319,18 +318,18 @@ export default {
     lines.push(`case_${loopCase}:`);
     lines.push(`        case ${loopCase}:`);
 
-    this._asyncBreakStack = this._asyncBreakStack || [];
-    this._asyncContinueStack = this._asyncContinueStack || [];
-    this._asyncBreakStack.push(endLabel);
-    this._asyncContinueStack.push(contLabel);
-    const savedTerminated = ctx.terminated;
-    ctx.terminated = false;
-    this._emitAsyncStmtList(doBody, lines, ctx, I);
-    this._asyncBreakStack.pop();
-    this._asyncContinueStack.pop();
-    const isNested = this._asyncBreakStack?.length > 0;
+    ctx._asyncBreakStack = ctx._asyncBreakStack || [];
+    ctx._asyncContinueStack = ctx._asyncContinueStack || [];
+    ctx._asyncBreakStack.push(endLabel);
+    ctx._asyncContinueStack.push(contLabel);
+    const savedTerminated = actx.terminated;
+    actx.terminated = false;
+    ctx._emitAsyncStmtList(doBody, lines, actx, I);
+    ctx._asyncBreakStack.pop();
+    ctx._asyncContinueStack.pop();
+    const isNested = ctx._asyncBreakStack?.length > 0;
 
-    if (!ctx.terminated) {
+    if (!actx.terminated) {
       lines.push(`${contLabel}:`);
       lines.push(`${I}if (${condC}) {`);
       lines.push(`${I}    self->_state = ${loopCase};`);
@@ -339,21 +338,21 @@ export default {
     }
 
     lines.push(`${endLabel}:`);
-    ctx.terminated = false;
-    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated && !isNested) {
-      if (this._selfCtx!.hasCleanup) {
+    actx.terminated = false;
+    for (const rs of remainingStmts) ctx._emitAsyncStmt(rs, lines, actx, I);
+    if (!actx.terminated && !isNested) {
+      if (ctx._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return;`);
       }
     }
-    if (!isNested) ctx.terminated = true;
-  },
+    if (!isNested) actx.terminated = true;
+}
 
-  _emitAsyncFor(this: CodeGenThis, s: For, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
-    const loopCase = ctx.nextCase++;
+export function _emitAsyncFor(ctx: CodeGenContext, s: For, remainingStmts: Stmt[], lines: string[], actx: AsyncEmitCtx, I: string) {
+    const loopCase = actx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `for_${loopCase}_end`;
     const contLabel = `for_${loopCase}_cont`;
@@ -362,12 +361,12 @@ export default {
     if (s.init) {
       if (s.init.kind === 'VarDecl') {
         const { varKind, name, typeAnn, init } = s.init;
-        const ct = typeAnn ? this.resolveType(typeAnn) : (init ? this.inferType(init) : 'int32_t');
-        const initC = init ? this._selfE(init) : '0';
+        const ct = typeAnn ? ctx.resolveType(typeAnn) : (init ? ctx.inferType(init) : 'int32_t');
+        const initC = init ? ctx._selfE(init) : '0';
         lines.push(`${I}${ct} ${name} = ${initC};`);
-        this.define(name, { ctype: ct, varKind });
+        ctx.define(name, { ctype: ct, varKind });
       } else if (s.init.kind === 'ExprStmt') {
-        lines.push(`${I}${this._selfE(s.init.expr)};`);
+        lines.push(`${I}${ctx._selfE(s.init.expr)};`);
       }
     }
 
@@ -378,28 +377,28 @@ export default {
     lines.push(`        case ${loopCase}:`);
 
     // Condition check
-    const testC = s.test ? this._selfE(s.test) : null;
+    const testC = s.test ? ctx._selfE(s.test) : null;
     if (testC) {
       lines.push(`${I}if (!(${testC})) { goto ${endLabel}; }`);
     }
 
     // Push async loop context
-    this._asyncBreakStack = this._asyncBreakStack || [];
-    this._asyncContinueStack = this._asyncContinueStack || [];
-    this._asyncBreakStack.push(endLabel);
-    this._asyncContinueStack.push(contLabel);
-    const savedTerminated = ctx.terminated;
-    ctx.terminated = false;
-    this._emitAsyncStmtList(forBody, lines, ctx, I);
-    this._asyncBreakStack.pop();
-    this._asyncContinueStack.pop();
-    const isNested = this._asyncBreakStack?.length > 0;
+    ctx._asyncBreakStack = ctx._asyncBreakStack || [];
+    ctx._asyncContinueStack = ctx._asyncContinueStack || [];
+    ctx._asyncBreakStack.push(endLabel);
+    ctx._asyncContinueStack.push(contLabel);
+    const savedTerminated = actx.terminated;
+    actx.terminated = false;
+    ctx._emitAsyncStmtList(forBody, lines, actx, I);
+    ctx._asyncBreakStack.pop();
+    ctx._asyncContinueStack.pop();
+    const isNested = ctx._asyncBreakStack?.length > 0;
 
     // Continue target: update + condition + loop-back
-    if (!ctx.terminated) {
+    if (!actx.terminated) {
       lines.push(`${contLabel}:`);
       if (s.update) {
-        lines.push(`${I}${this._selfE(s.update)};`);
+        lines.push(`${I}${ctx._selfE(s.update)};`);
       }
       if (testC) {
         lines.push(`${I}if (!(${testC})) { goto ${endLabel}; }`);
@@ -410,40 +409,40 @@ export default {
 
     // End label + remaining stmts
     lines.push(`${endLabel}:`);
-    ctx.terminated = false;
-    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated && !isNested) {
-      if (this._selfCtx!.hasCleanup) {
+    actx.terminated = false;
+    for (const rs of remainingStmts) ctx._emitAsyncStmt(rs, lines, actx, I);
+    if (!actx.terminated && !isNested) {
+      if (ctx._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return;`);
       }
     }
-    if (!isNested) ctx.terminated = true;
-  },
+    if (!isNested) actx.terminated = true;
+}
 
-  _emitAsyncForOf(this: CodeGenThis, s: ForOf, remainingStmts: Stmt[], lines: string[], ctx: AsyncEmitCtx, I: string) {
-    const loopCase = ctx.nextCase++;
+export function _emitAsyncForOf(ctx: CodeGenContext, s: ForOf, remainingStmts: Stmt[], lines: string[], actx: AsyncEmitCtx, I: string) {
+    const loopCase = actx.nextCase++;
     const forBody = s.body?.kind === 'Block' ? s.body.body : [s.body];
     const endLabel = `forof_${loopCase}_end`;
     const contLabel = `forof_${loopCase}_cont`;
 
-    const forOfIdx = this._forOfEmitCount ?? 0;
-    this._forOfEmitCount = forOfIdx + 1;
+    const forOfIdx = ctx._forOfEmitCount ?? 0;
+    ctx._forOfEmitCount = forOfIdx + 1;
     const idxName = `_forof_idx_${forOfIdx}`;
 
-    const iterC = this._selfE(s.iterable);
-    const iterSym = s.iterable?.kind === 'Ident' ? this.lookup(s.iterable.name) : null;
+    const iterC = ctx._selfE(s.iterable);
+    const iterSym = s.iterable?.kind === 'Ident' ? ctx.lookup(s.iterable.name) : null;
     const arrType = iterSym?.ctype;
     let elemType = 'int32_t';
     if (iterSym?.arrElemCType) {
       elemType = iterSym.arrElemCType;
     } else if (arrType?.startsWith('Array_')) {
-      elemType = this._arrIdentToCType(arrType.slice(6));
+      elemType = ctx._arrIdentToCType(arrType.slice(6));
     }
 
-    const isPromoted = this._selfCtx!.promoted.has(idxName);
+    const isPromoted = ctx._selfCtx!.promoted.has(idxName);
     const idxAccess = isPromoted ? `self->${idxName}` : idxName;
 
     // Init index
@@ -466,36 +465,36 @@ export default {
     const qual = s.varKind === 'const' ? 'const ' : '';
     const bindName = (s.binding as { kind: string; name?: string }).kind === 'Ident' ? (s.binding as { name?: string }).name : null;
     if (bindName) {
-      const isComplex = !this._isSimpleCType(elemType);
+      const isComplex = !ctx._isSimpleCType(elemType);
       if (isComplex) {
         const ptrQual = s.varKind === 'const' ? 'const ' : '';
         lines.push(`${I}${ptrQual}${elemType} *${bindName} = &${iterC}.data[${idxAccess}];`);
-        this.define(bindName, { ctype: `${elemType} *`, varKind: s.varKind });
+        ctx.define(bindName, { ctype: `${elemType} *`, varKind: s.varKind });
       } else {
-        const bindPromoted = this._selfCtx!.promoted.has(bindName);
+        const bindPromoted = ctx._selfCtx!.promoted.has(bindName);
         if (bindPromoted) {
           lines.push(`${I}self->${bindName} = ${iterC}.data[${idxAccess}];`);
         } else {
           lines.push(`${I}${qual}${elemType} ${bindName} = ${iterC}.data[${idxAccess}];`);
         }
-        this.define(bindName, { ctype: elemType, varKind: s.varKind });
+        ctx.define(bindName, { ctype: elemType, varKind: s.varKind });
       }
     }
 
     // Push async loop context
-    this._asyncBreakStack = this._asyncBreakStack || [];
-    this._asyncContinueStack = this._asyncContinueStack || [];
-    this._asyncBreakStack.push(endLabel);
-    this._asyncContinueStack.push(contLabel);
-    const savedTerminated = ctx.terminated;
-    ctx.terminated = false;
-    this._emitAsyncStmtList(forBody, lines, ctx, I);
-    this._asyncBreakStack.pop();
-    this._asyncContinueStack.pop();
-    const isNested = this._asyncBreakStack?.length > 0;
+    ctx._asyncBreakStack = ctx._asyncBreakStack || [];
+    ctx._asyncContinueStack = ctx._asyncContinueStack || [];
+    ctx._asyncBreakStack.push(endLabel);
+    ctx._asyncContinueStack.push(contLabel);
+    const savedTerminated = actx.terminated;
+    actx.terminated = false;
+    ctx._emitAsyncStmtList(forBody, lines, actx, I);
+    ctx._asyncBreakStack.pop();
+    ctx._asyncContinueStack.pop();
+    const isNested = ctx._asyncBreakStack?.length > 0;
 
     // Continue target: increment + condition + loop-back
-    if (!ctx.terminated) {
+    if (!actx.terminated) {
       lines.push(`${contLabel}:`);
       if (isPromoted) {
         lines.push(`${I}self->${idxName}++;`);
@@ -509,42 +508,41 @@ export default {
 
     // End label + remaining stmts
     lines.push(`${endLabel}:`);
-    ctx.terminated = false;
-    for (const rs of remainingStmts) this._emitAsyncStmt(rs, lines, ctx, I);
-    if (!ctx.terminated && !isNested) {
-      if (this._selfCtx!.hasCleanup) {
+    actx.terminated = false;
+    for (const rs of remainingStmts) ctx._emitAsyncStmt(rs, lines, actx, I);
+    if (!actx.terminated && !isNested) {
+      if (ctx._selfCtx!.hasCleanup) {
         lines.push(`${I}goto _cleanup;`);
       } else {
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return;`);
       }
     }
-    if (!isNested) ctx.terminated = true;
-  },
+    if (!isNested) actx.terminated = true;
+}
 
   // Emit: self->_state = N; /* fall through */ case N:
-  _emitAsyncTransition(this: CodeGenThis, lines: string[], ctx: AsyncEmitCtx, I: string) {
-    lines.push(`${I}self->_state = ${ctx.nextCase};`);
+export function _emitAsyncTransition(ctx: CodeGenContext, lines: string[], actx: AsyncEmitCtx, I: string) {
+    lines.push(`${I}self->_state = ${actx.nextCase};`);
     lines.push(`${I}/* fall through */`);
-    lines.push(`        case ${ctx.nextCase}:`);
-    ctx.nextCase++;
-  },
+    lines.push(`        case ${actx.nextCase}:`);
+    actx.nextCase++;
+}
 
   // Check for await on a non-async/non-callable expression and throw if found
-  _checkAwaitTarget(this: CodeGenThis, awaitNode: { expr?: Expression } | null | undefined) {
+export function _checkAwaitTarget(ctx: CodeGenContext, awaitNode: { expr?: Expression } | null | undefined) {
     const expr = awaitNode?.expr;
     if (!expr) return;
     if (expr.kind === 'Ident') {
       // Check inlined consts (they're not async)
-      const rawType = this._selfCtx?.inlinedTypes?.get(expr.name);
+      const rawType = ctx._selfCtx?.inlinedTypes?.get(expr.name);
       if (rawType !== undefined) {
-        throw this.error(`"await" can only be applied to Promise<T>, got ${rawType}`, awaitNode);
+        throw ctx.error(`"await" can only be applied to Promise<T>, got ${rawType}`, awaitNode);
       }
-      const sym = this.lookup(expr.name);
+      const sym = ctx.lookup(expr.name);
       if (sym && !sym._isAsync && sym.varKind) {
-        throw this.error(
+        throw ctx.error(
           `"await" can only be applied to Promise<T>, got ${sym.ctype ?? 'unknown'}`, awaitNode);
       }
     }
-  },
-};
+}

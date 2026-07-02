@@ -1,5 +1,5 @@
-import type { FuncDecl, Param, Decorator, Stmt, Block, Expression, Yield } from '@tsclang/ast';
-import type { CodeGenThis } from '../../codegen.js';
+﻿import type { FuncDecl, Param, Decorator, Stmt, Block, Expression, Yield } from '@tsclang/ast';
+import type { CodeGenContext } from '../../codegen.js';
 // generator.ts
 
 interface FieldInfo { name: string; ctype: string; }
@@ -7,19 +7,18 @@ export interface GenEmitCtx { caseNum: number; loopLabels: string[]; needTermina
 // Generator statement walkers handle both Stmt and bare Yield (recursed from ExprStmt)
 export type GenNode = Stmt | Yield;
 
-export default {
   // ─── emitGeneratorFunc ────────────────────────────────────────────────────
-  emitGeneratorFunc(this: CodeGenThis, node: FuncDecl) {
-    this._initAsync();
+export function emitGeneratorFunc(ctx: CodeGenContext, node: FuncDecl) {
+    ctx._initAsync();
     const { name, params, returnType, body, throwsTypes } = node;
 
     // Determine yield type
     let yieldType = 'int32_t';
     if (returnType?.kind === 'TypeRef') {
       if (returnType.name === 'Generator') {
-        yieldType = this.resolveType(returnType.typeArgs?.[0]) || 'int32_t';
+        yieldType = ctx.resolveType(returnType.typeArgs?.[0]) || 'int32_t';
       } else {
-        yieldType = this.resolveType(returnType) || 'int32_t';
+        yieldType = ctx.resolveType(returnType) || 'int32_t';
       }
     }
 
@@ -30,7 +29,7 @@ export default {
     const hasThrows = throwsNames.length > 0;
     const errKey = hasThrows ? throwsNames[0] : null;
     const resultCt = hasThrows
-      ? `Result_${this.cTypeToIdent(yieldType)}_${errKey}` : null;
+      ? `Result_${ctx.cTypeToIdent(yieldType)}_${errKey}` : null;
 
     const stateType = `${name}_state`;
     const resultType = `${name}_result`;
@@ -44,8 +43,8 @@ export default {
         if (!s) continue;
         if (s.kind === 'VarDecl' && s.varKind === 'let' && !seenLets.has(s.name)) {
           seenLets.add(s.name);
-          const ct = s.typeAnn ? this.resolveType(s.typeAnn)
-                   : s.init ? (this.inferType(s.init) || 'int32_t') : 'int32_t';
+          const ct = s.typeAnn ? ctx.resolveType(s.typeAnn)
+                   : s.init ? (ctx.inferType(s.init) || 'int32_t') : 'int32_t';
           letFields.push({ name: s.name, ctype: ct });
         }
         if (s.kind === 'Block') walkLets(s.body);
@@ -57,7 +56,7 @@ export default {
 
     if (letFields.length > 0) {
       const localVarNames = new Set(letFields.map((f: FieldInfo) => f.name));
-      const needsPromotion = this._genLivenessScan(body, localVarNames);
+      const needsPromotion = ctx._genLivenessScan(body, localVarNames);
       const safeLocal = new Set([
         'int32_t', 'int64_t', 'int8_t', 'int16_t',
         'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
@@ -80,16 +79,16 @@ export default {
         stringFields.push(f.name);
       } else if (f.ctype.startsWith('Array_')) {
         const elemIdent = f.ctype.slice(6);
-        const etC = this._arrIdentToCType(elemIdent);
-        this._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
+        const etC = ctx._arrIdentToCType(elemIdent);
+        ctx._ensureArrayFreeMacro(elemIdent, f.ctype, etC);
         arrayFields.push({ name: f.name, elemIdent });
       } else {
-        const cls = this.classes.get(f.ctype);
+        const cls = ctx.classes.get(f.ctype);
         if (cls) {
-          const sFields2 = this._getStringFields(f.ctype);
+          const sFields2 = ctx._getStringFields(f.ctype);
           if (sFields2.length > 0) {
-            this._ensureClassFree(f.ctype);
-            const freeFn = this.classes.get(f.ctype)?._classFreeFn;
+            ctx._ensureClassFree(f.ctype);
+            const freeFn = ctx.classes.get(f.ctype)?._classFreeFn;
             if (freeFn) classFreeFields.push({ name: f.name, freeFn });
           }
         }
@@ -99,8 +98,8 @@ export default {
 
     // Emit Result_T_E typedef if needed (before state struct references it)
     if (hasThrows) {
-      this._topBlank();
-      this.topLevel.push(`typedef struct { bool ok; union { ${yieldType} value; ${errKey} error; }; } ${resultCt};`);
+      ctx._topBlank();
+      ctx.topLevel.push(`typedef struct { bool ok; union { ${yieldType} value; ${errKey} error; }; } ${resultCt};`);
       // No blank before state struct — keep them together
     }
 
@@ -114,16 +113,16 @@ export default {
     } else if (!isVoidYield) {
       stateFields.push(`${yieldType} _value`);
     }
-    if (!hasThrows) this._topBlank();
-    this.topLevel.push(`typedef struct { ${stateFields.join('; ')}; } ${stateType};`);
+    if (!hasThrows) ctx._topBlank();
+    ctx.topLevel.push(`typedef struct { ${stateFields.join('; ')}; } ${stateType};`);
 
     // Result struct (compact, no blank before — same block)
     const resValueType = hasThrows ? resultCt : yieldType;
     const resultField = isVoidYield ? 'int _dummy' : `${resValueType} value`;
-    this.topLevel.push(`typedef struct { ${resultField}; bool done; } ${resultType};`);
+    ctx.topLevel.push(`typedef struct { ${resultField}; bool done; } ${resultType};`);
 
     // Register result struct in class registry for inferType to resolve .value type
-    this.classes.set(resultType, {
+    ctx.classes.set(resultType, {
       isStruct: true,
       fields: isVoidYield
         ? [{ name: '_dummy', ctype: 'int' }, { name: 'done', ctype: 'bool' }]
@@ -131,8 +130,8 @@ export default {
     });
 
     // Register
-    this._generatorFuncs.set(name, { stateType, resultType, nextFn, valueType: yieldType, params, letFields });
-    this.define(name, {
+    ctx._generatorFuncs.set(name, { stateType, resultType, nextFn, valueType: yieldType, params, letFields });
+    ctx.define(name, {
       ctype: stateType, funcName: name, _isGenerator: true,
       _stateType: stateType, _resultType: resultType, _nextFn: nextFn,
       _valueType: yieldType, params,
@@ -142,34 +141,34 @@ export default {
 
     // Build next function signature
     const paramStrs = (params || []).map((p: Param) => {
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : 'int32_t';
       return `${ct} ${p.name}`;
     });
     const fnSig = `static ${resultType} ${nextFn}(${stateType} *self${paramStrs.length ? ', ' + paramStrs.join(', ') : ''})`;
 
     // Set up generator self context (let vars promoted)
     const genPromoted = new Set(letFields.map((f: FieldInfo) => f.name));
-    this._selfCtx = { promoted: genPromoted, inlined: new Map(), stringFields, classFreeFields, hasCleanup };
+    ctx._selfCtx = { promoted: genPromoted, inlined: new Map(), stringFields, classFreeFields, hasCleanup };
 
-    const nextLines = this._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
+    const nextLines = ctx._buildGenNext(body, yieldType, resultType, hasThrows, resultCt);
 
-    this._selfCtx = null;
+    ctx._selfCtx = null;
 
-    this._emitTopFn(fnSig, nextLines);
+    ctx._emitTopFn(fnSig, nextLines);
 
     // @static generator: emit static instance in BSS
     const _hasStaticDecGen = (node.decorators ?? []).some((d: Decorator) =>
       d.name === 'static');
     if (_hasStaticDecGen) {
-      this.topLevel.push('');
-      this.topLevel.push(`static ${stateType} _${name}_instance;`);
+      ctx.topLevel.push('');
+      ctx.topLevel.push(`static ${stateType} _${name}_instance;`);
     }
-  },
+}
 
-  _buildGenNext(this: CodeGenThis, body: Block | null, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null) {
+export function _buildGenNext(ctx: CodeGenContext, body: Block | null, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null) {
     const stmts = body?.kind === 'Block' ? body.body : [];
     const lines: string[] = [];
-    const ctx: GenEmitCtx = { caseNum: 0, loopLabels: [], needTerminal: true };
+    const gctx: GenEmitCtx = { caseNum: 0, loopLabels: [], needTerminal: true };
 
     const zeroVal = yieldType === 'String' ? '(String){0}'
                   : yieldType === 'bool' ? 'false' : '0';
@@ -180,10 +179,10 @@ export default {
     lines.push('    switch (self->_state) {');
     lines.push('        case 0:');
 
-    this._emitGenStmtList(stmts, lines, ctx, '            ', yieldType, resultType, hasThrows, resultCt, zeroVal);
+    ctx._emitGenStmtList(stmts, lines, gctx, '            ', yieldType, resultType, hasThrows, resultCt, zeroVal);
 
-    if (ctx.needTerminal) {
-      if (this._selfCtx?.hasCleanup) {
+    if (gctx.needTerminal) {
+      if (ctx._selfCtx?.hasCleanup) {
         lines.push(`            goto _cleanup;`);
       } else {
         lines.push(`            self->_done = true;`);
@@ -191,19 +190,19 @@ export default {
       }
     }
 
-    if (this._selfCtx?.hasCleanup) {
+    if (ctx._selfCtx?.hasCleanup) {
       lines.push('        _cleanup:');
-      for (const name of this._selfCtx.stringFields) {
+      for (const name of ctx._selfCtx.stringFields) {
         lines.push(`            tsc_string_release(self->${name});`);
       }
-      for (const { name, freeFn } of this._selfCtx.classFreeFields) {
+      for (const { name, freeFn } of ctx._selfCtx.classFreeFields) {
         lines.push(`            ${freeFn}(&self->${name});`);
       }
       lines.push('            self->_done = true;');
       lines.push(`            ${doneRet}`);
     }
 
-    if (this._strictRules?.has('switch-default')) {
+    if (ctx._strictRules?.has('switch-default')) {
       lines.push('        default: break;');
     }
 
@@ -211,50 +210,50 @@ export default {
     lines.push(`    ${doneRet}`);
 
     return lines;
-  },
+}
 
-  _emitGenStmtList(this: CodeGenThis, stmts: GenNode[], lines: string[], ctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
+export function _emitGenStmtList(ctx: CodeGenContext, stmts: GenNode[], lines: string[], gctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
     for (const s of stmts || []) {
-      this._emitGenStmt(s, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
+      ctx._emitGenStmt(s, lines, gctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
     }
-  },
+}
 
-  _emitGenStmt(this: CodeGenThis, s: GenNode, lines: string[], ctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
+export function _emitGenStmt(ctx: CodeGenContext, s: GenNode, lines: string[], gctx: GenEmitCtx, I: string, yieldType: string, resultType: string, hasThrows: boolean, resultCt: string | null, zeroVal: string) {
     if (!s) return;
 
     // Unwrap ExprStmt(Yield(...))
     if (s.kind === 'ExprStmt' && s.expr?.kind === 'Yield') {
-      this._emitGenStmt(s.expr, lines, ctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
+      ctx._emitGenStmt(s.expr, lines, gctx, I, yieldType, resultType, hasThrows, resultCt, zeroVal);
       return;
     }
 
     if (s.kind === 'Yield') {
-      const val = s.value ? this._selfE(s.value) : zeroVal;
+      const val = s.value ? ctx._selfE(s.value) : zeroVal;
       if (hasThrows) {
-        lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+        lines.push(`${I}self->_state = ${gctx.caseNum + 1};`);
         lines.push(`${I}return (${resultType}){(${resultCt}){.ok = true, .value = ${val}}, false};`);
       } else {
-        lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+        lines.push(`${I}self->_state = ${gctx.caseNum + 1};`);
         lines.push(`${I}return (${resultType}){${val}, false};`);
       }
-      ctx.caseNum++;
-      lines.push(`        case ${ctx.caseNum}:`);
-      ctx.needTerminal = true;
+      gctx.caseNum++;
+      lines.push(`        case ${gctx.caseNum}:`);
+      gctx.needTerminal = true;
       return;
     }
 
     if (s.kind === 'While') {
       // case for loop condition (falls through from previous case)
-      const loopCase = ctx.caseNum + 1;
+      const loopCase = gctx.caseNum + 1;
       lines.push(`case_${loopCase}:`);
       lines.push(`        case ${loopCase}:`);
-      ctx.caseNum = loopCase;
-      ctx.needTerminal = false;
-      const condC = this._selfE(s.test ?? (s as { cond?: Expression }).cond);
+      gctx.caseNum = loopCase;
+      gctx.needTerminal = false;
+      const condC = ctx._selfE(s.test ?? (s as { cond?: Expression }).cond);
       const doneRet = hasThrows
         ? `return (${resultType}){(${resultCt}){.ok = false}, true};`
         : `return (${resultType}){${zeroVal}, true};`;
-      if (this._selfCtx?.hasCleanup) {
+      if (ctx._selfCtx?.hasCleanup) {
         lines.push(`${I}if (!(${condC})) { goto _cleanup; }`);
       } else {
         lines.push(`${I}if (!(${condC})) { self->_done = true; ${doneRet} }`);
@@ -269,26 +268,26 @@ export default {
         const wsYield = ws.kind === 'Yield' ? ws : (ws.kind === 'ExprStmt' && ws.expr?.kind === 'Yield' ? ws.expr : null);
         if (wsYield) {
           yieldFound = true;
-          const val = wsYield.value ? this._selfE(wsYield.value) : zeroVal;
+          const val = wsYield.value ? ctx._selfE(wsYield.value) : zeroVal;
           if (!hasThrows) {
             lines.push(`${I}self->_value = ${val};`);
-            lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+            lines.push(`${I}self->_state = ${gctx.caseNum + 1};`);
             lines.push(`${I}return (${resultType}){self->_value, false};`);
           } else {
-            lines.push(`${I}self->_state = ${ctx.caseNum + 1};`);
+            lines.push(`${I}self->_state = ${gctx.caseNum + 1};`);
             lines.push(`${I}return (${resultType}){(${resultCt}){.ok = true, .value = ${val}}, false};`);
           }
-          ctx.caseNum++;
-          lines.push(`        case ${ctx.caseNum}:`);
+          gctx.caseNum++;
+          lines.push(`        case ${gctx.caseNum}:`);
         } else {
           if (yieldFound) postYieldStmts.push(ws);
           else {
             // pre-yield while body (before first yield)
-            this._emitGenRegStmt(ws, lines, I);
+            ctx._emitGenRegStmt(ws, lines, I);
           }
         }
       }
-      for (const ps of postYieldStmts) this._emitGenRegStmt(ps, lines, I);
+      for (const ps of postYieldStmts) ctx._emitGenRegStmt(ps, lines, I);
 
       // Loop back
       lines.push(`${I}self->_state = ${loopCase};`);
@@ -298,7 +297,7 @@ export default {
 
     if (s.kind === 'Return') {
       if (!s.value) {
-        if (this._selfCtx?.hasCleanup) {
+        if (ctx._selfCtx?.hasCleanup) {
           lines.push(`${I}goto _cleanup;`);
         } else {
           lines.push(`${I}self->_done = true;`);
@@ -308,53 +307,52 @@ export default {
           lines.push(`${I}return ${doneRet};`);
         }
       }
-      ctx.needTerminal = false;
+      gctx.needTerminal = false;
       return;
     }
 
     if (s.kind === 'Throw') {
       if (hasThrows) {
-        const errC = this._selfE(s.value);
-        if (this._selfCtx?.hasCleanup) {
-          for (const name of this._selfCtx.stringFields) lines.push(`${I}tsc_string_release(self->${name});`);
-          for (const { name, freeFn } of this._selfCtx.classFreeFields) lines.push(`${I}${freeFn}(&self->${name});`);
+        const errC = ctx._selfE(s.value);
+        if (ctx._selfCtx?.hasCleanup) {
+          for (const name of ctx._selfCtx.stringFields) lines.push(`${I}tsc_string_release(self->${name});`);
+          for (const { name, freeFn } of ctx._selfCtx.classFreeFields) lines.push(`${I}${freeFn}(&self->${name});`);
         }
         lines.push(`${I}self->_done = true;`);
         lines.push(`${I}return (${resultType}){(${resultCt}){.ok = false, .error = ${errC}}, true};`);
       }
-      ctx.needTerminal = false;
+      gctx.needTerminal = false;
       return;
     }
 
-    this._emitGenRegStmt(s, lines, I);
-  },
+    ctx._emitGenRegStmt(s, lines, I);
+}
 
-  _emitGenRegStmt(this: CodeGenThis, stmt: GenNode, lines: string[], I: string) {
+export function _emitGenRegStmt(ctx: CodeGenContext, stmt: GenNode, lines: string[], I: string) {
     if (!stmt) return;
     if (stmt.kind === 'VarDecl') {
       const { varKind, name, typeAnn, init } = stmt;
-      if (varKind === 'let' && this._selfCtx?.promoted.has(name)) {
+      if (varKind === 'let' && ctx._selfCtx?.promoted.has(name)) {
         if (init) {
-          let initC = this._selfE(init);
-          const ct = typeAnn ? this.resolveType(typeAnn)
-                   : (init ? (this.inferType(init) || null) : null);
+          let initC = ctx._selfE(init);
+          const ct = typeAnn ? ctx.resolveType(typeAnn)
+                   : (init ? (ctx.inferType(init) || null) : null);
           if (initC === '{0}' && ct) initC = `(${ct}){0}`;
           lines.push(`${I}self->${name} = ${initC};`);
-          if (this._selfCtx.stringFields.includes(name) &&
+          if (ctx._selfCtx.stringFields.includes(name) &&
               (init.kind === 'Ident' || init.kind === 'Member' || init.kind === 'Index')) {
             lines.push(`${I}tsc_string_retain(self->${name});`);
           }
         }
       } else {
-        const ct = typeAnn ? this.resolveType(typeAnn)
-                 : init ? (this.inferType(init) || 'int32_t') : 'int32_t';
-        const initC = init ? this._selfE(init) : null;
+        const ct = typeAnn ? ctx.resolveType(typeAnn)
+                 : init ? (ctx.inferType(init) || 'int32_t') : 'int32_t';
+        const initC = init ? ctx._selfE(init) : null;
         lines.push(initC ? `${I}${ct} ${name} = ${initC};` : `${I}${ct} ${name} = {0};`);
       }
     } else {
       const tmp: string[] = [];
-      this.visitStmt(stmt as Stmt, tmp, 0);
+      ctx.visitStmt(stmt as Stmt, tmp, 0);
       for (const l of tmp) lines.push(I + l.trim());
     }
-  },
-};
+}
