@@ -1,15 +1,6 @@
-import program from './program.js';
-import dispatch from './dispatch.js';
-import class_ from './class.js';
-import decorators from './decorators.js';
-import typesAlias from './types-alias.js';
-import func from './func.js';
-
-export default {
-  ...program,
-  ...dispatch,
-  ...class_,
-  ...decorators,
-  ...typesAlias,
-  ...func,
-};
+export * from './program.js';
+export * from './dispatch.js';
+export * from './class.js';
+export * from './decorators.js';
+export * from './types-alias.js';
+export * from './func.js';

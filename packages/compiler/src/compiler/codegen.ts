@@ -13,7 +13,7 @@ import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf, Member } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf, Member, Decorator, Enum, ExtensionFunc, Interface, TypeAlias, DeclareModule, DeclareConst, DeclareFunction } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -1652,6 +1652,46 @@ class Context {
   _dispatchStdTasks(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdTasks(this, node, lines, depth); }
   _dispatchStdRegex(node: Call, lines: string[], depth: number) { return callsFns._dispatchStdRegex(this, node, lines, depth); }
 
+  // Delegating methods: topLevelFns
+  visitClassDecl(node: ClassDecl) { return topLevelFns.visitClassDecl(this, node); }
+  _emitPoolClass(name: string, poolDec: Decorator, node: ClassDecl) { return topLevelFns._emitPoolClass(this, name, poolDec, node); }
+  _ensurePoolAlloc(className: string) { return topLevelFns._ensurePoolAlloc(this, className); }
+  _ensurePoolDrop(className: string) { return topLevelFns._ensurePoolDrop(this, className); }
+  _markHeapClass(name: string, node: ClassDecl) { return topLevelFns._markHeapClass(this, name, node); }
+  _ensureHeapDestructor(className: string) { return topLevelFns._ensureHeapDestructor(this, className); }
+  _classHasInheritance(cBase: string | null | undefined) { return topLevelFns._classHasInheritance(this, cBase); }
+  emitVtableConstant(className: string, ifaceName: string, classNode: ClassDecl | null = null) { return topLevelFns.emitVtableConstant(this, className, ifaceName, classNode); }
+  _getStringFields(className: string) { return topLevelFns._getStringFields(this, className); }
+  _ensureClassFree(className: string) { return topLevelFns._ensureClassFree(this, className); }
+  _analyzeClassDecorator(decFn: Parameters<typeof topLevelFns._analyzeClassDecorator>[1]) { return topLevelFns._analyzeClassDecorator(this, decFn); }
+  _deepSubstOrigApply(node: unknown, replacement: Expression, isVoid = false) { return topLevelFns._deepSubstOrigApply(this, node, replacement, isVoid); }
+  _substituteInAst(node: unknown, bindings: Map<string, Expression>) { return topLevelFns._substituteInAst(this, node, bindings); }
+  _hasOrigApplyDeep(node: unknown) { return topLevelFns._hasOrigApplyDeep(this, node); }
+  _isOrigApply(stmt: unknown) { return topLevelFns._isOrigApply(this, stmt); }
+  _analyzeDecorator(decFn: Parameters<typeof topLevelFns._analyzeDecorator>[1], factoryArgs: Expression[] | null = null) { return topLevelFns._analyzeDecorator(this, decFn, factoryArgs); }
+  _extractLambdaBody(lambdaNode: Arrow | FuncExpr | null) { return topLevelFns._extractLambdaBody(this, lambdaNode); }
+  _buildInnerCall(className: string, methodName: string, m: Method, isStatic: boolean) { return topLevelFns._buildInnerCall(this, className, methodName, m, isStatic); }
+  _emitDecoratedMethod(className: string, m: Parameters<typeof topLevelFns._emitDecoratedMethod>[2], isStatic: boolean, explicitImplements: TypeRef[], decs: Decorator[]) { return topLevelFns._emitDecoratedMethod(this, className, m, isStatic, explicitImplements, decs); }
+  _emitDecoratorWrapperFn(className: string, m: Method, isStatic: boolean, wrapperName: string, innerName: string, analysis: Parameters<typeof topLevelFns._emitDecoratorWrapperFn>[6], d: Decorator, decIdx: number, totalDecs: number) { return topLevelFns._emitDecoratorWrapperFn(this, className, m, isStatic, wrapperName, innerName, analysis, d, decIdx, totalDecs); }
+  _emitDecoratedStandaloneFunc(node: FuncDecl, decs: Decorator[]) { return topLevelFns._emitDecoratedStandaloneFunc(this, node, decs); }
+  emitMethod(className: string, m: Parameters<typeof topLevelFns.emitMethod>[2], isStatic: boolean, explicitImplements: TypeRef[] = []) { return topLevelFns.emitMethod(this, className, m, isStatic, explicitImplements); }
+  visitTopLevel(node: Stmt) { return topLevelFns.visitTopLevel(this, node); }
+  visitDeclareModule(node: DeclareModule) { return topLevelFns.visitDeclareModule(this, node); }
+  visitDeclareConst(node: DeclareConst) { return topLevelFns.visitDeclareConst(this, node); }
+  visitDeclareFunction(node: DeclareFunction) { return topLevelFns.visitDeclareFunction(this, node); }
+  visitEnum(node: Enum) { return topLevelFns.visitEnum(this, node); }
+  visitGlobalVar(node: VarDecl) { return topLevelFns.visitGlobalVar(this, node); }
+  visitFuncDecl(node: FuncDecl, isTopLevel = false, isExported = false) { return topLevelFns.visitFuncDecl(this, node, isTopLevel, isExported); }
+  emitFuncBody(funcName: string, body: Block | null, params: Param[], retType: string, className: string | null = null, isMoveMethod = false, isMut = false, throwsCtx: ThrowsCtx | null = null, isNever = false) { return topLevelFns.emitFuncBody(this, funcName, body, params, retType, className, isMoveMethod, isMut, throwsCtx, isNever); }
+  visitExtensionFunc(node: ExtensionFunc) { return topLevelFns.visitExtensionFunc(this, node); }
+  visitProgram(ast: Program) { return topLevelFns.visitProgram(this, ast); }
+  visitInterface(node: Interface) { return topLevelFns.visitInterface(this, node); }
+  visitTypeAlias(node: TypeAlias) { return topLevelFns.visitTypeAlias(this, node); }
+  getStructFields(typeName: string) { return topLevelFns.getStructFields(this, typeName); }
+  flattenUnion(typeAnn: TypeAnn) { return topLevelFns.flattenUnion(this, typeAnn); }
+  isStringLiteralUnion(typeAnn: TypeAnn | null | undefined) { return topLevelFns.isStringLiteralUnion(this, typeAnn); }
+  getStringLiteralMembers(typeAnn: TypeAnn | null | undefined) { return topLevelFns.getStringLiteralMembers(this, typeAnn); }
+
 }
 
 // Declaration merging: mixin methods added via Object.assign at bottom of file.
@@ -1659,22 +1699,6 @@ class Context {
 // tightened later. This gives method-name checking and IDE autocomplete.
 interface Context {
   _asyncGenRetType: string | null;
-  _analyzeClassDecorator(...args: any[]): any;
-  _analyzeDecorator(...args: any[]): any;
-  _buildInnerCall(...args: any[]): any;
-  _classHasInheritance(...args: any[]): any;
-  _deepSubstOrigApply(...args: any[]): any;
-  _emitDecoratedMethod(...args: any[]): any;
-  _emitDecoratedStandaloneFunc(...args: any[]): any;
-  _emitDecoratorWrapperFn(...args: any[]): any;
-  _emitPoolClass(...args: any[]): any;
-  _ensureClassFree(...args: any[]): any;
-  _ensureHeapDestructor(...args: any[]): any;
-  _ensurePoolAlloc(...args: any[]): any;
-  _ensurePoolDrop(...args: any[]): any;
-  _extractLambdaBody(...args: any[]): any;
-  _getStringFields(...args: any[]): any;
-  _hasOrigApplyDeep(...args: any[]): any;
   _handleStdAvr(...args: any[]): any;
   _handleStdFs(...args: any[]): any;
   _handleStdIo(...args: any[]): any;
@@ -1682,34 +1706,12 @@ interface Context {
   _handleStdNet(...args: any[]): any;
   _handleStdLibc(...args: any[]): any;
   _handleStdStack(...args: any[]): any;
-  _isOrigApply(...args: any[]): any;
-  _markHeapClass(...args: any[]): any;
-  _substituteInAst(...args: any[]): any;
-  emitFuncBody(...args: any[]): any;
-  emitMethod(...args: any[]): any;
-  emitVtableConstant(...args: any[]): any;
-  flattenUnion(...args: any[]): any;
-  getStringLiteralMembers(...args: any[]): any;
-  getStructFields(...args: any[]): any;
-  isStringLiteralUnion(...args: any[]): any;
-  visitClassDecl(...args: any[]): any;
-  visitDeclareConst(...args: any[]): any;
-  visitDeclareFunction(...args: any[]): any;
-  visitDeclareModule(...args: any[]): any;
-  visitEnum(...args: any[]): any;
-  visitExtensionFunc(...args: any[]): any;
-  visitFuncDecl(...args: any[]): any;
-  visitGlobalVar(...args: any[]): any;
-  visitInterface(...args: any[]): any;
-  visitProgram(...args: any[]): any;
-  visitTopLevel(...args: any[]): any;
-  visitTypeAlias(...args: any[]): any;
 }
 
 export type CodeGenThis = Context;
 export type CodeGenContext = Context;
 
-import topLevel  from './codegen/top-level.js';
+import * as topLevelFns from './codegen/top-level/index.js';
 import * as stmtFns from './codegen/stmt.js';
 import * as stmtSubFns from './codegen/stmt/index.js';
 import * as callsFns from './codegen/calls/index.js';
@@ -1722,21 +1724,4 @@ import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
 
-const _mixinSources: [string, object][] = [
-  ['topLevel',  topLevel],
-];
-
-{
-  const seen = new Map();
-  for (const [name, obj] of _mixinSources) {
-    for (const key of Object.keys(obj)) {
-      if (seen.has(key)) {
-        console.error(`codegen mixin collision: "${key}" defined in both "${seen.get(key)}" and "${name}"`);
-        process.exit(1);
-      }
-      seen.set(key, name);
-    }
-  }
-}
-
-Object.assign(Context.prototype, topLevel, STDLIB_HANDLERS);
+Object.assign(Context.prototype, STDLIB_HANDLERS);

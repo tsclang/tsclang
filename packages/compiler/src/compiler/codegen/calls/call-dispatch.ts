@@ -398,7 +398,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           if (argClass && argSym3?.ctype && !ctx.interfaces.has(argSym3.ctype)) {
             // Concrete class: wrap in fat pointer
             const className = argSym3.ctype;
-            const hasExplicit = argClass.implements_?.some((i: TypeRef) => i.name === ifaceName);
+            const hasExplicit = argClass.implements_?.some((i: TypeRef | string) => (typeof i === 'string' ? i : i.name) === ifaceName);
             const vtableName = hasExplicit
               ? `${className}_${ifaceName}_vtable`
               : `_${className}_${ifaceName}_vtable`;

@@ -1,6 +1,6 @@
 import type { CodeGenContext, ClassMetaField } from '../codegen.js';
 import { mangleParams } from '../types.js';
-import type { Expression, TypeAnn, TypeRef, Argument, ObjLit, ObjLitProp, FuncDecl, ClassDecl, Param, ClassMember, Method, Field } from '@tsclang/ast';
+import type { Expression, TypeAnn, TypeRef, Argument, ObjLit, ObjLitProp, FuncDecl, ClassDecl, Param, ClassMember, Method, Field, Block } from '@tsclang/ast';
 // generics.ts
 export function callGeneric(ctx: CodeGenContext, name: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number) {
     const tmpl = ctx._genericFuncs.get(name);
@@ -141,17 +141,17 @@ export function emitMonoFunc(ctx: CodeGenContext, tmpl: FuncDecl, monoName: stri
     const monoReturnType = tmpl.returnType ? ctx.substType(tmpl.returnType, subst) : null;
     const monoBody = ctx.substNode(tmpl.body, subst);
 
-    const monoNode = {
+    const monoNode: FuncDecl = {
       kind: 'FuncDecl',
       name: monoName,
-      _monoName: monoName, // skip mangleParams suffix
+      _monoName: monoName,
       params: monoParams,
       returnType: monoReturnType,
-      body: monoBody,
+      body: monoBody as Block | null,
       generator: tmpl.generator,
       decorators: tmpl.decorators,
-      typeParams: [], // already monomorphized
-    };
+      typeParams: [],
+    } as FuncDecl;
     ctx.visitFuncDecl(monoNode, true);
 }
 
@@ -191,7 +191,7 @@ export function emitMonoClass(ctx: CodeGenContext, tmpl: ClassDecl, monoName: st
         .map((p: Param) => `${p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *'} ${p.name}`)
         .join(', ');
       const monoBody = ctx.substNode(ctor.body, subst);
-      const bodyLines = ctx.emitFuncBody('new', monoBody, ctorParams, monoName, monoName);
+      const bodyLines = ctx.emitFuncBody('new', monoBody as Block | null, ctorParams, monoName, monoName);
       ctx.addTop(`static ${monoName} ${monoName}_new(${paramDecls}) {`);
       for (const l of bodyLines) ctx.addTop('    ' + l);
       ctx.addTop('}');
@@ -213,7 +213,7 @@ export function emitMonoClass(ctx: CodeGenContext, tmpl: ClassDecl, monoName: st
         paramDecls.push(`${p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *'} ${p.name}`);
       }
 
-      const bodyLines = ctx.emitFuncBody(m.name, monoBody, monoParams, monoReturnType, monoName);
+      const bodyLines = ctx.emitFuncBody(m.name as string, monoBody as Block | null, monoParams, monoReturnType, monoName);
       ctx.addTop(`static ${monoReturnType} ${monoName}_${m.name}(${paramDecls.join(', ')}) {`);
       for (const l of bodyLines) ctx.addTop('    ' + l);
       ctx.addTop('}');

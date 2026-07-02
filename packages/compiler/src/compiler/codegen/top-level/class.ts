@@ -1,34 +1,38 @@
-import type { CodeGenThis, ClassMeta, ClassMetaField } from '../../codegen.js';
+import type { CodeGenContext, ClassMeta, ClassMetaField } from '../../codegen.js';
 import type { ClassDecl, Method, Field, Decorator, TypeRef, MethodSig, TypeAnn } from '@tsclang/ast';
-import type { ClassDecField, ClassDecInit } from './decorators.js';
+import type { ClassDecField, ClassDecInit, DecoratorFn } from './decorators.js';
 // class.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
-export default {
-  visitClassDecl(this: CodeGenThis, node: ClassDecl) {
+
+function _implName(iface: TypeRef | string): string {
+    return typeof iface === 'string' ? iface : iface.name;
+}
+
+export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     const { name, superClass, members, decorators, typeParams } = node;
-    const cname = this._modulePrefix ? this._modulePrefix + name : name;
+    const cname = ctx._modulePrefix ? ctx._modulePrefix + name : name;
     // Generic class: store as template
     if (typeParams && typeParams.length > 0) {
 
-      this._genericClasses.set(name, node);
+      ctx._genericClasses.set(name, node);
       return;
     }
 
     // Reserved prefix check (runs before PascalCase to give precise message)
     for (const pfx of ['ref_', 'mut_', 'arc_', 'weak_', 'opt_', 'Array_']) {
       if (name.startsWith(pfx)) {
-        throw this.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
+        throw ctx.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
       }
     }
     // PascalCase invariant check (skip built-in/internal names)
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
-      throw this.error(`class name "${name}" must start with uppercase (PascalCase)`, node);
+      throw ctx.error(`class name "${name}" must start with uppercase (PascalCase)`, node);
     }
 
     // @readonly on methods is invalid
     for (const m of (node.members ?? [])) {
       if (m.kind === 'Method' && (m.decorators ?? []).some((d: Decorator) => d.name === 'readonly')) {
-        throw this.error(`"@readonly" can only be applied to properties`, m);
+        throw ctx.error(`"@readonly" can only be applied to properties`, m);
       }
     }
 
@@ -37,9 +41,9 @@ export default {
     const _classDecoratorInits: ClassDecInit[] = [];   // statements to run after new ClassName()
     for (const d of (decorators ?? [])) {
       if (['struct', 'pool', 'heap', 'packed', 'align'].includes(d.name)) continue;
-      const decFn = this._decoratorFns?.get(d.name);
+      const decFn = ctx._decoratorFns?.get(d.name);
       if (decFn) {
-        const { fields: df, inits: di } = this._analyzeClassDecorator(decFn);
+        const { fields: df, inits: di } = ctx._analyzeClassDecorator(decFn as DecoratorFn);
         _classDecoratorFields.push(...df);
         _classDecoratorInits.push(...di);
       }
@@ -48,37 +52,37 @@ export default {
     // Process @embedded.* decorators
     const inlineDec = decorators?.find((d: Decorator) => d.name === 'struct');
     const poolDec   = decorators?.find((d: Decorator) => d.name === 'pool');
-    const isEmbedded = this._cap('allocator') !== 'heap';
+    const isEmbedded = ctx._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
-      throw this.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+      throw ctx.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
     }
     // @pool: require numeric capacity arg
     if (poolDec) {
       const poolSizeArg = poolDec.args?.[0];
       if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
-        throw this.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
+        throw ctx.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
       }
     }
 
     // @heap: only valid on allocator: "heap"
     const heapDec = decorators?.find((d: Decorator) => d.name === 'heap');
-    if (heapDec && this._allocatorName === 'static') {
-      throw this.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
+    if (heapDec && ctx._allocatorName === 'static') {
+      throw ctx.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
     }
     if (heapDec && poolDec) {
-      throw this.error(`@heap and @pool are mutually exclusive; use one allocation strategy`, node);
+      throw ctx.error(`@heap and @pool are mutually exclusive; use one allocation strategy`, node);
     }
     if (heapDec && inlineDec) {
-      throw this.error(`@heap and @struct are mutually exclusive; use one allocation strategy`, node);
+      throw ctx.error(`@heap and @struct are mutually exclusive; use one allocation strategy`, node);
     }
-    if (heapDec && this._classHasInheritance(superClass, name)) {
-      throw this.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
+    if (heapDec && ctx._classHasInheritance(superClass)) {
+      throw ctx.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
     }
     if (inlineDec && isEmbedded) {
       const badMethods = members.filter((m): m is Method => m.kind === 'Method' && m.name !== 'constructor' && (m.body?.body?.length ?? 0) > 0);
       if (badMethods.length > 0) {
-        throw this.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
+        throw ctx.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
       }
     }
 
@@ -86,7 +90,7 @@ export default {
     const packedDec = decorators?.find((d: Decorator) => d.name === 'packed');
     const alignDec  = decorators?.find((d: Decorator) => d.name === 'align');
     if (packedDec && alignDec) {
-      throw this.error('@packed and @align cannot be used together');
+      throw ctx.error('@packed and @align cannot be used together');
     }
     let structAttr = '';
     if (packedDec) {
@@ -95,7 +99,7 @@ export default {
       const alignVal = alignDec.args?.[0];
       const alignN = alignVal?.kind === 'Literal' ? Number(alignVal.value) : 0;
       if (!alignN || (alignN & (alignN - 1)) !== 0) {
-        throw this.error('@align argument must be a power of two');
+        throw ctx.error('@align argument must be a power of two');
       }
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
@@ -106,11 +110,11 @@ export default {
     for (const m of [...allFields_, ...methods]) {
       const n = typeof m.name === 'string' ? m.name : null;
       if (n && seen.has(n)) {
-        throw this.error(`duplicate member "${n}" in class "${name}"`, m);
+        throw ctx.error(`duplicate member "${n}" in class "${name}"`, m);
       }
       if (n) seen.add(n);
     }
-    const throwsInfo = this._throwsClasses?.get(name);
+    const throwsInfo = ctx._throwsClasses?.get(name);
     const isThrowsClass = !!throwsInfo;
 
     // For throws classes: replace 'message' field with TscError _base
@@ -130,7 +134,7 @@ export default {
     let _iterableElemType: string | null = null;
     for (const iface of implements_) {
       if (_ifaceName(iface) === 'Iterable' && typeof iface === 'object' && iface.typeArgs?.[0]) {
-        _iterableElemType = this.resolveType(iface.typeArgs[0]);
+        _iterableElemType = ctx.resolveType(iface.typeArgs[0]);
         break;
       }
     }
@@ -140,15 +144,15 @@ export default {
       ...(_classDecoratorInits.length > 0 ? { _decoratorInits: _classDecoratorInits } : {}),
       ...(_iterableElemType ? { _iterableElemType } : {}),
       ...(heapDec ? { _isHeap: true } : {}) };
-    this.classes.set(cname, _classEntry);
+    ctx.classes.set(cname, _classEntry);
     // Also register under original name so local TypeRef resolution works
-    if (cname !== name) this.classes.set(name, _classEntry);
+    if (cname !== name) ctx.classes.set(name, _classEntry);
 
     // Map TSClang base class names → C names
     const cBase = effectiveSuperClass === 'Error' ? 'TscError' : effectiveSuperClass;
 
     // Check if this class is used as Arc<T> or Weak<T>
-    const arcInfo = this._arcClasses?.get(name);
+    const arcInfo = ctx._arcClasses?.get(name);
 
     // All-static class with no fields → skip struct unless class name used as a type
     const _allStatic = methods.length > 0 && methods.every((m: Method) => m.modifiers.includes('static'));
@@ -171,13 +175,13 @@ export default {
       for (const f of fields) {
         // Ref<T>/Mut<T> cannot be stored in class fields
         if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
-          throw this.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
+          throw ctx.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
         }
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
-          throw this.error(`"never" cannot be used as a field type`);
+          throw ctx.error(`"never" cannot be used as a field type`);
         }
         const isReadonly = (f.decorators ?? []).some((d: Decorator) => d.name === 'readonly');
-        const ct = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+        const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
         const constPfx = isReadonly ? 'const ' : '';
         if (ct.endsWith(' *')) userFieldParts.push(`${constPfx}${ct.slice(0, -2)} *${f.name};`);
         else userFieldParts.push(`${constPfx}${ct} ${f.name};`);
@@ -194,26 +198,26 @@ export default {
         ];
         const allArcFields = [...arcPre, ...userFieldParts, ...arcPost];
         const isSelfRef = fields.some((f: Field) => {
-          const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
+          const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         if (isSelfRef) {
-          this.addTop(`typedef struct ${cname} ${cname};`);
-          this.addTop(`struct ${cname} { ${allArcFields.join(' ')} };`);
+          ctx.addTop(`typedef struct ${cname} ${cname};`);
+          ctx.addTop(`struct ${cname} { ${allArcFields.join(' ')} };`);
         } else {
-          this.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
+          ctx.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
         }
       } else {
         const isSelfRef = fields.some((f: Field) => {
-          const ct = f.typeAnn ? this.resolveType(f.typeAnn) : '';
+          const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
         if (isSelfRef) {
-          this.addTop(`typedef struct ${cname} ${cname};`);
-          this.addTop(`struct${structAttr} ${cname} { ${fieldContent} };`);
+          ctx.addTop(`typedef struct ${cname} ${cname};`);
+          ctx.addTop(`struct${structAttr} ${cname} { ${fieldContent} };`);
         } else {
-          this.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
+          ctx.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
         }
       }
 
@@ -224,11 +228,11 @@ export default {
         let newBody = `${cname} s = {0}; s._base.message = msg;`;
         if (hasStack) newBody += ` s.stack = tsc_capture_stack();`;
         newBody += ` return s;`;
-        this.typedefs.push(`static ${cname} ${cname}_new(String msg) { ${newBody} }`);
-        this.typedefs.push('');  // blank after _new, before Result typedef
-        this._lastAddedToTypedefs = false;  // next addTop('') won't be swallowed
+        ctx.typedefs.push(`static ${cname} ${cname}_new(String msg) { ${newBody} }`);
+        ctx.typedefs.push('');  // blank after _new, before Result typedef
+        ctx._lastAddedToTypedefs = false;  // next addTop('') won't be swallowed
       } else {
-        this.addTop('');  // blank after struct (no _new)
+        ctx.addTop('');  // blank after struct (no _new)
       }
     }
 
@@ -239,9 +243,9 @@ export default {
       for (const m of methods) {
         if (m.name === 'constructor') continue;
         const isStatic = m.modifiers.includes('static');
-        this.emitMethod(cname, m, isStatic, explicitImplements);
+        ctx.emitMethod(cname, m, isStatic, explicitImplements);
       }
-      for (const ifaceName of explicitImplements) this.emitVtableConstant(cname, ifaceName);
+      for (const ifaceName of explicitImplements) ctx.emitVtableConstant(cname, _implName(ifaceName));
       return;
     }
 
@@ -249,7 +253,7 @@ export default {
     const ctor = methods.find((m) => m.name === 'constructor');
     if (ctor) {
       if (ctor.decorators && ctor.decorators.length > 0) {
-        throw this.error('decorators on constructors are not supported', ctor);
+        throw ctx.error('decorators on constructors are not supported', ctor);
       }
       // Check that all fields are unconditionally assigned in the constructor
       if (fields.length > 0 && ctor.body) {
@@ -266,66 +270,66 @@ export default {
         }
         for (const f of fields) {
           if (!unconditional.has(f.name)) {
-            throw this.error(`field "${f.name}" may not be initialized on all paths in constructor`);
+            throw ctx.error(`field "${f.name}" may not be initialized on all paths in constructor`);
           }
         }
       }
-      this.emitMethod(cname, { ...ctor, name: 'new', isStatic: true, returnTypeOverride: cname }, true);
+      ctx.emitMethod(cname, { ...ctor, name: 'new', returnTypeOverride: cname }, true);
     }
 
     // Emit Iterable<T> impl before methods (iter() will be skipped below)
-    const _ifaceName2 = (iface: TypeRef) => iface.name;
-    const classInfo_ = this.classes.get(cname);
+    const _ifaceName2 = (iface: TypeRef | string) => _implName(iface);
+    const classInfo_ = ctx.classes.get(cname);
     if (classInfo_?._iterableElemType) {
       const iterMethod_ = methods.find((m) => m.name === 'iter' || m.isIterator);
-      if (iterMethod_) this._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
+      if (iterMethod_) ctx._emitIterableImpl(cname, iterMethod_, classInfo_._iterableElemType);
     }
 
     // Methods: emit with explicit-implements style (void *_self) when class has non-Iterable implements
-    const explicitImplements = (node.implements_ ?? []).filter((i: TypeRef) => _ifaceName2(i) !== 'Iterable');
+    const explicitImplements = (node.implements_ ?? []).filter((i: TypeRef | string) => _ifaceName2(i) !== 'Iterable');
     for (const m of methods) {
       if (m.name === 'constructor') continue;
       if ((m.name === 'iter' || m.isIterator) && classInfo_?._iterableElemType) continue; // handled by _emitIterableImpl
       const platformDec = (m.decorators ?? []).find((d: Decorator) => d.name === 'platform');
       if (platformDec) {
         const allowed = (platformDec.args ?? []).map((a) => (a as { value?: string }).value ?? a);
-        const target = this._targetName ?? DEFAULT_TARGET;
+        const target = ctx._targetName ?? DEFAULT_TARGET;
         if (!allowed.includes(target)) {
-          if (!this._platformSkipped) this._platformSkipped = new Map();
-          this._platformSkipped.set(`${cname}.${m.name}`, allowed as string[]);
+          if (!ctx._platformSkipped) ctx._platformSkipped = new Map();
+          ctx._platformSkipped.set(`${cname}.${m.name}`, allowed as string[]);
           continue;
         }
       }
       const isStatic = m.modifiers.includes('static');
-      const mDecs = (m.decorators ?? []).filter((d: Decorator) => this._decoratorFns?.has(d.name));
+      const mDecs = (m.decorators ?? []).filter((d: Decorator) => ctx._decoratorFns?.has(d.name));
       if (mDecs.length > 0) {
-        this._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
+        ctx._emitDecoratedMethod(cname, m, isStatic, explicitImplements, mDecs);
       } else {
-        this.emitMethod(cname, m, isStatic, explicitImplements);
+        ctx.emitMethod(cname, m, isStatic, explicitImplements);
       }
     }
 
     // Emit vtable constants for each explicitly implemented interface
     for (const ifaceName of explicitImplements) {
-      this.emitVtableConstant(cname, ifaceName);
+      ctx.emitVtableConstant(cname, _implName(ifaceName));
     }
 
     // @pool: generate pool array, mask (alloc/drop emitted lazily)
     if (poolDec) {
-      this._emitPoolClass(cname, poolDec, node);
+      ctx._emitPoolClass(cname, poolDec, node);
     }
     // @heap: mark class for heap allocation
     if (heapDec) {
-      this._markHeapClass(cname, node);
+      ctx._markHeapClass(cname, node);
     }
     // Mark class as inline value type
     if (inlineDec && isEmbedded) {
-      const cls = this.classes.get(cname);
+      const cls = ctx.classes.get(cname);
       if (cls) cls._isInline = true;
     }
-  },
+}
 
-  _emitPoolClass(this: CodeGenThis, name: string, poolDec: Decorator, node: ClassDecl) {
+export function _emitPoolClass(ctx: CodeGenContext, name: string, poolDec: Decorator, node: ClassDecl) {
     const poolSize = parseInt((poolDec.args?.[0] as { value: string } | undefined)?.value ?? '0');
     const poolVar  = `_${name.toLowerCase()}_pool`;
     const maskVar  = `_${name.toLowerCase()}_pool_mask`;
@@ -338,138 +342,137 @@ export default {
     else if (poolSize <= 32) maskType = 'uint32_t';
     else if (poolSize <= 64) maskType = 'uint64_t';
     else {
-      throw this.error(`TypeError: @pool(N) supports a maximum of 64 instances; got N=${poolSize}`, node);
+      throw ctx.error(`TypeError: @pool(N) supports a maximum of 64 instances; got N=${poolSize}`, node);
     }
 
     // Always emit pool storage
-    this.addTop(`static ${name} ${poolVar}[${poolSize}];`);
-    this.addTop(`static ${maskType} ${maskVar} = 0;`);
-    this.addTop('');
+    ctx.addTop(`static ${name} ${poolVar}[${poolSize}];`);
+    ctx.addTop(`static ${maskType} ${maskVar} = 0;`);
+    ctx.addTop('');
 
     // Mark in classes map — alloc/drop emitted lazily
-    const cls = this.classes.get(name);
+    const cls = ctx.classes.get(name);
     if (cls) {
       cls._isPool = true; cls._poolSize = poolSize; cls._poolOptType = optType;
       cls._poolAllocFn = allocFn; cls._poolDropFn = dropFn; cls._poolMaskVar = maskVar;
       cls._poolVar = poolVar; cls._poolMaskType = maskType;
     }
-  },
+}
 
-  _ensurePoolAlloc(this: CodeGenThis, className: string) {
-    const cls = this.classes.get(className);
+export function _ensurePoolAlloc(ctx: CodeGenContext, className: string) {
+    const cls = ctx.classes.get(className);
     if (!cls?._isPool || cls._poolAllocEmitted) return;
     cls._poolAllocEmitted = true;
     const { _poolOptType: optType, _poolAllocFn: allocFn, _poolVar: poolVar,
             _poolMaskVar: maskVar, _poolSize: poolSize, _poolMaskType: maskType } = cls;
-    this.addTop(`typedef struct { bool has_value; ${className} *value; int _pool_idx; } ${optType};`);
-    this.addTop('');
-    this.addTop(`static ${optType} ${allocFn}(void) {`);
-    this.addTop(`    for (int _i = 0; _i < ${poolSize}; _i++) {`);
-    this.addTop(`        if (!(${maskVar} & ((${maskType})1 << _i))) {`);
-    this.addTop(`            ${maskVar} |= ((${maskType})1 << _i);`);
-    this.addTop(`            return (${optType}){true, &${poolVar}[_i], _i};`);
-    this.addTop(`        }`);
-    this.addTop(`    }`);
-    this.addTop(`    return (${optType}){false, NULL, -1};`);
-    this.addTop(`}`);
-    this.addTop('');
-  },
+    ctx.addTop(`typedef struct { bool has_value; ${className} *value; int _pool_idx; } ${optType};`);
+    ctx.addTop('');
+    ctx.addTop(`static ${optType} ${allocFn}(void) {`);
+    ctx.addTop(`    for (int _i = 0; _i < ${poolSize}; _i++) {`);
+    ctx.addTop(`        if (!(${maskVar} & ((${maskType})1 << _i))) {`);
+    ctx.addTop(`            ${maskVar} |= ((${maskType})1 << _i);`);
+    ctx.addTop(`            return (${optType}){true, &${poolVar}[_i], _i};`);
+    ctx.addTop(`        }`);
+    ctx.addTop(`    }`);
+    ctx.addTop(`    return (${optType}){false, NULL, -1};`);
+    ctx.addTop(`}`);
+    ctx.addTop('');
+}
 
-  _ensurePoolDrop(this: CodeGenThis, className: string) {
-    const cls = this.classes.get(className);
+export function _ensurePoolDrop(ctx: CodeGenContext, className: string) {
+    const cls = ctx.classes.get(className);
     if (!cls?._isPool || cls._poolDropEmitted) return;
-    this._ensurePoolAlloc(className); // drop requires alloc
+    ctx._ensurePoolAlloc(className); // drop requires alloc
     cls._poolDropEmitted = true;
     const { _poolOptType: optType, _poolDropFn: dropFn, _poolMaskVar: maskVar, _poolMaskType: maskType } = cls;
     const param = className[0].toLowerCase();
-    this.addTop(`static void ${dropFn}(${optType} ${param}) {`);
-    this.addTop(`    if (${param}.has_value) ${maskVar} &= ~((${maskType})1 << ${param}._pool_idx);`);
-    this.addTop(`}`);
-    this.addTop('');
-  },
+    ctx.addTop(`static void ${dropFn}(${optType} ${param}) {`);
+    ctx.addTop(`    if (${param}.has_value) ${maskVar} &= ~((${maskType})1 << ${param}._pool_idx);`);
+    ctx.addTop(`}`);
+    ctx.addTop('');
+}
 
-  _markHeapClass(this: CodeGenThis, name: string, node: ClassDecl) {
-    const cls = this.classes.get(name);
+export function _markHeapClass(ctx: CodeGenContext, name: string, node: ClassDecl) {
+    const cls = ctx.classes.get(name);
     if (cls) {
       cls._heapClassName = name;
       // Register for runtime malloc include
-      this.includes.add('#include <stdlib.h>');
+      ctx.includes.add('#include <stdlib.h>');
     }
-  },
+}
 
-  _ensureHeapDestructor(this: CodeGenThis, className: string) {
-    const cls = this.classes.get(className);
+export function _ensureHeapDestructor(ctx: CodeGenContext, className: string) {
+    const cls = ctx.classes.get(className);
     if (!cls?._isHeap || cls._heapDestructorEmitted) return;
     cls._heapDestructorEmitted = true;
     const dtorFn = `${className}_destructor`;
     const param = className[0].toLowerCase();
-    this.addTop(`static void ${dtorFn}(${className} *${param}) {`);
+    ctx.addTop(`static void ${dtorFn}(${className} *${param}) {`);
     // Release string fields (auto-generated)
     if (cls.fields) {
       for (const f of cls.fields) {
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'string') {
-          this.addTop(`    tsc_string_release(&${param}->${f.name});`);
+          ctx.addTop(`    tsc_string_release(&${param}->${f.name});`);
         }
       }
     }
-    this.addTop(`}`);
-    this.addTop('');
-  },
+    ctx.addTop(`}`);
+    ctx.addTop('');
+}
 
-  _classHasInheritance(this: CodeGenThis, cBase: string | null | undefined): boolean {
+export function _classHasInheritance(ctx: CodeGenContext, cBase: string | null | undefined): boolean {
     return cBase != null;
-  },
+}
 
-  emitVtableConstant(this: CodeGenThis, className: string, ifaceName: string, classNode: ClassDecl | null = null) {
-    const ifaceDef = this.interfaces.get(ifaceName);
+export function emitVtableConstant(ctx: CodeGenContext, className: string, ifaceName: string, classNode: ClassDecl | null = null) {
+    const ifaceDef = ctx.interfaces.get(ifaceName);
     if (!ifaceDef) return;
     const ifaceMethods = ifaceDef.filter((m) => m.kind === 'MethodSig');
     if (ifaceMethods.length === 0) return;
     // Verify all interface methods are implemented
-    const classDef = this.classes.get(className);
+    const classDef = ctx.classes.get(className);
     for (const im of ifaceMethods) {
       const methodExists = classDef?.methods?.some((mm) => mm.name === im.name);
       if (!methodExists) {
-        throw this.error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
+        throw ctx.error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
       }
     }
     const vtableName = `${className}_${ifaceName}_vtable`;
     const entries = ifaceMethods.map((m) => {
       return `    .${m.name} = ${className}_${m.name}`;
     }).join(',\n');
-    this.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map((m) => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
-    this.addTop('');
-  },
+    ctx.addTop(`static const ${ifaceName}_vtable ${vtableName} = { ${ifaceMethods.map((m) => `.${m.name} = ${className}_${m.name}`).join(', ')} };`);
+    ctx.addTop('');
+}
 
-  _getStringFields(this: CodeGenThis, className: string): string[] {
-    const cls = this.classes.get(className);
+export function _getStringFields(ctx: CodeGenContext, className: string): string[] {
+    const cls = ctx.classes.get(className);
     if (!cls?.fields) return [];
     const result: string[] = [];
     for (const f of cls.fields) {
       const fname = typeof f === 'string' ? f : (f.name ?? f);
-      const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+      const ftype = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
       if (ftype === 'String') result.push(fname);
     }
     return result;
-  },
+}
 
-  _ensureClassFree(this: CodeGenThis, className: string) {
-    const cls = this.classes.get(className);
+export function _ensureClassFree(ctx: CodeGenContext, className: string) {
+    const cls = ctx.classes.get(className);
     if (!cls || cls._classFreeEmitted) return;
-    const stringFields = this._getStringFields(className);
+    const stringFields = ctx._getStringFields(className);
     if (stringFields.length === 0) return;
     cls._classFreeEmitted = true;
     cls._stringFields = stringFields;
     const freeFn = `${className}_free`;
     cls._classFreeFn = freeFn;
-    this.addTop(`static void ${freeFn}(${className} *self) {`);
-    this.addTop(`    if (!self) return;`);
+    ctx.addTop(`static void ${freeFn}(${className} *self) {`);
+    ctx.addTop(`    if (!self) return;`);
     for (const fname of stringFields) {
-      this.addTop(`    tsc_string_release(self->${fname});`);
+      ctx.addTop(`    tsc_string_release(self->${fname});`);
     }
-    this.addTop(`}`);
-    this.addTop('');
-  },
+    ctx.addTop(`}`);
+    ctx.addTop('');
+}
 
   // ----------------------------------------------------------------
-};

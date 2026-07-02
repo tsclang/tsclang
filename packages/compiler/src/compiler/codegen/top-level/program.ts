@@ -1,12 +1,11 @@
-import type { CodeGenThis } from '../../codegen.js';
+import type { CodeGenContext } from '../../codegen.js';
 import type { TscError } from '../../error.js';
 // program.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Program, ClassDecl, ClassMember, TypeAnn, Decorator, Field, Stmt } from '@tsclang/ast';
-export default {
-  visitProgram(this: CodeGenThis, ast: Program) {
+export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
-    this._fromEntriesConsumed = new Map();
+    ctx._fromEntriesConsumed = new Map();
     for (const node of ast.body) {
       const stmt = node.kind === 'Export' ? node.decl : node;
       if (stmt?.kind === 'VarDecl' &&
@@ -16,12 +15,12 @@ export default {
           stmt.init.callee?.object?.name === 'Object' &&
           stmt.init.callee?.prop === 'fromEntries' &&
           stmt.init.args?.[0]?.expr?.kind === 'Ident') {
-        this._fromEntriesConsumed.set(stmt.init.args[0].expr.name, null);
+        ctx._fromEntriesConsumed.set(stmt.init.args[0].expr.name, null);
       }
     }
 
     // Pre-scan: find Arc<T> and Weak<T> usage to know which classes need _refcount/_weakcount
-    this._arcClasses = new Map();
+    ctx._arcClasses = new Map();
     const _scanArc = (n: unknown) => {
       if (!n || typeof n !== 'object') return;
       if (Array.isArray(n)) { n.forEach(_scanArc); return; }
@@ -29,10 +28,10 @@ export default {
       if (nd.kind === 'New' && (nd.name === 'Arc' || nd.name === 'Weak')) {
         const tArg = nd.typeArgs?.[0];
         if (tArg?.kind === 'TypeRef') {
-          const info = this._arcClasses.get(tArg.name) ?? {};
+          const info = ctx._arcClasses.get(tArg.name) ?? {};
           if (nd.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
           if (nd.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
-          this._arcClasses.set(tArg.name, info);
+          ctx._arcClasses.set(tArg.name, info);
         }
       }
       if (nd.kind === 'VarDecl') {
@@ -41,10 +40,10 @@ export default {
           if (ta.kind === 'TypeRef' && (ta.name === 'Arc' || ta.name === 'Weak')) {
             const tArg = ta.typeArgs?.[0];
             if (tArg?.kind === 'TypeRef') {
-              const info = this._arcClasses.get(tArg.name) ?? {};
+              const info = ctx._arcClasses.get(tArg.name) ?? {};
               if (ta.name === 'Arc') { info.arc = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
               if (ta.name === 'Weak') { info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true; }
-              this._arcClasses.set(tArg.name, info);
+              ctx._arcClasses.set(tArg.name, info);
             }
           }
         };
@@ -54,9 +53,9 @@ export default {
       if (nd.kind === 'TypeRef' && nd.name === 'Weak') {
         const tArg = nd.typeArgs?.[0];
         if (tArg?.kind === 'TypeRef') {
-          const info = this._arcClasses.get(tArg.name) ?? {};
+          const info = ctx._arcClasses.get(tArg.name) ?? {};
           info.weak = true; if (!info.hasOwnProperty('refFirst')) info.refFirst = true;
-          this._arcClasses.set(tArg.name, info);
+          ctx._arcClasses.set(tArg.name, info);
         }
       }
       for (const key of Object.keys(nd)) {
@@ -71,7 +70,7 @@ export default {
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && n.superClass && n.superClass !== 'Error') {
-          throw this.error(`TypeError: class '${n.name}' cannot extend '${n.superClass}'; inheritance is only allowed from 'Error'`);
+          throw ctx.error(`TypeError: class '${n.name}' cannot extend '${n.superClass}'; inheritance is only allowed from 'Error'`);
         }
       }
     }
@@ -87,43 +86,43 @@ export default {
         if (!n.superClass) continue;
         const parent = classDecls[n.superClass];
         if (parent?.superClass) {
-          throw this.error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
+          throw ctx.error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
         }
       }
     }
 
     // Pre-scan: detect target and allocator from opts or defaults
     // Priority: opts > default
-    this._targetName = this._optsTarget || DEFAULT_TARGET;
-    this._allocatorName = this._optsAllocator || this._cap('allocator') || 'default';
-    this._asyncName = this._optsAsync || null;
-    this._ramSize = this._optsRamSize || null;
-    this._stackSize = this._optsStackSize || null;
-    this._funcStackInfo = new Map();
+    ctx._targetName = ctx._optsTarget || DEFAULT_TARGET;
+    ctx._allocatorName = ctx._optsAllocator || ctx._cap('allocator') || 'default';
+    ctx._asyncName = ctx._optsAsync || null;
+    ctx._ramSize = ctx._optsRamSize || null;
+    ctx._stackSize = ctx._optsStackSize || null;
+    ctx._funcStackInfo = new Map();
 
     // Default number type: opts > profile capability > DESKTOP_CAPABILITIES fallback
-    this._defaultNumber = this._optsDefaultNumber || this._cap('defaultNumber');
+    ctx._defaultNumber = ctx._optsDefaultNumber || ctx._cap('defaultNumber');
 
     // Pre-scan: capability-based restrictions
-    const noFloat = !this._cap('fpu');
-    const noAsync = this._cap('async') === 'none';
+    const noFloat = !ctx._cap('fpu');
+    const noAsync = ctx._cap('async') === 'none';
     if (noFloat || noAsync) {
       const _walkForRestrictions = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
         const nd = n as Record<string, any>;
         if (noFloat && nd.kind === 'TypeRef' && (nd.name === 'f32' || nd.name === 'f64')) {
-          throw this.error(`TypeError: float types (${nd.name}) are not supported (fpu: false)`);
+          throw ctx.error(`TypeError: float types (${nd.name}) are not supported (fpu: false)`);
         }
         if (noFloat && nd.kind === 'Literal' && nd.litType === 'number') {
           const v = String(nd.value).replace(/_/g, '');
           const isHex = /^0[xX]/.test(v);
           if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
-            throw this.error(`TypeError: float literal ${nd.value} is not supported (fpu: false)`);
+            throw ctx.error(`TypeError: float literal ${nd.value} is not supported (fpu: false)`);
           }
         }
         if (noAsync && nd.kind === 'FuncDecl' && nd.async) {
-          throw this.error(`TypeError: async functions are not supported (async: "none")`);
+          throw ctx.error(`TypeError: async functions are not supported (async: "none")`);
         }
         for (const k of Object.keys(nd)) {
           if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
@@ -133,13 +132,13 @@ export default {
     }
 
     // Pre-scan: wasm bare restrictions
-    if (this._isWasmBare()) {
+    if (ctx._isWasmBare()) {
       const _walkWasm = (n: unknown) => {
         if (!n || typeof n !== 'object') return;
         if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
         const nd = n as Record<string, any>;
         if (nd.kind === 'FuncDecl' && nd.async) {
-          throw this.error(`TypeError: async functions are not supported on wasm target`);
+          throw ctx.error(`TypeError: async functions are not supported on wasm target`);
         }
         for (const k of Object.keys(nd)) {
           if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkWasm(v); }
@@ -149,7 +148,7 @@ export default {
     }
 
     // Pre-scan: recursion detection when no-recursion strict rule is set
-    if (this._strictRules?.has('no-recursion')) {
+    if (ctx._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames
       const callGraph = new Map();
       const _collectCalls = (nd: unknown, result: Set<string>) => {
@@ -180,10 +179,10 @@ export default {
           const cycleStart = inStack.get(fn);
           const cycle = path.slice(cycleStart);
           if (cycle.length === 1) {
-            throw this.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden by strict rule 'no-recursion'`);
+            throw ctx.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden by strict rule 'no-recursion'`);
           } else {
             const cycleStr = [...cycle, fn].join(' → ');
-            throw this.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden by strict rule 'no-recursion'`);
+            throw ctx.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden by strict rule 'no-recursion'`);
           }
         }
         if (visited.has(fn)) return;
@@ -201,7 +200,7 @@ export default {
 
     // Pre-scan: collect all classes used in throws clauses → _throwsClasses
     // Also collect union groups for _new determination
-    this._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
+    ctx._throwsClasses = new Map(); // className → { hasMessage, hasStack, needsNew }
     const _throwsUnions: string[][] = []; // each element = array of class names from one throws clause
     // Flatten throwsTypes array (handles both TypeRef and TypeUnion elements)
     const _flattenThrowsNames = (throwsTypes: TypeAnn[]) => {
@@ -218,7 +217,7 @@ export default {
       if (!throwsTypes?.length) return;
       const names = _flattenThrowsNames(throwsTypes);
       for (const n of names) {
-        if (!this._throwsClasses.has(n)) this._throwsClasses.set(n, { hasMessage: false, hasStack: false, needsNew: false });
+        if (!ctx._throwsClasses.has(n)) ctx._throwsClasses.set(n, { hasMessage: false, hasStack: false, needsNew: false });
       }
       if (names.length > 0) _throwsUnions.push(names);
     };
@@ -237,10 +236,10 @@ export default {
       if (n?.kind === 'ClassDecl') {
         const fields = (n.members ?? []).filter((m: { kind: string }) => m.kind === 'Field');
         const hasStack = fields.some((f: ClassMember): f is Field => f.kind === 'Field' && f.name === 'stack');
-        if (hasStack && this._cap('os') === false) {
-          throw this.error(`TypeError: Error stack traces are not supported on embedded targets (${this._targetName})`);
+        if (hasStack && ctx._cap('os') === false) {
+          throw ctx.error(`TypeError: Error stack traces are not supported on embedded targets (${ctx._targetName})`);
         }
-        const info = this._throwsClasses.get(n.name);
+        const info = ctx._throwsClasses.get(n.name);
         if (info) {
           info.hasMessage = fields.some((f: ClassMember): f is Field => f.kind === 'Field' && f.name === 'message');
           info.hasStack = hasStack;
@@ -263,18 +262,18 @@ export default {
     for (const union of _throwsUnions) {
       if (union.some((name: string) => _thrownClasses.has(name))) {
         for (const name of union) {
-          const info = this._throwsClasses.get(name);
+          const info = ctx._throwsClasses.get(name);
           if (info) info.needsNew = true;
         }
       }
     }
 
     // Pre-scan: collect names used as decorators (so we can suppress C emission for those functions)
-    this._decoratorFns = new Map();   // name → FuncDecl AST
-    this._decoratorNames = new Set(); // all names used with @
-    this._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
+    ctx._decoratorFns = new Map();   // name → FuncDecl AST
+    ctx._decoratorNames = new Set(); // all names used with @
+    ctx._platformSkipped = new Map(); // name → allowed platforms (for error reporting)
     {
-      const scanDecs = (decs: Decorator[] | undefined) => { for (const d of (decs ?? [])) this._decoratorNames.add(d.name); };
+      const scanDecs = (decs: Decorator[] | undefined) => { for (const d of (decs ?? [])) ctx._decoratorNames.add(d.name); };
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl') {
@@ -286,7 +285,7 @@ export default {
     }
 
     // Pre-scan: detect HashMap capacity violations (capacity overflow takes priority over platform error)
-    this._hmCapViolations = new Map(); // varName → { count, cap }
+    ctx._hmCapViolations = new Map(); // varName → { count, cap }
     {
       const _hmDecls = new Map(); // varName → capacityNum
       for (const node of ast.body) {
@@ -302,8 +301,8 @@ export default {
             const info = _hmDecls.get(callee.object.name);
             if (info) {
               info.count++;
-              if (info.count > info.cap && !this._hmCapViolations.has(callee.object.name)) {
-                this._hmCapViolations.set(callee.object.name, { count: info.count, cap: info.cap });
+              if (info.count > info.cap && !ctx._hmCapViolations.has(callee.object.name)) {
+                ctx._hmCapViolations.set(callee.object.name, { count: info.count, cap: info.cap });
               }
             }
           }
@@ -313,7 +312,7 @@ export default {
 
     // Pre-scan: collect variable names referenced by top-level functions
     // These must become static globals (accessible from function scope)
-    this._funcRefVars = new Set();
+    ctx._funcRefVars = new Set();
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if ((n?.kind === 'FuncDecl' || n?.kind === 'ExtensionFunc') && n.body) {
@@ -334,7 +333,7 @@ export default {
           if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collect(x, outerLocals)); return; }
           const n = nd as Record<string, any>;
           if (n.kind === 'Ident') {
-            if (!outerLocals.has(n.name)) this._funcRefVars.add(n.name);
+            if (!outerLocals.has(n.name)) ctx._funcRefVars.add(n.name);
             return;
           }
           // Nested function: collect with its own param scope merged
@@ -376,7 +375,7 @@ export default {
               if (Array.isArray(nd)) { nd.forEach(_collectArrow); return; }
               const n = nd as Record<string, any>;
               if (n.kind === 'Ident' && !arrowParams.has(n.name) && !_signalVarNames.has(n.name)) {
-                this._funcRefVars.add(n.name);
+                ctx._funcRefVars.add(n.name);
               }
               for (const v of Object.values(n)) {
                 if (v && typeof v === 'object') _collectArrow(v);
@@ -390,29 +389,29 @@ export default {
 
     for (const node of ast.body) {
       try {
-        this.visitTopLevel(node);
+        ctx.visitTopLevel(node);
       } catch (e) {
         if ((e as Record<string, unknown>)?.isTscError) {
-          this._errors.push(e as TscError);
-          if (this._errors.length >= this._maxErrors) break;
+          ctx._errors.push(e as TscError);
+          if (ctx._errors.length >= ctx._maxErrors) break;
         } else {
           throw e;
         }
       }
     }
-    if (this._errors.length > 0) {
+    if (ctx._errors.length > 0) {
       const bag = new Error('compilation failed') as Error & { isTscErrorBag: boolean; errors: unknown[] };
       bag.isTscErrorBag = true;
-      bag.errors = this._errors;
+      bag.errors = ctx._errors;
       throw bag;
     }
 
-    if (this._stackSize != null && this._funcStackInfo.size > 0) {
+    if (ctx._stackSize != null && ctx._funcStackInfo.size > 0) {
       const _worstCase = new Map();
       const _visiting = new Set();
       const _computeWorst = (astName: string, path: string[]) => {
         if (_worstCase.has(astName)) return _worstCase.get(astName);
-        const info = this._funcStackInfo.get(astName);
+        const info = ctx._funcStackInfo.get(astName);
         if (!info) return 0;
         if (_visiting.has(astName)) return 0;
         _visiting.add(astName);
@@ -427,14 +426,13 @@ export default {
         return total;
       };
       const _checked = new Set();
-      for (const [cname, info] of this._funcStackInfo) {
+      for (const [cname, info] of ctx._funcStackInfo) {
         if (_checked.has(info.name)) continue;
         _checked.add(info.name);
         const worst = _computeWorst(info.name, []);
-        if (worst > this._stackSize) {
-          throw this.error(`Warning: Worst-case stack depth (${worst} bytes) exceeds stack_size (${this._stackSize} bytes) in '${info.name}()'`);
+        if (worst > ctx._stackSize) {
+          throw ctx.error(`Warning: Worst-case stack depth (${worst} bytes) exceeds stack_size (${ctx._stackSize} bytes) in '${info.name}()'`);
         }
       }
     }
-  },
-};
+}

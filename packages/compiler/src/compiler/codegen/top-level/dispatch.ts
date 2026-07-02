@@ -1,129 +1,128 @@
 import type { Stmt, Param, Decorator, TypeAnn, TypeRef, FuncOverload, DeclareModule, DeclareConst, DeclareFunction, VarDeclItem } from '@tsclang/ast';
-import type { CodeGenThis, DeclareModuleEntry } from '../../codegen.js';
+import type { CodeGenContext, DeclareModuleEntry } from '../../codegen.js';
 // dispatch.ts
 import { handleStdlibImport, STDLIB_HANDLERS, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
-export default {
-  visitTopLevel(this: CodeGenThis, node: Stmt) {
+export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
     if (!node) return;
     switch (node.kind) {
       case 'Import':
         // Check if source is a declared ambient module (declare module "name" { ... })
-        if (this._declaredModules?.has(node.source)) {
-          const decls = this._declaredModules.get(node.source)!;
+        if (ctx._declaredModules?.has(node.source)) {
+          const decls = ctx._declaredModules.get(node.source)!;
           const requestedNames = new Set((node.names ?? []).map((n: { name: string }) => n.name));
           for (const decl of decls) {
             if (!requestedNames.size || requestedNames.has(decl.name)) {
-              if (decl.kind === 'DeclareFunction') this.visitDeclareFunction(decl);
+              if (decl.kind === 'DeclareFunction') ctx.visitDeclareFunction(decl as DeclareFunction);
               else if (decl.kind === 'DeclareConst') {
-                const ct = this.resolveType(decl.typeAnn);
-                this.topLevel.push(`extern ${ct} ${decl.name};`);
-                this.topLevel.push('');
-                this.define(decl.name, { ctype: ct, varKind: 'const' });
+                const ct = ctx.resolveType(decl.typeAnn);
+                ctx.topLevel.push(`extern ${ct} ${decl.name};`);
+                ctx.topLevel.push('');
+                ctx.define(decl.name, { ctype: ct, varKind: 'const' });
               }
             }
           }
           break;
         }
         // Handle stdlib imports via registry
-        if (handleStdlibImport(this, node)) {
+        if (handleStdlibImport(ctx, node)) {
           break;
         }
       case 'ExportFrom': {
         // export { X, Y } from "./module"  OR  export { X, Y }  OR  export { X as Y }
         const { names, source } = node;
         if (source) {
-          const resolvedPath = this._sourceToPath?.[source];
-          const moduleExports = resolvedPath ? this._importedModules?.[resolvedPath] : null;
+          const resolvedPath = ctx._sourceToPath?.[source];
+          const moduleExports = resolvedPath ? ctx._importedModules?.[resolvedPath] : null;
           for (const n of (names ?? [])) {
             const origName = typeof n === 'object' ? n.name : n;
             const localName = typeof n === 'object' && n.alias ? n.alias : origName;
-            const entry = moduleExports?.[origName] ?? this.lookup(origName);
+            const entry = moduleExports?.[origName] ?? ctx.lookup(origName);
             if (entry) {
-              this.define(localName, entry);
-              this._exports.set(localName, entry);
+              ctx.define(localName, entry);
+              ctx._exports.set(localName, entry);
             }
           }
         } else {
           for (const n of (names ?? [])) {
             const origName = typeof n === 'object' ? n.name : n;
             const exportName = typeof n === 'object' && n.alias ? n.alias : origName;
-            let entry = this.lookup(origName);
+            let entry = ctx.lookup(origName);
             if (!entry) {
-              entry = this.classes.get(origName) ?? null;
-              if (!entry && this._typeAliases?.has(origName)) {
-                entry = { _isTypeAlias: true, cType: this._typeAliases.get(origName) };
+              entry = ctx.classes.get(origName) ?? null;
+              if (!entry && ctx._typeAliases?.has(origName)) {
+                entry = { _isTypeAlias: true, cType: ctx._typeAliases.get(origName) };
               }
             }
-            if (entry) this._exports.set(exportName, entry);
+            if (entry) ctx._exports.set(exportName, entry);
           }
         }
         break;
       }
       case 'Export': {
-        if (node.default) throw this.error('"export default" is not allowed; use named exports only');
+        if (node.default) throw ctx.error('"export default" is not allowed; use named exports only');
         if (node.decl?.kind === 'FuncDecl') {
-          this.visitFuncDecl(node.decl, true, true); // isExported=true → no static
+          ctx.visitFuncDecl(node.decl, true, true); // isExported=true → no static
         } else if (node.decl?.kind === 'ExtensionFunc') {
-          this.visitExtensionFunc(node.decl);
+          ctx.visitExtensionFunc(node.decl);
         } else {
-          this.visitTopLevel(node.decl);
+          ctx.visitTopLevel(node.decl);
         }
         // Track exported symbol for bundle system
         const _exportedName = (node.decl as { name?: string }).name;
         if (_exportedName) {
-          let _entry = this.lookup(_exportedName);
+          let _entry = ctx.lookup(_exportedName);
           if (!_entry) {
             // Types live in type tables, not scope
-            _entry = this.classes.get(_exportedName) ?? null;
-            if (!_entry && this._typeAliases?.has(_exportedName)) {
-              _entry = { _isTypeAlias: true, cType: this._typeAliases.get(_exportedName) };
+            _entry = ctx.classes.get(_exportedName) ?? null;
+            if (!_entry && ctx._typeAliases?.has(_exportedName)) {
+              _entry = { _isTypeAlias: true, cType: ctx._typeAliases.get(_exportedName) };
             }
           }
-          if (_entry) this._exports.set(_exportedName, _entry);
+          if (_entry) ctx._exports.set(_exportedName, _entry);
         }
         break;
       }
-      case 'ClassDecl':   this.visitClassDecl(node); break;
-      case 'Interface':   this.visitInterface(node); break;
-      case 'Enum':        this.visitEnum(node); break;
-      case 'TypeAlias':   this.visitTypeAlias(node); break;
-      case 'FuncDecl':    this.visitFuncDecl(node, true, false); break; // not exported → static
+      case 'ClassDecl':   ctx.visitClassDecl(node); break;
+      case 'Interface':   ctx.visitInterface(node); break;
+      case 'Enum':        ctx.visitEnum(node); break;
+      case 'TypeAlias':   ctx.visitTypeAlias(node); break;
+      case 'FuncDecl':    ctx.visitFuncDecl(node, true, false); break; // not exported → static
       case 'FuncOverload':
         // Collect signatures; implementation FuncDecl will emit them
 
-        { const _sigs = this._pendingOverloads.get(node.name) ?? [];
+        { const _sigs = ctx._pendingOverloads.get(node.name) ?? [];
           // Check for duplicate/ambiguous signature
-          const newSig = (node.params ?? []).map((p: Param) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+          const newSig = (node.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *').join(', ');
           const dupSig = _sigs.find((s: FuncOverload) => {
-            const sig = (s.params ?? []).map((p: Param) => p.typeAnn ? this.resolveType(p.typeAnn) : 'void *').join(', ');
+            const sig = (s.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *').join(', ');
             return sig === newSig;
           });
           if (dupSig) {
             const paramDesc = (node.params ?? []).map((p: Param) => `${p.name}: ${(p.typeAnn as TypeRef | undefined)?.name ?? '?'}`).join(', ');
-            throw this.error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
+            throw ctx.error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
           }
           _sigs.push(node);
-          this._pendingOverloads.set(node.name, _sigs); }
+          ctx._pendingOverloads.set(node.name, _sigs); }
         break;
       case 'VarDecl': {
         // process.argv assignment → alias _argv in scope, emit in main
         if (node.init?.kind === 'Member' &&
             node.init.object?.kind === 'Ident' && node.init.object.name === 'process' &&
             node.init.prop === 'argv') {
-          this._useArgcArgv = true;
+          ctx._useArgcArgv = true;
           // Array_string is predefined in runtime.h (no need to emit typedef)
 
-          this._emittedArrayStructs.add('Array_string');
-          this.define(node.name, { ctype: 'Array_string', varKind: node.varKind, _cAlias: '_argv' });
+          ctx._emittedArrayStructs.add('Array_string');
+          ctx.define(node.name, { ctype: 'Array_string', varKind: node.varKind, _cAlias: '_argv' });
           break;
         }
         // volatile<T> global variable → emit as plain global C var (before main)
         if (node.typeAnn?.kind === 'TypeRef' && node.typeAnn.name === 'volatile') {
-          const vCtype = this.resolveType(node.typeAnn);
-          const vInit = node.init ? this.exprToC(node.init) : '0';
-          this.addTop(`${vCtype} ${node.name} = ${vInit};`);
-          this.addTop('');
-          this.define(node.name, { ctype: vCtype, varKind: node.varKind });
+          const vCtype = ctx.resolveType(node.typeAnn);
+          const vInit = node.init ? ctx.exprToC(node.init) : '0';
+          ctx.addTop(`${vCtype} ${node.name} = ${vInit};`);
+          ctx.addTop('');
+          ctx.define(node.name, { ctype: vCtype, varKind: node.varKind });
           break;
         }
 
@@ -132,77 +131,77 @@ export default {
         if (staticDec && node.init?.kind === 'New' && node.init.name === 'Array') {
           const capArg = node.init.args?.[0];
           if (capArg) {
-            const capC = this.exprToC(capArg.expr, [], 0);
-            const et = node.init.typeArgs?.[0] ? this.resolveType(node.init.typeArgs[0]) : 'int32_t';
-            const etId = this.cTypeToIdent(et);
+            const capC = ctx.exprToC(capArg.expr, [], 0);
+            const et = node.init.typeArgs?.[0] ? ctx.resolveType(node.init.typeArgs[0]) : 'int32_t';
+            const etId = ctx.cTypeToIdent(et);
             const dataVar = `${node.name}_data`;
-            this.topLevel.push(`static ${et} ${dataVar}[${capC}];`);
-            this.topLevel.push(`static struct { ${et} *data; size_t length; size_t capacity; } ${node.name} = {`);
-            this.topLevel.push(`    .data = ${dataVar}, .length = 0, .capacity = ${capC}`);
-            this.topLevel.push(`};`);
-            this.topLevel.push('');
+            ctx.topLevel.push(`static ${et} ${dataVar}[${capC}];`);
+            ctx.topLevel.push(`static struct { ${et} *data; size_t length; size_t capacity; } ${node.name} = {`);
+            ctx.topLevel.push(`    .data = ${dataVar}, .length = 0, .capacity = ${capC}`);
+            ctx.topLevel.push(`};`);
+            ctx.topLevel.push('');
             const arrName = `Array_${etId}`;
-            this.define(node.name, { ctype: arrName, varKind: node.varKind, elemType: etId, arrElemCType: et, isArray: true, _isStaticArray: true });
+            ctx.define(node.name, { ctype: arrName, varKind: node.varKind, elemType: etId, arrElemCType: et, isArray: true, _isStaticArray: true });
             break;
           }
         }
         if (staticDec && node.typeAnn?.kind === 'TypeFixedArray') {
-          const et = this.resolveType(node.typeAnn.element);
+          const et = ctx.resolveType(node.typeAnn.element);
           const size = node.typeAnn.size;
-          if (this._ramSize != null) {
-            const bytes = size * this._cTypeBytes(et);
-            this._bssUsage = (this._bssUsage ?? 0) + bytes;
-            if (this._bssUsage > this._ramSize) {
-              throw this.error(`TypeError: Static BSS usage (${this._bssUsage} bytes) exceeds ram_size (${this._ramSize} bytes)`);
+          if (ctx._ramSize != null) {
+            const bytes = size * ctx._cTypeBytes(et);
+            ctx._bssUsage = (ctx._bssUsage ?? 0) + bytes;
+            if (ctx._bssUsage > ctx._ramSize) {
+              throw ctx.error(`TypeError: Static BSS usage (${ctx._bssUsage} bytes) exceeds ram_size (${ctx._ramSize} bytes)`);
             }
           }
           const initLines: string[] = [];
-          this.visitStmt(node, initLines, 0);
+          ctx.visitStmt(node, initLines, 0);
           // Rewrite the emitted line to be static
           for (const line of initLines) {
             const trimmed = line.trim();
-            if (trimmed) this.topLevel.push('static ' + trimmed);
+            if (trimmed) ctx.topLevel.push('static ' + trimmed);
           }
-          this.topLevel.push('');
-          this.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size });
+          ctx.topLevel.push('');
+          ctx.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size });
           break;
         }
         if (staticDec && node.init?.kind === 'New' && node.init.name === 'Map') {
           const capArg = node.init.args?.[0];
           if (capArg) {
-            const capC = this.exprToC(capArg.expr, [], 0);
-            const [kt, vt] = (node.init.typeArgs ?? []).map((t: TypeAnn) => this.resolveType(t));
+            const capC = ctx.exprToC(capArg.expr, [], 0);
+            const [kt, vt] = (node.init.typeArgs ?? []).map((t: TypeAnn) => ctx.resolveType(t));
             const k = kt ?? 'int32_t';
             const v = vt ?? 'int32_t';
-            const kId = this.cTypeToIdent(k);
-            const vId = this.cTypeToIdent(v);
+            const kId = ctx.cTypeToIdent(k);
+            const vId = ctx.cTypeToIdent(v);
             const smType = `StaticMap_${kId}_${vId}`;
 
-            if (!this._emittedStaticMaps.has(smType)) {
-              this._emittedStaticMaps.add(smType);
-              this.addTop(`typedef struct {`);
-              this.addTop(`    ${k} keys[${capC}];`);
-              this.addTop(`    ${v} values[${capC}];`);
-              this.addTop(`    bool used[${capC}];`);
-              this.addTop(`    size_t capacity;`);
-              this.addTop(`    size_t count;`);
-              this.addTop(`} ${smType};`);
-              this.addTop('');
+            if (!ctx._emittedStaticMaps.has(smType)) {
+              ctx._emittedStaticMaps.add(smType);
+              ctx.addTop(`typedef struct {`);
+              ctx.addTop(`    ${k} keys[${capC}];`);
+              ctx.addTop(`    ${v} values[${capC}];`);
+              ctx.addTop(`    bool used[${capC}];`);
+              ctx.addTop(`    size_t capacity;`);
+              ctx.addTop(`    size_t count;`);
+              ctx.addTop(`} ${smType};`);
+              ctx.addTop('');
             }
-            this.topLevel.push(`static ${smType} ${node.name} = {.capacity = ${capC}};`);
-            this.topLevel.push('');
-            this.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}` });
+            ctx.topLevel.push(`static ${smType} ${node.name} = {.capacity = ${capC}};`);
+            ctx.topLevel.push('');
+            ctx.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}` });
             break;
           }
         }
 
         // Make it a static global if: referenced by a top-level function body,
         // OR in library mode (no main()), OR @static decorator forces BSS lifetime
-        const needsStatic = this._libraryMode || this._funcRefVars?.has(node.name) || !!staticDec;
+        const needsStatic = ctx._libraryMode || ctx._funcRefVars?.has(node.name) || !!staticDec;
         if (needsStatic) {
           // Module-level variable → static global (not inside main)
           const _origName = node.name;
-          if (this._modulePrefix) node.name = this._modulePrefix + _origName;
+          if (ctx._modulePrefix) node.name = ctx._modulePrefix + _origName;
 
           // Detect non-constant initializer — C requires static globals to have
           // constant initializers. Split: zero-init declaration + runtime assignment.
@@ -222,97 +221,96 @@ export default {
             const _savedInit = node.init;
             node.init = null;
             const varLines: string[] = [];
-            this.visitStmt(node, varLines, 0);
+            ctx.visitStmt(node, varLines, 0);
             node.init = _savedInit;
             for (const line of varLines) {
               const trimmed = line.trim();
               if (!trimmed) continue;
-              this.topLevel.push('static ' + trimmed);
+              ctx.topLevel.push('static ' + trimmed);
             }
-            this.topLevel.push('');
+            ctx.topLevel.push('');
             // Generate init expression and collect runtime assignment
-            const _initC = this.exprToC(_savedInit, [], 0);
-            _splitInit = `${this._modulePrefix ? (this._modulePrefix + _origName) : _origName} = ${_initC};`;
-            if (this._libraryMode) {
-              this._libInitStmts.push(_splitInit);
+            const _initC = ctx.exprToC(_savedInit, [], 0);
+            _splitInit = `${ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName} = ${_initC};`;
+            if (ctx._libraryMode) {
+              ctx._libInitStmts.push(_splitInit);
             } else {
-              this.mainStmts.push(_splitInit);
+              ctx.mainStmts.push(_splitInit);
             }
           } else {
             const varLines: string[] = [];
-            this.visitStmt(node, varLines, 0);
+            ctx.visitStmt(node, varLines, 0);
             for (const line of varLines) {
               const trimmed = line.trim();
               if (!trimmed) continue;
-              this.topLevel.push('static ' + trimmed);
+              ctx.topLevel.push('static ' + trimmed);
             }
-            this.topLevel.push('');
+            ctx.topLevel.push('');
           }
 
           node.name = _origName;
-          if (this._modulePrefix) {
-            const _cName = this._modulePrefix + _origName;
-            const _sym = this.lookup(_cName);
+          if (ctx._modulePrefix) {
+            const _cName = ctx._modulePrefix + _origName;
+            const _sym = ctx.lookup(_cName);
             if (_sym) {
-              this.scopes[this.scopes.length - 1].delete(_cName);
+              ctx.scopes[ctx.scopes.length - 1].delete(_cName);
               _sym._cAlias = _cName;
-              this.define(_origName, _sym);
+              ctx.define(_origName, _sym);
             }
           }
         } else {
           // Runtime-init variable → stays inside main()
-          this.visitStmtInMain(node);
+          ctx.visitStmtInMain(node);
         }
         break;
       }
-      case 'ExtensionFunc': this.visitExtensionFunc(node); break;
-      case 'VarDecls': node.decls.forEach((d: VarDeclItem) => this.visitTopLevel(d)); break;
-      case 'DeclareConst':    this.visitDeclareConst(node); break;
-      case 'DeclareFunction': this.visitDeclareFunction(node); break;
-      case 'DeclareModule':   this.visitDeclareModule(node); break;
+      case 'ExtensionFunc': ctx.visitExtensionFunc(node); break;
+      case 'VarDecls': node.decls.forEach((d: VarDeclItem) => ctx.visitTopLevel(d)); break;
+      case 'DeclareConst':    ctx.visitDeclareConst(node); break;
+      case 'DeclareFunction': ctx.visitDeclareFunction(node); break;
+      case 'DeclareModule':   ctx.visitDeclareModule(node); break;
       case 'DeclarePlatform': break;
       case 'Noop':        break;
       default:
         // Top-level expression (e.g. console.log at top level)
-        this.visitStmtInMain(node);
+        ctx.visitStmtInMain(node);
     }
-  },
+}
 
-  visitDeclareModule(this: CodeGenThis, node: DeclareModule) {
+export function visitDeclareModule(ctx: CodeGenContext, node: DeclareModule) {
 
-    this._declaredModules.set(node.moduleName, node.body as unknown as DeclareModuleEntry[]);
-  },
+    ctx._declaredModules.set(node.moduleName, node.body as unknown as DeclareModuleEntry[]);
+}
 
-  visitDeclareConst(this: CodeGenThis, node: DeclareConst) {
-    const prevDeclare = this._inDeclare;
-    this._inDeclare = true;
+export function visitDeclareConst(ctx: CodeGenContext, node: DeclareConst) {
+    const prevDeclare = ctx._inDeclare;
+    ctx._inDeclare = true;
     const { name, typeAnn, init } = node;
-    const ct = this.resolveType(typeAnn);
-    const initC = init ? this.exprToC(init, [], 0) : '0';
-    this.topLevel.push(`static const ${ct} ${name} = ${initC};`);
-    this.topLevel.push('');
+    const ct = ctx.resolveType(typeAnn);
+    const initC = init ? ctx.exprToC(init, [], 0) : '0';
+    ctx.topLevel.push(`static const ${ct} ${name} = ${initC};`);
+    ctx.topLevel.push('');
     // Register in scope so later references work
-    this.define(name, { ctype: ct, varKind: 'const' });
-    this._inDeclare = prevDeclare;
-  },
+    ctx.define(name, { ctype: ct, varKind: 'const' });
+    ctx._inDeclare = prevDeclare;
+}
 
-  visitDeclareFunction(this: CodeGenThis, node: DeclareFunction) {
-    const prevDeclare = this._inDeclare;
-    this._inDeclare = true;
+export function visitDeclareFunction(ctx: CodeGenContext, node: DeclareFunction) {
+    const prevDeclare = ctx._inDeclare;
+    ctx._inDeclare = true;
     const { name, params, returnType } = node;
-    const retC = returnType ? this.resolveType(returnType) : 'void';
+    const retC = returnType ? ctx.resolveType(returnType) : 'void';
     const paramParts = (params ?? []).map((p: Param) => {
-      const ct = p.typeAnn ? this.resolveType(p.typeAnn) : 'int32_t';
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : 'int32_t';
       return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
     });
     const paramStr = paramParts.length > 0 ? paramParts.join(', ') : 'void';
     // Try to include a known library for well-known math functions
     const mathFuncs = new Set(['sin','cos','tan','asin','acos','atan','atan2','sqrt','pow','exp','log','log2','log10','floor','ceil','fabs','fmod','hypot']);
-    if (mathFuncs.has(name)) this.includes.add('#include <math.h>');
-    this.topLevel.push(`extern ${retC} ${name}(${paramStr});`);
-    this.topLevel.push('');
+    if (mathFuncs.has(name)) ctx.includes.add('#include <math.h>');
+    ctx.topLevel.push(`extern ${retC} ${name}(${paramStr});`);
+    ctx.topLevel.push('');
     // Register in scope
-    this.define(name, { ctype: retC, varKind: 'const', funcName: name, params: node.params ?? [] });
-    this._inDeclare = prevDeclare;
-  },
-};
+    ctx.define(name, { ctype: retC, varKind: 'const', funcName: name, params: node.params ?? [] });
+    ctx._inDeclare = prevDeclare;
+}
