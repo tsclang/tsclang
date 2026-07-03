@@ -391,7 +391,65 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       }
     }
 
+    // Phase A: Process type declarations (classes, interfaces, type aliases, enums)
+    //   Ensures all type metadata is registered before any function body codegen,
+    //   enabling forward references and a future monomorphization pre-pass.
+    const _isTypeDecl = (node: typeof ast.body[number]): boolean => {
+      const decl = node.kind === 'Export' ? node.decl : node;
+      if (!decl) return false;
+      return decl.kind === 'ClassDecl' || decl.kind === 'Interface' ||
+             decl.kind === 'TypeAlias' || decl.kind === 'Enum';
+    };
+
     for (const node of ast.body) {
+      if (!_isTypeDecl(node)) continue;
+      try {
+        ctx.visitTopLevel(node);
+      } catch (e) {
+        if ((e as Record<string, unknown>)?.isTscError) {
+          ctx._errors.push(e as TscError);
+          if (ctx._errors.length >= ctx._maxErrors) break;
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Monomorphization pre-pass: Walk the AST to find explicit generic class
+    // demands (TypeRef + New) and emit mono classes before function codegen.
+    // Skips generic class/function bodies (they're templates, not concrete code).
+    // Nested demands (e.g., Wrapper<U> contains Box<U>) are handled recursively
+    // by emitMonoClass → resolveType → ensureMonoClass.
+    {
+      const _scanMono = (n: unknown) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(_scanMono); return; }
+        const nd = n as Record<string, unknown>;
+        // Skip generic declarations — their bodies are templates, not concrete code
+        if (nd.kind === 'ClassDecl' && (nd.typeParams as unknown[])?.length) return;
+        if (nd.kind === 'FuncDecl' && (nd.typeParams as unknown[])?.length) return;
+        // Collect demands from non-generic code
+        if (nd.kind === 'TypeRef' && typeof nd.name === 'string' && ctx._genericClasses?.has(nd.name)) {
+          const typeArgs = (nd.typeArgs as TypeAnn[]) ?? [];
+          if (typeArgs.length > 0) ctx.ensureMonoClass(nd.name, typeArgs);
+        }
+        if (nd.kind === 'New' && typeof nd.name === 'string' && ctx._genericClasses?.has(nd.name)) {
+          const typeArgs = (nd.typeArgs as TypeAnn[]) ?? [];
+          ctx.ensureMonoClass(nd.name, typeArgs);
+        }
+        // Recurse (skip parent to avoid cycles)
+        for (const key of Object.keys(nd)) {
+          if (key === 'parent') continue;
+          const child = nd[key];
+          if (child && typeof child === 'object') _scanMono(child);
+        }
+      };
+      for (const node of ast.body) _scanMono(node);
+    }
+
+    // Phase B: Process functions, variables, imports, and everything else
+    for (const node of ast.body) {
+      if (_isTypeDecl(node)) continue;
       try {
         ctx.visitTopLevel(node);
       } catch (e) {
