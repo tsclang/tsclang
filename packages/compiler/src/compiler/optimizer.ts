@@ -59,8 +59,8 @@ function foldExpr(node: unknown): unknown {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(foldExpr);
 
-  const src = node as Record<string, any>;
-  const out: Record<string, any> = {};
+  const src = node as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
   for (const k of Object.keys(src)) {
     out[k] = k === 'parent' ? src[k] : foldExpr(src[k]);
   }
@@ -111,8 +111,8 @@ function foldExpr(node: unknown): unknown {
   }
 
   if (out.kind === 'Unary') {
-    const op: string = out.op;
-    const operand: Expression | undefined = out.operand ?? out.expr;
+    const op = out.op as string;
+    const operand = (out.operand ?? out.expr) as Expression | undefined;
     if (isNumLit(operand)) {
       if (op === '-') return numLit(-Number(operand.value));
       if (op === '+') return numLit(+Number(operand.value));
@@ -160,7 +160,7 @@ function substInExpr(node: unknown, constMap: Map<string, Literal>): unknown {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(n => substInExpr(n, constMap));
   const src = node as Record<string, any>;
-  if (src.kind === 'Ident' && constMap.has(src.name)) {
+  if (src.kind === 'Ident' && constMap.has(src.name as string)) {
     return { ...constMap.get(src.name)! };
   }
   const out: Record<string, any> = {};
