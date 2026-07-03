@@ -286,6 +286,12 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         }
         if (n?.kind === 'FuncDecl') scanDecs(n.decorators);
       }
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'FuncDecl' && n.name && (n.isDecorator || ctx._decoratorNames.has(n.name))) {
+          ctx._decoratorFns.set(n.name, n);
+        }
+      }
     }
 
     // Pre-scan: detect HashMap capacity violations (capacity overflow takes priority over platform error)
@@ -391,6 +397,49 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       }
     }
 
+    // Pre-scan: register function signatures referenced by ReturnType<typeof fn> / Parameters<typeof fn>
+    //   TypeAliases in Phase A need these symbols. Only register functions actually referenced
+    //   by utility-type TypeAliases to avoid interfering with normal function codegen.
+    {
+      const _collectTypeofNames = (n: unknown, acc: Set<string>) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach((x: unknown) => _collectTypeofNames(x, acc)); return; }
+        const nd = n as Record<string, unknown>;
+        if (nd.kind === 'TypeTypeof' && typeof nd.name === 'string') acc.add(nd.name);
+        for (const k of Object.keys(nd)) {
+          if (k === 'parent') continue;
+          const v = nd[k];
+          if (v && typeof v === 'object') _collectTypeofNames(v, acc);
+        }
+      };
+      const typeofNames = new Set<string>();
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'TypeAlias') {
+          const ut = n.typeAnn;
+          if (ut?.kind === 'TypeRef' && (ut.name === 'ReturnType' || ut.name === 'Parameters')) {
+            _collectTypeofNames(ut, typeofNames);
+          }
+        }
+      }
+      if (typeofNames.size > 0) {
+        for (const node of ast.body) {
+          const n = node.kind === 'Export' ? node.decl : node;
+          if (n?.kind === 'FuncDecl' && n.name && typeofNames.has(n.name)) {
+            const existing = ctx.lookup(n.name);
+            if (!existing) {
+              ctx.define(n.name, {
+                ctype: n.returnType ? ctx.resolveType(n.returnType) : 'void',
+                funcName: n.name,
+                params: n.params ?? [],
+                returnType: n.returnType ?? null,
+              });
+            }
+          }
+        }
+      }
+    }
+
     // Phase A: Process type declarations (classes, interfaces, type aliases, enums)
     //   Ensures all type metadata is registered before any function body codegen,
     //   enabling forward references and a future monomorphization pre-pass.
@@ -400,6 +449,27 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       return decl.kind === 'ClassDecl' || decl.kind === 'Interface' ||
              decl.kind === 'TypeAlias' || decl.kind === 'Enum';
     };
+
+    // Phase A.0: Process funcRef VarDecls that decorator wrappers may reference.
+    //   These static globals must be emitted before class methods (C: declaration before use).
+    //   Only process VarDecls in _funcRefVars — others stay in source order (Phase B).
+    const _processedVarDecls = new Set<unknown>();
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind === 'VarDecl' && n.name && ctx._funcRefVars?.has(n.name)) {
+        _processedVarDecls.add(node);
+        try {
+          ctx.visitTopLevel(node);
+        } catch (e) {
+          if ((e as Record<string, unknown>)?.isTscError) {
+            ctx._errors.push(e as TscError);
+            if (ctx._errors.length >= ctx._maxErrors) break;
+          } else {
+            throw e;
+          }
+        }
+      }
+    }
 
     for (const node of ast.body) {
       if (!_isTypeDecl(node)) continue;
@@ -447,9 +517,10 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       for (const node of ast.body) _scanMono(node);
     }
 
-    // Phase B: Process functions, variables, imports, and everything else
+    // Phase B: Process functions, imports, and everything else
     for (const node of ast.body) {
       if (_isTypeDecl(node)) continue;
+      if (_processedVarDecls.has(node)) continue;
       try {
         ctx.visitTopLevel(node);
       } catch (e) {
