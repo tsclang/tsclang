@@ -221,7 +221,8 @@ export const STDLIB_HANDLERS: Record<string, (ctx: CodeGenContext, node: Import)
 
   _handleStdFs(ctx, node) {
     if (node.namespace && node.names.length > 0) {
-      ctx.define(node.names[0].name, { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
+      const fsName = typeof node.names[0] === 'object' ? node.names[0].name : node.names[0];
+      ctx.define(fsName, { ctype: '__fs_namespace__', _isFsNamespace: true, varKind: 'const' });
     }
     ctx.classes.set('TscFileStat', { isStruct: true,
       fields: [{ name: 'size', ctype: 'int64_t' }, { name: 'isFile', ctype: 'bool' },
