@@ -1521,6 +1521,8 @@ class Context {
   substNode(node: unknown, subst: Map<string, string>) { return genericsFns.substNode(this, node, subst); }
   emitMonoFunc(tmpl: FuncDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoFunc(this, tmpl, monoName, subst); }
   emitMonoClass(tmpl: ClassDecl, monoName: string, subst: Map<string, string>) { return genericsFns.emitMonoClass(this, tmpl, monoName, subst); }
+  computeMonoName(name: string, typeArgs: TypeAnn[]) { return genericsFns.computeMonoName(this, name, typeArgs); }
+  ensureMonoClass(name: string, typeArgs: TypeAnn[]) { return genericsFns.ensureMonoClass(this, name, typeArgs); }
 
   // Delegating methods: miscFns
   newToC(node: New, lines: string[], depth: number) { return miscFns.newToC(this, node, lines, depth); }

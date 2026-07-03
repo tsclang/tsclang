@@ -2,6 +2,36 @@ import type { CodeGenContext, ClassMetaField } from '../codegen.js';
 import { mangleParams } from '../types.js';
 import type { Expression, TypeAnn, TypeRef, Argument, ObjLit, ObjLitProp, FuncDecl, ClassDecl, Param, ClassMember, Method, Field, Block } from '@tsclang/ast';
 // generics.ts
+
+export interface MonoClassResult {
+    monoName: string;
+    subst: Map<string, string>;
+    tmpl: ClassDecl;
+}
+
+export function computeMonoName(ctx: CodeGenContext, name: string, typeArgs: TypeAnn[]): MonoClassResult | null {
+    const tmpl = ctx._genericClasses.get(name);
+    if (!tmpl) return null;
+    const subst = new Map<string, string>();
+    const typeParams = tmpl.typeParams ?? [];
+    for (let i = 0; i < typeParams.length; i++) {
+        const ct = typeArgs[i] ? ctx.resolveType(typeArgs[i]) : 'int32_t';
+        subst.set(typeParams[i], ct);
+    }
+    const suffix = typeParams.map((tp: string) => ctx.cTypeToIdent(subst.get(tp) ?? 'void')).join('_');
+    const monoName = `${name}_${suffix}`;
+    return { monoName, subst, tmpl };
+}
+
+export function ensureMonoClass(ctx: CodeGenContext, name: string, typeArgs: TypeAnn[]): string {
+    const result = computeMonoName(ctx, name, typeArgs);
+    if (!result) return name;
+    if (!ctx._emittedGenericClasses.has(result.monoName)) {
+        ctx._emittedGenericClasses.add(result.monoName);
+        ctx.emitMonoClass(result.tmpl, result.monoName, result.subst);
+    }
+    return result.monoName;
+}
 export function callGeneric(ctx: CodeGenContext, name: string, typeArgs: TypeAnn[], args: Argument[], lines: string[], depth: number) {
     const tmpl = ctx._genericFuncs.get(name);
     if (!tmpl) return `${name}(${ctx.argsToC(args, lines, depth)})`;

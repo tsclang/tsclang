@@ -175,21 +175,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
 
       // Generic class with typeArgs → trigger monomorphization
       if (typeArgs?.length > 0 && ctx._genericClasses?.has(name)) {
-        const tmpl = ctx._genericClasses.get(name);
-        if (!tmpl) return name;
-        const gSubst = new Map();
-        const typeParams = tmpl.typeParams ?? [];
-        for (let i = 0; i < typeParams.length; i++) {
-          const ct = typeArgs[i] ? ctx.resolveType(typeArgs[i]) : 'int32_t';
-          gSubst.set(typeParams[i], ct);
-        }
-        const suffix = typeParams.map((tp) => ctx.cTypeToIdent(gSubst.get(tp) ?? 'void')).join('_');
-        const monoName = `${name}_${suffix}`;
-        if (!ctx._emittedGenericClasses.has(monoName)) {
-          ctx._emittedGenericClasses.add(monoName);
-          ctx.emitMonoClass(tmpl, monoName, gSubst);
-        }
-        return monoName;
+        return ctx.ensureMonoClass(name, typeArgs);
       }
 
       // User-defined type — use C name if registered with a module prefix

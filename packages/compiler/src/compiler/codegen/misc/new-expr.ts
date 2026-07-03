@@ -149,21 +149,8 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
 
     // Generic class instantiation: new Box<i32>(42) → Box_i32_new(42)
     if (ctx._genericClasses?.has(name)) {
-      const tmpl = ctx._genericClasses.get(name);
-      if (!tmpl) return `${name}_new(${argsC})`;
       const typeArgs = node.typeArgs ?? [];
-      const subst = new Map();
-      const typeParams = tmpl.typeParams ?? [];
-      for (let i = 0; i < typeParams.length; i++) {
-        const ct = typeArgs[i] ? ctx.resolveType(typeArgs[i]) : 'int32_t';
-        subst.set(typeParams[i], ct);
-      }
-      const suffix = typeParams.map((tp: string) => ctx.cTypeToIdent(subst.get(tp) ?? 'void')).join('_');
-      const monoName = `${name}_${suffix}`;
-      if (!ctx._emittedGenericClasses.has(monoName)) {
-        ctx._emittedGenericClasses.add(monoName);
-        ctx.emitMonoClass(tmpl, monoName, subst);
-      }
+      const monoName = ctx.ensureMonoClass(name, typeArgs);
       return `${monoName}_new(${argsC})`;
     }
 

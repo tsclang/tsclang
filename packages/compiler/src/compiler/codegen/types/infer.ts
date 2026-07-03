@@ -220,17 +220,9 @@ export function inferType(ctx: CodeGenContext, node: Expression | null | undefin
           return `TscSet_${ctx.cTypeToIdent(et)}`;
         }
         const tArgs = node.typeArgs;
-        if (ctx._genericClasses?.has(node.name) && tArgs && tArgs.length > 0) {
-          const tmpl = ctx._genericClasses.get(node.name);
-          if (!tmpl) return `${node.name}`;
-          const subst = new Map();
-          const typeParams = tmpl.typeParams ?? [];
-          for (let i = 0; i < typeParams.length; i++) {
-            const ct = tArgs[i] ? ctx.resolveType(tArgs[i]) : 'int32_t';
-            subst.set(typeParams[i], ct);
-          }
-          const suffix = typeParams.map((tp: string) => ctx.cTypeToIdent(subst.get(tp) ?? 'void')).join('_');
-          return `${node.name}_${suffix}`;
+        if (tArgs && tArgs.length > 0) {
+          const result = ctx.computeMonoName(node.name, tArgs);
+          if (result) return result.monoName;
         }
         const poolCls = ctx.classes.get(node.name);
         if (poolCls?._isPool) return `opt_ref_${node.name}`;
