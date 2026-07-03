@@ -847,11 +847,11 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
     eat(TK.IDENT, 'class');
     const name = eat(TK.IDENT).value;
     // Type parameters: class Foo<T>
-    let classTypeParams: { name: string }[] = [];
+    let classTypeParams: string[] = [];
     if (cur().type === TK.LT) {
       eat(TK.LT);
       while (cur().type !== TK.GT) {
-        classTypeParams.push({ name: eat(TK.IDENT).value });
+        classTypeParams.push(eat(TK.IDENT).value);
         tryEat(TK.COMMA);
       }
       eat(TK.GT);
