@@ -1692,7 +1692,6 @@ class Context {
 
 }
 
-export type CodeGenThis = Context;
 export type CodeGenContext = Context;
 
 import * as topLevelFns from './codegen/top-level/index.js';
