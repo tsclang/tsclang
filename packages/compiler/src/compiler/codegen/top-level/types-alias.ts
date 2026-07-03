@@ -55,13 +55,11 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
 
     // Pure struct interface (no methods) → emit typedef struct
     if (methods.length === 0 && props.length > 0) {
-      ctx._resolvingTypes.add(name);
       const fieldParts: string[] = [];
       const fieldCTypes: string[] = [];
       for (const f of props) {
         const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
         if (ct === name) {
-          ctx._resolvingTypes.delete(name);
           throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
         }
         fieldCTypes.push(ct);
@@ -71,7 +69,6 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
           fieldParts.push(`${ct} ${f.name};`);
         }
       }
-      ctx._resolvingTypes.delete(name);
       _emitStructType(ctx, cname, fieldParts, fieldCTypes);
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: props });
       return;
@@ -119,19 +116,16 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
       const hasMethod = typeAnn.fields.some((f: ObjectField) => f.isMethod);
       if (hasMethod) throw ctx.error(`"type" alias cannot contain methods; use "interface" instead`);
-      ctx._resolvingTypes.add(name);
       const fieldParts: string[] = [];
       const fieldCTypes: string[] = [];
       for (const f of typeAnn.fields) {
         const ct = ctx.resolveType(f.typeAnn);
         if (ct === name) {
-          ctx._resolvingTypes.delete(name);
           throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
         }
         fieldCTypes.push(ct);
         fieldParts.push(`${ct} ${f.name};`);
       }
-      ctx._resolvingTypes.delete(name);
       _emitStructType(ctx, cname, fieldParts, fieldCTypes);
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: typeAnn.fields });
     } else if (typeAnn?.kind === 'TypeTuple') {

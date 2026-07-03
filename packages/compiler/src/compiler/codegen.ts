@@ -448,7 +448,6 @@ class Context {
   _extensions!: Map<string, ExtInfo>;
   _typeAliases!: Map<string, string>;
   _pendingOptTypedefs!: Map<string, string>;
-  _resolvingTypes!: Set<string>;
   _narrowedVars!: Set<string>;
   _narrowedUnknownVars!: Map<string, string>;
   _emittedUnknownStruct!: boolean;
@@ -700,7 +699,6 @@ class Context {
     this._extensions = new Map();
     this._typeAliases = new Map();
     this._pendingOptTypedefs = new Map();
-    this._resolvingTypes = new Set();
     this._narrowedVars = new Set();
     this._narrowedUnknownVars = new Map();
     this._emittedUnknownStruct = false;
