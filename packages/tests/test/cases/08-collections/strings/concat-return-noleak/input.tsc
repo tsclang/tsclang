@@ -1,0 +1,4 @@
+function tag(x: i32): string {
+    return "val=" + x;
+}
+console.log(tag(42));

@@ -205,6 +205,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           } else {
             p(`_result = (${tc.resultType}){.ok = true};`);
           }
+          ctx._flushPostStmtCleanups(lines);
           ctx._emitFuncCleanup(lines, I);
           p(`goto cleanup;`);
           break;
@@ -230,6 +231,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             ctx._markPoolVarMoved(node.value);
             const tmpName = `_ret_${ctx.tempCount++}`;
             p(`${retType} ${tmpName} = ${retC};`);
+            ctx._flushPostStmtCleanups(lines);
             ctx._emitFuncCleanup(lines, I);
             if (ctx._throwsCtx) {
               p(`return (${ctx._throwsCtx.resultType}){.ok = true, .value = ${tmpName}};`);
@@ -247,7 +249,15 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               ctx._inReturnContext = false;
               if (!_isUnknownReturn) ctx._emitRetainIfNeeded(c, node.value!, p);
               ctx._markPoolVarMoved(node.value);
-              p(`return (${tc.resultType}){.ok = true, .value = ${c}};`);
+              if (ctx._postStmtCleanups?.length) {
+                const retType2 = ctx.inferType(node.value!) ?? 'int32_t';
+                const tmpName2 = `_ret_${ctx.tempCount++}`;
+                p(`${retType2} ${tmpName2} = ${c};`);
+                ctx._flushPostStmtCleanups(lines);
+                p(`return (${tc.resultType}){.ok = true, .value = ${tmpName2}};`);
+              } else {
+                p(`return (${tc.resultType}){.ok = true, .value = ${c}};`);
+              }
             } else {
               p(`return (${tc.resultType}){.ok = true};`);
             }
@@ -265,7 +275,15 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               if (!_isUnknownReturn) ctx._emitRetainIfNeeded(c, node.value, p);
               const retSym = node.value.kind === 'Ident' ? ctx.lookup(node.value.name) : null;
               ctx._markPoolVarMoved(node.value);
-              p(`return ${ctx._derefStrPtr(retSym, c)};`);
+              if (ctx._postStmtCleanups?.length) {
+                const retType = ctx.inferType(node.value) ?? 'int32_t';
+                const tmpName = `_ret_${ctx.tempCount++}`;
+                p(`${retType} ${tmpName} = ${ctx._derefStrPtr(retSym, c)};`);
+                ctx._flushPostStmtCleanups(lines);
+                p(`return ${tmpName};`);
+              } else {
+                p(`return ${ctx._derefStrPtr(retSym, c)};`);
+              }
             } else {
               p('return;');
             }

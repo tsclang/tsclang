@@ -272,7 +272,11 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       let rC = ctx._derefStringPtr(node.right, r);
       if (rType !== 'String' && rType !== 'String *') {
         const etIdent = ctx.cTypeToIdent(rType);
-        rC = `tsc_${etIdent}_to_string(${r})`;
+        const I = ' '.repeat(ctx.indent * depth);
+        const tmp = `_tsc_cat_${ctx.tempCount++}`;
+        lines.push(`${I}String ${tmp} = tsc_${etIdent}_to_string(${r});`);
+        ctx._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
+        rC = tmp;
       }
       return `tsc_string_concat(${ld}, ${rC})`;
     }

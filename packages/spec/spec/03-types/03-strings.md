@@ -37,6 +37,22 @@ Heap выделяется только при динамическом пост�
 String s = tsc_string_concat(a, b);  // capacity > 0, data → malloc
 ```
 
+При конкатенации строки с не-строковым операндом (число, bool и т.д.) компилятор материализует временный String и освобождает его после выполнения оператора:
+```c
+// const msg = "age: " + 42
+String _tsc_cat_0 = tsc_i32_to_string(42);          // temp
+String msg = tsc_string_concat(STR_LIT("age: "), _tsc_cat_0);
+tsc_string_release(_tsc_cat_0);                       // cleanup после оператора
+```
+
+В контексте `return` временный String освобождается до возврата:
+```c
+String _tsc_cat_0 = tsc_i32_to_string(x);
+String _ret_1 = tsc_string_concat(STR_LIT("val="), _tsc_cat_0);
+tsc_string_release(_tsc_cat_0);
+return _ret_1;
+```
+
 ### Индексация и длина
 
 ```typescript
