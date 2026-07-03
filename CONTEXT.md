@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-06-30.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-03.
 
 ---
 
@@ -35,11 +35,13 @@ input.tsc → lexer.ts → parser.ts → [optimizer.ts] → codegen.ts → runti
 
 ## 3. Codegen Architecture
 
-**Context class** (~1118 lines, 51 mixin files). **Fully typed** (Phase 2.3): 185 typed properties (100 constructor + 85 dynamic), no `[key: string]: any`. Mixin files still use `this: any` (100+ methods, low priority). Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`, `TypeChecker`.
+**Context class** (~1118 lines). **Fully typed** (Phase 2.3+2.4): 185 typed properties (100 constructor + 85 dynamic), no `[key: string]: any`, zero `any` annotations in entire compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)` ) — mixin objects, `Object.assign`, declaration merging, `fn.bind(ctx)` all eliminated. Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`.
 
-**Module map:** `top-level/` (7), `stmt/` (5), `expr/` (5), `calls/` (9), `types/` (4), `misc/` (5), `async/` (6).
+**Module map (free functions, not mixins):** `top-level/` (7), `stmt/` (5), `expr/` (5), `calls/` (9), `types/` (4), `misc/` (5), `async/` (6), `stdlib-registry.ts`, `resolve.ts`, `infer.ts`.
 
-**Common patterns:** `_ensureXxx()` (lazy typedefs), `exprToC(node)` (expr→C), `define()`/`lookup()` (scope), `hoistClosure()` (lambda lifting).
+**Common patterns:** `_ensureXxx()` (lazy typedefs), `exprToC(ctx, node)` (expr→C), `define()`/`lookup()` (scope), `hoistClosure()` (lambda lifting).
+
+**Phase 2.4 Step 0 complete:** `resolve.ts` + `infer.ts` converted from last 2 mixin objects to free functions. `TypeChecker` class deleted (was only a `fn.bind(ctx)` binder). 8 delegating methods on Context now have typed signatures. Zero mixin objects remain.
 
 ---
 
@@ -100,7 +102,9 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1774 (spec-based) + 127 (engine)
+### Tests: 1774 (spec-based) + 135 (engine)
+
+**Spec-based:** 1738 pass, 36 fail (pre-existing, documented in #166–#170)
 
 | Section | Tests | Topic |
 |---------|-------|-------|
@@ -120,8 +124,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #153 (Phase 2.4 investigation), #166–#170 (pre-existing test failures)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #154–#164 (Phase 2.3 mixin→functional), #171 (optimizer any), #172 (Phase 2.4 Step 0)
 
 ---
 
@@ -139,7 +143,9 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
 - **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
 - **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
-- **Context typing (Phase 2.3).** Context class has 185 typed fields, NO `[key: string]: any`. Mixin files still use `this: any`. `@tsclang/ast` provides AST types: `Program`, `Expression`, `Stmt`, `Token`, `SymbolInfo` (with index signature for dynamic codegen props). Pipeline entry points typed: `parse(): { ast: Program, errors: TscError[] }`, `codegen(ast: Program, ...)`.
+- **Context typing (Phase 2.3+2.4).** Context class has 185 typed fields, NO `[key: string]: any`, ZERO `any` in compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)`), not mixin objects. No `Object.assign`, no declaration merging, no `fn.bind(ctx)`. `TypeChecker` deleted. `@tsclang/ast` provides AST types: `Program`, `Expression`, `Stmt`, `Token`, `SymbolInfo` (with index signature for dynamic codegen props). Pipeline entry points typed: `parse(): { ast: Program, errors: TscError[] }`, `codegen(ast: Program, ...)`.
+- **`implements_` runtime type.** Parser returns `string` for simple interfaces, `{ name: string; typeArgs: TypeAnn[] }` for generic ones — runtime is `(TypeRef | string)[]`. Use `_implName()` helper in `class.ts` to normalize.
+- **Mixin → functional conversion complete.** 228+ methods across 10 subsystems converted to free functions. Each takes `ctx: CodeGenContext` as first param. `scripts/transform-mixin.mjs` was the transformer tool.
 - **Package model (monorepo).** All packages build to `dist/` (`.js` + `.d.ts`). Exports: `types`→`dist/*.d.ts`, `default`→`dist/*.js`. Run `pnpm build` after changes before testing via built JS. `pnpm tsclang` runs built JS (`node dist/index.js`); `pnpm tsclang:dev` runs from source via tsx (no build needed).
 - **CLI runtime root.** `packages/cli/dist/index.js` (source: `src/index.ts`) resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
@@ -153,10 +159,10 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 | Add AST node | `packages/ast/src/ast.ts` |
 | Add statement | `stmt/index.ts` + `stmt/*.ts` |
 | Add expression | `expr/dispatch.ts` + `expr/*.ts` |
-| Add array/Map/Set method | `calls/stdlib.ts` + `types/infer.ts` + `runtime.h` |
-| Add stdlib module | `stdlib-registry.ts` + `calls/call-dispatch.ts` |
+| Add array/Map/Set method | `calls/stdlib.ts` + `types/infer.ts` (free functions) + `runtime.h` |
+| Add stdlib module | `stdlib-registry.ts` (free functions) + `calls/call-dispatch.ts` |
 | Add builtin (console, Math) | `stdlib-registry.ts` + `calls/builtin.ts` |
-| Add type annotation | `types/resolve.ts` + `types/infer.ts` |
+| Add type annotation | `types/resolve.ts` + `types/infer.ts` (free functions) |
 | Add decorator | `top-level/decorators.ts` + `parser.ts` |
 | Add platform profile | `profiles/<name>/index.d.tsc` + `profile-loader.ts` |
 | Add strict rule | `codegen.ts` (_strictRules) + relevant file + spec |
