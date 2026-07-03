@@ -104,7 +104,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ### Tests: 1774 (spec-based) + 135 (engine)
 
-**Spec-based:** 1738 pass, 36 fail (pre-existing, documented in #166–#170)
+**Spec-based:** 1774 pass, 0 fail, 2 skipped
 
 | Section | Tests | Topic |
 |---------|-------|-------|
@@ -124,8 +124,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #153 (Phase 2.4 investigation), #166–#170 (pre-existing test failures)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #154–#164 (Phase 2.3 mixin→functional), #171 (optimizer any), #172 (Phase 2.4 Step 0)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #153 (Phase 2.4 investigation)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #154–#164 (Phase 2.3 mixin→functional), #166–#172 (pre-existing test failures + Phase 2.4 Step 0)
 
 ---
 
