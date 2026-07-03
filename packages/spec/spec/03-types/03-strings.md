@@ -144,6 +144,16 @@ s.lastIndexOf(sub)           // number — байтовое смещение п�
 s.at(i)                      // u8 | null — байт по смещению, отрицательные индексы считаются с конца
 ```
 
+**`String.fromCharCode(code: number): string`** — static-метод, создаёт строку из одного codepoint:
+
+```typescript
+String.fromCharCode(65)              // "A"
+String.fromCharCode(1088)            // "р" (UTF-8: 2 байта)
+String.fromCharCode(0x1F600)         // "😀" (UTF-8: 4 байта)
+```
+
+Эквивалент JS `String.fromCharCode`, но принимает один codepoint (не несколько аргументов). В C генерирует `tsc_string_from_char(code)`.
+
 Методы, требующие `import { ... } from "std/string"`:
 
 ```typescript

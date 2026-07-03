@@ -64,12 +64,12 @@ export function runLintCommand(args: string[]): void {
   if (fixFlag) {
     const fixed = applyFixes(src, diagnostics);
     writeFileSync(inputPath, fixed, 'utf8');
-    const remaining = diagnostics.filter((d: { fixable: boolean }) => !d.fixable);
+    const remaining = diagnostics.filter((d: { fixable?: boolean }) => !d.fixable);
     for (const d of remaining) {
       const tag = d.severity === 'error' ? 'LintError' : 'LintWarning';
       process.stderr.write(`${tag}[${(d as { rule: string }).rule}]: ${(d as { message: string }).message} at line ${(d as { line: number }).line}\n`);
     }
-    process.exit(remaining.some((d: { severity: string }) => d.severity === 'error') ? 1 : 0);
+    process.exit(remaining.some((d: { severity?: string }) => d.severity === 'error') ? 1 : 0);
   }
 
   for (const d of diagnostics) {

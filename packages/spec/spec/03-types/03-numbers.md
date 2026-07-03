@@ -174,7 +174,7 @@ let nums: i32[] = [1, 2, 3];                  // → Array_i32 (override default
 - **П3**: explicit лучше implicit для нетривиальных типов
 - **П1**: tuple = value type с фиксированным layout, компилятор не должен угадывать
 
-### Literal overflow *[NOT YET IMPLEMENTED]*
+### Literal overflow
 
 Числовой литерал без явной аннотации получает тип `number` = `defaultNumber`. Если значение не помещается в диапазон `defaultNumber` → compile error.
 
@@ -278,10 +278,12 @@ let i = g + h;         // ❌ error: cannot mix u32 and i32 (same-width mixed si
 
 **Cross-width mixed (unexpected unsigned result in C):**
 
-| Комбинация | Проблема | Решение |
-|------------|----------|---------|
-| `i64 + u32` | C: результат `u64` (неожиданно unsigned) | Compile error: use `as` |
-| `u32 + i64` | C: результат `u64` | Compile error: use `as` |
+Нет запрещённых комбинаций — все cross-width mixed безопасны:
+
+| Комбинация | Поведение C | Поведение TSClang |
+|------------|-------------|-------------------|
+| `i64 + u32` | u32 → i64 (§6.3.1.8: i64 вмещает все u32) | ✅ auto-widen u32 → i64 |
+| `u32 + i64` | u32 → i64 | ✅ auto-widen u32 → i64 |
 
 ```typescript
 let a: i32 = 1;
@@ -291,8 +293,7 @@ let c = a + (b as i32);   // ✅ явный cast
 
 let d: i64 = 1;
 let e: u32 = 2;
-let f = d + e;            // ❌ error: cannot add i64 and u32: no implicit widening for let variables, use "as"
-let f = d + (e as i64);   // ✅ явный cast
+let f = d + e;            // ✅ auto-widen: u32 → i64, результат i64
 
 // const/literals exempt — compile-time analysis:
 const x: i32 = 1;

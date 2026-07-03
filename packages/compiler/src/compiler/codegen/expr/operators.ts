@@ -157,7 +157,6 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         ['int16_t','uint16_t'], ['uint16_t','int16_t'],
         ['int32_t','uint32_t'], ['uint32_t','int32_t'],
         ['int64_t','uint64_t'], ['uint64_t','int64_t'],
-        ['int64_t','uint32_t'], ['uint32_t','int64_t'],
       ];
       for (const [a, b] of mixedPairs) {
         if (lt === a && rt === b) {
@@ -322,6 +321,12 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         const resultType = typeRank[slt] >= typeRank[srt] ? slt : srt;
         const uType = resultType.replace('int', 'uint');
         return `(${resultType})((${uType})${l} ${op} (${uType})${r})`;
+      }
+      // i64 + u32: widen u32 → i64 (safe per C §6.3.1.8: i64 represents all u32 values)
+      if ((slt === 'int64_t' && srt === 'uint32_t') || (slt === 'uint32_t' && srt === 'int64_t')) {
+        const lCast = slt === 'uint32_t' ? `(int64_t)(${l})` : l;
+        const rCast = srt === 'uint32_t' ? `(int64_t)(${r})` : r;
+        return `(int64_t)((uint64_t)${lCast} ${op} (uint64_t)${rCast})`;
       }
     }
     if (node.op === '/' || node.op === '%') {

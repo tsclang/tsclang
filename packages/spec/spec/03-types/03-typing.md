@@ -97,8 +97,8 @@
 
   ```typescript
   let a: i64 = 1
-  let b: u32 = 2
-  let c: f64 = a + b              // ❌ — i64 + u32: нет type-level widening i64←u32
+  let b: u64 = 2
+  let c: f64 = a + b              // ❌ — i64 + u64: same-width signed/unsigned mismatch
   let c: f64 = (a + (b as i64)) as f64  // ✅
   ```
 

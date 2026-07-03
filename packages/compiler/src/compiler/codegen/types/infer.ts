@@ -35,6 +35,11 @@ export function inferType(ctx: CodeGenContext, node: Expression | null | undefin
           if (lt === 'String' || lt === 'String *' || rt === 'String' || rt === 'String *') return 'String';
           if (lt === 'double' || rt === 'double') return 'double';
           if (lt === 'float'  || rt === 'float')  return 'float';
+          const INT_RANK: Record<string, number> = {
+            'int8_t': 1, 'uint8_t': 2, 'int16_t': 3, 'uint16_t': 4,
+            'int32_t': 5, 'uint32_t': 6, 'int64_t': 7, 'uint64_t': 8,
+          };
+          if (INT_RANK[lt] && INT_RANK[rt]) return INT_RANK[lt] >= INT_RANK[rt] ? lt : rt;
           return lt;
         }
         // Bitwise/shift ops always yield integer
