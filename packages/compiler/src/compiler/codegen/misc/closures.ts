@@ -188,6 +188,21 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
     }
     if (captured.size === 0) return null;
 
+    if (ctx._inReturnContext) {
+      for (const [nm, sym] of captured) {
+        const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
+        const isRefMut = capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut');
+        const ct = sym.ctype ?? 'void *';
+        const isComplexPtr = !capInfo && _isComplexCtype(ct) && !ct.endsWith(' *') && !sym._closureEnvVar;
+        if (isRefMut || isComplexPtr) {
+          throw ctx.error(
+            `Cannot capture '${nm}' by reference in an escaping closure: the captured value would outlive its stack frame. Use a value capture instead.`,
+            arrowNode
+          );
+        }
+      }
+    }
+
     if (ctx._inReturnContext && ctx._curFuncName) {
       const fnSym = ctx.lookup(ctx._curFuncName);
       if (fnSym) fnSym._returnsCapturingClosure = true;

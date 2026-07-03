@@ -91,14 +91,16 @@ const fn = [arr](): void => { ... };                             // Error: requi
 
 **Решение:** closure — стековая. Env struct выделяется на стеке. Если closure переживает scope захваченных переменных — UB (dangling pointer).
 
-Не фиксируется компилятором (нет lifetime analysis). Документировано как ограничение.
+**Compile error для ref/mut capture:** если closure с явным `[x: Ref<T>]` или `[x: Mut<T>]` захватом возвращается из функции — компилятор выдаёт ошибку. Value capture (примитивы по значению, String через retain) разрешён.
+
+Общее ограничение (env на стеке) остаётся документированным — полный escape analysis не реализован.
 
 Альтернативы отклонены:
 - Heap-allocate env — нарушает П1 (embedded без heap). Возможно в будущем как опция для desktop.
 - Borrow checker (как Rust) — слишком сложно, нарушает П2 (TS compat).
-- Compile-time escape analysis — возможен в будущем, но не сейчас.
+- Compile-time escape analysis — частично реализован (ref/mut capture в return context).
 
-**Статус: ✅ Решено. Документировано.**
+**Статус: ✅ Решено. Ref/mut capture в escaping closure — compile error. Общее ограничение документировано.**
 
 ---
 
@@ -554,6 +556,17 @@ fn();                               // UB: fn.env → мёртвый стек
 ```
 
 **Это UB при любом capture model** — даже value capture: env struct сам на стеке, `fn.env` dangling.
+
+**Compile error для ref/mut capture в escaping closure:** если closure с `[x: Ref<T>]` или `[x: Mut<T>]` захватом возвращается из функции — компилятор блокирует:
+
+```typescript
+function bad(): () => i32 {
+    let x: i32 = 0;
+    return [x: Mut<i32>](): i32 => x;  // error: Cannot capture 'x' by reference in an escaping closure
+}
+```
+
+Value captures (примитивы, String через retain) разрешены в escaping closures.
 
 **Mitigation:** 99% использований — same-scope (closure создаётся и используется в одном блоке). Escaping — rare edge case.
 

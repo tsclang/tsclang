@@ -1,0 +1,4 @@
+function makeInc(): (delta: i32) => i32 {
+    let count: i32 = 0;
+    return [count: Mut<i32>](delta: i32): i32 => { count += delta; return count; };
+}

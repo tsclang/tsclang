@@ -1,0 +1,4 @@
+function makeGetter(): () => i32 {
+    let x: i32 = 42;
+    return [x: Ref<i32>](): i32 => x;
+}
