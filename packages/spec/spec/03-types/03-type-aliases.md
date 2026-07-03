@@ -38,6 +38,32 @@ function sort(arr: Mut<i32[]>, cmp: Comparator<i32>): void { ... }
 - `T | null` — единственный допустимый runtime union; любой non-nullable runtime union (`string | i32`, `A | B`) — **ошибка компилятора**
 - Для полиморфизма — class-иерархия (`abstract class`) или discriminated union через enum
 
+### Рекурсивные типы
+
+Рекурсивные type aliases и interfaces (struct) поддерживаются через forward declaration в C:
+
+```typescript
+type Tree = {
+    value: i32;
+    left: Arc<Tree>;
+    right: Arc<Tree>;
+};
+```
+
+```c
+typedef struct Tree Tree;
+struct Tree { int32_t value; Tree * left; Tree * right; };
+```
+
+- **Ref\<Self\>** → `const T *` (immutable pointer) — OK
+- **Mut\<Self\>** → `T *` (mutable pointer) — OK
+- **Arc\<Self\>** → `T *` (managed pointer) — OK
+- **By-value Self** (`field: Self`) — **ошибка компилятора**: бесконечный размер; используйте Ref/Arc/Mut для indirection
+
+Компилятор автоматически определяет self-reference и эмитит `typedef struct Name Name;` перед `struct Name { ... };`. Тот же паттерн применяется к data-only `interface`.
+
+**Мутуальная рекурсия** (`A` ссылается на `B`, `B` ссылается на `A`) пока не поддерживается — требуется pre-pass для forward-declaration всех типов.
+
 ## String Literal Union
 
 String literal union — **compile-time концепция**. В runtime не существует — компилируется в C enum.

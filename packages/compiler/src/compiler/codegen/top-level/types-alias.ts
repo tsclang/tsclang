@@ -24,22 +24,28 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
     if (methods.length === 0 && props.length > 0) {
       ctx._resolvingTypes.add(name);
       const fieldParts: string[] = [];
+      const fieldCTypes: string[] = [];
       for (const f of props) {
         const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
         if (ct === name) {
           ctx._resolvingTypes.delete(name);
           throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
         }
+        fieldCTypes.push(ct);
         if (f.optional) {
-          // Optional field: bool has_X; T X; (no opt_T wrapper needed)
           fieldParts.push(`bool has_${f.name}; ${ct} ${f.name};`);
         } else {
           fieldParts.push(`${ct} ${f.name};`);
         }
       }
       ctx._resolvingTypes.delete(name);
-      ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
-      // No blank line — consecutive typedefs can follow immediately
+      const isSelfRef = fieldCTypes.some(ct => ct.includes(cname + ' *') || ct.includes(cname + '*'));
+      if (isSelfRef) {
+        ctx.addTop(`typedef struct ${cname} ${cname};`);
+        ctx.addTop(`struct ${cname} { ${fieldParts.join(' ')} };`);
+      } else {
+        ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
+      }
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: props });
       return;
     }
@@ -87,16 +93,25 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
       const hasMethod = typeAnn.fields.some((f: ObjectField) => f.isMethod);
       if (hasMethod) throw ctx.error(`"type" alias cannot contain methods; use "interface" instead`);
       ctx._resolvingTypes.add(name);
-      const fields = typeAnn.fields.map((f: ObjectField) => {
+      const fieldParts: string[] = [];
+      const fieldCTypes: string[] = [];
+      for (const f of typeAnn.fields) {
         const ct = ctx.resolveType(f.typeAnn);
         if (ct === name) {
           ctx._resolvingTypes.delete(name);
           throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
         }
-        return `${ct} ${f.name};`;
-      }).join(' ');
+        fieldCTypes.push(ct);
+        fieldParts.push(`${ct} ${f.name};`);
+      }
       ctx._resolvingTypes.delete(name);
-      ctx.addTop(`typedef struct { ${fields} } ${cname};`);
+      const isSelfRef = fieldCTypes.some(ct => ct.includes(cname + ' *') || ct.includes(cname + '*'));
+      if (isSelfRef) {
+        ctx.addTop(`typedef struct ${cname} ${cname};`);
+        ctx.addTop(`struct ${cname} { ${fieldParts.join(' ')} };`);
+      } else {
+        ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
+      }
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: typeAnn.fields });
     } else if (typeAnn?.kind === 'TypeTuple') {
       // Tuple alias: type Point = [x: f64, y: f64] → typedef struct { double _0; double _1; } Point;

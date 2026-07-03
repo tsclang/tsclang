@@ -1,0 +1,1 @@
+type Tree = { value: i32; left: Ref<Tree>; right: Ref<Tree> };

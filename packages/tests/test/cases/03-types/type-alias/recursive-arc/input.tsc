@@ -1,0 +1,3 @@
+type Node = { value: i32; next: Arc<Node> };
+const a: Node = { value: 42, next: null };
+console.log(a.value);
