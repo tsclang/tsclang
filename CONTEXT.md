@@ -35,13 +35,13 @@ input.tsc → lexer.ts → parser.ts → [optimizer.ts] → codegen.ts → runti
 
 ## 3. Codegen Architecture
 
-**Context class** (~1118 lines). **Fully typed** (Phase 2.3+2.4): 185 typed properties (100 constructor + 85 dynamic), no `[key: string]: any`, zero `any` annotations in entire compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)` ) — mixin objects, `Object.assign`, declaration merging, `fn.bind(ctx)` all eliminated. Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`.
+**Context class** (~1710 lines). **Fully typed** (Phase 2.3+2.4): 185 typed properties (100 constructor + 85 dynamic), no `[key: string]: any`, zero `any` annotations in entire compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)` ) — mixin objects, `Object.assign`, declaration merging, `fn.bind(ctx)` all eliminated. Extracted state: `ScopeManager`, `BorrowTracker`, `OutputBuffer`.
 
 **Module map (free functions, not mixins):** `top-level/` (7), `stmt/` (5), `expr/` (5), `calls/` (9), `types/` (4), `misc/` (5), `async/` (6), `stdlib-registry.ts`, `resolve.ts`, `infer.ts`.
 
 **Common patterns:** `_ensureXxx()` (lazy typedefs), `exprToC(ctx, node)` (expr→C), `define()`/`lookup()` (scope), `hoistClosure()` (lambda lifting).
 
-**Phase 2.4 Step 0 complete:** `resolve.ts` + `infer.ts` converted from last 2 mixin objects to free functions. `TypeChecker` class deleted (was only a `fn.bind(ctx)` binder). 8 delegating methods on Context now have typed signatures. Zero mixin objects remain.
+**Phase 2.4 COMPLETE (all steps):** `resolve.ts` + `infer.ts` converted from last 2 mixin objects to free functions. `TypeChecker` class deleted (was only a `fn.bind(ctx)` binder). Zero mixin objects remain. Phase A/B split (type declarations before functions). Explicit monomorphization pre-pass (`generics.ts`). `CodeGenThis` alias removed. ~232 delegating methods on Context retained as **dependency inversion layer** (breaks ESM circular imports between 10+ subsystems — not dead code). Pure pre-pass architecture rejected: type tables mutate during codegen, memoization unsafe (#153 analysis).
 
 ---
 
@@ -124,8 +124,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #153 (Phase 2.4 investigation)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #154–#164 (Phase 2.3 mixin→functional), #166–#172 (pre-existing test failures + Phase 2.4 Step 0)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0)
 
 ---
 
@@ -143,9 +143,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **`_ensureXxx()` pattern** — ALWAYS use lazy guards.
 - **Defined wrap for signed integers** — `+`/`-`/`*` emit unsigned cast to eliminate UB.
 - **safe-math try/catch** — integer arithmetic in `safe-math` mode requires guard.
-- **Context typing (Phase 2.3+2.4).** Context class has 185 typed fields, NO `[key: string]: any`, ZERO `any` in compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)`), not mixin objects. No `Object.assign`, no declaration merging, no `fn.bind(ctx)`. `TypeChecker` deleted. `@tsclang/ast` provides AST types: `Program`, `Expression`, `Stmt`, `Token`, `SymbolInfo` (with index signature for dynamic codegen props). Pipeline entry points typed: `parse(): { ast: Program, errors: TscError[] }`, `codegen(ast: Program, ...)`.
+- **Context typing (Phase 2.3+2.4 COMPLETE).** Context class has 185 typed fields, NO `[key: string]: any`, ZERO `any` in compiler. All codegen logic is **free functions** (`emitFoo(ctx, ...)`), not mixin objects. No `Object.assign`, no declaration merging, no `fn.bind(ctx)`. `TypeChecker` deleted. ~232 delegating methods on Context are the **dependency inversion layer** (breaks ESM circular imports between subsystems). `@tsclang/ast` provides AST types: `Program`, `Expression`, `Stmt`, `Token`, `SymbolInfo` (with index signature for dynamic codegen props). Pipeline entry points typed: `parse(): { ast: Program, errors: TscError[] }`, `codegen(ast: Program, ...)`.
 - **`implements_` runtime type.** Parser returns `string` for simple interfaces, `{ name: string; typeArgs: TypeAnn[] }` for generic ones — runtime is `(TypeRef | string)[]`. Use `_implName()` helper in `class.ts` to normalize.
-- **Mixin → functional conversion complete.** 228+ methods across 10 subsystems converted to free functions. Each takes `ctx: CodeGenContext` as first param. `scripts/transform-mixin.mjs` was the transformer tool.
 - **Package model (monorepo).** All packages build to `dist/` (`.js` + `.d.ts`). Exports: `types`→`dist/*.d.ts`, `default`→`dist/*.js`. Run `pnpm build` after changes before testing via built JS. `pnpm tsclang` runs built JS (`node dist/index.js`); `pnpm tsclang:dev` runs from source via tsx (no build needed).
 - **CLI runtime root.** `packages/cli/dist/index.js` (source: `src/index.ts`) resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
