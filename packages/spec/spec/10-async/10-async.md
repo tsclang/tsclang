@@ -1045,7 +1045,6 @@ static sensorPoll_state _sensorPoll_instance;
 
 - `@static function*` (sync generator) — описан выше в этом файле
 - `@static let/const` → [04-borrow.md](../04-ownership/04-borrow.md)
-- `@static class field` → [07-classes-ownership.md](../07-classes/07-classes-ownership.md)
 - Полный индекс `@static` контекстов: [15-decorators.md](../15-decorators/15-decorators.md#встроенные-декораторы)
 
 ### Embedded: альтернативы async generators

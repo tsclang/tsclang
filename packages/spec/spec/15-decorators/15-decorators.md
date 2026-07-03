@@ -625,28 +625,27 @@ TSClang имеет набор **встроенных декораторов**, �
 
 | Декоратор | Применяется к | Описание | Полная спецификация |
 |-----------|---------------|----------|---------------------|
-| `@static` | `class field` | Одно поле на класс в BSS | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#static-class-field--статическое-поле-класса) |
-| `@static` | `let` / `const` | Мутабельное глобальное состояние в BSS | [04-borrow.md](../04-ownership/04-borrow.md) |
+| `@static` | `let` / `const` (global) | Мутабельное глобальное состояние в BSS | [04-borrow.md](../04-ownership/04-borrow.md) |
 | `@static` | `function` | `static` функция в C (видимость ограничена TU) | [06-functions.md](../06-functions/06-functions.md#static-function--статическая-функция) |
+| `@static` | `async function` | State machine в BSS (cooperative scheduler) | [10-async.md](../10-async/10-async.md) |
 | `@static` | `function*` (sync gen) | Один экземпляр генератора в BSS | [10-async.md](../10-async/10-async.md#static-function--единственный-экземпляр-генератора) |
 | `@static` | `async function*` (async gen) | Async генератор в BSS (cooperative scheduler) | [10-async.md](../10-async/10-async.md#static-async-function--async-генератор-в-bss-cooperative-scheduler) |
-| `@readonly` | `class field` | Поле неизменяемо после конструктора | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#readonly-class-field) |
-| `@struct` | `class` | Value-type class (inline, no vtable, no methods) | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class) |
-| `@pool(N)` | `class` | Статический пул из N слотов в BSS | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#pooln--статический-пул-объектов) |
-| `@heap` | `class` (future) | Heap-аллокация через `malloc`/`free` | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#heap--heap-аллокация-классов-future-feature) |
-| `@inline` | `function` | Forced `static inline` в C | [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) |
-| `@packed` | `class` | Compact struct layout (no padding) | [07-packed-align.md](../07-classes/07-packed-align.md) |
-| `@align(N)` | `class` | Выравнивание struct по N байт | [07-packed-align.md](../07-classes/07-packed-align.md) |
-| `@platform` | `class`, `function` | Условная компиляция по платформе | [13-build.md](../13-build/13-build.md) |
-| `@isr` | `function` | Обработчик прерывания (embedded) | [11-concurrency.md](../11-concurrency/11-concurrency.md) |
+| `@readonly` | `class field` | Поле неизменяемо после конструктора (`const` квалификатор). На method — error | [07-classes-ownership.md](../07-classes/ownership/07-classes-ownership.md#readonly-class-field) |
+| `@struct` | `class` | Value-type class (inline, no vtable, no methods — embedded) | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class) |
+| `@pool(N)` | `class` | Статический пул из N слотов в BSS (N ≤ 64), `opt_ref_T` | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#pooln--статический-пул-объектов) |
+| `@heap` | `class` | Heap-аллокация через `malloc`/`free`, pointer type `Foo *` | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#heap--heap-аллокация-классов) |
+| `@packed` | `class` | Compact struct layout — `__attribute__((packed))` | [07-packed-align.md](../07-classes/07-packed-align.md) |
+| `@align(N)` | `class` | Выравнивание struct — `__attribute__((aligned(N)))`, N = степень 2 | [07-packed-align.md](../07-classes/07-packed-align.md) |
+| `@platform` | `function`, `method` | Условная компиляция по платформе | [13-build.md](../13-build/13-build.md) |
+| `@isr` | `function` | Обработчик прерывания (embedded only) | [11-concurrency.md](../11-concurrency/11-concurrency.md) |
 | `@stack(name, N)` | `function` | Статический стек для async-рекурсии (с макросами из `std/stack`) | [10-async.md](../10-async/10-async.md) |
 
 ### Принципы
 
 1. **Всегда обрабатываются в последней фазе** — после пользовательских декораторов, до type checker
 2. **Не требуют импорта** — доступны глобально, нельзя переопределить
-3. **Контекстно-зависимы** — `@static` имеет разную семантику для class field, let, function, generator. См. таблицу выше
-4. **Комбинируются** — `@static readonly field`, `@static async function*`, `@struct class` (взаимоисключающие)
+3. **Контекстно-зависимы** — `@static` имеет разную семантику для let, function, async function, generator. См. таблицу выше
+4. **Комбинируются** — `@static async function*`, `@struct class`, `@packed @align(N) class` (взаимоисключающие: `@packed`+`@align`, `@pool`+`@heap`+`@struct`)
 
 
 ---

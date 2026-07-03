@@ -855,7 +855,7 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 Декораторы для fine-grained контроля над поведением на embedded платформах.
 
-> **Примечание:** `@struct` (forced inline для функций) перенесён в [06-functions.md](../06-functions/06-functions.md#inline-function--принудительный-inline) как `@inline`. Здесь `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes/07-classes-ownership.md#struct--value-type-class).
+> **Примечание:** `@struct` используется только для классов (value-type) — см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class). `@inline` для функций — *[NOT YET IMPLEMENTED]*.
 
 > **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Arc<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен.
 
@@ -919,7 +919,7 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 
 | Аннотация | Desktop | Embedded | Проверка |
 |-----------|---------|----------|----------|
-| `@inline` (бывший `@struct` для функций) | ✅ | ✅ | — |
+| `@inline` *[NOT YET IMPLEMENTED]* | ✅ | ✅ | — |
 | `@isr` | ❌ | ✅ | Compile-time |
 | `@signal` | ✅ | ❌ | Compile-time |
 
@@ -1017,6 +1017,6 @@ void main(void) {
 │  @signal ──────── POSIX signal ──── desktop only     │
 │                                                      │
 │  @platform ────── условная компиляция ─── все        │
-│  @inline ──── все        │
+│  @inline ──────── все *[NOT YET IMPL.]*              │
 └─────────────────────────────────────────────────────┘
 ```

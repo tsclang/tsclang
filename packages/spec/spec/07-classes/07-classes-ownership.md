@@ -597,7 +597,7 @@ a.value // ❌ use of moved value: "a" (E002)
 
 ---
 
-## `@static class field` — статическое поле класса
+## `@static class field` — статическое поле класса *[NOT YET IMPLEMENTED]*
 
 Декоратор `@static` на поле класса создаёт **одно статическое поле на класс** (не per-instance), размещённое в BSS. Все экземпляры класса разделяют это поле.
 

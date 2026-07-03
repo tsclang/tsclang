@@ -94,13 +94,12 @@ static int32_t helper(int32_t x) {
 #### Связанные контексты `@static`
 
 - `@static let/const` → [04-borrow.md](../04-ownership/04-borrow.md) (мутабельное глобальное состояние)
-- `@static class field` → [07-classes-ownership.md](../07-classes/07-classes-ownership.md) (одно поле на класс в BSS)
 - `@static async function*` → [10-async.md](../10-async/10-async.md) (генератор в BSS, cooperative scheduler)
 - `@static function` (этот раздел) — статическая функция в C
 
 ---
 
-### `@inline function` — принудительный inline
+### `@inline function` — принудительный inline *[NOT YET IMPLEMENTED]*
 
 Декоратор `@inline` на функции форсирует **static inline** — компилятор C обязан попытаться встроить тело функции в место вызова. Используется для критичных по производительности маленьких функций на embedded.
 
