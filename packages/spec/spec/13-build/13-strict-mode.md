@@ -208,6 +208,64 @@ if (overflow !== null) {
 
 Поддерживаемые типы: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
 
+**C-output:**
+
+`Math.saturatingCast<i32>(big)` генерирует inline clamp:
+```c
+int32_t clamped = (big < (INT32_MIN)) ? (int32_t)(INT32_MIN)
+    : ((big > (INT32_MAX)) ? (int32_t)(INT32_MAX) : (int32_t)(big));
+```
+
+`Math.checkedCast<i32>(big)` генерирует `opt_i32` struct с runtime-проверкой:
+```c
+typedef struct { bool has_value; int32_t value; } opt_i32;
+
+opt_i32 _checked_0;
+_checked_0.has_value = (big >= (INT32_MIN) && big <= (INT32_MAX));
+_checked_0.value = _checked_0.has_value ? (int32_t)(big) : (int32_t)0;
+// Использование: if (result !== null) { ... result ... }
+```
+
+**Соответствие safety standards:**
+
+`no-lossy-cast` не запрещает сужение — он требует **проверяемое** сужение.
+MISRA/IEC против молчаливой потери данных, не против самого cast'а.
+
+| Стандарт | Требование | Как `no-lossy-cast` соответствует |
+|----------|-----------|----------------------------------|
+| MISRA C Rule 10.3 | Сужение должно быть явным | `checkedCast`/`saturatingCast` — явно, с проверкой |
+| MISRA C Rule 10.4 | Значение не должно теряться молча | Runtime check → null если overflow |
+| IEC 61508 SIL2+ | Runtime error detection | `checkedCast` = runtime detection |
+| IEC 61508 SIL3+ | Defensive programming | `saturatingCast` = graceful degradation |
+
+**Практический пример — чтение датчика:**
+```typescript
+// strict: ["no-lossy-cast"]
+
+// ❌ Молчаливая потеря данных — заблокировано:
+function readByte_bad(): i32 {
+    let raw: i64 = adcRead();   // 0..4095 (12-bit ADC)
+    return raw as i32;          // error: lossy cast from i64 to i32
+}
+
+// ✅ Вариант 1: проверка с ошибкой
+function readByte_checked(): i32 {
+    let raw: i64 = adcRead();
+    let result = Math.checkedCast<i32>(raw);
+    if (result === null) {
+        console.log("sensor overflow");
+        return 0;
+    }
+    return result;
+}
+
+// ✅ Вариант 2: clamp (graceful degradation)
+function readByte_clamped(): i32 {
+    let raw: i64 = adcRead();
+    return Math.saturatingCast<i32>(raw);  // >INT32_MAX → INT32_MAX
+}
+```
+
 **Обоснование:** Потеря данных при cast — источник скрытых багов. В safety-critical коде все преобразования должны быть явными и безопасными.
 
 #### `no-dynamic-alloc` — запрет динамической аллокации

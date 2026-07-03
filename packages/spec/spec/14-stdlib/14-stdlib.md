@@ -923,6 +923,7 @@ Math.saturatingCast<i32>(5000000000 as i64)  // i64 → i32 — 2147483647 (clam
 Math.saturatingCast<i32>(42 as i64)          // i64 → i32 — 42 (влезает, без изменений)
 Math.checkedCast<i32>(5000000000 as i64)     // i64 → i32|null — null (не влезает)
 Math.checkedCast<i32>(42 as i64)             // i64 → i32|null — 42 (влезает)
+// См. [13-strict-mode → no-lossy-cast](../13-build/13-strict-mode.md#no-lossy-cast) для C-output, MISRA/IEC compliance и практических примеров.
 
 // random (0..1, без seed)
 Math.random()              // f64 — [0.0, 1.0)

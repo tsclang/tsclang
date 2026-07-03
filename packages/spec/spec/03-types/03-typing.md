@@ -127,6 +127,10 @@
   // Семантика: bit-truncation по размеру целевого типа, two's complement для signed.
   // Эквивалент C: (int8_t)1000, (uint8_t)300 — предсказуемо на gcc/clang/avr-gcc.
   // Платформа не влияет: поведение одинаково на всех таргетах TSClang.
+  //
+  // ⚠️ Для safety-critical кода: включите strict rule `no-lossy-cast`
+  //    — запрещает lossy `as`, требует Math.checkedCast<T> или Math.saturatingCast<T>.
+  //    См. [13-strict-mode → no-lossy-cast](../13-build/13-strict-mode.md#no-lossy-cast).
 
   // 2. Non-null assertion — убрать null из типа без проверки
   let x: i32 | null = getValue();
