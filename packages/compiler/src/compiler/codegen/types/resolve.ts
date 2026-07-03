@@ -120,10 +120,8 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
               return [`bool has_${fname};`, `${ftype} ${fname};`];
             }).join(' ');
             ctx.classes.set(structKey, { isStruct: true, isMutable: true, isPartial: true, fields: baseDef.fields });
-            if (!ctx._typeEmissionSuppressed) {
-              ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
-              ctx.addTop('');
-            }
+            ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
+            ctx.addTop('');
           }
           return structKey;
         }
@@ -145,10 +143,8 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
               return `${ftype} ${fname};`;
             }).join(' ');
             ctx.classes.set(structKey, { isStruct: true, fields: picked });
-            if (!ctx._typeEmissionSuppressed) {
-              ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
-              ctx.addTop('');
-            }
+            ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
+            ctx.addTop('');
           }
           return structKey;
         }
@@ -163,11 +159,9 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
 
           if (!ctx._emittedOptStructs.has(aliased)) {
             ctx._emittedOptStructs.add(aliased);
-            if (!ctx._typeEmissionSuppressed) {
-              const optInner = ctx._pendingOptTypedefs.get(aliased)!;
-              ctx.addTop(`typedef struct { bool has_value; ${optInner} value; } ${aliased};`);
-              ctx.addTop('');
-            }
+            const optInner = ctx._pendingOptTypedefs.get(aliased)!;
+            ctx.addTop(`typedef struct { bool has_value; ${optInner} value; } ${aliased};`);
+            ctx.addTop('');
           }
         }
         return aliased;
@@ -242,9 +236,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
 
         if (!ctx._emittedOptStructs.has(optName)) {
           ctx._emittedOptStructs.add(optName);
-          if (!ctx._typeEmissionSuppressed) {
-            ctx.addTop(`typedef struct { bool has_value; ${inner} value; } ${optName};`);
-          }
+          ctx.addTop(`typedef struct { bool has_value; ${inner} value; } ${optName};`);
         }
         return optName;
       }
@@ -280,9 +272,7 @@ export function resolveTupleType(ctx: CodeGenContext, typeNode: TypeTuple, named
 
           if (!ctx._emittedOptStructs.has(optName)) {
             ctx._emittedOptStructs.add(optName);
-            if (!ctx._typeEmissionSuppressed) {
-              ctx.addTop(`typedef struct { bool has_value; ${ct} value; } ${optName};`);
-            }
+            ctx.addTop(`typedef struct { bool has_value; ${ct} value; } ${optName};`);
           }
           ct = optName;
         }
@@ -307,13 +297,11 @@ export function resolveTupleType(ctx: CodeGenContext, typeNode: TypeTuple, named
     if (!ctx._emittedTuples.has(structName)) {
       ctx._emittedTuples.add(structName);
       ctx.classes.set(structName, { isTuple: true, fields: fields as unknown as ClassMetaField[], readonly: !!readonly });
-      if (!ctx._typeEmissionSuppressed) {
-        const fieldDecls = fields.map((f: TupleField) => {
-          const ct = f.ctype.endsWith(' *') ? f.ctype.trimEnd() : f.ctype;
-          return `${f.const ? 'const ' : ''}${ct}${ct.endsWith('*') ? '' : ' '}${f.name};`;
-        }).join(' ');
-        ctx.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
-      }
+      const fieldDecls = fields.map((f: TupleField) => {
+        const ct = f.ctype.endsWith(' *') ? f.ctype.trimEnd() : f.ctype;
+        return `${f.const ? 'const ' : ''}${ct}${ct.endsWith('*') ? '' : ' '}${f.name};`;
+      }).join(' ');
+      ctx.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
     }
 
     return structName;

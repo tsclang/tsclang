@@ -606,8 +606,6 @@ class Context {
   _stdEmbeddedImported!: boolean;
   _avrSleepModeImported!: boolean;
 
-  _typeEmissionSuppressed: boolean = false;
-
   constructor(filename: string, src: string | null = null, opts: CodeGenOptions = {}) {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
@@ -746,13 +744,6 @@ class Context {
   // Type checking (delegated to resolve/infer free functions)
   // ----------------------------------------------------------------
   resolveType(typeNode: TypeAnn | string | null | undefined): string { return resolveFns.resolveType(this, typeNode); }
-  resolveTypeName(typeNode: TypeAnn | string | null | undefined): string {
-    const prev = this._typeEmissionSuppressed;
-    this._typeEmissionSuppressed = true;
-    const result = resolveFns.resolveType(this, typeNode);
-    this._typeEmissionSuppressed = prev;
-    return result;
-  }
   resolveTupleType(typeNode: TypeTuple, namedAs: string | null = null): string { return resolveFns.resolveTupleType(this, typeNode, namedAs); }
   typeDecl(typeNode: TypeAnn | null | undefined, name: string | null): string { return resolveFns.typeDecl(this, typeNode, name); }
   inferType(node: Expression | null | undefined): string { return inferFns.inferType(this, node); }
@@ -1447,7 +1438,7 @@ class Context {
     return parts.join('\n') + '\n';
   }
 
-  addTop(line: string) { if (!this._typeEmissionSuppressed) this._output.addTop(line); }
+  addTop(line: string) { this._output.addTop(line); }
   addLambda(line: string) { this._output.addLambda(line); }
 
   // Delegating methods: types/helpers → functional

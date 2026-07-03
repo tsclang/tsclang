@@ -163,7 +163,6 @@ export function substNode(ctx: CodeGenContext, node: unknown, subst: Map<string,
 }
 
 export function emitMonoFunc(ctx: CodeGenContext, tmpl: FuncDecl, monoName: string, subst: Map<string, string>) {
-    if (ctx._typeEmissionSuppressed) return;
     // Create a copy of the function with substituted type params
     const monoParams = tmpl.params.map((p: Param) => ({
       ...p,
@@ -203,9 +202,6 @@ export function emitMonoClass(ctx: CodeGenContext, tmpl: ClassDecl, monoName: st
       })),
       isStruct: false,
     });
-
-    // In dry-run mode, skip C code emission (metadata registration is sufficient)
-    if (ctx._typeEmissionSuppressed) return;
 
     // Single-line typedef struct
     const fieldDecls = fields.map((f: Field) => {
