@@ -2,7 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { compileTsc } from '@tsclang/compiler';
+import { compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { OPTIMIZE_LEVELS, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_DIR, DEBUG_FLAG } from '@tsclang/shared';
 import { getPositionalAfter, isValidOptimizeLevel } from '../args.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
@@ -30,6 +30,10 @@ export function runRunCommand(args: string[], rootDir: string): void {
   } catch (e) {
     reportErrors(e, basename(inputPath));
     process.exit(1);
+  }
+
+  for (const w of warnings) {
+    process.stderr.write(renderDiagnostic(w as Parameters<typeof renderDiagnostic>[0], { contextLines: 1 }) + '\n');
   }
 
   const stem    = basename(inputPath, extname(inputPath));

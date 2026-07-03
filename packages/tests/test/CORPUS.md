@@ -15,6 +15,8 @@ packages/tests/test/cases/<section>/<feature>/<test-name>/
     expected.c         — ожидаемый C-output (для success-тестов)
     expected.out       — ожидаемый stdout при запуске (опционально)
     expected.error     — ожидаемое сообщение об ошибке (для error-тестов)
+    expected.warning   — ожидаемый текст warning'а (опционально)
+    expected.no-warning — пустой файл: assert что warning'ов нет (опционально)
 ```
 
 ### Типы тестов

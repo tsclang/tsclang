@@ -165,13 +165,14 @@ async function classifyTest(testDir) {
   const hasErr        = existsSync(join(testDir, 'expected.error'));
   const hasRuntimeErr = existsSync(join(testDir, 'expected.runtime-error'));
   const hasWarning    = existsSync(join(testDir, 'expected.warning'));
+  const hasNoWarning  = existsSync(join(testDir, 'expected.no-warning'));
 
   if (hasErr) return { kind: 'E', inputType };
 
   if (inputType === 'tsc') {
-    if (hasC && hasOut) return { kind: 'R', inputType, hasWarning };
-    if (hasC && hasRuntimeErr) return { kind: 'RE', inputType, hasWarning };
-    if (hasC)           return { kind: 'F', inputType, hasWarning };
+    if (hasC && hasOut) return { kind: 'R', inputType, hasWarning, hasNoWarning };
+    if (hasC && hasRuntimeErr) return { kind: 'RE', inputType, hasWarning, hasNoWarning };
+    if (hasC)           return { kind: 'F', inputType, hasWarning, hasNoWarning };
     return null; // tsc test with no expected files — skip
   }
 
@@ -350,9 +351,9 @@ async function runTest(testDir) {
   }
 }
 
-async function executeTest(testDir, { kind, inputType, hasWarning }, tmpBase) {
+async function executeTest(testDir, { kind, inputType, hasWarning, hasNoWarning }, tmpBase) {
   switch (inputType) {
-    case 'tsc':  return executeTscTest(testDir, kind, tmpBase, { hasWarning });
+    case 'tsc':  return executeTscTest(testDir, kind, tmpBase, { hasWarning, hasNoWarning });
     case 'json': return executeJsonTest(testDir, kind, tmpBase);
     case 'sh':   return executeShTest(testDir, kind, tmpBase);
     default:     return { status: 'skip', testDir, reason: `unknown input type: ${inputType}` };
@@ -478,7 +479,7 @@ function metaToOpts(testDir) {
 // ---------------------------------------------------------------------------
 // .tsc tests — full compiler pipeline
 // ---------------------------------------------------------------------------
-async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
+async function executeTscTest(testDir, kind, tmpBase, { hasWarning, hasNoWarning } = {}) {
   const inputSrc = join(testDir, 'input.tsc');
   const opts = metaToOpts(testDir);
   const profTarget = opts.target || null;
@@ -517,6 +518,15 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning } = {}) {
     const warningText = (result.warnings || []).map(w => renderDiagnostic(w, { contextLines: 1 })).join('\n');
     const warningResult = await checkErrorOutput(testDir, warningText, 'expected.warning');
     if (warningResult.status !== 'pass') return warningResult;
+  }
+
+  // No-warning verification (for tests with expected.no-warning)
+  if (hasNoWarning) {
+    const wCount = (result.warnings || []).length;
+    if (wCount > 0) {
+      const wText = (result.warnings || []).map(w => renderDiagnostic(w, { contextLines: 1 })).join('\n');
+      return fail(testDir, 'no-warning', `expected 0 warnings but got ${wCount}`, wText);
+    }
   }
 
   if (kind === 'F' || flagNoGcc) {
