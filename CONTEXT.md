@@ -102,16 +102,18 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1774 (spec-based) + 135 (engine)
+### Tests: 1783 (spec-based) + 135 (engine)
 
-**Spec-based:** 1774 pass, 0 fail, 2 skipped
+**Spec-based:** 1783 pass, 0 fail, 2 skipped
 
 | Section | Tests | Topic |
 |---------|-------|-------|
-| 02-syntax | 124 | Arithmetic, variables, formatting |
-| 03-types | 398 | Numbers, enums, tuples, null |
+| 02-syntax | 127 | Arithmetic, variables, formatting |
+| 03-types | 403 | Numbers, enums, tuples, null |
 | 04-ownership | 116 | Ownership, Arc, Weak, Clone |
-| 09-errors | 46 | throws, try/catch, bare-throws |
+| 06-functions | 66 | Functions, closures, overloads |
+| 08-collections | 236 | Arrays, Map, Set, strings |
+| 09-errors | 47 | throws, try/catch, bare-throws |
 | 14-stdlib | 302 | console, Math, Date, JSON, std/* |
 
 ### Deferred / NOT YET
@@ -125,7 +127,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
 - **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error)
 
 ---
 
@@ -148,6 +150,8 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **Package model (monorepo).** All packages build to `dist/` (`.js` + `.d.ts`). Exports: `types`→`dist/*.d.ts`, `default`→`dist/*.js`. Run `pnpm build` after changes before testing via built JS. `pnpm tsclang` runs built JS (`node dist/index.js`); `pnpm tsclang:dev` runs from source via tsx (no build needed).
 - **CLI runtime root.** `packages/cli/dist/index.js` (source: `src/index.ts`) resolves `COMPILER_ROOT` via `createRequire(import.meta.url).resolve('@tsclang/compiler')` to find `runtime/` + `profiles/` (they live in the compiler package, not cli).
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
+- **`_postStmtCleanups` in Return.** All Return paths in `control-flow.ts` now call `_flushPostStmtCleanups` before the actual return. Previously, temps created during return expression evaluation (e.g. string concat with non-String operand) were leaked. If adding new Return paths, always flush post-stmt cleanups before the return.
+- **Named fn callbacks in `.map()`.** `infer.ts` handles both `Arrow` and `Ident` callbacks. Codegen (`_extractCallbackFn`) already worked — only type inference needed the fix. String array callbacks still have calling convention mismatch (macro passes `String *`, named fn takes `String` by value) — use arrow functions for string arrays.
 
 ---
 
