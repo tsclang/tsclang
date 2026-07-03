@@ -1,4 +1,4 @@
-import type { Assign, ClassMember } from '@tsclang/ast';
+import type { Assign, ClassMember, Binary } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
 // assign.ts
   // Assignment
@@ -361,7 +361,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
                              '&=':'&', '|=':'|', '^=':'^', '<<=':'<<', '>>=':'>>' };
     const binOp = (compoundBinOps as Record<string, string>)[node.op];
     if (binOp) {
-      const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right };
+      const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right } as Binary;
       const resultType = ctx._effectiveType(binNode);
       const si = ctx._numericTypeInfo(resultType);
       const di = ctx._numericTypeInfo(leftType);

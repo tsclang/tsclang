@@ -9,11 +9,10 @@ import type { DiagSpan } from './error.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
-import { TypeChecker } from './typechecker.js';
 import type { Capabilities } from './profile.js';
 import type { ThrowsCtx } from './codegen/top-level/decorators.js';
 import { RUNTIME_HEADER, RUNTIME_WASM_HEADER, TSC_DEFINES, WASM_TARGET, DEFAULT_ALLOCATOR, DEFAULT_ASYNC, DEFAULT_USIZE, DEFAULT_BITS, DEFAULT_NUMBER } from '@tsclang/shared';
-import type { Program, Method, TypeRef, TypeAnn, TypeArray, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf, Member, Decorator, Enum, ExtensionFunc, Interface, TypeAlias, DeclareModule, DeclareConst, DeclareFunction } from '@tsclang/ast';
+import type { Program, Method, TypeRef, TypeAnn, TypeArray, TypeTuple, MethodSig, PropSig, FuncDecl, FuncOverload, ClassDecl, SymbolInfo, Expression, Call, Await, CatchClause, NodePos, Param, Argument, ObjLit, New, Arrow, ArrayLit, TemplateLit, Stmt, Block, FuncExpr, Literal, Binary, Unary, Assign, VarDecl, Switch, MatchCase, MatchPattern, TryCatch, Match, While, DoWhile, For, ForOf, Member, Decorator, Enum, ExtensionFunc, Interface, TypeAlias, DeclareModule, DeclareConst, DeclareFunction } from '@tsclang/ast';
 
 export const DESKTOP_CAPABILITIES = {
   allocator: DEFAULT_ALLOCATOR,
@@ -484,7 +483,6 @@ class Context {
   // Lex/parse & type checking
   _lex!: typeof _lex;
   _parse!: typeof _parse;
-  _typeChecker!: TypeChecker;
 
   // Config-derived (set in codegen() and visitProgram)
   _debugLines!: boolean;
@@ -740,22 +738,19 @@ class Context {
     // Lex/parse helpers for template string expansion
     this._lex = _lex;
     this._parse = _parse;
-
-    // Type checking: delegated to TypeChecker
-    this._typeChecker = new TypeChecker(this);
   }
 
   // ----------------------------------------------------------------
-  // Type checking (delegated to TypeChecker)
+  // Type checking (delegated to resolve/infer free functions)
   // ----------------------------------------------------------------
-  resolveType(...a: unknown[]): string             { return this._typeChecker.resolveType(...a); }
-  resolveTupleType(...a: unknown[]): string        { return this._typeChecker.resolveTupleType(...a); }
-  typeDecl(...a: unknown[]): string                { return this._typeChecker.typeDecl(...a); }
-  inferType(...a: unknown[]): string               { return this._typeChecker.inferType(...a); }
-  _effectiveType(...a: unknown[]): string          { return this._typeChecker._effectiveType(...a); }
-  _inferCall(...a: unknown[]): string              { return this._typeChecker._inferCall(...a); }
-  _inferMemberCall(...a: unknown[]): string        { return this._typeChecker._inferMemberCall(...a); }
-  inferTypeWithParams(...a: unknown[]): string     { return this._typeChecker.inferTypeWithParams(...a); }
+  resolveType(typeNode: TypeAnn | string | null | undefined): string { return resolveFns.resolveType(this, typeNode); }
+  resolveTupleType(typeNode: TypeTuple, namedAs: string | null = null): string { return resolveFns.resolveTupleType(this, typeNode, namedAs); }
+  typeDecl(typeNode: TypeAnn | null | undefined, name: string | null): string { return resolveFns.typeDecl(this, typeNode, name); }
+  inferType(node: Expression | null | undefined): string { return inferFns.inferType(this, node); }
+  _effectiveType(node: Expression | null | undefined): string { return inferFns._effectiveType(this, node); }
+  _inferCall(node: Call): string { return inferFns._inferCall(this, node); }
+  _inferMemberCall(node: Call): string | null { return inferFns._inferMemberCall(this, node); }
+  inferTypeWithParams(arrowNode: Arrow, paramCType: string): string { return inferFns.inferTypeWithParams(this, arrowNode, paramCType); }
 
   // ----------------------------------------------------------------
   // Scope helpers (delegated to ScopeManager)
@@ -1710,3 +1705,5 @@ import * as miscFns from './codegen/misc/index.js';
 import type { IterMethod } from './codegen/misc/emit-helpers.js';
 import * as genericsFns from './codegen/generics.js';
 import * as helpers from './codegen/types/helpers.js';
+import * as resolveFns from './codegen/types/resolve.js';
+import * as inferFns from './codegen/types/infer.js';

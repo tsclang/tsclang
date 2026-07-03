@@ -1,5 +1,5 @@
 import type { TypeAnn, TypeTuple, TypeRef, ObjectField } from '@tsclang/ast';
-import type { CodeGenThis, ClassMetaField } from '../../codegen.js';
+import type { CodeGenContext, ClassMetaField } from '../../codegen.js';
 import { PRIMITIVE_MAP, toCType, inferLiteralCType } from '../../types.js';
 // resolve.ts
 
@@ -17,41 +17,40 @@ interface TupleField {
 // this runtime-accurate shape avoids casts at every access site.
 interface RtTupleEl { name?: string; typeAnn: TypeAnn; label?: string | null; rest?: boolean; optional?: boolean; }
 
-export default {
-  resolveType(this: CodeGenThis, typeNode: TypeAnn | string | null | undefined) {
+export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | null | undefined): string {
     if (!typeNode) return 'void';
     if (typeof typeNode === 'string') return toCType(typeNode);
 
     if (typeNode.kind === 'TypeRef') {
       const { name, typeArgs } = typeNode;
       if (name === 'null' || name === 'undefined') {
-        throw this.error(`"${name}" cannot be used as a standalone type; use T | ${name}`, typeNode);
+        throw ctx.error(`"${name}" cannot be used as a standalone type; use T | ${name}`, typeNode);
       }
       // usize resolved from capabilities
       if (name === 'usize') {
-        const usizeType = this._cap('usize');
+        const usizeType = ctx._cap('usize');
         if (usizeType === 'u8') return 'uint8_t';
         if (usizeType === 'u16') return 'uint16_t';
         if (usizeType === 'u32') return 'uint32_t';
         if (usizeType === 'u64') return 'size_t';
         return 'size_t';
       }
-      if (name === 'number') return PRIMITIVE_MAP[this._defaultNumber] || 'double';
+      if (name === 'number') return PRIMITIVE_MAP[ctx._defaultNumber] || 'double';
       if (!(typeNode as { _internal?: boolean })._internal) {
         if (name === 'bool') {
-          throw this.error('"bool" is not a valid TSC type; use "boolean"', typeNode);
+          throw ctx.error('"bool" is not a valid TSC type; use "boolean"', typeNode);
         }
         if (name === 'String') {
-          throw this.error('"String" is not a valid TSC type; use "string"', typeNode);
+          throw ctx.error('"String" is not a valid TSC type; use "string"', typeNode);
         }
       }
       if (name in PRIMITIVE_MAP) {
-        if (name === 'unknown') this._ensureUnknownStruct();
-        if (this._strictRules?.has('no-any') && (name === 'any' || name === 'unknown')) {
-          throw this.error(`"${name}" is forbidden in strict mode (no-any); use a concrete type`, typeNode);
+        if (name === 'unknown') ctx._ensureUnknownStruct();
+        if (ctx._strictRules?.has('no-any') && (name === 'any' || name === 'unknown')) {
+          throw ctx.error(`"${name}" is forbidden in strict mode (no-any); use a concrete type`, typeNode);
         }
-        if (name === 'any' && !this._inUnsafe && !this._inDeclare) {
-          throw this.error(`"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values`, typeNode);
+        if (name === 'any' && !ctx._inUnsafe && !ctx._inDeclare) {
+          throw ctx.error(`"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values`, typeNode);
         }
         return PRIMITIVE_MAP[name];
       }
@@ -60,31 +59,31 @@ export default {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
         const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize','isize','char']);
         if (innerName && COPY_ONLY.has(innerName)) {
-          throw this.error(`TypeError: ${name}<T> requires a non-primitive type, got ${innerName}`, typeNode);
+          throw ctx.error(`TypeError: ${name}<T> requires a non-primitive type, got ${innerName}`, typeNode);
         }
-        return `${this.resolveType(typeArgs[0])} *`;
+        return `${ctx.resolveType(typeArgs[0])} *`;
       }
       if (name === 'Ref') {
-        const inner = this.resolveType(typeArgs[0]);
+        const inner = ctx.resolveType(typeArgs[0]);
         if (inner === 'String') return 'String';
         return `const ${inner} *`;
       }
       if (name === 'Mut') {
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
-        if (innerName && this.interfaces.has(innerName)) return this.resolveType(typeArgs[0]);
-        return `${this.resolveType(typeArgs[0])} *`;
+        if (innerName && ctx.interfaces.has(innerName)) return ctx.resolveType(typeArgs[0]);
+        return `${ctx.resolveType(typeArgs[0])} *`;
       }
       if (name === 'Array' || name === 'ReadonlyArray') {
-        const et = typeArgs[0] ? this.resolveType(typeArgs[0]) : 'int32_t';
-        const arrName = `Array_${this.cTypeToIdent(et)}`;
-        this._ensureArrayStruct(arrName, et);
+        const et = typeArgs[0] ? ctx.resolveType(typeArgs[0]) : 'int32_t';
+        const arrName = `Array_${ctx.cTypeToIdent(et)}`;
+        ctx._ensureArrayStruct(arrName, et);
         return arrName;
       }
       if (name === 'Map') {
-        const k = typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'string';
-        const v = typeArgs[1] ? this.cTypeToIdent(this.resolveType(typeArgs[1])) : 'i32';
+        const k = typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'string';
+        const v = typeArgs[1] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[1])) : 'i32';
         const suffix = `${k}_${v}`;
-        this._ensureMapStruct(suffix);
+        ctx._ensureMapStruct(suffix);
         return `TscMap_${suffix}`;
       }
       if (name === 'Scalar') return 'Scalar';
@@ -92,60 +91,60 @@ export default {
       if (name === 'AbortController') return 'TscAbortController';
       if (name === 'AbortSignal')     return 'TscAbortSignal *';
       if (name === 'AsyncMutex')      return 'TscAsyncMutex';
-      if (name === 'Generator')  return `${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}_state`;
-      if (name === 'Readonly' && typeArgs?.[0]) return this.resolveType(typeArgs[0]);
-      if (name === 'Atomic')     return `Atomic_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
-      if (name === 'Channel')    return `Channel_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
-      if (name === 'Signal')     return `Signal_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'i32'}`;
-      if (name === 'Promise')    return `Promise_${typeArgs[0] ? this.cTypeToIdent(this.resolveType(typeArgs[0])) : 'void'}`;
-      if (name === 'volatile')   return `volatile ${this.resolveType(typeArgs[0])}`;
-      if (name === 'Volatile')   return `volatile ${this.resolveType(typeArgs[0])} *`;
+      if (name === 'Generator')  return `${typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'void'}_state`;
+      if (name === 'Readonly' && typeArgs?.[0]) return ctx.resolveType(typeArgs[0]);
+      if (name === 'Atomic')     return `Atomic_${typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'i32'}`;
+      if (name === 'Channel')    return `Channel_${typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'i32'}`;
+      if (name === 'Signal')     return `Signal_${typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'i32'}`;
+      if (name === 'Promise')    return `Promise_${typeArgs[0] ? ctx.cTypeToIdent(ctx.resolveType(typeArgs[0])) : 'void'}`;
+      if (name === 'volatile')   return `volatile ${ctx.resolveType(typeArgs[0])}`;
+      if (name === 'Volatile')   return `volatile ${ctx.resolveType(typeArgs[0])} *`;
       if (name === 'Slice' || name === 'MutSlice') {
-        const et = typeArgs[0] ? this.resolveType(typeArgs[0]) : 'int32_t';
-        const etId = this.cTypeToIdent(et);
+        const et = typeArgs[0] ? ctx.resolveType(typeArgs[0]) : 'int32_t';
+        const etId = ctx.cTypeToIdent(et);
         const slName = `${name}_${etId}`;
-        this._ensureSliceStruct(slName, et, name === 'MutSlice');
+        ctx._ensureSliceStruct(slName, et, name === 'MutSlice');
         return slName;
       }
 
       // Inline utility types: Pick<T, K>, Omit<T, K> without a named alias
       if (name === 'Partial' && typeArgs.length >= 1) {
-        const baseType = this.resolveType(typeArgs[0]);
-        const baseDef = this.classes.get(baseType);
+        const baseType = ctx.resolveType(typeArgs[0]);
+        const baseDef = ctx.classes.get(baseType);
         if (baseDef?.fields) {
-          const structKey = `_partial_${this.cTypeToIdent(baseType)}`;
-          if (!this.classes.has(structKey)) {
+          const structKey = `_partial_${ctx.cTypeToIdent(baseType)}`;
+          if (!ctx.classes.has(structKey)) {
             const fieldDecls = baseDef.fields.flatMap((f: ClassMetaField) => {
               const fname = f.name ?? '';
-              const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+              const ftype = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
               return [`bool has_${fname};`, `${ftype} ${fname};`];
             }).join(' ');
-            this.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
-            this.addTop('');
-            this.classes.set(structKey, { isStruct: true, isMutable: true, isPartial: true, fields: baseDef.fields });
+            ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
+            ctx.addTop('');
+            ctx.classes.set(structKey, { isStruct: true, isMutable: true, isPartial: true, fields: baseDef.fields });
           }
           return structKey;
         }
         return baseType;
       }
       if ((name === 'Pick' || name === 'Omit') && typeArgs.length >= 2) {
-        const baseType = this.resolveType(typeArgs[0]);
-        const baseDef = this.classes.get(baseType);
+        const baseType = ctx.resolveType(typeArgs[0]);
+        const baseDef = ctx.classes.get(baseType);
         if (baseDef?.fields) {
-          const keyNames = this.getStringLiteralMembers(typeArgs[1]);
+          const keyNames = ctx.getStringLiteralMembers(typeArgs[1]);
           const picked = name === 'Pick'
             ? baseDef.fields.filter((f: ClassMetaField) => keyNames.length === 0 || keyNames.includes(f.name ?? ''))
             : baseDef.fields.filter((f: ClassMetaField) => !keyNames.includes(f.name ?? ''));
           const structKey = `_${name.toLowerCase()}_${keyNames.join('_')}`;
-          if (!this.classes.has(structKey)) {
+          if (!ctx.classes.has(structKey)) {
             const fieldDecls = picked.map((f: ClassMetaField) => {
               const fname = f.name ?? '';
-              const ftype = f.typeAnn ? this.resolveType(f.typeAnn) : 'int32_t';
+              const ftype = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
               return `${ftype} ${fname};`;
             }).join(' ');
-            this.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
-            this.addTop('');
-            this.classes.set(structKey, { isStruct: true, fields: picked });
+            ctx.addTop(`typedef struct { ${fieldDecls} } ${structKey};`);
+            ctx.addTop('');
+            ctx.classes.set(structKey, { isStruct: true, fields: picked });
           }
           return structKey;
         }
@@ -153,45 +152,45 @@ export default {
       }
 
       // Transparent type alias (NonNullable, Record, etc.)
-      if (this._typeAliases?.has(name)) {
-        const aliased = this._typeAliases.get(name)!;
+      if (ctx._typeAliases?.has(name)) {
+        const aliased = ctx._typeAliases.get(name)!;
         // Lazily emit opt typedef if needed (but not when inside NonNullable processing)
-        if (!this._noOptEmit && aliased.startsWith('opt_') && this._pendingOptTypedefs?.has(aliased)) {
+        if (!ctx._noOptEmit && aliased.startsWith('opt_') && ctx._pendingOptTypedefs?.has(aliased)) {
 
-          if (!this._emittedOptStructs.has(aliased)) {
-            this._emittedOptStructs.add(aliased);
-            const optInner = this._pendingOptTypedefs.get(aliased)!;
-            this.addTop(`typedef struct { bool has_value; ${optInner} value; } ${aliased};`);
-            this.addTop('');
+          if (!ctx._emittedOptStructs.has(aliased)) {
+            ctx._emittedOptStructs.add(aliased);
+            const optInner = ctx._pendingOptTypedefs.get(aliased)!;
+            ctx.addTop(`typedef struct { bool has_value; ${optInner} value; } ${aliased};`);
+            ctx.addTop('');
           }
         }
         return aliased;
       }
 
       // Generic class with typeArgs → trigger monomorphization
-      if (typeArgs?.length > 0 && this._genericClasses?.has(name)) {
-        const tmpl = this._genericClasses.get(name);
+      if (typeArgs?.length > 0 && ctx._genericClasses?.has(name)) {
+        const tmpl = ctx._genericClasses.get(name);
         if (!tmpl) return name;
         const gSubst = new Map();
         const typeParams = tmpl.typeParams ?? [];
         for (let i = 0; i < typeParams.length; i++) {
-          const ct = typeArgs[i] ? this.resolveType(typeArgs[i]) : 'int32_t';
+          const ct = typeArgs[i] ? ctx.resolveType(typeArgs[i]) : 'int32_t';
           gSubst.set(typeParams[i], ct);
         }
-        const suffix = typeParams.map((tp) => this.cTypeToIdent(gSubst.get(tp) ?? 'void')).join('_');
+        const suffix = typeParams.map((tp) => ctx.cTypeToIdent(gSubst.get(tp) ?? 'void')).join('_');
         const monoName = `${name}_${suffix}`;
-        if (!this._emittedGenericClasses.has(monoName)) {
-          this._emittedGenericClasses.add(monoName);
-          this.emitMonoClass(tmpl, monoName, gSubst);
+        if (!ctx._emittedGenericClasses.has(monoName)) {
+          ctx._emittedGenericClasses.add(monoName);
+          ctx.emitMonoClass(tmpl, monoName, gSubst);
         }
         return monoName;
       }
 
       // User-defined type — use C name if registered with a module prefix
-      const _cls = this.classes.get(name);
+      const _cls = ctx.classes.get(name);
       if (_cls?._isPool) {
-        this._ensurePoolAlloc(name);
-        return _cls._poolOptType;
+        ctx._ensurePoolAlloc(name);
+        return _cls._poolOptType!;
       }
       if (_cls?._isHeap) {
         return `${_cls?._cname ?? name} *`;
@@ -200,58 +199,58 @@ export default {
     }
 
     if (typeNode.kind === 'TypePointer') {
-      const pointee = this.resolveType(typeNode.pointee);
+      const pointee = ctx.resolveType(typeNode.pointee);
       return `${pointee} *`;
     }
 
     if (typeNode.kind === 'TypeArray') {
       // Function pointer arrays use native C array syntax, not Array_T struct
       if (typeNode.element?.kind === 'TypeFunc') return 'tsc_closure';
-      const et = this.resolveType(typeNode.element);
-      const arrName = `Array_${this.cTypeToIdent(et)}`;
-      this._ensureArrayStruct(arrName, et);
+      const et = ctx.resolveType(typeNode.element);
+      const arrName = `Array_${ctx.cTypeToIdent(et)}`;
+      ctx._ensureArrayStruct(arrName, et);
       return arrName;
     }
 
     if (typeNode.kind === 'TypeFixedArray') {
-      return this.resolveType(typeNode.element);
+      return ctx.resolveType(typeNode.element);
     }
 
     if (typeNode.kind === 'TypeObject') {
       // Inline struct type — return 'struct { ... }' (anonymous)
       const fields = typeNode.fields.map((f: ObjectField) => {
-        const ct = this.resolveType(f.typeAnn);
+        const ct = ctx.resolveType(f.typeAnn);
         return `${ct} ${f.name}`;
       }).join('; ');
       return `struct { ${fields}; }`;
     }
 
     if (typeNode.kind === 'TypeTuple') {
-      return this.resolveTupleType(typeNode);
+      return ctx.resolveTupleType(typeNode);
     }
 
     if (typeNode.kind === 'TypeUnion') {
       // T | null → opt_T
-      const allLeaves = this.flattenUnion(typeNode);
+      const allLeaves = ctx.flattenUnion(typeNode);
       const nonNull = allLeaves.filter((t: TypeAnn) => !(t.kind === 'TypeRef' && (t.name === 'null' || t.name === 'undefined'))
                                           && !(t.kind === 'TypeLiteral' && t.value === 'null'));
       const hasNull = allLeaves.length !== nonNull.length;
       if (hasNull && nonNull.length === 1) {
-        const inner = this.resolveType(nonNull[0]);
-        if (inner === 'void *') throw this.error(`any is already nullable, "any | null" is redundant`);
+        const inner = ctx.resolveType(nonNull[0]);
+        if (inner === 'void *') throw ctx.error(`any is already nullable, "any | null" is redundant`);
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
         // Pool ref types are already nullable (has_value) — no double-wrap
         if (inner.startsWith('opt_ref_')) return inner;
-        const optName = `opt_${this.cTypeToIdent(inner)}`;
+        const optName = `opt_${ctx.cTypeToIdent(inner)}`;
         // Store for deferred emission
 
-        this._pendingOptTypedefs.set(optName, inner);
+        ctx._pendingOptTypedefs.set(optName, inner);
         // Emit struct typedef if not already done
 
-        if (!this._emittedOptStructs.has(optName)) {
-          this._emittedOptStructs.add(optName);
-          this.addTop(`typedef struct { bool has_value; ${inner} value; } ${optName};`);
+        if (!ctx._emittedOptStructs.has(optName)) {
+          ctx._emittedOptStructs.add(optName);
+          ctx.addTop(`typedef struct { bool has_value; ${inner} value; } ${optName};`);
         }
         return optName;
       }
@@ -263,10 +262,10 @@ export default {
     }
 
     return 'void';
-  },
+}
 
   // Build tuple struct name and emit typedef if needed
-  resolveTupleType(this: CodeGenThis, typeNode: TypeTuple, namedAs: string | null = null) {
+export function resolveTupleType(ctx: CodeGenContext, typeNode: TypeTuple, namedAs: string | null = null): string {
     const elements = typeNode.elements as unknown as RtTupleEl[];
     const readonly = (typeNode as { readonly?: boolean }).readonly;
 
@@ -276,18 +275,18 @@ export default {
       const el = elements[i];
       if (el.rest) {
         // Rest element: ...T[] → T *_tail; int32_t _tail_len
-        const et = this.resolveType((el.typeAnn as { element?: TypeAnn }).element ?? el.typeAnn);
+        const et = ctx.resolveType((el.typeAnn as { element?: TypeAnn }).element ?? el.typeAnn);
         fields.push({ name: `_tail`, ctype: `${et} *`, const: false, rest: true, elemType: et });
         fields.push({ name: `_tail_len`, ctype: `int32_t`, const: false, tailLen: true });
       } else {
-        let ct = this.resolveType(el.typeAnn);
+        let ct = ctx.resolveType(el.typeAnn);
         if (el.optional) {
           // Wrap in opt_T
-          const optName = `opt_${this.cTypeToIdent(ct)}`;
+          const optName = `opt_${ctx.cTypeToIdent(ct)}`;
 
-          if (!this._emittedOptStructs.has(optName)) {
-            this._emittedOptStructs.add(optName);
-            this.addTop(`typedef struct { bool has_value; ${ct} value; } ${optName};`);
+          if (!ctx._emittedOptStructs.has(optName)) {
+            ctx._emittedOptStructs.add(optName);
+            ctx.addTop(`typedef struct { bool has_value; ${ct} value; } ${optName};`);
           }
           ct = optName;
         }
@@ -302,30 +301,30 @@ export default {
     } else {
       const elNames = elements
         .filter((e: RtTupleEl) => !e.rest)
-        .map((e: RtTupleEl) => this.cTypeToIdent(this.resolveType(e.typeAnn)));
+        .map((e: RtTupleEl) => ctx.cTypeToIdent(ctx.resolveType(e.typeAnn)));
       const prefix = readonly ? 'readonly_tuple' : 'tuple';
       structName = `${prefix}_${elNames.join('_')}`;
     }
 
     // Emit typedef if not already done
 
-    if (!this._emittedTuples.has(structName)) {
-      this._emittedTuples.add(structName);
+    if (!ctx._emittedTuples.has(structName)) {
+      ctx._emittedTuples.add(structName);
       const fieldDecls = fields.map((f: TupleField) => {
         const ct = f.ctype.endsWith(' *') ? f.ctype.trimEnd() : f.ctype;
         return `${f.const ? 'const ' : ''}${ct}${ct.endsWith('*') ? '' : ' '}${f.name};`;
       }).join(' ');
-      this.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
+      ctx.addTop(`typedef struct { ${fieldDecls} } ${structName};`);
       // Register in classes for index/field access
-      this.classes.set(structName, { isTuple: true, fields: fields as unknown as ClassMetaField[], readonly: !!readonly });
+      ctx.classes.set(structName, { isTuple: true, fields: fields as unknown as ClassMetaField[], readonly: !!readonly });
     }
 
     return structName;
-  },
+}
 
   // Generate a full C declarator: handles function pointer types correctly
   // e.g. typeDecl({kind:'TypeFunc', params:[i32], ret:i32}, 'f') → 'int32_t (*f)(int32_t)'
-  typeDecl(this: CodeGenThis, typeNode: TypeAnn | null | undefined, name: string | null) {
+export function typeDecl(ctx: CodeGenContext, typeNode: TypeAnn | null | undefined, name: string | null): string {
     if (!typeNode) return `void *${name ? ' ' + name : ''}`;
     if (typeNode.kind === 'TypeFunc') {
       return `tsc_closure${name ? ' ' + name : ''}`;
@@ -333,10 +332,9 @@ export default {
     if (typeNode.kind === 'TypeArray' && typeNode.element?.kind === 'TypeFunc') {
       return `tsc_closure${name ? ' ' + name : ''}[]`;
     }
-    return `${this.resolveType(typeNode)}${name ? ' ' + name : ''}`;
-  },
+    return `${ctx.resolveType(typeNode)}${name ? ' ' + name : ''}`;
+}
 
   // ----------------------------------------------------------------
   // Type inference from expression
   // ----------------------------------------------------------------
-};

@@ -1,6 +1,6 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { ClassMeta } from '../../codegen.js';
-import type { Expression, MatchCase, MatchPattern, VarDecl, Stmt, CatchClause, Match, TryCatch } from '@tsclang/ast';
+import type { Expression, MatchCase, MatchPattern, VarDecl, Stmt, CatchClause, Match, TryCatch, TypeAnn } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
 export function _emitMatchCore(ctx: CodeGenContext, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
                                discC: string, discType: string, resultType: string, resultVar: string,
@@ -448,7 +448,7 @@ export function emitSelectVarDecl(ctx: CodeGenContext, node: VarDecl, lines: str
         const m = chSym?.ctype?.match(/^Channel_(\w+)$/);
         if (m) ident = m[1];
       }
-      const ctype = ctx.resolveType({ kind: 'TypeRef', name: ident }) ?? 'int32_t';
+      const ctype = ctx.resolveType({ kind: 'TypeRef', name: ident } as unknown as TypeAnn) ?? 'int32_t';
       fields.push({ key: typeof key === 'string' ? key : '', ident, ctype, valExpr: val as Expression });
     }
 

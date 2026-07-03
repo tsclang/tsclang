@@ -1,5 +1,5 @@
 import type { CodeGenContext } from '../../codegen.js';
-import type { Interface, TypeAlias, TypeAnn, MethodSig, PropSig, TypeUnion, TypeLiteral, ObjectField, Param, TypeRef } from '@tsclang/ast';
+import type { Interface, TypeAlias, TypeAnn, MethodSig, PropSig, TypeUnion, TypeLiteral, ObjectField, Param, TypeRef, TypeTuple } from '@tsclang/ast';
 
 export interface StructField {
   name: string;
@@ -240,7 +240,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
               kind: 'TypeTuple',
               elements: params.map((p) => ({ typeAnn: p.typeAnn ?? { kind: 'TypeRef', name: 'i32', typeArgs: [] }, label: p.name, rest: false, optional: false })),
               readonly: false
-            };
+            } as unknown as TypeTuple;
             const tupleName = ctx.resolveTupleType(tupleNode);
 
             ctx._typeAliases.set(name, tupleName);

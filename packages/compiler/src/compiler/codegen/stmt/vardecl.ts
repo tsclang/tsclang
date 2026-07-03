@@ -1611,7 +1611,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 const objSym = ctx.lookup(init.object.name);
                 const objDef = objSym?.ctype ? ctx.classes.get(objSym.ctype) : null;
                 const fieldType = objDef?.fields?.find((f) => f.name === init.prop);
-                if (fieldType && ctx.classes.has(ctx.resolveType(fieldType.typeAnn ?? {})) && objSym) {
+                if (fieldType && ctx.classes.has(ctx.resolveType(fieldType.typeAnn)) && objSym) {
                   if (!objSym._movedFields) objSym._movedFields = [];
                   objSym._movedFields.push(init.prop);
                   objSym._movedFieldLine = objSym._movedFieldLine ?? {};
