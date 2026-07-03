@@ -133,6 +133,7 @@ export function substNode(ctx: CodeGenContext, node: unknown, subst: Map<string,
 }
 
 export function emitMonoFunc(ctx: CodeGenContext, tmpl: FuncDecl, monoName: string, subst: Map<string, string>) {
+    if (ctx._typeEmissionSuppressed) return;
     // Create a copy of the function with substituted type params
     const monoParams = tmpl.params.map((p: Param) => ({
       ...p,
@@ -159,14 +160,6 @@ export function emitMonoClass(ctx: CodeGenContext, tmpl: ClassDecl, monoName: st
     const fields  = tmpl.members.filter((m: ClassMember): m is Field => m.kind === 'Field');
     const methods = tmpl.members.filter((m: ClassMember): m is Method => m.kind === 'Method');
 
-    // Single-line typedef struct
-    const fieldDecls = fields.map((f: Field) => {
-      const ct = ctx.resolveType(ctx.substType(f.typeAnn ?? { kind: 'TypeRef', name: 'int32_t', typeArgs: [] }, subst));
-      return `${ct} ${f.name};`;
-    }).join(' ');
-    ctx.addTop(`typedef struct { ${fieldDecls} } ${monoName};`);
-    ctx.addTop('');
-
     // Register class so method dispatch works
     ctx.classes.set(monoName, {
       fields: fields.map((f: Field) => ({ ...f, typeAnn: f.typeAnn ? ctx.substType(f.typeAnn, subst) : f.typeAnn })) as unknown as ClassMetaField[],
@@ -180,6 +173,17 @@ export function emitMonoClass(ctx: CodeGenContext, tmpl: ClassDecl, monoName: st
       })),
       isStruct: false,
     });
+
+    // In dry-run mode, skip C code emission (metadata registration is sufficient)
+    if (ctx._typeEmissionSuppressed) return;
+
+    // Single-line typedef struct
+    const fieldDecls = fields.map((f: Field) => {
+      const ct = ctx.resolveType(ctx.substType(f.typeAnn ?? { kind: 'TypeRef', name: 'int32_t', typeArgs: [] }, subst));
+      return `${ct} ${f.name};`;
+    }).join(' ');
+    ctx.addTop(`typedef struct { ${fieldDecls} } ${monoName};`);
+    ctx.addTop('');
 
     // Constructor
     const ctor = methods.find((m: Method) => m.name === 'constructor');
