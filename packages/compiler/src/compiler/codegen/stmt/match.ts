@@ -265,7 +265,7 @@ export function emitPropagateVarDecl(ctx: CodeGenContext, node: VarDecl, lines: 
     const p = (s: string) => lines.push(I + s);
 
     const isProp = init?.kind === 'Propagate';
-    const innerExpr = init?.kind === 'Propagate' ? init.expr : undefined;
+    const innerExpr = (init?.kind === 'Propagate' || init?.kind === 'NonNull') ? init.expr : undefined;
 
     // Get callee symbol
     const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;

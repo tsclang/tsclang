@@ -127,9 +127,9 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
       for (const s of (Array.isArray(stmts) ? stmts : [])) {
         const nd = s as Record<string, unknown>;
         if (nd.kind === 'ExprStmt' && (nd.expr as Record<string, unknown>)?.kind === 'Assign') {
-          const lhs = nd.expr as Record<string, unknown>;
-          if (lhs?.kind === 'Ident') writtenVars.add(lhs.name);
-          if (lhs?.kind === 'Member') {
+          const lhs = ((nd.expr as Record<string, unknown>).left as Record<string, unknown>) ?? {};
+          if (lhs.kind === 'Ident') writtenVars.add(lhs.name);
+          if (lhs.kind === 'Member') {
             const obj = lhs.object as Record<string, unknown>;
             if (obj?.kind === 'Ident') writtenVars.add(obj.name);
           }

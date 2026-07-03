@@ -9,7 +9,7 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
         // Check if source is a declared ambient module (declare module "name" { ... })
         if (ctx._declaredModules?.has(node.source)) {
           const decls = ctx._declaredModules.get(node.source)!;
-          const requestedNames = new Set((node.names ?? []).map((n: { name: string }) => n.name));
+          const requestedNames = new Set((node.names ?? []).map((n: string | { name: string }) => typeof n === 'object' ? n.name : n));
           for (const decl of decls) {
             if (!requestedNames.size || requestedNames.has(decl.name)) {
               if (decl.kind === 'DeclareFunction') ctx.visitDeclareFunction(decl as DeclareFunction);

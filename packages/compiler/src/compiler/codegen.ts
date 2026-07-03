@@ -1098,7 +1098,7 @@ class Context {
   }
 
   _checkFieldMoved(sym: SymbolInfo | null | undefined, prop: string, node: NodePos | null, objName: string) {
-    if (sym?._movedFields && (sym._movedFields as unknown as { has(p: string): boolean }).has(prop)) {
+    if (sym?._movedFields && sym._movedFields.includes(prop)) {
       const ms = (sym._movedFieldSourceNode as Record<string, NodePos> | undefined)?.[prop];
       throw this.error(`use of moved value: '${objName}.${prop}'`, node, {
         label: 'use of moved value',

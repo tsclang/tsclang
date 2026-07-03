@@ -1,5 +1,5 @@
 import type { CodeGenContext } from '../../codegen.js';
-import type { Expression, TypeAnn, VarDecl, ObjectField, Call, Block } from '@tsclang/ast';
+import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
@@ -769,7 +769,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             const initC = ctx.exprToC(innerInit, lines, depth);
             p(`${className} ${tempName} = ${initC};`);
             ctx.define(tempName, { ctype: className, varKind: 'let' });
-            const hasExplicit = classDef?.implements_?.some((impl) => impl.name === ifaceName);
+            const hasExplicit = classDef?.implements_?.some((impl: TypeRef | string) => (typeof impl === 'string' ? impl : impl.name) === ifaceName);
             const vtableName = hasExplicit
               ? `${className}_${ifaceName}_vtable`
               : `_${className}_${ifaceName}_vtable`;
@@ -792,7 +792,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             const argClass = ctx.classes.get(argSym.ctype);
             if (argClass) {
             const className = argSym.ctype;
-            const hasExplicit = argClass.implements_?.some((impl) => impl.name === ifaceName);
+            const hasExplicit = argClass.implements_?.some((impl: TypeRef | string) => (typeof impl === 'string' ? impl : impl.name) === ifaceName);
             const vtableName = hasExplicit
               ? `${className}_${ifaceName}_vtable`
               : `_${className}_${ifaceName}_vtable`;

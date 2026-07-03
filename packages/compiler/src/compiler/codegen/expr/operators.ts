@@ -1,4 +1,4 @@
-import type { Binary, Unary, Expression } from '@tsclang/ast';
+import type { Binary, Unary, Expression, TypeRef } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
 // operators.ts
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
@@ -33,7 +33,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           const ifaceName = objSym2.ctype;
           const className = typeName;
           const classDef = ctx.classes.get(className);
-          const hasExplicit = classDef?.implements_?.some(i => i.name === ifaceName);
+          const hasExplicit = classDef?.implements_?.some((i: TypeRef | string) => (typeof i === 'string' ? i : i.name) === ifaceName);
           const vtableName = hasExplicit ? `${className}_${ifaceName}_vtable` : `_${className}_${ifaceName}_vtable`;
           if (!hasExplicit) ctx._ensureImplicitVtable(className, ifaceName);
           const objC2 = ctx.exprToC(node.left, lines, depth);
@@ -46,7 +46,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       if (objSym2?.ctype && ctx.classes.has(objSym2.ctype)) {
         const className = objSym2.ctype;
         const classDef = ctx.classes.get(className);
-        const hasExplicit = classDef?.implements_?.some(i => i.name === typeName);
+        const hasExplicit = classDef?.implements_?.some((i: TypeRef | string) => (typeof i === 'string' ? i : i.name) === typeName);
         const vtableName = hasExplicit ? `${className}_${typeName}_vtable` : `_${className}_${typeName}_vtable`;
         if (!hasExplicit) ctx._ensureImplicitVtable(className, typeName);
         return `${objC}.vtable == &${vtableName}`;
