@@ -4,3 +4,4 @@
 
 - `15-decorators.md` — декораторы как языковой примитив, @sealed, пользовательские
 - `15-decorators-overview.md` — обзор применения декораторов на классах (из 07-classes)
+- `15-decorators-reference.md` — quick reference: что/без для каждого декоратора
