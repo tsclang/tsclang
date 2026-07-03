@@ -1,0 +1,8 @@
+function scale(x: i32): f64 {
+    return x * 2.0;
+}
+const arr: i32[] = [1, 2, 3];
+const result = arr.map(scale);
+console.log(result[0]);
+console.log(result[1]);
+console.log(result[2]);

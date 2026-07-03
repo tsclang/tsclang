@@ -1,0 +1,6 @@
+function scale(x: i32): f64 {
+    return x * 2.0;
+}
+const arr: i32[] = [1, 2, 3, 4, 5];
+const result = arr.map(scale).filter(x => x > 4.0);
+console.log(result.length);

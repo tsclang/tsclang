@@ -1,0 +1,8 @@
+function double(x: i32): i32 {
+    return x * 2;
+}
+const arr: i32[] = [1, 2, 3];
+const result = arr.map(double);
+console.log(result[0]);
+console.log(result[1]);
+console.log(result[2]);

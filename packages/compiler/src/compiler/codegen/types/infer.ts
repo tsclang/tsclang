@@ -825,6 +825,17 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
           }
           return `Array_${outIdent}`;
         }
+        if (cbArg?.kind === 'Ident') {
+          const sym = ctx.lookup(cbArg.name);
+          const retCType = sym?._closureFnName ? sym.closureRetType : sym?.ctype;
+          if (retCType) {
+            let outIdent = ctx.cTypeToIdent(retCType);
+            if (prop === 'flatMap' && retCType.startsWith('Array_')) {
+              outIdent = retCType.slice(6);
+            }
+            return `Array_${outIdent}`;
+          }
+        }
         return objType;
       }
       if (prop === 'slice') return objType;
