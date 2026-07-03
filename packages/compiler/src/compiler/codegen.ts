@@ -510,6 +510,8 @@ class Context {
   _funcRefVars!: Set<string>;
   _platformSkipped!: Map<string, string[]>;
   _emittedTasksTypedefs!: boolean;
+  _allStructNames!: Set<string>;
+  _forwardDeclared!: Set<string>;
 
   // Function-visit state
   _curFuncName!: string | null;
@@ -1065,6 +1067,12 @@ class Context {
       for (const cleanup of this._postStmtCleanups) lines.push(cleanup);
       this._postStmtCleanups = [];
     }
+  }
+
+  _ensureForwardDecl(cname: string) {
+    if (this._forwardDeclared.has(cname)) return;
+    this._forwardDeclared.add(cname);
+    this.addTop(`typedef struct ${cname} ${cname};`);
   }
 
   _genNextCall(sym: SymbolInfo, objC: string) {

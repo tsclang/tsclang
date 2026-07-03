@@ -60,9 +60,19 @@ struct Tree { int32_t value; Tree * left; Tree * right; };
 - **Arc\<Self\>** → `T *` (managed pointer) — OK
 - **By-value Self** (`field: Self`) — **ошибка компилятора**: бесконечный размер; используйте Ref/Arc/Mut для indirection
 
-Компилятор автоматически определяет self-reference и эмитит `typedef struct Name Name;` перед `struct Name { ... };`. Тот же паттерн применяется к data-only `interface`.
+Компилятор автоматически определяет self-reference и cross-reference, эмитит `typedef struct Name Name;` для всех нужных типов перед их определениями. Тот же механизм работает для мутуальной рекурсии и смешанных type alias + interface:
 
-**Мутуальная рекурсия** (`A` ссылается на `B`, `B` ссылается на `A`) пока не поддерживается — требуется pre-pass для forward-declaration всех типов.
+```typescript
+type A = { b: Arc<B> };
+type B = { a: Arc<A> };
+```
+
+```c
+typedef struct B B;
+typedef struct A A;
+struct A { B * b; };
+struct B { A * a; };
+```
 
 ## String Literal Union
 

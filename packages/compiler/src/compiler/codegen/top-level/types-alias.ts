@@ -8,6 +8,39 @@ export interface StructField {
   isMethod?: boolean;
 }
 
+function _emitStructType(
+  ctx: CodeGenContext,
+  cname: string,
+  fieldParts: string[],
+  fieldCTypes: string[]
+): void {
+  const isSelfRef = fieldCTypes.some(ct =>
+    ct.includes(cname + ' *') || ct.includes(cname + '*')
+  );
+
+  const crossRefs = new Set<string>();
+  for (const ct of fieldCTypes) {
+    for (const m of ct.matchAll(/(\w+)\s*\*/g)) {
+      const tn = m[1];
+      if (tn === cname) continue;
+      if (ctx._allStructNames?.has(tn) && !ctx._forwardDeclared.has(tn)) {
+        crossRefs.add(tn);
+      }
+    }
+  }
+
+  const wasForwardDeclared = ctx._forwardDeclared.has(cname);
+
+  if (isSelfRef || crossRefs.size > 0 || wasForwardDeclared) {
+    for (const ref of crossRefs) ctx._ensureForwardDecl(ref);
+    ctx._ensureForwardDecl(cname);
+    ctx.addTop(`struct ${cname} { ${fieldParts.join(' ')} };`);
+  } else {
+    ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
+    ctx._forwardDeclared.add(cname);
+  }
+}
+
 // types-alias.ts
 export function visitInterface(ctx: CodeGenContext, node: Interface) {
     const { name, members } = node;
@@ -39,13 +72,7 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
         }
       }
       ctx._resolvingTypes.delete(name);
-      const isSelfRef = fieldCTypes.some(ct => ct.includes(cname + ' *') || ct.includes(cname + '*'));
-      if (isSelfRef) {
-        ctx.addTop(`typedef struct ${cname} ${cname};`);
-        ctx.addTop(`struct ${cname} { ${fieldParts.join(' ')} };`);
-      } else {
-        ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
-      }
+      _emitStructType(ctx, cname, fieldParts, fieldCTypes);
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: props });
       return;
     }
@@ -105,13 +132,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
         fieldParts.push(`${ct} ${f.name};`);
       }
       ctx._resolvingTypes.delete(name);
-      const isSelfRef = fieldCTypes.some(ct => ct.includes(cname + ' *') || ct.includes(cname + '*'));
-      if (isSelfRef) {
-        ctx.addTop(`typedef struct ${cname} ${cname};`);
-        ctx.addTop(`struct ${cname} { ${fieldParts.join(' ')} };`);
-      } else {
-        ctx.addTop(`typedef struct { ${fieldParts.join(' ')} } ${cname};`);
-      }
+      _emitStructType(ctx, cname, fieldParts, fieldCTypes);
       ctx.classes.set(name, { isStruct: true, _cname: cname, fields: typeAnn.fields });
     } else if (typeAnn?.kind === 'TypeTuple') {
       // Tuple alias: type Point = [x: f64, y: f64] → typedef struct { double _0; double _1; } Point;

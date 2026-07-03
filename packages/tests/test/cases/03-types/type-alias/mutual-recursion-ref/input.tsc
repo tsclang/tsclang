@@ -1,0 +1,2 @@
+type A = { b: Ref<B> };
+type B = { a: Ref<A> };

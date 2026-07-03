@@ -102,14 +102,14 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1788 (spec-based) + 135 (engine)
+### Tests: 1792 (spec-based) + 135 (engine)
 
-**Spec-based:** 1788 pass, 0 fail, 2 skipped
+**Spec-based:** 1792 pass, 0 fail, 2 skipped
 
 | Section | Tests | Topic |
 |---------|-------|-------|
 | 02-syntax | 127 | Arithmetic, variables, formatting |
-| 03-types | 408 | Numbers, enums, tuples, null |
+| 03-types | 412 | Numbers, enums, tuples, null |
 | 04-ownership | 116 | Ownership, Arc, Weak, Clone |
 | 06-functions | 66 | Functions, closures, overloads |
 | 08-collections | 236 | Arrays, Map, Set, strings |

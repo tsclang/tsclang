@@ -1,0 +1,2 @@
+type A = { b: Arc<B> };
+type B = { a: Arc<A> };

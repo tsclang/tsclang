@@ -440,6 +440,26 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       }
     }
 
+    // Pre-scan: collect all struct-emitting type names for mutual recursion support.
+    //   When type A references type B via pointer and B hasn't been emitted yet,
+    //   we forward-declare B so the C compiler knows the type exists.
+    ctx._allStructNames = new Set();
+    ctx._forwardDeclared = new Set();
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (!n) continue;
+      const prefix = ctx._modulePrefix ?? '';
+      if (n.kind === 'ClassDecl') {
+        ctx._allStructNames.add(prefix + n.name);
+      } else if (n.kind === 'Interface') {
+        const hasMethods = (n.members ?? []).some((m: { kind: string }) => m.kind === 'MethodSig');
+        if (!hasMethods) ctx._allStructNames.add(prefix + n.name);
+      } else if (n.kind === 'TypeAlias' && n.typeAnn?.kind === 'TypeObject') {
+        const hasMethod = n.typeAnn.fields.some((f: { isMethod?: boolean }) => f.isMethod);
+        if (!hasMethod) ctx._allStructNames.add(prefix + n.name);
+      }
+    }
+
     // Phase A: Process type declarations (classes, interfaces, type aliases, enums)
     //   Ensures all type metadata is registered before any function body codegen,
     //   enabling forward references and a future monomorphization pre-pass.

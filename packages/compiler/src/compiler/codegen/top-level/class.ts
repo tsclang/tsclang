@@ -201,11 +201,12 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
           const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : '';
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
-        if (isSelfRef) {
-          ctx.addTop(`typedef struct ${cname} ${cname};`);
+        if (isSelfRef || ctx._forwardDeclared.has(cname)) {
+          ctx._ensureForwardDecl(cname);
           ctx.addTop(`struct ${cname} { ${allArcFields.join(' ')} };`);
         } else {
           ctx.addTop(`typedef struct { ${allArcFields.join(' ')} } ${cname};`);
+          ctx._forwardDeclared.add(cname);
         }
       } else {
         const isSelfRef = fields.some((f: Field) => {
@@ -213,11 +214,12 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
           return ct.includes(name + ' *') || ct.includes(name + '*');
         });
         const fieldContent = userFieldParts.length > 0 ? userFieldParts.join(' ') : 'int _dummy;';
-        if (isSelfRef) {
-          ctx.addTop(`typedef struct ${cname} ${cname};`);
+        if (isSelfRef || ctx._forwardDeclared.has(cname)) {
+          ctx._ensureForwardDecl(cname);
           ctx.addTop(`struct${structAttr} ${cname} { ${fieldContent} };`);
         } else {
           ctx.addTop(`typedef struct${structAttr} { ${fieldContent} } ${cname};`);
+          ctx._forwardDeclared.add(cname);
         }
       }
 
