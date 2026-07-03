@@ -70,7 +70,9 @@ if (s.length > 0) { ... }
 - Синтаксис nullable типа: `T | null` — для любых типов, компилятор выбирает реализацию:
   - Примитивы (`i8`..`i64`, `u8`..`u64`, `f32`, `f64`, `boolean`) → `struct { bool has_value; T value; }` в C
   - `string` → `struct { bool has_value; String value; }` в C (inline struct, ARC copy)
-  - Сложные типы (массивы, объекты, Map, Set) → `T* = NULL` в C (бесплатно)
+  - Value class → `struct { bool has_value; T value; }` в C (inline struct)
+  - `Ref<T>`, `@heap` class → `T*` в C (уже nullable через NULL, без обёртки)
+  - См. [03-null.md](03-null.md) для полной таблицы представлений
 
   > **Overhead:** `i32 | null` занимает 8 байт вместо 4 из-за alignment в C (`bool` добавляет padding). Массив из 1 000 000 элементов `i32 | null` займёт 8 МБ вместо 4 МБ. Для горячих путей с большими nullable-массивами примитивов — используй sentinel-значения вручную (`-1`, `INT32_MIN`) и обычный `i32`.
 - Компилятор сужает тип после проверки (type narrowing):

@@ -8,7 +8,7 @@
 
 > **Подробная спецификация nullable в контексте for-of и итераторов** — в [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md).
 
-`T | null` компилируется в struct с bool-флагом:
+`T | null` компилируется по-разному в зависимости от типа T:
 
 ```c
 // Примитивы — inline value:
@@ -18,15 +18,33 @@ typedef struct {
     int32_t value;       // 4 байта
 } opt_i32;
 
-// Complex types (class, nested array) — pointer:
+// Value class — inline struct (как Option<Struct> в Rust):
 typedef struct {
-    bool    has_value;   // 1 байт
-    // padding до выравнивания указателя
-    User   *value;       // 8 байт (desktop) / 2 байта (AVR)
-} opt_User;
+    bool    has_value;
+    Point   value;       // полный struct inline
+} opt_Point;
+
+// String — inline (ARC Copy, immutable):
+typedef struct {
+    bool    has_value;
+    String  value;       // sizeof(String) = 32 байта на desktop
+} opt_string;
 ```
 
-**Правило (тернарное):** `isPrimitive(T)` → `T value`; `isString(T)` → `String value`; иначе (class/nested array) → `T *value`. Причина: String — ARC Copy (immutable), inline struct без overhead; complex types в TSClang — уже value types (struct), `opt_T` с inline struct = двойная вложенность + лишний padding, pointer — компактнее и семантически точнее (borrow/null). См. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md) §5.4.
+**Четыре варианта nullable-представления:**
+
+| Тип T | `T \| null` → C | Представление | Аналог в Rust | Размер (desktop) |
+|-------|-----------------|---------------|---------------|------------------|
+| Примитив (`i32`, `f64`, ...) | `opt_T = { bool; T value; }` | inline | `Option<T>` | 8–16 байт |
+| String | `opt_string = { bool; String value; }` | inline (ARC Copy) | `Option<String>` | 40 байт |
+| Value class (по умолчанию) | `opt_Foo = { bool; Foo value; }` | **inline struct** | `Option<Struct>` | sizeof(Foo) + padding |
+| `@heap` class | `Foo *` | **bare pointer** (NULL = absent) | `Option<Box<T>>` | 8 байт |
+| `@pool` class | `opt_ref_Foo = { bool; Foo* value; int _pool_idx; }` | pointer + pool idx | `Option<&T>` (с overhead) | 16 байт |
+| `Ref<T>` | `T *` | **bare pointer** (NULL = absent) | `Option<&T>` | 8 байт |
+
+**Правило:** `isPointer(T)` → bare pointer, без opt_-обёртки (pointer уже nullable через NULL). Иначе → `opt_T` struct с inline `T value`.
+
+Value class — inline по умолчанию. Это **сознательное решение**: value semantics = копирование, как `Option<Struct>` в Rust. Для pointer-семантики используйте `Ref<T> | null` (zero overhead), `@heap` или `@pool`.
 
 Размер с учётом выравнивания (примитивы):
 
@@ -38,16 +56,6 @@ typedef struct {
 | `i64 \| null` | `bool + pad(7) + i64` | 16 байт |
 | `f32 \| null` | `bool + pad(3) + f32` | 8 байт |
 | `f64 \| null` | `bool + pad(7) + f64` | 16 байт |
-
-Complex types:
-
-| Тип | C struct | Размер (desktop) |
-|-----|----------|------------------|
-| `string \| null` | `bool + pad(7) + String (32 байта)` | 40 байт |
-| `User \| null` | `bool + pad(7) + User*` | 16 байт |
-| `i32[] \| null` | `bool + pad(7) + Array_i32*` | 16 байт |
-
-String — ARC Copy, `String value` inline (не pointer). `sizeof(String)` = 32 байта на desktop (`char*` + `size_t` length + `size_t` capacity + `uint32_t* _refcount`).
 
 На desktop это некритично. На embedded (AVR: 2KB RAM) overhead padding может быть значимым.
 

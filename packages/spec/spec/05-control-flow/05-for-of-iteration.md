@@ -419,7 +419,7 @@ for (size_t i = 0; i < groups.length; i++) {
 
 ### 5.1 opt_T — раздельная мономорфизация
 
-Компилятор генерирует `opt_T` по-разному в зависимости от типа элемента (три варианта):
+Компилятор генерирует `opt_T` / `opt_ref_T` по-разному в зависимости от типа элемента (три варианта):
 
 ```c
 // Примитив (int, bool, char, f64):
@@ -428,11 +428,11 @@ typedef struct { bool has_value; int32_t value; } opt_i32;        // T value —
 // String (ARC copy):
 typedef struct { bool has_value; String value; } opt_string;      // String value — ARC Copy
 
-// Complex (class, nested array):
-typedef struct { bool has_value; User *value; } opt_User;          // T *value — Borrow
+// Complex (class, nested array) — pointer (borrow):
+typedef struct { bool has_value; User *value; } opt_ref_User;     // T *value — Borrow
 ```
 
-Три категории: primitive (copy), string (ARC copy), complex (borrow pointer). Согласовано с таблицей в §5.4.
+Три категории: primitive (copy), string (ARC copy), complex (borrow pointer). Для complex types используется `opt_ref_T` (pointer), а не `opt_T` (inline struct) — итератор возвращает borrow на элемент коллекции, а не копию. См. [03-null.md](../03-types/03-null.md) для общего описания nullable-представления.
 
 ### 5.2 Пример: LinkedList\<User\>
 
@@ -465,17 +465,17 @@ C-вывод (complex type):
 typedef struct { Node *current; } LinkedList_iter_t;
 
 // next() возвращает POINTER на value внутри узла
-static opt_User LinkedList_iter_next(LinkedList_iter_t *_self) {
-    if (!_self->current) return (opt_User){false};
+static opt_ref_User LinkedList_iter_next(LinkedList_iter_t *_self) {
+    if (!_self->current) return (opt_ref_User){false};
     User *val = &_self->current->value;            // pointer в узел
     _self->current = _self->current->next;
-    return (opt_User){true, val};                   // return pointer
+    return (opt_ref_User){true, val};               // return pointer
 }
 
 // Desugared loop — RAII scope isolation
 {
     LinkedList_iter_t iter = LinkedList_iter(&list);
-    opt_User elem;
+    opt_ref_User elem;
     while ((elem = LinkedList_iter_next(&iter)).has_value) {
         User *item = elem.value;    // pointer на узел списка
         item->age = 99;             // мутирует узел!
@@ -525,12 +525,12 @@ for (let item of myLinkedList) {
 
 ### 5.4 Сводка Protocol Path
 
-| Тип элемента | opt_T.value | `const item` | `let item` | Мутация полей влияет на источник? |
-|-------------|------------|-------------|-----------|----------------------------------|
-| Primitive | `T value` | `const T item = elem.value` | `T item = elem.value` | Нет (копия) |
-| String | `String value` | `const String item = elem.value` | `String item = elem.value` | Нет (ARC copy) |
-| Class | `T *value` | `const T *item = elem.value` | `T *item = elem.value` | **Да** (pointer) |
-| Array\<U\> | `T *value` | `const T *item = elem.value` | `T *item = elem.value` | **Да** (pointer) |
+| Тип элемента | opt repr | `const item` | `let item` | Мутация полей влияет на источник? |
+|-------------|----------|-------------|-----------|----------------------------------|
+| Primitive | `opt_T` (inline) | `const T item = elem.value` | `T item = elem.value` | Нет (копия) |
+| String | `opt_string` (inline) | `const String item = elem.value` | `String item = elem.value` | Нет (ARC copy) |
+| Class | `opt_ref_T` (pointer) | `const T *item = elem.value` | `T *item = elem.value` | **Да** (pointer) |
+| Array\<U\> | `opt_ref_T` (pointer) | `const T *item = elem.value` | `T *item = elem.value` | **Да** (pointer) |
 
 ---
 
@@ -719,7 +719,7 @@ static inline bool tsc_graphemes_next(TscGraphemeIter *it, String *out) {
 4. Тесты: mutate-source-push-error, mutate-source-index-assign-error
 
 **Step 3: Protocol Path P2**
-1. `emit-helpers.ts`: генерация `opt_T` — primitive → `T value` (copy), String → `String value` (ARC copy + retain), complex → `T *value` (borrow pointer)
+1. `emit-helpers.ts`: генерация `opt_T` / `opt_ref_T` — primitive → `opt_T` (inline copy), String → `opt_string` (ARC copy + retain), complex → `opt_ref_T` (borrow pointer)
 2. `emit-helpers.ts`: `next()` body — для complex types pointer на value
 3. `control-flow.ts`: Protocol Path desugaring — complex types `T *item = elem.value`
 4. Тесты: iterable/linked-list-class (complex type, P2 pointer)
