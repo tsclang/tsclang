@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1803 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1816 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -208,23 +208,24 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 
 ---
 
-## 15. Decimal Fixed-Point Types (#180 — Phase 1 DONE)
+## 15. Decimal Fixed-Point Types (#180 — Phase 1-2 DONE)
 
-**Phase 1 (Foundation) implemented:** type registration, literal conversion, FPU check, `defaultNumber` integration. 11 tests pass. See issue #180 for full plan (11 phases).
+**Phase 1 (Foundation) + Phase 2 (Arithmetic) implemented.** 24 tests pass. See issue #180 for full plan.
 
-### Implemented (Phase 1)
+### Implemented (Phase 1-2)
 
 - Type registration: `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), runtime typedefs.
 - Literal conversion: `literalToCTyped` scales float literals to integers (e.g., `1.5` → `15000` for d32). `scaleLiteral()` uses round-half-away-from-zero.
 - Negative literals: `vardecl.ts` handles `Unary('-', Literal)` for decimal types only.
 - `defaultNumber: "d32"` etc. makes `number` resolve to decimal ctype via `_effectiveType` in `infer.ts`.
 - FPU check: `program.ts` pre-scan skips float-literal rejection inside decimal-typed `VarDecl` init (context-aware `skipFloatLiterals` flag).
-- Key files: `decimal.ts` (helpers), `helpers.ts` (NumInfo with `scale`/`decimals`), `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `runtime.h`.
+- **Arithmetic:** `+`/`-` plain integer ops (same scale). `*` via `tsc_mul_dXX()` runtime helpers (wider intermediate, round-half-away-from-zero). `/` via `tsc_div_dXX()` + div-by-zero guard. `%` plain integer + div-by-zero guard. Mixed decimal types → compile error.
+- **Compound assignment:** `+=`/`-=` work directly. `*=`/`/=` use runtime helpers.
+- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `runtime.h`.
 - Spec: `03-types/03-decimal-types.md`.
 
-### Roadmap (Phases 2-5)
+### Roadmap (Phases 3-5)
 
-- **Phase 2:** Arithmetic (`*`/`/` with rounding runtime helpers, `+`/`-` work as-is, widening).
-- **Phase 3:** Casts (`as` truncate, `Math.roundCast`, `no-lossy-cast` updates).
+- **Phase 3:** Casts (`as` truncate, `Math.roundCast`, `no-lossy-cast` updates, widening d8→d16→d32→d64 with rescaling).
 - **Phase 4:** Formatting (console.log, toString, template literals).
-- **Phase 5:** Math + Platform (Math.sqrt/abs on decimal, saturatingCast/checkedCast).
+- **Phase 5:** Math + Platform (Math.sqrt/abs on decimal, saturatingCast/checkedCast for decimal).

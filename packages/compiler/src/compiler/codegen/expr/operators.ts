@@ -286,6 +286,38 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       if (lt === 'double' || rt === 'double') return `fmod(${l}, ${r})`;
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
+    // Decimal fixed-point arithmetic: *, / need runtime helpers; +, -, % are plain integer ops
+    const DECIMAL_CTYPES = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
+    if (arithOps.includes(node.op)) {
+      const dlt = ctx.inferType(node.left);
+      const drt = ctx.inferType(node.right);
+      if (DECIMAL_CTYPES.has(dlt) || DECIMAL_CTYPES.has(drt)) {
+        if (dlt !== drt) {
+          const tsA = ctx.ctypeToTsName(dlt);
+          const tsB = ctx.ctypeToTsName(drt);
+          throw ctx.error(`TypeError: cannot mix ${tsA} and ${tsB} in arithmetic without explicit cast`, node);
+        }
+        if (node.op === '*') {
+          const helper = `tsc_mul_${dlt.replace('_t', '')}`;
+          return `${helper}(${l}, ${r})`;
+        }
+        if (node.op === '/' || node.op === '%') {
+          const I = ' '.repeat(ctx.indent * depth);
+          const tmp = `_tsc_div_${ctx.tempCount++}`;
+          const panicExpr = ctx._strictRules?.has('no-abort')
+            ? '_tsc_on_panic("division by zero")'
+            : 'abort()';
+          lines.push(`${I}${drt} ${tmp} = ${r};`);
+          lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+          if (node.op === '/') {
+            const helper = `tsc_div_${dlt.replace('_t', '')}`;
+            return `${helper}(${l}, ${tmp})`;
+          }
+          return `${l} % ${tmp}`;
+        }
+        return `${l} ${op} ${r}`;
+      }
+    }
     const _isIntOperand = (n: Expression, t: string) => {
       if (intTypes.has(t)) return true;
       if (t === undefined) return true;

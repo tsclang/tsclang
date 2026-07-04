@@ -401,6 +401,24 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       }
     }
 
+    // Decimal compound assignment: *=, /= need runtime helpers
+    const DECIMAL_CTYPES_ASN = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
+    if (DECIMAL_CTYPES_ASN.has(leftType) && (node.op === '*=' || node.op === '/=')) {
+      if (node.op === '*=') {
+        const helper = `tsc_mul_${leftType.replace('_t', '')}`;
+        return `${l} = ${helper}(${l}, ${r})`;
+      }
+      const helper = `tsc_div_${leftType.replace('_t', '')}`;
+      const I = ' '.repeat(ctx.indent * depth);
+      const tmp = `_tsc_div_${ctx.tempCount++}`;
+      const panicExpr = ctx._strictRules?.has('no-abort')
+        ? '_tsc_on_panic("division by zero")'
+        : 'abort()';
+      lines.push(`${I}${leftType} ${tmp} = ${r};`);
+      lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+      return `${l} = ${helper}(${l}, ${tmp})`;
+    }
+
     if (node.op === '+=' || node.op === '-=' || node.op === '*=') {
       const signedIntSet = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t']);
       if (signedIntSet.has(leftType)) {

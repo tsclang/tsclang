@@ -122,6 +122,66 @@ typedef int16_t d16_t;
 typedef int32_t d32_t;
 typedef int64_t d64_t;
 
+/* Decimal multiply: result = round_half_away_from_zero(a * b / scale) */
+static inline d8_t tsc_mul_d8(d8_t a, d8_t b) {
+    int16_t prod = (int16_t)a * (int16_t)b;
+    if (prod >= 0) prod += 50; else prod -= 50;
+    return (d8_t)(prod / 100);
+}
+static inline d16_t tsc_mul_d16(d16_t a, d16_t b) {
+    int32_t prod = (int32_t)a * (int32_t)b;
+    if (prod >= 0) prod += 50; else prod -= 50;
+    return (d16_t)(prod / 100);
+}
+static inline d32_t tsc_mul_d32(d32_t a, d32_t b) {
+    int64_t prod = (int64_t)a * (int64_t)b;
+    if (prod >= 0) prod += 5000; else prod -= 5000;
+    return (d32_t)(prod / 10000);
+}
+static inline d64_t tsc_mul_d64(d64_t a, d64_t b) {
+#if defined(__SIZEOF_INT128__)
+    __int128 prod = (__int128)a * (__int128)b;
+    if (prod >= 0) prod += 50000000; else prod -= 50000000;
+    return (d64_t)(prod / 100000000);
+#else
+    int64_t ah = a / 10000, al = a % 10000;
+    int64_t bh = b / 10000, bl = b % 10000;
+    int64_t result = ah * bh * 10000 + ah * bl + al * bh + (al * bl) / 10000;
+    return (d64_t)result;
+#endif
+}
+
+/* Decimal divide: result = round_half_away_from_zero(a * scale / b) */
+static inline d8_t tsc_div_d8(d8_t a, d8_t b) {
+    int16_t num = (int16_t)a * 100;
+    int16_t half = b < 0 ? (int16_t)(-(int16_t)b / 2) : (int16_t)(b / 2);
+    if (num >= 0) num += half; else num -= half;
+    return (d8_t)(num / b);
+}
+static inline d16_t tsc_div_d16(d16_t a, d16_t b) {
+    int32_t num = (int32_t)a * 100;
+    int32_t half = b < 0 ? -(b / 2) : b / 2;
+    if (num >= 0) num += half; else num -= half;
+    return (d16_t)(num / b);
+}
+static inline d32_t tsc_div_d32(d32_t a, d32_t b) {
+    int64_t num = (int64_t)a * 10000;
+    int64_t half = b < 0 ? -(b / 2) : b / 2;
+    if (num >= 0) num += half; else num -= half;
+    return (d32_t)(num / b);
+}
+static inline d64_t tsc_div_d64(d64_t a, d64_t b) {
+#if defined(__SIZEOF_INT128__)
+    __int128 num = (__int128)a * 100000000;
+    __int128 half = b < 0 ? -((__int128)b / 2) : (__int128)b / 2;
+    if (num >= 0) num += half; else num -= half;
+    return (d64_t)(num / b);
+#else
+    int64_t result = (a / b) * 100000000 + ((a % b) * 100000000) / b;
+    return (d64_t)result;
+#endif
+}
+
 /* -------------------------------------------------------------------------
  * Allocation helpers РІР‚вЂќ fail-fast on OOM
  * All heap allocations in the runtime go through these wrappers.

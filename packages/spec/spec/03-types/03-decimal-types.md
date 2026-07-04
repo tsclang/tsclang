@@ -89,12 +89,32 @@ typedef int64_t  d64_t;
 
 Отдельные typedef-имена (не `int32_t` напрямую) позволяют компилятору различать decimal и integer типы по C-имени.
 
-### *[ROADMAP] Арифметика
+### Арифметика
 
-- `+`, `-` — работают напрямую (одинаковый scale, точность не теряется)
-- `*` — требует нормализации (результат имеет scale², нужен rounding back)
-- `/` — требует масштабирования перед делением
-- Округление: round-half-away-from-zero для `*` и `/`
+Для операндов одного decimal-типа:
+
+| Операция | Поведение | C-output |
+|----------|-----------|----------|
+| `+`, `-` | Прямое сложение/вычитание scaled integers (точное) | `a + b`, `a - b` |
+| `*` | Умножение с нормализацией: `(a * b) / scale`, round-half-away-from-zero | `tsc_mul_dXX(a, b)` |
+| `/` | Деление с масштабированием: `(a * scale) / b`, round-half-away-from-zero + div-by-zero guard | `tsc_div_dXX(a, b)` |
+| `%` | Остаток от деления scaled integers (точное) + div-by-zero guard | `a % b` |
+
+Runtime helpers в `runtime.h` (`static inline`):
+- `tsc_mul_d8/d16/d32/d64` — умножение с wider intermediate (int16→int32→int64→`__int128`)
+- `tsc_div_d8/d16/d32/d64` — деление с wider intermediate
+
+```typescript
+let a: d32 = 1.5;      // 15000
+let b: d32 = 0.5;      // 5000
+let sum = a + b;        // 20000 (2.0)
+let prod = a * b;       // tsc_mul_d32(15000, 5000) = 7500 (0.75)
+let quot = a / b;       // tsc_div_d32(15000, 5000) = 30000 (3.0)
+```
+
+**Смешанные decimal-типы запрещены:** `d16 + d32` — compile error. Используйте явный `as` cast.
+
+**Compound assignment:** `+=`, `-=` работают напрямую. `*=`, `/=` используют runtime helpers: `a = tsc_mul_d32(a, b)`.
 
 ### *[ROADMAP] Casts
 
