@@ -315,7 +315,7 @@
 | Раздел | Тестов | Что покрывает |
 |--------|--------|---------------|
 | `02-syntax` | 127 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, spread, truthy |
-| `03-types` | 445 | Числа, decimal fixed-point, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
+| `03-types` | 449 | Числа, decimal fixed-point, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
 | `04-ownership` | 116 | Ownership, Arc, Weak, Clone, @static let, destructuring |
 | `05-control-flow` | 52 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue, match-as-expression |
 | `06-functions` | 66 | Функции, стрелочные, function expressions, default params, rest params, closures, overloads, extensions |
@@ -331,7 +331,7 @@
 | `16-tooling` | 44 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
 | `book` | 4 | Примеры из документации |
 
-**Всего: 1825 тестов.**
+**Всего: 1829 тестов.**
 
 ## Roadmap
 

@@ -1396,6 +1396,70 @@ static inline const char *tsc_dtoa(double v) {
     return buf;
 }
 
+/* Decimal fixed-point formatting.
+ * Formats a scaled integer as a decimal string with fixed decimal places.
+ * Example: tsc_dec_dtoa(15000, 10000, 4) -> "1.5000"
+ * Uses 8 rotating static buffers (same pattern as tsc_dtoa). */
+static inline const char *tsc_dec_dtoa(int64_t v, int32_t scale, int decimals) {
+    static char _bufs[8][32];
+    static int _idx = 0;
+    char *buf = _bufs[_idx & 7];
+    _idx++;
+    int neg = v < 0;
+    uint64_t av = neg ? (uint64_t)(-v) : (uint64_t)v;
+    uint64_t ipart = av / (uint64_t)scale;
+    uint64_t fpart = av % (uint64_t)scale;
+#if defined(__AVR__) || (defined(TSC_EMBEDDED) && !defined(__INT64_TYPE__))
+    snprintf(buf, 32, "%s%lu.%0*lu", neg ? "-" : "",
+             (unsigned long)ipart, decimals, (unsigned long)fpart);
+#else
+    snprintf(buf, 32, "%s%llu.%0*llu", neg ? "-" : "",
+             (unsigned long long)ipart, decimals, (unsigned long long)fpart);
+#endif
+    return buf;
+}
+
+static inline String tsc_d8_to_string(d8_t v) {
+    const char *s = tsc_dec_dtoa((int64_t)v, 100, 2);
+    size_t n = strlen(s);
+#ifdef TSC_EMBEDDED
+    char tmp[16]; memcpy(tmp, s, n + 1); return _tsc_str_make(tmp, n, n + 1);
+#else
+    char *buf = (char *)_tsc_xmalloc(n + 1); memcpy(buf, s, n + 1);
+    return _tsc_str_make(buf, n, n + 1);
+#endif
+}
+static inline String tsc_d16_to_string(d16_t v) {
+    const char *s = tsc_dec_dtoa((int64_t)v, 100, 2);
+    size_t n = strlen(s);
+#ifdef TSC_EMBEDDED
+    char tmp[16]; memcpy(tmp, s, n + 1); return _tsc_str_make(tmp, n, n + 1);
+#else
+    char *buf = (char *)_tsc_xmalloc(n + 1); memcpy(buf, s, n + 1);
+    return _tsc_str_make(buf, n, n + 1);
+#endif
+}
+static inline String tsc_d32_to_string(d32_t v) {
+    const char *s = tsc_dec_dtoa((int64_t)v, 10000, 4);
+    size_t n = strlen(s);
+#ifdef TSC_EMBEDDED
+    char tmp[16]; memcpy(tmp, s, n + 1); return _tsc_str_make(tmp, n, n + 1);
+#else
+    char *buf = (char *)_tsc_xmalloc(n + 1); memcpy(buf, s, n + 1);
+    return _tsc_str_make(buf, n, n + 1);
+#endif
+}
+static inline String tsc_d64_to_string(d64_t v) {
+    const char *s = tsc_dec_dtoa((int64_t)v, 100000000, 8);
+    size_t n = strlen(s);
+#ifdef TSC_EMBEDDED
+    char tmp[32]; memcpy(tmp, s, n + 1); return _tsc_str_make(tmp, n, n + 1);
+#else
+    char *buf = (char *)_tsc_xmalloc(n + 1); memcpy(buf, s, n + 1);
+    return _tsc_str_make(buf, n, n + 1);
+#endif
+}
+
 /* string.lastIndexOf(sub): returns last position of sub, or -1 */
 static inline ptrdiff_t tsc_string_last_index_of(String s, String sub) {
     return _tsc_str_rfind(&s, &sub);

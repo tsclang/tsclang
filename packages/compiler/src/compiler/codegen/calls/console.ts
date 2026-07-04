@@ -177,6 +177,13 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
       } else if (ctype === 'float') {
         fmtParts.push('%s');
         fmtArgs.push(`tsc_dtoa((double)${cexpr})`);
+      } else if (ctype === 'd8_t' || ctype === 'd16_t' || ctype === 'd32_t' || ctype === 'd64_t') {
+        fmtParts.push('%s');
+        const decScales: Record<string, [number, number]> = {
+          'd8_t': [100, 2], 'd16_t': [100, 2], 'd32_t': [10000, 4], 'd64_t': [100000000, 8],
+        };
+        const [scale, dp] = decScales[ctype];
+        fmtArgs.push(`tsc_dec_dtoa((int64_t)(${cexpr}), ${scale}, ${dp})`);
       } else if (ctype === 'int64_t') {
         if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
           throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);

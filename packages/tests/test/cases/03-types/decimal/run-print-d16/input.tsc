@@ -1,0 +1,2 @@
+let a: d16 = 0.5;
+console.log(a);

@@ -90,8 +90,13 @@ export function _templateToC(ctx: CodeGenContext, node: TemplateLit, lines: stri
         } else if (t === 'uint64_t') {
           if (isEmb) { const s = `_tsf_${ctx.tempCount++}`; lines.push(`${' '.repeat(ctx.indent * depth)}String ${s} = tsc_u64_to_string(${c});`); fmt += '%s'; fmtArgs.push(`${s}.data`); }
           else { fmt += '%llu'; fmtArgs.push(`(unsigned long long)${c}`); }
-        } else if (t === 'double')   { fmt += '%s'; fmtArgs.push(`tsc_dtoa(${c})`); }
+        }         else if (t === 'double')   { fmt += '%s'; fmtArgs.push(`tsc_dtoa(${c})`); }
         else if (t === 'float')    { fmt += '%s'; fmtArgs.push(`tsc_dtoa((double)${c})`); }
+        else if (t === 'd8_t' || t === 'd16_t' || t === 'd32_t' || t === 'd64_t') {
+          const decScalesT: Record<string, [number, number]> = { 'd8_t':[100,2], 'd16_t':[100,2], 'd32_t':[10000,4], 'd64_t':[100000000,8] };
+          const [sc, dp] = decScalesT[t];
+          fmt += '%s'; fmtArgs.push(`tsc_dec_dtoa((int64_t)(${c}), ${sc}, ${dp})`);
+        }
         else if (t === 'bool')     { fmt += '%s'; fmtArgs.push(`(${c}) ? "true" : "false"`); }
         else if (t === 'String') {
           if (isEmb) { fmt += '%s'; fmtArgs.push(`_tsc_str_to_ram(${c}).data`); }

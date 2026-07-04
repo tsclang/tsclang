@@ -5,6 +5,6 @@ int main(void) {
     d32_t a = 15000;
     d32_t b = 5000;
     d32_t c = a + b;
-    printf("%d\n", c);
+    printf("%s\n", tsc_dec_dtoa((int64_t)(c), 10000, 4));
     return 0;
 }

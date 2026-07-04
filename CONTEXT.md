@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1825 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1829 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -208,11 +208,11 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 
 ---
 
-## 15. Decimal Fixed-Point Types (#180 — Phase 1-3 DONE)
+## 15. Decimal Fixed-Point Types (#180 — Phase 1-4 DONE)
 
-**Phase 1 (Foundation) + Phase 2 (Arithmetic) + Phase 3 (Casts) implemented.** 33 tests pass. See issue #180 for full plan.
+**Phase 1-4 implemented.** 37 tests pass. See issue #180 for full plan.
 
-### Implemented (Phase 1-3)
+### Implemented (Phase 1-4)
 
 - Type registration: `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), runtime typedefs.
 - Literal conversion: `literalToCTyped` scales float literals to integers (e.g., `1.5` → `15000` for d32). `scaleLiteral()` uses round-half-away-from-zero.
@@ -222,10 +222,10 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 - **Arithmetic:** `+`/`-` plain integer ops (same scale). `*` via `tsc_mul_dXX()` runtime helpers (wider intermediate, round-half-away-from-zero). `/` via `tsc_div_dXX()` + div-by-zero guard. `%` plain integer + div-by-zero guard. Mixed decimal types → compile error.
 - **Compound assignment:** `+=`/`-=` work directly. `*=`/`/=` use runtime helpers.
 - **Casts (`as`):** Scale-aware conversion. int→dec: `*scale`, dec→int: `/scale` (truncate), dec→dec widen: `*(dstScale/srcScale)`, dec→dec narrow: `/(srcScale/dstScale)` (truncate), dec↔float: `/scale.0` or `*scale.0`. `_isSafeWidening` updated for decimal kinds.
-- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `runtime.h`.
+- **Formatting:** `console.log`, template literals, `.toString()`, string concat all use `tsc_dec_dtoa()` / `tsc_dXX_to_string()` — fixed decimal places (d8/d16=2dp, d32=4dp, d64=8dp).
+- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `runtime.h`.
 - Spec: `03-types/03-decimal-types.md`.
 
-### Roadmap (Phases 4-5)
+### Roadmap (Phase 5)
 
-- **Phase 4:** Formatting (console.log, toString, template literals).
 - **Phase 5:** Math + Platform (Math.sqrt/abs on decimal, Math.roundCast/saturatingCast/checkedCast for decimal).

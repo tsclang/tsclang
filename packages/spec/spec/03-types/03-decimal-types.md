@@ -145,6 +145,22 @@ let f = d as f64;       // (double)(d / 10000.0) = 1.5
 
 ### *[ROADMAP] Math.roundCast / saturatingCast / checkedCast
 
-### *[ROADMAP] Форматирование
+### Форматирование
 
-`console.log`, `toString`, template literals — decimal значения форматируются с учётом scale (например, `d32` со значением `15000` выводится как `1.5000`).
+Decimal значения форматируются с фиксированным числом знаков после запятой:
+
+| Тип | Формат | Пример |
+|------|--------|--------|
+| `d8` | `N.NN` | `0.50` |
+| `d16` | `N.NN` | `1.50` |
+| `d32` | `N.NNNN` | `1.5000` |
+| `d64` | `N.NNNNNNNN` | `1.50000000` |
+
+Runtime: `tsc_dec_dtoa(int64_t v, int32_t scale, int decimals)` — вращающиеся static buffers (для `console.log`, template literals). `tsc_dXX_to_string()` — heap-allocated `String` (для `.toString()`, string concat).
+
+```typescript
+let a: d32 = 1.5;
+console.log(a);          // "1.5000"
+let s = a.toString();    // "1.5000"
+let t = `val=${a}`;      // "val=1.5000"
+```
