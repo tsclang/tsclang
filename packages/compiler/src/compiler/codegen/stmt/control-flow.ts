@@ -1,6 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { Expression, SymbolInfo, Stmt, Switch, Block } from '@tsclang/ast';
 import type { ThrowsCtx } from '../top-level/decorators.js';
+import { isDecimal } from '../types/decimal.js';
 export function _emitRetainIfNeeded(ctx: CodeGenContext, valC: string, valNode: Expression, p: (s: string) => void) {
     if (valNode.kind === 'Ident') {
       const sym = ctx.lookup(valNode.name);
@@ -98,6 +99,8 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
       }
 
       case 'Return': {
+        const _prevET_ret = ctx._expectedType;
+        ctx._expectedType = ctx.currentFuncReturnType ?? null;
         // Inside Iterable iter_next body: translate return null/val to opt_T
         if (ctx._inIterNextBody) {
           const optType = ctx._iterNextOptType;
@@ -112,6 +115,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             const retVal = ctx._iterNextIsComplex ? `&(${valC})` : valC;
             lines.push(`${I}return (${optType}){true, ${retVal}};`);
           }
+          ctx._expectedType = _prevET_ret;
           break;
         }
         // Check bare throws in return value, unless auto-propagate will handle it
@@ -187,6 +191,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
                 p(`return (${tc!.resultType}){.ok = true, .value = ${resName}.value};`);
               }
             }
+            ctx._expectedType = _prevET_ret;
             break;
           }
         }
@@ -208,6 +213,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           ctx._flushPostStmtCleanups(lines);
           ctx._emitFuncCleanup(lines, I);
           p(`goto cleanup;`);
+          ctx._expectedType = _prevET_ret;
           break;
         }
         if (ctx._hasPendingCleanups() && node.value) {
@@ -289,6 +295,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             }
           }
         }
+        ctx._expectedType = _prevET_ret;
         break;
       }
 
@@ -1330,7 +1337,10 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             if (discEnumDef?.isStringLiteralUnion && c.test.kind === 'Literal' && c.test.litType === 'string') {
               caseC = `${discType}_${c.test.value}`;
             } else {
+              const _prevET_case = ctx._expectedType;
+              if (isDecimal(discType)) ctx._expectedType = discType;
               caseC = ctx.exprToC(c.test, lines, depth);
+              ctx._expectedType = _prevET_case;
             }
             lines.push(`${IS}case ${caseC}:`);
           } else {

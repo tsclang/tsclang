@@ -1,12 +1,18 @@
 import type { CodeGenContext } from '../../codegen.js';
 // dispatch.ts
 import type { Expression, ObjLitProp } from '@tsclang/ast';
+import { isDecimal } from '../types/decimal.js';
 export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] = [], depth: number = 0): string {
     if (!node) return '0';
     ctx._currentNode = node;
     switch (node.kind) {
       case 'RawC': return node.code;
-      case 'Literal': return ctx.literalToC(node);
+      case 'Literal': {
+        if (node.litType === 'number' && ctx._expectedType && isDecimal(ctx._expectedType)) {
+          return ctx.literalToCTyped(node, ctx._expectedType);
+        }
+        return ctx.literalToC(node);
+      }
 
       case 'Ident': {
         if (node.name === 'keyof') throw ctx.error(`"keyof" can only be used in type position`, node);
@@ -464,6 +470,8 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         const prevExpected = ctx._expectedType;
         if (arrType?.startsWith('Array_') && ctx._expectedType?.startsWith('Array_')) {
           ctx._expectedType = arrType;
+        } else if (isDecimal(elemType)) {
+          ctx._expectedType = elemType;
         }
         const items = elems.map((e: { expr: Expression }) => {
           let c = ctx.exprToC(e.expr, lines, depth);

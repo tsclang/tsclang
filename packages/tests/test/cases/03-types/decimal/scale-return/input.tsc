@@ -1,0 +1,1 @@
+function half(): d32 { return 1.5; }

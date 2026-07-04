@@ -1,0 +1,2 @@
+function add(a: d32, b: d32): d32 { return a + b; }
+let r = add(1.5, 2.5);

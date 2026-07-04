@@ -1,0 +1,1 @@
+function getVal(): d64 { return 1.5; }

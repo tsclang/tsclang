@@ -1,8 +1,11 @@
 import type { ArrayLit, Expression, Ident } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
+import { isDecimal } from '../types/decimal.js';
 // arrays.ts
 export function arrayLitToC(ctx: CodeGenContext, node: ArrayLit, _elemType: string, lines: string[], depth: number) {
     const result: string[] = [];
+    const _prevET = ctx._expectedType;
+    if (isDecimal(_elemType)) ctx._expectedType = _elemType;
     for (const e of node.elems) {
       if (e.spread) {
         const sym = e.expr?.kind === 'Ident' ? ctx.lookup(e.expr.name) : null;
@@ -30,6 +33,7 @@ export function arrayLitToC(ctx: CodeGenContext, node: ArrayLit, _elemType: stri
         result.push(c);
       }
     }
+    ctx._expectedType = _prevET;
     return result;
 }
 

@@ -1,0 +1,3 @@
+function half(): d32 { return 1.5; }
+let x = half();
+console.log(x);

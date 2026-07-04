@@ -1430,9 +1430,11 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   }
                 }
                 // Safe widening check for non-literal expressions
-                const isNumLit = (init.kind === 'Literal' && init.litType === 'number')
-                  || (init.kind === 'Unary' && init.op === '-'
-                    && init.expr?.kind === 'Literal' && init.expr?.litType === 'number');
+                const _isNumLiteral = (e: any): boolean =>
+                  (e?.kind === 'Literal' && e?.litType === 'number') ||
+                  (e?.kind === 'Unary' && e?.op === '-' && _isNumLiteral(e?.expr));
+                const isNumLit = _isNumLiteral(init)
+                  || (init.kind === 'Ternary' && _isNumLiteral(init.yes) && _isNumLiteral(init.no));
                 if (!isNumLit) {
                   const srcTypeEff = ctx._effectiveType(init);
                   const si = ctx._numericTypeInfo(srcTypeEff);
