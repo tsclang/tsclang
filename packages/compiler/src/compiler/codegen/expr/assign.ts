@@ -1,5 +1,6 @@
 import type { Assign, ClassMember, Binary } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
+import { isDecimal } from '../types/decimal.js';
 // assign.ts
   // Assignment
 export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], depth: number): string | null {
@@ -134,7 +135,13 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         r = ctx.literalToCTyped(node.right, leftType);
       }
     }
-    if (r === undefined) r = ctx.exprToC(node.right, lines, depth);
+    if (r === undefined) {
+      const _prevET_asn = ctx._expectedType;
+      const _asnLt = ctx.inferType(node.left);
+      ctx._expectedType = isDecimal(_asnLt) ? _asnLt : null;
+      r = ctx.exprToC(node.right, lines, depth);
+      ctx._expectedType = _prevET_asn;
+    }
 
     // Move tracking for `b = a` where a is Ident of owned type (opt_ref_, heap ptr, or struct)
     if (node.op === '=' && node.left.kind === 'Ident' && node.right?.kind === 'Ident' && node.left.name !== node.right.name) {
@@ -401,22 +408,32 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       }
     }
 
-    // Decimal compound assignment: *=, /= need runtime helpers
+    // Decimal compound assignment: *=, /= need runtime helpers; +=, -=, %= need type check + zero guard
     const DECIMAL_CTYPES_ASN = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
-    if (DECIMAL_CTYPES_ASN.has(leftType) && (node.op === '*=' || node.op === '/=')) {
+    if (DECIMAL_CTYPES_ASN.has(leftType) && (node.op === '+=' || node.op === '-=' || node.op === '*=' || node.op === '/=' || node.op === '%=')) {
+      const rightType = ctx.inferType(node.right);
+      if (DECIMAL_CTYPES_ASN.has(rightType) && rightType !== leftType) {
+        throw ctx.error(`TypeError: cannot mix ${ctx.ctypeToTsName(leftType)} and ${ctx.ctypeToTsName(rightType)} in arithmetic without explicit cast`, node);
+      }
       if (node.op === '*=') {
         const helper = `tsc_mul_${leftType.replace('_t', '')}`;
         return `${l} = ${helper}(${l}, ${r})`;
       }
-      const helper = `tsc_div_${leftType.replace('_t', '')}`;
-      const I = ' '.repeat(ctx.indent * depth);
-      const tmp = `_tsc_div_${ctx.tempCount++}`;
-      const panicExpr = ctx._strictRules?.has('no-abort')
-        ? '_tsc_on_panic("division by zero")'
-        : 'abort()';
-      lines.push(`${I}${leftType} ${tmp} = ${r};`);
-      lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
-      return `${l} = ${helper}(${l}, ${tmp})`;
+      if (node.op === '/=' || node.op === '%=') {
+        const I = ' '.repeat(ctx.indent * depth);
+        const tmp = `_tsc_div_${ctx.tempCount++}`;
+        const panicExpr = ctx._strictRules?.has('no-abort')
+          ? '_tsc_on_panic("division by zero")'
+          : 'abort()';
+        lines.push(`${I}${leftType} ${tmp} = ${r};`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+        if (node.op === '/=') {
+          const helper = `tsc_div_${leftType.replace('_t', '')}`;
+          return `${l} = ${helper}(${l}, ${tmp})`;
+        }
+        return `${l} %= ${tmp}`;
+      }
+      // +=, -= fall through to raw integer ops (correct for same-scale decimals)
     }
 
     if (node.op === '+=' || node.op === '-=' || node.op === '*=') {

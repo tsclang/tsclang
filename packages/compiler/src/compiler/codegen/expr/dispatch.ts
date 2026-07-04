@@ -638,7 +638,10 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             return ct === 'uint8_t' ? code + 'U' : String(code);
           }
         }
+        const _prevET_cast = ctx._expectedType;
+        ctx._expectedType = null;
         const exprC = ctx.exprToC(node.expr, lines, depth);
+        ctx._expectedType = _prevET_cast;
         const srcType = ctx.inferType(node.expr);
         if (ct === 'tsc_unknown' && srcType !== 'tsc_unknown') {
           ctx._ensureUnknownStruct();
