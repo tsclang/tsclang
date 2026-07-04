@@ -318,6 +318,19 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         return `${l} ${op} ${r}`;
       }
     }
+    // Decimal comparison check: reject mixed decimal types (different scales = wrong results)
+    const cmpOps = new Set(['<', '>', '<=', '>=', '==', '!=', '===', '!==']);
+    if (cmpOps.has(node.op)) {
+      const dlt = ctx.inferType(node.left);
+      const drt = ctx.inferType(node.right);
+      if (DECIMAL_CTYPES.has(dlt) || DECIMAL_CTYPES.has(drt)) {
+        if (dlt !== drt) {
+          const tsA = ctx.ctypeToTsName(dlt);
+          const tsB = ctx.ctypeToTsName(drt);
+          throw ctx.error(`TypeError: cannot compare ${tsA} and ${tsB} without explicit cast`, node);
+        }
+      }
+    }
     const _isIntOperand = (n: Expression, t: string) => {
       if (intTypes.has(t)) return true;
       if (t === undefined) return true;

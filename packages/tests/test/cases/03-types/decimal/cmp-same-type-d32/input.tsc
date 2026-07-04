@@ -1,0 +1,4 @@
+let a: d32 = 1.5;
+let b: d32 = 2.5;
+let lt = a < b;
+let eq = a == b;
