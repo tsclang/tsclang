@@ -122,6 +122,40 @@ typedef int16_t d16_t;
 typedef int32_t d32_t;
 typedef int64_t d64_t;
 
+/* __int128 availability: define TSC_FORCE_NO_INT128 to test the portable fallback */
+#if defined(__SIZEOF_INT128__) && !defined(TSC_FORCE_NO_INT128)
+#  define TSC_HAS_INT128 1
+#else
+#  define TSC_HAS_INT128 0
+#endif
+
+/* Portable 128-bit helpers for platforms without __int128 (MSVC, 32-bit) */
+#if !TSC_HAS_INT128
+/* Unsigned 64x64 -> 128-bit multiply */
+static inline void tsc_mulu128(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) {
+    uint64_t aH = a >> 32, aL = a & 0xFFFFFFFFu;
+    uint64_t bH = b >> 32, bL = b & 0xFFFFFFFFu;
+    uint64_t p0 = aL * bL;
+    uint64_t p1 = aL * bH;
+    uint64_t p2 = aH * bL;
+    uint64_t p3 = aH * bH;
+    uint64_t mid = (p0 >> 32) + (p1 & 0xFFFFFFFFu) + (p2 & 0xFFFFFFFFu);
+    *lo = (p0 & 0xFFFFFFFFu) | (mid << 32);
+    *hi = p3 + (p1 >> 32) + (p2 >> 32) + (mid >> 32);
+}
+/* Unsigned 128/64 -> 64-bit division. Requires nhi < d (quotient fits in 64 bits). */
+static inline uint64_t tsc_divu128by64(uint64_t nhi, uint64_t nlo, uint64_t d) {
+    uint64_t q = 0;
+    uint64_t r = nhi;
+    for (int i = 63; i >= 0; i--) {
+        uint64_t shifted = (r << 1) | ((nlo >> i) & 1u);
+        if ((r >> 63) || shifted >= d) { r = shifted - d; q |= (1ULL << i); }
+        else r = shifted;
+    }
+    return q;
+}
+#endif
+
 /* Decimal multiply: result = round_half_away_from_zero(a * b / scale) */
 static inline d8_t tsc_mul_d8(d8_t a, d8_t b) {
     int16_t prod = (int16_t)a * (int16_t)b;
@@ -139,15 +173,23 @@ static inline d32_t tsc_mul_d32(d32_t a, d32_t b) {
     return (d32_t)(prod / 10000);
 }
 static inline d64_t tsc_mul_d64(d64_t a, d64_t b) {
-#if defined(__SIZEOF_INT128__)
+#if TSC_HAS_INT128
     __int128 prod = (__int128)a * (__int128)b;
     if (prod >= 0) prod += 50000000; else prod -= 50000000;
     return (d64_t)(prod / 100000000);
 #else
-    int64_t ah = a / 10000, al = a % 10000;
-    int64_t bh = b / 10000, bl = b % 10000;
-    int64_t result = ah * bh * 10000 + ah * bl + al * bh + (al * bl) / 10000;
-    return (d64_t)result;
+    /* Portable fallback: 128-bit multiply via tsc_mulu128, then divide by S=1e8 */
+    int neg = (a < 0) ^ (b < 0);
+    uint64_t ua = a < 0 ? 0 - (uint64_t)a : (uint64_t)a;
+    uint64_t ub = b < 0 ? 0 - (uint64_t)b : (uint64_t)b;
+    uint64_t phi, plo;
+    tsc_mulu128(ua, ub, &phi, &plo);
+    /* Round half away from zero: add S/2 = 50000000 */
+    plo += 50000000ULL;
+    if (plo < 50000000ULL) phi++;
+    /* Divide 128-bit by S=1e8 (fits in 32 bits, so nhi < S is guaranteed) */
+    uint64_t result = tsc_divu128by64(phi, plo, 100000000ULL);
+    return neg ? -(d64_t)result : (d64_t)result;
 #endif
 }
 
@@ -171,14 +213,24 @@ static inline d32_t tsc_div_d32(d32_t a, d32_t b) {
     return (d32_t)(num / b);
 }
 static inline d64_t tsc_div_d64(d64_t a, d64_t b) {
-#if defined(__SIZEOF_INT128__)
+#if TSC_HAS_INT128
     __int128 num = (__int128)a * 100000000;
     __int128 half = b < 0 ? -((__int128)b / 2) : (__int128)b / 2;
     if (num >= 0) num += half; else num -= half;
     return (d64_t)(num / b);
 #else
-    int64_t result = (a / b) * 100000000 + ((a % b) * 100000000) / b;
-    return (d64_t)result;
+    /* Portable fallback: compute |a|*S as 128-bit, divide by |b| with rounding */
+    int neg = (a < 0) ^ (b < 0);
+    uint64_t ua = a < 0 ? 0 - (uint64_t)a : (uint64_t)a;
+    uint64_t ub = b < 0 ? 0 - (uint64_t)b : (uint64_t)b;
+    uint64_t nhi, nlo;
+    tsc_mulu128(ua, 100000000ULL, &nhi, &nlo);
+    /* Round half away from zero: add |b|/2 */
+    uint64_t half = ub / 2;
+    nlo += half;
+    if (nlo < half) nhi++;
+    uint64_t result = tsc_divu128by64(nhi, nlo, ub);
+    return neg ? -(d64_t)result : (d64_t)result;
 #endif
 }
 

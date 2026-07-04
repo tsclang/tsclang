@@ -1,0 +1,9 @@
+let a: d64 = 3.0;
+let b: d64 = 2.0;
+console.log((a / b).toString());
+let c: d64 = 1.0;
+let d: d64 = 3.0;
+console.log((c / d).toString());
+let e: d64 = 2.0;
+let f: d64 = 3.0;
+console.log((e / f).toString());
