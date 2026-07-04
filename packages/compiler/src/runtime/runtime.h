@@ -113,6 +113,16 @@
 #endif
 
 /* -------------------------------------------------------------------------
+ * Decimal fixed-point types: d8_t, d16_t, d32_t, d64_t
+ * Storage is signed integer, value = raw / scale.
+ * d8/d16: scale=100 (2 decimals), d32: scale=10000 (4 decimals), d64: scale=100000000 (8 decimals)
+ * ------------------------------------------------------------------------- */
+typedef int8_t  d8_t;
+typedef int16_t d16_t;
+typedef int32_t d32_t;
+typedef int64_t d64_t;
+
+/* -------------------------------------------------------------------------
  * Allocation helpers РІР‚вЂќ fail-fast on OOM
  * All heap allocations in the runtime go through these wrappers.
  * If malloc/realloc returns NULL, a panic is emitted instead of a segfault.

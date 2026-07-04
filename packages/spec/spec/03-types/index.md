@@ -4,6 +4,7 @@
 
 - `03-typing.md` — структурная vs номинальная типизация, объектные литералы, `as`, type inference
 - `03-numbers.md` — числовые типы (i8..f64, number, usize), литералы, inference
+- `03-decimal-types.md` — decimal fixed-point типы (d8, d16, d32, d64)
 - `03-type-conversion.md` — число↔строка, parseInt, parseFloat, числовые префиксы
 - `03-special-types.md` — any, unknown, void, never
 - `03-null.md` — T | null, optional (`?`), C-layout, embedded паттерны

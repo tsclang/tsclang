@@ -10,10 +10,10 @@ const _RUNTIME_REDUCE = new Set(['i32_i32', 'i32_f64', 'i32_string', 'f64_string
 const _RUNTIME_REDUCE_R = new Set(['i32_i32', 'i32_f64']);
 const _RUNTIME_FLAT = new Set(['i32', 'f64', 'string', 'Array_i32']);
 
-export interface NumInfo { bits: number; signed: boolean; kind: string; mantissa?: number }
+export interface NumInfo { bits: number; signed: boolean; kind: string; mantissa?: number; scale?: number; decimals?: number }
 
 export function _cTypeBytes(ctx: CodeGenContext, ct: string) {
-    const m: Record<string, number> = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1 };
+    const m: Record<string, number> = { 'uint8_t':1,'int8_t':1,'uint16_t':2,'int16_t':2,'uint32_t':4,'int32_t':4,'uint64_t':8,'int64_t':8,'float':4,'double':8,'bool':1,'char':1,'d8_t':1,'d16_t':2,'d32_t':4,'d64_t':8 };
     if (ct === 'size_t') return ctx._ptrBytes();
     return m[ct] ?? 4;
 }
@@ -50,6 +50,7 @@ export function cTypeToIdent(ctx: CodeGenContext, ctype: string) {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
       'float': 'f32', 'double': 'f64',
+      'd8_t': 'd8', 'd16_t': 'd16', 'd32_t': 'd32', 'd64_t': 'd64',
       'bool': 'bool', 'String': 'string', 'size_t': 'usize', 'void': 'void',
       'char': 'char',
     };
@@ -62,6 +63,7 @@ export function ctypeToTsName(ctx: CodeGenContext, ctype: string) {
       'int8_t': 'i8', 'int16_t': 'i16', 'int32_t': 'i32', 'int64_t': 'i64',
       'uint8_t': 'u8', 'uint16_t': 'u16', 'uint32_t': 'u32', 'uint64_t': 'u64',
       'float': 'f32', 'double': 'f64', 'bool': 'boolean',
+      'd8_t': 'd8', 'd16_t': 'd16', 'd32_t': 'd32', 'd64_t': 'd64',
       'String': 'string', 'size_t': 'usize', 'ptrdiff_t': 'isize',
     };
     return m[ctype] ?? ctype;
@@ -79,6 +81,10 @@ export function _numericTypeInfo(ctx: CodeGenContext, ct: string) {
       'uint64_t': { bits: 64, signed: false, kind: 'int' },
       'float':    { bits: 32, signed: true,  kind: 'float', mantissa: 24 },
       'double':   { bits: 64, signed: true,  kind: 'float', mantissa: 53 },
+      'd8_t':   { bits: 8,  signed: true,  kind: 'decimal', scale: 100,       decimals: 2 },
+      'd16_t':  { bits: 16, signed: true,  kind: 'decimal', scale: 100,       decimals: 2 },
+      'd32_t':  { bits: 32, signed: true,  kind: 'decimal', scale: 10000,     decimals: 4 },
+      'd64_t':  { bits: 64, signed: true,  kind: 'decimal', scale: 100000000, decimals: 8 },
       'size_t':   { bits: ctx._cTypeBytes('size_t') * 8, signed: false, kind: 'int' },
     };
     return m[ct] ?? null;
@@ -103,7 +109,8 @@ export function _arrIdentToCType(ctx: CodeGenContext, ident: string) {
     const m: Record<string, string> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                 'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
                 'f32':'float','f64':'double','bool':'bool','string':'String',
-                'usize':'size_t','char':'char' };
+                'usize':'size_t','char':'char',
+                'd8':'d8_t','d16':'d16_t','d32':'d32_t','d64':'d64_t' };
     return m[ident] ?? ident;
 }
 
@@ -282,13 +289,13 @@ export function _ensureUnknownStruct(ctx: CodeGenContext) {
 
 export function _tsNameToTypeId(ctx: CodeGenContext, tsName: string): number {
     if (tsName === 'number') return ctx._tsNameToTypeId(ctx._defaultNumber);
-    const m: Record<string, number> = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
+    const m: Record<string, number> = { 'i8': 10, 'i16': 11, 'i32': 1, 'i64': 2, 'u8': 12, 'u16': 13, 'u32': 14, 'u64': 15, 'f32': 3, 'f64': 4, 'd8': 20, 'd16': 21, 'd32': 22, 'd64': 23, 'boolean': 5, 'string': 6, 'array': 7, 'object': 8, 'char': 16 };
     return m[tsName] ?? 0;
 }
 
 export function _tsNameToCType(ctx: CodeGenContext, tsName: string): string {
     if (tsName === 'number') return ctx._tsNameToCType(ctx._defaultNumber);
-    const m: Record<string, string> = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
+    const m: Record<string, string> = { 'i8': 'int8_t', 'i16': 'int16_t', 'i32': 'int32_t', 'i64': 'int64_t', 'u8': 'uint8_t', 'u16': 'uint16_t', 'u32': 'uint32_t', 'u64': 'uint64_t', 'f32': 'float', 'f64': 'double', 'd8': 'd8_t', 'd16': 'd16_t', 'd32': 'd32_t', 'd64': 'd64_t', 'boolean': 'bool', 'string': 'String', 'char': 'char' };
     return m[tsName] ?? 'int32_t';
 }
 

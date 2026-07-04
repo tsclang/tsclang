@@ -1,7 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
-import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block } from '@tsclang/ast';
+import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block, Literal } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
-const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize']);
+const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','d8','d16','d32','d64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[], depth: number) {
@@ -1389,6 +1389,13 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             }
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
               initC = ctx.literalToCTyped(init, ctype);
+            } else if (init.kind === 'Unary' && init.op === '-' && init.expr?.kind === 'Literal' && (init.expr as Literal).litType === 'number') {
+              const di = ctx._numericTypeInfo(ctype);
+              if (di && di.kind === 'decimal') {
+                initC = '-' + ctx.literalToCTyped(init.expr as Literal, ctype);
+              } else {
+                initC = ctx.exprToC(init, lines, depth);
+              }
             } else if (init.kind === 'Literal' && init.litType === 'string'
                        && (ctype === 'char' || ctype === 'uint8_t')) {
               const code = ctx._stringLiteralToByte(init);

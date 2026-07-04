@@ -14,6 +14,10 @@ export const PRIMITIVE_MAP: Record<string, string> = {
   u64:   'uint64_t',
   f32:   'float',
   f64:   'double',
+  d8:    'd8_t',
+  d16:   'd16_t',
+  d32:   'd32_t',
+  d64:   'd64_t',
   boolean: 'bool',
   usize: 'size_t',
   isize: 'ptrdiff_t',
@@ -36,6 +40,7 @@ export function fmtSpec(ctype: string): string {
     'uint8_t':  '%u', 'uint16_t': '%u', 'uint32_t': '%u',
     'uint64_t': '%llu',
     'float':    '%g', 'double': '%g',
+    'd8_t': '%s', 'd16_t': '%s', 'd32_t': '%s', 'd64_t': '%s',
     'bool':     '%s',   // special: ternary
     'String':   '%s',   // special: .data
     'char':     '%c',

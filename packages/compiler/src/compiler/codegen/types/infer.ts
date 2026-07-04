@@ -1,6 +1,6 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident, MethodSig } from '@tsclang/ast';
-import { inferLiteralCType } from '../../types.js';
+import { inferLiteralCType, PRIMITIVE_MAP } from '../../types.js';
 
 interface RtField { name?: string; label?: string; typeAnn?: TypeAnn; ctype?: string; _ctype?: string; }
 interface RtMethod { name: string; returnType?: TypeAnn | null; }
@@ -345,6 +345,7 @@ export function _effectiveType(ctx: CodeGenContext, node: Expression | null | un
     if (!node) return 'double';
     const dn = ctx._defaultNumber;
     const floatDefault = dn === 'f64' || dn === 'f32';
+    const decDefault = dn === 'd8' || dn === 'd16' || dn === 'd32' || dn === 'd64';
     switch (node.kind) {
       case 'Literal': {
         if (node.litType !== 'number') return ctx.inferType(node);
@@ -353,6 +354,7 @@ export function _effectiveType(ctx: CodeGenContext, node: Expression | null | un
           if (floatDefault) return ctx._cap('bits') < 32 ? 'int16_t' : 'int32_t';
           return inferLiteralCType(node, dn);
         }
+        if (decDefault) return PRIMITIVE_MAP[dn] || 'double';
         return dn === 'f32' ? 'float' : 'double';
       }
       case 'Binary': {

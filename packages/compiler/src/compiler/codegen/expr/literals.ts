@@ -1,5 +1,6 @@
 import type { Literal, Binary, Expression } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
+import { isDecimal, decimalScale, scaleLiteral } from '../types/decimal.js';
 // literals.ts
   // Unescape a char literal value to numeric code
 export function _charCode(ctx: CodeGenContext, raw: string) {
@@ -69,6 +70,13 @@ export function literalToCTyped(ctx: CodeGenContext, node: Literal, ctype: strin
     if (v === 'Infinity') return ctype === 'float' ? '(float)INFINITY' : 'INFINITY';
     // Convert 0o (octal) → C octal 0NNN format
     if (v.startsWith('0o') || v.startsWith('0O')) v = '0' + v.slice(2);
+    // Decimal fixed-point types: convert literal to scaled integer
+    if (isDecimal(ctype)) {
+      const scale = decimalScale(ctype)!;
+      const scaled = scaleLiteral(v, scale);
+      if (ctype === 'd64_t') return scaled + 'LL';
+      return scaled;
+    }
     if (ctype === 'float') {
       // f32: add 'f' suffix if no decimal, or if decimal without suffix
       if (v.startsWith('0x') || v.startsWith('0X')) return `(float)${v}`;

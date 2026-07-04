@@ -108,15 +108,16 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Pre-scan: capability-based restrictions
     const noFloat = !ctx._cap('fpu');
     const noAsync = ctx._cap('async') === 'none';
+    const DECIMAL_TYPES = new Set(['d8', 'd16', 'd32', 'd64']);
     if (noFloat || noAsync) {
-      const _walkForRestrictions = (n: unknown) => {
+      const _walkForRestrictions = (n: unknown, skipFloatLiterals: boolean = false) => {
         if (!n || typeof n !== 'object') return;
-        if (Array.isArray(n)) { n.forEach(_walkForRestrictions); return; }
+        if (Array.isArray(n)) { n.forEach(item => _walkForRestrictions(item, skipFloatLiterals)); return; }
         const nd = n as Record<string, unknown>;
         if (noFloat && nd.kind === 'TypeRef' && (nd.name === 'f32' || nd.name === 'f64')) {
           throw ctx.error(`TypeError: float types (${nd.name as string}) are not supported (fpu: false)`);
         }
-        if (noFloat && nd.kind === 'Literal' && nd.litType === 'number') {
+        if (noFloat && !skipFloatLiterals && nd.kind === 'Literal' && nd.litType === 'number') {
           const v = String(nd.value).replace(/_/g, '');
           const isHex = /^0[xX]/.test(v);
           if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
@@ -126,8 +127,16 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         if (noAsync && nd.kind === 'FuncDecl' && nd.async) {
           throw ctx.error(`TypeError: async functions are not supported (async: "none")`);
         }
+        // Propagate skipFloatLiterals to children if inside a decimal-typed VarDecl
+        let childSkip = skipFloatLiterals;
+        if ((nd.kind === 'VarDecl' || nd.kind === 'ConstDecl') && nd.typeAnn) {
+          const ta = nd.typeAnn as { kind?: string; name?: string };
+          if (ta.kind === 'TypeRef' && DECIMAL_TYPES.has(ta.name ?? '')) {
+            childSkip = true;
+          }
+        }
         for (const k of Object.keys(nd)) {
-          if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkForRestrictions(v); }
+          if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkForRestrictions(v, childSkip); }
         }
       };
       for (const node of ast.body) _walkForRestrictions(node);

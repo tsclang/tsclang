@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-03.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-04.
 
 ---
 
@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1774 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1803 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -53,6 +53,7 @@ See `spec/03-types/` for full details. Key mappings:
 |-----|---|-------|
 | `i32` | `int32_t` | AVR `int`=16bit! |
 | `f64` | `double` | `defaultNumber` on desktop |
+| `d32` | `d32_t` (= `int32_t`) | Decimal fixed-point, scale=10000, 4 dp |
 | `string` | `String` (struct) | ARC, NOT `char*` |
 | `T[]` | `Array_T` | heap, growable |
 | `T \| null` | `opt_T` | `{ bool has_value; T value; }` |
@@ -126,7 +127,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #179 (warnings), #180 (decimal types)
 - **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning)
 
 ---
@@ -204,3 +205,26 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 ## 14. Math.saturatingCast/checkedCast
 
 `saturatingCast<T>(x)` — clamp to range. `checkedCast<T>(x)` — return `T | null`. Escape hatch for `no-lossy-cast`. Inline C in `builtin-helpers.ts`. Spec: `14-stdlib/14-stdlib.md` + `13-strict-mode.md`.
+
+---
+
+## 15. Decimal Fixed-Point Types (#180 — Phase 1 DONE)
+
+**Phase 1 (Foundation) implemented:** type registration, literal conversion, FPU check, `defaultNumber` integration. 11 tests pass. See issue #180 for full plan (11 phases).
+
+### Implemented (Phase 1)
+
+- Type registration: `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), runtime typedefs.
+- Literal conversion: `literalToCTyped` scales float literals to integers (e.g., `1.5` → `15000` for d32). `scaleLiteral()` uses round-half-away-from-zero.
+- Negative literals: `vardecl.ts` handles `Unary('-', Literal)` for decimal types only.
+- `defaultNumber: "d32"` etc. makes `number` resolve to decimal ctype via `_effectiveType` in `infer.ts`.
+- FPU check: `program.ts` pre-scan skips float-literal rejection inside decimal-typed `VarDecl` init (context-aware `skipFloatLiterals` flag).
+- Key files: `decimal.ts` (helpers), `helpers.ts` (NumInfo with `scale`/`decimals`), `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `runtime.h`.
+- Spec: `03-types/03-decimal-types.md`.
+
+### Roadmap (Phases 2-5)
+
+- **Phase 2:** Arithmetic (`*`/`/` with rounding runtime helpers, `+`/`-` work as-is, widening).
+- **Phase 3:** Casts (`as` truncate, `Math.roundCast`, `no-lossy-cast` updates).
+- **Phase 4:** Formatting (console.log, toString, template literals).
+- **Phase 5:** Math + Platform (Math.sqrt/abs on decimal, saturatingCast/checkedCast).
