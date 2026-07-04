@@ -99,6 +99,12 @@ export function _isSafeWidening(ctx: CodeGenContext, src: string, dst: string) {
     if (si.kind === 'float' && di.kind === 'int') return false;
     if (si.kind === 'float' && di.kind === 'float') return di.bits >= si.bits;
     if (si.kind === 'int' && di.kind === 'float') return si.bits <= (di.mantissa ?? 53);
+    if (si.kind === 'decimal' || di.kind === 'decimal') {
+      if (si.kind === 'decimal' && di.kind === 'decimal') {
+        return di.bits >= si.bits && (di.scale ?? 0) >= (si.scale ?? 0);
+      }
+      return false;
+    }
     if (si.signed === di.signed) return di.bits >= si.bits;
     if (!si.signed && di.signed) return di.bits > si.bits;
     return false;

@@ -2,7 +2,7 @@
 
 int main(void) {
     TSC_INIT();
-    d32_t a = 15000;
-    a += (d32_t)(1 * 10000.0);
+    int32_t i = 5;
+    d32_t d = (d32_t)(i * 10000);
     return 0;
 }

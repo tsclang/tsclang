@@ -1,0 +1,2 @@
+let w: d16 = 0.5;
+let d = w as d32;

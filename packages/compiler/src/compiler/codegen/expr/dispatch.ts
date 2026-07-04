@@ -673,6 +673,39 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
           }
         }
+        // Decimal cast: scale conversion needed (not a plain C cast)
+        {
+          const DECIMAL_SCALES_CAST: Record<string, number> = {
+            'd8_t': 100, 'd16_t': 100, 'd32_t': 10000, 'd64_t': 100000000,
+          };
+          const srcDec = DECIMAL_SCALES_CAST[srcType ?? ''];
+          const dstDec = DECIMAL_SCALES_CAST[ct];
+          if (srcDec !== undefined || dstDec !== undefined) {
+            const isFloatSrc = srcType === 'double' || srcType === 'float';
+            const isFloatDst = ct === 'double' || ct === 'float';
+            const llSuffix = ct === 'd64_t' ? 'LL' : '';
+            if (srcDec !== undefined && dstDec !== undefined) {
+              // decimal → decimal
+              if (srcDec === dstDec) {
+                return `(${ct})${exprC}`;
+              } else if (dstDec > srcDec) {
+                const ratio = dstDec / srcDec;
+                return `(${ct})(${exprC} * ${ratio}${llSuffix})`;
+              } else {
+                const ratio = srcDec / dstDec;
+                return `(${ct})(${exprC} / ${ratio}${llSuffix})`;
+              }
+            } else if (dstDec !== undefined) {
+              // int/float → decimal: multiply by scale
+              const scaleStr = isFloatSrc ? `${dstDec}.0` : `${dstDec}${llSuffix}`;
+              return `(${ct})(${exprC} * ${scaleStr})`;
+            } else {
+              // decimal → int/float: divide by scale
+              const scaleStr = isFloatDst ? `${srcDec}.0` : `${srcDec}`;
+              return `(${ct})(${exprC} / ${scaleStr})`;
+            }
+          }
+        }
         const needsParens = node.expr.kind === 'Binary' || node.expr.kind === 'Ternary';
         return needsParens ? `(${ct})(${exprC})` : `(${ct})${exprC}`;
       }

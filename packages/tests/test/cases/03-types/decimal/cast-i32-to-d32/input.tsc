@@ -1,0 +1,2 @@
+let i: i32 = 5;
+let d = i as d32;

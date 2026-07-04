@@ -1,0 +1,2 @@
+let d: d32 = 2.5;
+let big = d as d64;

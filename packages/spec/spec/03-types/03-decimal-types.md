@@ -116,14 +116,34 @@ let quot = a / b;       // tsc_div_d32(15000, 5000) = 30000 (3.0)
 
 **Compound assignment:** `+=`, `-=` работают напрямую. `*=`, `/=` используют runtime helpers: `a = tsc_mul_d32(a, b)`.
 
-### *[ROADMAP] Casts
+### Casts (`as`)
 
-| Операция | Поведение |
-|----------|-----------|
-| `as` | Truncate toward zero (явное, по конвенции C/Rust) |
-| `Math.roundCast<T>(x)` | Round-half-away-from-zero (NEW) |
-| `Math.saturatingCast<T>(x)` | Truncate + saturate (clamp to range) |
-| `Math.checkedCast<T>(x)` | Truncate + null on overflow |
+Decimal casts требуют масштабирования (scale conversion), не plain C cast.
+
+| Направление | Формула | Поведение |
+|-------------|---------|-----------|
+| `dXX as iYY` | `expr / scale` | Truncate toward zero |
+| `iYY as dXX` | `expr * scale` | Scale up (точное) |
+| `dXX as dYY` (widen) | `expr * (dstScale / srcScale)` | Точное (ratio — integer) |
+| `dXX as dYY` (narrow) | `expr / (srcScale / dstScale)` | Truncate toward zero |
+| `dXX as f64` | `expr / scale.0` | Точное |
+| `f64 as dXX` | `expr * scale.0` | Truncate toward zero |
+
+```typescript
+let d: d32 = 1.5;
+let i = d as i32;       // (int32_t)(d / 10000) = 1 (truncate)
+let back = i as d32;    // (d32_t)(i * 10000) = 10000 (1.0)
+let w: d16 = 0.5;
+let widened = w as d32;  // (d32_t)(w * 100) = 5000 (0.5, scale 100→10000)
+let narrowed = d as d16; // (d16_t)(d / 100) = 150 (1.5, scale 10000→100)
+let f = d as f64;       // (double)(d / 10000.0) = 1.5
+```
+
+**`no-lossy-cast` strict rule:** decimal narrowing (`d32 as d16`) и decimal→integer (`d32 as i32`) считаются lossy и требуют отключения правила.
+
+**`_isSafeWidening` для decimal:** widening (`d8→d16→d32→d64`) — safe. Все остальные decimal→non-decimal и narrowing — unsafe (требуют явный `as`).
+
+### *[ROADMAP] Math.roundCast / saturatingCast / checkedCast
 
 ### *[ROADMAP] Форматирование
 
