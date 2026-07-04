@@ -1,0 +1,2 @@
+let a: d64 = 999999.99999999;
+let b = Math.saturatingCast<d32>(a);

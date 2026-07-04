@@ -1,0 +1,2 @@
+let a: d32 = 3.2;
+let b = Math.ceil(a);

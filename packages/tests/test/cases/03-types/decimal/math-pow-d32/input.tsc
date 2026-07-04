@@ -1,0 +1,3 @@
+let a: d32 = 2.0;
+let b: d32 = 3.0;
+let c = Math.pow(a, b);

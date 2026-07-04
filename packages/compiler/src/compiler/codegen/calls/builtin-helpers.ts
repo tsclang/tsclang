@@ -4,6 +4,11 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
     const a0t = args[0] ? ctx.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? ctx.inferType(args[1].expr) : 'int32_t';
     const isFloat = (t: string) => t === 'double' || t === 'float';
+    const DEC_INFO: Record<string, [number, number]> = {
+      'd8_t': [100, 2], 'd16_t': [100, 2], 'd32_t': [10000, 4], 'd64_t': [100000000, 8],
+    };
+    const isDec = (t: string) => t in DEC_INFO;
+    const decI = DEC_INFO[a0t];
     const a0 = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
     const a1 = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
     const a2 = args[2] ? ctx.exprToC(args[2].expr, lines, depth) : '0';
@@ -18,6 +23,9 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
     if (prop === 'LOG10E')  { ctx.includes.add('#include <math.h>'); return 'M_LOG10E'; }
 
     if (prop === 'abs') {
+      if (isDec(a0t)) {
+        return a0t === 'd64_t' ? `(${a0t})llabs(${a0})` : `(${a0t})abs(${a0})`;
+      }
       ctx.includes.add('#include <math.h>');
       if (!isFloat(a0t)) return `(int)abs(${a0})`;
       return `fabs(${a0})`;
@@ -85,6 +93,11 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       return `tsc_clamp(${a0}, ${a1}, ${a2})`;
     }
     if (prop === 'sign') {
+      if (isDec(a0t)) {
+        const [scale] = decI;
+        const llS = a0t === 'd64_t' ? 'LL' : '';
+        return `(${a0t})(((${a0} > 0) - (${a0} < 0)) * ${scale}${llS})`;
+      }
       return `(${a0} > 0.0) - (${a0} < 0.0) + 0.0`;
     }
 
@@ -101,11 +114,42 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         'uint16_t': ['0',          'UINT16_MAX'],
         'uint32_t': ['0',          'UINT32_MAX'],
         'uint64_t': ['0',          'UINT64_MAX'],
+        'd8_t':     ['INT8_MIN',   'INT8_MAX'],
+        'd16_t':    ['INT16_MIN',  'INT16_MAX'],
+        'd32_t':    ['INT32_MIN',  'INT32_MAX'],
+        'd64_t':    ['INT64_MIN',  'INT64_MAX'],
       };
       const range = RANGE[targetType];
       if (!range) throw ctx.error(`saturatingCast: unsupported target type '${targetType}'`, node);
-      if (isFloat(srcType)) {
+      const srcDecI = DEC_INFO[srcType];
+      const dstDecI = DEC_INFO[targetType];
+      if (srcDecI && dstDecI) {
+        const [sScale] = srcDecI;
+        const [dScale] = dstDecI;
+        if (dScale > sScale) {
+          const ratio = dScale / sScale;
+          const llS = srcType === 'd64_t' || targetType === 'd64_t' ? 'LL' : '';
+          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${ratio}${llS}))`;
+        }
+        if (dScale < sScale) {
+          const ratio = sScale / dScale;
+          const llS = srcType === 'd64_t' ? 'LL' : '';
+          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${ratio}${llS}))`;
+        }
         return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
+      }
+      if (srcDecI && !dstDecI && !isFloat(targetType)) {
+        const [sScale] = srcDecI;
+        const llS = srcType === 'd64_t' ? 'LL' : '';
+        return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${sScale}${llS}))`;
+      }
+      if (!srcDecI && dstDecI) {
+        const [dScale] = dstDecI;
+        const llS = targetType === 'd64_t' ? 'LL' : '';
+        if (isFloat(srcType)) {
+          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}.0))`;
+        }
+        return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}${llS}))`;
       }
       return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
     }
@@ -125,15 +169,95 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         'uint16_t': ['0',          'UINT16_MAX'],
         'uint32_t': ['0',          'UINT32_MAX'],
         'uint64_t': ['0',          'UINT64_MAX'],
+        'd8_t':     ['INT8_MIN',   'INT8_MAX'],
+        'd16_t':    ['INT16_MIN',  'INT16_MAX'],
+        'd32_t':    ['INT32_MIN',  'INT32_MAX'],
+        'd64_t':    ['INT64_MIN',  'INT64_MAX'],
       };
       const range = RANGE[targetType];
       if (!range) throw ctx.error(`checkedCast: unsupported target type '${targetType}'`, node);
       const I = ' '.repeat(ctx.indent * depth);
       const tmp = `_checked_${ctx.tempCount++}`;
+      const srcDecI = DEC_INFO[srcType];
+      const dstDecI = DEC_INFO[targetType];
+      let convExpr = a0;
+      if (srcDecI && dstDecI) {
+        const [sScale] = srcDecI;
+        const [dScale] = dstDecI;
+        if (dScale > sScale) convExpr = `(${a0}) * ${dScale / sScale}`;
+        else if (dScale < sScale) convExpr = `(${a0}) / ${sScale / dScale}`;
+      } else if (srcDecI && !dstDecI && !isFloat(targetType)) {
+        convExpr = `(${a0}) / ${srcDecI[0]}`;
+      } else if (!srcDecI && dstDecI) {
+        if (isFloat(srcType)) convExpr = `(${a0}) * ${dstDecI[0]}.0`;
+        else convExpr = `(${a0}) * ${dstDecI[0]}`;
+      }
       lines.push(`${I}${optName} ${tmp};`);
       lines.push(`${I}${tmp}.has_value = (${a0} >= (${range[0]}) && ${a0} <= (${range[1]}));`);
-      lines.push(`${I}${tmp}.value = ${tmp}.has_value ? (${targetType})(${a0}) : (${targetType})0;`);
+      lines.push(`${I}${tmp}.value = ${tmp}.has_value ? (${targetType})(${convExpr}) : (${targetType})0;`);
       return tmp;
+    }
+
+    // Math.roundCast<T>(x) — round-half-away-from-zero then cast
+    if (prop === 'roundCast') {
+      const targetType = node?.typeArgs?.[0] ? ctx.resolveType(node.typeArgs[0]) : 'int32_t';
+      const srcType = a0t;
+      const srcDecI = DEC_INFO[srcType];
+      const dstDecI = DEC_INFO[targetType];
+      const llS = (srcType === 'd64_t' || targetType === 'd64_t') ? 'LL' : '';
+      // decimal -> integer: round + /scale
+      if (srcDecI && !dstDecI && !isFloat(targetType)) {
+        const [scale] = srcDecI;
+        const half = Math.floor(scale / 2);
+        return `(${targetType})((${a0} >= 0) ? ((${a0} + ${half}${llS}) / ${scale}${llS}) : ((${a0} - ${half}${llS}) / ${scale}${llS}))`;
+      }
+      // decimal -> narrower decimal: round + /ratio
+      if (srcDecI && dstDecI && dstDecI[0] < srcDecI[0]) {
+        const ratio = srcDecI[0] / dstDecI[0];
+        const half = Math.floor(ratio / 2);
+        return `(${targetType})((${a0} >= 0) ? ((${a0} + ${half}${llS}) / ${ratio}${llS}) : ((${a0} - ${half}${llS}) / ${ratio}${llS}))`;
+      }
+      // float -> integer: round()
+      if (isFloat(srcType) && !dstDecI && !isFloat(targetType)) {
+        ctx.includes.add('#include <math.h>');
+        return `(${targetType})round(${a0})`;
+      }
+      // decimal -> wider decimal: *ratio (exact, no rounding needed)
+      if (srcDecI && dstDecI && dstDecI[0] > srcDecI[0]) {
+        return `(${targetType})(${a0} * ${dstDecI[0] / srcDecI[0]}${llS})`;
+      }
+      // decimal -> float: /scale.0
+      if (srcDecI && isFloat(targetType)) {
+        return `(${targetType})(${a0} / ${srcDecI[0]}.0)`;
+      }
+      // float -> decimal: *scale.0
+      if (isFloat(srcType) && dstDecI) {
+        return `(${targetType})(${a0} * ${dstDecI[0]}.0)`;
+      }
+      // integer -> decimal: *scale
+      if (!srcDecI && !isFloat(srcType) && dstDecI) {
+        return `(${targetType})(${a0} * ${dstDecI[0]}${llS})`;
+      }
+      // same-type or integer->integer: plain cast
+      return `(${targetType})(${a0})`;
+    }
+
+    // Decimal transcendental/rounding: convert to double, compute, convert back
+    if (decI) {
+      const [scale] = decI;
+      ctx.includes.add('#include <math.h>');
+      const UNARY = ['floor', 'ceil', 'round', 'trunc', 'sqrt', 'cbrt',
+        'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+        'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+        'log', 'log2', 'log10', 'log1p', 'exp', 'expm1'];
+      const BINARY = ['pow', 'hypot', 'atan2'];
+      if (UNARY.includes(prop)) {
+        return `(${a0t})${prop}((double)(${a0}) / ${scale}.0) * ${scale}.0`;
+      }
+      if (BINARY.includes(prop)) {
+        const a1Conv = isDec(a1t) ? `(double)(${a1}) / ${DEC_INFO[a1t][0]}.0` : `(double)(${a1})`;
+        return `(${a0t})${prop}((double)(${a0}) / ${scale}.0, ${a1Conv}) * ${scale}.0`;
+      }
     }
 
     ctx.includes.add('#include <math.h>');

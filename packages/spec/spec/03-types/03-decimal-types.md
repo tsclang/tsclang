@@ -143,7 +143,47 @@ let f = d as f64;       // (double)(d / 10000.0) = 1.5
 
 **`_isSafeWidening` для decimal:** widening (`d8→d16→d32→d64`) — safe. Все остальные decimal→non-decimal и narrowing — unsafe (требуют явный `as`).
 
-### *[ROADMAP] Math.roundCast / saturatingCast / checkedCast
+### Math functions
+
+Decimal аргументы сохраняют тип в возвращаемом значении: `Math.abs(d32_val)` → `d32`, `Math.sqrt(d32_val)` → `d32`.
+
+| Функция | Поведение для decimal | C-output |
+|---------|----------------------|----------|
+| `Math.abs(x)` | Integer abs (`abs`/`llabs`) | `(d32_t)abs(x)`, `(d64_t)llabs(x)` |
+| `Math.sign(x)` | Знак × scale | `(d32_t)(((x > 0) - (x < 0)) * 10000)` |
+| `Math.min/max(a, b)` | Прямое сравнение (integer compare = real compare) | тернарник |
+| `Math.floor/ceil/round/trunc(x)` | Convert-compute-convert через `double` | `(d32_t)floor((double)(x) / S.0) * S.0` |
+| `Math.sqrt/cbrt(x)` | Convert-compute-convert | `(d32_t)sqrt((double)(x) / S.0) * S.0` |
+| `Math.sin/cos/tan/...` | Convert-compute-convert | аналогично |
+| `Math.pow/hypot/atan2(a, b)` | Оба аргумента конвертируются в double, результат — обратно | `(d32_t)pow((double)(a) / S.0, (double)(b) / S.0) * S.0` |
+
+**Важно:** transcendentals используют `double` внутри (требуется FPU). На `fpu: false` платформах эти функции недоступны для decimal. Чистые integer операции (`abs`, `sign`, `min/max`) работают везде.
+
+### Math.roundCast\<T\>(x)
+
+`as` cast — truncate toward zero. `Math.roundCast<T>(x)` — round-half-away-from-zero, затем cast.
+
+| Направление | Формула |
+|-------------|---------|
+| `roundCast<i32>(d32_val)` | `(int32_t)((val >= 0) ? ((val + scale/2) / scale) : ((val - scale/2) / scale))` |
+| `roundCast<d16>(d32_val)` | `(d16_t)((val >= 0) ? ((val + ratio/2) / ratio) : ((val - ratio/2) / ratio))` |
+| `roundCast<i32>(f64_val)` | `(int32_t)round(val)` |
+| Widening / same-type | Эквивалентно `as` (без потери точности) |
+
+```typescript
+let d: d32 = 3.5;
+let i = Math.roundCast<i32>(d);   // 4 (round-half-away-from-zero)
+let t = d as i32;                  // 3 (truncate)
+```
+
+### Math.saturatingCast\<T\>(x) и Math.checkedCast\<T\>(x)
+
+Поддерживают decimal target-типы (`d8`/`d16`/`d32`/`d64`). При scale conversion clamp применяется к raw integer range target-типа.
+
+```typescript
+let big: d64 = 999999.99999999;
+let clamped = Math.saturatingCast<d32>(big);  // INT32_MAX as d32_t
+```
 
 ### Форматирование
 

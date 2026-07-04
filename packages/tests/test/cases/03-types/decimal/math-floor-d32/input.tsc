@@ -1,0 +1,2 @@
+let a: d32 = 3.7;
+let b = Math.floor(a);

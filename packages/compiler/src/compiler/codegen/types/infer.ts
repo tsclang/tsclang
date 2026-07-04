@@ -513,23 +513,37 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
       return 'double';
     }
     if (obj.kind === 'Ident' && obj.name === 'Math') {
+      const DEC_CTS = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
+      const _a0t = node.args?.[0] ? ctx.inferType(node.args[0].expr) : 'int32_t';
+      const _isDec = DEC_CTS.has(_a0t);
       if (prop === 'clz32' || prop === 'imul') return 'int32_t';
       if (prop === 'fround') return 'float';
-      if (prop === 'saturatingCast') {
+      if (prop === 'saturatingCast' || prop === 'roundCast') {
         const tname = (node.typeArgs?.[0] as TypeRef | undefined)?.name ?? 'i32';
         const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
           u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
-          f32:'float', f64:'double', bool:'bool', usize:'size_t' };
+          f32:'float', f64:'double', bool:'bool', usize:'size_t',
+          d8:'d8_t', d16:'d16_t', d32:'d32_t', d64:'d64_t' };
         return (primMap as Record<string, string>)[tname] ?? 'int32_t';
       }
       if (prop === 'checkedCast') {
         const tname = (node.typeArgs?.[0] as TypeRef | undefined)?.name ?? 'i32';
         const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
           u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
-          f32:'float', f64:'double', bool:'bool', usize:'size_t' };
+          f32:'float', f64:'double', bool:'bool', usize:'size_t',
+          d8:'d8_t', d16:'d16_t', d32:'d32_t', d64:'d64_t' };
         const ctype = (primMap as Record<string, string>)[tname] ?? 'int32_t';
         const ident = ctx.cTypeToIdent(ctype);
         return `opt_${ident}`;
+      }
+      if (_isDec && ['abs', 'sign', 'floor', 'ceil', 'round', 'trunc', 'sqrt', 'cbrt',
+          'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+          'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+          'log', 'log2', 'log10', 'log1p', 'exp', 'expm1'].includes(prop)) {
+        return _a0t;
+      }
+      if (_isDec && (prop === 'pow' || prop === 'hypot' || prop === 'atan2')) {
+        return _a0t;
       }
       if (prop === 'abs' || prop === 'min' || prop === 'max') {
         const a0 = node.args?.[0];
@@ -537,11 +551,13 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
           const arrType = ctx.inferType(a0.expr);
           const primMap: Record<string, string> = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
             u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
-            f32:'float', f64:'double', bool:'bool', usize:'size_t' };
+            f32:'float', f64:'double', bool:'bool', usize:'size_t',
+            d8:'d8_t', d16:'d16_t', d32:'d32_t', d64:'d64_t' };
           const etIdent = arrType?.startsWith('Array_') ? arrType.slice(6) : null;
           if (etIdent && (primMap as Record<string, string>)[etIdent]) return (primMap as Record<string, string>)[etIdent];
         }
         const a0t = a0 ? ctx.inferType(a0.expr) : 'int32_t';
+        if (DEC_CTS.has(a0t)) return a0t;
         if (a0t !== 'double' && a0t !== 'float') return 'int32_t';
       }
       return 'double';

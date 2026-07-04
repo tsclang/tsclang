@@ -1,0 +1,2 @@
+let a: d32 = 9.0;
+let b = Math.sqrt(a);

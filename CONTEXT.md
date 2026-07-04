@@ -208,11 +208,11 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 
 ---
 
-## 15. Decimal Fixed-Point Types (#180 — Phase 1-4 DONE)
+## 15. Decimal Fixed-Point Types (#180 — Phase 1-5 DONE)
 
-**Phase 1-4 implemented.** 37 tests pass. See issue #180 for full plan.
+**Phase 1-5 implemented.** 52 tests pass. See issue #180 for full plan.
 
-### Implemented (Phase 1-4)
+### Implemented (Phase 1-5)
 
 - Type registration: `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), runtime typedefs.
 - Literal conversion: `literalToCTyped` scales float literals to integers (e.g., `1.5` → `15000` for d32). `scaleLiteral()` uses round-half-away-from-zero.
@@ -223,9 +223,8 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 - **Compound assignment:** `+=`/`-=` work directly. `*=`/`/=` use runtime helpers.
 - **Casts (`as`):** Scale-aware conversion. int→dec: `*scale`, dec→int: `/scale` (truncate), dec→dec widen: `*(dstScale/srcScale)`, dec→dec narrow: `/(srcScale/dstScale)` (truncate), dec↔float: `/scale.0` or `*scale.0`. `_isSafeWidening` updated for decimal kinds.
 - **Formatting:** `console.log`, template literals, `.toString()`, string concat all use `tsc_dec_dtoa()` / `tsc_dXX_to_string()` — fixed decimal places (d8/d16=2dp, d32=4dp, d64=8dp).
-- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `runtime.h`.
+- **Math functions (Phase 5):** `abs`/`sign`/`min`/`max` preserve decimal type (pure integer). Transcendentals (`sqrt`/`sin`/`cos`/etc.) use convert-compute-convert via `double`. `floor`/`ceil`/`round`/`trunc` same pattern. `pow`/`hypot`/`atan2` convert both args. Type inference in `infer.ts` preserves decimal ctype for all these.
+- **Math.roundCast\<T\>(x) (Phase 5 NEW):** Round-half-away-from-zero cast. Decimal→integer: `(val ± scale/2) / scale`. Decimal→narrower-decimal: `(val ± ratio/2) / ratio`. Float→integer: `round()`. Widening/same-type: same as `as`.
+- **Math.saturatingCast\<T\>(x) / Math.checkedCast\<T\>(x) (Phase 5):** Support decimal target types with scale conversion + range clamp.
+- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `builtin-helpers.ts`, `runtime.h`.
 - Spec: `03-types/03-decimal-types.md`.
-
-### Roadmap (Phase 5)
-
-- **Phase 5:** Math + Platform (Math.sqrt/abs on decimal, Math.roundCast/saturatingCast/checkedCast for decimal).
