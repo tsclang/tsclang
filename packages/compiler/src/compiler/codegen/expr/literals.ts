@@ -115,6 +115,32 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
       'uint32_t': { min: 0n,                       max: 4294967295n,             ts: 'u32' },
       'uint64_t': { min: 0n,                       max: 18446744073709551615n,   ts: 'u64' },
     };
+
+    // Decimal types: check scaled value against raw integer range
+    const decBase = resolveDecimalBase(ctx, ctype);
+    if (decBase) {
+      const isLit = node.kind === 'Literal' && node.litType === 'number';
+      const isNegLit = node.kind === 'Unary' && node.op === '-'
+        && node.expr?.kind === 'Literal' && node.expr.litType === 'number';
+      if (!isLit && !isNegLit) return;
+      const litNode = isLit ? (node as Literal) : (node as { expr: Literal }).expr;
+      const rawVal = litNode.value;
+      const scale = decimalScale(decBase)!;
+      const scaledStr = scaleLiteral(rawVal, scale);
+      const scaled = BigInt(scaledStr);
+      const DEC_RANGES: Record<string, { min: bigint; max: bigint; ts: string }> = {
+        'd8_t':  { min: -128n,                    max: 127n,                    ts: 'd8' },
+        'd16_t': { min: -32768n,                  max: 32767n,                  ts: 'd16' },
+        'd32_t': { min: -2147483648n,             max: 2147483647n,             ts: 'd32' },
+        'd64_t': { min: -9223372036854775808n,    max: 9223372036854775807n,    ts: 'd64' },
+      };
+      const r = DEC_RANGES[decBase];
+      if (r && (scaled < r.min || scaled > r.max)) {
+        throw ctx.error(`literal ${rawVal} overflows ${r.ts} (scaled value ${scaled} exceeds raw range ${r.min}..${r.max})`, node);
+      }
+      return;
+    }
+
     if (!(ctype in INT_RANGES)) return;
     const isLit = node.kind === 'Literal' && node.litType === 'number';
     const isNegLit = node.kind === 'Unary' && node.op === '-'

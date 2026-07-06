@@ -47,7 +47,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         const NUMERIC_ET = { i8:'int8_t', i16:'int16_t', i32:'int32_t', i64:'int64_t',
           u8:'uint8_t', u16:'uint16_t', u32:'uint32_t', u64:'uint64_t',
           f32:'float', f64:'double', bool:'bool', usize:'size_t', isize:'intptr_t',
-          char:'char' };
+          char:'char', d8:'d8_t', d16:'d16_t', d32:'d32_t', d64:'d64_t' };
         const etIdent = arrType.startsWith('Array_') ? arrType.slice(6) : null;
         if (!etIdent || !(etIdent in NUMERIC_ET)) {
           throw ctx.error(`Math.${prop}(...arr) requires a numeric array, got ${etIdent || 'non-array'} elements`);
@@ -133,27 +133,27 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         if (dScale > sScale) {
           const ratio = dScale / sScale;
           const llS = srcType === 'd64_t' || targetType === 'd64_t' ? 'LL' : '';
-          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${ratio}${llS}))`;
+          return `(${a0} < ((${range[0]}) / ${ratio})) ? (${targetType})(${range[0]}) : ((${a0} > ((${range[1]}) / ${ratio})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${ratio}${llS}))`;
         }
         if (dScale < sScale) {
           const ratio = sScale / dScale;
           const llS = srcType === 'd64_t' ? 'LL' : '';
-          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${ratio}${llS}))`;
+          return `(${a0} < ((${range[0]}) * ${ratio}${llS})) ? (${targetType})(${range[0]}) : ((${a0} > ((${range[1]}) * ${ratio}${llS})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${ratio}${llS}))`;
         }
         return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
       }
       if (srcDecI && !dstDecI && !isFloat(targetType)) {
         const [sScale] = srcDecI;
         const llS = srcType === 'd64_t' ? 'LL' : '';
-        return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${sScale}${llS}))`;
+        return `(${a0} < ((${range[0]}) * ${sScale}${llS})) ? (${targetType})(${range[0]}) : ((${a0} > ((${range[1]}) * ${sScale}${llS})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) / ${sScale}${llS}))`;
       }
       if (!srcDecI && dstDecI) {
         const [dScale] = dstDecI;
         const llS = targetType === 'd64_t' ? 'LL' : '';
         if (isFloat(srcType)) {
-          return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}.0))`;
+          return `(${a0} < ((${range[0]}) / ${dScale}.0)) ? (${targetType})(${range[0]}) : ((${a0} > ((${range[1]}) / ${dScale}.0)) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}.0))`;
         }
-        return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}${llS}))`;
+        return `(${a0} < ((${range[0]}) / ${dScale})) ? (${targetType})(${range[0]}) : ((${a0} > ((${range[1]}) / ${dScale})) ? (${targetType})(${range[1]}) : (${targetType})((${a0}) * ${dScale}${llS}))`;
       }
       return `(${a0} < (${range[0]})) ? (${targetType})(${range[0]}) : ((${a0} > (${range[1]})) ? (${targetType})(${range[1]}) : (${targetType})(${a0}))`;
     }
@@ -185,19 +185,40 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       const srcDecI = DEC_INFO[srcType];
       const dstDecI = DEC_INFO[targetType];
       let convExpr = a0;
+      let chkMin = range[0];
+      let chkMax = range[1];
       if (srcDecI && dstDecI) {
         const [sScale] = srcDecI;
         const [dScale] = dstDecI;
-        if (dScale > sScale) convExpr = `(${a0}) * ${dScale / sScale}`;
-        else if (dScale < sScale) convExpr = `(${a0}) / ${sScale / dScale}`;
+        if (dScale > sScale) {
+          const ratio = dScale / sScale;
+          convExpr = `(${a0}) * ${ratio}`;
+          chkMin = `(${range[0]}) / ${ratio}`;
+          chkMax = `(${range[1]}) / ${ratio}`;
+        } else if (dScale < sScale) {
+          const ratio = sScale / dScale;
+          convExpr = `(${a0}) / ${ratio}`;
+          chkMin = `(${range[0]}) * ${ratio}`;
+          chkMax = `(${range[1]}) * ${ratio}`;
+        }
       } else if (srcDecI && !dstDecI && !isFloat(targetType)) {
-        convExpr = `(${a0}) / ${srcDecI[0]}`;
+        const [sScale] = srcDecI;
+        convExpr = `(${a0}) / ${sScale}`;
+        chkMin = `(${range[0]}) * ${sScale}`;
+        chkMax = `(${range[1]}) * ${sScale}`;
       } else if (!srcDecI && dstDecI) {
-        if (isFloat(srcType)) convExpr = `(${a0}) * ${dstDecI[0]}.0`;
-        else convExpr = `(${a0}) * ${dstDecI[0]}`;
+        if (isFloat(srcType)) {
+          convExpr = `(${a0}) * ${dstDecI[0]}.0`;
+          chkMin = `(${range[0]}) / ${dstDecI[0]}.0`;
+          chkMax = `(${range[1]}) / ${dstDecI[0]}.0`;
+        } else {
+          convExpr = `(${a0}) * ${dstDecI[0]}`;
+          chkMin = `(${range[0]}) / ${dstDecI[0]}`;
+          chkMax = `(${range[1]}) / ${dstDecI[0]}`;
+        }
       }
       lines.push(`${I}${optName} ${tmp};`);
-      lines.push(`${I}${tmp}.has_value = (${a0} >= (${range[0]}) && ${a0} <= (${range[1]}));`);
+      lines.push(`${I}${tmp}.has_value = (${a0} >= (${chkMin}) && ${a0} <= (${chkMax}));`);
       lines.push(`${I}${tmp}.value = ${tmp}.has_value ? (${targetType})(${convExpr}) : (${targetType})0;`);
       return tmp;
     }

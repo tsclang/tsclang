@@ -1,0 +1,1 @@
+lossy cast from f64 to d32 is forbidden (no-lossy-cast)

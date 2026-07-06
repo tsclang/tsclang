@@ -1,0 +1,8 @@
+let arr = new Array<d32>(3);
+arr.push(1.5);
+arr.push(0.3);
+arr.push(2.7);
+let mn = Math.min(...arr);
+let mx = Math.max(...arr);
+console.log(mn);
+console.log(mx);

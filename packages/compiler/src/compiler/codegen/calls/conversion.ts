@@ -275,7 +275,8 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
       const typeName = callee.object.name;
       const primitiveMap = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                               'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
-                              'f32':'float','f64':'double' };
+                              'f32':'float','f64':'double',
+                              'd8':'d8_t','d16':'d16_t','d32':'d32_t','d64':'d64_t' };
       if (typeName in primitiveMap) {
         const ctype = (primitiveMap as Record<string, string>)[typeName];
         const ident = ctx.cTypeToIdent(ctype);

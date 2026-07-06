@@ -2033,6 +2033,109 @@ static inline double tsc_parse_f64(String s) {
 })
 #define tsc_parse_float(s) tsc_try_parse_f64(s)
 
+/* Decimal parse/tryParse — pure integer, no FPU required */
+static inline int _tsc_valid_decimal(const char *s) {
+    if (*s == '-' || *s == '+') s++;
+    int has_digit = 0;
+    while (*s >= '0' && *s <= '9') { has_digit = 1; s++; }
+    if (*s == '.') {
+        s++;
+        while (*s >= '0' && *s <= '9') { has_digit = 1; s++; }
+    }
+    return has_digit && *s == '\0';
+}
+
+static inline int64_t _tsc_parse_decimal_raw(const char *buf, int64_t scale, int decimals) {
+    const char *p = buf;
+    int neg = 0;
+    if (*p == '-') { neg = 1; p++; }
+    else if (*p == '+') { p++; }
+    int64_t int_part = 0;
+    while (*p >= '0' && *p <= '9') {
+        int_part = int_part * 10 + (*p - '0');
+        p++;
+    }
+    int64_t result = int_part * scale;
+    if (*p == '.') {
+        p++;
+        int64_t frac_value = 0;
+        int frac_count = 0;
+        int round_up = 0;
+        while (*p >= '0' && *p <= '9') {
+            if (frac_count < decimals) {
+                frac_value = frac_value * 10 + (*p - '0');
+                frac_count++;
+            } else if (frac_count == decimals) {
+                if (*p >= '5') round_up = 1;
+                frac_count++;
+            }
+            p++;
+        }
+        while (frac_count < decimals) { frac_value *= 10; frac_count++; }
+        result += frac_value;
+        if (round_up) result += 1;
+    }
+    return neg ? -result : result;
+}
+
+static inline d8_t tsc_d8_parse(String s) {
+    char buf[64]; size_t n = s.length < 63 ? s.length : 63;
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    return (d8_t)_tsc_parse_decimal_raw(buf, 100, 2);
+}
+static inline d16_t tsc_d16_parse(String s) {
+    char buf[64]; size_t n = s.length < 63 ? s.length : 63;
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    return (d16_t)_tsc_parse_decimal_raw(buf, 100, 2);
+}
+static inline d32_t tsc_d32_parse(String s) {
+    char buf[64]; size_t n = s.length < 63 ? s.length : 63;
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    return (d32_t)_tsc_parse_decimal_raw(buf, 10000LL, 4);
+}
+static inline d64_t tsc_d64_parse(String s) {
+    char buf[64]; size_t n = s.length < 63 ? s.length : 63;
+    _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    return (d64_t)_tsc_parse_decimal_raw(buf, 100000000LL, 8);
+}
+
+#define tsc_d8_try_parse(s) ({ \
+    String _s_ = (s); char _b_[64]; \
+    size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
+    int _ok_ = _tsc_valid_decimal(_b_); \
+    d8_t _v_ = _ok_ ? (d8_t)_tsc_parse_decimal_raw(_b_, 100, 2) : 0; \
+    (opt_d8){ .has_value = _ok_, .value = _v_ }; \
+})
+#define tsc_d16_try_parse(s) ({ \
+    String _s_ = (s); char _b_[64]; \
+    size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
+    int _ok_ = _tsc_valid_decimal(_b_); \
+    d16_t _v_ = _ok_ ? (d16_t)_tsc_parse_decimal_raw(_b_, 100, 2) : 0; \
+    (opt_d16){ .has_value = _ok_, .value = _v_ }; \
+})
+#define tsc_d32_try_parse(s) ({ \
+    String _s_ = (s); char _b_[64]; \
+    size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
+    int _ok_ = _tsc_valid_decimal(_b_); \
+    d32_t _v_ = _ok_ ? (d32_t)_tsc_parse_decimal_raw(_b_, 10000LL, 4) : 0; \
+    (opt_d32){ .has_value = _ok_, .value = _v_ }; \
+})
+#define tsc_d64_try_parse(s) ({ \
+    String _s_ = (s); char _b_[64]; \
+    size_t _n_ = _s_.length < 63 ? _s_.length : 63; \
+    _tsc_str_copy_to(_b_, &_s_, 0, _n_); _b_[_n_] = '\0'; \
+    int _ok_ = _tsc_valid_decimal(_b_); \
+    d64_t _v_ = _ok_ ? (d64_t)_tsc_parse_decimal_raw(_b_, 100000000LL, 8) : 0; \
+    (opt_d64){ .has_value = _ok_, .value = _v_ }; \
+})
+
 /* -------------------------------------------------------------------------
  * process.argv support
  * ------------------------------------------------------------------------- */

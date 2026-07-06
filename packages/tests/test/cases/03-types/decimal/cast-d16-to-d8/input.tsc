@@ -1,0 +1,2 @@
+let a: d16 = 1.27;
+let b = a as d8;

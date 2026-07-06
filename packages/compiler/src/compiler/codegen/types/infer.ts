@@ -920,7 +920,8 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
     }
     const primitiveMap2: Record<string, string> = { 'i8':'int8_t','i16':'int16_t','i32':'int32_t','i64':'int64_t',
                              'u8':'uint8_t','u16':'uint16_t','u32':'uint32_t','u64':'uint64_t',
-                             'f32':'float','f64':'double' };
+                             'f32':'float','f64':'double',
+                             'd8':'d8_t','d16':'d16_t','d32':'d32_t','d64':'d64_t' };
     if (obj.kind === 'Ident' && obj.name in primitiveMap2) {
       const cT = (primitiveMap2 as Record<string, string>)[obj.name];
       const etId = ctx.cTypeToIdent(cT);

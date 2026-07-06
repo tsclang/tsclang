@@ -88,7 +88,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 | Поле | Тип | Desktop default | Допустимые значения | Описание |
 |------|-----|----------------|--------------------|----------|
-| `fpu` | `boolean` | `true` | `true`, `false` | Есть ли FPU. `false` → `f32`/`f64` типы и float-литералы запрещены; `defaultNumber` должен быть integer. |
+| `fpu` | `boolean` | `true` | `true`, `false` | Есть ли FPU. `false` → `f32`/`f64` типы и float-литералы запрещены; `defaultNumber` должен быть integer или decimal (`d8`/`d16`/`d32`/`d64`). |
 | `bits` | `u8` | `64` | `8`, `16`, `32`, `64` | Разрядность CPU. Влияет на printf formatting (`%ld` при `bits < 32`), размер указателей (через `usize`). |
 | `unaligned_access` | `boolean` | `true` | `true`, `false` | Поддерживает ли CPU невыровненный доступ к памяти. `false` → компилятор генерирует побайтовые helper'ы для `@packed`-структур вместо прямого cast. x86-64: `true`; ARM Cortex-M0, AVR, 6502: `false`. **[NOT YET IMPLEMENTED]** |
 
@@ -97,7 +97,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | Поле | Тип | Обязательное | Допустимые значения | Описание |
 |------|-----|-------------|--------------------|----------|
 | `usize` | `string` | Да | `"u8"`, `"u16"`, `"u32"`, `"u64"` | Тип для `usize`. Явное поле, не выводится из `bits`. Покрывает краевые случаи (8086: 16-бит CPU с 20-битной адресацией). |
-| `defaultNumber` | `string` | Да | `"f64"`, `"f32"`, `"i8"`, `"i16"`, `"i32"`, `"u8"`, `"u16"`, `"u32"` | Тип для `number`. Если `fpu: false` — должен быть integer, иначе compile error. |
+| `defaultNumber` | `string` | Да | `"f64"`, `"f32"`, `"i8"`, `"i16"`, `"i32"`, `"u8"`, `"u16"`, `"u32"`, `"d8"`, `"d16"`, `"d32"`, `"d64"` | Тип для `number`. Если `fpu: false` — должен быть integer или decimal, иначе compile error. Decimal types (`d8`–`d64`) не требуют FPU — pure integer math. |
 
 ### Memory
 

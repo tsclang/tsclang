@@ -56,6 +56,10 @@ Value class — inline по умолчанию. Это **сознательно�
 | `i64 \| null` | `bool + pad(7) + i64` | 16 байт |
 | `f32 \| null` | `bool + pad(3) + f32` | 8 байт |
 | `f64 \| null` | `bool + pad(7) + f64` | 16 байт |
+| `d8 \| null` | `bool + d8_t` | 2 байта |
+| `d16 \| null` | `bool + pad(1) + d16_t` | 4 байта |
+| `d32 \| null` | `bool + pad(3) + d32_t` | 8 байт |
+| `d64 \| null` | `bool + pad(7) + d64_t` | 16 байт |
 
 На desktop это некритично. На embedded (AVR: 2KB RAM) overhead padding может быть значимым.
 

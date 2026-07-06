@@ -679,8 +679,25 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             ['uint16_t','int8_t'],['uint16_t','uint8_t'],
             ['size_t','int32_t'],['size_t','int16_t'],['size_t','int8_t'],
           ];
+          const tsName = (c: string) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
           if (LOSSY.some(([s,t]) => srcType === s && ct === t)) {
-            const tsName = (c: string) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
+            throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
+          }
+          // Decimal lossy casts: narrowing, decimal→integer (fractional loss), float→decimal (precision loss)
+          const DEC_SET = new Set(['d8_t','d16_t','d32_t','d64_t']);
+          const INT_SET = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t']);
+          const FLOAT_SET = new Set(['double','float']);
+          const DEC_SCALES: Record<string,number> = { 'd8_t':100,'d16_t':100,'d32_t':10000,'d64_t':100000000 };
+          const DEC_BITS: Record<string,number> = { 'd8_t':8,'d16_t':16,'d32_t':32,'d64_t':64 };
+          let decLossy = false;
+          if (DEC_SET.has(srcType) && DEC_SET.has(ct)) {
+            if (DEC_SCALES[ct] < DEC_SCALES[srcType] || DEC_BITS[ct] < DEC_BITS[srcType]) decLossy = true;
+          } else if (DEC_SET.has(srcType) && INT_SET.has(ct)) {
+            decLossy = true;
+          } else if (FLOAT_SET.has(srcType) && DEC_SET.has(ct)) {
+            decLossy = true;
+          }
+          if (decLossy) {
             throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
           }
         }

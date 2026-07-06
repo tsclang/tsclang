@@ -204,3 +204,20 @@ console.log(a);          // "1.5000"
 let s = a.toString();    // "1.5000"
 let t = `val=${a}`;      // "val=1.5000"
 ```
+
+### parse / tryParse
+
+Все decimal типы поддерживают статические методы `parse()` и `tryParse()` для конвертации строк:
+
+```typescript
+let x = d32.parse("3.14");         // d32 = 3.1400, panics on invalid input
+let opt = d32.tryParse("abc");     // opt_d32 = null
+let opt2 = d32.tryParse("2.7");    // opt_d32 = 2.7000
+```
+
+- `dXX.parse(s)` — парсит строку в scaled integer, panics при невалидном вводе
+- `dXX.tryParse(s)` — возвращает `opt_dXX`, `null` при невалидном вводе
+
+Парсинг — pure integer, не требует FPU. Поддерживаются опциональный знак, целая часть, десятичная точка и дробная часть. Округление — round-half-away-from-zero (как в арифметике). Лишние знаки после запятой (сверх precision типа) округляются.
+
+Runtime: `tsc_dXX_parse(String)` / `tsc_dXX_try_parse(String)`.
