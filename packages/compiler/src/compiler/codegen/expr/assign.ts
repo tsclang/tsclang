@@ -368,14 +368,20 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
                              '&=':'&', '|=':'|', '^=':'^', '<<=':'<<', '>>=':'>>' };
     const binOp = (compoundBinOps as Record<string, string>)[node.op];
     if (binOp) {
-      const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right } as Binary;
-      const resultType = ctx._effectiveType(binNode);
-      const si = ctx._numericTypeInfo(resultType);
-      const di = ctx._numericTypeInfo(leftType);
-      if (si && di && !ctx._isSafeWidening(resultType, leftType)) {
-        const srcTs = ctx.ctypeToTsName(resultType);
-        const dstTs = ctx.ctypeToTsName(leftType);
-        throw ctx.error(`cannot implicitly convert ${srcTs} to ${dstTs} in '${node.op}': use "as ${dstTs}" or explicit assignment`);
+      // Skip widening check for numeric literals — _expectedType handles scaling
+      const isCompoundNumLit = (node.right?.kind === 'Literal' && node.right?.litType === 'number')
+        || (node.right?.kind === 'Unary' && node.right?.op === '-'
+          && node.right?.expr?.kind === 'Literal' && node.right?.expr?.litType === 'number');
+      if (!isCompoundNumLit) {
+        const binNode = { kind: 'Binary', op: binOp, left: node.left, right: node.right } as Binary;
+        const resultType = ctx._effectiveType(binNode);
+        const si = ctx._numericTypeInfo(resultType);
+        const di = ctx._numericTypeInfo(leftType);
+        if (si && di && !ctx._isSafeWidening(resultType, leftType)) {
+          const srcTs = ctx.ctypeToTsName(resultType);
+          const dstTs = ctx.ctypeToTsName(leftType);
+          throw ctx.error(`cannot implicitly convert ${srcTs} to ${dstTs} in '${node.op}': use "as ${dstTs}" or explicit assignment`);
+        }
       }
     }
 

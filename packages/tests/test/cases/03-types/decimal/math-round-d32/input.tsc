@@ -1,0 +1,3 @@
+let a: d32 = 1.5;
+let b = Math.round(a);
+console.log(b);

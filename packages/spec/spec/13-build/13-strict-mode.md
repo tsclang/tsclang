@@ -157,6 +157,12 @@ class MathError extends Error {
 | `f64` | `i32` | усечение дробной части + возможный overflow |
 | `f32` | `i32` | усечение дробной части + возможный overflow |
 | Любой более широкий | Любой более узкий | потеря данных |
+| `d32` | `d16` / `d8` | потеря точности (scale + диапазон) |
+| `d64` | `d32` / `d16` / `d8` | потеря точности (scale + диапазон) |
+| `d16` | `d8` | потеря точности |
+| `f64` | `dXX` | усечение дробной части + возможный overflow |
+| `i64` | `dXX` (при overflow) | raw диапазон может не вместить scaled значение |
+| `dXX` | `iXX` | усечение дробной части |
 
 ```typescript
 // ❌ error: lossy cast from i64 to i32 is forbidden (no-lossy-cast);
@@ -176,6 +182,7 @@ let b = a as i64;    // i32 → i64 — safe
 **Safe casts (не запрещаются):**
 - Widening: `i32` → `i64`, `u8` → `i16`, `f32` → `f64`, `i32` → `f64`
 - Same-size unsigned↔signed: `u32` ↔ `i32` (bit-preserving)
+- Decimal widening (больше scale или тот же): `d8` → `d16` / `d32` / `d64`, `d16` → `d32` / `d64`, `d32` → `d64`
 - `as` на non-null assertion: `x as i32` при `x: i32 | null` (не lossy, только убирает null)
 - String literal union → string (не числовой cast)
 
@@ -206,7 +213,9 @@ if (overflow !== null) {
 
 **`Math.checkedCast<T>(x)`** — возвращает `T | null`. `null` если значение не влезает в диапазон типа `T`. Позволяет проверить overflow без потери данных.
 
-Поддерживаемые типы: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`.
+Поддерживаемые типы: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`, `d8`, `d16`, `d32`, `d64`.
+
+При cross-scale decimal cast (например `saturatingCast<d16>` на `d32`) range check корректируется на соотношение scale: для narrowing проверяется `a < MIN*ratio || a > MAX*ratio`, где `ratio = scale_src / scale_dst`.
 
 **C-output:**
 

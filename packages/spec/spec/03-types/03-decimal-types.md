@@ -114,6 +114,10 @@ let quot = a / b;       // tsc_div_d32(15000, 5000) = 30000 (3.0)
 
 **Смешанные decimal-типы запрещены:** `d16 + d32` — compile error. Используйте явный `as` cast.
 
+**Смешанные decimal + integer запрещены:** `d32 + i32`, `d32 + 1` (где `1: i32`) — compile error. Integer-типы всегда шире decimal в диапазоне, но decimal имеет дробную часть — нет безопасного направления для auto-widening. Используйте явный cast: `d32 + (1 as d32)` или `(d as i32) + i`.
+
+**Numeric literals — исключение:** `d32 += 1.5` — разрешено. Numeric literal масштабируется под `_expectedType` (decimal), поэтому widening check пропускается.
+
 **Compound assignment:** `+=`, `-=` работают напрямую. `*=`, `/=` используют runtime helpers: `a = tsc_mul_d32(a, b)`.
 
 ### Casts (`as`)

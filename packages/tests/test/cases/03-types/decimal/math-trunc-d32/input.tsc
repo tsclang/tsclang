@@ -1,0 +1,3 @@
+let a: d32 = 1.7;
+let b = Math.trunc(a);
+console.log(b);

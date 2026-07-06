@@ -255,9 +255,10 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       if (srcDecI && isFloat(targetType)) {
         return `(${targetType})(${a0} / ${srcDecI[0]}.0)`;
       }
-      // float -> decimal: *scale.0
+      // float -> decimal: *scale.0 with rounding
       if (isFloat(srcType) && dstDecI) {
-        return `(${targetType})(${a0} * ${dstDecI[0]}.0)`;
+        ctx.includes.add('#include <math.h>');
+        return `(${targetType})llround(${a0} * ${dstDecI[0]}.0)`;
       }
       // integer -> decimal: *scale
       if (!srcDecI && !isFloat(srcType) && dstDecI) {
