@@ -697,7 +697,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           } else if (FLOAT_SET.has(srcType) && DEC_SET.has(ct)) {
             decLossy = true;
           } else if (DEC_SET.has(srcType) && ct === 'float') {
-            decLossy = true;
+            if (DEC_BITS[srcType] >= 32) decLossy = true;
           }
           if (decLossy) {
             throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
