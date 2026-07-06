@@ -20,6 +20,18 @@ export function isDecimal(ctype: string): boolean {
   return ctype in DECIMAL_SCALES;
 }
 
+// Resolve scalar aliases (type Money = d32) to their base decimal C type.
+// Returns the base type ('d32_t') if the ctype is or aliases a decimal, null otherwise.
+export function resolveDecimalBase(ctx: CodeGenContext, ctype: string | null | undefined): string | null {
+  if (!ctype) return null;
+  if (DECIMAL_SCALES[ctype]) return ctype;
+  const alias = ctx.classes.get(ctype);
+  if (alias?.isScalarAlias && alias.innerType && DECIMAL_SCALES[alias.innerType]) {
+    return alias.innerType;
+  }
+  return null;
+}
+
 export function decimalScale(ctype: string): number | null {
   return DECIMAL_SCALES[ctype] ?? null;
 }

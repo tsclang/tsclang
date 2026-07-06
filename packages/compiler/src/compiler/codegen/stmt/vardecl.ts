@@ -1,6 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block, Literal } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
+import { resolveDecimalBase } from '../types/decimal.js';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','d8','d16','d32','d64','boolean','usize']);
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
@@ -1415,7 +1416,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 initC = ctx.binaryWidened(init, ctype, lines, depth);
               } else {
                 // Set expected type hint for context-sensitive calls (e.g. parseFloat with f64 annotation)
-                ctx._expectedType = ctype;
+                ctx._expectedType = resolveDecimalBase(ctx, ctype) ?? ctype;
                 initC = ctx.exprToC(init, lines, depth);
                 ctx._expectedType = null;
               }

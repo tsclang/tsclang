@@ -1,6 +1,6 @@
 import type { Assign, ClassMember, Binary } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
-import { isDecimal } from '../types/decimal.js';
+import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
 // assign.ts
   // Assignment
 export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], depth: number): string | null {
@@ -138,7 +138,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
     if (r === undefined) {
       const _prevET_asn = ctx._expectedType;
       const _asnLt = ctx.inferType(node.left);
-      ctx._expectedType = isDecimal(_asnLt) ? _asnLt : null;
+      ctx._expectedType = resolveDecimalBase(ctx, _asnLt);
       r = ctx.exprToC(node.right, lines, depth);
       ctx._expectedType = _prevET_asn;
     }
@@ -409,14 +409,14 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
     }
 
     // Decimal compound assignment: *=, /= need runtime helpers; +=, -=, %= need type check + zero guard
-    const DECIMAL_CTYPES_ASN = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
-    if (DECIMAL_CTYPES_ASN.has(leftType) && (node.op === '+=' || node.op === '-=' || node.op === '*=' || node.op === '/=' || node.op === '%=')) {
-      const rightType = ctx.inferType(node.right);
-      if (DECIMAL_CTYPES_ASN.has(rightType) && rightType !== leftType) {
-        throw ctx.error(`TypeError: cannot mix ${ctx.ctypeToTsName(leftType)} and ${ctx.ctypeToTsName(rightType)} in arithmetic without explicit cast`, node);
+    const dLeftBase = resolveDecimalBase(ctx, leftType);
+    if (dLeftBase && (node.op === '+=' || node.op === '-=' || node.op === '*=' || node.op === '/=' || node.op === '%=')) {
+      const dRightBase = resolveDecimalBase(ctx, ctx.inferType(node.right));
+      if (dRightBase && dRightBase !== dLeftBase) {
+        throw ctx.error(`TypeError: cannot mix ${ctx.ctypeToTsName(leftType)} and ${ctx.ctypeToTsName(ctx.inferType(node.right))} in arithmetic without explicit cast`, node);
       }
       if (node.op === '*=') {
-        const helper = `tsc_mul_${leftType.replace('_t', '')}`;
+        const helper = `tsc_mul_${dLeftBase.replace('_t', '')}`;
         return `${l} = ${helper}(${l}, ${r})`;
       }
       if (node.op === '/=' || node.op === '%=') {
@@ -425,10 +425,10 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         const panicExpr = ctx._strictRules?.has('no-abort')
           ? '_tsc_on_panic("division by zero")'
           : 'abort()';
-        lines.push(`${I}${leftType} ${tmp} = ${r};`);
+        lines.push(`${I}${dLeftBase} ${tmp} = ${r};`);
         lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
         if (node.op === '/=') {
-          const helper = `tsc_div_${leftType.replace('_t', '')}`;
+          const helper = `tsc_div_${dLeftBase.replace('_t', '')}`;
           return `${l} = ${helper}(${l}, ${tmp})`;
         }
         return `${l} %= ${tmp}`;

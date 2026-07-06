@@ -1,0 +1,5 @@
+type Money = d32;
+
+let m: Money = 1.5;
+m += 1;
+m *= 2;

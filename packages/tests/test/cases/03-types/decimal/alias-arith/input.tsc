@@ -1,0 +1,6 @@
+type Money = d32;
+
+let m: Money = 1.5;
+let price: Money = 2.0;
+let sum = m + price;
+let product = m * price;

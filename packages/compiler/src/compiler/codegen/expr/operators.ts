@@ -1,5 +1,6 @@
 import type { Binary, Unary, Expression, TypeRef } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
+import { resolveDecimalBase } from '../types/decimal.js';
 // operators.ts
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
 export function binaryWidened(ctx: CodeGenContext, node: Binary, targetCtype: string, lines: string[], depth: number) {
@@ -287,18 +288,17 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     }
     const intTypes = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','char','bool']);
     // Decimal fixed-point arithmetic: *, / need runtime helpers; +, -, % are plain integer ops
-    const DECIMAL_CTYPES = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
     if (arithOps.includes(node.op)) {
-      const dlt = ctx.inferType(node.left);
-      const drt = ctx.inferType(node.right);
-      if (DECIMAL_CTYPES.has(dlt) || DECIMAL_CTYPES.has(drt)) {
+      const dlt = resolveDecimalBase(ctx, ctx.inferType(node.left));
+      const drt = resolveDecimalBase(ctx, ctx.inferType(node.right));
+      if (dlt || drt) {
         if (dlt !== drt) {
-          const tsA = ctx.ctypeToTsName(dlt);
-          const tsB = ctx.ctypeToTsName(drt);
+          const tsA = ctx.ctypeToTsName(dlt ?? ctx.inferType(node.left));
+          const tsB = ctx.ctypeToTsName(drt ?? ctx.inferType(node.right));
           throw ctx.error(`TypeError: cannot mix ${tsA} and ${tsB} in arithmetic without explicit cast`, node);
         }
         if (node.op === '*') {
-          const helper = `tsc_mul_${dlt.replace('_t', '')}`;
+          const helper = `tsc_mul_${dlt!.replace('_t', '')}`;
           return `${helper}(${l}, ${r})`;
         }
         if (node.op === '/' || node.op === '%') {
@@ -307,10 +307,10 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           const panicExpr = ctx._strictRules?.has('no-abort')
             ? '_tsc_on_panic("division by zero")'
             : 'abort()';
-          lines.push(`${I}${drt} ${tmp} = ${r};`);
+          lines.push(`${I}${dlt!} ${tmp} = ${r};`);
           lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
           if (node.op === '/') {
-            const helper = `tsc_div_${dlt.replace('_t', '')}`;
+            const helper = `tsc_div_${dlt!.replace('_t', '')}`;
             return `${helper}(${l}, ${tmp})`;
           }
           return `${l} % ${tmp}`;
@@ -321,12 +321,12 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     // Decimal comparison check: reject mixed decimal types (different scales = wrong results)
     const cmpOps = new Set(['<', '>', '<=', '>=', '==', '!=', '===', '!==']);
     if (cmpOps.has(node.op)) {
-      const dlt = ctx.inferType(node.left);
-      const drt = ctx.inferType(node.right);
-      if (DECIMAL_CTYPES.has(dlt) || DECIMAL_CTYPES.has(drt)) {
+      const dlt = resolveDecimalBase(ctx, ctx.inferType(node.left));
+      const drt = resolveDecimalBase(ctx, ctx.inferType(node.right));
+      if (dlt || drt) {
         if (dlt !== drt) {
-          const tsA = ctx.ctypeToTsName(dlt);
-          const tsB = ctx.ctypeToTsName(drt);
+          const tsA = ctx.ctypeToTsName(dlt ?? ctx.inferType(node.left));
+          const tsB = ctx.ctypeToTsName(drt ?? ctx.inferType(node.right));
           throw ctx.error(`TypeError: cannot compare ${tsA} and ${tsB} without explicit cast`, node);
         }
       }

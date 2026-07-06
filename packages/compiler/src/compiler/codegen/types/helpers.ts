@@ -87,7 +87,11 @@ export function _numericTypeInfo(ctx: CodeGenContext, ct: string) {
       'd64_t':  { bits: 64, signed: true,  kind: 'decimal', scale: 100000000, decimals: 8 },
       'size_t':   { bits: ctx._cTypeBytes('size_t') * 8, signed: false, kind: 'int' },
     };
-    return m[ct] ?? null;
+    if (m[ct]) return m[ct];
+    // Resolve scalar aliases (type Money = d32) for decimal types
+    const alias = ctx.classes.get(ct);
+    if (alias?.isScalarAlias && alias.innerType && m[alias.innerType]) return m[alias.innerType];
+    return null;
 }
 
 export function _isSafeWidening(ctx: CodeGenContext, src: string, dst: string) {

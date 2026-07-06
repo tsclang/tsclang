@@ -1,7 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Expression, Call, Argument, SymbolInfo, Param, TypeRef } from '@tsclang/ast';
-import { isDecimal } from '../types/decimal.js';
+import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
 export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth: number): string {
     const { callee, args } = node;
 
@@ -507,7 +507,8 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           return `(tsc_closure){.env = NULL, .fn = (void*)${lambdaName}}`;
         }
         const _prevExpected = ctx._expectedType;
-        if (paramType?.startsWith('Array_') || (paramType && isDecimal(paramType))) ctx._expectedType = paramType;
+        const _decPT = resolveDecimalBase(ctx, paramType);
+        if (paramType?.startsWith('Array_') || _decPT) ctx._expectedType = _decPT ?? paramType;
         const _argC = ctx.exprToC(a.expr, lines, depth);
         ctx._expectedType = _prevExpected;
         if (paramType === 'tsc_unknown') {

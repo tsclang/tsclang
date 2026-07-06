@@ -1,7 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 // dispatch.ts
 import type { Expression, ObjLitProp } from '@tsclang/ast';
-import { isDecimal } from '../types/decimal.js';
+import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
 export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] = [], depth: number = 0): string {
     if (!node) return '0';
     ctx._currentNode = node;
@@ -470,8 +470,8 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         const prevExpected = ctx._expectedType;
         if (arrType?.startsWith('Array_') && ctx._expectedType?.startsWith('Array_')) {
           ctx._expectedType = arrType;
-        } else if (isDecimal(elemType)) {
-          ctx._expectedType = elemType;
+        } else if (resolveDecimalBase(ctx, elemType)) {
+          ctx._expectedType = resolveDecimalBase(ctx, elemType);
         }
         const items = elems.map((e: { expr: Expression }) => {
           let c = ctx.exprToC(e.expr, lines, depth);
