@@ -246,16 +246,19 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
     // Decimal transcendental/rounding: convert to double, compute, convert back
     if (decI) {
       const [scale] = decI;
-      ctx.includes.add('#include <math.h>');
       const UNARY = ['floor', 'ceil', 'round', 'trunc', 'sqrt', 'cbrt',
         'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
         'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
         'log', 'log2', 'log10', 'log1p', 'exp', 'expm1'];
       const BINARY = ['pow', 'hypot', 'atan2'];
-      if (UNARY.includes(prop)) {
-        return `(${a0t})${prop}((double)(${a0}) / ${scale}.0) * ${scale}.0`;
-      }
-      if (BINARY.includes(prop)) {
+      if (UNARY.includes(prop) || BINARY.includes(prop)) {
+        if (!ctx._cap('fpu')) {
+          throw ctx.error(`Math.${prop}() on decimal types requires FPU (floating-point unit); platform has fpu=false`, node);
+        }
+        ctx.includes.add('#include <math.h>');
+        if (UNARY.includes(prop)) {
+          return `(${a0t})${prop}((double)(${a0}) / ${scale}.0) * ${scale}.0`;
+        }
         const a1Conv = isDec(a1t) ? `(double)(${a1}) / ${DEC_INFO[a1t][0]}.0` : `(double)(${a1})`;
         return `(${a0t})${prop}((double)(${a0}) / ${scale}.0, ${a1Conv}) * ${scale}.0`;
       }

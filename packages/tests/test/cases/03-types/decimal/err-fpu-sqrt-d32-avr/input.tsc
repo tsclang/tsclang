@@ -1,0 +1,3 @@
+// platform: AVR (fpu: false)
+let x: d32 = 9.0;
+let y = Math.sqrt(x);
