@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-04.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-07.
 
 ---
 
@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1829 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1923 spec-based tests (`--no-gcc`) + 135 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -208,23 +208,34 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 
 ---
 
-## 15. Decimal Fixed-Point Types (#180 — Phase 1-5 DONE)
+## 15. Decimal Fixed-Point Types (#180 — COMPLETE)
 
-**Phase 1-5 implemented.** 52 tests pass. See issue #180 for full plan.
+**All 11 phases implemented.** 128 tests pass. Issue #180 closed.
 
-### Implemented (Phase 1-5)
+### Type table
 
-- Type registration: `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), runtime typedefs.
-- Literal conversion: `literalToCTyped` scales float literals to integers (e.g., `1.5` → `15000` for d32). `scaleLiteral()` uses round-half-away-from-zero.
-- Negative literals: `vardecl.ts` handles `Unary('-', Literal)` for decimal types only.
-- `defaultNumber: "d32"` etc. makes `number` resolve to decimal ctype via `_effectiveType` in `infer.ts`.
-- FPU check: `program.ts` pre-scan skips float-literal rejection inside decimal-typed `VarDecl` init (context-aware `skipFloatLiterals` flag).
-- **Arithmetic:** `+`/`-` plain integer ops (same scale). `*` via `tsc_mul_dXX()` runtime helpers (wider intermediate, round-half-away-from-zero). `/` via `tsc_div_dXX()` + div-by-zero guard. `%` plain integer + div-by-zero guard. Mixed decimal types → compile error.
-- **Compound assignment:** `+=`/`-=` work directly. `*=`/`/=` use runtime helpers.
-- **Casts (`as`):** Scale-aware conversion. int→dec: `*scale`, dec→int: `/scale` (truncate), dec→dec widen: `*(dstScale/srcScale)`, dec→dec narrow: `/(srcScale/dstScale)` (truncate), dec↔float: `/scale.0` or `*scale.0`. `_isSafeWidening` updated for decimal kinds.
-- **Formatting:** `console.log`, template literals, `.toString()`, string concat all use `tsc_dec_dtoa()` / `tsc_dXX_to_string()` — fixed decimal places (d8/d16=2dp, d32=4dp, d64=8dp).
-- **Math functions (Phase 5):** `abs`/`sign`/`min`/`max` preserve decimal type (pure integer). Transcendentals (`sqrt`/`sin`/`cos`/etc.) use convert-compute-convert via `double`. `floor`/`ceil`/`round`/`trunc` same pattern. `pow`/`hypot`/`atan2` convert both args. Type inference in `infer.ts` preserves decimal ctype for all these.
-- **Math.roundCast\<T\>(x) (Phase 5 NEW):** Round-half-away-from-zero cast. Decimal→integer: `(val ± scale/2) / scale`. Decimal→narrower-decimal: `(val ± ratio/2) / ratio`. Float→integer: `round()`. Widening/same-type: same as `as`.
-- **Math.saturatingCast\<T\>(x) / Math.checkedCast\<T\>(x) (Phase 5):** Support decimal target types with scale conversion + range clamp.
-- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `builtin-helpers.ts`, `runtime.h`.
-- Spec: `03-types/03-decimal-types.md`.
+| Type | C storage | Scale | Decimals | Range |
+|------|-----------|-------|----------|-------|
+| `d8`  | `int8_t`  | 100       | 2 | ±1.27 |
+| `d16` | `int16_t` | 100       | 2 | ±327.67 |
+| `d32` | `int32_t` | 10000     | 4 | ±214748.3647 |
+| `d64` | `int64_t` | 100000000 | 8 | ±92233720368.5 |
+
+### Implemented (all phases)
+
+- **Type registration:** `d8`/`d16`/`d32`/`d64` in `NUMBER_TYPES`, `PRIMITIVE_MAP` (`d8_t`/`d16_t`/`d32_t`/`d64_t`), `_numericTypeInfo` with `kind:'decimal'`. `decimal.ts`: `isDecimal`, `decimalScale`, `decimalDecimals`, `resolveDecimalBase` (alias-aware), `scaleLiteral` (round-half-away-from-zero, hex/octal via `Number()`).
+- **Literals:** `literalToCTyped` scales float/int literals (`1.5` → `15000`, `3` → `30000`, `0xFF` → `2550000`). `_checkLiteralFitsType` checks scaled value against raw int range (overflow detection). Negative literals via `Unary('-', Literal)`.
+- **defaultNumber:** `"d32"` etc. makes `number` resolve to decimal ctype via `_effectiveType` in `infer.ts`.
+- **FPU check:** `program.ts` skips float-literal rejection inside decimal-typed `VarDecl` init. Decimal types allowed when `fpu: false`.
+- **Arithmetic:** `+`/`-` plain integer ops. `*` via `tsc_mul_dXX()` (wider intermediate, round-half-away-from-zero). `/` via `tsc_div_dXX()` + div-by-zero guard. `%` plain integer + div-by-zero guard. Mixed decimal+integer → compile error (explicit cast required). Numeric literals in compound assignment (`d32 += 1.5`) bypass widening check — `_expectedType` handles scaling.
+- **Compound assignment:** `+=`/`-=` work directly. `*=`/`/=`/`%=` use runtime helpers + zero guard.
+- **Casts (`as`):** Scale-aware. int→dec: `*scale`, dec→int: `/scale` (truncate toward zero), dec→dec widen: `*(dstScale/srcScale)`, dec→dec narrow: `/(srcScale/dstScale)`, dec↔float: `/scale.0` or `*scale.0`. `_isSafeWidening`: widening (d8→d16→d32→d64) safe, all else unsafe.
+- **`no-lossy-cast` strict rule:** Decimal narrowing (d32→d16 etc.), decimal→integer, float→decimal all flagged as lossy. d32/d64→f32 flagged (9+ digits > f32's 7). d8/d16→f32 NOT lossy (matches i8/i16→f32 pattern). d*→f64 never lossy.
+- **Formatting:** `console.log`, template literals, `.toString()`, `.toFixed()`, `.toPrecision()`, string concat, `JSON.stringify` all use `tsc_dec_dtoa(v, scale, dp)` / `tsc_dXX_to_string()`.
+- **Math functions:** `abs`/`sign`/`min`/`max`/`clamp` preserve decimal (pure integer). Transcendentals (`sqrt`/`sin`/`cos`/etc.) use convert-compute-convert via `double` (FPU required). `floor`/`ceil`/`round`/`trunc` same. `pow`/`hypot`/`atan2` convert both args. `imul`/`clz32` rejected for decimal.
+- **`Math.roundCast<T>(x)`:** Round-half-away-from-zero cast for ALL numeric pairs. Float→decimal uses `llround()`. Decimal→integer: `(val ± scale/2) / scale`. Decimal→narrower-decimal: `(val ± ratio/2) / ratio`.
+- **`Math.saturatingCast<T>(x)` / `Math.checkedCast<T>(x)`:** All decimal types supported. Cross-scale range check adjusts bounds by scale ratio (`a < MIN*ratio || a > MAX*ratio` for narrowing).
+- **`parse()` / `tryParse()`:** Pure integer parser in runtime.h (`_tsc_parse_decimal_raw`, `_tsc_valid_decimal`, `tsc_dXX_parse`, `tsc_dXX_try_parse`). No FPU required. Codegen: d-types in `primitiveMap` (`conversion.ts`) and `primitiveMap2` (`infer.ts`).
+- **Runtime:** typedefs, `tsc_mul_dXX`/`tsc_div_dXX` (round-half-away-from-zero), portable 128-bit helpers (`tsc_mulu128`, `tsc_divu128by64`) for d64 without `__int128`. `tsc_dec_dtoa` (generic formatter with AVR/embedded branches). `tsc_dXX_to_string` (String-returning wrappers).
+- Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `builtin-helpers.ts`, `conversion.ts`, `runtime.h`.
+- Spec: `03-types/03-decimal-types.md` (227 lines), cross-refs in `03-numbers.md`, `03-null.md`, `13-platform-capabilities.md`, `13-strict-mode.md`.
