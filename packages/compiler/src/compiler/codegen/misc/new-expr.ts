@@ -59,6 +59,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       const elemIdent = ctx.cTypeToIdent(et);
       const arrName = `Array_${elemIdent}`;
       ctx._ensureArrayStruct(arrName, et);
+      ctx._ensureArrayCreateMacro(elemIdent, arrName, et);
       const capArg = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
       return `tsc_array_create_${elemIdent}(${capArg})`;
     }

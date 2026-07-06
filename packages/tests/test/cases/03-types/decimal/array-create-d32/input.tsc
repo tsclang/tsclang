@@ -1,0 +1,7 @@
+let arr = new Array<d32>(3);
+arr.push(1.5);
+arr.push(2.5);
+arr.push(3.5);
+console.log(arr[0].toString());
+console.log(arr[1].toString());
+console.log(arr[2].toString());

@@ -1458,7 +1458,7 @@ static inline const char *tsc_dec_dtoa(int64_t v, int32_t scale, int decimals) {
     char *buf = _bufs[_idx & 7];
     _idx++;
     int neg = v < 0;
-    uint64_t av = neg ? (uint64_t)(-v) : (uint64_t)v;
+    uint64_t av = neg ? (uint64_t)(-(v + 1)) + 1 : (uint64_t)v;
     uint64_t ipart = av / (uint64_t)scale;
     uint64_t fpart = av % (uint64_t)scale;
 #if defined(__AVR__) || (defined(TSC_EMBEDDED) && !defined(__INT64_TYPE__))

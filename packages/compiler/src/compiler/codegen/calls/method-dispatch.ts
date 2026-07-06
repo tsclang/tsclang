@@ -126,7 +126,16 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         case 'push': {
           if ((sym?._refBorrowCount || 0) > 0)
             throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+          const _prevET_push = ctx._expectedType;
+          const _pushDecBase = resolveDecimalBase(ctx, etC);
+          ctx._expectedType = _pushDecBase ?? etC;
           let elemC = args[0] ? ctx.exprToC(args[0].expr, [], depth) : '0';
+          ctx._expectedType = _prevET_push;
+          const _pushArrName = `Array_${et}`;
+          if (_pushDecBase) {
+            ctx._ensureArrayFreeMacro(et, _pushArrName, etC);
+            ctx._ensureArrayPushMacro(et, _pushArrName, etC);
+          }
           if (et === 'tsc_unknown' && args[0]) {
             const _argType = ctx.inferType(args[0].expr);
             if (_argType !== 'tsc_unknown') {

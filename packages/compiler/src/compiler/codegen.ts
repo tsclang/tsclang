@@ -1462,6 +1462,7 @@ class Context {
   _ensureArrayStruct(arrName: string, et: string) { return helpers._ensureArrayStruct(this, arrName, et); }
   _ensureArrayFreeMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayFreeMacro(this, elemIdent, arrName, et); }
   _ensureArrayPushMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayPushMacro(this, elemIdent, arrName, et); }
+  _ensureArrayCreateMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayCreateMacro(this, elemIdent, arrName, et); }
   _isOptType(elemType: string) { return helpers._isOptType(this, elemType); }
   _wrapOptValue(cExpr: string, exprNode: Expression, elemType: string) { return helpers._wrapOptValue(this, cExpr, exprNode, elemType); }
   _ensureOptArrayMacros(elemIdent: string, arrName: string, et: string) { return helpers._ensureOptArrayMacros(this, elemIdent, arrName, et); }
