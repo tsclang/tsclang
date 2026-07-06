@@ -2,6 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Expression, Argument, TypeAnn, Member } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
+import { resolveDecimalBase, decimalScale } from '../types/decimal.js';
 export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[], lines: string[], depth: number) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
@@ -656,25 +657,38 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
     const numMethods: Record<string, () => string> = {
       toFixed: () => {
         const objType = ctx.inferType(baseObject);
-        if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
-          throw ctx.error(`"toFixed()" is only available on f32/f64`);
+        const decBase = resolveDecimalBase(ctx, objType);
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
           throw ctx.error(`"toFixed()" argument must be a compile-time literal`);
         const n = nArg.value;
         const buf = `_buf_${ctx.tempCount++}`;
         lines.push(`char ${buf}[64];`);
-        lines.push(`snprintf(${buf}, sizeof(${buf}), "%.${n}f", ${objC});`);
+        if (decBase) {
+          const scale = decimalScale(decBase)!;
+          lines.push(`snprintf(${buf}, sizeof(${buf}), "%.${n}f", (double)(${objC}) / ${scale}.0);`);
+        } else {
+          if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
+            throw ctx.error(`"toFixed()" is only available on f32/f64/decimal`);
+          lines.push(`snprintf(${buf}, sizeof(${buf}), "%.${n}f", ${objC});`);
+        }
         return `STR_LIT_RUNTIME(${buf})`;
       },
       toPrecision: () => {
+        const objType = ctx.inferType(baseObject);
+        const decBase = resolveDecimalBase(ctx, objType);
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
           throw ctx.error(`"toPrecision()" argument must be a compile-time literal`);
         const n = nArg.value;
         const buf = `_buf_${ctx.tempCount++}`;
         lines.push(`char ${buf}[64];`);
-        lines.push(`snprintf(${buf}, sizeof(${buf}), "%.*g", ${n}, ${objC});`);
+        if (decBase) {
+          const scale = decimalScale(decBase)!;
+          lines.push(`snprintf(${buf}, sizeof(${buf}), "%.*g", ${n}, (double)(${objC}) / ${scale}.0);`);
+        } else {
+          lines.push(`snprintf(${buf}, sizeof(${buf}), "%.*g", ${n}, ${objC});`);
+        }
         return `STR_LIT_RUNTIME(${buf})`;
       },
     };
