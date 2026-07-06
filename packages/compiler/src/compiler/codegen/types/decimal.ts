@@ -46,10 +46,10 @@ export function scaleLiteral(value: string, scale: number): string {
   let v = value;
   // Strip underscores
   v = v.replace(/_/g, '');
-  // Handle hex/octal — not valid for decimal, but let it fall through to int
+  // Handle hex/octal — scale integer value
   if (v.startsWith('0x') || v.startsWith('0X') || v.startsWith('0o') || v.startsWith('0O')) {
-    const fval = parseFloat(v);
-    return String(Math.round(fval * scale));
+    const fval = Number(v);
+    return String(BigInt(Math.round(fval * scale)));
   }
   const fval = parseFloat(v);
   // Round-half-away-from-zero

@@ -1,0 +1,3 @@
+let a: d8 = 0.5;
+let b: d8 = 1.0;
+let c = a * b;

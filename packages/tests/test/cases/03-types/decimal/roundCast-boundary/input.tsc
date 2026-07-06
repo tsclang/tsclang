@@ -1,0 +1,4 @@
+let a: d32 = 0.0150;
+let b = Math.roundCast<d8>(a);
+let c: d32 = 0.0149;
+let d = Math.roundCast<d8>(c);

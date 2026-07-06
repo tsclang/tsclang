@@ -1,0 +1,2 @@
+let x = d16.parse("12.34");
+console.log(x);

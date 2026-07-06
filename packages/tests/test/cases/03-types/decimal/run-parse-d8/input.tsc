@@ -1,0 +1,2 @@
+let x = d8.parse("0.5");
+console.log(x);

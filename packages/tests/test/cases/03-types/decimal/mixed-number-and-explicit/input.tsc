@@ -1,0 +1,4 @@
+// defaultNumber: "d32"
+let a: number = 1.5;
+let b: d32 = 2.5;
+let c = a + b;

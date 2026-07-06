@@ -1,0 +1,5 @@
+let big: i32 = 200;
+let r = Math.checkedCast<d8>(big);
+if (r !== null) {
+  let v = r;
+}

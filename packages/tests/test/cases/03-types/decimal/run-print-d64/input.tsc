@@ -1,0 +1,2 @@
+let a: d64 = 1.5;
+console.log(a);

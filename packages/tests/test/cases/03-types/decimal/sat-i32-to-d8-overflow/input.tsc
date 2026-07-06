@@ -1,0 +1,2 @@
+let big: i32 = 200;
+let s = Math.saturatingCast<d8>(big);
