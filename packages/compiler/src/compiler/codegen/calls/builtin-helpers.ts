@@ -1,5 +1,6 @@
 import type { Call, Argument, Expression, TypeAnn, TypeRef } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
+import { resolveDecimalBase } from '../types/decimal.js';
 export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], lines: string[], depth: number, node?: Call) {
     const a0t = args[0] ? ctx.inferType(args[0].expr) : 'int32_t';
     const a1t = args[1] ? ctx.inferType(args[1].expr) : 'int32_t';
@@ -292,6 +293,8 @@ export function jsonCall(ctx: CodeGenContext, prop: string, typeArgs: TypeAnn[],
       if (t === 'String') return `tsc_json_stringify_string(${a0})`;
       if (t === 'bool')   return `(${a0}) ? STR_LIT("true") : STR_LIT("false")`;
       if (t === 'double' || t === 'float') return `tsc_f64_to_string(${a0})`;
+      const decBase = resolveDecimalBase(ctx, t);
+      if (decBase) return `tsc_${ctx.cTypeToIdent(decBase)}_to_string(${a0})`;
       if (t === 'int64_t') return `tsc_i64_to_string(${a0})`;
       return `tsc_i32_to_string(${a0})`;
     }

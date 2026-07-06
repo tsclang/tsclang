@@ -1,0 +1,2 @@
+let x: d32 = 2.5;
+console.log(JSON.stringify(x));
