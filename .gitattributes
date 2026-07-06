@@ -1,1 +1,7 @@
 * text=auto eol=lf
+
+*.tsc linguist-language=TypeScript
+
+**/expected.c linguist-generated
+**/expected.out linguist-generated
+**/expected.error linguist-generated
