@@ -1,0 +1,2 @@
+let x: d32 = 15.0;
+let clamped = Math.clamp(x, 0 as d32, 10 as d32);

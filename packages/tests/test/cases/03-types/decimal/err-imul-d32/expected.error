@@ -1,0 +1,1 @@
+Math.imul() operates on 32-bit integers, not decimal types; use '(a as i32) * (b as i32)' for explicit integer semantics

@@ -84,6 +84,9 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       return vname;
     }
     if (prop === 'clamp') {
+      if (isDec(a0t)) {
+        return `(${a0t})(${a0} < ${a1} ? ${a1} : (${a0} > ${a2} ? ${a2} : ${a0}))`;
+      }
       if (!ctx._emittedTscClamp) {
         ctx._emittedTscClamp = true;
         ctx.addTop('static double tsc_clamp(double v, double lo, double hi) {');
@@ -262,6 +265,11 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         const a1Conv = isDec(a1t) ? `(double)(${a1}) / ${DEC_INFO[a1t][0]}.0` : `(double)(${a1})`;
         return `(${a0t})${prop}((double)(${a0}) / ${scale}.0, ${a1Conv}) * ${scale}.0`;
       }
+    }
+
+    // Math.imul/clz32 on decimal types — reject (32-bit integer ops, not meaningful on decimals)
+    if ((prop === 'imul' || prop === 'clz32') && (isDec(a0t) || isDec(a1t))) {
+      throw ctx.error(`Math.${prop}() operates on 32-bit integers, not decimal types; use '${prop === 'imul' ? '(a as i32) * (b as i32)' : 'Math.clz32(x as i32)'}' for explicit integer semantics`, node);
     }
 
     ctx.includes.add('#include <math.h>');

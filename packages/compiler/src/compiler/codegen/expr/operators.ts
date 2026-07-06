@@ -267,19 +267,33 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       return (node.op === '!=' || node.op === '!==') ? `!${eq}` : eq;
     }
     // String concat via +
-    if (node.op === '+' && ctx.isStringExpr(node.left)) {
-      const ld = ctx._derefStringPtr(node.left, l);
-      const rType = ctx.inferType(node.right);
-      let rC = ctx._derefStringPtr(node.right, r);
+    if (node.op === '+' && (ctx.isStringExpr(node.left) || (node.right && ctx.isStringExpr(node.right)))) {
+      let ld = l, rd_c = r;
+      let lType = ctx.inferType(node.left);
+      let rType = ctx.inferType(node.right);
+      // Ensure left is String
+      if (lType !== 'String' && lType !== 'String *') {
+        const etIdent = ctx.cTypeToIdent(lType);
+        const I = ' '.repeat(ctx.indent * depth);
+        const tmp = `_tsc_cat_${ctx.tempCount++}`;
+        lines.push(`${I}String ${tmp} = tsc_${etIdent}_to_string(${l});`);
+        ctx._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
+        ld = tmp;
+      } else {
+        ld = ctx._derefStringPtr(node.left, l);
+      }
+      // Ensure right is String
       if (rType !== 'String' && rType !== 'String *') {
         const etIdent = ctx.cTypeToIdent(rType);
         const I = ' '.repeat(ctx.indent * depth);
         const tmp = `_tsc_cat_${ctx.tempCount++}`;
         lines.push(`${I}String ${tmp} = tsc_${etIdent}_to_string(${r});`);
         ctx._pushPostStmtCleanup(`${I}tsc_string_release(${tmp});`);
-        rC = tmp;
+        rd_c = tmp;
+      } else {
+        rd_c = ctx._derefStringPtr(node.right, r);
       }
-      return `tsc_string_concat(${ld}, ${rC})`;
+      return `tsc_string_concat(${ld}, ${rd_c})`;
     }
     if (node.op === '%') {
       const lt = ctx.inferType(node.left);
@@ -540,7 +554,7 @@ export function unaryToC(ctx: CodeGenContext, node: Unary, lines: string[], dept
       case '-':
       case '~': {
         const et = ctx.inferType(node.expr);
-        const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
+        const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool','d8_t','d16_t','d32_t','d64_t']);
         if (!NUMERIC.has(et)) {
           const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
           const label = node.op === '~' ? `bitwise op '~'` : `unary '${node.op}'`;

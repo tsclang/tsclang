@@ -1,0 +1,3 @@
+let x: d32 = 1.5;
+let y = -x;
+console.log(y.toString());
