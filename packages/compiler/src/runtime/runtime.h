@@ -1313,7 +1313,7 @@ _Noreturn static inline void tsc_throw(String msg) {
 }
 
 #ifndef _tsc_on_panic
-#define _tsc_on_panic(msg) (fprintf(stderr, "panic: %s\n", msg), abort())
+#define _tsc_on_panic(msg) (fprintf(stderr, "panic%s\n", msg), abort())
 #endif
 
 /* tsc_panic РІР‚вЂќ used for '!' non-null assertion failure in non-throws context */

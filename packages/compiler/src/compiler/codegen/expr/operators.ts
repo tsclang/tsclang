@@ -319,10 +319,10 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           const I = ' '.repeat(ctx.indent * depth);
           const tmp = `_tsc_div_${ctx.tempCount++}`;
           const panicExpr = ctx._strictRules?.has('no-abort')
-            ? '_tsc_on_panic("division by zero")'
+            ? '_tsc_on_panic("[E401]: division by zero")'
             : 'abort()';
           lines.push(`${I}${dlt!} ${tmp} = ${r};`);
-          lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+          lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic[E401]: division by zero\\n"); ${panicExpr}; }`);
           if (node.op === '/') {
             const helper = `tsc_div_${dlt!.replace('_t', '')}`;
             return `${helper}(${l}, ${tmp})`;
@@ -419,17 +419,17 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         const I = ' '.repeat(ctx.indent * depth);
         const tmp = `_tsc_div_${ctx.tempCount++}`;
         const panicExpr = ctx._strictRules?.has('no-abort')
-          ? '_tsc_on_panic("division by zero")'
+          ? '_tsc_on_panic("[E401]: division by zero")'
           : 'abort()';
         lines.push(`${I}int32_t ${tmp} = ${r};`);
-        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic: division by zero\\n"); ${panicExpr}; }`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic[E401]: division by zero\\n"); ${panicExpr}; }`);
         const minMap: Record<string, string> = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
         const minConst = minMap[lt];
         if (minConst) {
           const overflowPanic = ctx._strictRules?.has('no-abort')
-            ? '_tsc_on_panic("integer overflow")'
+            ? '_tsc_on_panic("[E402]: integer overflow")'
             : 'abort()';
-          lines.push(`${I}if (${tmp} == -1 && ${l} == ${minConst}) { fprintf(stderr, "panic: integer overflow\\n"); ${overflowPanic}; }`);
+          lines.push(`${I}if (${tmp} == -1 && ${l} == ${minConst}) { fprintf(stderr, "panic[E402]: integer overflow\\n"); ${overflowPanic}; }`);
         }
         return `${l} ${op} ${tmp}`;
       }

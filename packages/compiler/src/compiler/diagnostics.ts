@@ -159,6 +159,46 @@ shifts the rest:
   const p = arr.remove(0);   // ok — p owns the Point
 `,
   },
+
+  // ── E4xx: Runtime panics ─────────────────────────────────────────────────
+  E401: {
+    code: 'E401',
+    severity: 'error',
+    title: 'division by zero',
+    body: `
+Integer division or modulo by zero is undefined behaviour in C and causes a
+hardware trap (SIGFPE) on most platforms. TSClang inserts a runtime guard
+that panics with a clear message instead.
+
+  let x: i32 = 10;
+  let y: i32 = 0;
+  let z = x / y;   // panic[E401]: division by zero
+
+Fix: check the divisor before dividing:
+
+  if (y != 0) { let z = x / y; }
+
+Or use safe-math mode with try/catch to recover:
+
+  try { let z = x / y; } catch (e) { /* handle */ }
+`,
+  },
+
+  E402: {
+    code: 'E402',
+    severity: 'error',
+    title: 'integer overflow in division',
+    body: `
+Dividing INT_MIN by -1 overflows: the mathematical result (INT_MAX + 1) cannot
+be represented in a signed integer of the same width. In C this is undefined
+behaviour. TSClang inserts a runtime guard for int32_t and int64_t types.
+
+  let x: i32 = -2147483648;   // INT32_MIN
+  let z = x / -1;             // panic[E402]: integer overflow
+
+Fix: check for this edge case explicitly, or use safe-math mode with try/catch.
+`,
+  },
 };
 
 // Look up a diagnostic entry by code (case-insensitive).
