@@ -22,12 +22,14 @@ export interface TscErrorOptions {
   help?: string[];
   notes?: string[];
   code?: string | null;
+  title?: string | null;
   kind?: string;
 }
 
 export interface Diagnostic {
   kind?: string;
   code?: string | null;
+  title?: string | null;
   message: string;
   line?: number | null;
   col?: number | null;
@@ -68,6 +70,7 @@ export class TscError extends Error {
   help: string[];
   notes: string[];
   code: string | null;
+  title: string | null;
   kind: string;
 
   constructor(message: string, opts: TscErrorOptions = {}) {
@@ -84,6 +87,7 @@ export class TscError extends Error {
     this.help       = opts.help    ?? [];
     this.notes      = opts.notes   ?? [];
     this.code       = opts.code    ?? null;
+    this.title      = opts.title   ?? null;
     this.kind       = opts.kind    ?? 'error';
   }
 }

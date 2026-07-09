@@ -6,6 +6,7 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 import type { DiagSpan } from './error.js';
+import { lookupDiagnostic } from './diagnostics.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
@@ -334,6 +335,7 @@ export interface ErrorOpts {
   help?: string[];
   notes?: string[];
   code?: string | null;
+  title?: string | null;
   secondary?: unknown;
   [key: string]: unknown;
 }
@@ -989,6 +991,8 @@ class Context {
   error(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
     const n = (node ?? this._currentNode) as NodePos | null | undefined;
     const legacy = Array.isArray(opts);
+    const code   = legacy ? null : (opts.code ?? null);
+    const title  = code ? (lookupDiagnostic(code)?.title ?? null) : null;
     throw new TscError(msg, {
       filename: this.filename,
       line:   n?.line   ?? null,
@@ -999,7 +1003,8 @@ class Context {
       label:  legacy ? null          : (opts.label ?? null),
       spans:  legacy ? []            : (opts.spans ?? []),
       help:   legacy ? []            : (opts.help  ?? []),
-      code:   legacy ? null          : (opts.code  ?? null),
+      code,
+      title,
     });
   }
 
@@ -1008,6 +1013,8 @@ class Context {
   warn(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
     const n = (node ?? this._currentNode) as NodePos | null | undefined;
     const legacy = Array.isArray(opts);
+    const code   = legacy ? null : (opts.code ?? null);
+    const title  = code ? (lookupDiagnostic(code)?.title ?? null) : null;
     this._warnings.push(new TscError(msg, {
       kind:   'warning',
       filename: this.filename,
@@ -1019,7 +1026,8 @@ class Context {
       label:  legacy ? null          : (opts.label ?? null),
       spans:  legacy ? []            : (opts.spans ?? []),
       help:   legacy ? []            : (opts.help  ?? []),
-      code:   legacy ? null          : (opts.code  ?? null),
+      code,
+      title,
     }));
   }
 
