@@ -6,7 +6,7 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 import type { DiagSpan } from './error.js';
-import { lookupDiagnostic } from './diagnostics.js';
+import { lookupDiagnostic, substituteParams } from './diagnostics.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
@@ -1028,6 +1028,64 @@ class Context {
       help:   legacy ? []            : (opts.help  ?? []),
       code,
       title,
+    }));
+  }
+
+  // Throw a positioned TscError using a diagnostic code from the registry.
+  // Resolves message template + help from DIAGNOSTICS, then merges opts.help on top.
+  //   ctx.errorCode('E002', node, { name: 'x' }, { spans: [...] });
+  errorCode(
+    code: string,
+    node?: unknown,
+    params?: Record<string, string | number>,
+    opts: ErrorOpts = {},
+  ): never {
+    const entry = lookupDiagnostic(code);
+    if (!entry) throw new Error(`Unknown diagnostic code: ${code}`);
+    const n = (node ?? this._currentNode) as NodePos | null | undefined;
+    const msg  = substituteParams(entry.message, params);
+    const help = [...(entry.help ?? []), ...(opts.help ?? [])];
+    throw new TscError(msg, {
+      filename: this.filename,
+      line:   n?.line   ?? null,
+      col:    n?.col    ?? null,
+      endCol: n?.endCol ?? null,
+      src:    this.src,
+      notes:  opts.notes ?? [],
+      label:  opts.label ?? null,
+      spans:  opts.spans ?? [],
+      help,
+      code: entry.code,
+      title: entry.title,
+    });
+  }
+
+  // Collect a warning diagnostic using a diagnostic code from the registry.
+  //   ctx.warnCode('W001', node, { type: 'Foo' });
+  warnCode(
+    code: string,
+    node?: unknown,
+    params?: Record<string, string | number>,
+    opts: ErrorOpts = {},
+  ): void {
+    const entry = lookupDiagnostic(code);
+    if (!entry) throw new Error(`Unknown diagnostic code: ${code}`);
+    const n = (node ?? this._currentNode) as NodePos | null | undefined;
+    const msg  = substituteParams(entry.message, params);
+    const help = [...(entry.help ?? []), ...(opts.help ?? [])];
+    this._warnings.push(new TscError(msg, {
+      kind:   'warning',
+      filename: this.filename,
+      line:   n?.line   ?? null,
+      col:    n?.col    ?? null,
+      endCol: n?.endCol ?? null,
+      src:    this.src,
+      notes:  opts.notes ?? [],
+      label:  opts.label ?? null,
+      spans:  opts.spans ?? [],
+      help,
+      code: entry.code,
+      title: entry.title,
     }));
   }
 
