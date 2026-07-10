@@ -154,8 +154,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
               const _pushSym = ctx.lookup(args[0].expr.name);
               if (_pushSym) {
                 if (_pushSym._moved)
-                  throw ctx.error(`use of moved value: "${args[0].expr.name}"`, args[0].expr,
-                    { code: 'E002', secondary: _pushSym._movedSourceNode, secondaryLine: _pushSym._movedLine });
+                  throw ctx.errorCode('E002', args[0].expr, { name: args[0].expr.name });
                 _pushSym._moved = true;
                 _pushSym._movedLine = args[0].expr.line;
                 _pushSym._movedSourceNode = args[0].expr;

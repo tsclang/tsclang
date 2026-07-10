@@ -57,10 +57,8 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
     if (node.left.kind === 'Ident') {
       const sym = ctx.lookup(node.left.name);
       if (sym && sym.varKind === 'const') {
-        throw ctx.error(`cannot assign to 'const' variable '${node.left.name}'`, node, {
+        throw ctx.errorCode('E001', node, { name: node.left.name }, {
           label: 'cannot assign to const',
-          help: [`change \`const\` to \`let\` if this variable needs to be mutable`],
-          code: 'E001',
         });
       }
       // String literal union: convert string literal to enum value
@@ -150,10 +148,10 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       const rightCtype = rightSym?.ctype;
       if (rightCtype && rightCtype.startsWith('opt_ref_')) {
         if (rightSym._moved) {
-          throw ctx.error(`use of moved value: "${node.right.name}"`, node.right, { code: 'E002' });
+          throw ctx.errorCode('E002', node.right, { name: node.right.name });
         }
         if (rightSym.varKind === 'const') {
-          throw ctx.error(`cannot move out of "const" binding`, null, { code: 'E003' });
+          throw ctx.errorCode('E003');
         }
         rightSym._moved = true;
         rightSym._movedLine = node.line;
@@ -164,10 +162,10 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         }
       } else if (rightSym?._isHeap) {
         if (rightSym._moved) {
-          throw ctx.error(`use of moved value: "${node.right.name}"`, node.right, { code: 'E002' });
+          throw ctx.errorCode('E002', node.right, { name: node.right.name });
         }
         if (rightSym.varKind === 'const') {
-          throw ctx.error(`cannot move out of "const" binding`, null, { code: 'E003' });
+          throw ctx.errorCode('E003');
         }
         rightSym._moved = true;
         rightSym._movedLine = node.line;

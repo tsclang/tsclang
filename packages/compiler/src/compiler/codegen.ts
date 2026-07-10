@@ -1169,10 +1169,9 @@ class Context {
     if (sym?._closureEnvVar) return;
     if (sym?._moved) {
       const ms = sym._movedSourceNode as NodePos | undefined;
-      throw this.error(`use of moved value: "${name}"`, node, {
+      throw this.errorCode('E002', node, { name }, {
         label: 'use of moved value',
         spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
-        code: 'E002',
       });
     }
   }
@@ -1180,10 +1179,9 @@ class Context {
   _checkFieldMoved(sym: SymbolInfo | null | undefined, prop: string, node: NodePos | null, objName: string) {
     if (sym?._movedFields && sym._movedFields.includes(prop)) {
       const ms = (sym._movedFieldSourceNode as Record<string, NodePos> | undefined)?.[prop];
-      throw this.error(`use of moved value: '${objName}.${prop}'`, node, {
+      throw this.errorCode('E006', node, { field: `${objName}.${prop}` }, {
         label: 'use of moved value',
         spans: ms?.line != null ? [{ line: ms.line, col: ms.col, endCol: ms.endCol, char: '-', label: 'value moved here' }] : [],
-        code: 'E006',
       });
     }
   }

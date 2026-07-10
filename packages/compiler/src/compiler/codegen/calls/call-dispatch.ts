@@ -548,14 +548,10 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
                 );
               }
               if (_moveArgSym.varKind === 'const') {
-                throw ctx.error(`cannot move out of "const" binding`, a.expr, { code: 'E003' });
+                throw ctx.errorCode('E003', a.expr);
               }
               if (_moveArgSym._moved) {
-                throw ctx.error(
-                  `use of moved value: "${a.expr.name}"`,
-                  a.expr,
-                  { code: 'E002', secondary: _moveArgSym._movedSourceNode, secondaryLine: _moveArgSym._movedLine }
-                );
+                throw ctx.errorCode('E002', a.expr, { name: a.expr.name });
               }
               _moveArgSym._moved = true;
               _moveArgSym._movedLine = a.expr.line;

@@ -1442,10 +1442,8 @@ export function _validateSwitchFallthrough(ctx: CodeGenContext, node: Switch) {
       const isTerminator = last.kind === 'Break' || last.kind === 'Return' ||
                            last.kind === 'Throw' || last.kind === 'Continue';
       if (!isTerminator && ci < node.cases.length - 1) {
-        throw ctx.error(`implicit fallthrough`, last, {
+        throw ctx.errorCode('E005', last, undefined, {
           label: 'add `break;` or `return` to end this case',
-          help: ['each case must end with `break`, `return`, or `continue`'],
-          code: 'E005',
         });
       }
     }

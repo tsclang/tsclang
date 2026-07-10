@@ -891,7 +891,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         if (ctype?.endsWith(' *') && init?.kind === 'Ident' && ctx.classes.get(ctype.slice(0, -2))?._isHeap) {
           const initSym3 = ctx.lookup(init.name);
           if (initSym3?._moved) {
-            throw ctx.error(`use of moved value: "${init.name}"`, init, { code: 'E002' });
+            throw ctx.errorCode('E002', init, { name: init.name });
           }
           if (initSym3) {
             initSym3._moved = true;
@@ -1259,10 +1259,10 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               const structDef2 = ctx.classes.get(ctype);
               if (structDef2?.fields || ctype.startsWith('Array_')) {
                 if (initSym2?.varKind === 'const') {
-                  throw ctx.error(`cannot move out of "const" binding`, null, { code: 'E003' });
+                  throw ctx.errorCode('E003');
                 }
                 if (initSym2?.isRefParam) {
-                  throw ctx.error(`cannot move out of "Ref<T>" borrow`, null, { code: 'E004' });
+                  throw ctx.errorCode('E004');
                 }
               }
             }
@@ -1335,9 +1335,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               if (_arrT2?.startsWith('Array_')) {
                 const _elem2 = _arrT2.slice(6);
                 if (!PRIMITIVE_IDENTS.has(_elem2) && _elem2 !== 'string') {
-                  throw ctx.error(`cannot move out of array by index`, init, {
-                    code: 'E009', help: ['use .remove(i) to take ownership'],
-                  });
+                  throw ctx.errorCode('E009', init);
                 }
               }
             }
@@ -1521,10 +1519,10 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   && ctx.classes.get(initSym2pre.ctype)?.isStruct && structDef2pre?.isStruct;
                 if (!isCrossStruct && (structDef2pre?.fields || ctype.startsWith('Array_'))) {
                   if (initSym2pre?.varKind === 'const') {
-                    throw ctx.error(`cannot move out of "const" binding`, null, { code: 'E003' });
+                    throw ctx.errorCode('E003');
                   }
                   if (initSym2pre?.isRefParam) {
-                    throw ctx.error(`cannot move out of "Ref<T>" borrow`, null, { code: 'E004' });
+                    throw ctx.errorCode('E004');
                   }
                 }
               } else if (init.kind === 'Index') {
@@ -1533,9 +1531,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   if (_arrT?.startsWith('Array_')) {
                     const _elem = _arrT.slice(6);
                     if (!PRIMITIVE_IDENTS.has(_elem) && _elem !== 'string') {
-                      throw ctx.error(`cannot move out of array by index`, init, {
-                        code: 'E009', help: ['use .remove(i) to take ownership'],
-                      });
+                      throw ctx.errorCode('E009', init);
                     }
                   }
                 } else if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Ref' && init.object.kind === 'Ident') {
