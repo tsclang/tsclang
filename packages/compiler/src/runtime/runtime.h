@@ -241,12 +241,12 @@ static inline d64_t tsc_div_d64(d64_t a, d64_t b) {
  * ------------------------------------------------------------------------- */
 static inline void *_tsc_xmalloc(size_t sz) {
     void *p = malloc(sz);
-    if (!p) { fprintf(stderr, "panic: out of memory\n"); abort(); }
+    if (!p) { fprintf(stderr, "panic[E403]: out of memory\n"); abort(); }
     return p;
 }
 static inline void *_tsc_xrealloc(void *ptr, size_t sz) {
     void *p = realloc(ptr, sz);
-    if (!p) { fprintf(stderr, "panic: out of memory\n"); abort(); }
+    if (!p) { fprintf(stderr, "panic[E403]: out of memory\n"); abort(); }
     return p;
 }
 #define tsc_malloc(sz) _tsc_xmalloc(sz)
@@ -1991,7 +1991,7 @@ static inline int32_t tsc_i32_parse(String s) {
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
     int64_t v = 0;
     if (!_tsc_parse_prefixed_i64(buf, &v)) {
-        fprintf(stderr, "Parse error: '%s' is not a valid integer\n", buf); exit(1);
+        fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid integer\n", buf); exit(1);
     }
     return (int32_t)v;
 }
@@ -2001,7 +2001,7 @@ static inline double tsc_parse_f64(String s) {
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
     double v = 0;
     if (!_tsc_parse_prefixed_f64(buf, &v)) {
-        fprintf(stderr, "Parse error: '%s' is not a valid number\n", buf); exit(1);
+        fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid number\n", buf); exit(1);
     }
     return v;
 }
@@ -2081,25 +2081,25 @@ static inline int64_t _tsc_parse_decimal_raw(const char *buf, int64_t scale, int
 static inline d8_t tsc_d8_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
-    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid decimal\n", buf); exit(1); }
     return (d8_t)_tsc_parse_decimal_raw(buf, 100, 2);
 }
 static inline d16_t tsc_d16_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
-    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid decimal\n", buf); exit(1); }
     return (d16_t)_tsc_parse_decimal_raw(buf, 100, 2);
 }
 static inline d32_t tsc_d32_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
-    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid decimal\n", buf); exit(1); }
     return (d32_t)_tsc_parse_decimal_raw(buf, 10000LL, 4);
 }
 static inline d64_t tsc_d64_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';
-    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "Parse error: '%s' is not a valid decimal\n", buf); exit(1); }
+    if (!_tsc_valid_decimal(buf)) { fprintf(stderr, "panic[E406]: parse error: '%s' is not a valid decimal\n", buf); exit(1); }
     return (d64_t)_tsc_parse_decimal_raw(buf, 100000000LL, 8);
 }
 
@@ -2216,14 +2216,14 @@ static int _tsc_cmp_i32_user_adapter(const void *a, const void *b) {
 #define tsc_array_get_checked_i32(arr, idx) ({ \
     Array_i32 _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
+        fprintf(stderr, "panic[E405]: array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 
 #define tsc_array_get_checked_string(arr, idx) ({ \
     Array_string _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
+        fprintf(stderr, "panic[E405]: array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 
@@ -3074,7 +3074,7 @@ static int _tsc_cmp_f64_user_adapter(const void *a, const void *b) {
 #define tsc_array_get_checked_f64(arr, idx) ({ \
     Array_f64 _a_ = (arr); int32_t _i_ = (idx); \
     if (_i_ < 0 || (size_t)_i_ >= _a_.length) { \
-        fprintf(stderr, "Array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
+        fprintf(stderr, "panic[E405]: array index %d out of bounds (length %u)\n", _i_, (unsigned)_a_.length); exit(1); } \
     _a_.data[_i_]; \
 })
 

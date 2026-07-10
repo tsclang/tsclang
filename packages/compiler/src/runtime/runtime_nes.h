@@ -235,4 +235,4 @@ static inline void _tsc_init(void) {
 /* -------------------------------------------------------------------------
  * Panic on unavailable desktop features
  * ------------------------------------------------------------------------- */
-#define TSC_NES_NO_HEAP() tsc_panic(STR_LIT("heap not available on NES"))
+#define TSC_NES_NO_HEAP() tsc_panic(STR_LIT("[E410]: heap not available on this platform"))

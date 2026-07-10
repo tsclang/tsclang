@@ -44,7 +44,7 @@ typedef struct { char *ptr; int32_t len; int32_t cap; } String;
 static inline String tsc_str_from(const char *lit) {
     int32_t n = (int32_t)strlen(lit);
     char *p = (char *)malloc((size_t)(n + 1));
-    if (!p) { tsc_log("OOM"); while(1); }
+    if (!p) { tsc_log("panic[E403]: out of memory"); while(1); }
     memcpy(p, lit, (size_t)(n + 1));
     return (String){ .ptr = p, .len = n, .cap = n };
 }
