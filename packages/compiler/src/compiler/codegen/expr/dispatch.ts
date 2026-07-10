@@ -660,10 +660,14 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         if (srcType?.startsWith('opt_') && !ct.startsWith('opt_')) {
           const innerIdent = srcType.slice(4);
           const innerCType = ctx._arrIdentToCType(innerIdent);
+          const tag = ctx.panicTag('E404');
+          const panicExpr = ctx._strictRules?.has('no-abort')
+            ? `_tsc_on_panic("${tag}")`
+            : 'abort()';
           if (innerCType === ct) {
-            return `(${exprC}.has_value ? ${exprC}.value : (fprintf(stderr, "panic: null cast to non-null\\n"), abort(), (${ct})0))`;
+            return `(${exprC}.has_value ? ${exprC}.value : (fprintf(stderr, "panic${tag}\\n"), ${panicExpr}, (${ct})0))`;
           }
-          return `(${exprC}.has_value ? (${ct})${exprC}.value : (fprintf(stderr, "panic: null cast to non-null\\n"), abort(), (${ct})0))`;
+          return `(${exprC}.has_value ? (${ct})${exprC}.value : (fprintf(stderr, "panic${tag}\\n"), ${panicExpr}, (${ct})0))`;
         }
         if (srcType === ct) return exprC;
         if (ctx._strictRules?.has('no-lossy-cast') && srcType && ct && srcType !== ct) {

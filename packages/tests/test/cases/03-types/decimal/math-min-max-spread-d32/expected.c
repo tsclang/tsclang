@@ -14,13 +14,13 @@ int main(void) {
     tsc_array_push_d32(&arr, 15000);
     tsc_array_push_d32(&arr, 3000);
     tsc_array_push_d32(&arr, 27000);
-    if (arr.length == 0) { fprintf(stderr, "Math.min: empty array\n"); exit(1); }
+    if (arr.length == 0) { fprintf(stderr, "panic[E407]: Math.min: empty array\n"); abort(); }
     d32_t _min_0 = arr.data[0];
     for (size_t _i_1 = 1; _i_1 < arr.length; _i_1++) {
         if (arr.data[_i_1] < _min_0) _min_0 = arr.data[_i_1];
     }
     d32_t mn = _min_0;
-    if (arr.length == 0) { fprintf(stderr, "Math.max: empty array\n"); exit(1); }
+    if (arr.length == 0) { fprintf(stderr, "panic[E407]: Math.max: empty array\n"); abort(); }
     d32_t _max_2 = arr.data[0];
     for (size_t _i_3 = 1; _i_3 < arr.length; _i_3++) {
         if (arr.data[_i_3] > _max_2) _max_2 = arr.data[_i_3];

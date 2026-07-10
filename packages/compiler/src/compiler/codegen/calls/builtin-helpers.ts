@@ -59,7 +59,11 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         const ivar = `_i_${ctx.tempCount++}`;
         ctx.includes.add('#include <stdio.h>');
         ctx.includes.add('#include <stdlib.h>');
-        lines.push(`${I}if (${arrC}.length == 0) { fprintf(stderr, "Math.${prop}: empty array\\n"); exit(1); }`);
+        const tag = ctx.panicTag('E407', { func: prop });
+        const panicExpr = ctx._strictRules?.has('no-abort')
+          ? `_tsc_on_panic("${tag}")`
+          : 'abort()';
+        lines.push(`${I}if (${arrC}.length == 0) { fprintf(stderr, "panic${tag}\\n"); ${panicExpr}; }`);
         lines.push(`${I}${etCType} ${vname} = ${arrC}.data[0];`);
         lines.push(`${I}for (size_t ${ivar} = 1; ${ivar} < ${arrC}.length; ${ivar}++) {`);
         lines.push(`${I}    if (${arrC}.data[${ivar}] ${op} ${vname}) ${vname} = ${arrC}.data[${ivar}];`);
