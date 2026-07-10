@@ -178,7 +178,7 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
         }
       }
       if (!_checkSend(fv.ctype)) {
-        throw ctx.error(`TypeError: Type '${fv.ctype}' is not Send — cannot be safely shared across threads; use Arc<T> or Atomic<T>`);
+        throw ctx.errorCode('E306', null, { name: fv.ctype });
       }
     }
 

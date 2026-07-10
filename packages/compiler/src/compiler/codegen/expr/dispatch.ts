@@ -115,7 +115,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         // process.stdin / process.stdout / process.stderr (std/io)
         if (ctx._stdIoImported && node.object.kind === 'Ident' && node.object.name === 'process') {
           if (ctx._cap('os') === false) {
-            throw ctx.error(`TypeError: 'process.${node.prop}' is not available on embedded targets`);
+            throw ctx.errorCode('E300', null, { detail: `'process.${node.prop}' is not available on embedded targets` });
           }
           if (node.prop === 'stdin')  { ctx._lastSuppressConst = true; return 'tsc_stdin()'; }
           if (node.prop === 'stdout') { ctx._lastSuppressConst = true; return 'tsc_stdout()'; }

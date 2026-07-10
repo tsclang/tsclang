@@ -61,7 +61,7 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
     // setTimeout / setInterval / clearTimeout
     if (callee.kind === 'Ident' && (callee.name === 'setTimeout' || callee.name === 'setInterval')) {
       if (ctx._cap('async') !== 'libuv') {
-        throw ctx.error(`"${callee.name}" is not available on embedded targets`, node);
+        throw ctx.errorCode('E300', node, { detail: `"${callee.name}" is not available on embedded targets` });
       }
     }
     if (callee.kind === 'Ident' && callee.name === 'setTimeout') {

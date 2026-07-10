@@ -152,7 +152,7 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             const bytes = size * ctx._cTypeBytes(et);
             ctx._bssUsage = (ctx._bssUsage ?? 0) + bytes;
             if (ctx._bssUsage > ctx._ramSize) {
-              throw ctx.error(`TypeError: Static BSS usage (${ctx._bssUsage} bytes) exceeds ram_size (${ctx._ramSize} bytes)`);
+              throw ctx.errorCode('E305', null, { detail: `Static BSS usage (${ctx._bssUsage} bytes) exceeds ram_size (${ctx._ramSize} bytes)` });
             }
           }
           const initLines: string[] = [];

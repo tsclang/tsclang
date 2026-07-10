@@ -55,7 +55,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     const isEmbedded = ctx._cap('allocator') !== 'heap';
 
     if (inlineDec && !isEmbedded) {
-      throw ctx.error(`Warning: @struct on '${name}' has no effect on non-embedded platform; annotation ignored`, node);
+      throw ctx.errorCode('E304', node, { detail: `@struct on '${name}' has no effect on non-embedded platform; annotation ignored` });
     }
     // @pool: require numeric capacity arg
     if (poolDec) {
@@ -68,7 +68,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     // @heap: only valid on allocator: "heap"
     const heapDec = decorators?.find((d: Decorator) => d.name === 'heap');
     if (heapDec && ctx._allocatorName === 'static') {
-      throw ctx.error(`@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"`, node);
+      throw ctx.errorCode('E301', node, { detail: '@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"' });
     }
     if (heapDec && poolDec) {
       throw ctx.error(`@heap and @pool are mutually exclusive; use one allocation strategy`, node);

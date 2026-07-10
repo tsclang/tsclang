@@ -62,7 +62,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
     if (callee.kind === 'Ident' && ctx._platformSkipped?.has(callee.name)) {
       const allowed = ctx._platformSkipped.get(callee.name)!.join('", "');
       const target = ctx._targetName ?? DEFAULT_TARGET;
-      throw ctx.error(`TypeError: '${callee.name}' is only available on platform "${allowed}", but current target is "${target}"`);
+      throw ctx.errorCode('E300', null, { detail: `'${callee.name}' is only available on platform "${allowed}", but current target is "${target}"` });
     }
 
     if (callee.kind === 'Ident') {
@@ -672,7 +672,7 @@ export function _dispatchGroupBy(ctx: CodeGenContext, node: Call, lines: string[
     if (obj.name !== 'Map' && obj.name !== 'Object') return null;
     if (args.length < 2) return null;
     if (ctx._cap('allocator') !== 'heap') {
-      throw ctx.error(`'${obj.name}.groupBy()' is not available on embedded targets`, node);
+      throw ctx.errorCode('E300', node, { detail: `'${obj.name}.groupBy()' is not available on embedded targets` });
     }
     const arrExpr = args[0].expr;
     const arrType = ctx.inferType(arrExpr);

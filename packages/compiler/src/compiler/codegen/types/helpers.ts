@@ -321,7 +321,7 @@ export function _unknownPackerFor(ctx: CodeGenContext, ctype: string) {
     if (m[ctype]) return m[ctype];
     if (ctype.startsWith('Array_')) {
       if (ctx._cap('allocator') !== 'heap' || ctx._cap('bits') < 64) {
-        throw ctx.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
+        throw ctx.errorCode('E304', null, { detail: `Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage` });
       }
       const elemIdent = ctype.slice(6);
       const et = ctx._arrIdentToCType(elemIdent);
@@ -329,7 +329,7 @@ export function _unknownPackerFor(ctx: CodeGenContext, ctype: string) {
       return `tsc_unknown_from_${ctype}`;
     }
     if (ctx._cap('allocator') !== 'heap' || ctx._cap('bits') < 64) {
-      throw ctx.error(`Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage`);
+      throw ctx.errorCode('E304', null, { detail: `Type '${ctype}' exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage` });
     }
     if (ctx.classes.has(ctype)) {
       ctx._ensureUnknownPackerClass(ctype);

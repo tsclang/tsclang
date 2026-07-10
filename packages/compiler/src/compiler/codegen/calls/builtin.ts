@@ -75,7 +75,7 @@ export function _dispatchBuiltin(ctx: CodeGenContext, node: Call, lines: string[
         callee.object.object.kind === 'Ident' && callee.object.object.name === 'process' &&
         callee.object.prop === 'env') {
       if (ctx._cap('os') === false) {
-        throw ctx.error(`"process.env" is not available on embedded targets`);
+        throw ctx.errorCode('E300', null, { detail: '"process.env" is not available on embedded targets' });
       }
       ctx.includes.add('#include <stdlib.h>');
       const key = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
@@ -91,7 +91,7 @@ export function _dispatchBuiltin(ctx: CodeGenContext, node: Call, lines: string[
         callee.object.kind === 'Ident' && callee.object.name === 'process' &&
         callee.prop === 'exit') {
       if (ctx._cap('os') === false) {
-        throw ctx.error(`"process.exit" is not available on embedded targets`);
+        throw ctx.errorCode('E300', null, { detail: '"process.exit" is not available on embedded targets' });
       }
       ctx.includes.add('#include <stdlib.h>');
       const code = args.length ? ctx.exprToC(args[0].expr, lines, depth) : '0';

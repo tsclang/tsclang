@@ -282,7 +282,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       const BINARY = ['pow', 'hypot', 'atan2'];
       if (UNARY.includes(prop) || BINARY.includes(prop)) {
         if (!ctx._cap('fpu')) {
-          throw ctx.error(`Math.${prop}() on decimal types requires FPU (floating-point unit); platform has fpu=false`, node);
+          throw ctx.errorCode('E302', node, { detail: `Math.${prop}() on decimal types requires FPU (floating-point unit); platform has fpu=false` });
         }
         ctx.includes.add('#include <math.h>');
         if (UNARY.includes(prop)) {

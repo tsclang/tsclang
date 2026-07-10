@@ -26,7 +26,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
         const [kt2, vt2] = (node.typeArgs ?? []).map((t: TypeAnn) => ctx.resolveType(t));
         const k2 = kt2 ? ctx.ctypeToTsName(kt2) : 'string';
         const v2 = vt2 ? ctx.ctypeToTsName(vt2) : 'i32';
-        throw ctx.error(`TypeError: 'new Map<${k2}, ${v2}>()' requires a capacity argument when allocator is "static"; use 'new Map<${k2}, ${v2}>(N)'`);
+        throw ctx.errorCode('E301', null, { detail: `'new Map<${k2}, ${v2}>()' requires a capacity argument when allocator is "static"; use 'new Map<${k2}, ${v2}>(N)'` });
       }
       const [kt, vt] = (node.typeArgs ?? []).map((t: TypeAnn) => ctx.resolveType(t));
       const k = kt ? ctx.cTypeToIdent(kt) : 'string';
@@ -50,7 +50,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       if (ctx._allocatorName === 'static' && !args[0]) {
         const et2 = node.typeArgs?.[0] ? ctx.resolveType(node.typeArgs[0]) : 'int32_t';
         const tsName = ctx.ctypeToTsName(et2);
-        throw ctx.error(`TypeError: 'new Array<${tsName}>()' requires a capacity argument when allocator is "static"; use 'new Array<${tsName}>(N)'`);
+        throw ctx.errorCode('E301', null, { detail: `'new Array<${tsName}>()' requires a capacity argument when allocator is "static"; use 'new Array<${tsName}>(N)'` });
       }
       // Determine element type from type args or annotation context
       let et = 'int32_t';
@@ -69,7 +69,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       if (ctx._allocatorName === 'static') {
         const t2 = node.typeArgs?.[0] ? ctx.resolveType(node.typeArgs[0]) : 'void';
         const tsName = ctx.ctypeToTsName(t2);
-        throw ctx.error(`TypeError: 'new Arc<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${ctx._allocatorName}"`);
+        throw ctx.errorCode('E301', null, { detail: `'new Arc<${tsName}>()' requires heap allocation (ARC), which is unavailable when allocator is "${ctx._allocatorName}"` });
       }
       const t = node.typeArgs?.[0] ? ctx.resolveType(node.typeArgs[0]) : 'void';
       return `tsc_arc_alloc(sizeof(${t}))`;

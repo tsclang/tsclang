@@ -740,7 +740,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
       if (ctx._platformSkipped?.has(`${baseObject.name}.${prop}`)) {
         const allowed = ctx._platformSkipped.get(`${baseObject.name}.${prop}`)!.join('", "');
         const target = ctx._targetName ?? DEFAULT_TARGET;
-        throw ctx.error(`TypeError: '${baseObject.name}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
+        throw ctx.errorCode('E300', null, { detail: `'${baseObject.name}.${prop}' is only available on platform "${allowed}", but current target is "${target}"` });
       }
     }
 
@@ -852,7 +852,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
       if (ctx._platformSkipped?.has(`${classSym.ctype}.${prop}`)) {
         const allowed = ctx._platformSkipped.get(`${classSym.ctype}.${prop}`)!.join('", "');
         const target = ctx._targetName ?? DEFAULT_TARGET;
-        throw ctx.error(`TypeError: '${classSym.ctype}.${prop}' is only available on platform "${allowed}", but current target is "${target}"`);
+        throw ctx.errorCode('E300', null, { detail: `'${classSym.ctype}.${prop}' is only available on platform "${allowed}", but current target is "${target}"` });
       }
       return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;
     }

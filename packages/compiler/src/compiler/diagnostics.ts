@@ -936,6 +936,121 @@ Fix: use a concrete type, or remove the strict rule.
 `,
   },
 
+  // ── E3xx: Platform / target restrictions ────────────────────────────────────
+  E300: {
+    code: 'E300',
+    severity: 'error',
+    title: 'feature not available on target',
+    message: `{detail}`,
+    help: ['check the target platform documentation for available features', 'use a target-appropriate alternative'],
+    body: `
+The compiler targets a specific platform (desktop, embedded, wasm, etc.).
+Some features are only available on certain platforms.
+
+Common cases: stdlib imports, process.env, console.trace, SecureRandom,
+groupBy, etc.
+
+Fix: use a platform-appropriate alternative, or change the target.
+`,
+  },
+
+  E301: {
+    code: 'E301',
+    severity: 'error',
+    title: 'allocator restriction',
+    message: `{detail}`,
+    help: ['provide a capacity argument for static allocation', 'switch to a heap allocator if dynamic allocation is needed'],
+    body: `
+The allocator strategy (static, heap, pool) determines what allocation
+patterns are allowed.
+
+  - Static allocator: Map/Array need a capacity argument; Arc requires heap.
+  - @heap classes require a heap allocator.
+  - Global functions must be @static when allocator is "static".
+
+Fix: provide the required argument, or switch allocator strategy.
+`,
+  },
+
+  E302: {
+    code: 'E302',
+    severity: 'error',
+    title: 'FPU required',
+    message: `{detail}`,
+    help: ['use fixed-point decimal types (d8, d16, d32) instead of float', 'enable FPU if the platform supports it'],
+    body: `
+Floating-point operations require a hardware FPU (floating-point unit).
+Some embedded platforms (e.g. AVR) do not have an FPU.
+
+  let x: f32 = 1.5;   // error[E302]: f32 requires FPU
+
+Fix: use decimal types (d8, d16, d32, d64) for fractional values,
+or enable FPU if the platform supports it.
+`,
+  },
+
+  E303: {
+    code: 'E303',
+    severity: 'error',
+    title: 'async not supported',
+    message: `{detail}`,
+    help: ['use synchronous code', 'enable async support in the target configuration'],
+    body: `
+Async/await requires platform support for state machines or coroutines.
+Some targets (e.g. wasm without asyncify, embedded with async: "none")
+do not support async functions.
+
+Fix: use synchronous code, or configure the target to support async.
+`,
+  },
+
+  E304: {
+    code: 'E304',
+    severity: 'error',
+    title: 'embedded platform limitation',
+    message: `{detail}`,
+    help: ['use an embedded-compatible alternative', 'target a non-embedded platform if the feature is required'],
+    body: `
+Embedded platforms have stricter constraints than desktop:
+  - std/embedded requires an embedded target
+  - Unknown inline buffer is limited to 3 words
+  - Error stack traces may not be available
+  - @struct has no effect on non-embedded platforms
+
+Fix: use an embedded-compatible approach, or target a different platform.
+`,
+  },
+
+  E305: {
+    code: 'E305',
+    severity: 'error',
+    title: 'resource limit exceeded',
+    message: `{detail}`,
+    help: ['reduce the data size or number of locals', 'increase the resource limit in the target configuration'],
+    body: `
+The program exceeds a platform resource limit:
+  - BSS (static data) exceeds ram_size
+  - Worst-case stack depth exceeds stack_size
+
+Fix: reduce data sizes, or increase the limit in the target configuration.
+`,
+  },
+
+  E306: {
+    code: 'E306',
+    severity: 'error',
+    title: 'type not Send',
+    message: `type '{name}' is not Send — cannot be safely shared across threads; use Arc<T> or Atomic<T>`,
+    help: ['wrap the value in Arc<T> for shared ownership', 'use Atomic<T> for primitive types'],
+    body: `
+Types passed across thread boundaries must be \`Send\` — meaning they
+contain no shared mutable state. Types with internal pointers or
+non-thread-safe internals are not Send.
+
+Fix: wrap the value in Arc<T>, or use Atomic<T> for primitives.
+`,
+  },
+
   // ── E4xx: Runtime panics ─────────────────────────────────────────────────
   E401: {
     code: 'E401',

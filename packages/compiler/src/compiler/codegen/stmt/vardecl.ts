@@ -310,7 +310,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         // new Tasks<N>() С‚Р–Рў Tasks_N typedef + cooperative scheduler support
         if (init?.kind === 'New' && init.name === 'Tasks') {
           if (ctx._cap('async') === 'libuv') {
-            throw ctx.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
+            throw ctx.errorCode('E304', null, { detail: "'std/embedded' requires an embedded platform target or explicit @[embedded] annotation" });
           }
           ctx.includes.add('#include "std/embedded.h"');
           const nArg = init.typeArgs?.[0];
@@ -383,7 +383,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             throw ctx.error(`RuntimeError: HashMap capacity exceeded: max ${_capViol.cap}, attempted to insert ${_n}${_sfx} entry`);
           }
           if (ctx._cap('async') === 'libuv') {
-            throw ctx.error(`TypeError: 'std/embedded' requires an embedded platform target or explicit @[embedded] annotation`);
+            throw ctx.errorCode('E304', null, { detail: "'std/embedded' requires an embedded platform target or explicit @[embedded] annotation" });
           }
           ctx.includes.add('#include "std/embedded.h"');
           const kArg = init.typeArgs?.[0];
@@ -535,7 +535,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         // new SecureRandom() С‚Р–Рў error on embedded targets
         if (init?.kind === 'New' && init.name === 'SecureRandom') {
           if (ctx._cap('os') === false) {
-            throw ctx.error(`"SecureRandom" is not available on embedded targets`);
+            throw ctx.errorCode('E300', null, { detail: '"SecureRandom" is not available on embedded targets' });
           }
           if (!ctx._emittedTscSecureRandomDef) {
             ctx._emittedTscSecureRandomDef = true;
@@ -586,7 +586,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
             if (ctx._allocatorName === 'static') {
-              throw ctx.error(`TypeError: 'new Arc<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${ctx._allocatorName}"`);
+              throw ctx.errorCode('E301', null, { detail: `'new Arc<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${ctx._allocatorName}"` });
             }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
             ctx.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isArc: true, derefType: innerType });
@@ -630,7 +630,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
 
         // Borrow check: Arc<T> requires a heap allocator
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && ctx._allocatorName === 'static') {
-          throw ctx.error(`"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC`);
+          throw ctx.errorCode('E301', null, { detail: `"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC` });
         }
 
         // let x: Arc<T> = new T() С‚Р–Рў arc alloc with explicit field init
@@ -753,7 +753,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           throw ctx.errorCode('E106', null, { detail: '"void" can only be used as a return type' });
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && ctx._allocatorName === 'static') {
-          throw ctx.error(`"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC`);
+          throw ctx.errorCode('E301', null, { detail: `"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC` });
         }
         // Fat-pointer assignment: let x: Interface = (new Foo() as Interface) or (new Foo())
         if (typeAnn?.kind === 'TypeRef' && ctx.interfaces.has(typeAnn.name)) {

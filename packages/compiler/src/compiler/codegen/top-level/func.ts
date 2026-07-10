@@ -164,7 +164,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
       const hasStaticDec = (decorators ?? []).some((d) => d.name === 'static');
       if (!hasStaticDec && ctx._allocatorName === 'static') {
         const kind = node.async && generator ? 'async generator' : node.async ? 'async function' : 'generator';
-        throw ctx.error(`TypeError: ${kind} '${name}' must be annotated with @static when allocator is "static"`);
+        throw ctx.errorCode('E301', null, { detail: `${kind} '${name}' must be annotated with @static when allocator is "static"` });
       }
     }
     if (node.async) { ctx.emitAsyncFunc(node); return; }

@@ -115,17 +115,17 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         if (Array.isArray(n)) { n.forEach(item => _walkForRestrictions(item, skipFloatLiterals)); return; }
         const nd = n as Record<string, unknown>;
         if (noFloat && nd.kind === 'TypeRef' && (nd.name === 'f32' || nd.name === 'f64')) {
-          throw ctx.error(`TypeError: float types (${nd.name as string}) are not supported (fpu: false)`);
+          throw ctx.errorCode('E302', null, { detail: `float types (${nd.name as string}) are not supported (fpu: false)` });
         }
         if (noFloat && !skipFloatLiterals && nd.kind === 'Literal' && nd.litType === 'number') {
           const v = String(nd.value).replace(/_/g, '');
           const isHex = /^0[xX]/.test(v);
           if (!isHex && (v.includes('.') || /[eE]/.test(v))) {
-            throw ctx.error(`TypeError: float literal ${nd.value as string} is not supported (fpu: false)`);
+            throw ctx.errorCode('E302', null, { detail: `float literal ${nd.value as string} is not supported (fpu: false)` });
           }
         }
         if (noAsync && nd.kind === 'FuncDecl' && nd.async) {
-          throw ctx.error(`TypeError: async functions are not supported (async: "none")`);
+          throw ctx.errorCode('E303', null, { detail: 'async functions are not supported (async: "none")' });
         }
         // Propagate skipFloatLiterals to children if inside a decimal-typed VarDecl
         let childSkip = skipFloatLiterals;
@@ -149,7 +149,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         if (Array.isArray(n)) { n.forEach(_walkWasm); return; }
         const nd = n as Record<string, unknown>;
         if (nd.kind === 'FuncDecl' && nd.async) {
-          throw ctx.error(`TypeError: async functions are not supported on wasm target`);
+          throw ctx.errorCode('E303', null, { detail: 'async functions are not supported on wasm target' });
         }
         for (const k of Object.keys(nd)) {
           if (k !== 'parent') { const v = nd[k]; if (v && typeof v === 'object') _walkWasm(v); }
@@ -249,7 +249,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         const fields = (n.members ?? []).filter((m: { kind: string }) => m.kind === 'Field');
         const hasStack = fields.some((f: ClassMember): f is Field => f.kind === 'Field' && f.name === 'stack');
         if (hasStack && ctx._cap('os') === false) {
-          throw ctx.error(`TypeError: Error stack traces are not supported on embedded targets (${ctx._targetName})`);
+          throw ctx.errorCode('E304', null, { detail: `Error stack traces are not supported on embedded targets (${ctx._targetName})` });
         }
         const info = ctx._throwsClasses.get(n.name);
         if (info) {
@@ -593,7 +593,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         _checked.add(info.name);
         const worst = _computeWorst(info.name, []);
         if (worst > ctx._stackSize) {
-          throw ctx.error(`Warning: Worst-case stack depth (${worst} bytes) exceeds stack_size (${ctx._stackSize} bytes) in '${info.name}()'`);
+          throw ctx.errorCode('E305', null, { detail: `worst-case stack depth (${worst} bytes) exceeds stack_size (${ctx._stackSize} bytes) in '${info.name}()'` });
         }
       }
     }

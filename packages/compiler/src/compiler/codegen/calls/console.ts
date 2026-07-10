@@ -11,7 +11,7 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
     }
     if (method === 'trace') {
       if (ctx._cap('os') === false || ctx._isWasmBare()) {
-        throw ctx.error(`"console.trace()" is not available on ${ctx._targetName} targets`);
+        throw ctx.errorCode('E300', null, { detail: `"console.trace()" is not available on ${ctx._targetName} targets` });
       }
       const label = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : 'STR_LIT("")';
       return `tsc_console_trace(${label})`;

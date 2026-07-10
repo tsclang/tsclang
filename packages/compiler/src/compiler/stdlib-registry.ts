@@ -149,18 +149,18 @@ export function handleStdlibImport(ctx: CodeGenContext, node: Import) {
 
   if (mod.platformCheck === 'not-embedded-not-wasm') {
     if (ctx._cap('os') === false || ctx._isWasmBare()) {
-      throw ctx.error(`TypeError: '${node.source}' is not available on ${ctx._targetName} targets`);
+      throw ctx.errorCode('E300', null, { detail: `'${node.source}' is not available on ${ctx._targetName} targets` });
     }
   } else if (mod.platformCheck === 'not-wasm') {
     if (ctx._isWasmBare()) {
-      throw ctx.error(`TypeError: '${node.source}' is not available on wasm targets`);
+      throw ctx.errorCode('E300', null, { detail: `'${node.source}' is not available on wasm targets` });
     }
   } else if (mod.platformCheck === 'embedded-only') {
     if (ctx._cap('allocator') !== 'static') {
-      throw ctx.error(`TypeError: '${node.source}' requires an embedded platform target`);
+      throw ctx.errorCode('E300', null, { detail: `'${node.source}' requires an embedded platform target` });
     }
     if (ctx._isWasmBare()) {
-      throw ctx.error(`TypeError: '${node.source}' is not available on wasm targets`);
+      throw ctx.errorCode('E300', null, { detail: `'${node.source}' is not available on wasm targets` });
     }
   }
 
