@@ -26,7 +26,7 @@ export interface DiagnosticEntry {
   body: string;
 }
 
-export const DIAGNOSTICS: Record<string, DiagnosticEntry> = {
+export const DIAGNOSTICS = {
   // ── E0xx: Ownership ──────────────────────────────────────────────────────
   E001: {
     code: 'E001',
@@ -1177,12 +1177,16 @@ Fix: use \`i32\` or \`u32\` if the range suffices, or use fixed-point
 decimal types (d8, d16) for fractional values.
 `,
   },
-};
+} satisfies Record<string, DiagnosticEntry>;
+
+// Derive a union of all valid codes from the registry.
+// Usage: function foo(code: DiagnosticCode) — catches typos at compile time.
+export type DiagnosticCode = keyof typeof DIAGNOSTICS;
 
 // Look up a diagnostic entry by code (case-insensitive).
 // Returns null if the code is not registered.
 export function lookupDiagnostic(code: string): DiagnosticEntry | null {
-  return DIAGNOSTICS[code.toUpperCase()] ?? null;
+  return (DIAGNOSTICS as Record<string, DiagnosticEntry>)[code.toUpperCase()] ?? null;
 }
 
 // Format a diagnostic entry for `tsclang explain <CODE>`.

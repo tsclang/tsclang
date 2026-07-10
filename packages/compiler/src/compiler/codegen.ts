@@ -6,7 +6,7 @@ import { lex as _lex }   from './lexer.js';
 import { parse as _parse } from './parser.js';
 import { TscError } from './error.js';
 import type { DiagSpan } from './error.js';
-import { lookupDiagnostic, substituteParams } from './diagnostics.js';
+import { lookupDiagnostic, substituteParams, type DiagnosticCode } from './diagnostics.js';
 import { ScopeManager } from './codegen/scope-manager.js';
 import { BorrowTracker } from './codegen/borrow-tracker.js';
 import { OutputBuffer } from './codegen/output-buffer.js';
@@ -1029,7 +1029,7 @@ class Context {
   // Resolves message template + help from DIAGNOSTICS, then merges opts.help on top.
   //   ctx.errorCode('E002', node, { name: 'x' }, { spans: [...] });
   errorCode(
-    code: string,
+    code: DiagnosticCode,
     node?: unknown,
     params?: Record<string, string | number>,
     opts: ErrorOpts = {},
@@ -1057,7 +1057,7 @@ class Context {
   // Collect a warning diagnostic using a diagnostic code from the registry.
   //   ctx.warnCode('W001', node, { type: 'Foo' });
   warnCode(
-    code: string,
+    code: DiagnosticCode,
     node?: unknown,
     params?: Record<string, string | number>,
     opts: ErrorOpts = {},
@@ -1085,7 +1085,7 @@ class Context {
 
   // Build a panic tag string for embedding in generated C code.
   // Returns "[E401]: division by zero" — code + resolved message from registry.
-  panicTag(code: string, params?: Record<string, string | number>): string {
+  panicTag(code: DiagnosticCode, params?: Record<string, string | number>): string {
     const entry = lookupDiagnostic(code);
     if (!entry) throw new Error(`Unknown diagnostic code: ${code}`);
     return `[${entry.code}]: ${substituteParams(entry.message, params)}`;

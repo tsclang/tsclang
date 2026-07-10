@@ -9,7 +9,7 @@ export { compileTsc, findPackageJson } from './compiler/compile.js';
 export { renderDiagnostic, TscError } from './compiler/error.js';
 export type { DiagSpan, TscErrorOptions, Diagnostic, RenderOptions } from './compiler/error.js';
 export { DIAGNOSTICS, lookupDiagnostic, explainError, substituteParams } from './compiler/diagnostics.js';
-export type { DiagnosticEntry, Severity } from './compiler/diagnostics.js';
+export type { DiagnosticEntry, DiagnosticCode, Severity } from './compiler/diagnostics.js';
 export { DIAGNOSTICS as ERROR_CATALOG } from './compiler/diagnostics.js';
 export { lint, applyFixes } from './compiler/linter.js';
 export { emitDtsSync } from './compiler/dts-emitter.js';
