@@ -329,18 +329,20 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       if (intTypes.has(leftType) && lines) {
         const I = ' '.repeat(ctx.indent * depth);
         const tmp = `_tsc_div_${ctx.tempCount++}`;
+        const divTag = ctx.panicTag('E401');
         const panicExpr = ctx._strictRules?.has('no-abort')
-          ? '_tsc_on_panic("[E401]: division by zero")'
+          ? `_tsc_on_panic("${divTag}")`
           : 'abort()';
         lines.push(`${I}int32_t ${tmp} = ${r};`);
-        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic[E401]: division by zero\\n"); ${panicExpr}; }`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic${divTag}\\n"); ${panicExpr}; }`);
         const minMap = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
         const minConst = (minMap as Record<string, string>)[leftType];
         if (minConst) {
+          const ovfTag = ctx.panicTag('E402');
           const overflowPanic = ctx._strictRules?.has('no-abort')
-            ? '_tsc_on_panic("[E402]: integer overflow")'
+            ? `_tsc_on_panic("${ovfTag}")`
             : 'abort()';
-          lines.push(`${I}if (${tmp} == -1 && ${l} == ${minConst}) { fprintf(stderr, "panic[E402]: integer overflow\\n"); ${overflowPanic}; }`);
+          lines.push(`${I}if (${tmp} == -1 && ${l} == ${minConst}) { fprintf(stderr, "panic${ovfTag}\\n"); ${overflowPanic}; }`);
         }
         return `${l} ${node.op} ${tmp}`;
       }
@@ -428,11 +430,12 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       if (node.op === '/=' || node.op === '%=') {
         const I = ' '.repeat(ctx.indent * depth);
         const tmp = `_tsc_div_${ctx.tempCount++}`;
+        const tag = ctx.panicTag('E401');
         const panicExpr = ctx._strictRules?.has('no-abort')
-          ? '_tsc_on_panic("[E401]: division by zero")'
+          ? `_tsc_on_panic("${tag}")`
           : 'abort()';
         lines.push(`${I}${dLeftBase} ${tmp} = ${r};`);
-        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic[E401]: division by zero\\n"); ${panicExpr}; }`);
+        lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic${tag}\\n"); ${panicExpr}; }`);
         if (node.op === '/=') {
           const helper = `tsc_div_${dLeftBase.replace('_t', '')}`;
           return `${l} = ${helper}(${l}, ${tmp})`;

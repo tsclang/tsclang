@@ -1089,6 +1089,14 @@ class Context {
     }));
   }
 
+  // Build a panic tag string for embedding in generated C code.
+  // Returns "[E401]: division by zero" — code + resolved message from registry.
+  panicTag(code: string, params?: Record<string, string | number>): string {
+    const entry = lookupDiagnostic(code);
+    if (!entry) throw new Error(`Unknown diagnostic code: ${code}`);
+    return `[${entry.code}]: ${substituteParams(entry.message, params)}`;
+  }
+
   // Register a cleanup statement (e.g., "tsc_array_free_i32(&arr)") for main or function scope
   _registerCleanup(stmt: string) {
     if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
