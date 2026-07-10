@@ -399,6 +399,202 @@ Fix: declare the function as \`throws\`, or wrap the call in try/catch:
   }
 `,
   },
+
+  // ── W0xx: Warnings ───────────────────────────────────────────────────────
+  W001: {
+    code: 'W001',
+    severity: 'warning',
+    title: 'condition is always true',
+    message: `condition is always true`,
+    help: ['the condition will always evaluate to true'],
+    body: `
+A class, Array, Map, or Set used as a boolean condition is always truthy.
+This may indicate a logic error — the condition will never be false.
+
+  const arr = [1, 2, 3];
+  if (arr) { ... }   // warning[W001]: condition is always true
+`,
+  },
+
+  W002: {
+    code: 'W002',
+    severity: 'warning',
+    title: 'condition is always false',
+    message: `condition is always false`,
+    help: ['the condition will always evaluate to false', 'the branch is dead code'],
+    body: `
+A condition that can never be true produces dead code. This may indicate a
+logic error or an impossible check after a previous assertion.
+
+  const s: string = "hello";
+  if (s == null) { ... }   // warning[W002]: condition is always false
+`,
+  },
+
+  W003: {
+    code: 'W003',
+    severity: 'warning',
+    title: 'switch on enum is not exhaustive',
+    message: `switch on enum '{name}' is not exhaustive`,
+    help: ['add a default case', 'handle all enum variants'],
+    body: `
+A switch on an enum type does not cover all variants and has no default case.
+If a new variant is added later, the switch will silently skip it.
+
+  switch (color) {
+    case Color.Red:   ...; break;
+    case Color.Green: ...; break;
+    // missing Color.Blue — warning[W003]
+  }
+
+Fix: add a default case or handle all variants explicitly.
+`,
+  },
+
+  W004: {
+    code: 'W004',
+    severity: 'warning',
+    title: 'native block used',
+    message: `native block used`,
+    help: ['native blocks contain platform-specific C code', 'ensure the C code is correct and portable'],
+    body: `
+A \`native\` block embeds raw C code directly. This bypasses TSClang's type
+system and ownership rules. Review the embedded C carefully.
+
+  native<int> {
+    return some_c_function();
+  }
+`,
+  },
+
+  W005: {
+    code: 'W005',
+    severity: 'warning',
+    title: 'unsafe block used',
+    message: `unsafe block used`,
+    help: ['unsafe blocks bypass ownership and type checks', 'review carefully for memory safety'],
+    body: `
+An \`unsafe\` block disables certain compile-time checks (ownership, borrow,
+type narrowing). This is intended for low-level interop but should be used
+sparingly.
+
+  unsafe {
+    // raw pointer manipulation, etc.
+  }
+`,
+  },
+
+  W006: {
+    code: 'W006',
+    severity: 'warning',
+    title: 'async recursion requires heap allocation',
+    message: `async function '{name}' recurses; heap allocation required for state machine`,
+    help: ['consider an iterative approach to avoid heap allocation'],
+    body: `
+An async function that calls itself (directly or indirectly) requires heap
+allocation for the state machine, because each recursion level needs its own
+state. On heapless targets, this is not possible.
+
+  async function recurse(n: i32): Promise<void> {
+    if (n > 0) await recurse(n - 1);   // warning[W006]
+  }
+
+Fix: rewrite as an iterative loop if possible.
+`,
+  },
+
+  W007: {
+    code: 'W007',
+    severity: 'warning',
+    title: 'struct field padding inefficiency',
+    message: `struct '{name}' has inefficient field padding ({bytes} bytes wasted)`,
+    help: ['reorder fields by decreasing alignment to reduce padding', 'use @packed to eliminate padding'],
+    body: `
+Struct fields are laid out in declaration order with C alignment rules.
+Suboptimal ordering wastes memory on padding between fields.
+
+  class Bad { a: u8; b: i64; c: u8; }   // 24 bytes, 14 wasted
+  class Good { b: i64; a: u8; c: u8; }  // 16 bytes, 6 wasted
+
+Fix: order fields by decreasing alignment (largest first).
+`,
+  },
+
+  W008: {
+    code: 'W008',
+    severity: 'warning',
+    title: 'move from const binding in strict mode',
+    message: `cannot move from const binding '{name}' in strict mode`,
+    help: ['declare the variable with let if you intend to move it'],
+    body: `
+In strict mode, moving a value out of a \`const\` binding produces a warning
+(in non-strict mode this is allowed). Moving from const leaves the binding
+in an invalid state.
+
+  const s: string = "hello";
+  const t = s;   // warning[W008]: move from const in strict mode
+
+Fix: declare the source variable with \`let\`.
+`,
+  },
+
+  W009: {
+    code: 'W009',
+    severity: 'warning',
+    title: 'readonly class with mut method',
+    message: `class '{name}' has all readonly fields but contains mut method '{method}'`,
+    help: ['consider making the method non-mut', 'or add mutable fields if mutation is intended'],
+    body: `
+A class where all fields are \`readonly\` has a \`mut\` method. Since the method
+cannot modify any fields, the \`mut\` qualifier is likely unnecessary and
+prevents calling the method on const bindings.
+
+  class Counter {
+    readonly count: i32;
+    mut inc(): void { ... }   // warning[W009]: no mutable fields
+  }
+
+Fix: remove \`mut\` from the method, or add mutable fields.
+`,
+  },
+
+  W010: {
+    code: 'W010',
+    severity: 'warning',
+    title: 'blocking Mutex.lock() in async context',
+    message: `Mutex.lock() in async function '{name}' blocks the event loop`,
+    help: ['use Mutex.tryLock() for non-blocking acquisition'],
+    body: `
+Calling \`Mutex.lock()\` inside an async function blocks the event loop until
+the lock is acquired. This can cause deadlocks or stall other async tasks.
+
+  async function work(m: Mutex): Promise<void> {
+    m.lock();   // warning[W010]: blocks event loop
+    // ...
+    m.unlock();
+  }
+
+Fix: use \`tryLock()\` and yield if the lock is not available.
+`,
+  },
+
+  W011: {
+    code: 'W011',
+    severity: 'warning',
+    title: 'expensive type on 8-bit target',
+    message: `{type} is expensive on 8-bit target`,
+    help: ['consider using i32 or fixed-point decimal instead'],
+    body: `
+On 8-bit targets (AVR, etc.), 64-bit integer and float operations are
+emulated in software and are very slow. The compiler warns when these types
+are used.
+
+  let x: i64 = 0;   // warning[W011]: i64 on 8-bit target
+
+Fix: use \`i32\` or \`u32\` if the range suffices, or use fixed-point
+decimal types (d8, d16) for fractional values.
+`,
+  },
 };
 
 // Look up a diagnostic entry by code (case-insensitive).

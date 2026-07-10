@@ -908,7 +908,7 @@ export function _truthyToC(ctx: CodeGenContext, node: Expression, lines: string[
       return `${c}.has_value`;
     }
     if (ctx.classes.has(type) || type.startsWith('Array_') || type.startsWith('TscMap_') || type.startsWith('Map_') || type.startsWith('TscSet_') || type.startsWith('Set_')) {
-      ctx.warn(`condition is always true`, node);
+      ctx.warnCode('W001', node);
       return '1';
     }
     return ctx.exprToC(node, lines, depth);
