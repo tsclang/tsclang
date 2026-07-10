@@ -216,8 +216,12 @@ export function run(code: string, opts?: RunOptions): string {
         c = codegen(ast, "<run>", code, codegenOpts).c
       }
     } catch (e: any) {
-      if (e?.isTscErrorBag) throw new TscCompilationError(e.errors.map((er: any) => er.message || String(er)).join('; '))
-      throw new TscCompilationError(e instanceof Error ? e.message : String(e))
+      if (e?.isTscErrorBag) {
+        const msgs = e.errors.map((er: any) => er.code ? `[${er.code}] ${er.message || ''}` : (er.message || String(er)))
+        throw new TscCompilationError(msgs.join('; '))
+      }
+      const code = e?.code ? `[${e.code}] ` : ''
+      throw new TscCompilationError(code + (e instanceof Error ? e.message : String(e)))
     }
 
     const compilerName = opts?.compiler ?? getDefaultCompiler()

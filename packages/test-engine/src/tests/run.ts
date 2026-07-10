@@ -15,6 +15,8 @@ import "./async.test"
 import "./jest-api.test"
 import "./integer-overflow.test"
 import "./integer-errors.test"
+import "./integer-properties.test"
+import "./safe-math-errors.test"
 import "./diagnostics-registry.test"
 import { printSummary } from "../engine"
 
