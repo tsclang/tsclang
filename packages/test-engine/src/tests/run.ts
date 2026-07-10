@@ -14,6 +14,7 @@ import "./hooks.test"
 import "./async.test"
 import "./jest-api.test"
 import "./integer-overflow.test"
+import "./diagnostics-registry.test"
 import { printSummary } from "../engine"
 
 printSummary()

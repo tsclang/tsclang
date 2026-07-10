@@ -1632,3 +1632,40 @@ export function substituteParams(
     return val !== undefined ? String(val) : match;
   });
 }
+
+// A fully resolved diagnostic — message and help have params substituted.
+// This is what external consumers (CLI formatters, test engine) should use.
+export interface ResolvedDiagnostic {
+  code: string;
+  severity: Severity;
+  title: string;
+  message: string;
+  help: string[];
+}
+
+// i18n-ready diagnostic resolution.
+//
+// Looks up the code (case-insensitive), substitutes params into message + help,
+// and returns a ResolvedDiagnostic.
+//
+// locale: defaults to 'en'. Only 'en' is currently available (the DIAGNOSTICS
+// registry IS the English catalog). When translations are added, this function
+// will check a LOCALE_OVERRIDES map first, then fall back to the English registry.
+//
+// Returns null if the code is not registered.
+export function resolveDiagnostic(
+  code: string,
+  params?: Record<string, string | number>,
+  locale = 'en',
+): ResolvedDiagnostic | null {
+  void locale; // placeholder — only 'en' available; future: check LOCALE_OVERRIDES[locale][code]
+  const entry = lookupDiagnostic(code);
+  if (!entry) return null;
+  return {
+    code: entry.code,
+    severity: entry.severity,
+    title: entry.title,
+    message: substituteParams(entry.message, params),
+    help: (entry.help ?? []).map(h => substituteParams(h, params)),
+  };
+}
