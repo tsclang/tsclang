@@ -222,6 +222,183 @@ behaviour. TSClang inserts a runtime guard for int32_t and int64_t types.
 Fix: check for this edge case explicitly, or use safe-math mode with try/catch.
 `,
   },
+
+  E403: {
+    code: 'E403',
+    severity: 'error',
+    title: 'out of memory',
+    message: `out of memory`,
+    help: ['increase memory budget', 'check for memory leaks or unbounded allocations'],
+    body: `
+A memory allocation (malloc/realloc) returned NULL. This means the system ran
+out of available memory.
+
+On embedded targets with a fixed pool allocator, this means the pool is full.
+On desktop, it means the OS refused to allocate more memory.
+
+Fix: reduce the number of live allocations, or increase the pool size / memory
+budget for the target.
+`,
+  },
+
+  E404: {
+    code: 'E404',
+    severity: 'error',
+    title: 'null cast to non-null',
+    message: `null cast to non-null`,
+    help: ['check for null before casting', 'use optional chaining ?. instead of as'],
+    body: `
+Casting an optional (opt_T) value to its non-optional type (T) via \`as\`
+asserts the value is present. If the optional is empty (null), this is a
+runtime panic.
+
+  const opt: opt_i32 = null;
+  const v: i32 = opt as i32;   // panic[E404]: null cast to non-null
+
+Fix: check for presence before casting:
+
+  if (opt.has_value) { const v: i32 = opt.value; }
+`,
+  },
+
+  E405: {
+    code: 'E405',
+    severity: 'error',
+    title: 'array index out of bounds',
+    message: `array index {index} out of bounds (length {length})`,
+    help: ['check array length before accessing', 'use .get(i) for safe access'],
+    body: `
+Accessing an array element by index beyond the array's length is undefined
+behaviour in C. TSClang inserts a runtime bounds check when the index is
+known at compile time to be potentially out of bounds.
+
+  const arr = [1, 2, 3];
+  const x = arr[5];   // panic[E405]: array index 5 out of bounds (length 3)
+
+Fix: check the array length before accessing:
+
+  if (i < arr.length) { const x = arr[i]; }
+`,
+  },
+
+  E406: {
+    code: 'E406',
+    severity: 'error',
+    title: 'parse failure',
+    message: `parse error: '{input}' is not a valid {type}`,
+    help: ['use tryParse() for safe parsing without panic'],
+    body: `
+Parsing a string into a number failed because the string does not represent
+a valid value of the target type.
+
+  const x = i32.parse("abc");   // panic[E406]: parse error: 'abc' is not a valid integer
+
+Fix: use the \`tryParse()\` variant which returns an optional instead of
+panicking:
+
+  const x = i32.tryParse("abc");   // opt_i32 — none
+  if (x.has_value) { ... }
+`,
+  },
+
+  E407: {
+    code: 'E407',
+    severity: 'error',
+    title: 'Math.min/max on empty array',
+    message: `Math.{func}: empty array`,
+    help: ['check array length before calling Math.min/max'],
+    body: `
+Calling \`Math.min()\` or \`Math.max()\` with an empty array (or spread of an
+empty array) has no defined result. TSClang panics at runtime.
+
+  const arr: i32[] = [];
+  const m = Math.min(...arr);   // panic[E407]: Math.min: empty array
+
+Fix: check the array length first:
+
+  if (arr.length > 0) { const m = Math.min(...arr); }
+`,
+  },
+
+  E408: {
+    code: 'E408',
+    severity: 'error',
+    title: 'pool exhausted',
+    message: `pool exhausted: {name}`,
+    help: ['increase pool size', 'reduce number of live allocations'],
+    body: `
+A pool-allocated class's alloc() returned no slot — the fixed-size pool is
+full. All slots are in use and no more instances can be created until some
+are freed.
+
+  const pool = new Pool(Foo, 4);
+  const a = new Foo();  // ok — slot 1
+  // ... 4 more allocations
+  const f = new Foo();  // panic[E408]: pool exhausted: Foo
+
+Fix: increase the pool size, or free unused instances before allocating new ones.
+`,
+  },
+
+  E409: {
+    code: 'E409',
+    severity: 'error',
+    title: 'unwrap of failed Result',
+    message: `unwrap of failed Result`,
+    help: ['handle the error case with try/catch', 'use ?. instead of ! to propagate'],
+    body: `
+The \`!\` operator unwraps a Result, asserting success. If the function
+returned an error, this is a runtime panic.
+
+  function risky(): throws Error { ... }
+  const v = risky()!;   // panic[E409] if risky() throws
+
+Fix: handle the error with try/catch, or propagate with \`?\`:
+
+  try { const v = risky(); } catch (e) { /* handle */ }
+`,
+  },
+
+  E410: {
+    code: 'E410',
+    severity: 'error',
+    title: 'heap not available on this platform',
+    message: `heap not available on this platform`,
+    help: ['use stack allocation', 'configure an allocator for this target'],
+    body: `
+The target platform does not have a heap allocator (e.g. NES, retro targets
+with allocator: "none"). Any operation that requires dynamic allocation will
+panic.
+
+  const arr = new Array<i32>(10);   // panic[E410]: heap not available on NES
+
+Fix: use stack-allocated arrays or a static pool, or configure an allocator
+for the target.
+`,
+  },
+
+  E411: {
+    code: 'E411',
+    severity: 'error',
+    title: 'uncaught throw',
+    message: `uncaught throw`,
+    help: ['declare the function as throws', 'wrap the call in try/catch'],
+    body: `
+A \`throw\` statement was executed in a function that does not declare
+\`throws\`, and the throw was not caught by a try/catch. This is a runtime
+panic — the error cannot be propagated.
+
+  function f(): void {
+    throw new Error("boom");   // panic[E411]: uncaught throw
+  }
+
+Fix: declare the function as \`throws\`, or wrap the call in try/catch:
+
+  function f(): throws Error {
+    throw new Error("boom");   // ok — propagates to caller
+  }
+`,
+  },
 };
 
 // Look up a diagnostic entry by code (case-insensitive).
