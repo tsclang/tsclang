@@ -668,7 +668,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         const decBase = resolveDecimalBase(ctx, objType);
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
-          throw ctx.error(`"toFixed()" argument must be a compile-time literal`);
+          throw ctx.errorCode('E418', null, { detail: '"toFixed()" argument must be a compile-time literal' });
         const n = nArg.value;
         const buf = `_buf_${ctx.tempCount++}`;
         lines.push(`char ${buf}[64];`);
@@ -687,7 +687,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         const decBase = resolveDecimalBase(ctx, objType);
         const nArg = args[0]?.expr;
         if (!nArg || nArg.kind !== 'Literal')
-          throw ctx.error(`"toPrecision()" argument must be a compile-time literal`);
+          throw ctx.errorCode('E418', null, { detail: '"toPrecision()" argument must be a compile-time literal' });
         const n = nArg.value;
         const buf = `_buf_${ctx.tempCount++}`;
         lines.push(`char ${buf}[64];`);
@@ -719,7 +719,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
     if (baseObject.kind === 'Ident' && ctx.classes.has(baseObject.name)) {
       const poolDef = ctx.classes.get(baseObject.name);
       if (poolDef?._isPool && prop === 'alloc') {
-        throw ctx.error(`PoolClass.alloc() is removed; use "new ${baseObject.name}()" instead`, baseObject);
+        throw ctx.errorCode('E416', baseObject, { detail: `PoolClass.alloc() is removed; use "new ${baseObject.name}()" instead` });
       }
       if (poolDef?._isPool && prop === 'drop') {
         ctx._ensurePoolDrop(baseObject.name);

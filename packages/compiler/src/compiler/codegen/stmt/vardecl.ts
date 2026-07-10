@@ -259,7 +259,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             if (prop.computed) {
               const keyExpr = prop.key;
               const keyName = typeof keyExpr === 'object' && keyExpr?.kind === 'Ident' ? keyExpr.name : '?';
-              throw ctx.error(`TypeError: StaticMap keys must be compile-time string literals; dynamic key '[${keyName}]' is not allowed`);
+              throw ctx.errorCode('E418', null, { detail: `TypeError: StaticMap keys must be compile-time string literals; dynamic key '[${keyName}]' is not allowed` });
             }
             const valC = ctx.exprToC(prop.value!, lines, depth);
             entries.push({ key: prop.key ?? '', valC });
@@ -380,7 +380,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             const _sfx = (_n % 10 === 1 && _n % 100 !== 11) ? 'st'
                        : (_n % 10 === 2 && _n % 100 !== 12) ? 'nd'
                        : (_n % 10 === 3 && _n % 100 !== 13) ? 'rd' : 'th';
-            throw ctx.error(`RuntimeError: HashMap capacity exceeded: max ${_capViol.cap}, attempted to insert ${_n}${_sfx} entry`);
+            throw ctx.errorCode('E418', null, { detail: `RuntimeError: HashMap capacity exceeded: max ${_capViol.cap}, attempted to insert ${_n}${_sfx} entry` });
           }
           if (ctx._cap('async') === 'libuv') {
             throw ctx.errorCode('E304', null, { detail: "'std/embedded' requires an embedded platform target or explicit @[embedded] annotation" });
@@ -1632,7 +1632,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           // No initializer: zero-init for safe defaults, compile error for enum
           const enumDef = ctx.classes.get(ctype);
           if (enumDef?.isEnum && !enumDef?.isStringLiteralUnion && !enumDef?.isKeyOf) {
-            throw ctx.error(`variable of enum type "${ctype}" must be explicitly initialized or declared nullable`);
+            throw ctx.errorCode('E419', null, { detail: `variable of enum type "${ctype}" must be explicitly initialized or declared nullable` });
           }
           const PRIMITIVE_ZERO: Record<string, string> = {
             'int8_t': '0', 'int16_t': '0', 'int32_t': '0', 'int64_t': '0',

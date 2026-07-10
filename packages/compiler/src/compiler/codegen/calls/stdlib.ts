@@ -227,7 +227,7 @@ export function _dispatchStdSignal(ctx: CodeGenContext, node: Call, lines: strin
         const sigRef = ctx._capturedSignalMap?.get(callee.object.name) ?? `&${callee.object.name}`;
         if (callee.prop === 'get') return `tsc_signal_get_${etIdent}(${sigRef})`;
         if (callee.prop === 'set') {
-          if (ctx._inComputedFn) throw ctx.error(`TypeError: Side effect (signal.set) inside computed() is not allowed`);
+          if (ctx._inComputedFn) throw ctx.errorCode('E418', null, { detail: 'TypeError: Side effect (signal.set) inside computed() is not allowed' });
           const val = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
           return `tsc_signal_set_${etIdent}(${sigRef}, ${val})`;
         }
@@ -748,7 +748,7 @@ export function _dvOp(ctx: CodeGenContext, _dvName: string, base: string, I: str
       const offsetNode = args[0]?.expr;
       const offsetVal = (offsetNode?.kind === 'Literal' && offsetNode?.litType === 'number') ? parseInt(offsetNode.value) : null;
       if (offsetVal != null && offsetVal + sz > _dvSym._dvCap) {
-        throw ctx.error(`TypeError: DataView.${dir}${type} at offset ${offsetVal} requires ${sz} bytes, but buffer length is ${_dvSym._dvCap}`);
+        throw ctx.errorCode('E418', null, { detail: `TypeError: DataView.${dir}${type} at offset ${offsetVal} requires ${sz} bytes, but buffer length is ${_dvSym._dvCap}` });
       }
     }
 
@@ -818,9 +818,7 @@ export function _dispatchStdHashMap(ctx: CodeGenContext, node: Call, lines: stri
           if (_hmSym._hmCap > 0) {
             _hmSym._hmSetCount = (_hmSym._hmSetCount ?? 0) + 1;
             if (_hmSym._hmSetCount > _hmSym._hmCap) {
-              throw ctx.error(
-                `RuntimeError: HashMap capacity exceeded: max ${_hmSym._hmCap}, attempted to insert ${_hmSym._hmSetCount}th entry`
-              );
+              throw ctx.errorCode('E418', null, { detail: `RuntimeError: HashMap capacity exceeded: max ${_hmSym._hmCap}, attempted to insert ${_hmSym._hmSetCount}th entry` });
             }
           }
           const _hmArg1 = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';

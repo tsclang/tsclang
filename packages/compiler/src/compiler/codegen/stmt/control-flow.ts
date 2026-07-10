@@ -55,10 +55,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               p(`    return (${tc.resultType}){.ok = false, .error = ${ctx._wrapErrForCaller(tc, `${resName}.error`, sym)}};`);
             } else {
               const errTypes = sym._resultErrTypes?.map((t: string | { name: string }) => typeof t === 'string' ? t : t?.name).join(' | ') ?? 'unknown';
-              throw ctx.error(
-                `TypeError: '${callee.kind === 'Ident' ? callee.name : 'unknown'}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function`,
-                expr
-              );
+              throw ctx.errorCode('E415', expr, { detail: `TypeError: '${callee.kind === 'Ident' ? callee.name : 'unknown'}()' throws ${errTypes} which cannot be caught by 'math try/catch' (only MathError is catchable); use regular try/catch or declare 'throws' on the enclosing function` });
             }
             p(`}`);
             ctx._flushPostStmtCleanups(lines);
@@ -68,10 +65,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         if (!ctx._throwsCtx && !ctx._inMathTry && expr.kind === 'Call' && expr.callee?.kind === 'Ident') {
           const sym = ctx.lookup(expr.callee.name);
           if (sym?._isThrowsFunc) {
-            throw ctx.error(
-              `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function`,
-              node
-            );
+            throw ctx.errorCode('E415', node, { detail: `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function` });
           }
         }
         // Check method calls: obj.method() where method is throws
@@ -81,10 +75,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           if (cls?._methodNames) {
             const methodInfo = cls._methodNames.get(expr.callee.prop);
             if (methodInfo?._isThrowsFunc) {
-              throw ctx.error(
-                `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function`,
-                node
-              );
+              throw ctx.errorCode('E415', node, { detail: `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', try/catch, or declare 'throws' on the enclosing function` });
             }
           }
         }
@@ -124,7 +115,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         if (!_retAutoProp) ctx._checkNoBareThrows(node.value);
         // Error: return inside finally block
         if (ctx._inFinallyBlock) {
-          throw ctx.error('TypeError: Cannot return inside a finally block');
+          throw ctx.errorCode('E415', null, { detail: 'TypeError: Cannot return inside a finally block' });
         }
         const funcSym = ctx.currentFuncName ? ctx.lookup(ctx.currentFuncName) : null;
         const retTypeAnn = funcSym?.returnType;
@@ -919,7 +910,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
       }
 
       case 'ForIn': {
-        throw ctx.error(`SyntaxError: 'for-in' loops are not supported; use 'for-of' instead`, node);
+        throw ctx.errorCode('E414', node, { detail: `'for-in' loops are not supported; use 'for-of' instead` });
         break;
       }
 
@@ -1070,7 +1061,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         const val = node.value;
         // Error: throw inside finally block
         if (ctx._inFinallyBlock) {
-          throw ctx.error('TypeError: Cannot throw inside a finally block');
+          throw ctx.errorCode('E415', null, { detail: 'TypeError: Cannot throw inside a finally block' });
         }
         // Error: throw string literal
         if (val?.kind === 'Literal' && val.litType === 'string') {
@@ -1079,7 +1070,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         // Error: throw in function without throws declaration
         // (never-return functions are exempt тАФ they are expected to throw/abort)
         if (!ctx._throwsCtx && ctx.inFunction && !ctx._currentFuncIsNever) {
-          throw ctx.error(`function "${ctx.currentFuncName}" throws but does not declare "throws"`);
+          throw ctx.errorCode('E415', null, { detail: `function "${ctx.currentFuncName}" throws but does not declare "throws"` });
         }
 
         if (ctx._throwsCtx) {
@@ -1392,7 +1383,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         while ((m = ptrPattern.exec(nativeOut)) !== null) {
           const typeName = m[1];
           if (!knownCTypes.has(typeName) && !ctx.classes.has(typeName) && !ctx.interfaces.has(typeName)) {
-            throw ctx.error(`TypeError: Native block references undeclared type '${typeName}'; declare it or use @[native_type]`);
+            throw ctx.errorCode('E418', null, { detail: `TypeError: Native block references undeclared type '${typeName}'; declare it or use @[native_type]` });
           }
         }
         p(nativeOut);
@@ -1420,7 +1411,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
 
       case 'Noop': break;
       default:
-        throw ctx.error(`internal: unhandled statement kind '${node.kind}'`, node);
+        throw ctx.errorCode('E417', node, { detail: `internal: unhandled statement kind '${node.kind}'` });
     }
 }
 

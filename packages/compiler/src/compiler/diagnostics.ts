@@ -1051,6 +1051,138 @@ Fix: wrap the value in Arc<T>, or use Atomic<T> for primitives.
 `,
   },
 
+  // ── E4xx: Misc compiler errors ──────────────────────────────────────────────
+  E400: {
+    code: 'E400',
+    severity: 'error',
+    title: 'naming convention error',
+    message: `{detail}`,
+    help: ['use PascalCase (uppercase first letter) for type/class/interface/enum names'],
+    body: `
+TSClang enforces naming conventions for clarity:
+  - Classes, interfaces, type aliases, enums: PascalCase
+  - Type names must not use reserved prefixes
+
+Fix: rename to follow the convention.
+`,
+  },
+
+  E412: {
+    code: 'E412',
+    severity: 'error',
+    title: 'class/decorator validation error',
+    message: `{detail}`,
+    help: ['check the class/decorator rules in the docs'],
+    body: `
+Validation errors for class declarations, decorators, and structural
+constraints (e.g. @pool capacity, @heap/@struct conflicts, duplicate
+members, readonly fields, @packed/@align, etc.).
+
+Fix: follow the specific constraint described in the error message.
+`,
+  },
+
+  E413: {
+    code: 'E413',
+    severity: 'error',
+    title: 'assignment restriction',
+    message: `{detail}`,
+    help: ['check the assignment rules in the docs'],
+    body: `
+Certain assignments are restricted: readonly fields, array length/capacity
+(must use resize/reallocate), and readonly tuple elements.
+
+Fix: use the appropriate method (resize, reallocate) or remove the
+readonly modifier.
+`,
+  },
+
+  E414: {
+    code: 'E414',
+    severity: 'error',
+    title: 'syntax error',
+    message: `{detail}`,
+    help: ['see the language syntax documentation'],
+    body: `
+A syntax-level restriction: mixing || and ?? without parens, for-in loops
+(use for-of), keyof outside type position, computed object keys, empty
+object literals, export default, etc.
+
+Fix: follow the syntax rule described in the error message.
+`,
+  },
+
+  E415: {
+    code: 'E415',
+    severity: 'error',
+    title: 'error handling rule violation',
+    message: `{detail}`,
+    help: ['see the error handling documentation'],
+    body: `
+TSClang has strict error handling rules:
+  - Calls to \`throws\` functions must use '?', '!', or try/catch
+  - '?' and '!' are not supported in async functions
+  - Cannot use '?' on non-throwing functions
+  - Cannot throw or return inside a finally block
+  - Functions that throw must declare \`throws\`
+
+Fix: follow the error handling rule described in the message.
+`,
+  },
+
+  E416: {
+    code: 'E416',
+    severity: 'error',
+    title: 'feature not supported',
+    message: `{detail}`,
+    help: ['see the language features documentation'],
+    body: `
+This language feature or API is not supported by TSClang. The message
+provides specific details about what is unsupported and what to use instead.
+`,
+  },
+
+  E417: {
+    code: 'E417',
+    severity: 'error',
+    title: 'internal compiler error',
+    message: `{detail}`,
+    help: ['this is likely a compiler bug — please report it'],
+    body: `
+The compiler encountered an AST node or construct it does not handle.
+This usually indicates a bug in the compiler or an incomplete feature.
+
+Please report this with the input code that triggered it.
+`,
+  },
+
+  E418: {
+    code: 'E418',
+    severity: 'error',
+    title: 'runtime validation error',
+    message: `{detail}`,
+    help: ['check the API documentation for valid usage'],
+    body: `
+A compile-time validation of runtime API usage: DataView bounds,
+UTF-8 decode errors, HashMap capacity, signal side effects, memory
+ordering parameters, etc.
+
+Fix: follow the API constraint described in the message.
+`,
+  },
+
+  E419: {
+    code: 'E419',
+    severity: 'error',
+    title: 'compiler error',
+    message: `{detail}`,
+    help: ['see the error message for details'],
+    body: `
+A compiler error that does not fit a more specific category.
+The message provides the specific details.
+`,
+  },
+
   // ── E4xx: Runtime panics ─────────────────────────────────────────────────
   E401: {
     code: 'E401',

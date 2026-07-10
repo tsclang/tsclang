@@ -72,7 +72,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       for (const node of ast.body) {
         const n = node.kind === 'Export' ? node.decl : node;
         if (n?.kind === 'ClassDecl' && n.superClass && n.superClass !== 'Error') {
-          throw ctx.error(`TypeError: class '${n.name}' cannot extend '${n.superClass}'; inheritance is only allowed from 'Error'`);
+          throw ctx.errorCode('E416', null, { detail: `TypeError: class '${n.name}' cannot extend '${n.superClass}'; inheritance is only allowed from 'Error'` });
         }
       }
     }
@@ -88,7 +88,7 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         if (!n.superClass) continue;
         const parent = classDecls[n.superClass];
         if (parent?.superClass) {
-          throw ctx.error(`TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'`);
+          throw ctx.errorCode('E416', null, { detail: `TypeError: Inheritance chains longer than one level are not supported; '${name}' cannot extend '${n.superClass}' which already extends '${parent.superClass}'` });
         }
       }
     }

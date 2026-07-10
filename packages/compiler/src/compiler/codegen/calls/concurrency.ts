@@ -35,7 +35,7 @@ export function _dispatchConcurrency(ctx: CodeGenContext, node: Call, lines: str
             const validRmw   = ['acq_rel', 'seq_cst'];
             const valid = op === 'store' ? validStore : op === 'load' ? validLoad : validRmw;
             if (!valid.includes(expr.value)) {
-              throw ctx.error(`TypeError: Invalid memory ordering '${expr.value}' for ${op} operation; valid: ${valid.map(v=>`'${v}'`).join(', ')}`);
+              throw ctx.errorCode('E418', null, { detail: `TypeError: Invalid memory ordering '${expr.value}' for ${op} operation; valid: ${valid.map(v=>`'${v}'`).join(', ')}` });
             }
             return `memory_order_${expr.value}`;
           }

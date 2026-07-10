@@ -15,7 +15,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
       }
 
       case 'Ident': {
-        if (node.name === 'keyof') throw ctx.error(`"keyof" can only be used in type position`, node);
+        if (node.name === 'keyof') throw ctx.errorCode('E414', node, { detail: '"keyof" can only be used in type position' });
         const kw: Record<string, string> = {
           'true': 'true', 'false': 'false', 'null': 'NULL',
           'undefined': 'NULL',
@@ -158,7 +158,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             ctx.includes.add('#include <float.h>');
             return floatConsts[node.prop];
           }
-          throw ctx.error(`TypeError: 'Number.${node.prop}' is not a known constant`, node);
+          throw ctx.errorCode('E419', node, { detail: `TypeError: 'Number.${node.prop}' is not a known constant` });
         }
         const sym = node.object.kind === 'Ident' ? ctx.lookup(node.object.name) : null;
         const objName = node.object.kind === 'Ident' ? node.object.name : '';
@@ -203,7 +203,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             const thisSym = ctx.lookup('this') ?? ctx.lookup('self');
             const inMethod = thisSym?.ctype === sym.ctype;
             if (!inMethod) {
-              throw ctx.error(`"${node.prop}" is private and not accessible from outside the class`, node);
+              throw ctx.errorCode('E419', node, { detail: `"${node.prop}" is private and not accessible from outside the class` });
             }
           }
         }
@@ -520,7 +520,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           if (p.expr) ctx._checkNoBareThrows(p.expr);
         }
         if (node.props.length === 0) {
-          throw ctx.error(`empty object literal is forbidden; use a typed variable or Map<K, V>`, node);
+          throw ctx.errorCode('E414', node, { detail: 'empty object literal is forbidden; use a typed variable or Map<K, V>' });
         }
         const spreads = node.props.filter((p: { spread?: boolean }) => p.spread);
         const explicit = node.props.filter((p: { spread?: boolean; computed?: boolean }) => !p.spread && !p.computed);
@@ -566,7 +566,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           return props.length > 0 ? `{${props.join(', ')}}` : `{}`;
         }
         const props = node.props.map((p: ObjLitProp) => {
-          if (p.computed) throw ctx.error(`computed object key '[...]' is not supported; use StaticMap or inline the value`, node);
+          if (p.computed) throw ctx.errorCode('E414', node, { detail: "computed object key '[...]' is not supported; use StaticMap or inline the value" });
           return `.${p.key} = ${ctx.exprToC(p.value!, lines, depth)}`;
         });
         return props.length > 0 ? `{ ${props.join(', ')} }` : `{}`;
@@ -769,7 +769,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
               return `tsc_thread_join(${tC2})`;
             }
           }
-          throw ctx.error(`"await" can only be used inside an "async" function`, node);
+          throw ctx.errorCode('E415', node, { detail: '"await" can only be used inside an "async" function' });
         }
         // Check for await on non-async variable (e.g. await x where x: i32)
         if (node.expr?.kind === 'Ident') {
@@ -795,7 +795,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           const _dropArg = dropExpr?.kind === 'Ident' ? dropExpr.name : ctx.exprToC(dropExpr, lines, depth);
           return `${_dc?._poolDropFn}(${_dropArg})`;
         }
-        throw ctx.error(`drop() can only be used on pool-allocated types`, node);
+        throw ctx.errorCode('E416', node, { detail: 'drop() can only be used on pool-allocated types' });
       }
       case 'NonNull': {
         const innerExpr: Expression = node.expr;
@@ -803,7 +803,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         const calleeSym = (callee?.kind === 'Ident') ? ctx.lookup(callee.name) : null;
         if (calleeSym?._isThrowsFunc) {
           if (ctx._inAsyncFunc) {
-            throw ctx.error(`TypeError: '!' error handling is not supported in async functions; use try/catch on await`);
+            throw ctx.errorCode('E415', null, { detail: "TypeError: '!' error handling is not supported in async functions; use try/catch on await" });
           }
           const I = ' '.repeat(ctx.indent * depth);
           const resName = `_res_${ctx.tempCount++}`;
@@ -817,18 +817,18 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
       }
       case 'Propagate': {
         if (ctx._inAsyncFunc) {
-          throw ctx.error(`TypeError: '?' error propagation is not supported in async functions; use try/catch on await`);
+          throw ctx.errorCode('E415', null, { detail: "TypeError: '?' error propagation is not supported in async functions; use try/catch on await" });
         }
         const innerExpr: Expression = node.expr;
         const callee = innerExpr?.kind === 'Call' ? innerExpr.callee : undefined;
         const calleeSym = (callee?.kind === 'Ident') ? ctx.lookup(callee.name) : null;
         if (!calleeSym?._isThrowsFunc) {
           const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
-          throw ctx.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+          throw ctx.errorCode('E415', null, { detail: `TypeError: Cannot use '?' on '${calleeName}()': function does not throw` });
         }
         if (!ctx._throwsCtx) {
           const fnName = ctx.currentFuncName ?? '<function>';
-          throw ctx.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
+          throw ctx.errorCode('E415', null, { detail: `TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'` });
         }
         const throwsData = ctx._throwsCtx!;
         const I = ' '.repeat(ctx.indent * depth);
@@ -874,7 +874,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
       }
 
       default:
-        throw ctx.error(`internal: unhandled expression kind '${node.kind}'`, node);
+        throw ctx.errorCode('E417', node, { detail: `internal: unhandled expression kind '${node.kind}'` });
     }
 }
 

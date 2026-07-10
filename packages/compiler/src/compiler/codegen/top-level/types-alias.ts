@@ -45,7 +45,7 @@ function _emitStructType(
 export function visitInterface(ctx: CodeGenContext, node: Interface) {
     const { name, members } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
-      throw ctx.error(`interface name "${name}" must start with uppercase (PascalCase)`, node);
+      throw ctx.errorCode('E400', node, { detail: `interface name "${name}" must start with uppercase (PascalCase)` });
     }
     const cname = ctx._modulePrefix ? ctx._modulePrefix + name : name;
     ctx.interfaces.set(name, members);
@@ -99,7 +99,7 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
 export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
     const { name, typeAnn } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
-      throw ctx.error(`type alias name "${name}" must start with uppercase (PascalCase)`, node);
+      throw ctx.errorCode('E400', node, { detail: `type alias name "${name}" must start with uppercase (PascalCase)` });
     }
     const cname = ctx._modulePrefix ? ctx._modulePrefix + name : name;
     // String literal union: type Dir = "north" | "south"
@@ -115,7 +115,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
     } else if (typeAnn?.kind === 'TypeObject') {
       // Struct alias: type Point = { x: f64; y: f64 } → typedef struct { double x; double y; } Point;
       const hasMethod = typeAnn.fields.some((f: ObjectField) => f.isMethod);
-      if (hasMethod) throw ctx.error(`"type" alias cannot contain methods; use "interface" instead`);
+      if (hasMethod) throw ctx.errorCode('E414', null, { detail: '"type" alias cannot contain methods; use "interface" instead' });
       const fieldParts: string[] = [];
       const fieldCTypes: string[] = [];
       for (const f of typeAnn.fields) {
@@ -242,7 +242,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
           }
         }
       } else if (utName === 'Exclude' || utName === 'Extract') {
-        throw ctx.error(`conditional types are not supported`);
+        throw ctx.errorCode('E414', null, { detail: 'conditional types are not supported' });
       } else if (utName === 'ReturnType' && utArgs.length >= 1) {
         // ReturnType<typeof fn> → fn's return type
         const arg = utArgs[0];

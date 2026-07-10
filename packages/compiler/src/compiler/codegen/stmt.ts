@@ -93,7 +93,7 @@ export function visitStmt(ctx: CodeGenContext, node: Stmt, lines: string[], dept
       case 'Noop':
         ctx._visitControlFlow(node, lines, depth); break;
       default:
-        throw ctx.error(`internal: unhandled statement kind '${node.kind}'`, node);
+        throw ctx.errorCode('E417', node, { detail: `internal: unhandled statement kind '${node.kind}'` });
     }
 }
 

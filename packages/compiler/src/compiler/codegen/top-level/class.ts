@@ -21,18 +21,18 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     // Reserved prefix check (runs before PascalCase to give precise message)
     for (const pfx of ['ref_', 'mut_', 'arc_', 'weak_', 'opt_', 'Array_']) {
       if (name.startsWith(pfx)) {
-        throw ctx.error(`type name "${name}" uses reserved prefix "${pfx}"`, node);
+        throw ctx.errorCode('E400', node, { detail: `type name "${name}" uses reserved prefix "${pfx}"` });
       }
     }
     // PascalCase invariant check (skip built-in/internal names)
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
-      throw ctx.error(`class name "${name}" must start with uppercase (PascalCase)`, node);
+      throw ctx.errorCode('E400', node, { detail: `class name "${name}" must start with uppercase (PascalCase)` });
     }
 
     // @readonly on methods is invalid
     for (const m of (node.members ?? [])) {
       if (m.kind === 'Method' && (m.decorators ?? []).some((d: Decorator) => d.name === 'readonly')) {
-        throw ctx.error(`"@readonly" can only be applied to properties`, m);
+        throw ctx.errorCode('E412', m, { detail: '"@readonly" can only be applied to properties' });
       }
     }
 
@@ -61,7 +61,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     if (poolDec) {
       const poolSizeArg = poolDec.args?.[0];
       if (!poolSizeArg || poolSizeArg.kind !== 'Literal') {
-        throw ctx.error(`TypeError: @pool requires a numeric capacity argument; use @pool(N)`, node);
+        throw ctx.errorCode('E412', node, { detail: 'TypeError: @pool requires a numeric capacity argument; use @pool(N)' });
       }
     }
 
@@ -71,18 +71,18 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
       throw ctx.errorCode('E301', node, { detail: '@heap class is not supported on allocator "static"; use @pool(N) for static-backing, or switch to allocator "heap"' });
     }
     if (heapDec && poolDec) {
-      throw ctx.error(`@heap and @pool are mutually exclusive; use one allocation strategy`, node);
+      throw ctx.errorCode('E412', node, { detail: '@heap and @pool are mutually exclusive; use one allocation strategy' });
     }
     if (heapDec && inlineDec) {
-      throw ctx.error(`@heap and @struct are mutually exclusive; use one allocation strategy`, node);
+      throw ctx.errorCode('E412', node, { detail: '@heap and @struct are mutually exclusive; use one allocation strategy' });
     }
     if (heapDec && ctx._classHasInheritance(superClass)) {
-      throw ctx.error(`@heap class cannot have inheritance (no @heap + extends)`, node);
+      throw ctx.errorCode('E412', node, { detail: '@heap class cannot have inheritance (no @heap + extends)' });
     }
     if (inlineDec && isEmbedded) {
       const badMethods = members.filter((m): m is Method => m.kind === 'Method' && m.name !== 'constructor' && (m.body?.body?.length ?? 0) > 0);
       if (badMethods.length > 0) {
-        throw ctx.error(`TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class`, node);
+        throw ctx.errorCode('E412', node, { detail: `TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class` });
       }
     }
 
@@ -90,7 +90,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     const packedDec = decorators?.find((d: Decorator) => d.name === 'packed');
     const alignDec  = decorators?.find((d: Decorator) => d.name === 'align');
     if (packedDec && alignDec) {
-      throw ctx.error('@packed and @align cannot be used together');
+        throw ctx.errorCode('E412', null, { detail: '@packed and @align cannot be used together' });
     }
     let structAttr = '';
     if (packedDec) {
@@ -99,7 +99,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
       const alignVal = alignDec.args?.[0];
       const alignN = alignVal?.kind === 'Literal' ? Number(alignVal.value) : 0;
       if (!alignN || (alignN & (alignN - 1)) !== 0) {
-        throw ctx.error('@align argument must be a power of two');
+        throw ctx.errorCode('E412', null, { detail: '@align argument must be a power of two' });
       }
       structAttr = ` __attribute__((aligned(${alignN})))`;
     }
@@ -110,7 +110,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     for (const m of [...allFields_, ...methods]) {
       const n = typeof m.name === 'string' ? m.name : null;
       if (n && seen.has(n)) {
-        throw ctx.error(`duplicate member "${n}" in class "${name}"`, m);
+        throw ctx.errorCode('E412', m, { detail: `duplicate member "${n}" in class "${name}"` });
       }
       if (n) seen.add(n);
     }
@@ -255,7 +255,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     const ctor = methods.find((m) => m.name === 'constructor');
     if (ctor) {
       if (ctor.decorators && ctor.decorators.length > 0) {
-        throw ctx.error('decorators on constructors are not supported', ctor);
+        throw ctx.errorCode('E412', ctor, { detail: 'decorators on constructors are not supported' });
       }
       // Check that all fields are unconditionally assigned in the constructor
       if (fields.length > 0 && ctor.body) {
@@ -272,7 +272,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
         }
         for (const f of fields) {
           if (!unconditional.has(f.name)) {
-            throw ctx.error(`field "${f.name}" may not be initialized on all paths in constructor`);
+            throw ctx.errorCode('E412', null, { detail: `field "${f.name}" may not be initialized on all paths in constructor` });
           }
         }
       }
@@ -344,7 +344,7 @@ export function _emitPoolClass(ctx: CodeGenContext, name: string, poolDec: Decor
     else if (poolSize <= 32) maskType = 'uint32_t';
     else if (poolSize <= 64) maskType = 'uint64_t';
     else {
-      throw ctx.error(`TypeError: @pool(N) supports a maximum of 64 instances; got N=${poolSize}`, node);
+      throw ctx.errorCode('E412', node, { detail: `TypeError: @pool(N) supports a maximum of 64 instances; got N=${poolSize}` });
     }
 
     // Always emit pool storage

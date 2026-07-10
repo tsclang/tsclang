@@ -274,7 +274,7 @@ export function emitPropagateVarDecl(ctx: CodeGenContext, node: VarDecl, lines: 
     if (!calleeSym?._isThrowsFunc) {
       if (isProp) {
         const calleeName = callee?.kind === 'Ident' ? callee.name : '?';
-        throw ctx.error(`TypeError: Cannot use '?' on '${calleeName}()': function does not throw`);
+        throw ctx.errorCode('E415', null, { detail: `TypeError: Cannot use '?' on '${calleeName}()': function does not throw` });
       }
       // NonNull on non-throws: just emit normally
       const c = ctx.exprToC(innerExpr!, lines, depth);
@@ -315,7 +315,7 @@ export function emitPropagateVarDecl(ctx: CodeGenContext, node: VarDecl, lines: 
     } else {
       if (isProp) {
         const fnName = ctx.currentFuncName ?? '<function>';
-        throw ctx.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
+        throw ctx.errorCode('E415', null, { detail: `TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'` });
       }
       p(`if (!${resName}.ok) { tsc_panic("E409", ${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
     }
@@ -419,7 +419,7 @@ export function _matchPatternCond(ctx: CodeGenContext, pattern: MatchPattern, di
         }
         return conds.length > 0 ? conds.join(' && ') : '1';
       }
-      default: throw ctx.error(`internal: unhandled match pattern kind '${(pattern as MatchPattern).kind}'`, pattern as MatchPattern);
+      default: throw ctx.errorCode('E417', pattern as MatchPattern, { detail: `internal: unhandled match pattern kind '${(pattern as MatchPattern).kind}'` });
     }
 }
 

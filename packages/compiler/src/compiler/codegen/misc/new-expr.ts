@@ -182,7 +182,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
         const tmpName = `_pool_${ctx.tempCount++}`;
         lines.push(`${cls._poolOptType} ${tmpName} = ${allocResult};`);
         if (!ctx._throwsCtx && !ctx._inTryBlock) {
-          throw ctx.error(`pool allocation via "new ${name}()" may fail; wrap in try/catch or declare function as "throws Error"`, node);
+          throw ctx.errorCode('E415', node, { detail: `pool allocation via "new ${name}()" may fail; wrap in try/catch or declare function as "throws Error"` });
         }
         lines.push(`if (!${tmpName}.has_value) {`);
         const errC = `(TscError){ .message = STR_LIT("pool exhausted: ${name}") }`;

@@ -440,7 +440,7 @@ export function _emitDecoratedStandaloneFunc(ctx: CodeGenContext, node: FuncDecl
         const descTypeAnn = descParam?.typeAnn;
         const descTypeName = descTypeAnn?.kind === 'TypeRef' ? descTypeAnn.name : undefined;
         if (descTypeName === 'MethodDesc') {
-          throw ctx.error(`"${d.name}" is a method decorator and cannot be applied to a standalone function`, node);
+          throw ctx.errorCode('E412', node, { detail: `"${d.name}" is a method decorator and cannot be applied to a standalone function` });
         }
       }
     }
@@ -511,10 +511,10 @@ export function emitMethod(ctx: CodeGenContext, className: string, m: CodeGenMet
 
     // Error: static methods cannot be mut
     if (isStatic && m.modifiers?.includes('mut')) {
-      throw ctx.error(`"static" methods cannot be "mut"`);
+      throw ctx.errorCode('E412', null, { detail: '"static" methods cannot be "mut"' });
     }
     if (isStatic && m.modifiers?.includes('move')) {
-      throw ctx.error(`"static" methods cannot be "move"`);
+      throw ctx.errorCode('E412', null, { detail: '"static" methods cannot be "move"' });
     }
 
     // Methods are NOT mangled by param types (class prefix already disambiguates)

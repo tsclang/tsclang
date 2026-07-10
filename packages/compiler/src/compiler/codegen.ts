@@ -883,10 +883,7 @@ class Context {
         if (expr.callee?.kind === 'Ident') {
           const sym = this.lookup(expr.callee.name);
           if (sym?._isThrowsFunc) {
-            throw this.error(
-              `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', or assign to a variable first`,
-              expr
-            );
+            throw this.errorCode('E415', expr, { detail: `TypeError: Call to throws function '${expr.callee.name}()' requires error handling: use '?', '!', or assign to a variable first` });
           }
         }
         // Check method calls: obj.method() where method is throws
@@ -897,10 +894,7 @@ class Context {
             const methodInfo = cls._methodNames.get(expr.callee.prop);
             if (methodInfo?._isThrowsFunc) {
               const errNames = (methodInfo._resultErrTypes ?? []).join(' | ');
-              throw this.error(
-                `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', or assign to a variable first (throws ${errNames})`,
-                expr
-              );
+              throw this.errorCode('E415', expr, { detail: `TypeError: Call to throws method '${expr.callee.prop}()' requires error handling: use '?', '!', or assign to a variable first (throws ${errNames})` });
             }
           }
         }

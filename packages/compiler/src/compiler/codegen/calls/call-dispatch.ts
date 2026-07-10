@@ -101,7 +101,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         const argsC = ctx.argsToC(args, lines, depth);
         return `self._base = ${superClass}_new(${argsC})`;
       }
-      throw ctx.error(`super() can only be called in a class with a superclass`, node);
+      throw ctx.errorCode('E416', node, { detail: 'super() can only be called in a class with a superclass' });
     }
 
 
@@ -178,7 +178,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
         // Unknown identifier check: callee not in scope and not a language builtin
         if (!sym && !ctx._languageBuiltins.has(callee.name)) {
-          throw ctx.error(`unknown identifier '${callee.name}'`);
+          throw ctx.errorCode('E419', null, { detail: `unknown identifier '${callee.name}'` });
         }
         // avr/hal direct calls that return values: set _lastHalRead so stmt.js emits (void)name;
         if (sym?._suppressVoidWarning && sym.ctype !== 'void') ctx._lastHalRead = sym.ctype ?? null;
@@ -239,7 +239,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         if (a.spread) {
           const spreadSym = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
           if (spreadSym?._isVaList) return { isVaList: true, vaListName: spreadSym._vaListName };
-          throw ctx.error(`spread '...' requires a va_list in variadic function calls`, a.expr ?? a);
+          throw ctx.errorCode('E419', a.expr ?? a, { detail: "spread '...' requires a va_list in variadic function calls" });
         }
         if (a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           return { raw: `"${a.expr.value.replace(/"/g, '\\"')}"` };

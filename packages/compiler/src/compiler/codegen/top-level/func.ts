@@ -7,7 +7,7 @@ import type { Enum, VarDecl, FuncDecl, ExtensionFunc, Param, TypeAnn, TypeRef, T
 export function visitEnum(ctx: CodeGenContext, node: Enum) {
     const { name, members, isConst } = node;
     if (name.length > 0 && name[0] >= 'a' && name[0] <= 'z') {
-      throw ctx.error(`enum name "${name}" must start with uppercase (PascalCase)`, node);
+      throw ctx.errorCode('E400', node, { detail: `enum name "${name}" must start with uppercase (PascalCase)` });
     }
     const cname = ctx._modulePrefix ? ctx._modulePrefix + name : name;
     let counter = 0;
@@ -122,7 +122,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
     // @isr("VECTOR") decorator → ISR(VECTOR_vect) { ... }
     const isrDecorator = (decorators ?? []).find((d) => d.name === 'isr');
     if (isrDecorator) {
-      if (node.async) throw ctx.error(`TypeError: Cannot use 'async' with @isr on '${name}'`);
+        if (node.async) throw ctx.errorCode('E416', null, { detail: `TypeError: Cannot use 'async' with @isr on '${name}'` });
       const vectorArg = isrDecorator.args?.[0];
       const vectorLit = vectorArg?.kind === 'Literal' ? vectorArg : null;
       const vectorName = vectorLit?.litType === 'string' ? vectorLit.value : 'UNKNOWN';
@@ -131,7 +131,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
         const snBody = sn?.body as Record<string, unknown> | undefined;
         return sn?.kind === 'Throw' || bodyHasThrow(snBody?.body ?? snBody ?? []);
       });
-      if (bodyHasThrow(body?.body ?? [])) throw ctx.error(`"throw" is not allowed inside @isr handlers`);
+        if (bodyHasThrow(body?.body ?? [])) throw ctx.errorCode('E416', null, { detail: '"throw" is not allowed inside @isr handlers' });
       const funcLines: string[] = [];
       ctx.pushScope();
       for (const p2 of (params ?? [])) ctx.define(p2.name, { ctype: p2.typeAnn ? ctx.resolveType(p2.typeAnn) : 'int32_t', varKind: 'let' });
@@ -205,7 +205,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
         const keyArg = returnType.typeArgs[1];
         const typeParamNames = new Set((typeParams ?? []).map((tp) => tp.name));
         if (keyArg.kind === 'TypeRef' && typeParamNames.has(keyArg.name)) {
-          throw ctx.error(`Pick with runtime key in return type is not supported`);
+          throw ctx.errorCode('E416', null, { detail: 'Pick with runtime key in return type is not supported' });
         }
       }
 
@@ -651,7 +651,7 @@ export function visitExtensionFunc(ctx: CodeGenContext, node: ExtensionFunc) {
     if (thisType.kind === 'TypeRef' && ctx.classes.has(thisType.name)) {
       const cls = ctx.classes.get(thisType.name);
       if (cls?._methodNames?.has(name)) {
-        throw ctx.error(`TypeError: extension '${name}' conflicts with existing method on ${thisType.name}`);
+        throw ctx.errorCode('E416', null, { detail: `TypeError: extension '${name}' conflicts with existing method on ${thisType.name}` });
       }
     }
 

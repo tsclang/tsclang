@@ -20,9 +20,7 @@ export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
     if (ctx._targetName === 'avr') {
       ctx._asyncCount = (ctx._asyncCount || 0) + 1;
       if (ctx._asyncCount > 8) {
-        throw ctx.error(
-          `TypeError: Too many concurrent async state machines for AVR target: max 8, got ${ctx._asyncCount}`
-        );
+        throw ctx.errorCode('E305', null, { detail: `Too many concurrent async state machines for AVR target: max 8, got ${ctx._asyncCount}` });
       }
     }
 

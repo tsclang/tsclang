@@ -33,14 +33,14 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
     }
     if (prop === 'min' || prop === 'max') {
       if (args.length === 0) {
-        throw ctx.error(`Math.${prop}() requires at least 1 argument`);
+        throw ctx.errorCode('E418', null, { detail: `Math.${prop}() requires at least 1 argument` });
       }
       const isMin = prop === 'min';
       const op = isMin ? '<' : '>';
       const hasSpread = args.some((a: Argument) => a.spread);
       if (hasSpread) {
         if (args.length > 1) {
-          throw ctx.error(`Math.${prop}/max does not support mixed spread and non-spread arguments`);
+          throw ctx.errorCode('E418', null, { detail: `Math.${prop}/max does not support mixed spread and non-spread arguments` });
         }
         const arrExpr = args[0].expr;
         const arrType = ctx.inferType(arrExpr);
@@ -318,7 +318,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
       random: `tsc_math_random()`,
     };
     const result = (map as Record<string, string>)[prop];
-    if (!result) throw ctx.error(`Unknown Math method 'Math.${prop}'`, node);
+    if (!result) throw ctx.errorCode('E418', node, { detail: `Unknown Math method 'Math.${prop}'` });
     return result;
 }
 
@@ -342,7 +342,7 @@ export function jsonCall(ctx: CodeGenContext, prop: string, typeArgs: TypeAnn[],
       if (typeName === 'boolean') return `(${a0}.length == 4 && memcmp(${a0}.data, "true", 4) == 0)`;
       return `atoi(${a0}.data)`;
     }
-    throw ctx.error(`Unknown JSON method 'JSON.${prop}'`, node);
+    throw ctx.errorCode('E418', node, { detail: `Unknown JSON method 'JSON.${prop}'` });
 }
 
   // NOTE: node stays `any` — generic recursive walk over arbitrary AST subtrees

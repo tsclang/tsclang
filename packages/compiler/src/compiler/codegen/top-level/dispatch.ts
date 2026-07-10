@@ -59,7 +59,7 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
         break;
       }
       case 'Export': {
-        if (node.default) throw ctx.error('"export default" is not allowed; use named exports only');
+        if (node.default) throw ctx.errorCode('E414', null, { detail: '"export default" is not allowed; use named exports only' });
         if (node.decl?.kind === 'FuncDecl') {
           ctx.visitFuncDecl(node.decl, true, true); // isExported=true → no static
         } else if (node.decl?.kind === 'ExtensionFunc') {

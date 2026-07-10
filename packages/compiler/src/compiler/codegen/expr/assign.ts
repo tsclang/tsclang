@@ -20,10 +20,10 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       const arrSym = ctx.lookup(node.left.object.name);
       if (arrSym?.isArray) {
         if (node.left.prop === 'length') {
-          throw ctx.error(`cannot assign to "length"; use "${node.left.object.name}.resize(n)" instead`, node);
+          throw ctx.errorCode('E413', node, { detail: `cannot assign to "length"; use "${node.left.object.name}.resize(n)" instead` });
         }
         if (node.left.prop === 'capacity') {
-          throw ctx.error(`cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead`, node);
+          throw ctx.errorCode('E413', node, { detail: `cannot assign to "capacity"; use "${node.left.object.name}.reallocate(n)" instead` });
         }
       }
       // Check readonly field write outside constructor
@@ -35,7 +35,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           const thisSym = ctx.lookup('this') ?? ctx.lookup('self');
           const inCtor = ctx.currentFuncName === 'new' && thisSym?.ctype === objSym.ctype;
           if (!inCtor) {
-            throw ctx.error(`cannot assign to readonly field "${node.left.prop}" outside the constructor`, node);
+            throw ctx.errorCode('E413', node, { detail: `cannot assign to readonly field "${node.left.prop}" outside the constructor` });
           }
         }
       }
@@ -52,7 +52,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
     if (node.left.kind === 'Index' && node.left.object.kind === 'Ident') {
       const sym = ctx.lookup(node.left.object.name);
       const tupleDef = sym?.ctype ? ctx.classes.get(sym.ctype) : null;
-      if (tupleDef?.readonly) throw ctx.error('cannot assign to readonly tuple element', node);
+        if (tupleDef?.readonly) throw ctx.errorCode('E413', node, { detail: 'cannot assign to readonly tuple element' });
     }
     if (node.left.kind === 'Ident') {
       const sym = ctx.lookup(node.left.name);

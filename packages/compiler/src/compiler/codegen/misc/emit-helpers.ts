@@ -164,10 +164,10 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
         throw ctx.errorCode('E021', null, { detail: 'thread closure cannot capture "Ref<T>": not Send' });
       }
       if (sym?.isArc) {
-        throw ctx.error(`thread closure cannot capture "Arc<T>": use Atomic<T> for thread-safe shared state`);
+        throw ctx.errorCode('E418', null, { detail: 'thread closure cannot capture "Arc<T>": use Atomic<T> for thread-safe shared state' });
       }
       if (sym?._isStaticArray || sym?._isStaticMap) {
-        throw ctx.error(`TypeError: Cannot capture @static variable '${fv.name}' in spawn block; use Atomic<T> for thread-safe access`);
+        throw ctx.errorCode('E418', null, { detail: `TypeError: Cannot capture @static variable '${fv.name}' in spawn block; use Atomic<T> for thread-safe access` });
       }
       if (writtenVars.has(fv.name) && sym?.varKind === 'let') {
         const classDef = ctx.classes.get(fv.ctype);

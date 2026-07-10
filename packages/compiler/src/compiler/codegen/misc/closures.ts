@@ -172,7 +172,7 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       explicitCaptures = [];
       for (const cap of (arrowNode as Arrow).captures as unknown as CaptureInfo[]) {
         const sym = ctx.lookup(cap.name);
-        if (!sym) throw ctx.error(`Cannot capture '${cap.name}' — not in scope`, arrowNode);
+        if (!sym) throw ctx.errorCode('E419', arrowNode, { detail: `Cannot capture '${cap.name}' — not in scope` });
         captured.set(cap.name, sym);
         let mode: string | null = null;
         if (cap.typeAnn?.kind === 'TypeRef') {

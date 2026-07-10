@@ -90,7 +90,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         let lC = ctx.exprToC(node.left, lines, depth);
         // Error: || mixed with ?? requires parens
         if (node.right?.kind === 'Binary' && (node.right.op === '||' || node.right.op === '??')) {
-          throw ctx.error(`"||" and "??" require parentheses when mixed`, node);
+          throw ctx.errorCode('E414', node, { detail: '"||" and "??" require parentheses when mixed' });
         }
         if (!['Ident', 'Literal'].includes(node.left.kind)) {
           const tmp = `_tsc_opt_${ctx.tempCount++}`;
@@ -106,7 +106,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     // Error: || and ?? mixed without parens
     if (node.op === '||') {
       if (node.right?.kind === 'Binary' && node.right.op === '??') {
-        throw ctx.error(`"||" and "??" require parentheses when mixed`, node);
+        throw ctx.errorCode('E414', node, { detail: '"||" and "??" require parentheses when mixed' });
       }
     }
 
@@ -545,7 +545,7 @@ export function unaryToC(ctx: CodeGenContext, node: Unary, lines: string[], dept
         }
       }
       if (!ctx._inUnsafe) {
-        throw ctx.error(`TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'`, node);
+        throw ctx.errorCode('E416', node, { detail: "TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'" });
       }
       const e = ctx.exprToC(node.expr, lines, depth);
       return node.op === '&' ? `&${e}` : `*${e}`;
@@ -573,6 +573,6 @@ export function unaryToC(ctx: CodeGenContext, node: Unary, lines: string[], dept
       case '--pre': return `--${e}`;
       case '++post': return `${e}++`;
       case '--post': return `${e}--`;
-      default: throw ctx.error(`internal: unhandled unary operator '${node.op}'`, node);
+      default: throw ctx.errorCode('E417', node, { detail: `internal: unhandled unary operator '${node.op}'` });
     }
 }

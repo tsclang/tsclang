@@ -506,7 +506,7 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
       return 'Array_i32';
     }
     if (obj.kind === 'Ident' && prop === 'alloc' && ctx.classes.get(obj.name)?._isPool) {
-      throw ctx.error(`PoolClass.alloc() is removed; use "new ${obj.name}()" instead`, node);
+      throw ctx.errorCode('E416', node, { detail: `PoolClass.alloc() is removed; use "new ${obj.name}()" instead` });
     }
     if (obj.kind === 'Ident' && obj.name === 'performance') {
       if (prop === 'measure') return 'TscPerfEntry';

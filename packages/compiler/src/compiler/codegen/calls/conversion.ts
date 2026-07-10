@@ -17,7 +17,7 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
         const enumName = callee.object.object.kind === 'Ident' ? callee.object.object.name : null;
         const enumDef = enumName ? ctx.classes.get(enumName) : null;
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw ctx.error(`"toString()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.errorCode('E416', null, { detail: '"toString()" is not available on const enum' });
           const ec = enumDef._cname ?? enumName;
           const memberC = `${ec}_${callee.object.prop}`;
           if (enumDef.isStringEnum) return `${ec}_strings[(int)${memberC}]`;
@@ -29,7 +29,7 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
       if (callee.prop === 'values' && callee.object.kind === 'Ident') {
         const enumDef = ctx.classes.get(callee.object.name);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw ctx.error(`"values()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.errorCode('E416', null, { detail: '"values()" is not available on const enum' });
           return `${enumDef._cname ?? callee.object.name}_values`;
         }
       }
@@ -38,7 +38,7 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
         const enumName = callee.object.name;
         const enumDef = ctx.classes.get(enumName);
         if (enumDef?.isEnum) {
-          if (enumDef.isConst) throw ctx.error(`"fromValue()" is not available on const enum`);
+          if (enumDef.isConst) throw ctx.errorCode('E416', null, { detail: '"fromValue()" is not available on const enum' });
           const ec = enumDef._cname ?? enumName;
           const n = (enumDef.members ?? []).length;
           const helperName = `${ec}_fromValue`;
@@ -170,10 +170,10 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
             else if (b < 0xF0) { seqLen = 3; }
             else if (b < 0xF5) { seqLen = 4; }
             else { seqLen = -1; }
-            if (seqLen < 0) throw ctx.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}`);
+            if (seqLen < 0) throw ctx.errorCode('E418', null, { detail: `RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i}` });
             for (let j = 1; j < seqLen; j++) {
               if (i + j >= bytes.length || (bytes[i + j] & 0xC0) !== 0x80)
-                throw ctx.error(`RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}`);
+                throw ctx.errorCode('E418', null, { detail: `RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset ${i + j}` });
             }
             i += seqLen;
           }
