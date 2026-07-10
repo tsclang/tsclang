@@ -24,7 +24,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
     if (typeNode.kind === 'TypeRef') {
       const { name, typeArgs } = typeNode;
       if (name === 'null' || name === 'undefined') {
-        throw ctx.error(`"${name}" cannot be used as a standalone type; use T | ${name}`, typeNode);
+        throw ctx.errorCode('E106', typeNode, { detail: `"${name}" cannot be used as a standalone type; use T | ${name}` });
       }
       // usize resolved from capabilities
       if (name === 'usize') {
@@ -38,10 +38,10 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
       if (name === 'number') return PRIMITIVE_MAP[ctx._defaultNumber] || 'double';
       if (!(typeNode as { _internal?: boolean })._internal) {
         if (name === 'bool') {
-          throw ctx.error('"bool" is not a valid TSC type; use "boolean"', typeNode);
+          throw ctx.errorCode('E106', typeNode, { detail: '"bool" is not a valid TSC type; use "boolean"' });
         }
         if (name === 'String') {
-          throw ctx.error('"String" is not a valid TSC type; use "string"', typeNode);
+          throw ctx.errorCode('E106', typeNode, { detail: '"String" is not a valid TSC type; use "string"' });
         }
       }
       if (name in PRIMITIVE_MAP) {
@@ -50,7 +50,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
           throw ctx.error(`"${name}" is forbidden in strict mode (no-any); use a concrete type`, typeNode);
         }
         if (name === 'any' && !ctx._inUnsafe && !ctx._inDeclare) {
-          throw ctx.error(`"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values`, typeNode);
+          throw ctx.errorCode('E106', typeNode, { detail: `"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values` });
         }
         return PRIMITIVE_MAP[name];
       }
@@ -59,7 +59,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
         const innerName = typeArgs[0]?.kind === 'TypeRef' ? typeArgs[0].name : null;
         const COPY_ONLY = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','boolean','usize','isize','char']);
         if (innerName && COPY_ONLY.has(innerName)) {
-          throw ctx.error(`TypeError: ${name}<T> requires a non-primitive type, got ${innerName}`, typeNode);
+          throw ctx.errorCode('E106', typeNode, { detail: `TypeError: ${name}<T> requires a non-primitive type, got ${innerName}` });
         }
         return `${ctx.resolveType(typeArgs[0])} *`;
       }
@@ -223,7 +223,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
       const hasNull = allLeaves.length !== nonNull.length;
       if (hasNull && nonNull.length === 1) {
         const inner = ctx.resolveType(nonNull[0]);
-        if (inner === 'void *') throw ctx.error(`any is already nullable, "any | null" is redundant`);
+        if (inner === 'void *') throw ctx.errorCode('E120', null, { detail: 'any is already nullable, "any | null" is redundant' });
         // Pointer types are already nullable (NULL) — no opt_ wrapper needed
         if (inner.endsWith(' *') || inner.endsWith('*')) return inner;
         // Pool ref types are already nullable (has_value) — no double-wrap

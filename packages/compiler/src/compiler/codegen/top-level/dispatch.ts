@@ -99,7 +99,7 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
           });
           if (dupSig) {
             const paramDesc = (node.params ?? []).map((p: Param) => `${p.name}: ${(p.typeAnn as TypeRef | undefined)?.name ?? '?'}`).join(', ');
-            throw ctx.error(`TypeError: Ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'`);
+            throw ctx.errorCode('E119', null, { detail: `ambiguous overload for '${node.name}': duplicate signature '(${paramDesc})'` });
           }
           _sigs.push(node);
           ctx._pendingOverloads.set(node.name, _sigs); }

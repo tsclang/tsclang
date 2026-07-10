@@ -121,7 +121,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             const valNode = pair.elems[1]?.expr;
             if (keyNode?.kind !== 'Literal' || keyNode.litType !== 'string') continue;
             const key = keyNode.value;
-            if (!fieldNames.includes(key)) throw ctx.error(`Object.fromEntries: key "${key}" is not a field of the target type`);
+            if (!fieldNames.includes(key)) throw ctx.errorCode('E108', null, { detail: `Object.fromEntries: key "${key}" is not a field of the target type` });
             initParts.push(`.${key} = ${ctx.exprToC(valNode, lines, depth)}`);
           }
           if (isVar) {
@@ -747,10 +747,10 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         }
 
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'never') {
-          throw ctx.error(`"never" cannot be used as a variable type`);
+          throw ctx.errorCode('E106', null, { detail: '"never" cannot be used as a variable type' });
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'void') {
-          throw ctx.error(`"void" can only be used as a return type`);
+          throw ctx.errorCode('E106', null, { detail: '"void" can only be used as a return type' });
         }
         if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && ctx._allocatorName === 'static') {
           throw ctx.error(`"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC`);
@@ -907,7 +907,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         if (enumDef2?.isStringLiteralUnion && init?.kind === 'Literal' && init.litType === 'string') {
           const val = init.value;
           if (!(enumDef2.members as string[] | undefined)?.includes(val)) {
-            throw ctx.error(`"${val}" is not a valid value for type ${ctype}`);
+            throw ctx.errorCode('E114', null, { value: val, type: ctype });
           }
           p(`${qualifier}${ctype} ${name} = ${ctype}_${val};`);
           ctx.define(name, { ctype, varKind });
@@ -924,7 +924,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               // Single-element: C fill/zero-init shorthand (e.g. [0] С‚Р–Рў {0})
               p(`${et} ${name}[${size}] = {${elems[0]}};`);
             } else if (elems.length !== size) {
-              throw ctx.error(`array literal has ${elems.length} elements but type ${ctx.ctypeToTsName(et)}[${size}] requires exactly ${size}`);
+              throw ctx.errorCode('E113', null, { detail: `array literal has ${elems.length} elements but type ${ctx.ctypeToTsName(et)}[${size}] requires exactly ${size}` });
             } else {
               p(`${et} ${name}[${size}] = {${elems.join(', ')}};`);
             }
@@ -1038,7 +1038,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 const srcDef = ctx.classes.get(srcType);
                 const tupleHasRest = tfields.some((f) => f.rest);
                 if (!srcDef?.isTuple && !tupleHasRest) {
-                  throw ctx.error('cannot spread runtime array into fixed-size tuple');
+                  throw ctx.errorCode('E113', null, { detail: 'cannot spread runtime array into fixed-size tuple' });
                 }
                 if (srcDef?.isTuple) {
                   for (const f of srcDef.fields!) {
@@ -1382,8 +1382,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 const di = ctx._numericTypeInfo(ctype);
                 if (di && di.kind === 'int') {
                   const dstTs = ctx.ctypeToTsName(ctype);
-                  throw ctx.error(`float literal ${init.value} assigned to integer type ${dstTs} вЂ” fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})`);
-                }
+                  throw ctx.errorCode('E100', null, { detail: `float literal ${init.value} assigned to integer type ${dstTs} вЂ” fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})` });}
               }
             }
             if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
@@ -1425,7 +1424,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 if (ctype === 'String') {
                   const srcEnumDef = ctx.classes.get(srcType);
                   if (srcEnumDef?.isStringLiteralUnion) {
-                    throw ctx.error(`cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"`);
+                    throw ctx.errorCode('E100', null, { detail: `cannot implicitly convert ${srcType} to string: use ".toString()" or "as string"` });
                   }
                 }
                 // Safe widening check for non-literal expressions
@@ -1441,7 +1440,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   if (si && di && !ctx._isSafeWidening(srcTypeEff, ctype)) {
                     const srcTs = ctx.ctypeToTsName(srcTypeEff);
                     const dstTs = ctx.ctypeToTsName(ctype);
-                    throw ctx.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
+                    throw ctx.errorCode('E100', null, { detail: `cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"` });
                   }
                 }
                 // C-level widening cast for size_t в†’ int64_t

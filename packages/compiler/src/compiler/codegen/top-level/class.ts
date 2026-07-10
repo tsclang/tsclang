@@ -175,10 +175,10 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
       for (const f of fields) {
         // Ref<T>/Mut<T> cannot be stored in class fields
         if (f.typeAnn?.kind === 'TypeRef' && (f.typeAnn.name === 'Ref' || f.typeAnn.name === 'Mut')) {
-          throw ctx.error(`"${f.typeAnn.name}<T>" cannot be stored in a class field`);
+          throw ctx.errorCode('E106', null, { detail: `"${f.typeAnn.name}<T>" cannot be stored in a class field` });
         }
         if (f.typeAnn?.kind === 'TypeRef' && f.typeAnn.name === 'never') {
-          throw ctx.error(`"never" cannot be used as a field type`);
+          throw ctx.errorCode('E106', null, { detail: '"never" cannot be used as a field type' });
         }
         const isReadonly = (f.decorators ?? []).some((d: Decorator) => d.name === 'readonly');
         const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
@@ -436,7 +436,7 @@ export function emitVtableConstant(ctx: CodeGenContext, className: string, iface
     for (const im of ifaceMethods) {
       const methodExists = classDef?.methods?.some((mm) => mm.name === im.name);
       if (!methodExists) {
-        throw ctx.error(`class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"`);
+        throw ctx.errorCode('E118', null, { detail: `class "${className}" does not implement method "${im.name}" from interface "${ifaceName}"` });
       }
     }
     const vtableName = `${className}_${ifaceName}_vtable`;

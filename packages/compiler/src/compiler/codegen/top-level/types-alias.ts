@@ -60,7 +60,7 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
       for (const f of props) {
         const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
         if (ct === name) {
-          throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
+          throw ctx.errorCode('E107', f, { name });
         }
         fieldCTypes.push(ct);
         if (f.optional) {
@@ -121,7 +121,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
       for (const f of typeAnn.fields) {
         const ct = ctx.resolveType(f.typeAnn);
         if (ct === name) {
-          throw ctx.error(`type "${name}" recursively references itself by value; use Ref<${name}>, Arc<${name}>, or Mut<${name}> for indirection`, f);
+          throw ctx.errorCode('E107', f, { name });
         }
         fieldCTypes.push(ct);
         fieldParts.push(`${ct} ${f.name};`);
@@ -142,7 +142,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
           const pickedNames = ctx.getStringLiteralMembers(utArgs[1]);
           for (const pn of pickedNames) {
             if (!fields.some((f: StructField) => f.name === pn))
-              throw ctx.error(`field "${pn}" does not exist in ${baseTypeName}`);
+              throw ctx.errorCode('E108', null, { detail: `field "${pn}" does not exist in ${baseTypeName}` });
           }
           // Multi-pick: "name" | "age" → both picked
           const picked = fields.filter((f: StructField) => pickedNames.length > 0 ? pickedNames.includes(f.name) : true);
@@ -157,7 +157,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
           const omitNames = ctx.getStringLiteralMembers(utArgs[1]);
           for (const on of omitNames) {
             if (!fields.some((f: StructField) => f.name === on))
-              throw ctx.error(`field "${on}" does not exist in ${baseTypeName}`);
+              throw ctx.errorCode('E108', null, { detail: `field "${on}" does not exist in ${baseTypeName}` });
           }
           const kept = fields.filter((f: StructField) => !omitNames.includes(f.name));
           const fieldDecls = kept.map((f: StructField) => `${ctx.resolveType(f.typeAnn)} ${f.name};`).join(' ');
@@ -238,7 +238,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
             const v = ctx.cTypeToIdent(valCtype);
             ctx._typeAliases.set(name, `TscMap_${k}_${v}`);
           } else {
-            throw ctx.error(`Record key must be a string literal union or string enum, not ${(keyTypeNode as TypeRef).name ?? keyCtype}`);
+            throw ctx.errorCode('E109', null, { detail: `Record key must be a string literal union or string enum, not ${(keyTypeNode as TypeRef).name ?? keyCtype}` });
           }
         }
       } else if (utName === 'Exclude' || utName === 'Extract') {
@@ -257,7 +257,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
             ctx._typeAliases.set(name, 'void');
           }
         } else {
-          throw ctx.error(`ReturnType argument must be a function type`);
+          throw ctx.errorCode('E109', null, { detail: 'ReturnType argument must be a function type' });
         }
       } else if (utName === 'Parameters' && utArgs.length >= 1) {
         // Parameters<typeof fn> → tuple type of fn's params
@@ -313,7 +313,7 @@ export function visitTypeAlias(ctx: CodeGenContext, node: TypeAlias) {
       const hasString = allMembers.some((t: TypeAnn) => t.kind === 'TypeLiteral' && t.litKind === 'string');
       const hasNonString = allMembers.some((t: TypeAnn) => !(t.kind === 'TypeLiteral' && t.litKind === 'string'));
       if (hasString && hasNonString) {
-        throw ctx.error(`string literal union cannot be mixed with non-string types`);
+        throw ctx.errorCode('E109', null, { detail: 'string literal union cannot be mixed with non-string types' });
       }
 
       // For nullable unions (T | null), compute opt name without emitting typedef yet

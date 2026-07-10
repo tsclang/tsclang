@@ -24,7 +24,7 @@ export function _emitMatchCore(ctx: CodeGenContext, discriminant: Expression, ca
       if (!hasWild) {
         const missing = allValues.filter((v: string) => !coveredEnumCases.has(v));
         if (missing.length > 0) {
-          throw ctx.error(`TypeError: Non-exhaustive match on enum '${discType}': missing cases ${missing.map((v: string) => `'${v}'`).join(', ')}`);
+          throw ctx.errorCode('E110', null, { name: discType, missing: missing.map((v: string) => `'${v}'`).join(', ') });
         }
       }
     }
@@ -135,7 +135,7 @@ export function _emitTryCatchResult(ctx: CodeGenContext, node: TryCatch, tryStmt
     // Require explicit type annotation in catch clauses
     for (const c of node.catches ?? []) {
       if (c.param && !c.typeAnn) {
-        throw ctx.error(`TypeError: catch clause requires explicit error type`, c);
+        throw ctx.errorCode('E111', c);
       }
     }
 

@@ -282,7 +282,7 @@ export function _emitAsyncStmt(ctx: CodeGenContext, s: Stmt, lines: string[], ac
       if (catchClause) {
         const { param, body: catchBody } = catchClause;
         if (param && !catchClause.typeAnn) {
-          throw ctx.error(`TypeError: catch clause requires explicit error type`, catchClause);
+          throw ctx.errorCode('E111', catchClause);
         }
         lines.push(`${I}if (!self->_await_${lastAwaitIdx}._result.ok) {`);
         if (param) {

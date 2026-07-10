@@ -139,7 +139,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
 
     // new Promise<T>(...)
     if (name === 'Promise') {
-      throw ctx.error(`Promise requires a type argument: new Promise<T>(executor)`, node);
+      throw ctx.errorCode('E120', node, { detail: 'Promise requires a type argument: new Promise<T>(executor)' });
     }
 
     // new URL(...)

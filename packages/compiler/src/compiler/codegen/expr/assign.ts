@@ -67,7 +67,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         if (enumDef?.isStringLiteralUnion) {
           const val = node.right.value;
           if (!(enumDef.members as string[] | undefined)?.includes(val)) {
-            throw ctx.error(`"${val}" is not a valid value for type ${sym.ctype}`, node);
+            throw ctx.errorCode('E114', node, { value: val, type: sym.ctype! });
           }
           const l = ctx.exprToC(node.left, lines, depth);
           return `${l} ${node.op} ${sym.ctype}_${val}`;
@@ -105,7 +105,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       const leftSym = node.left.kind === 'Ident' ? ctx.lookup(node.left.name) : null;
       const leftCtype = leftSym?.ctype;
       if (leftCtype && !leftCtype.startsWith('opt_') && leftCtype !== 'void *' && leftCtype !== 'tsc_unknown' && !leftCtype.endsWith(' *')) {
-        throw ctx.error(`cannot assign null to non-nullable type`, node);
+        throw ctx.errorCode('E116', node);
       }
       if (leftCtype?.startsWith('opt_')) {
         if (leftSym) leftSym.optIsNull = true;
@@ -353,7 +353,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
       if (!NUMERIC.has(leftType) || !NUMERIC.has(rightType)) {
         const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
-        throw ctx.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(leftType)}' and '${tsName(rightType)}'`, node);
+        throw ctx.errorCode('E105', node, { detail: `bitwise op '${node.op}' not applicable to '${tsName(leftType)}' and '${tsName(rightType)}'` });
       }
       const leftIsFloat = leftType === 'double' || leftType === 'float';
       const rightIsFloat = (rightType === 'double' || rightType === 'float') && ctx._hasFloatVar(node.right);
@@ -380,7 +380,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         if (si && di && !ctx._isSafeWidening(resultType, leftType)) {
           const srcTs = ctx.ctypeToTsName(resultType);
           const dstTs = ctx.ctypeToTsName(leftType);
-          throw ctx.error(`cannot implicitly convert ${srcTs} to ${dstTs} in '${node.op}': use "as ${dstTs}" or explicit assignment`);
+          throw ctx.errorCode('E100', node, { detail: `cannot implicitly convert ${srcTs} to ${dstTs} in '${node.op}': use "as ${dstTs}" or explicit assignment` });
         }
       }
     }
@@ -394,7 +394,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           const di = ctx._numericTypeInfo(leftType);
           if (di && di.kind === 'int') {
             const dstTs = ctx.ctypeToTsName(leftType);
-            throw ctx.error(`float literal ${node.right.value} assigned to integer type ${dstTs} — fractional part will be lost\nhint: use '${node.right.value} as ${dstTs}' for explicit truncation, or Math.trunc(${node.right.value})`);
+            throw ctx.errorCode('E100', node, { detail: `float literal ${node.right.value} assigned to integer type ${dstTs} — fractional part will be lost\nhint: use '${node.right.value} as ${dstTs}' for explicit truncation, or Math.trunc(${node.right.value})` });
           }
         }
       }
@@ -409,7 +409,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         if (si && di && !ctx._isSafeWidening(rightType, leftType)) {
           const srcTs = ctx.ctypeToTsName(rightType);
           const dstTs = ctx.ctypeToTsName(leftType);
-          throw ctx.error(`cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"`);
+          throw ctx.errorCode('E100', node, { detail: `cannot implicitly convert ${srcTs} to ${dstTs}: use "as ${dstTs}"` });
         }
       }
     }
@@ -419,7 +419,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
     if (dLeftBase && (node.op === '+=' || node.op === '-=' || node.op === '*=' || node.op === '/=' || node.op === '%=')) {
       const dRightBase = resolveDecimalBase(ctx, ctx.inferType(node.right));
       if (dRightBase && dRightBase !== dLeftBase) {
-        throw ctx.error(`TypeError: cannot mix ${ctx.ctypeToTsName(leftType)} and ${ctx.ctypeToTsName(ctx.inferType(node.right))} in arithmetic without explicit cast`, node);
+        throw ctx.errorCode('E100', node, { detail: `cannot mix ${ctx.ctypeToTsName(leftType)} and ${ctx.ctypeToTsName(ctx.inferType(node.right))} in arithmetic without explicit cast` });
       }
       if (node.op === '*=') {
         const helper = `tsc_mul_${dLeftBase.replace('_t', '')}`;

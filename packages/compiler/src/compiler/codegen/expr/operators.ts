@@ -24,7 +24,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     // instanceof: obj instanceof TypeName
     if (node.op === 'instanceof') {
       const typeName = node.right.kind === 'Ident' ? node.right.name : null;
-      if (!typeName) throw ctx.error(`TypeError: 'instanceof' right-hand side must be a type name`, node);
+      if (!typeName) throw ctx.errorCode('E103', node, { detail: `'instanceof' right-hand side must be a type name` });
       const objSym2 = node.left.kind === 'Ident' ? ctx.lookup(node.left.name) : null;
       if (!ctx.interfaces.has(typeName)) {
         // Class on RHS: only valid when LHS is that same class (always-true compile-time check)
@@ -40,7 +40,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           const objC2 = ctx.exprToC(node.left, lines, depth);
           return `${objC2}.vtable == &${vtableName}`;
         }
-        throw ctx.error(`TypeError: 'instanceof' requires an interface type on the right-hand side, got '${typeName}'`, node);
+        throw ctx.errorCode('E103', node, { detail: `'instanceof' requires an interface type on the right-hand side, got '${typeName}'` });
       }
       // Interface instanceof: compare vtable pointer (obj must be concrete class)
       const objC = ctx.exprToC(node.left, lines, depth);
@@ -171,7 +171,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
             const reason = widthA === widthB
               ? `cannot mix ${tsA} and ${tsB}: signed/unsigned mismatch, use "as" to specify type`
               : `cannot add ${tsA} and ${tsB}: no implicit widening for let variables, use "as"`;
-            throw ctx.error(reason, node);
+            throw ctx.errorCode('E100', node, { detail: reason });
           }
         }
       }
@@ -192,8 +192,8 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     if (_allBinaryOps.includes(node.op)) {
       const lt = ctx.inferType(node.left);
       const rt = ctx.inferType(node.right);
-      if (lt === 'tsc_unknown') throw ctx.error(`Cannot perform binary operation '${node.op}' on type 'unknown'`, node);
-      if (rt === 'tsc_unknown') throw ctx.error(`Cannot perform binary operation '${node.op}' on type 'unknown'`, node);
+      if (lt === 'tsc_unknown') throw ctx.errorCode('E120', node, { detail: `cannot perform binary operation '${node.op}' on type 'unknown'` });
+      if (rt === 'tsc_unknown') throw ctx.errorCode('E120', node, { detail: `cannot perform binary operation '${node.op}' on type 'unknown'` });
     }
 
     // typeof x === "typename" runtime check for unknown variables
@@ -248,7 +248,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       const NUMERIC = new Set(['int8_t','int16_t','int32_t','int64_t','uint8_t','uint16_t','uint32_t','uint64_t','double','float','char','size_t','bool']);
       if (!NUMERIC.has(lt) || !NUMERIC.has(rt)) {
         const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
-        throw ctx.error(`TypeError: bitwise op '${node.op}' not applicable to '${tsName(lt)}' and '${tsName(rt)}'`, node);
+        throw ctx.errorCode('E105', node, { detail: `bitwise op '${node.op}' not applicable to '${tsName(lt)}' and '${tsName(rt)}'` });
       }
       const needsCast = ctx._hasFloatVar(node.left) || ctx._hasFloatVar(node.right);
       if (needsCast) {
@@ -309,7 +309,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         if (dlt !== drt) {
           const tsA = ctx.ctypeToTsName(dlt ?? ctx.inferType(node.left));
           const tsB = ctx.ctypeToTsName(drt ?? ctx.inferType(node.right));
-          throw ctx.error(`TypeError: cannot mix ${tsA} and ${tsB} in arithmetic without explicit cast`, node);
+          throw ctx.errorCode('E100', node, { detail: `cannot mix ${tsA} and ${tsB} in arithmetic without explicit cast` });
         }
         if (node.op === '*') {
           const helper = `tsc_mul_${dlt!.replace('_t', '')}`;
@@ -342,7 +342,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         if (dlt !== drt) {
           const tsA = ctx.ctypeToTsName(dlt ?? ctx.inferType(node.left));
           const tsB = ctx.ctypeToTsName(drt ?? ctx.inferType(node.right));
-          throw ctx.error(`TypeError: cannot compare ${tsA} and ${tsB} without explicit cast`, node);
+          throw ctx.errorCode('E100', node, { detail: `cannot compare ${tsA} and ${tsB} without explicit cast` });
         }
       }
     }
@@ -561,7 +561,7 @@ export function unaryToC(ctx: CodeGenContext, node: Unary, lines: string[], dept
         if (!NUMERIC.has(et)) {
           const tsName = (t: string) => t === 'String' ? 'string' : t === 'void *' ? 'null' : t;
           const label = node.op === '~' ? `bitwise op '~'` : `unary '${node.op}'`;
-          throw ctx.error(`TypeError: ${label} not applicable to '${tsName(et)}'`, node);
+          throw ctx.errorCode('E105', node, { detail: `${label} not applicable to '${tsName(et)}'` });
         }
         if (node.op === '~') {
           if (ctx._hasFloatVar(node.expr)) return `(${et})(~((int32_t)(${e})))`;

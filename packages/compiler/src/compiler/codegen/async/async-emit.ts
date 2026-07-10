@@ -537,12 +537,11 @@ export function _checkAwaitTarget(ctx: CodeGenContext, awaitNode: { expr?: Expre
       // Check inlined consts (they're not async)
       const rawType = ctx._selfCtx?.inlinedTypes?.get(expr.name);
       if (rawType !== undefined) {
-        throw ctx.error(`"await" can only be applied to Promise<T>, got ${rawType}`, awaitNode);
+        throw ctx.errorCode('E112', awaitNode, { detail: `"await" can only be applied to Promise<T>, got ${rawType}` });
       }
       const sym = ctx.lookup(expr.name);
       if (sym && !sym._isAsync && sym.varKind) {
-        throw ctx.error(
-          `"await" can only be applied to Promise<T>, got ${sym.ctype ?? 'unknown'}`, awaitNode);
+        throw ctx.errorCode('E112', awaitNode, { detail: `"await" can only be applied to Promise<T>, got ${sym.ctype ?? 'unknown'}` });
       }
     }
 }

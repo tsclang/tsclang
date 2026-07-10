@@ -267,7 +267,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           const argType = ctx.inferType(args[i].expr);
           if (argType !== 'void *' && argType !== null && argType !== undefined) {
             const tsType = ctx.ctypeToTsName(argType);
-            throw ctx.error(`cannot pass ${tsType} as "any": any is opaque across function boundaries`);
+            throw ctx.errorCode('E120', null, { detail: `cannot pass ${tsType} as "any": any is opaque across function boundaries` });
           }
         }
       }
@@ -345,7 +345,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         if (paramEnumDef?.isStringLiteralUnion && a.expr.kind === 'Literal' && a.expr.litType === 'string') {
           const val = a.expr.value;
           if (!((paramEnumDef.members as string[] | undefined) ?? []).includes(val)) {
-            throw ctx.error(`"${val}" is not a valid value for type ${paramType}`);
+            throw ctx.errorCode('E114', null, { value: val as string, type: paramType! });
           }
           return `${paramType}_${val}`;
         }
@@ -619,7 +619,7 @@ export function _dispatchObjectStatic(ctx: CodeGenContext, node: Call, lines: st
     const firstType = fieldTypes[0];
     const allSame = fieldTypes.every((t: string) => t === firstType);
     if (!allSame) {
-      throw ctx.error('Object.values/entries requires uniform field types', node);
+      throw ctx.errorCode('E120', node, { detail: 'Object.values/entries requires uniform field types' });
     }
     const etIdent = ctx.cTypeToIdent(firstType);
     const refArrName = `Array_ref_${etIdent}`;

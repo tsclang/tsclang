@@ -453,6 +453,314 @@ Fix: declare x as \`let\`, or pass a mutable binding.
 `,
   },
 
+  // ── E1xx: Type errors ──────────────────────────────────────────────────────
+  E100: {
+    code: 'E100',
+    severity: 'error',
+    title: 'type conversion error',
+    message: `{detail}`,
+    help: ['use an explicit cast: value as TargetType', 'check that the types are compatible'],
+    body: `
+TSClang does not allow implicit type conversions that could lose data or
+change semantics. Use an explicit cast (\`as\`) when you intentionally
+convert between types.
+
+  let x: i32 = 10;
+  let y: u32 = x;          // error[E100]: cannot implicitly convert i32 to u32
+  let y: u32 = x as u32;   // ok
+
+Common cases: signed/unsigned mismatch, float-to-integer assignment,
+mixing i32 and u32 in arithmetic.
+`,
+  },
+
+  E101: {
+    code: 'E101',
+    severity: 'error',
+    title: 'literal overflow',
+    message: `{detail}`,
+    help: ['use a wider type', 'check the value range for the target type'],
+    body: `
+A numeric literal exceeds the representable range of its target type.
+
+  const x: u8 = 300;   // error[E101]: 300 overflows u8 (0..255)
+
+Fix: use a wider type, or adjust the value to fit.
+`,
+  },
+
+  E102: {
+    code: 'E102',
+    severity: 'error',
+    title: 'invalid char/u8 literal',
+    message: `{detail}`,
+    help: ['use double quotes for multi-byte strings', 'use a single ASCII character for char/u8'],
+    body: `
+Single-quoted literals in TSC are strings (like TypeScript), not chars.
+A \`char\` or \`u8\` must be a single ASCII character or escape sequence.
+
+  const c: char = 'ab';     // error[E102]: multi-character string
+  const c: char = 'a';      // ok
+  const s: string = 'ab';   // ok — string
+`,
+  },
+
+  E103: {
+    code: 'E103',
+    severity: 'error',
+    title: 'invalid instanceof',
+    message: `{detail}`,
+    help: ['use an interface name on the right-hand side of instanceof'],
+    body: `
+\`instanceof\` checks whether a value implements an interface. The
+right-hand side must be an interface type name.
+
+  if (x instanceof Shape) { ... }   // ok
+  if (x instanceof 42) { ... }      // error[E103]
+`,
+  },
+
+  E104: {
+    code: 'E104',
+    severity: 'error',
+    title: 'invalid cast',
+    message: `{detail}`,
+    help: ['use the appropriate conversion method', 'see the type conversion docs'],
+    body: `
+The \`as\` operator cannot perform this conversion. Some types require
+an explicit method call instead.
+
+  const s = num as string;       // error[E104]: use .toString()
+  const s = num.toString();      // ok
+`,
+  },
+
+  E105: {
+    code: 'E105',
+    severity: 'error',
+    title: 'type narrowing error',
+    message: `{detail}`,
+    help: ['use "as Array<T>" or "as ClassName" to narrow the type first'],
+    body: `
+After a \`typeof\` check, the variable has type \`unknown\` and must be
+narrowed with an \`as\` cast before accessing properties or indexing.
+
+  if (typeof x === "array") {
+    x.length;                  // error[E105]: x is still unknown
+    (x as Array<i32>).length;  // ok
+  }
+`,
+  },
+
+  E106: {
+    code: 'E106',
+    severity: 'error',
+    title: 'invalid type usage',
+    message: `{detail}`,
+    help: ['check the type system rules in the docs'],
+    body: `
+Certain types have restrictions on where they can appear:
+
+  - \`never\` cannot be used as a variable or field type
+  - \`void\` can only be a return type
+  - \`Ref<T>\` / \`Mut<T>\` / \`Arc<T>\` cannot be stored in class fields
+  - \`any\` is only allowed in declare/unsafe context
+
+Fix: use the appropriate type for the context.
+`,
+  },
+
+  E107: {
+    code: 'E107',
+    severity: 'error',
+    title: 'recursive type by value',
+    message: `type '{name}' recursively references itself by value; use Ref<{name}> or a pointer`,
+    help: ['use Ref<T> or a pointer for recursive types'],
+    body: `
+A type cannot contain itself by value — that would have infinite size.
+Use a reference type (Ref<T>) or a pointer for recursive references.
+
+  type Node { next: Node }       // error[E107]: infinite size
+  type Node { next: Ref<Node> }  // ok — pointer-sized
+`,
+  },
+
+  E108: {
+    code: 'E108',
+    severity: 'error',
+    title: 'member does not exist',
+    message: `{detail}`,
+    help: ['check the type definition for available members'],
+    body: `
+The referenced field or method does not exist on the specified type.
+Check the type definition and spelling.
+`,
+  },
+
+  E109: {
+    code: 'E109',
+    severity: 'error',
+    title: 'type composition error',
+    message: `{detail}`,
+    help: ['see the type system docs for Record, keyof, and ReturnType rules'],
+    body: `
+Errors with type-level utilities: Record, keyof, ReturnType, and
+string literal unions.
+
+Fix: follow the constraints for each utility as described in the docs.
+`,
+  },
+
+  E110: {
+    code: 'E110',
+    severity: 'error',
+    title: 'non-exhaustive match',
+    message: `non-exhaustive match on enum '{name}': missing cases {missing}`,
+    help: ['add cases for all missing enum variants', 'add a default case'],
+    body: `
+When matching an enum, all variants must be handled (or a default case
+must be provided).
+
+  enum Color { Red, Green, Blue }
+  match (c) {
+    case Color.Red: ...
+    // error[E110]: missing Green, Blue
+  }
+
+Fix: add the missing cases, or add a \`default\` branch.
+`,
+  },
+
+  E111: {
+    code: 'E111',
+    severity: 'error',
+    title: 'catch clause requires explicit error type',
+    message: `catch clause requires explicit error type`,
+    help: ['specify the error type: catch (e: MyError)'],
+    body: `
+TSClang requires catch clauses to declare the error type explicitly,
+unlike TypeScript which infers \`any\` or \`unknown\`.
+
+  try { ... }
+  catch (e) { ... }               // error[E111]
+  catch (e: MyError) { ... }      // ok
+`,
+  },
+
+  E112: {
+    code: 'E112',
+    severity: 'error',
+    title: 'await on non-Promise',
+    message: `{detail}`,
+    help: ['ensure the expression is a Promise<T>'],
+    body: `
+\`await\` can only be applied to \`Promise<T>\` values.
+
+  const x = await 42;   // error[E112]: 42 is not a Promise
+`,
+  },
+
+  E113: {
+    code: 'E113',
+    severity: 'error',
+    title: 'array/tuple size mismatch',
+    message: `{detail}`,
+    help: ['adjust the number of elements to match the declared size'],
+    body: `
+A fixed-size array or tuple literal must have exactly the declared
+number of elements.
+`,
+  },
+
+  E114: {
+    code: 'E114',
+    severity: 'error',
+    title: 'invalid enum value',
+    message: `"{value}" is not a valid value for type {type}`,
+    help: ['check the enum definition for valid values'],
+    body: `
+A string literal assigned to an enum type must be one of the enum's
+defined values.
+
+  type Direction = "north" | "south" | "east" | "west";
+  const d: Direction = "up";   // error[E114]
+`,
+  },
+
+  E115: {
+    code: 'E115',
+    severity: 'error',
+    title: 'mixed enum values',
+    message: `mixed string and number values in enum "{name}" are not allowed`,
+    help: ['use all-string or all-number values in an enum'],
+    body: `
+An enum must have either all string values or all number values —
+mixing is not allowed.
+`,
+  },
+
+  E116: {
+    code: 'E116',
+    severity: 'error',
+    title: 'null assignment to non-nullable',
+    message: `cannot assign null to non-nullable type`,
+    help: ['declare the type as nullable: T | null', 'remove the null assignment'],
+    body: `
+A non-nullable type cannot be assigned null.
+
+  let x: Point = null;   // error[E116]
+  let x: Point | null = null;   // ok
+`,
+  },
+
+  E117: {
+    code: 'E117',
+    severity: 'error',
+    title: 'function with return type "never" must not return',
+    message: `function with return type "never" must not return`,
+    help: ['remove the return statement', 'change the return type if the function can return'],
+    body: `
+A function declared as returning \`never\` must not contain a \`return\`
+statement — \`never\` means the function never completes normally.
+`,
+  },
+
+  E118: {
+    code: 'E118',
+    severity: 'error',
+    title: 'missing interface implementation',
+    message: `{detail}`,
+    help: ['implement all methods required by the interface'],
+    body: `
+A class that declares \`implements\` must provide all methods required
+by the interface.
+`,
+  },
+
+  E119: {
+    code: 'E119',
+    severity: 'error',
+    title: 'ambiguous overload',
+    message: `{detail}`,
+    help: ['make overload signatures unambiguous', 'remove duplicate signatures'],
+    body: `
+Two overloads match the call arguments equally well, and the compiler
+cannot choose between them. Make the signatures more specific.
+`,
+  },
+
+  E120: {
+    code: 'E120',
+    severity: 'error',
+    title: 'type error',
+    message: `{detail}`,
+    help: ['see the compiler error message for details', 'check the type system documentation'],
+    body: `
+A type-system error that doesn't fit a more specific category. The
+message provides the specific details.
+`,
+  },
+
   // ── E4xx: Runtime panics ─────────────────────────────────────────────────
   E401: {
     code: 'E401',

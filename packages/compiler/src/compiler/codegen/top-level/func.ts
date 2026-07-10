@@ -14,7 +14,7 @@ export function visitEnum(ctx: CodeGenContext, node: Enum) {
     // Detect string enum: first member with a string value
     const isStringEnum = members.some((m) => m.value?.kind === 'Literal' && m.value.litType === 'string');
     if (isStringEnum && members.some((m) => m.value?.kind === 'Literal' && m.value.litType !== 'string')) {
-      throw ctx.error(`mixed string and number values in enum "${name}" are not allowed`, node);
+      throw ctx.errorCode('E115', node, { name });
     }
     const entries = members.map((m) => {
       const mLit = m.value?.kind === 'Literal' ? m.value : null;
@@ -347,7 +347,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
       const stmts = body.kind === 'Block' ? body.body : [body];
       const last = stmts[stmts.length - 1];
       if (!last || last.kind !== 'Throw') {
-        throw ctx.error(`function with return type "never" must not return`);
+        throw ctx.errorCode('E117');
       }
     }
 

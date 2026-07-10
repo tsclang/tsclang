@@ -39,7 +39,7 @@ export function callGeneric(ctx: CodeGenContext, name: string, typeArgs: TypeAnn
     // Check for ambiguous overload (non-generic version exists in scope)
     const existing = ctx.lookup(name);
     if (existing?.funcName) {
-      throw ctx.error(`ambiguous call: both generic and non-generic overload match`);
+      throw ctx.errorCode('E119', null, { detail: 'ambiguous call: both generic and non-generic overload match' });
     }
 
     // Build substitution map: T → concrete C type

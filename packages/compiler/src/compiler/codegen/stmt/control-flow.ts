@@ -1074,7 +1074,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         }
         // Error: throw string literal
         if (val?.kind === 'Literal' && val.litType === 'string') {
-          throw ctx.error('can only throw Error instances, not string');
+          throw ctx.errorCode('E120', null, { detail: 'can only throw Error instances, not string' });
         }
         // Error: throw in function without throws declaration
         // (never-return functions are exempt тАФ they are expected to throw/abort)
@@ -1143,7 +1143,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         // Require explicit type annotation in catch clauses
         for (const c of node.catches ?? []) {
           if (c.param && !c.typeAnn) {
-            throw ctx.error(`TypeError: catch clause requires explicit error type`, c);
+            throw ctx.errorCode('E111', c);
           }
         }
 
@@ -1433,7 +1433,7 @@ const _SIMPLE_C_TYPES = new Set([
 
 export function _validateSwitchFallthrough(ctx: CodeGenContext, node: Switch) {
     if (ctx.inferType(node.discriminant) === 'double' || ctx.inferType(node.discriminant) === 'float') {
-      throw ctx.error(`cannot switch on type 'f64'`, node);
+      throw ctx.errorCode('E120', node, { detail: `cannot switch on type 'f64'` });
     }
     for (let ci = 0; ci < node.cases.length; ci++) {
       const c = node.cases[ci];

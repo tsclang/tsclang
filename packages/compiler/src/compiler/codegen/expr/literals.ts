@@ -15,10 +15,10 @@ export function _charCode(ctx: CodeGenContext, raw: string) {
     if (raw.startsWith('\\u')) return parseInt(raw.slice(2), 16);
     if (raw.length === 1) {
       const code = raw.charCodeAt(0);
-      if (code > 127) throw ctx.error(`non-ASCII character cannot be used as u8 — use double quotes for multi-byte strings`);
+      if (code > 127) throw ctx.errorCode('E102', null, { detail: 'non-ASCII character cannot be used as u8 — use double quotes for multi-byte strings' });
       return code;
     }
-    throw ctx.error(`cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters`);
+    throw ctx.errorCode('E102', null, { detail: 'cannot convert multi-character string to u8 — single quotes are strings in TSC (like TS), use ": u8" only for single ASCII characters' });
 }
 
 export function _charLiteralToSTR_LIT(ctx: CodeGenContext, value: string) {
@@ -29,17 +29,17 @@ export function _charLiteralToSTR_LIT(ctx: CodeGenContext, value: string) {
 export function _stringLiteralToByte(ctx: CodeGenContext, node: Literal) {
     const raw = node.value;
     if (raw.length === 0) {
-      throw ctx.error(`cannot convert empty string to char/u8`, node);
+      throw ctx.errorCode('E102', node, { detail: 'cannot convert empty string to char/u8' });
     }
     if (raw.startsWith('\\')) {
       return ctx._charCode(raw);
     }
     if (raw.length !== 1) {
-      throw ctx.error(`cannot convert multi-character string to char/u8 — use single character or escape sequence`, node);
+      throw ctx.errorCode('E102', node, { detail: 'cannot convert multi-character string to char/u8 — use single character or escape sequence' });
     }
     const code = raw.charCodeAt(0);
     if (code > 127) {
-      throw ctx.error(`non-ASCII character cannot be used as char/u8 — multi-byte UTF-8 characters require string type`, node);
+      throw ctx.errorCode('E102', node, { detail: 'non-ASCII character cannot be used as char/u8 — multi-byte UTF-8 characters require string type' });
     }
     return code;
 }
@@ -136,7 +136,7 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
       };
       const r = DEC_RANGES[decBase];
       if (r && (scaled < r.min || scaled > r.max)) {
-        throw ctx.error(`literal ${rawVal} overflows ${r.ts} (scaled value ${scaled} exceeds raw range ${r.min}..${r.max})`, node);
+        throw ctx.errorCode('E101', node, { detail: `literal ${rawVal} overflows ${r.ts} (scaled value ${scaled} exceeds raw range ${r.min}..${r.max})` });
       }
       return;
     }
@@ -150,7 +150,7 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
     if (val === null) return;
     const r = (INT_RANGES as Record<string, { min: bigint; max: bigint; ts: string }>)[ctype];
     if (val < r.min || val > r.max) {
-      throw ctx.error(`literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})`, node);
+      throw ctx.errorCode('E101', node, { detail: `literal ${val} overflows ${r.ts} (range: ${r.min}..${r.max})` });
     }
 }
 
@@ -201,7 +201,7 @@ export function tryConstMixedBinary(ctx: CodeGenContext, node: Binary, targetCty
         const typeMin = { 'uint32_t': 0n, 'uint8_t': 0n, 'uint16_t': 0n,
                           'int32_t': -2147483648n, 'int64_t': -9223372036854775808n };
         if (targetCtype in typeMax && (result > (typeMax as Record<string, bigint>)[targetCtype] || result < (typeMin as Record<string, bigint>)[targetCtype])) {
-          throw ctx.error(`const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}`, node);
+          throw ctx.errorCode('E101', node, { detail: `const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}` });
         }
       }
       const [lC, rC] = [ctx.exprToC(node.left, lines, depth), ctx.exprToC(node.right, lines, depth)];
@@ -215,7 +215,7 @@ export function tryConstMixedBinary(ctx: CodeGenContext, node: Binary, targetCty
       const u32Node = lt === 'uint32_t' ? node.left : node.right;
       const u32Val = ctx.constVal(u32Node);
       if (u32Val !== null && u32Val > 2147483647n) {
-        throw ctx.error(`cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges`, node);
+        throw ctx.errorCode('E101', node, { detail: 'cannot mix i32 and u32 in const expression: incompatible signed/unsigned ranges' });
       }
       const [lC, rC] = [ctx.exprToC(node.left, lines, depth), ctx.exprToC(node.right, lines, depth)];
       const [lCast, rCast] = lt === 'int32_t' ? [lC, `(int32_t)${rC}`] : [`(int32_t)${lC}`, rC];
@@ -231,7 +231,7 @@ export function tryConstMixedBinary(ctx: CodeGenContext, node: Binary, targetCty
         const result = node.op === '+' ? lv + rv : node.op === '-' ? lv - rv :
                        node.op === '*' ? lv * rv : node.op === '/' ? lv / rv : lv % rv;
         if (result > (typeMax as Record<string, bigint>)[targetCtype] || result < (typeMin as Record<string, bigint>)[targetCtype]) {
-          throw ctx.error(`const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}`, node);
+          throw ctx.errorCode('E101', node, { detail: `const expression result ${result} overflows ${ctx.ctypeToTsName(targetCtype)}` });
         }
       }
     }

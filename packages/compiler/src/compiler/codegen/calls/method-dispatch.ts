@@ -677,7 +677,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
           lines.push(`snprintf(${buf}, sizeof(${buf}), "%.${n}f", (double)(${objC}) / ${scale}.0);`);
         } else {
           if (objType === 'int32_t' || objType === 'int64_t' || objType === 'uint32_t')
-            throw ctx.error(`"toFixed()" is only available on f32/f64/decimal`);
+            throw ctx.errorCode('E120', null, { detail: '"toFixed()" is only available on f32/f64/decimal' });
           lines.push(`snprintf(${buf}, sizeof(${buf}), "%.${n}f", ${objC});`);
         }
         return `STR_LIT_RUNTIME(${buf})`;
@@ -960,7 +960,7 @@ export function _ensureImplicitVtable(ctx: CodeGenContext, className: string, if
     for (const im of ifaceMethods) {
       const methodExists = classDef?.methods?.some((mm) => mm.name === im.name);
       if (!methodExists) {
-        throw ctx.error(`TypeError: Class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'`);
+        throw ctx.errorCode('E118', null, { detail: `class '${className}' does not implement interface '${ifaceName}': missing method '${im.name}'` });
       }
     }
     const vtableName = `_${className}_${ifaceName}_vtable`;

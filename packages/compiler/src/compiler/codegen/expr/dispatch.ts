@@ -167,8 +167,8 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         }
         if (sym?.ctype === 'tsc_unknown' && ctx._narrowedUnknownVars?.has(objName)) {
           const _nc = ctx._narrowedUnknownVars.get(objName);
-          if (_nc === '__array__') throw ctx.error(`Cannot access '.${node.prop}' on '${objName}' after typeof "array"; use '${objName} as Array<T>' first`, node);
-          if (_nc === '__object__') throw ctx.error(`Cannot access '.${node.prop}' on '${objName}' after typeof "object"; use '${objName} as ClassName' first`, node);
+          if (_nc === '__array__') throw ctx.errorCode('E105', node, { detail: `cannot access '.${node.prop}' on '${objName}' after typeof "array"; use '${objName} as Array<T>' first` });
+          if (_nc === '__object__') throw ctx.errorCode('E105', node, { detail: `cannot access '.${node.prop}' on '${objName}' after typeof "object"; use '${objName} as ClassName' first` });
         }
         // Channel<T>.length / .capacity → tsc_channel_length/capacity_T(ch._inner)
         if (sym?._isChannel && (node.prop === 'length' || node.prop === 'capacity')) {
@@ -315,8 +315,8 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           }
           if (_idxQSym?.ctype === 'tsc_unknown' && ctx._narrowedUnknownVars?.has(node.object.name)) {
             const _nc = ctx._narrowedUnknownVars.get(node.object.name);
-            if (_nc === '__array__') throw ctx.error(`Cannot index '${node.object.name}' after typeof "array"; use '${node.object.name} as Array<T>' first`, node);
-            if (_nc === '__object__') throw ctx.error(`Cannot index '${node.object.name}' after typeof "object"; use '${node.object.name} as ClassName' first`, node);
+            if (_nc === '__array__') throw ctx.errorCode('E105', node, { detail: `cannot index '${node.object.name}' after typeof "array"; use '${node.object.name} as Array<T>' first` });
+            if (_nc === '__object__') throw ctx.errorCode('E105', node, { detail: `cannot index '${node.object.name}' after typeof "object"; use '${node.object.name} as ClassName' first` });
           }
         }
         // req.params["key"] → tsc_request_param(req, STR_LIT("key"))
@@ -461,7 +461,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           if (elemTypes.some((t: string) => t !== elemTypes[0])) {
             const tsName = (ct: string) => (ct === 'double' || ct === 'float') ? 'number' : ctx.ctypeToTsName(ct);
             const unique = [...new Set(elemTypes.map(tsName))];
-            throw ctx.error(`mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]`, node);
+            throw ctx.errorCode('E120', node, { detail: `mixed array literal — specify type: [${unique.join(', ')}] (tuple) or T[]` });
           }
         }
         const arrType = `Array_${ctx.cTypeToIdent(elemType)}`;
@@ -619,7 +619,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
                                 'uint8_t','uint16_t','uint32_t','uint64_t',
                                 'float','double','size_t','bool'];
           if (numericTypes.includes(exprType)) {
-            throw ctx.error(`cannot cast ${ctx.ctypeToTsName(exprType)} to string using "as"; use ".toString()"`, node);
+            throw ctx.errorCode('E104', node, { detail: `cannot cast ${ctx.ctypeToTsName(exprType)} to string using "as"; use ".toString()"` });
           }
         }
         // Pointer cast (as *T): just return the inner expr — type annotation only, no C cast needed
@@ -776,7 +776,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           const awaitSym = ctx.lookup(node.expr.name);
           if (awaitSym && !awaitSym._isAsync && awaitSym.varKind) {
             const t = awaitSym.ctype ?? 'unknown';
-            throw ctx.error(`"await" can only be applied to Promise<T>, got ${t}`, node);
+            throw ctx.errorCode('E112', node, { detail: `"await" can only be applied to Promise<T>, got ${t}` });
           }
         }
         return ctx.exprToC(node.expr, lines, depth);

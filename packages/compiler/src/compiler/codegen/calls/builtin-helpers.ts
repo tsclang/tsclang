@@ -50,7 +50,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
           char:'char', d8:'d8_t', d16:'d16_t', d32:'d32_t', d64:'d64_t' };
         const etIdent = arrType.startsWith('Array_') ? arrType.slice(6) : null;
         if (!etIdent || !(etIdent in NUMERIC_ET)) {
-          throw ctx.error(`Math.${prop}(...arr) requires a numeric array, got ${etIdent || 'non-array'} elements`);
+          throw ctx.errorCode('E120', null, { detail: `Math.${prop}(...arr) requires a numeric array, got ${etIdent || 'non-array'} elements` });
         }
         const etCType = (NUMERIC_ET as Record<string, string>)[etIdent];
         const arrC = ctx.exprToC(arrExpr, lines, depth);
@@ -128,7 +128,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         'd64_t':    ['INT64_MIN',  'INT64_MAX'],
       };
       const range = RANGE[targetType];
-      if (!range) throw ctx.error(`saturatingCast: unsupported target type '${targetType}'`, node);
+      if (!range) throw ctx.errorCode('E120', node, { detail: `saturatingCast: unsupported target type '${targetType}'` });
       const srcDecI = DEC_INFO[srcType];
       const dstDecI = DEC_INFO[targetType];
       if (srcDecI && dstDecI) {
@@ -183,7 +183,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
         'd64_t':    ['INT64_MIN',  'INT64_MAX'],
       };
       const range = RANGE[targetType];
-      if (!range) throw ctx.error(`checkedCast: unsupported target type '${targetType}'`, node);
+      if (!range) throw ctx.errorCode('E120', node, { detail: `checkedCast: unsupported target type '${targetType}'` });
       const I = ' '.repeat(ctx.indent * depth);
       const tmp = `_checked_${ctx.tempCount++}`;
       const srcDecI = DEC_INFO[srcType];
@@ -295,7 +295,7 @@ export function mathCall(ctx: CodeGenContext, prop: string, args: Argument[], li
 
     // Math.imul/clz32 on decimal types — reject (32-bit integer ops, not meaningful on decimals)
     if ((prop === 'imul' || prop === 'clz32') && (isDec(a0t) || isDec(a1t))) {
-      throw ctx.error(`Math.${prop}() operates on 32-bit integers, not decimal types; use '${prop === 'imul' ? '(a as i32) * (b as i32)' : 'Math.clz32(x as i32)'}' for explicit integer semantics`, node);
+      throw ctx.errorCode('E120', node, { detail: `Math.${prop}() operates on 32-bit integers, not decimal types; use '${prop === 'imul' ? '(a as i32) * (b as i32)' : 'Math.clz32(x as i32)'}' for explicit integer semantics` });
     }
 
     ctx.includes.add('#include <math.h>');
