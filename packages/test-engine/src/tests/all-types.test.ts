@@ -1,5 +1,14 @@
 import { describe, test, run, expect, matrix } from "../engine.js"
 
+const DECIMAL_DP: Record<string, number> = { d8: 2, d16: 2, d32: 4, d64: 8 }
+
+function formatExpected(typeName: string, val: any): string {
+  if (typeof val !== "number") return String(val)
+  const dp = DECIMAL_DP[typeName]
+  if (dp !== undefined) return val.toFixed(dp)
+  return String(val)
+}
+
 function runTypeTests(typeName: string, typeDef: any) {
   describe(`${typeName} = value`, () => {
     for (const val of typeDef.values) {
@@ -18,9 +27,8 @@ function runTypeTests(typeName: string, typeDef: any) {
           expect(() => run(code)).toThrow()
         })
       } else {
-        const expected = typeof val === "number" && !Number.isInteger(val) ? String(val) : val
         test(`let x: ${typeName} = ${val}`, () => {
-          expect(run(code)).toBe(String(expected))
+          expect(run(code)).toBe(formatExpected(typeName, val))
         })
       }
     }

@@ -10,7 +10,7 @@ registerAll()
 export { normalizeC, toWslPath, getBackend, getDefaultCompiler }
 
 export const platformMatrix = {
-  defaultNumber: ["i8", "i16", "i32", "f64", "u8", "u16"],
+  defaultNumber: ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"],
   targets: ["desktop", "avr", "nes", "spectrum"],
   strict: [[], ["safe-math"], ["no-lossy-cast"], ["safe-math", "no-lossy-cast"]]
 }
@@ -78,6 +78,38 @@ export const matrix = {
     max: Number.MAX_SAFE_INTEGER,
     values: [0, 1, Number.MAX_SAFE_INTEGER],
     validValues: [0, 1, Number.MAX_SAFE_INTEGER],
+    invalidValues: [true, "hello"]
+  },
+  d8: {
+    type: "d8",
+    min: -1.27,
+    max: 1.27,
+    values: [0, 0.01, 0.5, 1.27, -1.27, 1.28, -1.29],
+    validValues: [0, 0.01, 0.5, 1.27, -1.27],
+    invalidRange: [1.28, -1.29], invalidValues: [true, "hello"]
+  },
+  d16: {
+    type: "d16",
+    min: -327.67,
+    max: 327.67,
+    values: [0, 0.01, 1.5, 327.67, -327.67, 327.68, -327.69],
+    validValues: [0, 0.01, 1.5, 327.67, -327.67],
+    invalidRange: [327.68, -327.69], invalidValues: [true, "hello"]
+  },
+  d32: {
+    type: "d32",
+    min: -214748.3647,
+    max: 214748.3647,
+    values: [0, 0.0001, 1.5, 3.14, 214748.3647, -214748.3647, 214748.3648],
+    validValues: [0, 0.0001, 1.5, 3.14, 214748.3647, -214748.3647],
+    invalidRange: [214748.3648], invalidValues: [true, "hello"]
+  },
+  d64: {
+    type: "d64",
+    min: -92233720368.54775808,
+    max: 92233720368.54775807,
+    values: [0, 0.1, 1.5, 3.14],
+    validValues: [0, 0.1, 1.5, 3.14],
     invalidValues: [true, "hello"]
   },
   f32: {
