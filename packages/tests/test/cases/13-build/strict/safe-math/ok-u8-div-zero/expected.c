@@ -6,7 +6,7 @@ int main(void) {
     uint8_t b = 0U;
     uint8_t z = 0;
     MathError _math_err_0 = {0};
-    int32_t _math_1 = b;
+    uint8_t _math_1 = b;
     if (_math_1 == 0) { _math_err_0.operation = "div"; goto _catch_0; }
     z = a / _math_1;
     goto _catch_end_0;

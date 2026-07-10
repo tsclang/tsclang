@@ -405,9 +405,9 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           const opName = op === '/' ? 'div' : 'mod';
           const I = ' '.repeat(ctx.indent * depth);
           const divTmp = `_math_${ctx.tempCount++}`;
-          lines.push(`${I}int32_t ${divTmp} = ${r};`);
+          lines.push(`${I}${lt || 'int32_t'} ${divTmp} = ${r};`);
           lines.push(`${I}if (${divTmp} == 0) { ${ctx._mathErrVar}.operation = "${opName}"; goto ${ctx._mathCatchLabel}; }`);
-          const minMap: Record<string, string> = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+          const minMap: Record<string, string> = { 'int8_t': 'INT8_MIN', 'int16_t': 'INT16_MIN', 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
           const minConst = minMap[lt];
           if (minConst) {
             lines.push(`${I}if (${divTmp} == -1 && ${l} == ${minConst}) { ${ctx._mathErrVar}.operation = "${opName}"; goto ${ctx._mathCatchLabel}; }`);
@@ -423,9 +423,9 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         const panicExpr = ctx._strictRules?.has('no-abort')
           ? `_tsc_on_panic("${divTag}")`
           : 'abort()';
-        lines.push(`${I}int32_t ${tmp} = ${r};`);
+        lines.push(`${I}${lt || 'int32_t'} ${tmp} = ${r};`);
         lines.push(`${I}if (${tmp} == 0) { fprintf(stderr, "panic${divTag}\\n"); ${panicExpr}; }`);
-        const minMap: Record<string, string> = { 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
+        const minMap: Record<string, string> = { 'int8_t': 'INT8_MIN', 'int16_t': 'INT16_MIN', 'int32_t': 'INT32_MIN', 'int64_t': 'INT64_MIN' };
         const minConst = minMap[lt];
         if (minConst) {
           const ovfTag = ctx.panicTag('E402');

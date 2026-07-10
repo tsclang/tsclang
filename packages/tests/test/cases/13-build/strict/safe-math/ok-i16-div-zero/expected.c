@@ -6,8 +6,9 @@ int main(void) {
     int16_t b = 0;
     int16_t z = 0;
     MathError _math_err_0 = {0};
-    int32_t _math_1 = b;
+    int16_t _math_1 = b;
     if (_math_1 == 0) { _math_err_0.operation = "div"; goto _catch_0; }
+    if (_math_1 == -1 && a == INT16_MIN) { _math_err_0.operation = "div"; goto _catch_0; }
     z = a / _math_1;
     goto _catch_end_0;
     _catch_0:

@@ -215,7 +215,8 @@ export function run(code: string, opts?: RunOptions): string {
         if (errors.length > 0) throw { isTscErrorBag: true, errors }
         c = codegen(ast, "<run>", code, codegenOpts).c
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.isTscErrorBag) throw new TscCompilationError(e.errors.map((er: any) => er.message || String(er)).join('; '))
       throw new TscCompilationError(e instanceof Error ? e.message : String(e))
     }
 
@@ -270,9 +271,13 @@ export function file(path: string): string {
 export function expect(actual: any) {
   if (typeof actual === "function") {
     return {
-      toThrow(ErrorClass?: any) {
+      toThrow(ErrorClass?: any, codeOrSubstring?: string) {
         try { actual(); } catch (e) {
           if (ErrorClass && !(e instanceof ErrorClass)) throw new Error(`expected ${ErrorClass.name} but got ${e.constructor.name}`)
+          if (codeOrSubstring) {
+            const msg = e instanceof Error ? e.message : String(e)
+            if (!msg.includes(codeOrSubstring)) throw new Error(`expected error message to contain "${codeOrSubstring}" but got "${msg}"`)
+          }
           return
         }
         throw new Error("expected function to throw")
