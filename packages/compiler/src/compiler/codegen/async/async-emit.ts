@@ -59,7 +59,7 @@ export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
     if (awaitStatesCount > 0) {
       for (const p of (params || [])) {
         if (p.typeAnn?.kind === 'TypeRef' && (p.typeAnn.name === 'Ref' || p.typeAnn.name === 'Mut')) {
-          throw ctx.error(`"${p.typeAnn.name}<T>" cannot live across "await"; use ".clone()" to make an owned copy`, node);
+          throw ctx.errorCode('E019', node, { name: `${p.typeAnn.name}<T>` });
         }
       }
     }

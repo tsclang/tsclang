@@ -1341,7 +1341,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             }
             // Ref<T> / Mut<T> borrow from object fields is not supported
             if (init.kind === 'Member' && typeAnn?.kind === 'TypeRef' && (typeAnn.name === 'Ref' || typeAnn.name === 'Mut')) {
-              throw ctx.error(`TypeError: Cannot borrow a class field; pass the entire object as ${typeAnn.name}<T> instead`, init);
+              throw ctx.errorCode('E018', init, { type: typeAnn.name });
             }
             // Auto-propagate throws function calls in throws context
             if (ctx._throwsCtx && init?.kind === 'Call' && init.callee?.kind === 'Ident') {
@@ -1556,19 +1556,13 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 }
                 if (srcSym) {
                   if (srcSym.varKind === 'const') {
-                    throw ctx.error(`cannot borrow "${init.name}" as mutable: it is a const binding`);
+                    throw ctx.errorCode('E013', null, { name: init.name });
                   }
                   if ((srcSym._refBorrowCount || 0) > 0) {
-                    throw ctx.error(
-                      `TypeError: Cannot create mutable borrow of '${init.name}' while immutable borrow is active`,
-                      init
-                    );
+                    throw ctx.errorCode('E014', init, { name: init.name });
                   }
                   if (srcSym._mutBorrowedBy) {
-                    throw ctx.error(
-                      `TypeError: Cannot create two simultaneous mutable borrows of '${init.name}'`,
-                      init
-                    );
+                    throw ctx.errorCode('E012', init, { name: init.name });
                   }
                   srcSym._mutBorrowedBy = `_mut_var_${name}`;
                   ctx._trackMutBorrow(srcSym);

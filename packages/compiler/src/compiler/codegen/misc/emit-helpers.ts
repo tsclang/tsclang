@@ -161,7 +161,7 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
     for (const fv of freeVars) {
       const sym = ctx.lookup(fv.name);
       if (fv.ctype.endsWith(' *') && fv.ctype.includes('const ')) {
-        throw ctx.error(`thread closure cannot capture "Ref<T>": not Send`);
+        throw ctx.errorCode('E021', null, { detail: 'thread closure cannot capture "Ref<T>": not Send' });
       }
       if (sym?.isArc) {
         throw ctx.error(`thread closure cannot capture "Arc<T>": use Atomic<T> for thread-safe shared state`);
@@ -172,9 +172,9 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
       if (writtenVars.has(fv.name) && sym?.varKind === 'let') {
         const classDef = ctx.classes.get(fv.ctype);
         if (classDef?.fields) {
-          throw ctx.error(`TypeError: Cannot capture '${fv.ctype}' by move into spawn block; use Arc<${fv.ctype}> for shared ownership across threads`);
+          throw ctx.errorCode('E021', null, { detail: `cannot capture '${fv.ctype}' by move into spawn block; use Arc<${fv.ctype}> for shared ownership across threads` });
         } else {
-          throw ctx.error(`TypeError: Cannot capture mutable variable '${fv.name}' by reference in a spawn block; use Arc<T> or Atomic<T>`);
+          throw ctx.errorCode('E021', null, { detail: `cannot capture mutable variable '${fv.name}' by reference in a spawn block; use Arc<T> or Atomic<T>` });
         }
       }
       if (!_checkSend(fv.ctype)) {

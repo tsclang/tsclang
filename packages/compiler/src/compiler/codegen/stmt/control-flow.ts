@@ -131,7 +131,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         const isRefReturn = retTypeAnn?.kind === 'TypeRef' && retTypeAnn.name === 'Ref';
         const isMutReturn = retTypeAnn?.kind === 'TypeRef' && retTypeAnn.name === 'Mut';
         if ((isRefReturn || isMutReturn) && node.value?.kind === 'Index') {
-          throw ctx.error(`TypeError: Cannot return borrow to array element from function`);
+          throw ctx.errorCode('E017', null, { detail: 'borrow to array element' });
         }
         if (ctx.currentFuncReturnType?.startsWith('const ') &&
             ctx.currentFuncReturnType?.includes(' *') &&
@@ -140,13 +140,13 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           // and the returned value is a local (non-param) variable
           const retSym = ctx.lookup(node.value.name);
           if (retSym && !retSym.isPointer && !retSym.isRefParam && !retSym.funcName) {
-            throw ctx.error(`TypeError: Cannot return reference to local variable '${node.value.name}' that does not outlive the function`);
+            throw ctx.errorCode('E017', null, { detail: `reference to local variable '${node.value.name}'` });
           }
         }
         if (isMutReturn && node.value?.kind === 'Ident') {
           const retSym = ctx.lookup(node.value.name);
           if (retSym && !retSym.isPointer && !retSym.isRefParam && !retSym.funcName) {
-            throw ctx.error(`TypeError: Cannot return mutable borrow to local variable '${node.value.name}' that does not outlive the function`);
+            throw ctx.errorCode('E017', null, { detail: `mutable borrow to local variable '${node.value.name}'` });
           }
         }
         // Unknown return: auto-wrap primitive in tsc_unknown_from_XXX

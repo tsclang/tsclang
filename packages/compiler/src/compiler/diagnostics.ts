@@ -179,6 +179,280 @@ shifts the rest:
 `,
   },
 
+  // ── E1x: Borrow checking ──────────────────────────────────────────────────
+  E010: {
+    code: 'E010',
+    severity: 'error',
+    title: 'cannot mutate while borrowed',
+    message: `cannot mutate '{name}' while a borrow is active`,
+    help: ['wait for the borrow to go out of scope before mutating', 'use Ref<T> instead of Mut<T> if you only need read access'],
+    body: `
+TSClang's borrow checker prevents mutating a value while it is borrowed,
+to avoid dangling references.
+
+  const r = Mut<T>(x);
+  x.field = 1;   // error[E010]: x is borrowed by r
+  r.release();
+
+Fix: release the borrow before mutating, or restructure to avoid the overlap.
+`,
+  },
+
+  E011: {
+    code: 'E011',
+    severity: 'error',
+    title: 'cannot access while mutably borrowed',
+    message: `cannot access '{name}' while a mutable borrow is active`,
+    help: ['wait for the Mut<T> borrow to go out of scope', 'use Ref<T> for shared read access instead of Mut<T>'],
+    body: `
+While a value is mutably borrowed (Mut<T>), no other access is allowed —
+not even a read. This prevents data races.
+
+  const m = Mut<T>(x);
+  console.log(x);   // error[E011]: x is mutably borrowed
+  m.release();
+
+Fix: release the mutable borrow first, or use Ref<T> for shared access.
+`,
+  },
+
+  E012: {
+    code: 'E012',
+    severity: 'error',
+    title: 'two simultaneous mutable borrows',
+    message: `cannot create two simultaneous mutable borrows of '{name}'`,
+    help: ['only one Mut<T> may exist at a time', 'use Ref<T> for shared access if multiple readers are needed'],
+    body: `
+TSClang follows Rust's aliasing rule: at most one mutable borrow (Mut<T>)
+may be active at a time.
+
+  const m1 = Mut<T>(x);
+  const m2 = Mut<T>(x);   // error[E012]: x already mutably borrowed
+
+Fix: release the first borrow before creating a second, or use Ref<T>.
+`,
+  },
+
+  E013: {
+    code: 'E013',
+    severity: 'error',
+    title: 'cannot borrow const as mutable',
+    message: `cannot borrow '{name}' as mutable: it is a const binding`,
+    help: ['change const to let if mutability is needed', 'use Ref<T> for read-only borrows of const values'],
+    body: `
+A const binding cannot be mutably borrowed because Mut<T> requires
+exclusive write access, which const forbids.
+
+  const x = new Foo();
+  const m = Mut<T>(x);   // error[E013]: x is const
+
+Fix: declare x as \`let\` if you need a mutable borrow, or use Ref<T>.
+`,
+  },
+
+  E014: {
+    code: 'E014',
+    severity: 'error',
+    title: 'mutable borrow while immutable borrow active',
+    message: `cannot create mutable borrow of '{name}' while immutable borrow is active`,
+    help: ['release all Ref<T> borrows before creating a Mut<T>', 'use Ref<T> if you only need read access'],
+    body: `
+You cannot create a mutable borrow (Mut<T>) while an immutable borrow
+(Ref<T>) is still active — readers would see torn data.
+
+  const r = Ref<T>(x);
+  const m = Mut<T>(x);   // error[E014]: x is immutably borrowed
+
+Fix: release the Ref<T> first, or use Ref<T> for the second borrow too.
+`,
+  },
+
+  E015: {
+    code: 'E015',
+    severity: 'error',
+    title: 'incompatible borrow conversion',
+    message: `{detail}`,
+    help: ['check the expected parameter type vs the argument type', 'see the ownership and borrowing section of the docs'],
+    body: `
+The borrow types Ref<T>, Mut<T>, and Arc<T> are not freely convertible.
+The compiler rejects conversions that would violate borrow rules:
+
+  - Ref<T> cannot become Mut<T> (immutable → mutable)
+  - Mut<T> cannot become Arc<T> (exclusive → shared)
+  - Ref<T> cannot become Arc<T> (incompatible reference kinds)
+  - Arc<T> cannot be mutably borrowed (no exclusive access)
+
+Fix: use the borrow type expected by the function signature, or restructure.
+`,
+  },
+
+  E016: {
+    code: 'E016',
+    severity: 'error',
+    title: 'cannot pass borrow as owned parameter',
+    message: `cannot pass {borrow_type} '{name}' as owned parameter`,
+    help: ['pass an owned value instead of a borrow', 'clone the value: const owned = borrowed.clone()'],
+    body: `
+Borrow types (Ref<T>, Mut<T>, Arc<T>) are non-owning references and cannot
+be passed where an owned value is expected — that would consume the borrow.
+
+  function take(p: Point) { ... }
+  const r = Ref<T>(p);
+  take(r);   // error[E016]: cannot pass Ref<T> as owned
+
+Fix: pass the owned value directly, or clone the borrow.
+`,
+  },
+
+  E017: {
+    code: 'E017',
+    severity: 'error',
+    title: 'cannot return reference to local',
+    message: `cannot return {detail} from function`,
+    help: ['return an owned value instead of a reference', 'take the data as a parameter if the caller owns it'],
+    body: `
+A function cannot return a reference (Ref<T> or Mut<T>) to a local variable
+or array element — the local is destroyed when the function returns,
+leaving a dangling reference.
+
+  function f(): Ref<T> {
+    const x = new Foo();
+    return Ref<T>(x);   // error[E017]: x does not outlive f
+  }
+
+Fix: return an owned value, or accept the data as a parameter.
+`,
+  },
+
+  E018: {
+    code: 'E018',
+    severity: 'error',
+    title: 'cannot borrow a class field',
+    message: `cannot borrow a class field; pass the entire object as {type}<T> instead`,
+    help: ['borrow the whole object, then access the field through the borrow'],
+    body: `
+TSClang does not allow borrowing individual struct fields — only the
+whole object can be borrowed. This simplifies the borrow checker.
+
+  const h = new Header("name");
+  const r = Ref<T>(h.data);   // error[E018]
+
+Fix: borrow the entire object:
+
+  const r = Ref<T>(h);   // ok — access h.data through r
+`,
+  },
+
+  E019: {
+    code: 'E019',
+    severity: 'error',
+    title: 'cannot hold borrow across await',
+    message: `{name} cannot live across 'await'; use '.clone()' to make an owned copy`,
+    help: ['clone the value before the await to create an owned copy', 'restructure to release the borrow before awaiting'],
+    body: `
+Borrows (Ref<T>, Mut<T>) cannot be held across an \`await\` point — the
+borrowed value may change or be destroyed while the async task is
+suspended, causing a dangling reference.
+
+  const r = Ref<T>(x);
+  await something();   // error[E019]: r is still alive
+  r.release();
+
+Fix: clone the value before awaiting, or release the borrow first.
+`,
+  },
+
+  E020: {
+    code: 'E020',
+    severity: 'error',
+    title: 'invalid closure capture',
+    message: `invalid closure capture: {detail}`,
+    help: ['see the closures section of the docs for capture rules'],
+    body: `
+Closures in TSClang can capture variables by value or by reference, but
+there are restrictions:
+
+  - Explicit captures [var] need a type annotation: Ref<T> or Mut<T>
+  - Escaping closures (returned or stored) cannot capture by reference
+    — the captured stack frame would be destroyed
+
+Fix: use a value capture, or wrap the captured data in Arc<T> for
+shared ownership.
+`,
+  },
+
+  E021: {
+    code: 'E021',
+    severity: 'error',
+    title: 'invalid spawn capture',
+    message: `invalid spawn capture: {detail}`,
+    help: ['use Arc<T> for shared ownership across threads', 'use Atomic<T> for primitive types'],
+    body: `
+Spawn blocks (threads/async tasks) have stricter capture rules because
+captured values may outlive the current stack frame:
+
+  - Ref<T> cannot be captured (not Send)
+  - Owned values must be wrapped in Arc<T> for shared ownership
+  - Mutable variables cannot be captured by reference — use Arc<T> or Atomic<T>
+
+Fix: wrap the value in Arc<T>, or use Atomic<T> for primitives.
+`,
+  },
+
+  E022: {
+    code: 'E022',
+    severity: 'error',
+    title: 'cannot dereference Weak<T>',
+    message: `cannot dereference '{name}' (Weak<T>); use '{name}.upgrade()' and check for null`,
+    help: ['call .upgrade() which returns a nullable Arc<T>'],
+    body: `
+Weak<T> is a non-owning weak reference that does not keep the value alive.
+It cannot be dereferenced directly — the value may have been freed.
+
+  const w = Weak<T>(arc);
+  w.field;   // error[E022]: cannot dereference Weak<T>
+
+Fix: call .upgrade(), which returns Arc<T> or null:
+
+  const arc = w.upgrade();
+  if (arc) { arc.field; }   // ok
+`,
+  },
+
+  E023: {
+    code: 'E023',
+    severity: 'error',
+    title: 'cannot cast ownership types',
+    message: `cannot use 'as' for ownership types`,
+    help: ['use the appropriate constructor: Ref<T>(x), Mut<T>(x), or Arc<T>(x)'],
+    body: `
+The \`as\` cast operator cannot convert between ownership types (T, Ref<T>,
+Mut<T>, Arc<T>). These have different memory layouts and semantics.
+
+  const r = Ref<T>(x);
+  const a = r as Arc<T>;   // error[E023]
+
+Fix: use the appropriate constructor for the target type.
+`,
+  },
+
+  E024: {
+    code: 'E024',
+    severity: 'error',
+    title: 'cannot pass const as Mut<Interface>',
+    message: `cannot pass const variable '{name}' as Mut<{iface}>`,
+    help: ['change const to let if the variable needs to be mutable', 'pass a mutable binding instead'],
+    body: `
+A const variable cannot be passed where Mut<Interface> is expected —
+Mut<T> requires exclusive mutable access, which const forbids.
+
+  const x = new Foo();
+  takesMut(x);   // error[E024]: x is const, Mut<FooIFace> expected
+
+Fix: declare x as \`let\`, or pass a mutable binding.
+`,
+  },
+
   // ── E4xx: Runtime panics ─────────────────────────────────────────────────
   E401: {
     code: 'E401',

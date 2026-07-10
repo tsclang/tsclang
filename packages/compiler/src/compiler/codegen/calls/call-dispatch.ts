@@ -324,10 +324,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
             const innerName = p.typeAnn.typeArgs?.[0]?.name;
             if (!innerName || !ctx.interfaces.has(innerName)) {
               if (mutArgNames.has(nm)) {
-                throw ctx.error(
-                  `TypeError: Cannot create two simultaneous mutable borrows of '${nm}'`,
-                  args[i].expr
-                );
+                throw ctx.errorCode('E012', args[i].expr, { name: nm });
               }
               mutArgNames.set(nm, i);
             }
@@ -340,7 +337,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         if (a.expr.kind === 'Ident') {
           const _argQSym = ctx.lookup(a.expr.name);
           if (_argQSym?._mutQuarantined) {
-            throw ctx.error(`cannot access '${a.expr.name}' while a mutable borrow is active`, a.expr);
+            throw ctx.errorCode('E011', a.expr, { name: a.expr.name });
           }
         }
         const paramType = param.typeAnn ? ctx.resolveType(param.typeAnn) : null;
@@ -372,7 +369,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           if (!innerCheck || !ctx.interfaces.has(innerCheck)) {
             const argSym = ctx.lookup(a.expr.name);
             if (argSym?.varKind === 'const') {
-              throw ctx.error(`cannot borrow "${a.expr.name}" as mutable: it is a const binding`);
+              throw ctx.errorCode('E013', null, { name: a.expr.name });
             }
           }
         }
@@ -391,7 +388,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
             const argVarInfo = ctx.lookup(argName);
             if (argVarInfo?.varKind === 'const') {
               const mutIfaceName = param.typeAnn.typeArgs?.[0]?.name ?? ifaceName;
-              throw ctx.error(`TypeError: Cannot pass const variable '${argName}' as Mut<${mutIfaceName}>`);
+              throw ctx.errorCode('E024', null, { name: argName, iface: mutIfaceName });
             }
           }
           const argSym3 = ctx.lookup(argName);
@@ -417,16 +414,10 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           const argSymSh = a.expr?.kind === 'Ident' ? ctx.lookup(a.expr.name) : null;
           if (argSymSh && a.expr.kind === 'Ident') {
             if (argSymSh.isRefParam) {
-              throw ctx.error(
-                `TypeError: Cannot pass Ref<T> '${a.expr.name}' as Arc<T> — incompatible borrow types`,
-                a.expr
-              );
+              throw ctx.errorCode('E015', a.expr, { name: a.expr.name, detail: `cannot pass Ref<T> '${a.expr.name}' as Arc<T> — incompatible borrow types` });
             }
             if (argSymSh.isMutParam) {
-              throw ctx.error(
-                `TypeError: Cannot pass Mut<T> '${a.expr.name}' as Arc<T> — mutable borrow cannot become shared reference`,
-                a.expr
-              );
+              throw ctx.errorCode('E015', a.expr, { name: a.expr.name, detail: `cannot pass Mut<T> '${a.expr.name}' as Arc<T> — mutable borrow cannot become shared reference` });
             }
           }
         }
@@ -439,30 +430,18 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
             if (argSym2 && a.expr.kind === 'Ident') {
               if (param.typeAnn.name === 'Mut') {
                 if (argSym2.isRefParam) {
-                  throw ctx.error(
-                    `TypeError: Cannot re-borrow Ref<T> '${a.expr.name}' as Mut<T> — immutable borrow cannot become mutable`,
-                    a.expr
-                  );
+                  throw ctx.errorCode('E015', a.expr, { name: a.expr.name, detail: `cannot re-borrow Ref<T> '${a.expr.name}' as Mut<T> — immutable borrow cannot become mutable` });
                 }
                 if (argSym2.isArc) {
-                  throw ctx.error(
-                    `TypeError: Cannot create mutable borrow of Arc<T> '${a.expr.name}' — Arc does not give exclusive access`,
-                    a.expr
-                  );
+                  throw ctx.errorCode('E015', a.expr, { name: a.expr.name, detail: `cannot create mutable borrow of Arc<T> '${a.expr.name}' — Arc does not give exclusive access` });
                 }
                 // Cannot mutably borrow while an immutable borrow is active
                 if ((argSym2._refBorrowCount || 0) > 0) {
-                  throw ctx.error(
-                    `TypeError: Cannot create mutable borrow of '${a.expr.name}' while immutable borrow is active`,
-                    a.expr
-                  );
+                  throw ctx.errorCode('E014', a.expr, { name: a.expr.name });
                 }
                 // Cannot pass to two *different* Mut<T> borrowers in the same scope
                 if (argSym2._mutBorrowedBy && argSym2._mutBorrowedBy !== calleeC) {
-                  throw ctx.error(
-                    `TypeError: Cannot create two simultaneous mutable borrows of '${a.expr.name}'`,
-                    a.expr
-                  );
+                  throw ctx.errorCode('E012', a.expr, { name: a.expr.name });
                 }
                 argSym2._mutBorrowedBy = calleeC;
                 _callMutBorrowedSyms.push(argSym2);
@@ -530,22 +509,13 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
             const _moveArgSym = ctx.lookup(a.expr.name);
             if (_moveArgSym) {
               if (_moveArgSym.isRefParam) {
-                throw ctx.error(
-                  `TypeError: Cannot pass Ref<T> '${a.expr.name}' as owned parameter — borrow cannot be consumed`,
-                  a.expr
-                );
+                throw ctx.errorCode('E016', a.expr, { borrow_type: 'Ref<T>', name: a.expr.name });
               }
               if (_moveArgSym.isMutParam) {
-                throw ctx.error(
-                  `TypeError: Cannot pass Mut<T> '${a.expr.name}' as owned parameter — mutable borrow cannot be consumed`,
-                  a.expr
-                );
+                throw ctx.errorCode('E016', a.expr, { borrow_type: 'Mut<T>', name: a.expr.name });
               }
               if (_moveArgSym.isArc) {
-                throw ctx.error(
-                  `TypeError: Cannot pass Arc<T> '${a.expr.name}' as owned parameter — shared reference cannot be consumed`,
-                  a.expr
-                );
+                throw ctx.errorCode('E016', a.expr, { borrow_type: 'Arc<T>', name: a.expr.name });
               }
               if (_moveArgSym.varKind === 'const') {
                 throw ctx.errorCode('E003', a.expr);

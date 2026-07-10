@@ -179,7 +179,7 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
           if (cap.typeAnn.name === 'Ref') mode = 'ref';
           else if (cap.typeAnn.name === 'Mut') mode = 'mut';
         }
-        if (!mode) throw ctx.error(`Explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>`, arrowNode);
+        if (!mode) throw ctx.errorCode('E020', arrowNode, { detail: `explicit capture '[${cap.name}]' requires a type annotation: Ref<${cap.name}> or Mut<${cap.name}>` });
         explicitCaptures.push({ name: cap.name, mode, typeAnn: cap.typeAnn as TypeAnn });
         if (mode === 'mut') {
           ctx._trackMutQuarantine(sym, varName);
@@ -200,10 +200,7 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
         const ct = sym.ctype ?? 'void *';
         const isComplexPtr = !capInfo && _isComplexCtype(ct) && !ct.endsWith(' *') && !sym._closureEnvVar;
         if (isRefMut || isComplexPtr) {
-          throw ctx.error(
-            `Cannot capture '${nm}' by reference in an escaping closure: the captured value would outlive its stack frame. Use a value capture instead.`,
-            arrowNode
-          );
+          throw ctx.errorCode('E020', arrowNode, { detail: `cannot capture '${nm}' by reference in an escaping closure: the captured value would outlive its stack frame. Use a value capture instead.` });
         }
       }
     }

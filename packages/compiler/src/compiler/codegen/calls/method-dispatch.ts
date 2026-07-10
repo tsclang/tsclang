@@ -65,7 +65,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
     const objC = ctx.exprToC(baseObject, lines, depth);
     if (prop === 'upgrade' && sym?.isWeak) ctx._inWeakUpgrade = false;
     if (sym?._mutQuarantined) {
-      throw ctx.error(`cannot access '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a mutable borrow is active`, baseObject);
+      throw ctx.errorCode('E011', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
     }
     let et    = sym?.elemType ?? 'i32';
     let etC   = sym?.arrElemCType ?? 'int32_t';
@@ -125,7 +125,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
       switch (prop) {
         case 'push': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+            throw ctx.errorCode('E010', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           const _prevET_push = ctx._expectedType;
           const _pushDecBase = resolveDecimalBase(ctx, etC);
           ctx._expectedType = _pushDecBase ?? etC;
@@ -173,7 +173,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         }
         case 'pop': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+            throw ctx.errorCode('E010', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           if (!ctx._isOptType(etC)) {
             ctx._ensureOptStruct(`opt_${et}`, etC);
           }
@@ -182,7 +182,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         }
         case 'remove': {
           if ((sym?._refBorrowCount || 0) > 0)
-            throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+            throw ctx.errorCode('E010', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           const idxC = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
           ctx._lastArrayElemReturn = true;
           ctx._ensureArrayRemoveMacro(et, etC);
@@ -359,14 +359,14 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         case 'unshift': {
           ctx._ensureArrayUnshiftMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
-            throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+            throw ctx.errorCode('E010', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           const uv = args[0] ? ctx.exprToC(args[0].expr, [], depth) : '0';
           return `tsc_array_unshift_${et}(&${objC}, ${uv})`;
         }
         case 'splice': {
           ctx._ensureArraySpliceMacro(et, etC);
           if ((sym?._refBorrowCount || 0) > 0)
-            throw ctx.error(`cannot mutate '${baseObject.kind === 'Ident' ? baseObject.name : '?'}' while a borrow is active`, baseObject);
+            throw ctx.errorCode('E010', baseObject, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           const spStart = args[0] ? ctx.exprToC(args[0].expr, lines, depth) : '0';
           const spDel = args[1] ? ctx.exprToC(args[1].expr, lines, depth) : '0';
           const spItems = argsForC.slice(2).map((a: { spread?: boolean; expr: Expression }) => a.spread ? `/* ...${ctx.exprToC(a.expr, lines, depth)} */` : ctx.exprToC(a.expr, lines, depth));
@@ -788,12 +788,12 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         const methodInfo = poolCls._methodNames?.get(prop);
         if (methodInfo?.isMoveMethod) {
           if (classSym.varKind === 'const') {
-            throw ctx.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
+            throw ctx.errorCode('E003', null, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           }
           return `${methodInfo.nameMangled}(*${objC}${argsC ? ', ' + argsC : ''})`;
         }
         if (methodInfo?.isExplicitMut && classSym.varKind === 'const') {
-          throw ctx.error(`cannot call "mut" method on const binding`);
+          throw ctx.errorCode('E013');
         }
         if (methodInfo) {
           return `${poolClassName}_${prop}(${objC}${argsC ? ', ' + argsC : ''})`;
@@ -807,12 +807,12 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         const methodInfo = poolCls._methodNames?.get(prop);
         if (methodInfo?.isMoveMethod) {
           if (classSym.varKind === 'const') {
-            throw ctx.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
+            throw ctx.errorCode('E003', null, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
           }
           return `${methodInfo.nameMangled}(*${objC}.value${argsC ? ', ' + argsC : ''})`;
         }
         if (methodInfo?.isExplicitMut && classSym.varKind === 'const') {
-          throw ctx.error(`cannot call "mut" method on const binding`);
+          throw ctx.errorCode('E013');
         }
         if (methodInfo) {
           return `${poolClassName}_${prop}(${objC}.value${argsC ? ', ' + argsC : ''})`;
@@ -824,12 +824,12 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
       const methodInfo2 = classDef2?._methodNames?.get(prop);
       if (methodInfo2?.isMoveMethod) {
         if (classSym.varKind === 'const') {
-          throw ctx.error(`TypeError: Cannot move '${baseObject.kind === 'Ident' ? baseObject.name : '?'}': variable is declared const`);
+          throw ctx.errorCode('E003', null, { name: baseObject.kind === 'Ident' ? baseObject.name : '?' });
         }
         return `${methodInfo2.nameMangled}(${objC}${argsC ? ', ' + argsC : ''})`;
       }
       if (methodInfo2?.isExplicitMut && classSym.varKind === 'const') {
-        throw ctx.error(`cannot call "mut" method on const binding`);
+        throw ctx.errorCode('E013');
       }
       if (methodInfo2) {
         return `${classSym.ctype}_${prop}(&${objC}${argsC ? ', ' + argsC : ''})`;

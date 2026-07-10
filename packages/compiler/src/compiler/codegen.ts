@@ -790,16 +790,10 @@ class Context {
     for (const scopeLevel of this.scopes) {
       for (const [sname, sym] of scopeLevel) {
         if (sym._mutQuarantined) {
-          throw this.error(
-            `Cannot hold mutable reference to "${sname}" across "await" (potential asynchronous aliasing)`,
-            awaitNode
-          );
+          throw this.errorCode('E019', awaitNode, { name: `"${sname}" (mutable reference)` });
         }
         if ((sym._refBorrowCount || 0) > 0) {
-          throw this.error(
-            `"${sname}" cannot live across "await"; use ".clone()" to make an owned copy`,
-            awaitNode
-          );
+          throw this.errorCode('E019', awaitNode, { name: sname });
         }
       }
     }

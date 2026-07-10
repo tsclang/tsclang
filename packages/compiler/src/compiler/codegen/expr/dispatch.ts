@@ -48,10 +48,10 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         const sym = ctx.lookup(node.name);
         ctx._checkMoved(sym, node, node.name);
         if (sym?._mutQuarantined) {
-          throw ctx.error(`cannot access '${node.name}' while a mutable borrow is active`, node);
+          throw ctx.errorCode('E011', node, { name: node.name });
         }
         if (sym?.isWeak && !ctx._inWeakUpgrade) {
-          throw ctx.error(`cannot dereference '${node.name}' (Weak<T>); use '${node.name}.upgrade()' and check for null`, node);
+          throw ctx.errorCode('E022', node, { name: node.name });
         }
         if (sym?._cAlias) return sym._cAlias;
         if (sym?.funcName && !sym.funcPtr) return sym.funcName;
@@ -163,7 +163,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         const sym = node.object.kind === 'Ident' ? ctx.lookup(node.object.name) : null;
         const objName = node.object.kind === 'Ident' ? node.object.name : '';
         if (sym?._mutQuarantined) {
-          throw ctx.error(`cannot access '${objName}' while a mutable borrow is active`, node);
+          throw ctx.errorCode('E011', node, { name: objName });
         }
         if (sym?.ctype === 'tsc_unknown' && ctx._narrowedUnknownVars?.has(objName)) {
           const _nc = ctx._narrowedUnknownVars.get(objName);
@@ -311,7 +311,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         if (node.object.kind === 'Ident') {
           const _idxQSym = ctx.lookup(node.object.name);
           if (_idxQSym?._mutQuarantined) {
-            throw ctx.error(`cannot access '${node.object.name}' while a mutable borrow is active`, node);
+            throw ctx.errorCode('E011', node, { name: node.object.name });
           }
           if (_idxQSym?.ctype === 'tsc_unknown' && ctx._narrowedUnknownVars?.has(node.object.name)) {
             const _nc = ctx._narrowedUnknownVars.get(node.object.name);
@@ -604,7 +604,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         }
         const ownershipTypes = ['Ref', 'Mut', 'Arc', 'Weak', 'Box', 'Rc'];
         if (node.castType.kind === 'TypeRef' && ownershipTypes.includes(node.castType.name)) {
-          throw ctx.error(`cannot use "as" for ownership types`, node);
+          throw ctx.errorCode('E023', node);
         }
         // String literal union → string: use values array
         if (node.castType.kind === 'TypeRef' && node.castType.name === 'string') {

@@ -41,11 +41,11 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       }
       // Borrow check: cannot mutate field while an immutable borrow is active
       if ((objSym?._refBorrowCount || 0) > 0) {
-        throw ctx.error(`cannot mutate '${node.left.object.name}' while a borrow is active`, node);
+        throw ctx.errorCode('E010', node, { name: node.left.object.name });
       }
       // Mut quarantine: cannot access field while a mutable borrow return is active
       if (objSym?._mutQuarantined) {
-        throw ctx.error(`cannot access '${node.left.object.name}' while a mutable borrow is active`, node);
+        throw ctx.errorCode('E011', node, { name: node.left.object.name });
       }
     }
     // Check readonly tuple assignment: t[n] = ...
