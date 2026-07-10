@@ -189,6 +189,24 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
       // Fields from class decorators (e.g., @sealed adds _sealed: bool)
       for (const { fieldDecl } of _classDecoratorFields) userFieldParts.push(fieldDecl);
 
+      // W007: warn about struct padding inefficiency
+      if (inlineDec && !packedDec) {
+        const ALIGN: Record<string, number> = { int8_t:1, uint8_t:1, char:1, bool:1, int16_t:2, uint16_t:2, int32_t:4, uint32_t:4, float:4, size_t:4, int64_t:8, uint64_t:8, double:8 };
+        const SIZE: Record<string, number> = { int8_t:1, uint8_t:1, char:1, bool:1, int16_t:2, uint16_t:2, int32_t:4, uint32_t:4, float:4, size_t:4, int64_t:8, uint64_t:8, double:8 };
+        let offset = 0, padding = 0;
+        for (const f of fields) {
+          const ct = f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t';
+          const baseType = ct.endsWith(' *') ? 'size_t' : ct.replace(/^const /, '');
+          const align = ALIGN[baseType] ?? 4;
+          const size = SIZE[baseType] ?? 4;
+          padding += (align - (offset % align)) % align;
+          offset += (align - (offset % align)) % align + size;
+        }
+        if (padding >= 4 && offset > 0 && padding / offset > 0.2) {
+          ctx.warnCode('W007', null, { name, bytes: String(padding) });
+        }
+      }
+
       if (arcInfo) {
         const arcPre = arcInfo.refFirst ? [
           ...(arcInfo.arc || arcInfo.weak ? ['int32_t _refcount;', 'int32_t _weakcount;'] : []),

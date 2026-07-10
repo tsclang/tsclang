@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-07.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-11.
 
 ---
 
@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1923 spec-based tests (`--no-gcc`) + 135 engine tests
+- **Tests:** 1932 spec-based tests (`--no-gcc`) + 166 engine tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -103,9 +103,9 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1792 (spec-based) + 135 (engine)
+### Tests: 1932 (spec-based) + 166 (engine)
 
-**Spec-based:** 1792 pass, 0 fail, 2 skipped
+**Spec-based:** 1932 pass, 0 fail, 2 skipped
 
 | Section | Tests | Topic |
 |---------|-------|-------|
@@ -239,3 +239,29 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 - **Runtime:** typedefs, `tsc_mul_dXX`/`tsc_div_dXX` (round-half-away-from-zero), portable 128-bit helpers (`tsc_mulu128`, `tsc_divu128by64`) for d64 without `__int128`. `tsc_dec_dtoa` (generic formatter with AVR/embedded branches). `tsc_dXX_to_string` (String-returning wrappers).
 - Key files: `decimal.ts`, `helpers.ts`, `literals.ts`, `infer.ts`, `vardecl.ts`, `program.ts`, `operators.ts`, `assign.ts`, `dispatch.ts`, `console.ts`, `closures.ts`, `builtin-helpers.ts`, `conversion.ts`, `runtime.h`.
 - Spec: `03-types/03-decimal-types.md` (227 lines), cross-refs in `03-numbers.md`, `03-null.md`, `13-platform-capabilities.md`, `13-strict-mode.md`.
+
+---
+
+## 16. Diagnostics System (#179 — W001-W011 COMPLETE)
+
+**Registry:** `diagnostics.ts` — ~86 codes total (E0xx ownership, E1xx types, E2xx strict, E3xx platform, E4xx runtime+misc, W0xx warnings). `DiagnosticCode = keyof typeof DIAGNOSTICS` (type-safe). API: `ctx.errorCode(code, node?, params?, opts?)`, `ctx.warnCode(code, node?, params?)`, `ctx.panicTag(code, params?)`. `resolveDiagnostic(code, params?, locale?)` for tooling (LSP, CLI explain). i18n-ready (ICU MessageFormat-compatible templates).
+
+**Runtime panics:** Static panics resolve template at compile time. Dynamic (E409/E411) use `tsc_panic(code, ...)` / `tsc_throw(code, ...)`.
+
+### Warnings W001-W011
+
+| Code | Detection location | Trigger |
+|------|--------------------|---------|
+| W001 | `dispatch.ts` `_truthyToC` | class/Array/Map/Set always truthy in boolean context |
+| W002 | `dispatch.ts` `_truthyToC` | `!expr` where expr is always-truthy type (dead code) |
+| W003 | `control-flow.ts` Switch handler | non-exhaustive enum switch (no default) |
+| W004 | `control-flow.ts` Native handler | `native` block used |
+| W005 | `control-flow.ts` Unsafe handler | `unsafe` block used |
+| W006 | `async-emit.ts` `emitAsyncFunc` | direct self-call in async fn body (heap required) |
+| W007 | `class.ts` struct field emission | `@struct` padding ≥4 bytes and >20% of struct (no `@packed`) |
+| W008 | `assign.ts` + `vardecl.ts` + `call-dispatch.ts` | move from `const` in strict mode (non-strict → E003) |
+| W009 | `decorators.ts` `emitMethod` | `mut` method on class where ALL fields are readonly |
+| W010 | `concurrency.ts` Mutex.lock | `AsyncMutex.lock()` in async fn (deferred — async codegen loses type info) |
+| W011 | `vardecl.ts` typed var decl | `i64`/`u64`/`f64`/`f32` on `bits < 32` platform |
+
+**W010 note:** Async codegen promotes params to `self->m`, breaking `ctx.lookup()` type resolution. Test deferred — needs investigation of async member-call dispatch.

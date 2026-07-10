@@ -879,6 +879,13 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
 }
 
 export function _truthyToC(ctx: CodeGenContext, node: Expression, lines: string[] = [], depth: number = 0): string {
+    // Check for !expr where expr is always truthy (class/Array/Map/Set) — W002
+    if (node.kind === 'Unary' && node.op === '!') {
+      const innerType = ctx.inferType(node.expr);
+      if (ctx.classes.has(innerType) || innerType.startsWith('Array_') || innerType.startsWith('TscMap_') || innerType.startsWith('Map_') || innerType.startsWith('TscSet_') || innerType.startsWith('Set_')) {
+        ctx.warnCode('W002', node);
+      }
+    }
     const type = ctx.inferType(node);
     if (!type || type === 'bool' || type === 'void *') {
       return ctx.exprToC(node, lines, depth);

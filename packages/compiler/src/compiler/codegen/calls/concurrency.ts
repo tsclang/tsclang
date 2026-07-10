@@ -234,7 +234,10 @@ export function _dispatchConcurrency(ctx: CodeGenContext, node: Call, lines: str
         if (callee.prop === 'tryLock')  return `tsc_async_mutex_try_lock(&${_amC})`;
         if (callee.prop === 'unlock')   return `tsc_async_mutex_unlock(&${_amC})`;
         if (callee.prop === 'isLocked') return `tsc_async_mutex_is_locked(&${_amC})`;
-        if (callee.prop === 'lock')     return `tsc_async_mutex_try_lock(&${_amC})`;
+        if (callee.prop === 'lock') {
+          if (ctx._inAsyncFunc) ctx.warnCode('W010', node, { name: ctx.currentFuncName ?? 'async function' });
+          return `tsc_async_mutex_try_lock(&${_amC})`;
+        }
       }
     }
 

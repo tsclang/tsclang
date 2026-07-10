@@ -806,6 +806,12 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           } // end if innerInit2?.kind === 'Ident'
         }
         let ctype = typeAnn ? ctx.resolveType(typeAnn) : (init ? ctx.inferType(init) : 'double');
+        // W011: warn about expensive types on 8-bit targets
+        if (ctx._cap('bits') < 32) {
+          const expensive: Record<string, string> = { int64_t: 'i64', uint64_t: 'u64', double: 'f64', float: 'f32' };
+          const tsName = expensive[ctype];
+          if (tsName) ctx.warnCode('W011', node, { type: tsName });
+        }
         if (ctype === 'String *' && init?.kind === 'Ident') {
           const initSym = ctx.lookup(init.name);
           if (initSym?.isRefParam && initSym?.derefType === 'String') ctype = 'String';
@@ -1259,7 +1265,11 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               const structDef2 = ctx.classes.get(ctype);
               if (structDef2?.fields || ctype.startsWith('Array_')) {
                 if (initSym2?.varKind === 'const') {
-                  throw ctx.errorCode('E003');
+                  if (ctx._strictRules?.size) {
+                    ctx.warnCode('W008', null, { name: init.name });
+                  } else {
+                    throw ctx.errorCode('E003');
+                  }
                 }
                 if (initSym2?.isRefParam) {
                   throw ctx.errorCode('E004');
@@ -1518,7 +1528,11 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   && ctx.classes.get(initSym2pre.ctype)?.isStruct && structDef2pre?.isStruct;
                 if (!isCrossStruct && (structDef2pre?.fields || ctype.startsWith('Array_'))) {
                   if (initSym2pre?.varKind === 'const') {
-                    throw ctx.errorCode('E003');
+                    if (ctx._strictRules?.size) {
+                      ctx.warnCode('W008', null, { name: init.name });
+                    } else {
+                      throw ctx.errorCode('E003');
+                    }
                   }
                   if (initSym2pre?.isRefParam) {
                     throw ctx.errorCode('E004');

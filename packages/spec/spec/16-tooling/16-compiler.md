@@ -563,7 +563,7 @@ error[TSC-E071]: `Arc<T>` is not available on heap:false platforms
 ```
 
 ```
-warning[TSC-W081]: i64 on 8-bit target is expensive (8 bytes, up to 8 instructions per operation)
+warning[TSC-W011]: i64 on 8-bit target is expensive (8 bytes, up to 8 instructions per operation)
   --> src/main.tsc:3:5
    |
  3 |     let counter: i64 = 0
@@ -592,11 +592,27 @@ error[TSC-E031]: non-exhaustive switch вЂ” missing case `Direction.Up`
 - **РћРґРёРЅ РІР°СЂРёР°РЅС‚:** РµСЃР»Рё СЂРµС€РµРЅРёР№ РЅРµСЃРєРѕР»СЊРєРѕ вЂ” РїРѕРєР°Р·Р°С‚СЊ РЅР°РёР±РѕР»РµРµ РІРµСЂРѕСЏС‚РЅРѕРµ, РѕСЃС‚Р°Р»СЊРЅС‹Рµ РІ `note`
 - **Р‘РµР· Р¶Р°СЂРіРѕРЅР°:** РЅРµ В«lifetime constraint violatedВ», Р° В«borrow still used hereВ»
 - **РЈРєР°Р·С‹РІР°С‚СЊ СЃС‚СЂРѕРєСѓ** РєРѕРіРґР° fix РІ РґСЂСѓРіРѕРј РјРµСЃС‚Рµ: `= hint: move line 13 before line 9`
-## Test Engine API (для разработки компилятора и пользовательского тестирования)
 
-Jest-like API для написания тестов в TypeScript. Тесты компилируют TSClang > C > binary и проверяют результат.
+### РљР°С‚Р°Р»РѕРі warnings (W001-W011)
 
-### Основной API
+| РљРѕРґ | РўСЂРёРіРіРµСЂ | Р¤Р°Р№Р» |
+|-----|---------|------|
+| W001 | class/Array/Map/Set РІ boolean context вЂ” РІСЃРµРіРґР° truthy | `dispatch.ts` |
+| W002 | `!expr` РіРґРµ expr РІСЃРµРіРґР° truthy вЂ” dead code | `dispatch.ts` |
+| W003 | switch РїРѕ enum Р±РµР· РїРѕРєСЂС‹С‚РёСЏ РІСЃРµС… РІР°СЂРёР°РЅС‚РѕРІ (Р±РµР· default) | `control-flow.ts` |
+| W004 | `native` Р±Р»РѕРє вЂ” C РєРѕРґ РІСЃС‚Р°РІР»РµРЅ РєР°Рє РµСЃС‚СЊ, Р±РµР· РїСЂРѕРІРµСЂРѕРє | `control-flow.ts` |
+| W005 | `unsafe` Р±Р»РѕРє вЂ” ownership Рё type checks РѕС‚РєР»СЋС‡РµРЅС‹ | `control-flow.ts` |
+| W006 | РџСЂСЏРјР°СЏ СЂРµРєСѓСЂСЃРёСЏ РІ async С„СѓРЅРєС†РёРё вЂ” heap allocation required | `async-emit.ts` |
+| W007 | `@struct` СЃ РЅРµСЌС„С„РµРєС‚РёРІРЅС‹Рј РїРѕСЂСЏРґРєРѕРј РїРѕР»РµР№ (padding в‰Ґ4 bytes, >20%) | `class.ts` |
+| W008 | Move РёР· `const` binding РІ strict mode (Р±РµР· strict в†’ E003) | `assign.ts`, `vardecl.ts`, `call-dispatch.ts` |
+| W009 | `mut` РјРµС‚РѕРґ РЅР° РєР»Р°СЃСЃРµ РіРґРµ Р’РЎР• РїРѕР»СЏ readonly | `decorators.ts` |
+| W010 | `AsyncMutex.lock()` РІ async С„СѓРЅРєС†РёРё (Р±Р»РѕРєРёСЂСѓСЋС‰РёР№ РІС‹Р·РѕРІ) | `concurrency.ts` |
+| W011 | `i64`/`u64`/`f64`/`f32` РЅР° 8-bit РїР»Р°С‚С„РѕСЂРјРµ (РґРѕСЂРѕРіРѕ) | `vardecl.ts` |
+## Test Engine API (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
+
+Jest-like API пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ TypeScript. пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ TSClang > C > binary пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+
+### пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ API
 
 ```typescript
 import { describe, test, run, compile, expect, file } from "@tsclang/test"
@@ -619,35 +635,35 @@ describe("math", () => {
 })
 ```
 
-### Функции
+### пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
-| Функция | Описание |
+| пїЅпїЅпїЅпїЅпїЅпїЅпїЅ | пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ |
 |---------|----------|
-| `describe(name, fn)` | Группировка тестов |
-| `test(name, callback)` | Запуск теста |
-| `run(code, opts?)` | Компилирует TSC > C > binary, возвращает stdout |
-| `compile(codeOrPath)` | Компилирует TSC > C, возвращает C строку |
-| `file(path)` | Читает .tsc файл |
-| `expect(value)` | Создаёт chain с матчерами |
-| `expect(() => ...)` | Создаёт chain для проверки throw |
-| `TscError / CompileError / RuntimeError` | Классы ошибок по фазам |
+| `describe(name, fn)` | пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ |
+| `test(name, callback)` | пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ |
+| `run(code, opts?)` | пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ TSC > C > binary, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ stdout |
+| `compile(codeOrPath)` | пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ TSC > C, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ C пїЅпїЅпїЅпїЅпїЅпїЅ |
+| `file(path)` | пїЅпїЅпїЅпїЅпїЅпїЅ .tsc пїЅпїЅпїЅпїЅ |
+| `expect(value)` | пїЅпїЅпїЅпїЅпїЅпїЅ chain пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ |
+| `expect(() => ...)` | пїЅпїЅпїЅпїЅпїЅпїЅ chain пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ throw |
+| `TscError / CompileError / RuntimeError` | пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ |
 
 ### Matchers
 
 - `toBe(expected)`, `toBeGreaterThan(n)`, `toBeLessThan(n)`
 - `toContain(substring)`, `toMatch(regex)`
 - `toBeTruthy()`, `toBeFalsy()`, `toBeNull()`
-- `.not.toContain(substring)` — инверсия
+- `.not.toContain(substring)` пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
-### Компиляторы
+### пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 - `gcc` (Linux/WSL), `clang` (macOS), `msvc` (Windows), `avr-gcc` (AVR), `wasm`
 
-### 4-фазный пайплайн
+### 4-пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 ```
 TSC > C > [C-check] > binary > run
   1    1.5       2        3
 ```
 
-`run()` обрабатывает все 3 фазы. `compile()` останавливается после фазы 1.
+`run()` пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ 3 пїЅпїЅпїЅпїЅ. `compile()` пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ 1.

@@ -1,0 +1,7 @@
+function run(): void {
+  let x: i32 = 42;
+  unsafe {
+    x = x + 1;
+  }
+  console.log(x);
+}

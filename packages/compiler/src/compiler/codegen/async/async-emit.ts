@@ -16,6 +16,20 @@ export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
     ctx._initAsync();
     const { name, params, returnType, body } = node;
 
+    // W006: warn about async recursion (requires heap allocation for state machine)
+    if (body) {
+      const _hasSelfCall = (nd: unknown): boolean => {
+        if (!nd || typeof nd !== 'object') return false;
+        if (Array.isArray(nd)) return nd.some(_hasSelfCall);
+        const n = nd as Record<string, unknown>;
+        const callee = n.callee as Record<string, unknown> | undefined;
+        if (n.kind === 'Call' && callee?.kind === 'Ident' && callee.name === name) return true;
+        if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return false;
+        return Object.values(n).some(_hasSelfCall);
+      };
+      if (_hasSelfCall(body)) ctx.warnCode('W006', node, { name });
+    }
+
     // AVR: max 8 async state machines
     if (ctx._targetName === 'avr') {
       ctx._asyncCount = (ctx._asyncCount || 0) + 1;

@@ -1,0 +1,10 @@
+async function recurse(n: i32): Promise<void> {
+  if (n > 0) {
+    await recurse(n - 1);
+  }
+}
+
+async function run(): Promise<void> {
+  await recurse(3);
+  console.log("done");
+}

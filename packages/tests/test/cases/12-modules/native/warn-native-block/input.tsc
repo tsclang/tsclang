@@ -1,0 +1,4 @@
+function run(): void {
+  native "printf(\"native block\\n\");";
+  console.log("after");
+}

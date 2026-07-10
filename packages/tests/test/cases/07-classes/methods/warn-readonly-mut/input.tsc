@@ -1,0 +1,10 @@
+class Counter {
+  readonly count: i32;
+  constructor(c: i32) { this.count = c; }
+  mut inc(): void {
+    console.log(this.count);
+  }
+}
+
+let c = new Counter(42);
+c.inc();

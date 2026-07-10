@@ -1344,6 +1344,20 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         if (!hasDefault && ctx._strictRules?.has('switch-default')) {
           lines.push(`${IS}default: break;`);
         }
+        // W003: warn on non-exhaustive switch over enum (no default, missing cases)
+        if (!hasDefault && discEnumDef?.isEnum && !discEnumDef?.isConst && !discEnumDef?.isStringLiteralUnion) {
+          const allMembers = ((discEnumDef.members ?? []) as { name: string }[]).map(m => m.name);
+          const covered = new Set<string>();
+          for (const c of node.cases) {
+            if (c.test?.kind === 'Member' && c.test.object?.kind === 'Ident' && c.test.prop) {
+              covered.add(c.test.prop);
+            }
+          }
+          const missing = allMembers.filter(v => !covered.has(v));
+          if (missing.length > 0) {
+            ctx.warnCode('W003', node, { name: discType });
+          }
+        }
         p('}');
         break;
       }
@@ -1352,6 +1366,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         if (ctx._strictRules?.has('no-native')) {
           throw ctx.errorCode('E207', node);
         }
+        ctx.warnCode('W004', node);
         let nativeOut = '';
         if (node.templateParts) {
           // native(`... ${expr} ...`) тАФ interpolate expressions
@@ -1394,6 +1409,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         if (ctx._strictRules?.has('no-unsafe')) {
           throw ctx.errorCode('E208', node);
         }
+        ctx.warnCode('W005', node);
         p('{');
         const prevUnsafe = ctx._inUnsafe;
         ctx._inUnsafe = true;

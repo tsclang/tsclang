@@ -522,6 +522,17 @@ export function emitMethod(ctx: CodeGenContext, className: string, m: CodeGenMet
     const nameMangled = `${className}_${m.name}`;
 
     const isMut = m.modifiers?.includes('mut');
+    // W009: warn about mut method on class with all readonly fields
+    if (isMut && !isStatic) {
+      const cls = ctx.classes.get(className);
+      const classFields = (cls?.fields ?? []).filter((f: any) => !f.isMethod);
+      const isFieldReadonly = (f: any) =>
+        (f.modifiers ?? []).includes('readonly') ||
+        (f.decorators ?? []).some((d: any) => d.name === 'readonly');
+      if (classFields.length > 0 && classFields.every(isFieldReadonly)) {
+        ctx.warnCode('W009', null, { name: className, method: String(m.name) });
+      }
+    }
     // Move-method: returns the class itself by value → self passed by value
     const isMoveMethod = !isStatic && m.name !== 'new' && retType === className;
 

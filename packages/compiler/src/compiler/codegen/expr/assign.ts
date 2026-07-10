@@ -151,7 +151,11 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           throw ctx.errorCode('E002', node.right, { name: node.right.name });
         }
         if (rightSym.varKind === 'const') {
-          throw ctx.errorCode('E003');
+          if (ctx._strictRules?.size) {
+            ctx.warnCode('W008', node, { name: node.right.name });
+          } else {
+            throw ctx.errorCode('E003');
+          }
         }
         rightSym._moved = true;
         rightSym._movedLine = node.line;
@@ -165,7 +169,11 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           throw ctx.errorCode('E002', node.right, { name: node.right.name });
         }
         if (rightSym.varKind === 'const') {
-          throw ctx.errorCode('E003');
+          if (ctx._strictRules?.size) {
+            ctx.warnCode('W008', node, { name: node.right.name });
+          } else {
+            throw ctx.errorCode('E003');
+          }
         }
         rightSym._moved = true;
         rightSym._movedLine = node.line;

@@ -106,7 +106,7 @@ const n64: i64 = n      // неявно — без потерь
   const d = 1.0;         // error: float literal not supported (fpu: false)
   ```
 
-- **Performance warnings на 8-bit таргетах (AVR)** *[NOT YET IMPLEMENTED]*
+- **Performance warnings на 8-bit таргетах (AVR, NES) — W011**
 
   На `"target": "avr"` компилятор выдаёт предупреждения для типов, которые дороги на 8-bit ALU:
 

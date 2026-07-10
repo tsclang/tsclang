@@ -1,0 +1,6 @@
+@struct
+class BadLayout {
+  a: u8;
+  b: i64;
+  c: u8;
+}

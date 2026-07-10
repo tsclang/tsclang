@@ -518,7 +518,11 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
                 throw ctx.errorCode('E016', a.expr, { borrow_type: 'Arc<T>', name: a.expr.name });
               }
               if (_moveArgSym.varKind === 'const') {
-                throw ctx.errorCode('E003', a.expr);
+                if (ctx._strictRules?.size) {
+                  ctx.warnCode('W008', a.expr, { name: a.expr.name });
+                } else {
+                  throw ctx.errorCode('E003', a.expr);
+                }
               }
               if (_moveArgSym._moved) {
                 throw ctx.errorCode('E002', a.expr, { name: a.expr.name });
