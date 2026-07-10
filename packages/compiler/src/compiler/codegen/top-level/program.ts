@@ -191,10 +191,10 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
           const cycleStart = inStack.get(fn);
           const cycle = path.slice(cycleStart);
           if (cycle.length === 1) {
-            throw ctx.error(`TypeError: Direct recursion detected in '${fn}()': recursion is forbidden by strict rule 'no-recursion'`);
+            throw ctx.errorCode('E209', null, { detail: `direct recursion detected in '${fn}()': recursion is forbidden by strict rule 'no-recursion'` });
           } else {
             const cycleStr = [...cycle, fn].join(' → ');
-            throw ctx.error(`TypeError: Mutual recursion detected: ${cycleStr}; recursion is forbidden by strict rule 'no-recursion'`);
+            throw ctx.errorCode('E209', null, { detail: `mutual recursion detected: ${cycleStr}; recursion is forbidden by strict rule 'no-recursion'` });
           }
         }
         if (visited.has(fn)) return;

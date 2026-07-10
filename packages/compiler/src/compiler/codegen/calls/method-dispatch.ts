@@ -218,7 +218,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         case 'capacity': return `${objC}.capacity`;
         case 'sort': {
           if (args.length && ctx._strictRules?.has('no-sort')) {
-            throw ctx.error('Array.sort() with comparator is forbidden in strict mode (no-sort)', baseObject);
+            throw ctx.errorCode('E202', baseObject);
           }
           const fnC = args.length ? (cbFnName ?? argsC) : 'NULL';
           return `tsc_array_sort_${et}(&${objC}, ${fnC})`;
@@ -901,7 +901,7 @@ export function _extractCallbackFn(ctx: CodeGenContext, arg: Argument, lines: st
     const expr = arg.expr ?? arg;
     if (expr.kind === 'Arrow') {
       if (ctx._strictRules?.has('no-closures')) {
-        throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', expr);
+        throw ctx.errorCode('E200', expr);
       }
       const closure = ctx.hoistClosure(expr, `_cb_${ctx.closureCount ?? 0}`);
       if (closure) {

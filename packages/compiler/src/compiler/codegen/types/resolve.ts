@@ -47,7 +47,7 @@ export function resolveType(ctx: CodeGenContext, typeNode: TypeAnn | string | nu
       if (name in PRIMITIVE_MAP) {
         if (name === 'unknown') ctx._ensureUnknownStruct();
         if (ctx._strictRules?.has('no-any') && (name === 'any' || name === 'unknown')) {
-          throw ctx.error(`"${name}" is forbidden in strict mode (no-any); use a concrete type`, typeNode);
+          throw ctx.errorCode('E211', typeNode, { name });
         }
         if (name === 'any' && !ctx._inUnsafe && !ctx._inDeclare) {
           throw ctx.errorCode('E106', typeNode, { detail: `"any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values` });

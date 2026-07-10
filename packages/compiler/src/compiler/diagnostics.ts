@@ -761,6 +761,181 @@ message provides the specific details.
 `,
   },
 
+  // ── E2xx: Strict-mode rules ──────────────────────────────────────────────────
+  E200: {
+    code: 'E200',
+    severity: 'error',
+    title: 'closures forbidden (no-closures)',
+    message: `closures are forbidden in strict mode (no-closures); use named functions or inline the logic`,
+    help: ['define a named function instead of an arrow/lambda', 'remove the closure and inline the logic'],
+    body: `
+When the \`no-closures\` strict rule is active, arrow functions and
+closures are forbidden because they require heap allocation.
+
+Fix: replace the closure with a named function, or inline the logic.
+`,
+  },
+
+  E201: {
+    code: 'E201',
+    severity: 'error',
+    title: 'i64/u64 printing forbidden (no-i64-print)',
+    message: `i64/u64 values cannot be printed (no-i64-print)`,
+    help: ['cast to i32 for printing: value as i32', 'use a custom formatter'],
+    body: `
+When the \`no-i64-print\` strict rule is active, printing i64/u64 values
+is forbidden because many embedded platforms lack 64-bit printf support.
+
+Fix: cast to i32 for printing (if the value fits), or use a custom
+formatter.
+`,
+  },
+
+  E202: {
+    code: 'E202',
+    severity: 'error',
+    title: 'Array.sort() with comparator forbidden (no-sort)',
+    message: `Array.sort() with comparator is forbidden in strict mode (no-sort)`,
+    help: ['use a named sort function', 'implement the sort manually'],
+    body: `
+When the \`no-sort\` strict rule is active, \`Array.sort()\` with a
+comparator callback is forbidden because it requires dynamic dispatch
+and heap allocation for the closure.
+
+Fix: use a named sort function or implement the sort manually.
+`,
+  },
+
+  E203: {
+    code: 'E203',
+    severity: 'error',
+    title: 'unguarded integer arithmetic (safe-math)',
+    message: `{detail}`,
+    help: ['wrap in try/catch to handle overflow', 'declare the function as throws MathError'],
+    body: `
+When safe-math mode is active, integer arithmetic that could overflow
+must be wrapped in a try/catch block or the function must declare
+\`throws MathError\`.
+
+  try {
+    let z = x + y;
+  } catch (e) { /* handle overflow */ }
+`,
+  },
+
+  E204: {
+    code: 'E204',
+    severity: 'error',
+    title: 'lossy cast forbidden (no-lossy-cast)',
+    message: `lossy cast from {from} to {to} is forbidden (no-lossy-cast)`,
+    help: ["remove 'no-lossy-cast' from strict rules", 'use a safe widening path'],
+    body: `
+When the \`no-lossy-cast\` strict rule is active, type conversions that
+could lose data (e.g. i32 → i8, f64 → i32) are forbidden.
+
+Fix: use a safe widening path, or remove the strict rule if lossy
+casts are intentional.
+`,
+  },
+
+  E205: {
+    code: 'E205',
+    severity: 'error',
+    title: 'threads forbidden (no-threads)',
+    message: `threads are forbidden in strict mode (no-threads)`,
+    help: ['remove the no-threads strict rule', 'use a single-threaded alternative'],
+    body: `
+When the \`no-threads\` strict rule is active, \`spawn\` blocks and
+thread creation are forbidden.
+
+Fix: use a single-threaded alternative, or remove the strict rule.
+`,
+  },
+
+  E206: {
+    code: 'E206',
+    severity: 'error',
+    title: 'dynamic allocation forbidden (no-dynamic-alloc)',
+    message: `dynamic allocation is forbidden in strict mode (no-dynamic-alloc); {detail}`,
+    help: ['use a fixed-size buffer or compile-time constant', 'remove the no-dynamic-alloc strict rule'],
+    body: `
+When the \`no-dynamic-alloc\` strict rule is active, heap allocation
+(new Map, new Array, new Set, etc.) is forbidden.
+
+Fix: use fixed-size data structures or compile-time constants.
+`,
+  },
+
+  E207: {
+    code: 'E207',
+    severity: 'error',
+    title: 'native C blocks forbidden (no-native)',
+    message: `native C blocks are forbidden in strict mode (no-native)`,
+    help: ['use TSClang constructs instead of inline C', 'remove the no-native strict rule'],
+    body: `
+When the \`no-native\` strict rule is active, inline C blocks
+(\`native { ... }\`\u200b) are forbidden.
+
+Fix: use TSClang language constructs, or remove the strict rule.
+`,
+  },
+
+  E208: {
+    code: 'E208',
+    severity: 'error',
+    title: 'unsafe blocks forbidden (no-unsafe)',
+    message: `unsafe blocks are forbidden in strict mode (no-unsafe)`,
+    help: ['use safe TSClang constructs', 'remove the no-unsafe strict rule'],
+    body: `
+When the \`no-unsafe\` strict rule is active, \`unsafe { ... }\` blocks
+are forbidden.
+
+Fix: use safe TSClang constructs, or remove the strict rule.
+`,
+  },
+
+  E209: {
+    code: 'E209',
+    severity: 'error',
+    title: 'recursion forbidden (no-recursion)',
+    message: `{detail}`,
+    help: ['refactor to an iterative solution', 'remove the no-recursion strict rule'],
+    body: `
+When the \`no-recursion\` strict rule is active, direct and mutual
+recursion are forbidden because they make stack usage unbounded.
+
+Fix: refactor to an iterative solution, or remove the strict rule.
+`,
+  },
+
+  E210: {
+    code: 'E210',
+    severity: 'error',
+    title: 'interfaces with methods forbidden (no-interfaces)',
+    message: `interfaces with methods are forbidden in strict mode (no-interfaces)`,
+    help: ['use a struct type instead', 'remove the no-interfaces strict rule'],
+    body: `
+When the \`no-interfaces\` strict rule is active, interfaces that
+declare methods are forbidden because they require vtable dispatch.
+
+Fix: use a struct type, or remove the strict rule.
+`,
+  },
+
+  E211: {
+    code: 'E211',
+    severity: 'error',
+    title: 'any/unknown forbidden (no-any)',
+    message: `"{name}" is forbidden in strict mode (no-any); use a concrete type`,
+    help: ['use a concrete type instead of any/unknown', 'remove the no-any strict rule'],
+    body: `
+When the \`no-any\` strict rule is active, \`any\` and \`unknown\` types
+are forbidden because they bypass the type system.
+
+Fix: use a concrete type, or remove the strict rule.
+`,
+  },
+
   // ── E4xx: Runtime panics ─────────────────────────────────────────────────
   E401: {
     code: 'E401',

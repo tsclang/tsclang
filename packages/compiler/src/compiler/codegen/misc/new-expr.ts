@@ -20,7 +20,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
     // new Map<K,V>() → tsc_map_create_K_V()
     if (name === 'Map') {
       if (ctx._strictRules?.has('no-dynamic-alloc')) {
-        throw ctx.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Map requires heap allocation`, node);
+        throw ctx.errorCode('E206', node, { detail: 'Map requires heap allocation' });
       }
       if (ctx._allocatorName === 'static' && !args[0]) {
         const [kt2, vt2] = (node.typeArgs ?? []).map((t: TypeAnn) => ctx.resolveType(t));
@@ -44,7 +44,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       if (ctx._strictRules?.has('no-dynamic-alloc') && args[0]) {
         const argLit = args[0].expr?.kind === 'Literal' && args[0].expr.litType === 'number';
         if (!argLit) {
-          throw ctx.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); use fixed-size array or compile-time constant`, node);
+          throw ctx.errorCode('E206', node, { detail: 'use fixed-size array or compile-time constant' });
         }
       }
       if (ctx._allocatorName === 'static' && !args[0]) {

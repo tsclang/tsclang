@@ -118,7 +118,7 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
           fmtArgs.push(`tsc_dtoa(*${cexpr})`);
         } else if (derefType === 'int64_t') {
           if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
-            throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+            throw ctx.errorCode('E201', expr);
           }
           fmtParts.push('%lld');
           fmtArgs.push(`(long long)*${cexpr}`);
@@ -186,13 +186,13 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
         fmtArgs.push(`tsc_dec_dtoa((int64_t)(${cexpr}), ${scale}, ${dp})`);
       } else if (ctype === 'int64_t') {
         if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
-          throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+          throw ctx.errorCode('E201', expr);
         }
         fmtParts.push('%lld');
         fmtArgs.push(`(long long)${cexpr}`);
       } else if (ctype === 'uint64_t') {
         if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
-          throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+          throw ctx.errorCode('E201', expr);
         }
         fmtParts.push('%llu');
         fmtArgs.push(`(unsigned long long)${cexpr}`);
@@ -292,7 +292,7 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
               fmtArgs.push(`tsc_dtoa((double)(${valExpr}.value))`);
             } else if (innerCType === 'int64_t') {
               if (ctx._strictRules?.has('no-i64-print') || ctx._cap('bits') < 32) {
-                throw ctx.error('i64/u64 values cannot be printed (no-i64-print)', expr);
+                throw ctx.errorCode('E201', expr);
               }
               fmtParts.push('%lld');
               fmtArgs.push(`(long long)${valExpr}.value`);

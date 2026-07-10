@@ -375,7 +375,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           lines.push(`${I}if (${builtin}((${resultType})(${l}), (${resultType})(${r}), &${tmp})) { ${ctx._mathErrVar}.operation = "${opName}"; goto ${ctx._mathCatchLabel}; }`);
           return tmp;
         }
-        throw ctx.error(`unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+        throw ctx.errorCode('E203', node, { detail: 'unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare \'throws MathError\'' });
       }
       const signedIntSet = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t']);
       const slt = ctx.inferType(node.left);
@@ -414,7 +414,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
           }
           return `${l} ${op} ${divTmp}`;
         }
-        throw ctx.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+        throw ctx.errorCode('E203', node, { detail: 'unguarded integer division in safe-math mode; wrap in try/catch or declare \'throws MathError\'' });
       }
       if (isIntDefault && lines) {
         const I = ' '.repeat(ctx.indent * depth);

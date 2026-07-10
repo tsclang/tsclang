@@ -77,7 +77,7 @@ export function visitInterface(ctx: CodeGenContext, node: Interface) {
     if (methods.length === 0) return;
 
     if (ctx._strictRules?.has('no-interfaces')) {
-      throw ctx.error('interfaces with methods are forbidden in strict mode (no-interfaces)', node);
+      throw ctx.errorCode('E210', node);
     }
 
     // vtable typedef (single-line)

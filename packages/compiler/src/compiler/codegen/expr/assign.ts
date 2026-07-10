@@ -303,7 +303,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           lines.push(`${I}if (${builtin}((${leftType})(${l}), (${leftType})(${r}), &${tmp})) { ${ctx._mathErrVar}.operation = "${opName}"; goto ${ctx._mathCatchLabel}; }`);
           return `${l} = ${tmp}`;
         }
-        throw ctx.error(`unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+        throw ctx.errorCode('E203', node, { detail: 'unguarded integer arithmetic in safe-math mode; wrap in try/catch or declare \'throws MathError\'' });
       }
     }
     if (node.op === '/=' || node.op === '%=') {
@@ -322,7 +322,7 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
           }
           return `${l} ${node.op} ${divTmp}`;
         }
-        throw ctx.error(`unguarded integer division in safe-math mode; wrap in try/catch or declare 'throws MathError'`, node);
+        throw ctx.errorCode('E203', node, { detail: 'unguarded integer division in safe-math mode; wrap in try/catch or declare \'throws MathError\'' });
       }
       if (intTypes.has(leftType) && lines) {
         const I = ' '.repeat(ctx.indent * depth);

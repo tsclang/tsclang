@@ -126,7 +126,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
     // IIFE: (x => expr)(args) — hoist and call directly
     if (callee.kind === 'Arrow') {
       if (ctx._strictRules?.has('no-closures')) {
-        throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+        throw ctx.errorCode('E200', node);
       }
       const closure = ctx.hoistClosure(callee, `_iife_${ctx.closureCount ?? 0}`);
       if (closure) {
@@ -470,7 +470,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         }
         if (paramType === 'tsc_closure' && a.expr.kind === 'Arrow') {
           if (ctx._strictRules?.has('no-closures')) {
-            throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+            throw ctx.errorCode('E200', node);
           }
           const closure = ctx.hoistClosure(a.expr, `_cb_${ctx.closureCount ?? 0}`);
           if (closure) {

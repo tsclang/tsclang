@@ -685,7 +685,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           ];
           const tsName = (c: string) => c === 'double' ? 'f64' : c === 'float' ? 'f32' : c === 'size_t' ? 'usize' : c.replace(/_t$/,'').replace(/^u/,'u').replace(/^int/,'i');
           if (LOSSY.some(([s,t]) => srcType === s && ct === t)) {
-            throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
+            throw ctx.errorCode('E204', node, { from: tsName(srcType), to: tsName(ct) });
           }
           // Decimal lossy casts: narrowing, decimal→integer (fractional loss), float→decimal (precision loss)
           const DEC_SET = new Set(['d8_t','d16_t','d32_t','d64_t']);
@@ -704,7 +704,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             if (DEC_BITS[srcType] >= 32) decLossy = true;
           }
           if (decLossy) {
-            throw ctx.error(`lossy cast from ${tsName(srcType)} to ${tsName(ct)} is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path`, node);
+            throw ctx.errorCode('E204', node, { from: tsName(srcType), to: tsName(ct) });
           }
         }
         // Decimal cast: scale conversion needed (not a plain C cast)

@@ -412,7 +412,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         // new Set<T>() / new Set<T>([...]) С‚Р–Рў TscSet_SUFFIX
         if (init?.kind === 'New' && init.name === 'Set') {
           if (ctx._strictRules?.has('no-dynamic-alloc')) {
-            throw ctx.error(`dynamic allocation is forbidden in strict mode (no-dynamic-alloc); Set requires heap allocation`, init);
+            throw ctx.errorCode('E206', init, { detail: 'Set requires heap allocation' });
           }
           const tArg = init.typeArgs?.[0];
           const elemCType = tArg ? ctx.resolveType(tArg) : 'int32_t';
@@ -1114,7 +1114,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         // TypeFunc: single closure variable
         if (typeAnn?.kind === 'TypeFunc') {
           if (ctx._strictRules?.has('no-closures')) {
-            throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+            throw ctx.errorCode('E200', node);
           }
           const _closureParamCtypes = (typeAnn.params ?? []).map((p: TypeAnn) => ctx.resolveType(p));
           let initC: string;
@@ -1199,7 +1199,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         if (init) {
           if (init.kind === 'Arrow' || init.kind === 'FuncExpr') {
             if (ctx._strictRules?.has('no-closures')) {
-              throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+              throw ctx.errorCode('E200', node);
             }
             const _arrowParamCtypes = (init.params ?? []).map((p) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *');
             // Pre-declare for recursion support (before hoistClosure compiles body)
@@ -1236,7 +1236,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             const sym = ctx.lookup(init.name);
             if (sym?.funcName && sym?.params) {
               if (ctx._strictRules?.has('no-closures')) {
-                throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+                throw ctx.errorCode('E200', node);
               }
               p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${sym.funcName}};`);
               ctx.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName, closureRetType: sym.ctype,
@@ -1245,7 +1245,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               return;
             } else if (sym?.ctype === 'tsc_closure' && sym?.closureRetType) {
               if (ctx._strictRules?.has('no-closures')) {
-                throw ctx.error('closures are forbidden in strict mode (no-closures); use named functions or inline the logic', node);
+                throw ctx.errorCode('E200', node);
               }
               p(`${ctx.varDecl(qualifier, 'tsc_closure', name)} = ${init.name};`);
               ctx.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind,

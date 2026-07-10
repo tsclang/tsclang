@@ -1359,7 +1359,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
 
       case 'Native': {
         if (ctx._strictRules?.has('no-native')) {
-          throw ctx.error('native C blocks are forbidden in strict mode (no-native)', node);
+          throw ctx.errorCode('E207', node);
         }
         let nativeOut = '';
         if (node.templateParts) {
@@ -1401,7 +1401,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
 
       case 'Unsafe': {
         if (ctx._strictRules?.has('no-unsafe')) {
-          throw ctx.error('unsafe blocks are forbidden in strict mode (no-unsafe)', node);
+          throw ctx.errorCode('E208', node);
         }
         p('{');
         const prevUnsafe = ctx._inUnsafe;

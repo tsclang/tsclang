@@ -115,7 +115,7 @@ export function _emitPromiseTypedef(ctx: CodeGenContext, promiseType: string, in
   // Returns the C variable name of the thread handle
 export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, body: Stmt | Expression, throwsTypes: TypeAnn[] | null, lines: string[], depth: number) {
     if (ctx._strictRules?.has('no-threads')) {
-      throw ctx.error('threads are forbidden in strict mode (no-threads)', body);
+      throw ctx.errorCode('E205', body);
     }
     // Collect free (captured) vars from body
     const syntheticLambda = { params: [] as Param[], body: (body.kind === 'Block' ? body : { kind: 'Block', body: [body] }) as Block };
