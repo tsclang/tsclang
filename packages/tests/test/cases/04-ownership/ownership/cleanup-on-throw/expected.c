@@ -25,7 +25,7 @@ Result_i32_MyError process_bool(bool flag) {
 int main(void) {
     TSC_INIT();
     Result_i32_MyError _unwrap_0 = process_bool(false);
-    if (!_unwrap_0.ok) { tsc_panic(_unwrap_0.error._base.message); }
+    if (!_unwrap_0.ok) { tsc_panic("E409", _unwrap_0.error._base.message); }
     printf("%d\n", _unwrap_0.value);
     return 0;
 }

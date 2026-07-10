@@ -9,7 +9,7 @@ static int32_t Math_sqrt_inner(const Math *self, int32_t x) {
 
 static int32_t Math_sqrt(const Math *self, int32_t x) {
     if (x < 0) {
-        tsc_throw(STR_LIT("negative"));
+        tsc_throw("E411", STR_LIT("negative"));
     }
     return Math_sqrt_inner(self, x);
 }

@@ -317,7 +317,7 @@ export function emitPropagateVarDecl(ctx: CodeGenContext, node: VarDecl, lines: 
         const fnName = ctx.currentFuncName ?? '<function>';
         throw ctx.error(`TypeError: Cannot use '?' in '${fnName}': function does not declare 'throws'`);
       }
-      p(`if (!${resName}.ok) { tsc_panic(${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
+      p(`if (!${resName}.ok) { tsc_panic("E409", ${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
     }
 
     // Bind the value

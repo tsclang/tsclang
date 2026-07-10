@@ -809,7 +809,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           const resName = `_res_${ctx.tempCount++}`;
           const callC = ctx.exprToC(innerExpr, lines, depth);
           lines.push(`${I}${calleeSym._resultType} ${resName} = ${callC};`);
-          lines.push(`${I}if (!${resName}.ok) { tsc_panic(${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
+          lines.push(`${I}if (!${resName}.ok) { tsc_panic("E409", ${ctx._panicMsgExpr(resName, calleeSym._resultErrTypes)}); }`);
           if (calleeSym._resultIsVoid) return '((void)0)';
           return `${resName}.value`;
         }

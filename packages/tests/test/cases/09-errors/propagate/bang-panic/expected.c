@@ -12,7 +12,7 @@ Result_string_IOError readFile_string(String path) {
 int main(void) {
     TSC_INIT();
     Result_string_IOError _res_0 = readFile_string(STR_LIT("x.txt"));
-    if (!_res_0.ok) { tsc_panic(_res_0.error._base.message); }
+    if (!_res_0.ok) { tsc_panic("E409", _res_0.error._base.message); }
     String content = _res_0.value;
     printf("%s\n", content.data);
     return 0;

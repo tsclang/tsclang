@@ -9,7 +9,7 @@ static int32_t Calc_sqrt_inner(const Calc *self, int32_t x) {
 
 static int32_t Calc_sqrt(const Calc *self, int32_t x) {
     if (x < 0) {
-        tsc_throw(STR_LIT("too small"));
+        tsc_throw("E411", STR_LIT("too small"));
     }
     return Calc_sqrt_inner(self, x);
 }

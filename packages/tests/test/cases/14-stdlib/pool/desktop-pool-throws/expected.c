@@ -51,9 +51,9 @@ Result_i32_TscError _tsc_main(void) {
 int main(void) {
     TSC_INIT();
     Result_i32_TscError _unwrap_3 = _tsc_main();
-    if (!_unwrap_3.ok) { tsc_panic(_unwrap_3.error.message); }
+    if (!_unwrap_3.ok) { tsc_panic("E409", _unwrap_3.error.message); }
     printf("%d\n", _unwrap_3.value);
     Result_i32_TscError _unwrap_main = _tsc_main();
-    if (!_unwrap_main.ok) { tsc_panic(_unwrap_main.error.message); }
+    if (!_unwrap_main.ok) { tsc_panic("E409", _unwrap_main.error.message); }
     return _unwrap_main.value;
 }

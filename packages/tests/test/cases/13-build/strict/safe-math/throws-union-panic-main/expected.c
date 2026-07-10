@@ -44,6 +44,6 @@ static String _tsc_panic_msg_MathError_IOError(_ErrUnion_MathError_IOError e) {
 int main(void) {
     TSC_INIT();
     Result_i32_MathError_IOError _unwrap_main = _tsc_main();
-    if (!_unwrap_main.ok) { tsc_panic(_tsc_panic_msg_MathError_IOError(_unwrap_main.error)); }
+    if (!_unwrap_main.ok) { tsc_panic("E409", _tsc_panic_msg_MathError_IOError(_unwrap_main.error)); }
     return _unwrap_main.value;
 }

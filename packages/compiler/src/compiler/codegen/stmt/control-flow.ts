@@ -1128,10 +1128,10 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           // Not in throws function — fall back to tsc_throw
           if (val?.kind === 'New' && val.name === 'Error' && val.args?.length === 1) {
             const msgC = ctx.exprToC(val.args[0].expr ?? val.args[0], lines, depth);
-            p(`tsc_throw(${msgC});`);
+            p(`tsc_throw("E411", ${msgC});`);
           } else {
             const errC = ctx.exprToC(val, lines, depth);
-            p(`tsc_throw(${errC});`);
+            p(`tsc_throw("E411", ${errC});`);
           }
         }
         break;

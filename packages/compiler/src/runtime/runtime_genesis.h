@@ -35,8 +35,8 @@ static inline String tsc_str_from(const char *lit) {
 }
 
 // Panic/throw
-_Noreturn static inline void tsc_throw(const char *msg) { tsc_log(msg); while(1); }
-_Noreturn static inline void tsc_panic(const char *msg) { tsc_log(msg); while(1); }
+_Noreturn static inline void tsc_throw(const char *code, const char *msg) { tsc_log(code); tsc_log(msg); while(1); }
+_Noreturn static inline void tsc_panic(const char *code, const char *msg) { tsc_log(code); tsc_log(msg); while(1); }
 
 // TSC_INIT: Genesis hardware init
 #ifdef SGDK

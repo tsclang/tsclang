@@ -41,7 +41,7 @@ Result_i32_Err process_i32(int32_t count) {
 int main(void) {
     TSC_INIT();
     Result_i32_Err _unwrap_1 = process_i32(3);
-    if (!_unwrap_1.ok) { tsc_panic(_unwrap_1.error._base.message); }
+    if (!_unwrap_1.ok) { tsc_panic("E409", _unwrap_1.error._base.message); }
     printf("%d\n", _unwrap_1.value);
     return 0;
 }

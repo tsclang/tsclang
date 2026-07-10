@@ -125,13 +125,13 @@ typedef struct TscError {
 } TscError;
 
 /* tsc_throw / tsc_panic — hang on NES (no stderr) */
-_Noreturn static inline void tsc_throw(String msg) {
-    (void)msg;
+_Noreturn static inline void tsc_throw(const char *code, String msg) {
+    (void)code; (void)msg;
     while (1) {} /* halt; consider triggering a reset via $FFFC jump */
 }
 
-_Noreturn static inline void tsc_panic(String msg) {
-    (void)msg;
+_Noreturn static inline void tsc_panic(const char *code, String msg) {
+    (void)code; (void)msg;
     while (1) {}
 }
 

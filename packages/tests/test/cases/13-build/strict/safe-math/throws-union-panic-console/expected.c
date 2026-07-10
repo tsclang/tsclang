@@ -32,7 +32,7 @@ static String _tsc_panic_msg_MathError_IOError(_ErrUnion_MathError_IOError e) {
 
 void caller(void) {
     Result_i32_MathError_IOError _unwrap_1 = risky_i32_i32(1, 2);
-    if (!_unwrap_1.ok) { tsc_panic(_tsc_panic_msg_MathError_IOError(_unwrap_1.error)); }
+    if (!_unwrap_1.ok) { tsc_panic("E409", _tsc_panic_msg_MathError_IOError(_unwrap_1.error)); }
     printf("%d\n", _unwrap_1.value);
 }
 

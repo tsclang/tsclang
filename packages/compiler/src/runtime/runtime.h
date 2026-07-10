@@ -1301,13 +1301,13 @@ static inline void tsc_set_clear_string(TscSet_string *_s) { _s->size = 0; }
 #define _Noreturn
 #endif
 
-/* tsc_throw РІР‚вЂќ used for 'throw new Error(msg)' in _Noreturn functions */
+/* tsc_throw — used for 'throw new Error(msg)' in non-throws functions (E411) */
 #include <stdlib.h>
-_Noreturn static inline void tsc_throw(String msg) {
+_Noreturn static inline void tsc_throw(const char *code, String msg) {
 #ifdef __AVR__
-    fputs("Error: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
+    fputs("panic[", stderr); fputs(code, stderr); fputs("]: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
 #else
-    fprintf(stderr, "Error: %.*s\n", (int)msg.length, msg.data);
+    fprintf(stderr, "panic[%s]: %.*s\n", code, (int)msg.length, msg.data);
 #endif
     exit(1);
 }
@@ -1316,12 +1316,12 @@ _Noreturn static inline void tsc_throw(String msg) {
 #define _tsc_on_panic(msg) (fprintf(stderr, "panic%s\n", msg), abort())
 #endif
 
-/* tsc_panic РІР‚вЂќ used for '!' non-null assertion failure in non-throws context */
-_Noreturn static inline void tsc_panic(String msg) {
+/* tsc_panic — used for '!' unwrap failure in non-throws context (E409) */
+_Noreturn static inline void tsc_panic(const char *code, String msg) {
 #ifdef __AVR__
-    fputs("panic: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
+    fputs("panic[", stderr); fputs(code, stderr); fputs("]: ", stderr); _tsc_fprint_str(stderr, msg); fputc(10, stderr);
 #else
-    fprintf(stderr, "panic: %.*s\n", (int)msg.length, msg.data);
+    fprintf(stderr, "panic[%s]: %.*s\n", code, (int)msg.length, msg.data);
 #endif
     exit(1);
 }

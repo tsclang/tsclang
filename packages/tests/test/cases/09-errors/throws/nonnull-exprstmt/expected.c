@@ -10,7 +10,7 @@ Result_void_IOError compute(void) {
 
 void caller(void) {
     Result_void_IOError _res_0 = compute();
-    if (!_res_0.ok) { tsc_panic(_res_0.error._base.message); }
+    if (!_res_0.ok) { tsc_panic("E409", _res_0.error._base.message); }
     ((void)0);
 }
 

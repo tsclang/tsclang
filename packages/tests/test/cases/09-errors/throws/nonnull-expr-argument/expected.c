@@ -13,7 +13,7 @@ void foo_i32(int32_t x) {
 
 void caller(void) {
     Result_i32_IOError _res_0 = risky();
-    if (!_res_0.ok) { tsc_panic(_res_0.error._base.message); }
+    if (!_res_0.ok) { tsc_panic("E409", _res_0.error._base.message); }
     foo_i32(_res_0.value);
 }
 

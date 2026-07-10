@@ -1498,7 +1498,7 @@ class Context {
           const unwrap = `_unwrap_main`;
           parts.push(`${this.ind()}${this._explicitMainResultType} ${unwrap} = _tsc_main();`);
           const panicMsg = _mainPanicMsg;
-          parts.push(`${this.ind()}if (!${unwrap}.ok) { tsc_panic(${panicMsg}); }`);
+          parts.push(`${this.ind()}if (!${unwrap}.ok) { tsc_panic("E409", ${panicMsg}); }`);
           if (this._explicitMainRetType === 'void') {
             parts.push(`${this.ind()}return 0;`);
           } else {

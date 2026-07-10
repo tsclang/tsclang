@@ -37,8 +37,8 @@ static inline String tsc_str_from(const char *lit) {
 static inline void tsc_str_free(String *s) { free(s->ptr); s->ptr = 0; s->len = s->cap = 0; }
 
 // Panic/throw → wasm trap (unreachable instruction)
-__attribute__((noreturn)) static inline void tsc_throw(const char *msg) { tsc_log(msg); __builtin_trap(); }
-__attribute__((noreturn)) static inline void tsc_panic(const char *msg) { tsc_log(msg); __builtin_trap(); }
+__attribute__((noreturn)) static inline void tsc_throw(const char *code, const char *msg) { tsc_log(code); tsc_log(msg); __builtin_trap(); }
+__attribute__((noreturn)) static inline void tsc_panic(const char *code, const char *msg) { tsc_log(code); tsc_log(msg); __builtin_trap(); }
 
 // TSC_INIT: nothing required for bare wasm32; Emscripten handles its own init
 #define TSC_INIT()  do {} while(0)

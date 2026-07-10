@@ -45,7 +45,7 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
           unwrapRes = `_unwrap_${ctx.tempCount++}`;
           const callC = ctx.exprToC(expr, lines, depth);
           lines.push(`${I}${calleeSym._resultType} ${unwrapRes} = ${callC};`);
-          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic(${ctx._panicMsgExpr(unwrapRes, calleeSym._resultErrTypes)}); }`);
+          lines.push(`${I}if (!${unwrapRes}.ok) { tsc_panic("E409", ${ctx._panicMsgExpr(unwrapRes, calleeSym._resultErrTypes)}); }`);
           ctype = calleeSym._resultValueType ?? 'int32_t';
         }
       }

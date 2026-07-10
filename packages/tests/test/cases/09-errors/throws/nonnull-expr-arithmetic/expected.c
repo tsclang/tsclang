@@ -9,7 +9,7 @@ Result_i32_IOError risky(void) {
 
 int32_t caller(void) {
     Result_i32_IOError _res_0 = risky();
-    if (!_res_0.ok) { tsc_panic(_res_0.error._base.message); }
+    if (!_res_0.ok) { tsc_panic("E409", _res_0.error._base.message); }
     return _res_0.value + 1;
 }
 

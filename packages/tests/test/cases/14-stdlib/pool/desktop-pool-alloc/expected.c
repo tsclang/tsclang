@@ -42,7 +42,7 @@ Result_i32_TscError makeSum(void) {
 int main(void) {
     TSC_INIT();
     Result_i32_TscError _unwrap_2 = makeSum();
-    if (!_unwrap_2.ok) { tsc_panic(_unwrap_2.error.message); }
+    if (!_unwrap_2.ok) { tsc_panic("E409", _unwrap_2.error.message); }
     printf("%d\n", _unwrap_2.value);
     return 0;
 }

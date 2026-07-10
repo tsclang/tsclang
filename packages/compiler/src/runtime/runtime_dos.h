@@ -31,8 +31,8 @@ static inline String tsc_str_from(const char *lit) {
 static inline void tsc_str_free(String *s) { free(s->ptr); s->ptr = 0; s->len = s->cap = 0; }
 
 // Panic/throw
-_Noreturn static inline void tsc_throw(const char *msg) { puts(msg); exit(1); }
-_Noreturn static inline void tsc_panic(const char *msg) { puts(msg); exit(1); }
+_Noreturn static inline void tsc_throw(const char *code, const char *msg) { printf("panic[%s]: %s\n", code, msg); exit(1); }
+_Noreturn static inline void tsc_panic(const char *code, const char *msg) { printf("panic[%s]: %s\n", code, msg); exit(1); }
 
 // TSC_INIT: nothing required for DOS
 #define TSC_INIT()  do {} while(0)
