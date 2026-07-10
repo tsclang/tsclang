@@ -1,1 +1,1 @@
-TypeError: Cannot capture mutable variable 'x' by reference in a spawn block; use Arc<T> or Atomic<T>
+error[E021]

@@ -1,1 +1,2 @@
 function "foo" throws but does not declare "throws"
+error[E415]

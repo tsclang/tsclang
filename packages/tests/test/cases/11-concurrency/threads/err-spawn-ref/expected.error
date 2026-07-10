@@ -1,1 +1,2 @@
 thread closure cannot capture "Ref<T>": not Send
+error[E021]

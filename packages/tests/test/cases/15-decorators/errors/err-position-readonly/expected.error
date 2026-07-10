@@ -1,1 +1,2 @@
 "@readonly" can only be applied to properties
+error[E412]

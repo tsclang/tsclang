@@ -1,1 +1,2 @@
 RuntimeError: decodeUtf8: invalid UTF-8 byte sequence at offset 0
+error[E418]

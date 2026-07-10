@@ -1,1 +1,2 @@
 TypeError: Cannot throw inside a finally block
+error[E415]

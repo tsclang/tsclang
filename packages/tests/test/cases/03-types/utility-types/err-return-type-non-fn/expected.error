@@ -1,1 +1,2 @@
 ReturnType argument must be a function type
+error[E109]

@@ -1,1 +1,1 @@
-TypeError: Cannot return borrow to array element from function
+error[E017]

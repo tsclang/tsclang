@@ -1,1 +1,1 @@
-TypeError: Cannot pass Mut<T> 'm' as Arc<T> — mutable borrow cannot become shared reference
+error[E015]

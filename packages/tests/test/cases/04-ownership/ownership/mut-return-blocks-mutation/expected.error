@@ -1,1 +1,1 @@
-error: cannot access 'box' while a mutable borrow is active
+error[E011]

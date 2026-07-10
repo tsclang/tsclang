@@ -1,1 +1,2 @@
 cannot convert multi-character string to char/u8
+error[E102]

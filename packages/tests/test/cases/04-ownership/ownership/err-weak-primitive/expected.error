@@ -1,1 +1,2 @@
 TypeError: Weak<T> requires a non-primitive type, got boolean
+error[E106]

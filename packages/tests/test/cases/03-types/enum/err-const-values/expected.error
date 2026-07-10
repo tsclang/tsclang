@@ -1,1 +1,2 @@
 "values()" is not available on const enum
+error[E416]

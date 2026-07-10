@@ -1,1 +1,2 @@
 TypeError: Raw pointer operation outside unsafe block; wrap in 'unsafe { ... }'
+error[E416]

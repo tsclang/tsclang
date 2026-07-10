@@ -1,1 +1,2 @@
 @align argument must be a power of two
+error[E412]

@@ -1,1 +1,2 @@
 const expression result 5000000000 overflows u32
+error[E101]

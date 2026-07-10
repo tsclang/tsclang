@@ -1,1 +1,2 @@
-"any" is forbidden in strict mode (no-any)
+error[E211]
+error[E211]: "any" is forbidden in strict mode (no-any); use a concrete type

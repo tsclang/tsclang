@@ -1,1 +1,2 @@
 use of moved value: 'h.inner'
+error[E006]

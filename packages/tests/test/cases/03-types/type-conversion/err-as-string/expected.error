@@ -1,1 +1,2 @@
 cannot cast i32 to string using "as"; use ".toString()"
+error[E104]

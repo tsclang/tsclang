@@ -1,1 +1,2 @@
 "null" cannot be used as a standalone type; use T | null
+error[E106]

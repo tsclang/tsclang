@@ -1,1 +1,2 @@
 float literal 1.5 assigned to integer type u8
+error[E100]

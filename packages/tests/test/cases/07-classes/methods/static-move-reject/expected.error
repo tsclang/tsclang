@@ -1,1 +1,2 @@
 "static" methods cannot be "move"
+error[E412]

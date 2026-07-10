@@ -1,1 +1,1 @@
-TypeError: Cannot create two simultaneous mutable borrows of 'b'
+error[E012]

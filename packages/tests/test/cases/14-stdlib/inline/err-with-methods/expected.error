@@ -1,1 +1,2 @@
-TypeError: @struct class 'Bad' cannot have non-trivial methods; remove 'compute()' or use a regular class
+error[E412]
+error[E412]: TypeError: @struct class 'Bad' cannot have non-trivial methods; remove 'compute()' or use a regular class

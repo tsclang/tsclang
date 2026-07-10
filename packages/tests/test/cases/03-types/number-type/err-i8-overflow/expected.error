@@ -1,1 +1,2 @@
 literal 128 overflows i8
+error[E101]

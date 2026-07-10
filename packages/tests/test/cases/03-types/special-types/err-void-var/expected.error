@@ -1,1 +1,2 @@
 "void" can only be used as a return type
+error[E106]

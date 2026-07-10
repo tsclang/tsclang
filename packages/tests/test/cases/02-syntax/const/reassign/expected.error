@@ -1,2 +1,3 @@
 cannot assign to 'const' variable 'x'
 input.tsc:2:
+error[E001]

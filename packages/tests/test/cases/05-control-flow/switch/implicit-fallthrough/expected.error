@@ -1,2 +1,3 @@
 implicit fallthrough
 input.tsc:4
+error[E005]

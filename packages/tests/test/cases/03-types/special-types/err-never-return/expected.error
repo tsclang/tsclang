@@ -1,1 +1,2 @@
 function with return type "never" must not return
+error[E117]

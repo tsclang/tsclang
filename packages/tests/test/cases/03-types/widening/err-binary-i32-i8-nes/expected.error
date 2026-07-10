@@ -1,1 +1,2 @@
 cannot implicitly convert i32 to i8
+error[E100]

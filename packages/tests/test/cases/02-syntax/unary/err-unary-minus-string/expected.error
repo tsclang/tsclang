@@ -1,1 +1,1 @@
-TypeError: unary '-' not applicable to 'string'
+error[E105]

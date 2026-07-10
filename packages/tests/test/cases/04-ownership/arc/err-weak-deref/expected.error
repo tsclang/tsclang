@@ -1,1 +1,2 @@
 cannot dereference 'w' (Weak<T>); use 'w.upgrade()' and check for null
+error[E022]

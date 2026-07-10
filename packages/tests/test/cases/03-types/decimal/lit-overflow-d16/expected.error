@@ -1,1 +1,2 @@
 literal 500.0 overflows d16 (scaled value 50000 exceeds raw range -32768..32767)
+error[E101]

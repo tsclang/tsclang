@@ -1,1 +1,2 @@
+error[E300]
 "setTimeout" is not available on embedded targets

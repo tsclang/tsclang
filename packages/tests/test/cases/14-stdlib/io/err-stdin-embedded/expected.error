@@ -1,1 +1,2 @@
-TypeError: 'process.stdin' is not available on embedded targets
+error[E300]
+error[E300]: 'process.stdin' is not available on embedded targets

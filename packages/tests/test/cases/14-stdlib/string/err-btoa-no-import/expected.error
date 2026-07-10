@@ -1,1 +1,1 @@
-error: unknown identifier 'btoa'
+error[E419]

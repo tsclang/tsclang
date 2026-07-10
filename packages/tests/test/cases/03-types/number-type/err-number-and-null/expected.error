@@ -1,1 +1,1 @@
-error: TypeError: bitwise op '&' not applicable to 'double' and 'null'
+error[E105]

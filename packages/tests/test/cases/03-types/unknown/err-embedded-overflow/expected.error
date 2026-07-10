@@ -1,1 +1,2 @@
+error[E304]
 exceeds embedded unknown inline buffer (3 words). Use Ref or pointers for indirect storage

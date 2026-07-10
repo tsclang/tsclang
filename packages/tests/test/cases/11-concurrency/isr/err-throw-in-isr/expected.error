@@ -1,1 +1,2 @@
 "throw" is not allowed inside @isr handlers
+error[E416]

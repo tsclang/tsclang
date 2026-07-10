@@ -1,1 +1,1 @@
-Cannot hold mutable reference to "b" across "await" (potential asynchronous aliasing)
+error[E019]

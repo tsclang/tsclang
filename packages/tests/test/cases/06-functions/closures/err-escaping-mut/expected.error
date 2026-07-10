@@ -1,1 +1,1 @@
-Cannot capture 'count' by reference in an escaping closure: the captured value would outlive its stack frame. Use a value capture instead.
+error[E020]

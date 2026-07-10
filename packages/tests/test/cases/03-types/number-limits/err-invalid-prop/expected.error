@@ -1,1 +1,2 @@
 TypeError: 'Number.FOO' is not a known constant
+error[E419]

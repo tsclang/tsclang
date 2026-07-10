@@ -1,1 +1,2 @@
 threads are forbidden in strict mode (no-threads)
+error[E205]

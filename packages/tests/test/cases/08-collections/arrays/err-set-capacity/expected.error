@@ -1,1 +1,2 @@
 cannot assign to "capacity"; use "arr.reallocate(n)" instead
+error[E413]

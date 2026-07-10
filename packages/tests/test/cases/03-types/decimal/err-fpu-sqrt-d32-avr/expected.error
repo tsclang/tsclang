@@ -1,1 +1,2 @@
+error[E302]
 Math.sqrt() on decimal types requires FPU (floating-point unit); platform has fpu=false

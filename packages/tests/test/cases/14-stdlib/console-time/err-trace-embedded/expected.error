@@ -1,1 +1,2 @@
+error[E300]
 "console.trace()" is not available on avr targets

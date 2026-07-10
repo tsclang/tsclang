@@ -1,1 +1,1 @@
-error: TypeError: bitwise op '^' not applicable to 'string' and 'string'
+error[E105]

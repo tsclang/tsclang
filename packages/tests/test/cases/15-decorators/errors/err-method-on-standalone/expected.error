@@ -1,1 +1,2 @@
 "methodOnly" is a method decorator and cannot be applied to a standalone function
+error[E412]

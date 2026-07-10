@@ -1,1 +1,2 @@
 "Arc<T>" requires a heap allocator; "static" allocator does not support ARC
+error[E301]

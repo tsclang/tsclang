@@ -1,1 +1,2 @@
 cannot implicitly convert i64 to u32: use "as u32"
+error[E100]

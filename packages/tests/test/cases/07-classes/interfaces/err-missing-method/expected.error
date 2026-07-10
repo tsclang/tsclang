@@ -1,1 +1,2 @@
 class "Rect" does not implement method "perimeter" from interface "Shape"
+error[E118]

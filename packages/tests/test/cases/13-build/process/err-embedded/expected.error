@@ -1,1 +1,2 @@
+error[E300]
 "process.exit" is not available on embedded targets

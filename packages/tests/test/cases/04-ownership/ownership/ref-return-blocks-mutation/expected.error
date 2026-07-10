@@ -1,1 +1,1 @@
-error: cannot mutate 'box' while a borrow is active
+error[E010]

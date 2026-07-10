@@ -1,1 +1,2 @@
 TypeError: Side effect (signal.set) inside computed() is not allowed
+error[E418]

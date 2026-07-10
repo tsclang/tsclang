@@ -1,1 +1,2 @@
 "type" alias cannot contain methods; use "interface" instead
+error[E414]

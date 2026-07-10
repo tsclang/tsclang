@@ -1,1 +1,1 @@
-﻿error: lossy cast from d32 to f32 is forbidden (no-lossy-cast); remove 'no-lossy-cast' from strict rules or use a safe widening path
+error[E204]

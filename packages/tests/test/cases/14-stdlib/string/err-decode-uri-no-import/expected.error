@@ -1,1 +1,1 @@
-error: unknown identifier 'decodeURI'
+error[E419]

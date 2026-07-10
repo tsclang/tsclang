@@ -1,1 +1,2 @@
 literal 4294967296 overflows u32
+error[E101]

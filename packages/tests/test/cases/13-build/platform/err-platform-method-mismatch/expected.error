@@ -1,1 +1,1 @@
-TypeError: 'Hal.avrOnly' is only available on platform "avr", but current target is "desktop"
+error[E300]

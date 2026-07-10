@@ -1,1 +1,2 @@
+error[E300]
 "SecureRandom" is not available on embedded targets

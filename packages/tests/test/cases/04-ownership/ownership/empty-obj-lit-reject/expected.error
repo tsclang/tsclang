@@ -1,1 +1,2 @@
 empty object literal is forbidden; use a typed variable or Map<K, V>
+error[E414]

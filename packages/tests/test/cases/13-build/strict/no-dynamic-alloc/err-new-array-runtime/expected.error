@@ -1,1 +1,2 @@
 dynamic allocation is forbidden in strict mode (no-dynamic-alloc)
+error[E206]

@@ -1,1 +1,2 @@
 literal 32768 overflows i16
+error[E101]

@@ -1,1 +1,1 @@
-TypeError: Cannot pass Ref<T> 'b' as owned parameter — borrow cannot be consumed
+error[E016]

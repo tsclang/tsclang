@@ -1,1 +1,2 @@
 literal 65536 overflows u16
+error[E101]

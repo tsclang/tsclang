@@ -1,1 +1,2 @@
 variable of enum type "Color" must be explicitly initialized or declared nullable
+error[E419]

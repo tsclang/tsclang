@@ -1,1 +1,2 @@
 Pick with runtime key in return type is not supported
+error[E416]

@@ -1,1 +1,2 @@
 interfaces with methods are forbidden in strict mode (no-interfaces)
+error[E210]

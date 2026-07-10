@@ -1,1 +1,1 @@
-TypeError: 'std/hal' requires an embedded platform target
+error[E300]

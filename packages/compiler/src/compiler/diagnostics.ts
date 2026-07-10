@@ -11,7 +11,6 @@
 //
 // Used by:
 //   - ctx.errorCode() / ctx.warnCode() → resolve message+help from registry
-//   - ctx.error() / ctx.warn()         → look up title by code (legacy)
 //   - `tsclang explain <CODE>`         → render body
 //   - test engine                      → assert code + title
 

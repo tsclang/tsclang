@@ -1,1 +1,2 @@
 lossy cast from i64 to i32 is forbidden (no-lossy-cast)
+error[E204]

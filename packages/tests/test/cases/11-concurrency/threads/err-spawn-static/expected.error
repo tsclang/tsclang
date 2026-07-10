@@ -1,1 +1,3 @@
 TypeError: Cannot capture @static variable 'counter' in spawn block; use Atomic<T> for thread-safe access
+error[E418]
+error[E415]

@@ -1,1 +1,2 @@
-TypeError: 'std/net' is not available on wasm targets
+error[E300]
+error[E300]: 'std/net' is not available on wasm targets

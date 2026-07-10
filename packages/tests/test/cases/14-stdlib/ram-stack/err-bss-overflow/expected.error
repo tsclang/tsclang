@@ -1,1 +1,2 @@
-TypeError: Static BSS usage (4096 bytes) exceeds ram_size (2048 bytes)
+error[E305]
+error[E305]: Static BSS usage (4096 bytes) exceeds ram_size (2048 bytes)

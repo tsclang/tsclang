@@ -1,1 +1,2 @@
 "never" cannot be used as a variable type
+error[E106]

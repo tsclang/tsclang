@@ -1,1 +1,2 @@
 cannot pass i32 as "any": any is opaque across function boundaries
+error[E120]

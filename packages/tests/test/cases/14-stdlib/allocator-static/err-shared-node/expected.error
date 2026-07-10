@@ -1,1 +1,1 @@
-TypeError: 'new Arc<Node>()' requires heap allocation (ARC), which is unavailable when allocator is "static"
+error[E301]

@@ -1,1 +1,2 @@
 Array.sort() with comparator is forbidden in strict mode (no-sort)
+error[E202]

@@ -1,1 +1,2 @@
 TypeError: Invalid memory ordering 'relaxed' for store operation; valid: 'release', 'seq_cst'
+error[E418]

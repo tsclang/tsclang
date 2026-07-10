@@ -1,1 +1,2 @@
 TypeError: Native block references undeclared type 'some_undefined_type'; declare it or use @[native_type]
+error[E418]

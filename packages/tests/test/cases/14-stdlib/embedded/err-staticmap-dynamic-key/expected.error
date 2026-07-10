@@ -1,1 +1,2 @@
 TypeError: StaticMap keys must be compile-time string literals; dynamic key '[key]' is not allowed
+error[E418]

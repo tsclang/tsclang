@@ -1,1 +1,2 @@
 cannot mix i32 and u32: signed/unsigned mismatch, use "as" to specify type
+error[E100]

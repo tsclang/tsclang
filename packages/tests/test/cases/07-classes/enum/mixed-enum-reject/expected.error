@@ -1,1 +1,2 @@
 mixed string and number values in enum "Color" are not allowed
+error[E115]

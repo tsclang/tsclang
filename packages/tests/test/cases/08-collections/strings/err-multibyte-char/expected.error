@@ -1,1 +1,2 @@
 non-ASCII character cannot be used as u8
+error[E102]

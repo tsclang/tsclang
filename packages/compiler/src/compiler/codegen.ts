@@ -973,52 +973,6 @@ class Context {
     }
   }
 
-  // Throw a positioned TscError.
-  // node — AST node with optional .line/.col/.endCol; falls back to this._currentNode.
-  // opts — string[] (legacy notes=[]) OR object { label, spans, help, notes, code }
-  error(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
-    const n = (node ?? this._currentNode) as NodePos | null | undefined;
-    const legacy = Array.isArray(opts);
-    const code   = legacy ? null : (opts.code ?? null);
-    const title  = code ? (lookupDiagnostic(code)?.title ?? null) : null;
-    throw new TscError(msg, {
-      filename: this.filename,
-      line:   n?.line   ?? null,
-      col:    n?.col    ?? null,
-      endCol: n?.endCol ?? null,
-      src:    this.src,
-      notes:  legacy ? opts          : (opts.notes ?? []),
-      label:  legacy ? null          : (opts.label ?? null),
-      spans:  legacy ? []            : (opts.spans ?? []),
-      help:   legacy ? []            : (opts.help  ?? []),
-      code,
-      title,
-    });
-  }
-
-  // Collect a warning diagnostic (does not throw).
-  // opts — same shape as error(): string[] (legacy notes) or { label, spans, help, notes, code }
-  warn(msg: string, node?: unknown, opts: string[] | ErrorOpts = {}) {
-    const n = (node ?? this._currentNode) as NodePos | null | undefined;
-    const legacy = Array.isArray(opts);
-    const code   = legacy ? null : (opts.code ?? null);
-    const title  = code ? (lookupDiagnostic(code)?.title ?? null) : null;
-    this._warnings.push(new TscError(msg, {
-      kind:   'warning',
-      filename: this.filename,
-      line:   n?.line   ?? null,
-      col:    n?.col    ?? null,
-      endCol: n?.endCol ?? null,
-      src:    this.src,
-      notes:  legacy ? opts          : (opts.notes ?? []),
-      label:  legacy ? null          : (opts.label ?? null),
-      spans:  legacy ? []            : (opts.spans ?? []),
-      help:   legacy ? []            : (opts.help  ?? []),
-      code,
-      title,
-    }));
-  }
-
   // Throw a positioned TscError using a diagnostic code from the registry.
   // Resolves message template + help from DIAGNOSTICS, then merges opts.help on top.
   //   ctx.errorCode('E002', node, { name: 'x' }, { spans: [...] });

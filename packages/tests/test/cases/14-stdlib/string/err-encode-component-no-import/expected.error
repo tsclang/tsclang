@@ -1,1 +1,1 @@
-error: unknown identifier 'encodeURIComponent'
+error[E419]

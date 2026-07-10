@@ -1,1 +1,2 @@
 "any" is only allowed in "declare" or "unsafe" context; use "unknown" for type-safe dynamic values
+error[E106]

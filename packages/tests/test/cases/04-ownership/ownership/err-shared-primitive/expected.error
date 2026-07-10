@@ -1,1 +1,2 @@
 TypeError: Arc<T> requires a non-primitive type, got i32
+error[E106]

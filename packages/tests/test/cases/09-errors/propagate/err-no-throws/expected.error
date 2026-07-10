@@ -1,1 +1,2 @@
 TypeError: Cannot use '?' on 'safe()': function does not throw
+error[E415]

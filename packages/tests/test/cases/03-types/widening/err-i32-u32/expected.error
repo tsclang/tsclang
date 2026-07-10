@@ -1,1 +1,2 @@
 cannot implicitly convert i32 to u32
+error[E100]

@@ -1,1 +1,2 @@
 TypeError: @pool requires a numeric capacity argument; use @pool(N)
+error[E412]

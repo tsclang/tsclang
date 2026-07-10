@@ -1,1 +1,1 @@
-error: TypeError: bitwise op '~' not applicable to 'string'
+error[E105]

@@ -1,1 +1,2 @@
 closures are forbidden in strict mode (no-closures)
+error[E200]

@@ -1,1 +1,2 @@
 type name "ref_User" uses reserved prefix "ref_"
+error[E400]

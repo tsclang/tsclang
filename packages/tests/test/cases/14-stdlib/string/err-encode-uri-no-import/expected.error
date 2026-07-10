@@ -1,1 +1,1 @@
-error: unknown identifier 'encodeURI'
+error[E419]

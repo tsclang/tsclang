@@ -1,1 +1,2 @@
 float literal 3.14 assigned to integer type i32
+error[E100]

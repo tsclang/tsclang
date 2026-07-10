@@ -1,1 +1,2 @@
 decorators on constructors are not supported
+error[E412]

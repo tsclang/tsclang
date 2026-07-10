@@ -1,1 +1,2 @@
 cannot implicitly convert Dir to string: use ".toString()" or "as string"
+error[E100]
