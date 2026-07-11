@@ -18,6 +18,7 @@ import "./integer-errors.test"
 import "./integer-properties.test"
 import "./safe-math-errors.test"
 import "./diagnostics-registry.test"
+import "./capability-matrix.test"
 import { printSummary } from "../engine"
 
 printSummary()

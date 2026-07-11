@@ -12,7 +12,29 @@ export { normalizeC, toWslPath, getBackend, getDefaultCompiler }
 export const platformMatrix = {
   defaultNumber: ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"],
   targets: ["desktop", "avr", "nes", "spectrum"],
-  strict: [[], ["safe-math"], ["no-lossy-cast"], ["safe-math", "no-lossy-cast"]]
+  strict: [[], ["safe-math"], ["no-lossy-cast"], ["safe-math", "no-lossy-cast"]],
+  // Capability parameters (direct, not via profiles)
+  fpu: [true, false],
+  bits: [8, 16, 32, 64],
+  allocator: ["heap", "static", "none"],
+  async: ["libuv", "state_machine", "none"],
+  usize: ["u16", "u32", "u64"],
+}
+
+const ALL_NUMERIC_TYPES = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"]
+
+export function filterValidTypes(caps: { fpu?: boolean; bits?: number }): string[] {
+  let types = [...ALL_NUMERIC_TYPES]
+  if (caps.fpu === false) {
+    types = types.filter(t => t !== "f32" && t !== "f64")
+  }
+  if (caps.bits !== undefined && caps.bits < 64) {
+    types = types.filter(t => t !== "i64" && t !== "u64" && t !== "d64")
+  }
+  if (caps.bits !== undefined && caps.bits < 32) {
+    types = types.filter(t => t !== "i32" && t !== "u32" && t !== "d32")
+  }
+  return types
 }
 
 export const matrix = {
@@ -221,19 +243,50 @@ export interface RunOptions {
   defaultNumber?: string
   strict?: string[]
   timeoutMs?: number
+  // Capability parameters (direct override, merged on top of profile or desktop defaults)
+  fpu?: boolean
+  bits?: number
+  allocator?: string
+  async?: string
+  usize?: string
+  os?: boolean
+  posix?: boolean
+  strtoll?: boolean
+}
+
+function buildDirectCapabilities(opts?: RunOptions): Record<string, unknown> | undefined {
+  if (!opts) return undefined
+  const caps: Record<string, unknown> = {}
+  let has = false
+  if (opts.fpu !== undefined) { caps.fpu = opts.fpu; has = true }
+  if (opts.bits !== undefined) { caps.bits = opts.bits; has = true }
+  if (opts.allocator !== undefined) { caps.allocator = opts.allocator; has = true }
+  if (opts.async !== undefined) { caps.async = opts.async; has = true }
+  if (opts.usize !== undefined) { caps.usize = opts.usize; has = true }
+  if (opts.os !== undefined) { caps.os = opts.os; has = true }
+  if (opts.posix !== undefined) { caps.posix = opts.posix; has = true }
+  if (opts.strtoll !== undefined) { caps.strtoll = opts.strtoll; has = true }
+  if (opts.defaultNumber !== undefined) { caps.defaultNumber = opts.defaultNumber; has = true }
+  return has ? caps : undefined
 }
 
 export function run(code: string, opts?: RunOptions): string {
   const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-run-"))
   try {
     const codegenOpts: any = { ...opts }
-    // Load platform profile for non-desktop targets
+    const directCaps = buildDirectCapabilities(opts)
+    // Load platform profile for non-desktop targets, then merge direct overrides
     if (codegenOpts.target && codegenOpts.target !== "desktop") {
       const profilesDir = resolve(import.meta.dirname, "..", "..", "compiler", PROFILES_DIR)
       const profilePath = join(profilesDir, codegenOpts.target, "index.d.tsc")
       if (existsSync(profilePath)) {
-        codegenOpts.capabilities = parsePlatformDecl(readFileSync(profilePath, "utf8"), profilePath)
+        const profileCaps = parsePlatformDecl(readFileSync(profilePath, "utf8"), profilePath)
+        codegenOpts.capabilities = { ...profileCaps, ...directCaps }
+      } else if (directCaps) {
+        codegenOpts.capabilities = directCaps
       }
+    } else if (directCaps) {
+      codegenOpts.capabilities = directCaps
     }
     let c: string
     try {
