@@ -1,4 +1,4 @@
-import { describe, test, run, expect, platformMatrix } from "../engine.js"
+import { describe, test, run, expect, platformMatrix } from "@tsclang/test-engine"
 
 const DECIMAL_DP: Record<string, number> = { d8: 2, d16: 2, d32: 4, d64: 8 }
 

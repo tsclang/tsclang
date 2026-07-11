@@ -1,4 +1,4 @@
-import { describe, test } from "../engine.js"
+import { describe, test } from "@tsclang/test-engine"
 import { DIAGNOSTICS, resolveDiagnostic, explainError, lookupDiagnostic, type DiagnosticCode } from "@tsclang/compiler"
 
 const entries = Object.entries(DIAGNOSTICS) as [string, typeof DIAGNOSTICS[DiagnosticCode]][]

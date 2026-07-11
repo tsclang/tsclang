@@ -1,4 +1,4 @@
-import { describe, test, run, compile, expect, getBackend, getDefaultCompiler } from "../engine.js"
+import { describe, test, run, compile, expect, getBackend, getDefaultCompiler } from "@tsclang/test-engine"
 import { listAvailable, listAll } from "../compilers/registry.js"
 
 // === CompilerBackend registry ===

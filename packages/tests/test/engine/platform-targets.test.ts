@@ -1,4 +1,4 @@
-import { describe, test, run, expect, platformMatrix } from "../engine.js"
+import { describe, test, run, expect, platformMatrix } from "@tsclang/test-engine"
 
 describe("platform-specific: float on AVR", () => {
   // On desktop (fpu=true), float operations work

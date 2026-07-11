@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "../engine.js"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe("literal overflow", () => {
   // defaultNumber=i8: 256 overflows i8

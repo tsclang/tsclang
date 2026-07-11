@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "../engine.js"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe("literal type inference across platforms", () => {
   // On desktop (defaultNumber=f64): 1 is f64, so 1 + 0.8 works

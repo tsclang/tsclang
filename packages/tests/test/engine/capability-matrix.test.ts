@@ -1,4 +1,4 @@
-import { describe, test, run, expect, platformMatrix, filterValidTypes, matrix, TscCompilationError } from "../engine.js"
+import { describe, test, run, expect, platformMatrix, filterValidTypes, matrix, TscCompilationError } from "@tsclang/test-engine"
 
 // === fpu ===
 

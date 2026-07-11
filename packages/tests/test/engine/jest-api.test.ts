@@ -1,4 +1,4 @@
-import { describe, test, run, compile, expect } from "../engine"
+import { describe, test, run, compile, expect } from "@tsclang/test-engine"
 
 describe("Jest-like API", () => {
   // === run() ===

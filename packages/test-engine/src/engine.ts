@@ -3,11 +3,11 @@ import { tmpdir } from "os"
 import { join, resolve } from "path"
 import { lex, parse, codegen, compileTsc, parsePlatformDecl } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath } from "./compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable } from "./compilers/index.js"
 
 registerAll()
 
-export { normalizeC, toWslPath, getBackend, getDefaultCompiler }
+export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable }
 
 export const platformMatrix = {
   defaultNumber: ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"],
@@ -19,6 +19,8 @@ export const platformMatrix = {
   allocator: ["heap", "static", "none"],
   async: ["libuv", "state_machine", "none"],
   usize: ["u16", "u32", "u64"],
+  // C compilers (all registered backends)
+  compilers: ["gcc", "clang", "msvc", "avr-gcc", "wasm"],
 }
 
 const ALL_NUMERIC_TYPES = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"]

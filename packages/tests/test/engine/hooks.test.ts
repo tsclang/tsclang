@@ -1,4 +1,4 @@
-import { describe, test, run, expect, beforeEach } from '../engine.js'
+import { describe, test, run, expect, beforeEach } from "@tsclang/test-engine"
 
 let counter = 0
 

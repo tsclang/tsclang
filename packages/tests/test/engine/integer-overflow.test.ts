@@ -1,4 +1,4 @@
-import { describe, test, run, expect, matrix } from "../engine.js"
+import { describe, test, run, expect, matrix } from "@tsclang/test-engine"
 
 // i32 defined-wrap oracle: explicit boundary formulas derived from matrix min/max.
 // TSClang defines integer overflow as two's-complement wrap (no UB).

@@ -85,7 +85,7 @@ export class AvrGccBackend implements CompilerBackend {
   run(hexPath: string, opts?: RunOpts): RunResult {
     if (process.platform === "win32") {
       const wslHexPath = hexPath.replace(/\\/g, "/").replace(/^([A-Z]):/i, (_, d) => `/mnt/${d.toLowerCase()}`)
-      const result = wslExec("simavr", ["-uart0:stdio", "-mcu", this.mcu, "-f", this.freq, wslHexPath])
+      const result = wslExec("simavr", ["-uart0:stdio", "-mcu", this.mcu, "-f", this.freq, wslHexPath], opts?.timeoutMs ?? 5000)
       return {
         success: result.status === 0,
         stdout: result.stdout?.toString() ?? "",

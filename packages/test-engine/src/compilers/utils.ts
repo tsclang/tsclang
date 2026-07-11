@@ -13,8 +13,8 @@ export function isInWsl(name: string): boolean {
   return result.status === 0
 }
 
-export function wslExec(cmd: string, args: string[]): SpawnSyncReturns<Buffer> {
-  return spawnSync("wsl", [cmd, ...args], { stdio: "pipe" })
+export function wslExec(cmd: string, args: string[], timeoutMs?: number): SpawnSyncReturns<Buffer> {
+  return spawnSync("wsl", [cmd, ...args], { stdio: "pipe", timeout: timeoutMs })
 }
 
 export function findMsVC(): { vcvarsall: string; cl: string } | null {

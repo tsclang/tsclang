@@ -1,4 +1,4 @@
-import { describe, test, run, expect, matrix, TscCompilationError } from "../engine.js"
+import { describe, test, run, expect, matrix, TscCompilationError } from "@tsclang/test-engine"
 
 const SIGNED = ["i8", "i16", "i32"] as const
 const UNSIGNED = ["u8", "u16", "u32"] as const

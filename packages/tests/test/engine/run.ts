@@ -19,6 +19,7 @@ import "./integer-properties.test"
 import "./safe-math-errors.test"
 import "./diagnostics-registry.test"
 import "./capability-matrix.test"
-import { printSummary } from "../engine"
+import "./compiler-matrix.test"
+import { printSummary } from "@tsclang/test-engine"
 
 printSummary()

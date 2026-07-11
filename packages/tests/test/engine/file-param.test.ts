@@ -1,4 +1,4 @@
-import { describe, test, compile, expect } from "../engine.js"
+import { describe, test, compile, expect } from "@tsclang/test-engine"
 
 describe("file parameter — positive", () => {
   test("reads .tsc file from disk", () => {

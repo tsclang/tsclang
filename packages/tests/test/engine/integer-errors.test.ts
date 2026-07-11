@@ -1,4 +1,4 @@
-import { describe, test, run, expect, matrix, RuntimeError } from "../engine.js"
+import { describe, test, run, expect, matrix, RuntimeError } from "@tsclang/test-engine"
 
 // Layer 2 — Error tests: deterministic, explicit type lists, per-behavior expectation.
 // Two behaviors: E401 (division by zero) and E402 (MIN / -1 overflow).
