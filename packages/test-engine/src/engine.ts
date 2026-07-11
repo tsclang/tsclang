@@ -44,7 +44,8 @@ export const matrix = {
     max: 127,
     values: [0, 1, -128, 127, -129, 128],
     validValues: [0, 1, -128, 127],
-    invalidRange: [-129, 128], invalidValues: [true, "hello"]
+    invalidRange: [-129, 128], invalidValues: [true, "hello"],
+    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7F", "127"]]
   },
   i16: {
     type: "i16",
@@ -52,7 +53,8 @@ export const matrix = {
     max: 32767,
     values: [0, 1, -32768, 32767, -32769, 32768],
     validValues: [0, 1, -32768, 32767],
-    invalidRange: [-32769, 32768], invalidValues: [true, "hello"]
+    invalidRange: [-32769, 32768], invalidValues: [true, "hello"],
+    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7FFF", "32767"]]
   },
   i32: {
     type: "i32",
@@ -60,7 +62,8 @@ export const matrix = {
     max: 2147483647,
     values: [0, 1, -2147483648, 2147483647, -2147483649, 2147483648],
     validValues: [0, 1, -2147483648, 2147483647],
-    invalidRange: [-2147483649, 2147483648], invalidValues: [true, "hello"]
+    invalidRange: [-2147483649, 2147483648], invalidValues: [true, "hello"],
+    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7FFFFFFF", "2147483647"]]
   },
   i64: {
     type: "i64",
@@ -68,7 +71,8 @@ export const matrix = {
     max: Number.MAX_SAFE_INTEGER,
     values: [0, 1, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
     validValues: [0, 1, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-    invalidValues: [true, "hello"]
+    invalidValues: [true, "hello"],
+    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0xFFFFFFFFFFFFF", "4503599627370495"]]
   },
   u8: {
     type: "u8",
@@ -76,7 +80,8 @@ export const matrix = {
     max: 255,
     values: [0, 1, 255, 256, -1],
     validValues: [0, 1, 255],
-    invalidRange: [256, -1], invalidValues: [true, "hello"]
+    invalidRange: [256, -1], invalidValues: [true, "hello"],
+    altLiterals: [["0xFF", "255"], ["0b11111111", "255"], ["0o377", "255"], ["0x0A", "10"]]
   },
   u16: {
     type: "u16",
@@ -84,7 +89,8 @@ export const matrix = {
     max: 65535,
     values: [0, 1, 65535, 65536, -1],
     validValues: [0, 1, 65535],
-    invalidRange: [65536, -1], invalidValues: [true, "hello"]
+    invalidRange: [65536, -1], invalidValues: [true, "hello"],
+    altLiterals: [["0xFFFF", "65535"], ["0b1000000000000000", "32768"], ["0o177777", "65535"], ["0x0A", "10"]]
   },
   u32: {
     type: "u32",
@@ -92,7 +98,8 @@ export const matrix = {
     max: 4294967295,
     values: [0, 1, 4294967295, 4294967296, -1],
     validValues: [0, 1, 4294967295],
-    invalidRange: [4294967296, -1], invalidValues: [true, "hello"]
+    invalidRange: [4294967296, -1], invalidValues: [true, "hello"],
+    altLiterals: [["0xFFFFFFFF", "4294967295"], ["0b10000000000000000000000000000000", "2147483648"], ["0o37777777777", "4294967295"]]
   },
   u64: {
     type: "u64",
@@ -100,7 +107,8 @@ export const matrix = {
     max: Number.MAX_SAFE_INTEGER,
     values: [0, 1, Number.MAX_SAFE_INTEGER],
     validValues: [0, 1, Number.MAX_SAFE_INTEGER],
-    invalidValues: [true, "hello"]
+    invalidValues: [true, "hello"],
+    altLiterals: [["0xFFFFFFFFFFFFF", "4503599627370495"], ["0b1001", "9"], ["0o17", "15"]]
   },
   d8: {
     type: "d8",

@@ -41,6 +41,17 @@ for (const [typeName, typeDef] of Object.entries(matrix)) {
   runTypeTests(typeName, typeDef)
 }
 
+describe("alternative numeric literals (hex/bin/oct)", () => {
+  for (const [typeName, typeDef] of Object.entries(matrix)) {
+    if (!typeDef.altLiterals) continue
+    for (const [lit, expected] of typeDef.altLiterals) {
+      test(`let x: ${typeName} = ${lit} → ${expected}`, () => {
+        expect(run(`let x: ${typeName} = ${lit}\nconsole.log(x)`)).toBe(expected)
+      })
+    }
+  }
+})
+
 describe("char = value", () => {
   test("char = 65 (A)", () => {
     expect(run("let x: char = 65\nconsole.log(x)")).toBe("A")
