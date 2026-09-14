@@ -135,6 +135,7 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         }
         // Number.* constants: type-specific integer limits + JS standard float constants
         if (node.object.kind === 'Ident' && node.object.name === 'Number') {
+          // Type-specific integer limits (always available)
           const intLimits: Record<string, string> = {
             MAX_I8:  'INT8_MAX',  MIN_I8:  'INT8_MIN',
             MAX_I16: 'INT16_MAX', MIN_I16: 'INT16_MIN',
@@ -144,11 +145,78 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             MAX_U32: 'UINT32_MAX', MAX_U64: 'UINT64_MAX',
           };
           if (intLimits[node.prop]) return intLimits[node.prop];
+
+          // Type-specific float limits (f32/f64)
+          if (node.prop === 'F32_MIN') { ctx.includes.add('#include <float.h>'); return 'FLT_MIN'; }
+          if (node.prop === 'F32_MAX') { ctx.includes.add('#include <float.h>'); return 'FLT_MAX'; }
+          if (node.prop === 'F64_MIN') { ctx.includes.add('#include <float.h>'); return 'DBL_MIN'; }
+          if (node.prop === 'F64_MAX') { ctx.includes.add('#include <float.h>'); return 'DBL_MAX'; }
+
+          // Decimal limits (d8/d16/d32/d64)
+          const decimalConsts: Record<string, string> = {
+            D8_MIN:  '-1.27',  D8_MAX:  '1.27',
+            D16_MIN: '-327.67', D16_MAX: '327.67',
+            D32_MIN: '-214748.3647', D32_MAX: '214748.3647',
+            D64_MIN: '-92233720368.54775808', D64_MAX: '92233720368.54775807',
+          };
+          if (decimalConsts[node.prop]) return decimalConsts[node.prop];
+
+          // Platform-sized constants
+          if (node.prop === 'CHAR_MIN')  { ctx.includes.add('#include <limits.h>'); return 'CHAR_MIN'; }
+          if (node.prop === 'CHAR_MAX')  { ctx.includes.add('#include <limits.h>'); return 'CHAR_MAX'; }
+          if (node.prop === 'ISIZE_MIN') { ctx.includes.add('#include <stddef.h>'); return 'PTRDIFF_MIN'; }
+          if (node.prop === 'ISIZE_MAX') { ctx.includes.add('#include <stddef.h>'); return 'PTRDIFF_MAX'; }
+          if (node.prop === 'USIZE_MAX') { ctx.includes.add('#include <stddef.h>'); return 'SIZE_MAX'; }
+
+          // MAX_VALUE/MIN_VALUE depend on defaultNumber
+          if (node.prop === 'MAX_VALUE' || node.prop === 'MAX') {
+            const defaultNum = ctx._optsDefaultNumber ?? 'f64';
+            switch (defaultNum) {
+              case 'i8':  return 'INT8_MAX';
+              case 'i16': return 'INT16_MAX';
+              case 'i32': return 'INT32_MAX';
+              case 'i64': return 'INT64_MAX';
+              case 'u8':  return 'UINT8_MAX';
+              case 'u16': return 'UINT16_MAX';
+              case 'u32': return 'UINT32_MAX';
+              case 'u64': return 'UINT64_MAX';
+              case 'd8':  return '1.27';
+              case 'd16': return '327.67';
+              case 'd32': return '214748.3647';
+              case 'd64': return '92233720368.54775807';
+              case 'f32': { ctx.includes.add('#include <float.h>'); return 'FLT_MAX'; }
+              case 'f64': { ctx.includes.add('#include <float.h>'); return 'DBL_MAX'; }
+              default:    { ctx.includes.add('#include <float.h>'); return 'DBL_MAX'; }
+            }
+          }
+
+          if (node.prop === 'MIN_VALUE' || node.prop === 'MIN') {
+            const defaultNum = ctx._optsDefaultNumber ?? 'f64';
+            switch (defaultNum) {
+              case 'i8':  return 'INT8_MIN';
+              case 'i16': return 'INT16_MIN';
+              case 'i32': return 'INT32_MIN';
+              case 'i64': return 'INT64_MIN';
+              case 'u8':  return '0';
+              case 'u16': return '0';
+              case 'u32': return '0';
+              case 'u64': return '0';
+              case 'd8':  return '-1.27';
+              case 'd16': return '-327.67';
+              case 'd32': return '-214748.3647';
+              case 'd64': return '-92233720368.54775808';
+              case 'f32': { ctx.includes.add('#include <float.h>'); return 'FLT_MIN'; }
+              case 'f64': { ctx.includes.add('#include <float.h>'); return 'DBL_MIN'; }
+              default:    { ctx.includes.add('#include <float.h>'); return 'DBL_MIN'; }
+            }
+          }
+
+          // Integer safe limits (no float.h needed)
           if (node.prop === 'MAX_SAFE_INTEGER') return '9007199254740991LL';
           if (node.prop === 'MIN_SAFE_INTEGER') return '(-9007199254740991LL)';
+
+          // Other float constants (always float-based, independent of defaultNumber)
           const floatConsts: Record<string, string> = {
-            MAX_VALUE:         'DBL_MAX',
-            MIN_VALUE:         'DBL_MIN',
             EPSILON:           'DBL_EPSILON',
             POSITIVE_INFINITY: 'INFINITY',
             NEGATIVE_INFINITY: '(-INFINITY)',
