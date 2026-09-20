@@ -74,6 +74,7 @@ lexer.ts (токенизация, 40+ типов токенов)
 | M9 | `import.meta.dirname` — не работает на Node < 20.11 | test-engine/src/engine.ts |
 | M10 | `shell: true` — уязвимость к инъекциям | test-engine/src/compilers/*.ts |
 | M11 | `>>>` всегда кастует к int32_t/uint32_t | compiler/src/compiler/codegen/expr/operators.ts | Неэффективно и некорректно для ретро-платформ (NES, Spectrum с i8/u8) |
+| M12 | `??=` генерирует C-trigraph `??` для non-nullable типов | compiler/src/compiler/codegen/expr/operators.ts | `a ?? 5` = ошибка C-компилятора (C-trigraph для `#`) |
 
 ---
 
@@ -247,6 +248,13 @@ lexer.ts (токенизация, 40+ типов токенов)
   - `i8 >>> i8` → `(int8_t)((uint8_t)l >> r)`
   - `u32 >>> u32` → `(uint32_t)l >> r`
 - **Проверка:** Тесты для u8, i8, u16, i16, u32, i32 | `>>>` на ретро-платформах (NES, Spectrum) | `>>>` на desktop
+
+#### Задача 3.5.2: Добавить compile error для `??=` на non-nullable типах
+- **Файл:** `compiler/src/compiler/codegen/expr/operators.ts`
+- **Проблема:** `??=` на non-nullable типах генерирует `a ?? 5` — C-trigraph для `#`, ошибка C-компилятора
+- **Действие:** Добавить проверку: если тип non-nullable → compile error, `??=` имеет смысл только для `T | null`
+- **Пример:** `let a: i32; a ??= 5;` → compile error: `??= requires nullable type`
+- **Проверка:** `let a: i32 | null; a ??= 5;` → корректный код (if (!a.has_value)) | `let a: i32; a ??= 5;` → compile error
 
 ---
 
