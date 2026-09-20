@@ -13,7 +13,7 @@
 | Целые числа (`i8`..`i64`, `u8`..`u64`, `usize`, `isize`, `char`) | `0` | `= 0;` |
 | Дробные (`f32`, `f64`) | `0.0` | `= 0.0;` |
 | `boolean` | `false` | `= false;` |
-| `string` | `""` (пустая строка) | `= STR_LIT("");` |
+| `string` | `""` (пустая строка) | `= STR_LIT("");` | rodata/static, не heap. На embedded — PROGMEM (flash). Безопасен на всех платформах, включая `heap: false`.
 | Класс, интерфейс, tuple, type alias (struct) | `{0}` (все поля нулевые) | `= {0};` |
 | Массив (`Array<T>`), Map, Set | Пустой контейнер | `= {0};` |
 | Специальные (Date, Buffer, Promise, ...) | `{0}` | `= {0};` |
