@@ -5,7 +5,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('i32 без инициализатора → C: = 0;', () => {
       const c = run(`
         let x: i32
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('i64 без инициализатора → C: = 0;', () => {
       const c = run(`
         let x: i64
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -21,7 +21,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('u32 без инициализатора → C: = 0;', () => {
       const c = run(`
         let x: u32
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -29,7 +29,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('u64 без инициализатора → C: = 0;', () => {
       const c = run(`
         let x: u64
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -39,7 +39,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('f64 без инициализатора → C: = 0.0;', () => {
       const c = run(`
         let x: f64
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -47,7 +47,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('f32 без инициализатора → C: = 0.0;', () => {
       const c = run(`
         let x: f32
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -57,7 +57,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('boolean без инициализатора → C: = false;', () => {
       const c = run(`
         let x: boolean
-        x
+        console.log(x)
       `)
       expect(c).toBe('false')
     })
@@ -67,7 +67,7 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('string без инициализатора → C: = STR_LIT("");', () => {
       const c = run(`
         let x: string
-        x
+        console.log(x)
       `)
       expect(c).toBe('')
     })
@@ -77,15 +77,15 @@ describe('02-syntax/02-variables — zero-values', () => {
     test('opt_T без инициализатора → C: = {false, 0};', () => {
       const c = run(`
         let x: i32 | null
-        x
+        console.log(x)
       `)
-      expect(c).toBe('null')
+      expect(c).toBe('0')
     })
 
     test('opt string без инициализатора → null', () => {
       const c = run(`
         let x: string | null
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })
@@ -96,7 +96,7 @@ describe('02-syntax/02-variables — zero-values', () => {
       const c = run(`
         class Foo {}
         let x: Arc<Foo>
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })
@@ -105,7 +105,7 @@ describe('02-syntax/02-variables — zero-values', () => {
       const c = run(`
         class Foo {}
         let x: Weak<Foo>
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })

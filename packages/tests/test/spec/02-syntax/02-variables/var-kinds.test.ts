@@ -6,7 +6,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
       const result = run(`
         let x: i32 = 5
         x = 10
-        x
+        console.log(x)
       `)
       expect(result).toBe('10')
     })
@@ -17,7 +17,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
           mut bar(): i32 { return 42 }
         }
         let f = new Foo()
-        f.bar()
+        console.log(f.bar())
       `)
       expect(result).toBe('42')
     })
@@ -26,7 +26,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
       const result = run(`
         fn takeMut(_m: Mut<i32>): i32 { return 0 }
         let x: i32 = 5
-        takeMut(x)
+        console.log(takeMut(x))
       `)
       expect(result).toBe('0')
     })
@@ -64,7 +64,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
       const result = run(`
         var x: i32 = 5
         x = 10
-        x
+        console.log(x)
       `)
       expect(result).toBe('10')
     })
@@ -75,7 +75,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
           mut bar(): i32 { return 42 }
         }
         var f = new Foo()
-        f.bar()
+        console.log(f.bar())
       `)
       expect(result).toBe('42')
     })

@@ -5,7 +5,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: i8 = 0x0F; → 15, OK', () => {
       const c = run(`
         let x: i8 = 0x0F
-        x
+        console.log(x)
       `)
       expect(c).toBe('15')
     })
@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: i8 = 0x7F; → 127 (max), OK', () => {
       const c = run(`
         let x: i8 = 0x7F
-        x
+        console.log(x)
       `)
       expect(c).toBe('127')
     })
@@ -21,7 +21,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: i32 = 0x7FFFFFFF; → max, OK', () => {
       const c = run(`
         let x: i32 = 0x7FFFFFFF
-        x
+        console.log(x)
       `)
       expect(c).toBe('2147483647')
     })
@@ -29,7 +29,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u32 = 0xFFFFFFFF; → max, OK', () => {
       const c = run(`
         let x: u32 = 0xFFFFFFFF
-        x
+        console.log(x)
       `)
       expect(c).toBe('4294967295')
     })
@@ -37,7 +37,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u64 = 0xFFFFFFFFFFFFF; → OK', () => {
       const c = run(`
         let x: u64 = 0xFFFFFFFFFFFFF
-        x
+        console.log(x)
       `)
       expect(c).toBe('4503599627370495')
     })
@@ -45,7 +45,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u8 = 0xFF; → 255 (max), OK', () => {
       const c = run(`
         let x: u8 = 0xFF
-        x
+        console.log(x)
       `)
       expect(c).toBe('255')
     })
@@ -55,7 +55,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: i8 = 0b1001; → 9, OK', () => {
       const c = run(`
         let x: i8 = 0b1001
-        x
+        console.log(x)
       `)
       expect(c).toBe('9')
     })
@@ -63,7 +63,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u8 = 0b11111111; → 255 (max), OK', () => {
       const c = run(`
         let x: u8 = 0b11111111
-        x
+        console.log(x)
       `)
       expect(c).toBe('255')
     })
@@ -71,7 +71,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u16 = 0b1000000000000000; → 32768, OK', () => {
       const c = run(`
         let x: u16 = 0b1000000000000000
-        x
+        console.log(x)
       `)
       expect(c).toBe('32768')
     })
@@ -81,7 +81,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: i8 = 0o17; → 15, OK', () => {
       const c = run(`
         let x: i8 = 0o17
-        x
+        console.log(x)
       `)
       expect(c).toBe('15')
     })
@@ -89,7 +89,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u8 = 0o377; → 255 (max), OK', () => {
       const c = run(`
         let x: u8 = 0o377
-        x
+        console.log(x)
       `)
       expect(c).toBe('255')
     })
@@ -97,7 +97,7 @@ describe('02-syntax/02-variables — alternative-literals', () => {
     test('let x: u16 = 0o177777; → 65535 (max), OK', () => {
       const c = run(`
         let x: u16 = 0o177777
-        x
+        console.log(x)
       `)
       expect(c).toBe('65535')
     })

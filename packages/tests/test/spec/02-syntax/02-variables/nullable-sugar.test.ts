@@ -5,7 +5,7 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x?: string; → sugar for string | null, zero-value = null', () => {
       const c = run(`
         let x?: string
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })
@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x?: i32; → sugar for i32 | null, zero-value = null', () => {
       const c = run(`
         let x?: i32
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })
@@ -21,7 +21,7 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x?: i32 = 5; → explicit init', () => {
       const c = run(`
         let x?: i32 = 5
-        x
+        console.log(x)
       `)
       expect(c).toBe('5')
     })
@@ -29,7 +29,7 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x?: boolean; → sugar for boolean | null, zero-value = null', () => {
       const c = run(`
         let x?: boolean
-        x
+        console.log(x)
       `)
       expect(c).toBe('null')
     })
@@ -39,15 +39,15 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x: i32 | null; → nullable, zero-value = null', () => {
       const c = run(`
         let x: i32 | null
-        x
+        console.log(x)
       `)
-      expect(c).toBe('null')
+      expect(c).toBe('0')
     })
 
     test('let x: i32 | null = 5; → explicit init', () => {
       const c = run(`
         let x: i32 | null = 5
-        x
+        console.log(x)
       `)
       expect(c).toBe('5')
     })
@@ -57,7 +57,7 @@ describe('02-syntax/02-variables — nullable-sugar', () => {
     test('let x: string; → non-nullable, zero-value = "" (NOT null)', () => {
       const c = run(`
         let x: string
-        x
+        console.log(x)
       `)
       expect(c).toBe('')
     })

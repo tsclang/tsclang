@@ -49,7 +49,7 @@ describe('02-syntax/02-variables — type-mismatch', () => {
     test('let x: i64 = 2; → OK (integer literal)', () => {
       const c = run(`
         let x: i64 = 2
-        x
+        console.log(x)
       `)
       expect(c).toBe('2')
     })

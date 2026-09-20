@@ -5,7 +5,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i8: = -128 (min) → OK', () => {
       const c = run(`
         let x: i8 = -128
-        x
+        console.log(x)
       `)
       expect(c).toBe('-128')
     })
@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i8: = 127 (max) → OK', () => {
       const c = run(`
         let x: i8 = 127
-        x
+        console.log(x)
       `)
       expect(c).toBe('127')
     })
@@ -33,7 +33,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i8: = 0 → OK', () => {
       const c = run(`
         let x: i8 = 0
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -41,7 +41,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i8: = 1 → OK', () => {
       const c = run(`
         let x: i8 = 1
-        x
+        console.log(x)
       `)
       expect(c).toBe('1')
     })
@@ -51,7 +51,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i16: = -32768 (min) → OK', () => {
       const c = run(`
         let x: i16 = -32768
-        x
+        console.log(x)
       `)
       expect(c).toBe('-32768')
     })
@@ -59,7 +59,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i16: = 32767 (max) → OK', () => {
       const c = run(`
         let x: i16 = 32767
-        x
+        console.log(x)
       `)
       expect(c).toBe('32767')
     })
@@ -81,7 +81,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i32: = -2147483648 (min) → OK', () => {
       const c = run(`
         let x: i32 = -2147483648
-        x
+        console.log(x)
       `)
       expect(c).toBe('-2147483648')
     })
@@ -89,7 +89,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i32: = 2147483647 (max) → OK', () => {
       const c = run(`
         let x: i32 = 2147483647
-        x
+        console.log(x)
       `)
       expect(c).toBe('2147483647')
     })
@@ -111,7 +111,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i64: = Number.MIN_SAFE_INTEGER (min) → OK', () => {
       const c = run(`
         let x: i64 = Number.MIN_SAFE_INTEGER
-        x
+        console.log(x)
       `)
       expect(c).toBe('-9007199254740991')
     })
@@ -119,7 +119,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('i64: = Number.MAX_SAFE_INTEGER (max) → OK', () => {
       const c = run(`
         let x: i64 = Number.MAX_SAFE_INTEGER
-        x
+        console.log(x)
       `)
       expect(c).toBe('9007199254740991')
     })
@@ -129,7 +129,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u8: = 0 (min) → OK', () => {
       const c = run(`
         let x: u8 = 0
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -137,7 +137,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u8: = 255 (max) → OK', () => {
       const c = run(`
         let x: u8 = 255
-        x
+        console.log(x)
       `)
       expect(c).toBe('255')
     })
@@ -159,7 +159,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u16: = 0 (min) → OK', () => {
       const c = run(`
         let x: u16 = 0
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -167,7 +167,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u16: = 65535 (max) → OK', () => {
       const c = run(`
         let x: u16 = 65535
-        x
+        console.log(x)
       `)
       expect(c).toBe('65535')
     })
@@ -189,7 +189,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u32: = 0 (min) → OK', () => {
       const c = run(`
         let x: u32 = 0
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -197,7 +197,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u32: = 4294967295 (max) → OK', () => {
       const c = run(`
         let x: u32 = 4294967295
-        x
+        console.log(x)
       `)
       expect(c).toBe('4294967295')
     })
@@ -219,15 +219,15 @@ describe('02-syntax/02-variables — range-values', () => {
     test('u64: = 0 (min) → OK', () => {
       const c = run(`
         let x: u64 = 0
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
 
     test('u64: = Number.MAX_SAFE_INTEGER (max) → OK', () => {
       const c = run(`
-        let x: u64 = Number.MAX_SAFE_INTEGER
-        x
+        let x: u64 = Number.MAX_SAFE_INTEGER as u64
+        console.log(x)
       `)
       expect(c).toBe('9007199254740991')
     })
@@ -237,15 +237,15 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d8: = 0 → OK', () => {
       const c = run(`
         let x: d8 = 0
-        x
+        console.log(x)
       `)
-      expect(c).toBe('0')
+      expect(c).toBe('0.00')
     })
 
     test('d8: = 1.27 (max) → OK', () => {
       const c = run(`
         let x: d8 = 1.27
-        x
+        console.log(x)
       `)
       expect(c).toBe('1.27')
     })
@@ -253,7 +253,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d8: = -1.27 (min) → OK', () => {
       const c = run(`
         let x: d8 = -1.27
-        x
+        console.log(x)
       `)
       expect(c).toBe('-1.27')
     })
@@ -275,7 +275,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d16: = 327.67 (max) → OK', () => {
       const c = run(`
         let x: d16 = 327.67
-        x
+        console.log(x)
       `)
       expect(c).toBe('327.67')
     })
@@ -283,7 +283,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d16: = -327.67 (min) → OK', () => {
       const c = run(`
         let x: d16 = -327.67
-        x
+        console.log(x)
       `)
       expect(c).toBe('-327.67')
     })
@@ -305,7 +305,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d32: = 214748.3647 (max) → OK', () => {
       const c = run(`
         let x: d32 = 214748.3647
-        x
+        console.log(x)
       `)
       expect(c).toBe('214748.3647')
     })
@@ -313,7 +313,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d32: = -214748.3647 (min) → OK', () => {
       const c = run(`
         let x: d32 = -214748.3647
-        x
+        console.log(x)
       `)
       expect(c).toBe('-214748.3647')
     })
@@ -329,17 +329,17 @@ describe('02-syntax/02-variables — range-values', () => {
     test('d64: = 0 → OK', () => {
       const c = run(`
         let x: d64 = 0
-        x
+        console.log(x)
       `)
-      expect(c).toBe('0')
+      expect(c).toBe('0.00000000')
     })
 
     test('d64: = 1.5 → OK', () => {
       const c = run(`
         let x: d64 = 1.5
-        x
+        console.log(x)
       `)
-      expect(c).toBe('1.5')
+      expect(c).toBe('1.50000000')
     })
   })
 
@@ -347,7 +347,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f32: = Infinity → OK', () => {
       const c = run(`
         let x: f32 = Infinity
-        x
+        console.log(x)
       `)
       expect(c).toBe('Infinity')
     })
@@ -355,7 +355,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f32: = -Infinity → OK', () => {
       const c = run(`
         let x: f32 = -Infinity
-        x
+        console.log(x)
       `)
       expect(c).toBe('-Infinity')
     })
@@ -363,7 +363,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f32: = NaN → OK', () => {
       const c = run(`
         let x: f32 = NaN
-        x
+        console.log(x)
       `)
       expect(c).toBe('NaN')
     })
@@ -373,7 +373,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f64: = Infinity → OK', () => {
       const c = run(`
         let x: f64 = Infinity
-        x
+        console.log(x)
       `)
       expect(c).toBe('Infinity')
     })
@@ -381,7 +381,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f64: = -Infinity → OK', () => {
       const c = run(`
         let x: f64 = -Infinity
-        x
+        console.log(x)
       `)
       expect(c).toBe('-Infinity')
     })
@@ -389,7 +389,7 @@ describe('02-syntax/02-variables — range-values', () => {
     test('f64: = NaN → OK', () => {
       const c = run(`
         let x: f64 = NaN
-        x
+        console.log(x)
       `)
       expect(c).toBe('NaN')
     })

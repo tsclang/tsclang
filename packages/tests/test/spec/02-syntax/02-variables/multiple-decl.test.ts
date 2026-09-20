@@ -5,7 +5,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
     test('let a = 1, b = 2, c = 3; — три переменные без типа', () => {
       const c = run(`
         let a = 1, b = 2, c = 3
-        a + b + c
+        console.log(a + b + c)
       `)
       expect(c).toBe('6')
     })
@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
     test('let x: i32 = 1, y: string = "hi"; — разные типы', () => {
       const result = run(`
         let x: i32 = 1, y: string = "hi"
-        y
+        console.log(y)
       `)
       expect(result).toBe('hi')
     })
@@ -21,7 +21,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
     test('let p = 1, q: f64, r = "three"; — смешанный', () => {
       const c = run(`
         let p = 1, q: f64, r = "three"
-        p
+        console.log(p)
       `)
       expect(c).toBe('1')
     })
@@ -29,7 +29,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
     test('let p = 1, q: f64, r = "three"; — q = 0.0', () => {
       const c = run(`
         let p = 1, q: f64, r = "three"
-        q
+        console.log(q)
       `)
       expect(c).toBe('0')
     })
@@ -39,7 +39,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
     test('const PI = 3.14, E = 2.71; — const group', () => {
       const c = run(`
         const PI = 3.14, E = 2.71
-        PI
+        console.log(PI)
       `)
       expect(c).toBe('3.14')
     })
@@ -57,7 +57,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
       const c = run(`
         let obj = { a: 10, b: 20 }
         let {a, b} = obj, c = 5
-        a + b + c
+        console.log(a + b + c)
       `)
       expect(c).toBe('35')
     })
@@ -67,7 +67,7 @@ describe('02-syntax/02-variables — multiple-decl', () => {
         let obj = { a: 10, b: 20 }
         let arr = [30, 40]
         let {a, b} = obj, [x, y] = arr
-        a + b + x + y
+        console.log(a + b + x + y)
       `)
       expect(c).toBe('100')
     })

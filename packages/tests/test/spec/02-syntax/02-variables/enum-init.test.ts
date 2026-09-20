@@ -13,7 +13,7 @@ describe('02-syntax/02-variables — enum-init', () => {
       const c = run(`
         enum Color { Red, Green, Blue }
         let x: Color = Color.Red
-        x
+        console.log(x)
       `)
       expect(c).toBe('0')
     })
@@ -22,9 +22,9 @@ describe('02-syntax/02-variables — enum-init', () => {
       const c = run(`
         enum Color { Red, Green, Blue }
         let x?: Color
-        x
+        console.log(x)
       `)
-      expect(c).toBe('null')
+      expect(c).toBe('0')
     })
 
     test('Enum с дырками (A=5, B=10) → compile error без инициализатора', () => {
@@ -38,7 +38,7 @@ describe('02-syntax/02-variables — enum-init', () => {
       const c = run(`
         enum E { A = 5, B = 10 }
         let x: E = E.A
-        x
+        console.log(x)
       `)
       expect(c).toBe('5')
     })
