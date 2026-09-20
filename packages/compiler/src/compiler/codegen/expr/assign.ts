@@ -251,7 +251,9 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
         lines.push(`${I}{ ${optType} *${ptr} = &(${l}); if (!(*${ptr}).has_value) { *${ptr} = (${optType}){true, ${r}}; } }`);
         return null;
       }
-      return `${l} = ${l} ?? ${r}`;
+      // Non-nullable type: ??= is a no-op (value is never null)
+      // Generate l = l to avoid C-trigraph '??' in generated C code
+      return `${l} = ${l}`;
     }
     // &&= / ||= → JS semantics with temp
     if (node.op === '&&=' || node.op === '||=') {

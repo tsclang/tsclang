@@ -232,7 +232,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     const r = needsParens(node.right, node.op, true)  ? `(${rRaw})` : rRaw;
     const opMap: Record<string, string> = {
       '===': '==', '!==': '!=',
-      '&&':  '&&', '||': '||', '??': '||',
+      '&&':  '&&', '||': '||',
     };
     const op = opMap[node.op] ?? node.op;
 
@@ -464,6 +464,10 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
         }
         return `${l} ${op} ${tmp}`;
       }
+    }
+    // ?? on non-optional type: left is never null, so a ?? b = a
+    if (node.op === '??') {
+      return l;
     }
     return `${l} ${op} ${r}`;
 }
