@@ -73,8 +73,8 @@ lexer.ts (токенизация, 40+ типов токенов)
 | M8 | semver без pre-release поддержки | pm/src/semver.ts |
 | M9 | `import.meta.dirname` — не работает на Node < 20.11 | test-engine/src/engine.ts |
 | M10 | `shell: true` — уязвимость к инъекциям | test-engine/src/compilers/*.ts |
-| M11 | `>>>` всегда кастует к int32_t/uint32_t | compiler/src/compiler/codegen/expr/operators.ts | Неэффективно и некорректно для ретро-платформ (NES, Spectrum с i8/u8) |
-| M12 | `??=` генерирует C-trigraph `??` для non-nullable типов | compiler/src/compiler/codegen/expr/operators.ts | `a ?? 5` = ошибка C-компилятора (C-trigraph для `#`) |
+| M11 | ~~`>>>` всегда кастует к int32_t/uint32_t~~ | ~~compiler/src/compiler/codegen/expr/operators.ts~~ | ~~Неэффективно и некорректно для ретро-платформ (NES, Spectrum с i8/u8)~~ | ✅ Исправлено (c4c04387) |
+| M12 | ~~`??=` генерирует C-trigraph `??` для non-nullable типов~~ | ~~compiler/src/compiler/codegen/expr/operators.ts~~ | ~~`a ?? 5` = ошибка C-компилятора (C-trigraph для `#`)~~ | ✅ Исправлено (2f965496) |
 
 ---
 
@@ -240,21 +240,24 @@ lexer.ts (токенизация, 40+ типов токенов)
 
 ### 3.5 Bitwise operators (M11)
 
-#### Задача 3.5.1: Исправить `>>>` для типов < 32 бит
+#### Задача 3.5.1: Исправить `>>>` для типов < 32 бит ✅
 - **Файл:** `compiler/src/compiler/codegen/expr/operators.ts`
-- **Проблема:** `>>>` всегда кастует к `(int32_t)((uint32_t)l >> r)`, независимо от типа операнда
-- **Действие:** Каст должен соответствовать типу операнда:
-  - `u8 >>> u8` → `(uint8_t)((uint8_t)l >> r)`
-  - `i8 >>> i8` → `(int8_t)((uint8_t)l >> r)`
-  - `u32 >>> u32` → `(uint32_t)l >> r`
-- **Проверка:** Тесты для u8, i8, u16, i16, u32, i32 | `>>>` на ретро-платформах (NES, Spectrum) | `>>>` на desktop
+- **Статус:** ✅ Исправлено (c4c04387)
+- **Решение:** Каст теперь соответствует типу операнда через typeRank:
+  - `u8/i8 >>> ...` → `(int32_t)((uint32_t)l >> r)` (i8/u8 promoted to 32-bit)
+  - `u16/i16 >>> ...` → `(int32_t)((uint32_t)l >> r)` (i16/u16 promoted to 32-bit)
+  - `u32/i32 >>> ...` → `(int32_t)((uint32_t)l >> r)`
+  - `u64/i64 >>> ...` → `(int64_t)((uint64_t)l >> r)`
+- **Проверка:** Тесты для u8, i8, u16, i16, u32, i32, u64, i64 | `>>>` на ретро-платформах (NES, Spectrum) | `>>>` на desktop
 
-#### Задача 3.5.2: Добавить compile error для `??=` на non-nullable типах
-- **Файл:** `compiler/src/compiler/codegen/expr/operators.ts`
-- **Проблема:** `??=` на non-nullable типах генерирует `a ?? 5` — C-trigraph для `#`, ошибка C-компилятора
-- **Действие:** Добавить проверку: если тип non-nullable → compile error, `??=` имеет смысл только для `T | null`
-- **Пример:** `let a: i32; a ??= 5;` → compile error: `??= requires nullable type`
-- **Проверка:** `let a: i32 | null; a ??= 5;` → корректный код (if (!a.has_value)) | `let a: i32; a ??= 5;` → compile error
+#### Задача 3.5.2: Исправить C-trigraph в `??=` и `??` для non-nullable типов ✅
+- **Файл:** `compiler/src/compiler/codegen/expr/operators.ts`, `compiler/src/compiler/codegen/expr/assign.ts`
+- **Статус:** ✅ Исправлено (2f965496)
+- **Решение:**
+  - `??=` на non-nullable: генерирует `l = l` (no-op, value never null)
+  - `??` на non-`opt_` типах: генерирует только левый операнд (never null)
+  - Удалён `??` из opMap (был маппинг на `||`, семантически неверный)
+- **Проверка:** `let a: i32 | null; a ??= 5;` → корректный код (if (!a.has_value)) | `let a: i32; a ??= 5;` → `a = a` (no-op) | `a ?? b` для non-nullable → `a`
 
 ---
 
