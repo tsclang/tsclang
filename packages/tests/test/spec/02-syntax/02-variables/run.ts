@@ -1,0 +1,15 @@
+import "./var-kinds.test"
+import "./zero-values.test"
+import "./enum-init.test"
+import "./null-assignment.test"
+import "./multiple-decl.test"
+import "./nullable-sugar.test"
+import "./type-mismatch.test"
+import "./range-values.test"
+import "./alternative-literals.test"
+import "./invalid-values.test"
+import "./string-values.test"
+import "./pointer-types.test"
+import { printSummary } from "../../../../../test-engine/src/engine.ts"
+
+printSummary()
