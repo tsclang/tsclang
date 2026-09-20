@@ -206,13 +206,26 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       }
     }
 
-    // >>>= → x = (int32_t)((uint32_t)x >> r)
+    // >>>= → x = (target_signed)((target_unsigned)x >> r) with type-aware casting
     if (node.op === '>>>=') {
-      if (node.left.kind === 'Ident') return `${l} = (int32_t)((uint32_t)${l} >> ${r})`;
-      const lt2 = ctx.inferType(node.left) ?? 'int32_t';
+      const lt = ctx.inferType(node.left);
+      const typeRank: Record<string, number> = {
+        'uint8_t': 0, 'int8_t': 0,
+        'uint16_t': 1, 'int16_t': 1,
+        'uint32_t': 2, 'int32_t': 2,
+        'uint64_t': 3, 'int64_t': 3,
+        'size_t': 3,
+      };
+      const rankL = typeRank[lt] ?? 2;
+      const signedType: Record<number, string> = {
+        0: 'int32_t', 1: 'int32_t', 2: 'int32_t', 3: 'int64_t',
+      };
+      const sType = signedType[rankL];
+      const uType = sType.replace('int', 'uint');
+      if (node.left.kind === 'Ident') return `${l} = (${sType})((${uType})${l} >> ${r})`;
       const ptr = `_tsc_ptr_${ctx.tempCount++}`;
       const I = ' '.repeat(ctx.indent * depth);
-      lines.push(`${I}{ ${lt2} *${ptr} = &(${l}); *${ptr} = (int32_t)((uint32_t)*${ptr} >> ${r}); }`);
+      lines.push(`${I}{ ${lt} *${ptr} = &(${l}); *${ptr} = (${sType})((${uType})*${ptr} >> ${r}); }`);
       return null;
     }
 
