@@ -3,10 +3,12 @@ import { describe, test, run, expect } from "@tslang/test-engine"
 describe('02-syntax/02-formatting — ASI', () => {
   describe('2.1. Символы, которые интерпретируются как продолжение выражения', () => {
     test('[ на новой строке — индекс (ошибка)', () => {
-      expect(() => run(`
+      let threw = false
+      try { run(`
         const a = 1
         [1, 2].forEach(x => console.log(x))
-      `)).toThrow()
+      `) } catch { threw = true }
+      expect(threw).toBe(true)
     })
 
     test('[ на новой строке — с ; разделяет', () => {
@@ -18,10 +20,12 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('( на новой строке — вызов (ошибка)', () => {
-      expect(() => run(`
+      let threw = false
+      try { run(`
         const a = 1
         (2 + 3)
-      `)).toThrow()
+      `) } catch { threw = true }
+      expect(threw).toBe(true)
     })
 
     test('( на новой строке — с ; разделяет', () => {
@@ -33,10 +37,12 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('Template literal на новой строке (ошибка)', () => {
-      expect(() => run(`
+      let threw = false
+      try { run(`
         const a = 1
         \`hello\`
-      `)).toThrow()
+      `) } catch { threw = true }
+      expect(threw).toBe(true)
     })
 
     test('Template literal на новой строке — с ; разделяет', () => {
