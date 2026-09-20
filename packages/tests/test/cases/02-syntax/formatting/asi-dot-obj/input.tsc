@@ -1,4 +1,0 @@
-const someVar = {a: 1, b: 2, c: 3}
-const someRes = someVar
-.c
-console.log(someRes)

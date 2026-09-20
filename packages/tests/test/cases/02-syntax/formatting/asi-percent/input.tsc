@@ -1,3 +1,0 @@
-const c = 5.0
-% 2
-console.log(c)
