@@ -73,6 +73,7 @@ lexer.ts (токенизация, 40+ типов токенов)
 | M8 | semver без pre-release поддержки | pm/src/semver.ts |
 | M9 | `import.meta.dirname` — не работает на Node < 20.11 | test-engine/src/engine.ts |
 | M10 | `shell: true` — уязвимость к инъекциям | test-engine/src/compilers/*.ts |
+| M11 | `>>>` всегда кастует к int32_t/uint32_t | compiler/src/compiler/codegen/expr/operators.ts | Неэффективно и некорректно для ретро-платформ (NES, Spectrum с i8/u8) |
 
 ---
 
@@ -235,6 +236,17 @@ lexer.ts (токенизация, 40+ типов токенов)
 - **Файл:** `test-engine/src/compilers/*.ts`
 - **Действие:** Использовать массив аргументов вместо shell commands
 - **Проверка:** Нет уязвимостей к командной инъекции
+
+### 3.5 Bitwise operators (M11)
+
+#### Задача 3.5.1: Исправить `>>>` для типов < 32 бит
+- **Файл:** `compiler/src/compiler/codegen/expr/operators.ts`
+- **Проблема:** `>>>` всегда кастует к `(int32_t)((uint32_t)l >> r)`, независимо от типа операнда
+- **Действие:** Каст должен соответствовать типу операнда:
+  - `u8 >>> u8` → `(uint8_t)((uint8_t)l >> r)`
+  - `i8 >>> i8` → `(int8_t)((uint8_t)l >> r)`
+  - `u32 >>> u32` → `(uint32_t)l >> r`
+- **Проверка:** Тесты для u8, i8, u16, i16, u32, i32 | `>>>` на ретро-платформах (NES, Spectrum) | `>>>` на desktop
 
 ---
 
