@@ -34,6 +34,14 @@ let x?: Color;             // OK — sugar for Color | null, default null
 - Explicit-value enum с дырками (`enum E { A=5, B=10 }`) делает `= 0` невалидным значением.
 - Честнее требовать явное присвоение или `?`, чем молча подставлять значение.
 
+**Non-nullable по умолчанию** — все типы non-nullable, кроме `T | null` и `T?`:
+
+```typescript
+let x: i32 = 5;    // non-nullable — нельзя null
+let y: i32 | null; // nullable — можно null
+let z?: string;    // sugar for string | null
+```
+
 **Правило присваивания `null`:**
 
 - `x = null` для **non-nullable** типа → compile error
