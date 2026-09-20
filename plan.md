@@ -172,6 +172,7 @@ lexer.ts (токенизация, 40+ типов токенов)
 #### Задача 3.1.3: Вынести Async machinery в отдельный класс
 - **Файл:** `compiler/src/compiler/codegen/async-engine.ts` (новый)
 - **Действие:** Перенести `_asyncFuncs`, `_generatorFuncs`, `_staticTasks` и все `_emitAsync*` методы
+- **Риски:** promoted vars, poll functions, `@static async function*`, borrow across await — места где легко сломать ownership. Написать integration-тесты для async + ownership edge cases.
 - **Проверка:** Async код генерируется корректно для desktop и embedded
 
 ### 3.2 Улучшение типизации (M2, M3)

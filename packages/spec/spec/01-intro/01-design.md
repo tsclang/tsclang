@@ -47,7 +47,7 @@
 | `var` | Синоним `let` | Нет hoisting/TDZ |
 | `typeof` | Только compile-time | Нет runtime reflection |
 | `delete` | Нет оператора | Ownership не позволяет |
-| `===` / `!==` | Синонимы `==` / `!=` | Нет type coercion в TSClang |
+| `===` / `!==` | Синонимы `==` / `!=` | Нет type coercion в TSClang; `==` работает как `===` (без приведения типов) |
 
 ### Пример
 
