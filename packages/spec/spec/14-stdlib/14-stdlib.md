@@ -151,6 +151,12 @@ process.env    // env API: .get(key), .has(key) — не Map, итерация �
 
 На **embedded** targets `process.*` — ошибка компилятора (нет OS, нет процесса). Вместо этого используются `std/serial`, `std/gpio` и др.
 
+**Форматирование значений** (`console.log(x)`):
+
+| Тип `x` | Вывод |
+|---------|-------|
+| closure / function | `null`, если `fn == NULL` (zero-value); иначе `[Function]` |
+
 Недоступно на embedded (требует OS):
 - `process.*`
 - `std/threads`

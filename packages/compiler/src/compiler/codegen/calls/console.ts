@@ -132,6 +132,13 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
         continue;
       }
 
+      if (ctype === 'tsc_closure') {
+        // Closure: zero-value {0} → fn == NULL → "null" (TS: undefined); otherwise "[Function]"
+        fmtParts.push('%s');
+        fmtArgs.push(`${cexpr}.fn ? "[Function]" : "null"`);
+        continue;
+      }
+
       if (ctype === 'String') {
         if (ctx._cap('allocator') !== 'heap') {
           if (fmtParts.length > 0) {

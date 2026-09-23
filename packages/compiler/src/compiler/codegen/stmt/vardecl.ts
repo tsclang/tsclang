@@ -1660,6 +1660,9 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             p(`${ctx.varDecl(qualifier, ctype, name)} = STR_LIT("");`);
           } else if (PRIMITIVE_ZERO[ctype] !== undefined) {
             p(`${ctx.varDecl(qualifier, ctype, name)} = ${PRIMITIVE_ZERO[ctype]};`);
+          } else if (ctype.endsWith(' *')) {
+            // Pointer types: NULL init
+            p(`${ctx.varDecl(qualifier, ctype, name)} = NULL;`);
           } else {
             p(`${ctx.varDecl(qualifier, ctype, name)} = {0};`);
           }
