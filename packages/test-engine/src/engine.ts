@@ -330,7 +330,8 @@ export function run(code: string, opts?: RunOptions): string {
     if (backend.run) {
       const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000 })
       if (!runResult.success || runResult.exitCode !== 0) throw new RuntimeError(runResult.stderr || `exit code ${runResult.exitCode}`)
-      return runResult.stdout.trim()
+      // Normalize CRLF (Windows text-mode stdout) so expectations are platform-independent
+      return runResult.stdout.replace(/\r\n/g, "\n").trim()
     }
     return ""
   } finally {
