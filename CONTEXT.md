@@ -107,6 +107,15 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 **Spec-based:** 1932 pass, 0 fail, 2 skipped
 
+**Spec-suites (`packages/tests/test/spec/`, run via per-folder `run.ts`):**
+
+| Suite | Result | Known bugs |
+|-------|--------|-----------|
+| 02-syntax/02-variables | 150/162 | 12 (Arc crash, Weak E022, enum? zero, boolean↔number ×6, char range) |
+| 02-syntax/02-formatting | 52/60 | 8 (untyped lambda void* ×2, forEach f64→i32 macro, tagged template, ++/-- ASI glue ×2, anon-struct Array typedef, tsc_dtoa digits) |
+
+Known failures carry `// KNOWN BUG (scope):` comments in tests. Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
+
 | Section | Tests | Topic |
 |---------|-------|-------|
 | 02-syntax | 127 | Arithmetic, variables, formatting |
@@ -153,6 +162,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 - **KNOWN: `pnpm --filter` cwd bug (test-engine).** `pnpm test:engine` runs with cwd=package dir, which breaks repo-root-relative `file()` paths (2 file-param tests fail with doubled paths). Run engine tests via `pnpm tsx packages/test-engine/src/tests/run.ts` from repo root (135/135 pass). Fix: make `file()` resolve relative to test file, not cwd.
 - **`_postStmtCleanups` in Return.** All Return paths in `control-flow.ts` now call `_flushPostStmtCleanups` before the actual return. Previously, temps created during return expression evaluation (e.g. string concat with non-String operand) were leaked. If adding new Return paths, always flush post-stmt cleanups before the return.
 - **Named fn callbacks in `.map()`.** `infer.ts` handles both `Arrow` and `Ident` callbacks. Codegen (`_extractCallbackFn`) already worked — only type inference needed the fix. String array callbacks still have calling convention mismatch (macro passes `String *`, named fn takes `String` by value) — use arrow functions for string arrays.
+- **Spec-suites gotchas (02-syntax).** Import engine as `@tsclang/test-engine` (NOT `@tslang` — dead name from early commits). Each folder needs `run.ts` entry + `printSummary()` — without it `expect` failures are swallowed (test() catches, exit 0). Engine `run()` normalizes CRLF → LF (Windows text-mode stdout). Console prints closure as `null`/`[Function]` (console.ts). Default init: pointer ctypes get `= NULL`, structs `{0}` (vardecl.ts `_visitVarDecl`).
 
 ---
 
