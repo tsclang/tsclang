@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "@tslang/test-engine"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe('02-syntax/02-formatting — перенос строки', () => {
   test('массив с переносами', () => {
@@ -82,6 +82,9 @@ describe('02-syntax/02-formatting — перенос строки', () => {
   })
 
   test('вложенные скобки с переносами', () => {
+    // KNOWN BUG (codegen): поле анонимного объекта-литерала с типом массив —
+    // typedef Array_f64 не эмитится (_ensureArray не вызывается для полей
+    // анонимных структур) → gcc: unknown type name 'Array_f64'.
     const result = run(`
       const obj = {
         arr: [

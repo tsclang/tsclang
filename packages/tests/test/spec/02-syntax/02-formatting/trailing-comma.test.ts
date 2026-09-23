@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "@tslang/test-engine"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe('02-syntax/02-formatting — trailing comma', () => {
   test('в объекте', () => {

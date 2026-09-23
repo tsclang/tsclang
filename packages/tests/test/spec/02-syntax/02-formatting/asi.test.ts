@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "@tslang/test-engine"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe('02-syntax/02-formatting — ASI', () => {
   describe('2.1. Символы, которые интерпретируются как продолжение выражения', () => {
@@ -12,11 +12,14 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('[ на новой строке — с ; разделяет', () => {
+      // KNOWN BUG (codegen): [1,2].forEach на массиве литералов number —
+      // выбирается tsc_array_foreach_i32 вместо f64-макроса, compound literal
+      // не обёрнут в скобки внутри macro-аргумента (gcc: passed 4 arguments).
       const result = run(`
         const a = 1;
         [1, 2].forEach(x => console.log(x))
       `)
-      expect(result).toBe('1')
+      expect(result).toBe('1\n2')
     })
 
     test('( на новой строке — вызов (ошибка)', () => {
@@ -29,14 +32,18 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('( на новой строке — с ; разделяет', () => {
+      // JS: выражение (2 + 3) — statement без вывода
       const result = run(`
         const a = 1;
         (2 + 3)
       `)
-      expect(result).toBe('1')
+      expect(result).toBe('')
     })
 
     test('Template literal на новой строке (ошибка)', () => {
+      // JS: 1`hello` — tagged template на литерале → TypeError.
+      // Компилятор должен отклонить tagged template (не поддерживается).
+      // KNOWN BUG (parser): tagged template принимается молча.
       let threw = false
       try { run(`
         const a = 1
@@ -46,11 +53,12 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('Template literal на новой строке — с ; разделяет', () => {
+      // JS: template literal — expression statement без вывода
       const result = run(`
         const a = 1;
         \`hello\`
       `)
-      expect(result).toBe('1')
+      expect(result).toBe('')
     })
 
     test('+ на новой строке — бинарный оператор', () => {
@@ -109,18 +117,22 @@ describe('02-syntax/02-formatting — ASI', () => {
     })
 
     test('++ на новой строке', () => {
+      // JS: ASI после 5 (restricted production), затем ++a → 6.
+      // KNOWN BUG (parser): парсер склеивает `5` и `++a` в постфикс (`5++a`),
+      // вместо вставки точки с запятой.
       const result = run(`
         let a = 5
-        ++
+        ++a
         console.log(a)
       `)
       expect(result).toBe('6')
     })
 
     test('-- на новой строке', () => {
+      // KNOWN BUG (parser): аналогично ++
       const result = run(`
         let a = 5
-        --
+        --a
         console.log(a)
       `)
       expect(result).toBe('4')

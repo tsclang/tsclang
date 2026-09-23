@@ -24,7 +24,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
 
     test('let — можно передавать как Mut<T>', () => {
       const result = run(`
-        fn takeMut(_m: Mut<i32>): i32 { return 0 }
+        function takeMut(_m: Mut<i32>): i32 { return 0 }
         let x: i32 = 5
         console.log(takeMut(x))
       `)
@@ -52,7 +52,7 @@ describe('02-syntax/02-variables — var-kinds', () => {
 
     test('const — нельзя передать как Mut<T> (compile error)', () => {
       expect(() => run(`
-        fn takeMut(_m: Mut<i32>): i32 { return 0 }
+        function takeMut(_m: Mut<i32>): i32 { return 0 }
         const x: i32 = 5
         takeMut(x)
       `)).toThrow()

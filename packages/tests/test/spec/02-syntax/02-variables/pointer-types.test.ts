@@ -39,11 +39,12 @@ describe('02-syntax/02-variables — pointer-types', () => {
   })
 
   describe('12.3. Closure — zero-value = NULL', () => {
-    test('let x: () => void; → zero-value = NULL (compiler bug: garbage)', () => {
-      expect(() => run(`
+    test('let x: () => void; → zero-value = NULL, печатается как null', () => {
+      const result = run(`
         let x: () => void
         console.log(x)
-      `)).toThrow()
+      `)
+      expect(result).toBe('null')
     })
   })
 })

@@ -1,9 +1,0 @@
-{
-  "name": "@tslang/tests-spec-02-variables",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@tslang/test-engine": "workspace:*"
-  }
-}

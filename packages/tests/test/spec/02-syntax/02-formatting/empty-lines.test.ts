@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "@tslang/test-engine"
+import { describe, test, run, expect } from "@tsclang/test-engine"
 
 describe('02-syntax/02-formatting — пустые строки', () => {
   test('одна пустая строка между функциями', () => {
@@ -14,7 +14,7 @@ describe('02-syntax/02-formatting — пустые строки', () => {
       foo()
       bar()
     `)
-    expect(result).toBe('foo bar')
+    expect(result).toBe('foo\nbar')
   })
 
   test('две пустые строки', () => {
@@ -31,6 +31,6 @@ describe('02-syntax/02-formatting — пустые строки', () => {
       foo()
       bar()
     `)
-    expect(result).toBe('foo bar')
+    expect(result).toBe('foo\nbar')
   })
 })
