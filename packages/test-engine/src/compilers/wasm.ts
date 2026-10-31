@@ -12,6 +12,12 @@ export class WasmBackend implements CompilerBackend {
     return isInPath("emcc")
   }
 
+  version(): string {
+    if (!this.isAvailable()) return ""
+    const r = spawnSync("emcc", ["--version"], { stdio: "pipe", shell: true, timeout: 5_000 })
+    return (r.stdout?.toString() ?? "").split("\n")[0]?.trim() ?? ""
+  }
+
   compile(cCode: string, outDir: string, opts?: CompileOpts): CompileResult {
     mkdirSync(outDir, { recursive: true })
     const cPath = join(outDir, "input.c")

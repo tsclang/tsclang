@@ -34,6 +34,17 @@ export class GccLikeBackend implements CompilerBackend {
     return this.available
   }
 
+  version(): string {
+    if (!this.isAvailable()) return ""
+    let out = ""
+    if (msys2Bash()) {
+      out = bashExec(`${shQuote(this.name)} --version`, 5_000).stdout?.toString() ?? ""
+    } else {
+      out = spawnSync(this.name, ["--version"], { stdio: "pipe", shell: true, timeout: 5_000 }).stdout?.toString() ?? ""
+    }
+    return out.split("\n")[0]?.trim() ?? ""
+  }
+
   compile(cCode: string, outDir: string, opts?: CompileOpts): CompileResult {
     mkdirSync(outDir, { recursive: true })
     const cPath = join(outDir, "input.c")

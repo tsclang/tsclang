@@ -1,5 +1,5 @@
 import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs"
-import { tmpdir } from "os"
+import { tmpdir, release } from "os"
 import { join, resolve, dirname } from "path"
 import { fileURLToPath } from "url"
 import { compileTsc, parsePlatformDecl } from "@tsclang/compiler"
@@ -226,6 +226,8 @@ export interface TestResult {
   /** Known-bug marker ('#NNN'): a failing xfail test counts as xfailed,
    *  a passing one as xpass — neither paints the run red */
   xfail?: string
+  /** Set when the test was not executed (skip mode, filter, non-only) */
+  skipped?: boolean
 }
 
 /** Per-test options. */
@@ -249,6 +251,9 @@ interface DescribeContext {
   beforeAllRan?: boolean
   /** Set when beforeAll threw — every test in the subtree fails with this */
   beforeAllError?: string
+  /** Set when at least one test of this context (or subtree) actually ran —
+   *  gates afterAll, so a fully filtered-out context fires no teardown */
+  ranAnyTest?: boolean
 }
 
 interface TestEntry {
@@ -256,9 +261,25 @@ interface TestEntry {
   name: string
   callback: () => unknown
   opts?: TestOpts
+  /** Selective-run mode: "only" suppresses every other test, "skip" skips this one */
+  mode?: "only" | "skip"
 }
 
-let results: TestResult[] = []
+/** All mutable execution state. Swapping the active state is what makes an
+ *  isolated runSuite() possible — the prerequisite for worker parallelism. */
+interface EngineState {
+  root: DescribeContext
+  currentContext: DescribeContext
+  results: TestResult[]
+}
+
+function freshState(): EngineState {
+  const root: DescribeContext = { kind: "describe", name: "", parent: null, entries: [] }
+  return { root, currentContext: root, results: [] }
+}
+
+const globalState = freshState()
+let state = globalState
 
 // === Jest-like API ===
 
@@ -556,72 +577,94 @@ export function expect(actual: any): FunctionMatchers | ValueMatchers {
   }
 }
 
-/** Registration root: collects top-level tests and every describe subtree. */
-const root: DescribeContext = { kind: "describe", name: "", parent: null, entries: [] }
-let currentContext: DescribeContext = root
-
-/** Registration only — nothing executes until printSummary() runs the tree. */
+/** Registration only — nothing executes until printSummary()/runSuite() runs the tree. */
 export function describe(name: string, fn: () => void): void {
   const ctx: DescribeContext = {
     kind: "describe",
-    name: currentContext.name ? `${currentContext.name} > ${name}` : name,
-    parent: currentContext,
+    name: state.currentContext.name ? `${state.currentContext.name} > ${name}` : name,
+    parent: state.currentContext,
     entries: [],
   }
-  currentContext.entries.push(ctx)
-  const prev = currentContext
-  currentContext = ctx
+  state.currentContext.entries.push(ctx)
+  const prev = state.currentContext
+  state.currentContext = ctx
   try {
     fn()
   } finally {
-    currentContext = prev
+    state.currentContext = prev
   }
 }
 
 export function before(fn: () => unknown): void {
-  if (currentContext !== root) currentContext.beforeAll = fn
+  if (state.currentContext !== state.root) state.currentContext.beforeAll = fn
 }
 
 export function after(fn: () => unknown): void {
-  if (currentContext !== root) currentContext.afterAll = fn
+  if (state.currentContext !== state.root) state.currentContext.afterAll = fn
 }
 
 export function beforeEach(fn: () => unknown): void {
-  if (currentContext !== root) currentContext.beforeEach = fn
+  if (state.currentContext !== state.root) state.currentContext.beforeEach = fn
 }
 
 export function afterEach(fn: () => unknown): void {
-  if (currentContext !== root) currentContext.afterEach = fn
+  if (state.currentContext !== state.root) state.currentContext.afterEach = fn
 }
 
-export function test(name: string, callback: () => unknown, opts?: TestOpts): void {
-  currentContext.entries.push({ kind: "test", name, callback, opts })
+/** test() with the selective-run modifiers attached (test.only / test.skip). */
+export interface TestFn {
+  (name: string, callback: () => unknown, opts?: TestOpts): void
+  /** Run only the tests marked .only — everything else counts as skipped */
+  only(name: string, callback: () => unknown, opts?: TestOpts): void
+  /** Register without running: the test counts as skipped */
+  skip(name: string, callback: () => unknown, opts?: TestOpts): void
+}
+
+export const test: TestFn = ((name: string, callback: () => unknown, opts?: TestOpts) => {
+  state.currentContext.entries.push({ kind: "test", name, callback, opts })
+}) as TestFn
+
+test.only = (name: string, callback: () => unknown, opts?: TestOpts) => {
+  state.currentContext.entries.push({ kind: "test", name, callback, opts, mode: "only" })
+}
+
+test.skip = (name: string, callback: () => unknown, opts?: TestOpts) => {
+  state.currentContext.entries.push({ kind: "test", name, callback, opts, mode: "skip" })
+}
+
+/** Does the tree contain at least one test.only? (Enables only-mode globally.) */
+function hasOnly(ctx: DescribeContext): boolean {
+  for (const e of ctx.entries) {
+    if (e.kind === "test" && e.mode === "only") return true
+    if (e.kind === "describe" && hasOnly(e)) return true
+  }
+  return false
 }
 
 /** Context chain root→ctx; the root is excluded (it carries no hooks). */
-function chainOf(ctx: DescribeContext): DescribeContext[] {
+function chainOf(st: EngineState, ctx: DescribeContext): DescribeContext[] {
   const chain: DescribeContext[] = []
-  for (let c = ctx; c !== root; c = c.parent!) chain.unshift(c)
+  for (let c = ctx; c !== st.root; c = c.parent!) chain.unshift(c)
   return chain
 }
 
 /** Synthetic hook-failure results inherit the test's xfail marker — the
  *  marker covers the test's whole lifecycle, cleanup included. */
-async function runAfterEach(chain: DescribeContext[], fullName: string, xfail?: string): Promise<void> {
+async function runAfterEach(st: EngineState, chain: DescribeContext[], fullName: string, xfail?: string): Promise<void> {
   for (const c of chain) {
     try {
       await c.afterEach?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      results.push({ name: `${fullName} > afterEach`, passed: false, error: `afterEach failed: ${msg}`, xfail })
+      st.results.push({ name: `${fullName} > afterEach`, passed: false, error: `afterEach failed: ${msg}`, xfail })
     }
   }
 }
 
-async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
-  const fullName = ctx === root ? entry.name : `${ctx.name} > ${entry.name}`
+async function runTest(st: EngineState, entry: TestEntry, ctx: DescribeContext): Promise<void> {
+  const fullName = ctx === st.root ? entry.name : `${ctx.name} > ${entry.name}`
   const xfail = entry.opts?.xfail
-  const chain = chainOf(ctx)
+  const chain = chainOf(st, ctx)
 
   // Lazy beforeAll: fire once per context, right before its first test
   for (const c of chain) {
@@ -638,7 +681,7 @@ async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
   // callbacks and per-test hooks are skipped
   const brokenSetup = chain.find(c => c.beforeAllError !== undefined)
   if (brokenSetup) {
-    results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}`, xfail })
+    st.results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}`, xfail })
     return
   }
 
@@ -647,61 +690,181 @@ async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
       await c.beforeEach?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      results.push({ name: fullName, passed: false, error: `beforeEach failed: ${msg}`, xfail })
-      await runAfterEach(chain, fullName, xfail)
+      st.results.push({ name: fullName, passed: false, error: `beforeEach failed: ${msg}`, xfail })
+      await runAfterEach(st, chain, fullName, xfail)
       return
     }
   }
 
   try {
     await entry.callback()
-    results.push({ name: fullName, passed: true, xfail })
+    st.results.push({ name: fullName, passed: true, xfail })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
     const phase = err instanceof TscCompilationError || err instanceof CompileError || err instanceof RuntimeError
       ? err.phase
       : undefined
-    results.push({ name: fullName, passed: false, error: err.message, phase, xfail })
+    st.results.push({ name: fullName, passed: false, error: err.message, phase, xfail })
   } finally {
-    await runAfterEach(chain, fullName, xfail)
+    await runAfterEach(st, chain, fullName, xfail)
   }
 }
 
-/** Execute one context: entries in registration order, afterAll at exit. */
-async function runContext(ctx: DescribeContext): Promise<void> {
+/** Does the subtree contain at least one registered test entry? */
+function subtreeHasTests(ctx: DescribeContext): boolean {
+  for (const e of ctx.entries) {
+    if (e.kind === "test" || (e.kind === "describe" && subtreeHasTests(e))) return true
+  }
+  return false
+}
+
+/** Execute one context: entries in registration order, afterAll at exit.
+ *  Tests eliminated by skip/only/filter stay in the results as skipped —
+ *  no hooks fire for them. afterAll fires unless the subtree HAD tests but
+ *  none of them ran (jest parity: an empty describe still fires afterAll). */
+async function runContext(st: EngineState, ctx: DescribeContext, filter: string | undefined, onlyMode: boolean): Promise<void> {
   for (const entry of ctx.entries) {
     if (entry.kind === "describe") {
-      await runContext(entry)
-    } else {
-      await runTest(entry, ctx)
+      await runContext(st, entry, filter, onlyMode)
+      if (entry.ranAnyTest) ctx.ranAnyTest = true
+      continue
     }
+    const fullName = ctx === st.root ? entry.name : `${ctx.name} > ${entry.name}`
+    const matches = filter === undefined || fullName.includes(filter)
+    const runnable = entry.mode !== "skip" && matches && (!onlyMode || entry.mode === "only")
+    if (!runnable) {
+      st.results.push({ name: fullName, passed: false, skipped: true })
+      continue
+    }
+    ctx.ranAnyTest = true
+    await runTest(st, entry, ctx)
   }
-  // afterAll fires at context exit — even when the context has no tests
-  // (mirrors jest; beforeAll stays lazy, afterAll does not)
-  if (ctx !== root && ctx.afterAll) {
+  // afterAll fires at context exit — for an empty describe too (jest parity),
+  // but not when the subtree had tests and every one of them was skipped
+  if (ctx !== st.root && ctx.afterAll && (ctx.ranAnyTest || !subtreeHasTests(ctx))) {
     try {
       await ctx.afterAll()
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e))
-      results.push({ name: `${ctx.name} > afterAll`, passed: false, error: err.message })
+      st.results.push({ name: `${ctx.name} > afterAll`, passed: false, error: err.message })
     }
   }
 }
 
 export function getResults(): TestResult[] {
-  return results
+  return globalState.results
 }
 
 export function reset(): void {
-  results = []
-  root.entries = []
-  // Clear hook bookkeeping so a re-run does not skip beforeAll
-  const walk = (c: DescribeContext) => {
-    c.beforeAllRan = undefined
-    c.beforeAllError = undefined
-    for (const e of c.entries) if (e.kind === "describe") walk(e)
+  const fresh = freshState()
+  globalState.root = fresh.root
+  globalState.currentContext = fresh.root
+  globalState.results = fresh.results
+  if (state === globalState) state.currentContext = fresh.root
+}
+
+/** Toolchain/environment block of a report — reproducibility and CI trends. */
+export interface SummaryEnvironment {
+  os: string
+  node: string
+  /** Name of the default compiler backend ("gcc", ...) */
+  backend: string
+  /** First line of the toolchain's --version, "" when not reportable */
+  toolchain: string
+}
+
+/** Machine-readable run outcome. */
+export interface Summary {
+  total: number
+  passed: number
+  failed: number
+  xfailed: number
+  xpassed: number
+  skipped: number
+  durationMs: number
+  /** Active name filter, when one was applied */
+  filter?: string
+  environment: SummaryEnvironment
+  results: TestResult[]
+}
+
+function environmentInfo(): SummaryEnvironment {
+  let toolchain = ""
+  try {
+    const backend = getBackend(getDefaultCompiler())
+    toolchain = backend?.version?.() ?? ""
+  } catch {
+    // A version probe must never break a test run
   }
-  walk(root)
+  return {
+    os: `${process.platform} ${release()}`,
+    node: process.version,
+    backend: getDefaultCompiler(),
+    toolchain,
+  }
+}
+
+export interface ExecuteOpts {
+  /** Substring of the test's full name; non-matching tests count as skipped */
+  filter?: string
+}
+
+/** Execute a state's tree and build the Summary (no printing, no exit). */
+async function execute(st: EngineState, opts?: ExecuteOpts): Promise<Summary> {
+  const started = Date.now()
+  const onlyMode = hasOnly(st.root)
+  await runContext(st, st.root, opts?.filter, onlyMode)
+  const plain = st.results.filter(r => !r.xfail && !r.skipped)
+  return {
+    total: st.results.length,
+    passed: plain.filter(r => r.passed).length,
+    failed: plain.filter(r => !r.passed).length,
+    xfailed: st.results.filter(r => r.xfail && !r.passed && !r.skipped).length,
+    xpassed: st.results.filter(r => r.xfail && r.passed).length,
+    skipped: st.results.filter(r => r.skipped).length,
+    durationMs: Date.now() - started,
+    filter: opts?.filter,
+    environment: environmentInfo(),
+    results: st.results,
+  }
+}
+
+export interface RunSuiteOpts extends ExecuteOpts {}
+
+/** Register and execute an isolated suite: the global tree/results stay
+ *  untouched (this is also what makes worker-based parallelism possible).
+ *  Returns the Summary instead of printing or exiting. */
+export async function runSuite(register: () => void, opts?: RunSuiteOpts): Promise<Summary> {
+  const prev = state
+  state = freshState()
+  try {
+    register()
+    return await execute(state, opts)
+  } finally {
+    state = prev
+  }
+}
+
+/** Write the machine-readable JSON report. */
+export function writeReport(summary: Summary, path: string): void {
+  writeFileSync(path, JSON.stringify(summary, null, 2) + "\n", "utf8")
+}
+
+export interface CliOptions {
+  filter?: string
+  jsonPath?: string
+}
+
+/** Parse runner CLI args: a bare word is a name filter,
+ *  --json[=path] requests a JSON report (default test-report.json). */
+export function resolveCliArgs(argv: string[]): CliOptions {
+  const out: CliOptions = {}
+  for (const arg of argv) {
+    if (arg === "--json") out.jsonPath = "test-report.json"
+    else if (arg.startsWith("--json=")) out.jsonPath = arg.slice("--json=".length)
+    else if (!arg.startsWith("--") && out.filter === undefined) out.filter = arg
+  }
+  return out
 }
 
 /** Format one failure block for the summary. Every failure must show a reason:
@@ -714,32 +877,44 @@ export function formatFailure(r: TestResult): string {
   return `  ✗ ${r.name}\n    error:    ${phase}${indented}`
 }
 
+export interface SummaryOpts {
+  filter?: string
+  jsonPath?: string
+}
+
 /** Execute all registered tests (awaiting async callbacks), then print totals.
  *  Fire-and-forget calls keep the process alive until the run completes.
  *  xfail-marked tests are excluded from passed/failed: they count as xfailed
- *  (still broken, expected) or xpass (bug apparently fixed — remove marker). */
-export async function printSummary(): Promise<void> {
-  await runContext(root)
-  const plain = results.filter(r => !r.xfail)
-  const passed = plain.filter(r => r.passed).length
-  const failed = plain.filter(r => !r.passed).length
-  const xfailed = results.filter(r => r.xfail && !r.passed).length
-  const xpassed = results.filter(r => r.xfail && r.passed).length
+ *  (still broken, expected) or xpass (bug apparently fixed — remove marker).
+ *  Selective run and JSON report are controlled by options, CLI args
+ *  (`run.ts <name-substring> [--json[=path]]`) or env (TSC_TEST_FILTER /
+ *  TSC_TEST_JSON) — options win, then CLI, then env. */
+export async function printSummary(opts?: SummaryOpts): Promise<void> {
+  const cli = resolveCliArgs(process.argv.slice(2))
+  const filter = opts?.filter ?? cli.filter ?? process.env.TSC_TEST_FILTER
+  const jsonPath = opts?.jsonPath ?? cli.jsonPath ?? (process.env.TSC_TEST_JSON || undefined)
 
-  const parts = [`${passed} passed`, `${failed} failed`]
-  if (xfailed > 0) parts.push(`${xfailed} xfailed`)
-  if (xpassed > 0) parts.push(`${xpassed} xpassed`)
-  console.log(`\n${parts.join(", ")}, ${results.length} total`)
+  const s = await execute(globalState, { filter })
+  if (jsonPath) writeReport(s, jsonPath)
 
-  if (failed > 0) {
+  const parts = [`${s.passed} passed`, `${s.failed} failed`]
+  if (s.xfailed > 0) parts.push(`${s.xfailed} xfailed`)
+  if (s.xpassed > 0) parts.push(`${s.xpassed} xpassed`)
+  if (s.skipped > 0) parts.push(`${s.skipped} skipped`)
+  const filterNote = filter ? ` (filter: ${filter})` : ""
+  console.log(`\n${parts.join(", ")}, ${s.total} total${filterNote}`)
+  if (jsonPath) console.log(`JSON report: ${jsonPath}`)
+
+  const plain = s.results.filter(r => !r.xfail && !r.skipped)
+  if (s.failed > 0) {
     console.log("\nFailures:")
     for (const r of plain.filter(x => !x.passed)) console.log(formatFailure(r))
   }
-  if (xpassed > 0) {
+  if (s.xpassed > 0) {
     console.log("\nXPASS (xfail no longer reproducible — bug fixed? remove the marker):")
-    for (const r of results.filter(x => x.xfail && x.passed)) {
+    for (const r of s.results.filter(x => x.xfail && x.passed)) {
       console.log(`  ✓ ${r.name} (xfail: ${r.xfail})`)
     }
   }
-  process.exit(failed > 0 ? 1 : 0)
+  process.exit(s.failed > 0 ? 1 : 0)
 }

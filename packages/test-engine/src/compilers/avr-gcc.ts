@@ -17,6 +17,14 @@ export class AvrGccBackend implements CompilerBackend {
     return isInPath("avr-gcc") && isInPath("simavr")
   }
 
+  version(): string {
+    if (!this.isAvailable()) return ""
+    const r = process.platform === "win32"
+      ? wslExec("avr-gcc", ["--version"])
+      : spawnSync("avr-gcc", ["--version"], { stdio: "pipe", shell: true })
+    return (r.stdout?.toString() ?? "").split("\n")[0]?.trim() ?? ""
+  }
+
   compile(cCode: string, outDir: string, opts?: CompileOpts): CompileResult {
     mkdirSync(outDir, { recursive: true })
     const cPath = join(outDir, "input.c")

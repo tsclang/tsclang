@@ -12,6 +12,8 @@ self-tests live here in `test/`.
 pnpm test:engine                                    # self-tests (any cwd)
 pnpm tsx packages/test-engine/test/run.ts           # same, explicit
 pnpm tsx packages/tests/test/spec/02-syntax/02-variables/run.ts   # a spec suite
+pnpm tsx …/02-variables/run.ts "zero-value"         # selective: name substring
+pnpm tsx …/02-variables/run.ts --json=report.json   # + machine-readable report
 ```
 
 ## Test API
@@ -46,6 +48,22 @@ describe("02-syntax/02-variables — var-kinds", () => {
   split into `passed / failed / xfailed / xpassed`; a failing xfail test is not
   red, a passing one is reported as XPASS ("bug fixed? remove the marker").
   Exit code is driven by `failed` only.
+- **Selective run**: `test.only(...)` runs only the `.only`-marked tests,
+  `test.skip(...)` registers without running; both count as `skipped`, and no
+  hooks fire for them. A name filter is a substring of the full name
+  (`outer > inner > test`), taken from the CLI arg, `TSC_TEST_FILTER` env, or
+  `printSummary({ filter })`. Debugging one invariant ≠ running the whole suite.
+
+## JSON report
+
+`--json[=path]` (or `TSC_TEST_JSON`, or `printSummary({ jsonPath })`) writes a
+machine-readable report: counters (`total/passed/failed/xfailed/xpassed/
+skipped`), `durationMs`, the active `filter`, per-test results and an
+`environment` block (`os`, `node`, `backend`, `toolchain` — the first line of
+the backend's `--version`) for reproducibility and CI trends. `runSuite(
+register, opts?)` runs an isolated suite in-process and returns the `Summary`
+without printing or exiting — the same primitive worker parallelism builds on
+(`writeReport(summary, path)` serializes it).
 
 ## expect()
 
@@ -126,6 +144,7 @@ packages/test-engine/
     hygiene.test.ts        # no path/code confusion, compile timeouts
     async.test.ts          # collect-then-run, async hooks, hook failures
     xfail.test.ts          # xfail/xpass model
+    selective-report.test.ts # filter/only/skip, runSuite, JSON report, CLI args
 ```
 
 Self-test sandbox tests that deliberately fail carry `{ xfail: "#206" }` — a

@@ -35,4 +35,7 @@ export interface CompilerBackend {
   isAvailable(): boolean
   compile(cCode: string, outDir: string, opts?: CompileOpts): CompileResult
   run?(binaryPath: string, opts?: RunOpts): RunResult
+  /** First line of the toolchain version banner, "" when not reportable —
+   *  feeds the JSON report environment block */
+  version?(): string
 }
