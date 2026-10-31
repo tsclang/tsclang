@@ -220,6 +220,8 @@ export interface TestResult {
   actual?: string
   expected?: string
   error?: string
+  /** Pipeline phase the failure came from: tsc | c-compile | run */
+  phase?: string
 }
 
 interface DescribeContext {
@@ -235,15 +237,21 @@ let currentDescribe = ""
 
 // === Jest-like API ===
 
+/** Pipeline phase an engine error originates from. */
+export type ErrorPhase = "tsc" | "c-compile" | "run"
+
 export class TscCompilationError extends Error {
+  readonly phase: ErrorPhase = "tsc"
   constructor(message: string) { super(message); this.name = "TscCompilationError"; }
 }
 
 export class CompileError extends Error {
+  readonly phase: ErrorPhase = "c-compile"
   constructor(message: string) { super(message); this.name = "CompileError"; }
 }
 
 export class RuntimeError extends Error {
+  readonly phase: ErrorPhase = "run"
   constructor(message: string) { super(message); this.name = "RuntimeError"; }
 }
 
@@ -325,11 +333,17 @@ export function run(code: string, opts?: RunOptions): string {
 
     const runtimeDir = resolve(import.meta.dirname, "..", "..", "compiler", RUNTIME_DIR)
     const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir] })
-    if (!compileResult.success) throw new CompileError(compileResult.stderr)
+    if (!compileResult.success) {
+      const stderr = compileResult.stderr.trim()
+      throw new CompileError(`${compilerName} exited ${compileResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
+    }
 
     if (backend.run) {
       const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000 })
-      if (!runResult.success || runResult.exitCode !== 0) throw new RuntimeError(runResult.stderr || `exit code ${runResult.exitCode}`)
+      if (!runResult.success || runResult.exitCode !== 0) {
+        const stderr = runResult.stderr.trim()
+        throw new RuntimeError(`exit code ${runResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
+      }
       // Normalize CRLF (Windows text-mode stdout) so expectations are platform-independent
       return runResult.stdout.replace(/\r\n/g, "\n").trim()
     }
@@ -454,7 +468,11 @@ export function test(name: string, callback: () => void): void {
     callback()
     results.push({ name: fullName, passed: true })
   } catch (e) {
-    results.push({ name: fullName, passed: false, error: e instanceof Error ? e.message : String(e) })
+    const err = e instanceof Error ? e : new Error(String(e))
+    const phase = err instanceof TscCompilationError || err instanceof CompileError || err instanceof RuntimeError
+      ? err.phase
+      : undefined
+    results.push({ name: fullName, passed: false, error: err.message, phase })
   } finally {
     for (const ctx of describeStack) { ctx.afterEach?.() }
   }
@@ -468,18 +486,23 @@ export function reset(): void {
   results = []
 }
 
+/** Format one failure block for the summary. Every failure must show a reason:
+ *  empty messages surface as "(no message)", engine phases as "[phase]" prefix,
+ *  multi-line stderr stays indented instead of gluing into the first line. */
+export function formatFailure(r: TestResult): string {
+  const phase = r.phase ? `[${r.phase}] ` : ""
+  const msg = r.error && r.error.trim().length > 0 ? r.error : "(no message)"
+  const indented = msg.split("\n").map((l, i) => i === 0 ? l : "    " + l).join("\n")
+  return `  ✗ ${r.name}\n    error:    ${phase}${indented}`
+}
+
 export function printSummary(): void {
   const passed = results.filter(r => r.passed).length
   const failed = results.filter(r => !r.passed).length
   console.log(`\n${passed} passed, ${failed} failed, ${results.length} total`)
   if (failed > 0) {
     console.log("\nFailures:")
-    for (const r of results.filter(x => !x.passed)) {
-      console.log(`  ✗ ${r.name}`)
-      if (r.expected !== undefined) console.log(`    expected: ${r.expected}`)
-      if (r.actual !== undefined) console.log(`    actual:   ${r.actual}`)
-      if (r.error) console.log(`    error:    ${r.error}`)
-    }
+    for (const r of results.filter(x => !x.passed)) console.log(formatFailure(r))
   }
   process.exit(failed > 0 ? 1 : 0)
 }
