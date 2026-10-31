@@ -1,6 +1,8 @@
 // Test-engine self-tests entry point
 // Run: pnpm tsx packages/test-engine/test/run.ts  (from repo root)
-import "./pipeline.test.ts"
+import "./run-pipeline.test.ts"
+import "./engine-api.test.ts"
+import "./to-throw.test.ts"
 import "./diagnostics.test.ts"
 import "./file-param.test.ts"
 import "./hooks.test.ts"
