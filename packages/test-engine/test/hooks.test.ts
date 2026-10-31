@@ -45,24 +45,22 @@ test("nested: outer beforeAll → inner beforeAll → beforeEach chain → test"
   expect(nested.join(",")).toBe("outer:beforeAll,inner:beforeAll,outer:beforeEach,it")
 })
 
+// Sandbox: a poisoned describe registered at top level, verified and cleaned up
+// by the test right after it — the expected failure must not leak into totals
+// (xfail model lands in step 9). Deferred execution: results only exist after
+// the poison context has run, so assertions live in the following test.
+const poisonSeen: string[] = []
+describe("hooks — poison sandbox", () => {
+  before(() => { poisonSeen.push("beforeAll"); throw new Error("setup exploded") })
+  test("inner", () => { poisonSeen.push("never") })
+})
+
 test("failing beforeAll fails its tests with a setup error, callback not executed", () => {
-  // Sandbox: splice results out, run a poisoned describe, assert, restore —
-  // the expected failure must not leak into the suite totals (xfail lands in step 9)
-  const saved = getResults().splice(0)
-  const seen: string[] = []
-  try {
-    describe("poison sandbox", () => {
-      before(() => { seen.push("beforeAll"); throw new Error("setup exploded") })
-      test("inner", () => { seen.push("never") })
-    })
-    const rs = getResults()
-    expect(String(rs.length)).toBe("1")
-    expect(String(rs[0].passed)).toBe("false")
-    expect(rs[0].error ?? "").toContain("beforeAll failed")
-    expect(seen.join(",")).toBe("beforeAll")
-  } finally {
-    // drop sandbox results, restore the real ones — order matters
-    getResults().splice(0)
-    getResults().push(...saved)
-  }
+  const rs = getResults()
+  const idx = rs.findIndex(r => r.name === "hooks — poison sandbox > inner")
+  expect(String(idx >= 0)).toBe("true")
+  expect(String(rs[idx].passed)).toBe("false")
+  expect(rs[idx].error ?? "").toContain("beforeAll failed")
+  expect(poisonSeen.join(",")).toBe("beforeAll")
+  rs.splice(idx, 1)
 })

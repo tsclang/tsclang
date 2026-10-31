@@ -226,19 +226,29 @@ export interface TestResult {
 }
 
 interface DescribeContext {
+  kind: "describe"
+  /** Full name including ancestors ("outer > inner"); "" for the root */
   name: string
-  beforeAll?: () => void
-  afterAll?: () => void
-  beforeEach?: () => void
-  afterEach?: () => void
+  parent: DescribeContext | null
+  /** Tests and nested contexts in registration order (interleaving preserved) */
+  entries: Array<TestEntry | DescribeContext>
+  beforeAll?: () => unknown
+  afterAll?: () => unknown
+  beforeEach?: () => unknown
+  afterEach?: () => unknown
   /** Lazily set when beforeAll has run (it fires before the first test only) */
   beforeAllRan?: boolean
-  /** Set when beforeAll threw — every test in the context fails with this */
+  /** Set when beforeAll threw — every test in the subtree fails with this */
   beforeAllError?: string
 }
 
+interface TestEntry {
+  kind: "test"
+  name: string
+  callback: () => unknown
+}
+
 let results: TestResult[] = []
-let currentDescribe = ""
 
 // === Jest-like API ===
 
@@ -546,78 +556,102 @@ export function expect(actual: any): FunctionMatchers | ValueMatchers {
   }
 }
 
-let describeStack: DescribeContext[] = []
+/** Registration root: collects top-level tests and every describe subtree. */
+const root: DescribeContext = { kind: "describe", name: "", parent: null, entries: [] }
+let currentContext: DescribeContext = root
 
+/** Registration only — nothing executes until printSummary() runs the tree. */
 export function describe(name: string, fn: () => void): void {
-  const prev = currentDescribe
-  currentDescribe = prev ? `${prev} > ${name}` : name
-  const ctx: DescribeContext = { name }
-  describeStack.push(ctx)
+  const ctx: DescribeContext = {
+    kind: "describe",
+    name: currentContext.name ? `${currentContext.name} > ${name}` : name,
+    parent: currentContext,
+    entries: [],
+  }
+  currentContext.entries.push(ctx)
+  const prev = currentContext
+  currentContext = ctx
   try {
     fn()
   } finally {
-    describeStack.pop()
-    currentDescribe = prev
-    // afterAll fires at describe completion — even when the context has no
-    // tests (mirrors jest; beforeAll stays lazy, afterAll does not)
-    if (ctx.afterAll) {
-      try {
-        ctx.afterAll()
-      } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e))
-        results.push({ name: `${currentDescribe ? currentDescribe + " > " : ""}${name} > afterAll`, passed: false, error: err.message })
-      }
+    currentContext = prev
+  }
+}
+
+export function before(fn: () => unknown): void {
+  if (currentContext !== root) currentContext.beforeAll = fn
+}
+
+export function after(fn: () => unknown): void {
+  if (currentContext !== root) currentContext.afterAll = fn
+}
+
+export function beforeEach(fn: () => unknown): void {
+  if (currentContext !== root) currentContext.beforeEach = fn
+}
+
+export function afterEach(fn: () => unknown): void {
+  if (currentContext !== root) currentContext.afterEach = fn
+}
+
+export function test(name: string, callback: () => unknown): void {
+  currentContext.entries.push({ kind: "test", name, callback })
+}
+
+/** Context chain root→ctx; the root is excluded (it carries no hooks). */
+function chainOf(ctx: DescribeContext): DescribeContext[] {
+  const chain: DescribeContext[] = []
+  for (let c = ctx; c !== root; c = c.parent!) chain.unshift(c)
+  return chain
+}
+
+async function runAfterEach(chain: DescribeContext[], fullName: string): Promise<void> {
+  for (const c of chain) {
+    try {
+      await c.afterEach?.()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      results.push({ name: `${fullName} > afterEach`, passed: false, error: `afterEach failed: ${msg}` })
     }
   }
 }
 
-export function before(fn: () => void): void {
-  const ctx = describeStack[describeStack.length - 1]
-  if (ctx) ctx.beforeAll = fn
-}
+async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
+  const fullName = ctx === root ? entry.name : `${ctx.name} > ${entry.name}`
+  const chain = chainOf(ctx)
 
-export function after(fn: () => void): void {
-  const ctx = describeStack[describeStack.length - 1]
-  if (ctx) ctx.afterAll = fn
-}
-
-export function beforeEach(fn: () => void): void {
-  const ctx = describeStack[describeStack.length - 1]
-  if (ctx) ctx.beforeEach = fn
-}
-
-export function afterEach(fn: () => void): void {
-  const ctx = describeStack[describeStack.length - 1]
-  if (ctx) ctx.afterEach = fn
-}
-
-export function test(name: string, callback: () => void): void {
-  const fullName = currentDescribe ? `${currentDescribe} > ${name}` : name
-
-  // Lazy beforeAll: fire once, right before the first test of each context
-  for (const ctx of describeStack) {
-    if (ctx.beforeAll && !ctx.beforeAllRan) {
-      ctx.beforeAllRan = true
+  // Lazy beforeAll: fire once per context, right before its first test
+  for (const c of chain) {
+    if (c.beforeAll && !c.beforeAllRan) {
+      c.beforeAllRan = true
       try {
-        ctx.beforeAll()
+        await c.beforeAll()
       } catch (e) {
-        ctx.beforeAllError = e instanceof Error ? e.message : String(e)
+        c.beforeAllError = e instanceof Error ? e.message : String(e)
       }
     }
   }
-  // A failed beforeAll poisons the context: tests fail with the setup error,
+  // A failed beforeAll poisons the subtree: tests fail with the setup error,
   // callbacks and per-test hooks are skipped
-  const brokenSetup = describeStack.find(c => c.beforeAllError !== undefined)
+  const brokenSetup = chain.find(c => c.beforeAllError !== undefined)
   if (brokenSetup) {
     results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}` })
     return
   }
 
-  // Вызвать beforeEach для всех describe в стеке
-  for (const ctx of describeStack) { ctx.beforeEach?.() }
+  for (const c of chain) {
+    try {
+      await c.beforeEach?.()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      results.push({ name: fullName, passed: false, error: `beforeEach failed: ${msg}` })
+      await runAfterEach(chain, fullName)
+      return
+    }
+  }
 
   try {
-    callback()
+    await entry.callback()
     results.push({ name: fullName, passed: true })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
@@ -626,7 +660,28 @@ export function test(name: string, callback: () => void): void {
       : undefined
     results.push({ name: fullName, passed: false, error: err.message, phase })
   } finally {
-    for (const ctx of describeStack) { ctx.afterEach?.() }
+    await runAfterEach(chain, fullName)
+  }
+}
+
+/** Execute one context: entries in registration order, afterAll at exit. */
+async function runContext(ctx: DescribeContext): Promise<void> {
+  for (const entry of ctx.entries) {
+    if (entry.kind === "describe") {
+      await runContext(entry)
+    } else {
+      await runTest(entry, ctx)
+    }
+  }
+  // afterAll fires at context exit — even when the context has no tests
+  // (mirrors jest; beforeAll stays lazy, afterAll does not)
+  if (ctx !== root && ctx.afterAll) {
+    try {
+      await ctx.afterAll()
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e))
+      results.push({ name: `${ctx.name} > afterAll`, passed: false, error: err.message })
+    }
   }
 }
 
@@ -636,6 +691,14 @@ export function getResults(): TestResult[] {
 
 export function reset(): void {
   results = []
+  root.entries = []
+  // Clear hook bookkeeping so a re-run does not skip beforeAll
+  const walk = (c: DescribeContext) => {
+    c.beforeAllRan = undefined
+    c.beforeAllError = undefined
+    for (const e of c.entries) if (e.kind === "describe") walk(e)
+  }
+  walk(root)
 }
 
 /** Format one failure block for the summary. Every failure must show a reason:
@@ -648,7 +711,10 @@ export function formatFailure(r: TestResult): string {
   return `  ✗ ${r.name}\n    error:    ${phase}${indented}`
 }
 
-export function printSummary(): void {
+/** Execute all registered tests (awaiting async callbacks), then print totals.
+ *  Fire-and-forget calls keep the process alive until the run completes. */
+export async function printSummary(): Promise<void> {
+  await runContext(root)
   const passed = results.filter(r => r.passed).length
   const failed = results.filter(r => !r.passed).length
   console.log(`\n${passed} passed, ${failed} failed, ${results.length} total`)
