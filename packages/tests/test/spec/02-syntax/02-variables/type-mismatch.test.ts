@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "../../../../../test-engine/src/engine.ts"
+import { describe, test, run, expect, TscCompilationError } from "../../../../../test-engine/src/engine.ts"
 
 describe('02-syntax/02-variables — type-mismatch', () => {
   describe('7.1. Несовместимые типы при инициализации', () => {
@@ -17,8 +17,8 @@ describe('02-syntax/02-variables — type-mismatch', () => {
     test('let x: boolean = 1; → compile error', () => {
       expect(() => run(`
         let x: boolean = 1
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: boolean = "true"; → compile error', () => {
       expect(() => run(`
@@ -43,8 +43,8 @@ describe('02-syntax/02-variables — type-mismatch', () => {
     test('let x: u32 = 2.0; → compile error (float literal)', () => {
       expect(() => run(`
         let x: u32 = 2.0
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: i64 = 2; → OK (integer literal)', () => {
       const c = run(`

@@ -5,3 +5,5 @@ function run(): void {
   }
   console.log(x);
 }
+
+run();

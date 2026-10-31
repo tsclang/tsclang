@@ -760,6 +760,83 @@ message provides the specific details.
 `,
   },
 
+  // ── E12x: Pre-codegen semantic checks (semantics.ts) ────────────────────────
+  E121: {
+    code: 'E121',
+    severity: 'error',
+    title: 'unknown type name',
+    message: `unknown type name '{name}'`,
+    help: ['check the spelling of the type', 'declare or import the type before use'],
+    body: `
+A type annotation references a name that is not a builtin type, a wrapper
+(Arc/Ref/Mut/Array/Map/…), a type parameter, or a type declared in this
+file (class, interface, enum, type alias) or imported from another module.
+
+  let x: NotAType = 5;   // error[E121]
+
+Previously this leaked to the C compiler as an opaque identifier; it is now
+rejected before code generation.
+`,
+  },
+
+  E122: {
+    code: 'E122',
+    severity: 'error',
+    title: 'undeclared identifier',
+    message: `undeclared identifier '{name}'`,
+    help: ['declare the variable before use', 'check the spelling of the name', 'import it from the module that exports it'],
+    body: `
+An identifier is used that is not declared in any visible scope: not a
+local variable, parameter, function, class, enum, import, or language
+builtin (console, Math, parseInt, …). Using a \`let\`/\`const\` variable
+before its declaration in the same execution context is also rejected
+(temporal dead zone).
+
+  console.log(undeclaredVar);   // error[E122]
+  let y: i32 = z;               // error[E122]
+`,
+  },
+
+  E123: {
+    code: 'E123',
+    severity: 'error',
+    title: 'duplicate declaration',
+    message: `'{name}' is already declared in this scope`,
+    help: ['rename one of the declarations', 'to shadow, declare inside a nested scope'],
+    body: `
+Two bindings with the same name are declared in the same scope. TSClang
+follows TypeScript here: redeclaration is only allowed for overload
+signatures (bodyless \`function\` declarations plus one implementation) and
+interface merging. Two full implementations of the same function, or a
+variable colliding with a class/enum/function, is an error.
+
+  let a: i32 = 1;
+  let a: i32 = 2;        // error[E123]
+`,
+  },
+
+  E124: {
+    code: 'E124',
+    severity: 'error',
+    title: 'type mismatch in initializer',
+    message: `cannot initialize {name}: {type} with a {literal} literal`,
+    help: ['the literal must match the declared type', 'use a cast (`x as T`) for an explicit conversion'],
+    body: `
+A variable or field is initialized with a literal whose kind does not match
+the declared primitive type: a number assigned to boolean/string, a boolean
+or string assigned to a number type, a float literal (contains \`.\` or an
+exponent) assigned to an integer type, or a char initialized outside the
+0–255 range or with a multi-character string.
+
+  let b: boolean = 1;       // error[E124]
+  let u: u32 = 2.0;         // error[E124]
+  let c: char = "ab";       // error[E124]
+
+Range checks for integer targets (e.g. \`i8 = 256\`) are reported separately
+as E101 at the same phase.
+`,
+  },
+
   // ── E2xx: Strict-mode rules ──────────────────────────────────────────────────
   E200: {
     code: 'E200',

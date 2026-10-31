@@ -1,1 +1,2 @@
-error[E419]
+undeclared identifier 'encodeURI'
+error[E122]

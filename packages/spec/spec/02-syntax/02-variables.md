@@ -92,3 +92,27 @@ let {a, b} = obj, [x, y] = arr;
 let {a, b} = obj;
 let c = 5;
 ```
+
+### Семантические проверки объявлений
+
+Объявления проверяются отдельным семантическим pass **до codegen** (детали pass — в «Архитектуре компилятора», раздел Error messages). Для переменных это четыре кода:
+
+```typescript
+let x: Usre = u;      // error[E121]: unknown type name 'Usre'
+
+let a = b + 1;        // error[E122]: undeclared identifier 'b'
+let c = c;            // error[E122]: TDZ — 'c' используется до объявления
+
+let x: i32 = 1;
+let x: i32 = 2;       // error[E123]: 'x' is already declared in this scope
+
+let flag: boolean = 1;        // error[E124]: number literal в boolean
+let s: string = true;         // error[E124]: boolean literal в string
+let ch: char = "ab";          // error[E102] (codegen — многосимвольная строка)
+let n: i32 = 3.14;            // error[E100] (codegen — дробное значение)
+let m: i32 = 2.0;             // error[E124]: float-текст в целый тип
+```
+
+**Граница E124 ↔ E100/E101/E102.** E124 отвечает за *несовпадение вида* литерала с аннотацией (number в boolean/string, boolean/string в число, float-текст или вне 0–255 в `char`). Диапазоны целых (E101), дробные значения в целых типах (E100) и длина строкового литерала для `char` (E102) остаются за codegen — там известен `defaultNumber` и точный целевой тип. Инициализация под `any`/`unknown` и `null`-литералы этим pass не проверяются.
+
+**Переобъявление.** Легальны только overload-наборы функций и interface/class merging (как в TypeScript). Два `let x` в одном скоупе — E123; первое объявление выигрывает, повторное не затирает. Для затенения (shadowing) объявите имя во вложенном скоупе (`if`, `for`, тело функции).

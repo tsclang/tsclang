@@ -1,4 +1,4 @@
-import { Blob } from "std/blob";
+import { Blob, Buffer } from "std/blob";
 const buf = new Buffer(2);
 buf[0] = 104; buf[1] = 105;
 const b = new Blob([buf], { type: "text/plain" });

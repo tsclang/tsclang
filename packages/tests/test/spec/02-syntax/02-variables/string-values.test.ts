@@ -1,4 +1,4 @@
-import { describe, test, run, expect } from "../../../../../test-engine/src/engine.ts"
+import { describe, test, run, expect, TscCompilationError } from "../../../../../test-engine/src/engine.ts"
 
 describe('02-syntax/02-variables — string-values', () => {
   describe('11.1. Строковые литералы', () => {
@@ -84,8 +84,8 @@ console.log(x)`)
     test("let x: char = 256; → compile error (out of range)", () => {
       expect(() => run(`
         let x: char = 256
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test("let x: char = 'ab'; → compile error (multi-char)", () => {
       expect(() => run(`

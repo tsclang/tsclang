@@ -308,6 +308,12 @@ export function visitDeclareFunction(ctx: CodeGenContext, node: DeclareFunction)
     // Try to include a known library for well-known math functions
     const mathFuncs = new Set(['sin','cos','tan','asin','acos','atan','atan2','sqrt','pow','exp','log','log2','log10','floor','ceil','fabs','fmod','hypot']);
     if (mathFuncs.has(name)) ctx.includes.add('#include <math.h>');
+    // A Promise<T> return type must carry its typedef: nothing else emits it
+    // for a bodyless declaration, and the extern below would not compile.
+    const rt = returnType as TypeRef | null | undefined;
+    if (retC.startsWith('Promise_') && rt?.kind === 'TypeRef' && rt.name === 'Promise' && rt.typeArgs?.[0]) {
+      ctx._emitPromiseTypedef(retC, ctx.resolveType(rt.typeArgs[0]));
+    }
     ctx.topLevel.push(`extern ${retC} ${name}(${paramStr});`);
     ctx.topLevel.push('');
     // Register in scope

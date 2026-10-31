@@ -350,7 +350,7 @@ export interface CodeGenOptions {
   defaultNumber?: string;
   allocator?: string;
   scheduler?: string;
-  strict?: string[];
+  strict?: string[] | null;
   ramSize?: number;
   stackSize?: number;
   capabilities?: Capabilities;

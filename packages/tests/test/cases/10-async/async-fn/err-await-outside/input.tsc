@@ -1,1 +1,3 @@
+declare function somePromise(): Promise<i32>;
+
 const x: i32 = await somePromise();

@@ -20,10 +20,12 @@
 ## 2. Compiler Pipeline
 
 ```
-input.tsc → lexer.ts → parser.ts → [optimizer.ts] → codegen.ts → runtime.h → output.c
+input.tsc → lexer.ts → parser.ts → semantics.ts → [optimizer.ts] → codegen.ts → runtime.h → output.c
 ```
 
 **Entry points:** `codegen()` in `codegen.ts:26`, `compileTsc()` in `compile.ts` (recursive imports).
+
+**Semantic pass (#208, `semantics.ts`):** runs in `compileTsc()` after parsing, **before codegen and before the artifact cache**. Two namespaces: type space (file-level set, hoisted, position-insensitive) + value space (scope chain, TDZ positional check, `var` hoists to function scope, nested-fn deferred execution bypasses TDZ). Codes: E121 unknown type, E122 undeclared ident (incl. TDZ), E123 duplicate decl (overload sets + interface/class merging legal, first binding wins), E124 literal/annotation mismatch (kind mismatch only; fractional value → E100, int range → E101, char string length → E102 stay in codegen). Allowlists: `BUILTIN_TYPE_NAMES` / `BUILTIN_VALUE_NAMES` (wrapper ctors, numeric namespaces `i32.parse`, utility types). Max 10 errors. Throws standard error bag (`isTscErrorBag`). `strict: ['safe-math']` pre-declares `MathError` type.
 
 **Pre-scan:** Populates `this.classes`, `this.interfaces`, function signatures before body codegen.
 
@@ -105,7 +107,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ### Tests: 1858 case corpus (by input.tsc) + 222 spec-suite + 104 engine self-tests
 
-**Case corpus:** 1858 cases. Verified green 2026-10-31 (#205 audit): 02-syntax 127✓, 09-errors 47✓, 13-build 174✓ (runner counts CLI-section tests higher — multivariants). Full phased runs (П5) required before claiming all-green.
+**Case corpus:** 1858 cases. Full phased run 2026-10-31 (#208 semantic pass merged, dist build clean): 02-syntax 127✓, 03-types 538/539, 04-ownership 117✓, 05-control-flow 53✓, 06-functions 65/66, 07-classes 45✓, 08-collections 236✓, 09-errors 47✓, 10-async 82/83, 11-concurrency 44✓, 12-modules 28✓, 13-build 174✓, 14-stdlib 302✓, 15-decorators 22✓, 16-tooling 45✓, book 4✓ (runner-side sum 1932 — multivariants counted higher than case count). The 3 failures are **pre-existing, baseline-verified** (stash-cycle): `03-types/widening/warn-not-array` [gcc], `06-functions/function-values/store-in-var` [c-compare, since 42532ebc console closure print], `10-async/async-fn/warn-async-recursion` [gcc] — separate bug issues filed. `12-modules` warn-native-block/warn-unsafe-block were broken test data since #179 (main never called `run()`, wrong expected.out) — fixed in #208 commit.
 
 **Engine self-tests (`packages/test-engine/test/`, `pnpm tsx packages/test-engine/test/run.ts`):** 97p/0f/5xf/2xp (104). The 2 xpass are intentional self-tests of the xpass path. Engine is THE primary testing mechanism (#206): collect-then-run (async), hooks with poison propagation, xfail markers, three-phase errors (TscCompilationError/CompileError/RuntimeError), 30s compile timeouts.
 
@@ -115,7 +117,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 | Suite | Result | xfail (issue) |
 |-------|--------|---------------|
-| 02-syntax/02-variables | 150p/0f/12xf (162) | #208 no semantic checks ×9, #215 Arc/Weak zero-value ×2, #216 enum `?` sugar |
+| 02-syntax/02-variables | 186p/0f/3xf (189) | #208 semantic checks landed (9 xfail → real E-tests in `semantic-errors.test.ts`); #215 Arc/Weak zero-value ×2, #216 enum `?` sugar ×1 |
 | 02-syntax/02-formatting | 52p/0f/8xf (60) | #209 untyped arrow param ×2, #210 forEach macro, #211 tagged template, #212 ++/-- ASI ×2, #213 anon-struct Array typedef, #214 tsc_dtoa digits |
 
 Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfailed`, excluded from pass/fail and exit code; XPASS prints loudly (marker → remove). Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
@@ -140,8 +142,8 @@ Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfaile
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #179 (warnings), #205 (spec audit — active), #206 (test-engine repair — **blocker for #205**, 11 steps), #207 (test-engine v2 concept: xfail/selective-run/JSON → parallel/C-snapshot/platform-matrix → traceability)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning), #180 (decimal types)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #205 (spec audit — deferred to separate session), #207 (test-engine v2 P1: C-snapshot/platform-matrix/parallelism)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning), #179 (warnings), #180 (decimal types), #206 (test-engine repair), #208 (semantic checks E121–E124)
 
 ---
 
@@ -167,6 +169,8 @@ Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfaile
 - **`_postStmtCleanups` in Return.** All Return paths in `control-flow.ts` now call `_flushPostStmtCleanups` before the actual return. Previously, temps created during return expression evaluation (e.g. string concat with non-String operand) were leaked. If adding new Return paths, always flush post-stmt cleanups before the return.
 - **Named fn callbacks in `.map()`.** `infer.ts` handles both `Arrow` and `Ident` callbacks. Codegen (`_extractCallbackFn`) already worked — only type inference needed the fix. String array callbacks still have calling convention mismatch (macro passes `String *`, named fn takes `String` by value) — use arrow functions for string arrays.
 - **Spec-suites gotchas (02-syntax).** Import engine as `@tsclang/test-engine` (NOT `@tslang` — dead name from early commits). Each folder needs `run.ts` entry + `printSummary()` — without it `expect` failures are swallowed (test() catches, exit 0). Engine `run()` normalizes CRLF → LF (Windows text-mode stdout). Console prints closure as `null`/`[Function]` (console.ts). Default init: pointer ctypes get `= NULL`, structs `{0}` (vardecl.ts `_visitVarDecl`).
+- **Parser recovery debris (matters for `semantics.ts`).** `keyof T` in value position → `Ident('keyof')` + stray `ExprStmt(Ident)`: skip Ident `keyof`, skip bare ExprStmt of known type names. BigInt suffix `1000000000000n` → number `1000000000000` + stray `Ident('n')` (parse bug, open issue) — corpus tests avoid `n` suffixes. Destructuring patterns from parser are FLAT, not AST-typed: import `names` = plain strings, obj pattern = `{name, alias?, defaultVal?}[]`, arr pattern = `{name?, rest?}[]|null`, ForOf binding = `{kind:'Ident'|'ObjPattern'|'ArrayPattern', ...}` — use `declarePatternItems()` in semantics.ts, don't switch on AST kinds. Match patterns: `MatchObjLit {discriminators, fields: string[]}`, `MatchClass {className, fields}`, `MatchTuple {elements}` with `MatchIdent {name}`.
+- **`declare function` returning `Promise<T>`** now emits the `Promise_T` typedef via `_emitPromiseTypedef` in `visitDeclareFunction` (dispatch.ts) — nothing else emits it for bodyless externs, and the extern line alone doesn't compile.
 
 ---
 
@@ -259,6 +263,8 @@ Methods declare `throws` like functions. `emitMethod` builds `throwsCtx`. `_meth
 ## 16. Diagnostics System (#179 — W001-W011 COMPLETE)
 
 **Registry:** `diagnostics.ts` — ~86 codes total (E0xx ownership, E1xx types, E2xx strict, E3xx platform, E4xx runtime+misc, W0xx warnings). `DiagnosticCode = keyof typeof DIAGNOSTICS` (type-safe). API: `ctx.errorCode(code, node?, params?, opts?)`, `ctx.warnCode(code, node?, params?)`, `ctx.panicTag(code, params?)`. `resolveDiagnostic(code, params?, locale?)` for tooling (LSP, CLI explain). i18n-ready (ICU MessageFormat-compatible templates).
+
+**E121–E124 (#208):** emitted by the pre-codegen semantic pass (`semantics.ts`), NOT codegen — see §2. E121 unknown type, E122 undeclared identifier (incl. TDZ), E123 duplicate declaration, E124 literal/annotation kind mismatch. Boundary: fractional-value-in-int (E100), int range (E101), char string length (E102) stay in codegen.
 
 **Runtime panics:** Static panics resolve template at compile time. Dynamic (E409/E411) use `tsc_panic(code, ...)` / `tsc_throw(code, ...)`.
 

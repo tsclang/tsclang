@@ -588,6 +588,48 @@ error[TSC-E031]: non-exhaustive switch — missing case `Direction.Up`
 
 ---
 
+#### Семантические проверки (до codegen)
+
+Отдельный pass (`semantics.ts`) запускается после парсинга, но до codegen и до кеша — артефакт в кеше всегда семантически валиден. Pass проверяет два пространства имён: **type space** (классы, интерфейсы, enum, type alias, импорты типов — файловый, позиции нечувствительны, типы хойстятся) и **value space** (переменные, функции, параметры — цепочка скоупов с TDZ-проверкой по позиции).
+
+```
+error[E121]: unknown type name 'User'
+  --> src/main.tsc:3:16
+```
+
+```
+error[E122]: undeclared identifier 'usr'
+  --> src/main.tsc:7:18
+```
+
+```
+error[E123]: 'x' is already declared in this scope
+  --> src/main.tsc:4:9
+```
+
+```
+error[E124]: cannot initialize flag: boolean with a number literal
+  --> src/main.tsc:2:22
+```
+
+**E121 — unknown type name.** Имя в type-аннотации не является builtin-типом, обёрткой (Arc/Ref/Mut/Array/Map/…), type-параметром, типом этого файла или импортом. Utility-типы TS (Record, Pick, Omit, Awaited, ReturnType, …) — builtin.
+
+**E122 — undeclared identifier.** Имя в value-позиции не объявлено ни в одном видимом скоупе (переменная, параметр, функция, класс, enum, импорт, language builtin). Использование `let`/`const` до строки объявления (TDZ) — та же E122; `var` хойстится в функциональный скоуп. Внутри вложенной функции обращение к переменной, объявленной позже в внешнем скоупе, разрешено (отложенное исполнение).
+
+**E123 — duplicate declaration.** Два биндинга с одним именем в одном скоупе. Как в TypeScript, легальны: набор overload-сигнатур (bodyless `function` + одна реализация) и interface/interface, interface/class merging. Всё остальное — ошибка. Первое объявление выигрывает — каскада нет.
+
+**E124 — literal/annotation mismatch.** Литерал в инициализаторе не подходит примитивному типу: number → boolean/string; boolean/string → number-тип; float-текст → char; вне диапазона 0–255 → char. Граница ответственности:
+
+| Ситуация | Код |
+|----------|-----|
+| Не тот **вид** литерала (number в boolean и т.п.) | **E124** (этот pass) |
+| Float-текст в `i32` и других целых (например `2.0`) | **E124** |
+| Дробное значение в целочисленный тип (`3.14`) | E100 (codegen, существующий) |
+| Целочисленный диапазон (`300` в `i8`) | E101 (codegen) |
+| Многосимвольная/пустая строка в `char` | E102 (codegen) |
+
+Под `any`/`unknown` проверка пропускается; `null`-инициализация не проверяется (её правила — в §Переменные).
+
 ### Правила оформления hint
 
 - **Конкретно:** `use r.clone()`, не «исправьте ошибку заимствования»

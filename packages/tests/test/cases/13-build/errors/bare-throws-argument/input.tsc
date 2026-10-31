@@ -1,3 +1,5 @@
+class MathError {}
+
 function risky(): i32 throws MathError {
     return 1 + 2;
 }

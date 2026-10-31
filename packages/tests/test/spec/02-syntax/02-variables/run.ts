@@ -10,6 +10,7 @@ import "./alternative-literals.test"
 import "./invalid-values.test"
 import "./string-values.test"
 import "./pointer-types.test"
+import "./semantic-errors.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

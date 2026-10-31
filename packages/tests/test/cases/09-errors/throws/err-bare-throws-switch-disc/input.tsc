@@ -1,3 +1,5 @@
+class IOError {}
+
 function risky(): i32 throws IOError { throw new IOError(); }
 function main(): i32 {
     switch (risky()) {

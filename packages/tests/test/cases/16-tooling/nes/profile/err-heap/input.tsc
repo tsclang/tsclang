@@ -1,1 +1,3 @@
+class Sprite { x: i8 = 0 }
+
 let s: Arc<Sprite> = new Sprite();

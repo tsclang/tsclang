@@ -10,5 +10,6 @@ void run(void) {
 
 int main(void) {
     TSC_INIT();
+    run();
     return 0;
 }

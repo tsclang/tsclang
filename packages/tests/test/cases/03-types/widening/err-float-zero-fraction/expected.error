@@ -1,0 +1,2 @@
+cannot initialize x: i32 with a float literal
+error[E124]

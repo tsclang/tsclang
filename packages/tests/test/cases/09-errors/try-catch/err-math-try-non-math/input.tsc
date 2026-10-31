@@ -1,3 +1,5 @@
+class MathError {}
+
 class IOError { message: string; }
 function readFile(path: string): string throws IOError {
     throw new IOError();

@@ -1,3 +1,5 @@
+class MathError {}
+
 class Foo {
   risky(): i32 throws MathError {
     return 42

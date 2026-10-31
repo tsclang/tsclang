@@ -9,6 +9,7 @@ import { homedir } from 'os';
 import { lex } from './lexer.js';
 import { parse } from './parser.js';
 import { codegen } from './codegen.js';
+import { checkSemantics } from './semantics.js';
 import type { SymbolInfo } from '@tsclang/ast';
 import { optimize } from './optimizer.js';
 
@@ -36,6 +37,7 @@ export interface CompileOptions {
   noCache?: boolean;
   debugLines?: boolean;
   sourcemap?: boolean;
+  strict?: string[] | null;
   importedModules?: Record<string, Record<string, SymbolInfo> | null>;
   sourceToPath?: Record<string, string>;
   depInitFns?: string[];
@@ -241,6 +243,11 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
     if (depResult._initFn) depInitFns.push(depResult._initFn);
   }
   compilingStack.delete(inputPath);
+
+  // Pre-codegen semantic checks (#208): unknown types, undeclared identifiers,
+  // duplicate declarations, literal/annotation mismatches — before codegen and
+  // before the cache, so a cached artifact is always semantically valid.
+  checkSemantics(ast, filename, src, { strict: opts.strict });
 
   const modulePrefix = opts.modulePrefix ?? '';
   const noCache = opts.noCache || opts.debugLines;

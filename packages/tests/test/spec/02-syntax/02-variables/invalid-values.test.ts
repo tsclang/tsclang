@@ -1,30 +1,30 @@
-import { describe, test, run, expect } from "../../../../../test-engine/src/engine.ts"
+import { describe, test, run, expect, TscCompilationError } from "../../../../../test-engine/src/engine.ts"
 
 describe('02-syntax/02-variables — invalid-values', () => {
   describe('10.1. Boolean как значение для числовых типов', () => {
     test('let x: i32 = true; → compile error', () => {
       expect(() => run(`
         let x: i32 = true
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: i32 = false; → compile error', () => {
       expect(() => run(`
         let x: i32 = false
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: u8 = true; → compile error', () => {
       expect(() => run(`
         let x: u8 = true
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: f64 = true; → compile error', () => {
       expect(() => run(`
         let x: f64 = true
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
   })
 
   describe('10.2. String как значение для числовых типов', () => {
@@ -51,14 +51,14 @@ describe('02-syntax/02-variables — invalid-values', () => {
     test('let x: boolean = 42; → compile error', () => {
       expect(() => run(`
         let x: boolean = 42
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: boolean = 0; → compile error', () => {
       expect(() => run(`
         let x: boolean = 0
-      `)).toThrow()
-    }, { xfail: '#208' })
+      `)).toThrow(TscCompilationError, 'E124')
+    })
 
     test('let x: boolean = "hello"; → compile error', () => {
       expect(() => run(`

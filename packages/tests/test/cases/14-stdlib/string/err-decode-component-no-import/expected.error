@@ -1,1 +1,2 @@
-error[E419]
+undeclared identifier 'decodeURIComponent'
+error[E122]
