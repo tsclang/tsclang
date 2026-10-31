@@ -2346,7 +2346,7 @@ describe("math", () => {
 
 ### Делегирование
 
-`tsclang test` вызывает `tsclang-test` (standalone CLI из `@tsclang/test-engine`) через subprocess.
+`tsclang test` сам компилирует каждый `*.test.tsc` (через `compileTsc` + gcc) и запускает бинарник — без отдельного CLI. Отдельный standalone-раннер `tsclang-test` удалён: он дублировал запуск, судил о результате по exit code и не использовался ни одной командой. Движок тестов компилятора живёт в `@tsclang/test-engine` (`packages/test-engine`, см. 16-compiler.md → Test Engine API).
 
 ## `tsclang dev` подробно *[NOT YET IMPLEMENTED]*
 

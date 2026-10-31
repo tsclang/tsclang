@@ -48,3 +48,23 @@ describe("default compiler", () => {
     expect(String(b!.isAvailable())).toBe("true")
   })
 })
+
+describe("e2e — wasm (gated on emcc in PATH)", () => {
+  test("run() compiles with emcc and executes the JS glue", () => {
+    const b = getBackend("wasm")
+    if (!b?.isAvailable()) return
+    const out = run("console.log(41 + 1)", { compiler: "wasm" })
+    expect(out).toBe("42")
+  })
+})
+
+describe("e2e — avr (gated on avr-gcc + simavr)", () => {
+  test("run() compiles with avr-gcc and simavr prints to stdout", () => {
+    const b = getBackend("avr-gcc")
+    if (!b?.isAvailable()) return
+    // target:"avr" loads the profile: i16 codegen + CONSOLE_UART define, so
+    // printf reaches the UART simavr bridges to stdout
+    const out = run("console.log(41 + 1)", { target: "avr", compiler: "avr-gcc", timeoutMs: 15_000 })
+    expect(out).toBe("42")
+  })
+})

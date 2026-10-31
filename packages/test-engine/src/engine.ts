@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync
 import { tmpdir, release } from "os"
 import { join, resolve, dirname, basename } from "path"
 import { fileURLToPath } from "url"
-import { compileTsc, parsePlatformDecl } from "@tsclang/compiler"
+import { compileTsc, parsePlatformDecl, capabilityDefines } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
 
@@ -408,7 +408,11 @@ export function run(code: string, opts?: RunOptions): string {
     if (!backend || !backend.isAvailable()) throw new CompileError(`compiler "${compilerName}" not available`)
 
     const runtimeDir = resolve(import.meta.dirname, "..", "..", "compiler", RUNTIME_DIR)
-    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir], mcu: opts?.mcu, freq: opts?.freq })
+    // CLI parity: the profile's capabilities decide the C defines exactly like
+    // `tsclang build` does (capabilityDefines) — e.g. avr gets TSC_CONSOLE_UART
+    // from its profile, so simavr's -uart0:stdio actually sees printf output
+    const profileDefines = capabilityDefines(codegenOpts.capabilities)
+    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir], mcu: opts?.mcu, freq: opts?.freq, defines: profileDefines })
     if (!compileResult.success) {
       const stderr = compileResult.stderr.trim()
       throw new CompileError(`${compilerName} exited ${compileResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
@@ -416,7 +420,10 @@ export function run(code: string, opts?: RunOptions): string {
 
     if (backend.run) {
       const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000, mcu: opts?.mcu, freq: opts?.freq })
-      if (!runResult.success || runResult.exitCode !== 0) {
+      // The backend is the authority on "ran OK": a simulator may be ended by
+      // a timeout kill even after a correct firmware run (simavr), which it
+      // reports as success with the captured stdout
+      if (!runResult.success) {
         const stderr = runResult.stderr.trim()
         throw new RuntimeError(`exit code ${runResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
       }
@@ -616,8 +623,10 @@ function writeSnapshotStore(path: string, entries: SnapshotEntry[]): void {
 }
 
 /** File-snapshot compare: key = full test name, store = JSONL next to the
- *  calling test file. Missing entry → create + pass. TSC_SNAPSHOT_UPDATE=1 →
- *  always rewrite. Existing entry → normalized compare. */
+ *  calling test file. Missing entry → create + pass — except under CI, where
+ *  a missing snapshot fails (a fresh checkout must not silently pass on an
+ *  empty store; create them locally first). TSC_SNAPSHOT_UPDATE=1 → always
+ *  rewrite, even under CI. Existing entry → normalized compare. */
 function matchCSnapshot(actual: string): void {
   if (typeof actual !== "string")
     throw new Error("toMatchC expects C code strings (compile() output)")
@@ -628,6 +637,10 @@ function matchCSnapshot(actual: string): void {
   const normalized = normalizeC(actual)
   const entries = readSnapshotStore(storePath)
   const stored = entries.find(e => e.key === key)
+  if (!stored && !process.env.TSC_SNAPSHOT_UPDATE && process.env.CI) {
+    throw new Error(
+      `no snapshot stored for "${key}" and CI is set — run the suite locally once (or with TSC_SNAPSHOT_UPDATE=1) to record it`)
+  }
   if (!stored || process.env.TSC_SNAPSHOT_UPDATE) {
     writeSnapshotStore(storePath, [...entries.filter(e => e.key !== key), { key, c: normalized }])
     return

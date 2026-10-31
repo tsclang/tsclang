@@ -3,7 +3,7 @@
 // Ref: #207 P1.6 — matrix MCU reachable from tests; wasm tested like prod;
 // unavailable targets declared, not silently absent
 import { describe, test, expect, platformMatrix } from "../src/engine.ts"
-import { buildAvrCompileArgs, buildSimavrArgs } from "../src/compilers/avr-gcc.ts"
+import { buildAvrCompileArgs, buildSimavrArgs, normalizeSimavrOut } from "../src/compilers/avr-gcc.ts"
 import { buildEmccArgs } from "../src/compilers/wasm.ts"
 import { DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from "@tsclang/shared"
 import { readdirSync } from "fs"
@@ -27,13 +27,32 @@ describe("avr-gcc — buildAvrCompileArgs", () => {
 })
 
 describe("avr-gcc — buildSimavrArgs", () => {
-  test("mcu + freq from opts", () => {
-    expect(args(buildSimavrArgs("atmega2560", "16000000", "f.hex"))).toContain("-mcu atmega2560")
+  test("mcu + freq from opts (simavr flag forms: -m, -f)", () => {
+    expect(args(buildSimavrArgs("atmega2560", "16000000", "f.hex"))).toContain("-m atmega2560")
     expect(args(buildSimavrArgs("atmega2560", "16000000", "f.hex"))).toContain("-f 16000000")
   })
   test("defaults applied when omitted", () => {
-    expect(args(buildSimavrArgs(undefined, undefined, "f.hex"))).toContain(`-mcu ${DEFAULT_AVR_MCU}`)
+    expect(args(buildSimavrArgs(undefined, undefined, "f.hex"))).toContain(`-m ${DEFAULT_AVR_MCU}`)
     expect(args(buildSimavrArgs(undefined, undefined, "f.hex"))).toContain(`-f ${DEFAULT_AVR_FREQ}`)
+  })
+})
+
+describe("avr-gcc — normalizeSimavrOut", () => {
+  test("strips simavr banners, ANSI wrap and trailing dots", () => {
+    // Exact byte shape observed on WSL simavr: banners on stdout, UART bytes
+    // ANSI-wrapped on stderr ("42.." — the ".." is simavr's own decoration)
+    const raw = "Loaded 1 section of ihex\nLoad HEX flash 00000000, 1722\n\x1b[32m42..\n\x1b[0msignal caught, simavr terminating\n"
+    expect(normalizeSimavrOut(raw)).toBe("42")
+  })
+  test("keeps multi-line program output and CRLF, drops blank lines", () => {
+    const raw = "Loaded 1 section of ihex\r\n\x1b[32ma..\r\nb..\r\n\x1b[0m\r\n"
+    expect(normalizeSimavrOut(raw)).toBe("a\nb")
+  })
+  test("ANSI codes inside a line are removed too", () => {
+    expect(normalizeSimavrOut("\x1b[32mx\x1b[0my..\n")).toBe("xy")
+  })
+  test("silent firmware → empty output (banners only)", () => {
+    expect(normalizeSimavrOut("Loaded 1 section of ihex\nsignal caught, simavr terminating\n")).toBe("")
   })
 })
 

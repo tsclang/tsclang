@@ -78,7 +78,9 @@ precision = 2)` (for f32/f64 where exact printing differs), `toBeTruthy` /
 both sides through `normalizeC()`; without an argument — file-snapshot mode,
 keyed by the test's full name in `__c-snapshots__/<file>.jsonl` next to the
 calling test file; a missing entry is created, `TSC_SNAPSHOT_UPDATE=1`
-rewrites). Full `not.*` for every matcher (`not.toMatchC` — inline only;
+rewrites — except under `CI=true`, where a missing snapshot **fails** instead
+of being created: a fresh checkout must not silently pass on an empty store).
+Full `not.*` for every matcher (`not.toMatchC` — inline only;
 inverted file snapshots are meaningless because a first run "creates and
 passes").
 
@@ -92,7 +94,11 @@ Function matchers: `toThrow()` (any throw), `toThrow(ErrorClass)`,
   `target`, `defaultNumber`, `strict`, `timeoutMs` (binary run, default 5s),
   capability overrides (`fpu`, `bits`, `allocator`, `async`, …), and AVR knobs
   `mcu` / `freq` (model for `-mmcu=` and simavr clock in Hz — passed to both
-  compile and run, they must match).
+  compile and run, they must match). The target profile also decides the C
+  compile defines — `capabilityDefines()` of the profile, exactly like the CLI
+  (`tsclang build`): for `target: "avr"` that means `TSC_CONSOLE_UART` etc., so
+  set both `target: "avr"` and `compiler: "avr-gcc"` — without the profile the
+  UART console never initializes and simavr sees no output.
 - `compile(codeOrPath)` — C output only. A path is detected by the `.tsc`
   suffix and resolved **relative to the calling test file** (works under
   `pnpm --filter` cwd quirks). Inline code always goes through `compileTsc`

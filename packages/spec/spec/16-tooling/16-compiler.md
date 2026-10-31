@@ -700,7 +700,7 @@ describe("math", () => {
 - `toBe(expected)`, `toBeGreaterThan(n)`, `toBeLessThan(n)`
 - `toContain(substring)`, `toMatch(regex)`
 - `toBeTruthy()`, `toBeFalsy()`, `toBeNull()`, `toBeCloseTo(n, precision?)`, `toBeNaN()`
-- `toMatchC(expectedC?)` — сравнение C-кода, обе стороны прогоняются через `normalizeC()`; без аргумента — файл-снапшот-режим: ключ = полное имя теста, файл `__c-snapshots__/<тест-файл>.jsonl` рядом с тестом; отсутствующая запись создаётся, перезапись — `TSC_SNAPSHOT_UPDATE=1`. Вторичный режим — для кодген-деталей, невидимых поведению (манглинг, layout, порядок cleanup)
+- `toMatchC(expectedC?)` — сравнение C-кода, обе стороны прогоняются через `normalizeC()`; без аргумента — файл-снапшот-режим: ключ = полное имя теста, файл `__c-snapshots__/<тест-файл>.jsonl` рядом с тестом; отсутствующая запись создаётся, перезапись — `TSC_SNAPSHOT_UPDATE=1`. Под `CI=true` отсутствующий снапшот — провал, а не создание (чистый чекаут не должен «проходить» на пустом сторе); явная перезапись `TSC_SNAPSHOT_UPDATE=1` работает и под CI. Вторичный режим — для кодген-деталей, невидимых поведению (манглинг, layout, порядок cleanup)
 - `.not.`-инверсия у всех value-матчеров (для файл-снапшотов не определена)
 
 ### Опции run()
@@ -710,9 +710,14 @@ describe("math", () => {
 - capability-оверрайды поверх профиля: `fpu`, `bits`, `allocator`, `async`, `usize`, `os`, `posix`, `strtoll`
 - `mcu` / `freq` — AVR: модель МК (`-mmcu=`, например `"atmega2560"`) и частота simavr в Гц; пробрасываются и в компиляцию, и в запуск
 
+Профиль таргета задаёт не только codegen, но и C-дефайны компиляции: `run()` передаёт бэкенду `capabilityDefines(профиля)` — ровно то же, что делает CLI `tsclang build` (avr получает `TSC_NO_POSIX`, `TSC_NO_STRTOLL`, `TSC_CONSOLE_UART`, `TSC_CONSOLE_BAUD=9600` и т.п. из своего профиля). Поэтому для AVR-тестов указывайте и `target: "avr"`, и `compiler: "avr-gcc"` — без профиля UART-консоль не подключится и simavr не увидит вывод.
+
 ### Бэкенды
 
-- `gcc` (на Windows — через MSYS2), `clang`, `msvc` (Windows), `avr-gcc` (AVR + simavr), `wasm` (emcc + node). wasm-бэкенд всегда добавляет `-DTSC_WASM -sWASM=1 -sSTANDALONE_WASM=1` — паритет с CLI `--emit wasm`: runtime.h активирует WASM-ветки тем же дефайном, что и в проде.
+- `gcc` (на Windows — через MSYS2), `clang`, `msvc` (Windows), `avr-gcc` (AVR + simavr), `wasm` (emcc + node). wasm-бэкенд всегда добавляет `-DTSC_WASM -sWASM=1 -sSTANDALONE_WASM=1` — паритет с CLI `--emit wasm`: runtime.h активирует WASM-ветки тем же дефайном, что и в проде. avr-gcc добавляет только тулчейн-константы CLI (`-mmcu=`, `-Os`, `-DTSC_EMBEDDED`); semantic-дефайны приходят из профиля (см. выше).
+- Все spawn'ы бэкендов имеют wall-clock таймаут (компиляция — `DEFAULT_COMPILE_TIMEOUT_MS` = 30 с, запуск — `timeoutMs`, по умолчанию 5 с): зависший инструмент — это провал, а не повисший прогон.
+- simavr: байты UART приходят на stderr, завёрнутые в ANSI-цвет и с хвостовыми точками (декорация самого simavr, проверена на чистом firmware), баннеры загрузки — на stdout; бэкенд мержит оба потока и вычищает декорации (`normalizeSimavrOut`). Завершение по timeout-kill — норма: exit-код симулятора не является вердиктом прошивки, решение принимает сравнение stdout.
+- Ответственность за `success` лежит на бэкенде: движок кидает `RuntimeError` только когда бэкенд сообщил `success: false` (симулятор с захваченным выводом может честно сообщить успех при не-нулевом exit).
 
 ### Матрица платформ
 

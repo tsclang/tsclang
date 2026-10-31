@@ -8,11 +8,7 @@
     ".": "./src/engine.ts",
     "./compilers": "./src/compilers/index.ts"
   },
-  "bin": {
-    "tsclang-test": "./src/index.ts"
-  },
   "scripts": {
-    "start": "tsx src/index.ts",
     "test": "tsx test/run.ts",
     "typecheck": "tsc --noEmit"
   },

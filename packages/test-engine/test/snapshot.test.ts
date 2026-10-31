@@ -39,7 +39,6 @@ describe("toMatchC — inline", () => {
 describe("toMatchC — file snapshots", () => {
   beforeEach(() => { rmSync(snapFile, { force: true }) })
   after(() => { rmSync(snapFile, { force: true }) })
-
   test("creates a missing snapshot and passes", () => {
     expect("int created = 1;").toMatchC()
     if (!existsSync(snapFile)) throw new Error("snapshot file was not created")
@@ -70,6 +69,53 @@ describe("toMatchC — file snapshots", () => {
     } finally {
       if (prev === undefined) delete process.env.TSC_SNAPSHOT_UPDATE
       else process.env.TSC_SNAPSHOT_UPDATE = prev
+    }
+  })
+})
+
+describe("toMatchC — CI guard", () => {
+  beforeEach(() => { rmSync(snapFile, { force: true }) })
+  after(() => { rmSync(snapFile, { force: true }) })
+
+  test("CI=true: a missing snapshot fails instead of being created", () => {
+    const prev = process.env.CI
+    process.env.CI = "true"
+    try {
+      let threw = false
+      try { expect("int ci = 1;").toMatchC() } catch { threw = true }
+      if (!threw) throw new Error("missing snapshot must fail under CI=true")
+      if (existsSync(snapFile)) throw new Error("snapshot file must not be written under CI=true")
+    } finally {
+      if (prev === undefined) delete process.env.CI
+      else process.env.CI = prev
+    }
+  })
+
+  test("CI=true: an existing snapshot still compares normally", () => {
+    delete process.env.CI
+    expect("int ci2 = 1;").toMatchC() // create outside CI
+    const prev = process.env.CI
+    process.env.CI = "true"
+    try {
+      expect("int ci2 = 1;").toMatchC() // stored snapshot — normal compare
+      fails(() => expect("int ci2 = 2;").toMatchC()) // mismatch still detected
+    } finally {
+      if (prev === undefined) delete process.env.CI
+      else process.env.CI = prev
+    }
+  })
+
+  test("CI=true + TSC_SNAPSHOT_UPDATE=1: explicit rewrite stays allowed", () => {
+    process.env.CI = "true"
+    const prev = process.env.TSC_SNAPSHOT_UPDATE
+    process.env.TSC_SNAPSHOT_UPDATE = "1"
+    try {
+      expect("int ci3 = 1;").toMatchC() // explicit update overrides the CI gate
+      if (!existsSync(snapFile)) throw new Error("explicit update must write the snapshot file")
+    } finally {
+      if (prev === undefined) delete process.env.TSC_SNAPSHOT_UPDATE
+      else process.env.TSC_SNAPSHOT_UPDATE = prev
+      delete process.env.CI
     }
   })
 })
