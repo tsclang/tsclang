@@ -11,7 +11,7 @@ import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS } from '@tsclang/shared';
-import { normalizeC, toWslPath } from '@tsclang/test-engine';
+import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -66,17 +66,10 @@ Examples:
 // ---------------------------------------------------------------------------
 // Subprocess helper
 // ---------------------------------------------------------------------------
-// On Windows, MSYS2 gcc requires its own bash environment to work (cc1.exe needs
-// the MSYS2 runtime). We detect the MSYS2 bash and use it for gcc and shell tests.
-const MSYS2_BASH = process.platform === 'win32'
-  ? (() => { try { return existsSync('C:\\msys64\\usr\\bin\\bash.exe') ? 'C:\\msys64\\usr\\bin\\bash.exe' : null; } catch { return null; } })()
-  : null;
-
-// Convert Windows path → MSYS2 path (C:\foo\bar → /c/foo/bar)
-function toMsysPath(p) {
-  if (process.platform !== 'win32') return p;
-  return p.replace(/^([A-Za-z]):\\/, (_, d) => '/' + d.toLowerCase() + '/').replace(/\\/g, '/');
-}
+// On Windows, MSYS2 gcc requires its own bash environment to work (cc1.exe
+// needs the MSYS2 runtime). Detection + path conversion live in the shared
+// test-engine module (src/compilers/msys2.ts) — deduplicated here.
+const MSYS2_BASH = msys2Bash();
 
 function run(cmd, args, opts = {}) {
   return new Promise(resolve => {
@@ -93,7 +86,7 @@ function run(cmd, args, opts = {}) {
 function runShell(script, opts = {}) {
   // Use MSYS2 bash on Windows so Unix shell scripts work
   const sh     = MSYS2_BASH ?? (process.platform === 'win32' ? 'cmd' : 'sh');
-  const shArgs = MSYS2_BASH ? ['--login', '-c', `export PATH="/mingw64/bin:$PATH" && ${script}`]
+  const shArgs = MSYS2_BASH ? bashLoginArgs(script)
     : process.platform === 'win32' ? ['/c', script]
     : ['-c', script];
   return new Promise(resolve => {

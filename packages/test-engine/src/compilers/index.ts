@@ -7,6 +7,7 @@ import { WasmBackend } from "./wasm.js"
 export type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 export { register, getBackend, listAvailable, listAll } from "./registry.js"
 export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC, toWslPath } from "./utils.js"
+export { msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./msys2.js"
 
 export function registerAll(): void {
   register(new GccLikeBackend("gcc"))

@@ -3,11 +3,11 @@ import { tmpdir } from "os"
 import { join, resolve } from "path"
 import { lex, parse, codegen, compileTsc, parsePlatformDecl } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable } from "./compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
 
 registerAll()
 
-export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable }
+export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec }
 
 export const platformMatrix = {
   defaultNumber: ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"],
@@ -373,7 +373,8 @@ export function expect(actual: any) {
     return {
       toThrow(ErrorClass?: any, codeOrSubstring?: string) {
         try { actual(); } catch (e) {
-          if (ErrorClass && !(e instanceof ErrorClass)) throw new Error(`expected ${ErrorClass.name} but got ${e.constructor.name}`)
+          const got = e instanceof Error ? e.constructor.name : typeof e
+          if (ErrorClass && !(e instanceof ErrorClass)) throw new Error(`expected ${ErrorClass.name} but got ${got}`)
           if (codeOrSubstring) {
             const msg = e instanceof Error ? e.message : String(e)
             if (!msg.includes(codeOrSubstring)) throw new Error(`expected error message to contain "${codeOrSubstring}" but got "${msg}"`)

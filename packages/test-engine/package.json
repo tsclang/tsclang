@@ -13,6 +13,7 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
+    "test": "tsx test/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
