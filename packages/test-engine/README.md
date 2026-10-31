@@ -74,7 +74,13 @@ fails loudly), `toContain`, `toMatch(regex)`, `toBeNull`, `toBeNaN` (accepts
 C printf spellings: `NaN`, `nan`, `-nan`, `nan(ind)`), `toBeCloseTo(expected,
 precision = 2)` (for f32/f64 where exact printing differs), `toBeTruthy` /
 `toBeFalsy` (**language** truthiness: `null`, `""`, any numeric zero, `false`,
-`NaN` are falsy — everything else truthy). Full `not.*` for every matcher.
+`NaN` are falsy — everything else truthy), `toMatchC(expectedC?)` (C compare:
+both sides through `normalizeC()`; without an argument — file-snapshot mode,
+keyed by the test's full name in `__c-snapshots__/<file>.jsonl` next to the
+calling test file; a missing entry is created, `TSC_SNAPSHOT_UPDATE=1`
+rewrites). Full `not.*` for every matcher (`not.toMatchC` — inline only;
+inverted file snapshots are meaningless because a first run "creates and
+passes").
 
 Function matchers: `toThrow()` (any throw), `toThrow(ErrorClass)`,
 `toThrow(ErrorClass, "substring")`, `not.toThrow()`.
@@ -84,7 +90,9 @@ Function matchers: `toThrow()` (any throw), `toThrow(ErrorClass)`,
 - `run(code, opts?)` — vertical slice: `.tsc` → `compileTsc` → C via the
   backend → binary → stdout (CRLF-normalized, trimmed). `opts`: `compiler`,
   `target`, `defaultNumber`, `strict`, `timeoutMs` (binary run, default 5s),
-  capability overrides (`fpu`, `bits`, `allocator`, `async`, …).
+  capability overrides (`fpu`, `bits`, `allocator`, `async`, …), and AVR knobs
+  `mcu` / `freq` (model for `-mmcu=` and simavr clock in Hz — passed to both
+  compile and run, they must match).
 - `compile(codeOrPath)` — C output only. A path is detected by the `.tsc`
   suffix and resolved **relative to the calling test file** (works under
   `pnpm --filter` cwd quirks). Inline code always goes through `compileTsc`

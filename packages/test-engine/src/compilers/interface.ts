@@ -9,6 +9,10 @@ export interface CompileOpts {
   debug?: boolean
   /** Wall-clock budget for the compilation; default 30s */
   timeoutMs?: number
+  /** AVR backend: MCU model for `-mmcu=` (default DEFAULT_AVR_MCU); ignored by other backends */
+  mcu?: string
+  /** AVR backend: clock frequency in Hz for simavr; ignored by other backends */
+  freq?: string | number
 }
 
 export interface CompileResult {
@@ -21,6 +25,10 @@ export interface CompileResult {
 export interface RunOpts {
   timeoutMs?: number
   args?: string[]
+  /** AVR backend: must match the MCU the binary was compiled for */
+  mcu?: string
+  /** AVR backend: simavr clock frequency in Hz */
+  freq?: string | number
 }
 
 export interface RunResult {

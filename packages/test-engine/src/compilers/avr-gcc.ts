@@ -5,10 +5,30 @@ import { C_STANDARD_FLAG, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES, SIZE_O
 import { isInPath, isInWsl, wslExec, toWslPath } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
+/** avr-gcc argument line for one translation unit. Pure: unit-testable without
+ *  the toolchain. Paths come in POSIX/Windows form and are converted by the
+ *  caller when running through WSL. */
+export function buildAvrCompileArgs(o: {
+  cPath: string
+  elfPath: string
+  mcu?: string
+  defines?: string[]
+  includes?: string[]
+}): string[] {
+  const defines = [`-D${TSC_DEFINES.EMBEDDED}`, `-D${TSC_DEFINES.NO_POSIX}`, `-D${TSC_DEFINES.NO_STRTOLL}`, ...(o.defines ?? [])]
+  const args = [`-mmcu=${o.mcu ?? DEFAULT_AVR_MCU}`, SIZE_OPTIMIZE_FLAG, C_STANDARD_FLAG, ...defines]
+  for (const inc of o.includes ?? []) args.push(`-I${inc}`)
+  args.push(o.cPath, "-o", o.elfPath)
+  return args
+}
+
+/** simavr invocation arguments. Pure: unit-testable without the simulator. */
+export function buildSimavrArgs(mcu: string | undefined, freq: string | number | undefined, hexPath: string): string[] {
+  return ["-uart0:stdio", "-mcu", mcu ?? DEFAULT_AVR_MCU, "-f", String(freq ?? DEFAULT_AVR_FREQ), hexPath]
+}
+
 export class AvrGccBackend implements CompilerBackend {
   name = "avr-gcc"
-  private mcu = DEFAULT_AVR_MCU
-  private freq = String(DEFAULT_AVR_FREQ)
 
   isAvailable(): boolean {
     if (process.platform === "win32") {
@@ -33,43 +53,20 @@ export class AvrGccBackend implements CompilerBackend {
 
     writeFileSync(cPath, cCode, "utf8")
 
-    const defines = [`-D${TSC_DEFINES.EMBEDDED}`, `-D${TSC_DEFINES.NO_POSIX}`, `-D${TSC_DEFINES.NO_STRTOLL}`, ...(opts?.defines ?? [])]
-    const args = [`-mmcu=${this.mcu}`, SIZE_OPTIMIZE_FLAG, C_STANDARD_FLAG, ...defines.flatMap(d => [d]), cPath, "-o", elfPath]
-    if (opts?.includes) {
-      for (const inc of opts.includes) args.splice(-2, 0, `-I${inc}`)
-    }
+    // One argument line, built once; on Windows the paths are mapped into the
+    // WSL view before spawning
+    const toHost = (p: string) => (process.platform === "win32" ? toWslPath(p) : p)
+    const args = buildAvrCompileArgs({
+      cPath: toHost(cPath),
+      elfPath: toHost(elfPath),
+      mcu: opts?.mcu,
+      defines: opts?.defines,
+      includes: (opts?.includes ?? []).map(toHost),
+    })
 
-    if (process.platform === "win32") {
-      const wslCPath = toWslPath(cPath)
-      const wslElfPath = toWslPath(elfPath)
-      const wslHexPath = toWslPath(hexPath)
-
-      const compileArgs = [`-mmcu=${this.mcu}`, SIZE_OPTIMIZE_FLAG, C_STANDARD_FLAG, ...defines, wslCPath, "-o", wslElfPath]
-      if (opts?.includes) {
-        for (const inc of opts.includes) compileArgs.splice(-2, 0, `-I${toWslPath(inc)}`)
-      }
-      const compileResult = wslExec("avr-gcc", compileArgs)
-      if (compileResult.status !== 0) {
-        return {
-          success: false,
-          stderr: compileResult.stderr?.toString() ?? "",
-          exitCode: compileResult.status ?? 1,
-        }
-      }
-
-      const objcopyResult = wslExec("avr-objcopy", ["-O", "ihex", "-R", ".eeprom", wslElfPath, wslHexPath])
-      if (objcopyResult.status !== 0) {
-        return {
-          success: false,
-          stderr: objcopyResult.stderr?.toString() ?? "",
-          exitCode: objcopyResult.status ?? 1,
-        }
-      }
-
-      return { success: true, binaryPath: hexPath, stderr: "", exitCode: 0 }
-    }
-
-    const compileResult = spawnSync("avr-gcc", args, { stdio: "pipe", shell: true })
+    const compileResult = process.platform === "win32"
+      ? wslExec("avr-gcc", args)
+      : spawnSync("avr-gcc", args, { stdio: "pipe", shell: true })
     if (compileResult.status !== 0) {
       return {
         success: false,
@@ -78,7 +75,9 @@ export class AvrGccBackend implements CompilerBackend {
       }
     }
 
-    const objcopyResult = spawnSync("avr-objcopy", ["-O", "ihex", "-R", ".eeprom", elfPath, hexPath], { stdio: "pipe", shell: true })
+    const objcopyResult = process.platform === "win32"
+      ? wslExec("avr-objcopy", ["-O", "ihex", "-R", ".eeprom", toHost(elfPath), toHost(hexPath)])
+      : spawnSync("avr-objcopy", ["-O", "ihex", "-R", ".eeprom", elfPath, hexPath], { stdio: "pipe", shell: true })
     if (objcopyResult.status !== 0) {
       return {
         success: false,
@@ -91,22 +90,11 @@ export class AvrGccBackend implements CompilerBackend {
   }
 
   run(hexPath: string, opts?: RunOpts): RunResult {
-    if (process.platform === "win32") {
-      const wslHexPath = hexPath.replace(/\\/g, "/").replace(/^([A-Z]):/i, (_, d) => `/mnt/${d.toLowerCase()}`)
-      const result = wslExec("simavr", ["-uart0:stdio", "-mcu", this.mcu, "-f", this.freq, wslHexPath], opts?.timeoutMs ?? 5000)
-      return {
-        success: result.status === 0,
-        stdout: result.stdout?.toString() ?? "",
-        stderr: result.stderr?.toString() ?? "",
-        exitCode: result.status ?? 1,
-      }
-    }
-
-    const result = spawnSync("simavr", ["-uart0:stdio", "-mcu", this.mcu, "-f", this.freq, hexPath], {
-      stdio: "pipe",
-      timeout: opts?.timeoutMs ?? 5000,
-      shell: true,
-    })
+    const hostHex = process.platform === "win32" ? toWslPath(hexPath) : hexPath
+    const args = buildSimavrArgs(opts?.mcu, opts?.freq, hostHex)
+    const result = process.platform === "win32"
+      ? wslExec("simavr", args)
+      : spawnSync("simavr", args, { stdio: "pipe", timeout: opts?.timeoutMs ?? 5000, shell: true })
 
     return {
       success: result.status === 0,

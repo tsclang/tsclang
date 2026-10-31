@@ -206,11 +206,15 @@ Module map (all under `packages/cli/src/cli/`): `args.ts`, `help.ts`, `helpers.t
 
 ## 12. Test Engine (`packages/test-engine/`)
 
-- **API:** describe, test, expect (matchers), hooks (beforeEach/afterEach), 4-phase pipeline
-- **Backends:** gcc, clang, msvc, avr-gcc, wasm (pluggable)
+- **API:** describe, test, expect (matchers), hooks (beforeEach/afterEach), 4-phase pipeline. `test(name, fn, { xfail: '#NNN' })`, `test.only/skip`, filter via `run.ts <substring>` / `TSC_TEST_FILTER`, JSON report (`--json[=path]` / `TSC_TEST_JSON`) with toolchain env (#207 P0)
+- **`toMatchC(expectedC?)` (#207 P1.5):** normalizeC() both sides; no-arg = file snapshots (`__c-snapshots__/<file>.jsonl` next to the test file, key = full test name; missing entry created, `TSC_SNAPSHOT_UPDATE=1` rewrites). Secondary mode for codegen details invisible to behavior. `not.toMatchC` — inline only.
+- **Backends:** gcc (MSYS2 on Windows), clang, msvc, avr-gcc, wasm (pluggable). Pure arg-builders exported for toolchain-free unit tests: `buildAvrCompileArgs` / `buildSimavrArgs` (avr-gcc.ts), `buildEmccArgs` (wasm.ts — always `-DTSC_WASM -sWASM=1 -sSTANDALONE_WASM=1`, CLI `--emit wasm` parity). `mcu`/`freq` flow RunOptions → CompileOpts+RunOpts (#207 P1.6).
+- **`platformMatrix.targetBackends`:** honest profile→backend model for all 12 compiler profiles; `backend: null` = no simulator/backend (NES, Genesis, PS2, Spectrum, DOS, ARM — C-fragment compare only). `targets` = runnable subset derived from it.
+- **Registration ≠ execution:** tests run only at `printSummary()` / `runSuite()`; expect() inside a callback runs in the execution phase (`EngineState.currentTest` set by runTest — file-snapshot keying relies on it).
 - **CLI:** `tsclang test` → `tsclang-test` (subprocess)
 - **File testing:** `file` parameter + `compileTsc()` for recursive imports
-- **Spec:** `packages/spec/spec/13-build/` (CLI), `packages/test-engine/README.md`
+- **Spec:** `packages/spec/spec/16-tooling/16-compiler.md` §Test Engine API, `packages/test-engine/README.md`
+- **Parallelism (#207 P1.4):** deferred by design until the full run exceeds ~10 min (issue #207 порядок); `EngineState` swap (runSuite) already isolates results for workers
 
 ---
 

@@ -1,6 +1,6 @@
-import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs"
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs"
 import { tmpdir, release } from "os"
-import { join, resolve, dirname } from "path"
+import { join, resolve, dirname, basename } from "path"
 import { fileURLToPath } from "url"
 import { compileTsc, parsePlatformDecl } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
@@ -10,9 +10,37 @@ registerAll()
 
 export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec }
 
+/** Target profile → backend able to compile AND run code for that platform.
+ *  backend: null means no backend/simulator is registered for the real
+ *  hardware — the profile's capability caps are still testable on a desktop
+ *  compiler (C-fragment compare), but that is NOT the target platform. */
+export interface TargetBackendEntry {
+  target: string
+  backend: string | null
+  note?: string
+}
+
+const TARGET_BACKENDS: TargetBackendEntry[] = [
+  { target: "desktop", backend: "gcc" },
+  { target: "avr", backend: "avr-gcc" },
+  { target: "avr-coop", backend: "avr-gcc" },
+  { target: "avr-heap", backend: "avr-gcc" },
+  { target: "wasm", backend: "wasm" },
+  { target: "wasm32", backend: "wasm" },
+  { target: "arm", backend: null, note: "no arm-none-eabi backend registered" },
+  { target: "dos", backend: null, note: "no DOS compiler/simulator backend" },
+  { target: "genesis", backend: null, note: "no Genesis simulator" },
+  { target: "nes", backend: null, note: "no NES simulator (caps profile testable on desktop gcc only)" },
+  { target: "ps2", backend: null, note: "no PS2 simulator" },
+  { target: "spectrum", backend: null, note: "no ZX Spectrum simulator (caps profile testable on desktop gcc only)" },
+]
+
 export const platformMatrix = {
   defaultNumber: ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"],
-  targets: ["desktop", "avr", "nes", "spectrum"],
+  /** Full honest model: every compiler profile (packages/compiler/src/profiles/*) appears here */
+  targetBackends: TARGET_BACKENDS,
+  /** Runnable subset (has a real backend) — kept as a flat list for iteration convenience */
+  targets: TARGET_BACKENDS.filter(t => t.backend !== null).map(t => t.target),
   strict: [[], ["safe-math"], ["no-lossy-cast"], ["safe-math", "no-lossy-cast"]],
   // Capability parameters (direct, not via profiles)
   fpu: [true, false],
@@ -271,11 +299,14 @@ interface EngineState {
   root: DescribeContext
   currentContext: DescribeContext
   results: TestResult[]
+  /** Full name of the test being executed — set by runTest, read by the
+   *  file-snapshot mode of toMatchC() to key snapshots. */
+  currentTest: string | null
 }
 
 function freshState(): EngineState {
   const root: DescribeContext = { kind: "describe", name: "", parent: null, entries: [] }
-  return { root, currentContext: root, results: [] }
+  return { root, currentContext: root, results: [], currentTest: null }
 }
 
 const globalState = freshState()
@@ -316,6 +347,10 @@ export interface RunOptions {
   os?: boolean
   posix?: boolean
   strtoll?: boolean
+  /** AVR backend: MCU model for -mmcu= and simavr (e.g. "atmega2560") */
+  mcu?: string
+  /** AVR backend: simavr clock frequency in Hz (compiled and run must match) */
+  freq?: string | number
 }
 
 function buildDirectCapabilities(opts?: RunOptions): Record<string, unknown> | undefined {
@@ -373,14 +408,14 @@ export function run(code: string, opts?: RunOptions): string {
     if (!backend || !backend.isAvailable()) throw new CompileError(`compiler "${compilerName}" not available`)
 
     const runtimeDir = resolve(import.meta.dirname, "..", "..", "compiler", RUNTIME_DIR)
-    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir] })
+    const compileResult = backend.compile(c, tmpDir, { includes: [runtimeDir], mcu: opts?.mcu, freq: opts?.freq })
     if (!compileResult.success) {
       const stderr = compileResult.stderr.trim()
       throw new CompileError(`${compilerName} exited ${compileResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
     }
 
     if (backend.run) {
-      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000 })
+      const runResult = backend.run(compileResult.binaryPath!, { timeoutMs: opts?.timeoutMs ?? 5000, mcu: opts?.mcu, freq: opts?.freq })
       if (!runResult.success || runResult.exitCode !== 0) {
         const stderr = runResult.stderr.trim()
         throw new RuntimeError(`exit code ${runResult.exitCode}${stderr ? "\n" + stderr : " (stderr empty)"}`)
@@ -470,6 +505,9 @@ export interface ValueNotMatchers {
   toBeLessThan(n: number): void
   toContain(sub: string): void
   toMatch(regex: string): void
+  /** Inline C compare only — inverted file snapshots are meaningless
+   *  (a first run "creates and passes", which would read as a failure). */
+  toMatchC(expected: string): void
   toBeTruthy(): void
   toBeFalsy(): void
   toBeNull(): void
@@ -484,6 +522,12 @@ export interface ValueMatchers {
   toBeLessThan(n: number): void
   toContain(sub: string): void
   toMatch(regex: string): void
+  /** Compare generated C against expected C (normalizeC() on both sides).
+   *  Without an argument: file-snapshot mode — the normalized C is stored
+   *  under the test's full name in `__c-snapshots__/<file>.jsonl` next to
+   *  the calling test file; a missing entry is created, an existing one is
+   *  compared (rewrite with TSC_SNAPSHOT_UPDATE=1). */
+  toMatchC(expected?: string): void
   toBeTruthy(): void
   toBeFalsy(): void
   toBeNull(): void
@@ -512,6 +556,83 @@ function isFalsyOutput(s: string): boolean {
   if (NAN_OUTPUT.test(v)) return true
   if (NUMERIC_OUTPUT.test(v)) return Number(v) === 0
   return false
+}
+
+// === toMatchC: C-snapshot matcher (#207 P1.5) ===
+
+/** First differing line of two normalized C strings, with line number. */
+function cDiff(expected: string, actual: string): string {
+  const exp = expected.split("\n")
+  const act = actual.split("\n")
+  for (let i = 0; i < Math.max(exp.length, act.length); i++) {
+    if (exp[i] !== act[i]) {
+      const e = exp[i] === undefined ? "<end of C>" : `"${exp[i]}"`
+      const a = act[i] === undefined ? "<end of C>" : `"${act[i]}"`
+      return `C mismatch at line ${i + 1}: expected ${e} but got ${a}`
+    }
+  }
+  return "C mismatch" // unreachable: equal strings are rejected by the caller
+}
+
+/** Inline compare: normalizeC() both sides, throw on any difference. */
+function matchCInline(actual: string, expected: string): void {
+  if (typeof actual !== "string" || typeof expected !== "string")
+    throw new Error("toMatchC expects C code strings (compile() output vs expected C)")
+  const a = normalizeC(actual)
+  const e = normalizeC(expected)
+  if (a !== e) throw new Error(cDiff(e, a))
+}
+
+/** Absolute path of the first stack frame outside this module — the calling
+ *  test file. File-snapshot mode keys entries by test name inside a JSONL
+ *  next to that file, so each test file owns its own snapshot store. */
+function callerFile(): string {
+  const stack = new Error().stack ?? ""
+  for (const rawLine of stack.split("\n")) {
+    const line = rawLine.trim()
+    if (!line.startsWith("at ")) continue
+    const paren = line.match(/\(([^)]+)\)/)
+    const inner = paren ? paren[1] : line.slice(3).trim()
+    const p = framePath(inner)
+    if (!p || p === ENGINE_PATH) continue
+    return p
+  }
+  throw new Error("toMatchC() could not locate the calling test file")
+}
+
+interface SnapshotEntry { key: string; c: string }
+
+function readSnapshotStore(path: string): SnapshotEntry[] {
+  if (!existsSync(path)) return []
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .filter(l => l.trim() !== "")
+    .map(l => JSON.parse(l) as SnapshotEntry)
+}
+
+function writeSnapshotStore(path: string, entries: SnapshotEntry[]): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, entries.map(e => JSON.stringify(e)).join("\n") + "\n", "utf8")
+}
+
+/** File-snapshot compare: key = full test name, store = JSONL next to the
+ *  calling test file. Missing entry → create + pass. TSC_SNAPSHOT_UPDATE=1 →
+ *  always rewrite. Existing entry → normalized compare. */
+function matchCSnapshot(actual: string): void {
+  if (typeof actual !== "string")
+    throw new Error("toMatchC expects C code strings (compile() output)")
+  const key = state.currentTest
+  if (!key) throw new Error("toMatchC() file mode requires a running test (called outside test()?)")
+  const testFile = callerFile()
+  const storePath = join(dirname(testFile), "__c-snapshots__", basename(testFile).replace(/\.ts$/, "") + ".jsonl")
+  const normalized = normalizeC(actual)
+  const entries = readSnapshotStore(storePath)
+  const stored = entries.find(e => e.key === key)
+  if (!stored || process.env.TSC_SNAPSHOT_UPDATE) {
+    writeSnapshotStore(storePath, [...entries.filter(e => e.key !== key), { key, c: normalized }])
+    return
+  }
+  if (normalizeC(stored.c) !== normalized) throw new Error(cDiff(normalizeC(stored.c), normalized))
 }
 
 export function expect(actual: (...args: any[]) => unknown): FunctionMatchers
@@ -551,6 +672,10 @@ export function expect(actual: any): FunctionMatchers | ValueMatchers {
     toBeFalsy() { if (!isFalsyOutput(s)) throw new Error(`expected falsy but got "${s}"`) },
     toBeNull() { if (s !== "null") throw new Error(`expected null but got "${s}"`) },
     toBeNaN() { if (!NAN_OUTPUT.test(s.trim())) throw new Error(`expected NaN but got "${s}"`) },
+    toMatchC(expected?: string) {
+      if (expected === undefined) matchCSnapshot(actual)
+      else matchCInline(actual, expected)
+    },
     toBeCloseTo(expected: number, precision = 2) {
       const actualNum = numberOutput(s)
       if (Math.abs(actualNum - expected) >= Math.pow(10, -precision) / 2)
@@ -567,6 +692,13 @@ export function expect(actual: any): FunctionMatchers | ValueMatchers {
         toBeFalsy() { if (isFalsyOutput(s)) throw new Error(`expected truthy but got "${s}"`) },
         toBeNull() { if (s === "null") throw new Error(`expected "${s}" not to be "null"`) },
         toBeNaN() { if (NAN_OUTPUT.test(s.trim())) throw new Error(`expected "${s}" not to be NaN`) },
+        toMatchC(expected?: string) {
+          if (expected === undefined)
+            throw new Error("not.toMatchC requires an inline C argument (inverted file snapshots are meaningless)")
+          const a = normalizeC(String(actual))
+          const e = normalizeC(expected)
+          if (a === e) throw new Error("expected C to differ from the given snapshot but both are identical")
+        },
         toBeCloseTo(expected: number, precision = 2) {
           const actualNum = numberOutput(s)
           if (Math.abs(actualNum - expected) < Math.pow(10, -precision) / 2)
@@ -697,6 +829,7 @@ async function runTest(st: EngineState, entry: TestEntry, ctx: DescribeContext):
   }
 
   try {
+    state.currentTest = fullName
     await entry.callback()
     st.results.push({ name: fullName, passed: true, xfail })
   } catch (e) {
@@ -706,6 +839,7 @@ async function runTest(st: EngineState, entry: TestEntry, ctx: DescribeContext):
       : undefined
     st.results.push({ name: fullName, passed: false, error: err.message, phase, xfail })
   } finally {
+    state.currentTest = null
     await runAfterEach(st, chain, fullName, xfail)
   }
 }

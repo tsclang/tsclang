@@ -652,14 +652,14 @@ error[E124]: cannot initialize flag: boolean with a number literal
 | W009 | `mut` метод на классе где ВСЕ поля readonly | `decorators.ts` |
 | W010 | `AsyncMutex.lock()` в async функции (блокирующий вызов) | `concurrency.ts` |
 | W011 | `i64`/`u64`/`f64`/`f32` на 8-bit платформе (дорого) | `vardecl.ts` |
-## Test Engine API (��� ���������� ����������� � ����������������� ������������)
+## Test Engine API (для генерации тестов и тестирования компилятора)
 
-Jest-like API ��� ��������� ������ � TypeScript. ����� ����������� TSClang > C > binary � ��������� ���������.
+Jest-like API для написания тестов на TypeScript. Каждый тест прогоняет TSClang > C > binary и проверяет stdout.
 
-### �������� API
+### Базовый API
 
 ```typescript
-import { describe, test, run, compile, expect, file } from "@tsclang/test"
+import { describe, test, run, compile, expect, file } from "@tsclang/test-engine"
 
 describe("math", () => {
   test("sum works", () => {
@@ -668,7 +668,7 @@ describe("math", () => {
   })
 
   test("throws on type error", () => {
-    expect(() => run(`let x: i32 = "hello"`)).toThrow(TscError)
+    expect(() => run(`let x: i32 = "hello"`)).toThrow(TscCompilationError)
   })
 
   test("compiles to C", () => {
@@ -679,35 +679,50 @@ describe("math", () => {
 })
 ```
 
-### �������
+### Функции
 
-| ������� | �������� |
+| Функция | Описание |
 |---------|----------|
-| `describe(name, fn)` | ����������� ������ |
-| `test(name, callback)` | ������ ����� |
-| `run(code, opts?)` | ����������� TSC > C > binary, ���������� stdout |
-| `compile(codeOrPath)` | ����������� TSC > C, ���������� C ������ |
-| `file(path)` | ������ .tsc ���� |
-| `expect(value)` | ������ chain � ��������� |
-| `expect(() => ...)` | ������ chain ��� �������� throw |
-| `TscError / CompileError / RuntimeError` | ������ ������ �� ����� |
+| `describe(name, fn)` | группировка тестов |
+| `test(name, callback)` | регистрация теста (регистрация ≠ выполнение) |
+| `test(name, fn, { xfail: '#NNN' })` | known-bug: падение = xfailed, починка = XPASS (видно, не краснит) |
+| `test.only / test.skip` | селективный запуск; фильтр — аргумент `run.ts <substring>` или env `TSC_TEST_FILTER` |
+| `run(code, opts?)` | конвейер TSC > C > binary, возвращает stdout (CRLF нормализован) |
+| `compile(codeOrPath)` | конвейер TSC > C, возвращает C-код |
+| `file(path)` | читает .tsc-файл (путь — относительно файла-вызывающего) |
+| `expect(value)` | матчер-chain для значений |
+| `expect(() => ...)` | матчер-chain для проверки throw |
+| `printSummary()` | прогон дерева тестов + итоги + exit code (без неё тесты не выполняются) |
+| `TscCompilationError / CompileError / RuntimeError` | классы ошибок по фазам конвейера |
 
 ### Matchers
 
 - `toBe(expected)`, `toBeGreaterThan(n)`, `toBeLessThan(n)`
 - `toContain(substring)`, `toMatch(regex)`
-- `toBeTruthy()`, `toBeFalsy()`, `toBeNull()`
-- `.not.toContain(substring)` � ��������
+- `toBeTruthy()`, `toBeFalsy()`, `toBeNull()`, `toBeCloseTo(n, precision?)`, `toBeNaN()`
+- `toMatchC(expectedC?)` — сравнение C-кода, обе стороны прогоняются через `normalizeC()`; без аргумента — файл-снапшот-режим: ключ = полное имя теста, файл `__c-snapshots__/<тест-файл>.jsonl` рядом с тестом; отсутствующая запись создаётся, перезапись — `TSC_SNAPSHOT_UPDATE=1`. Вторичный режим — для кодген-деталей, невидимых поведению (манглинг, layout, порядок cleanup)
+- `.not.`-инверсия у всех value-матчеров (для файл-снапшотов не определена)
 
-### �����������
+### Опции run()
 
-- `gcc` (Linux/WSL), `clang` (macOS), `msvc` (Windows), `avr-gcc` (AVR), `wasm`
+- `compiler` — имя бэкенда: `gcc`, `clang`, `msvc`, `avr-gcc`, `wasm`
+- `target`, `defaultNumber`, `strict`, `timeoutMs`
+- capability-оверрайды поверх профиля: `fpu`, `bits`, `allocator`, `async`, `usize`, `os`, `posix`, `strtoll`
+- `mcu` / `freq` — AVR: модель МК (`-mmcu=`, например `"atmega2560"`) и частота simavr в Гц; пробрасываются и в компиляцию, и в запуск
 
-### 4-������ ��������
+### Бэкенды
+
+- `gcc` (на Windows — через MSYS2), `clang`, `msvc` (Windows), `avr-gcc` (AVR + simavr), `wasm` (emcc + node). wasm-бэкенд всегда добавляет `-DTSC_WASM -sWASM=1 -sSTANDALONE_WASM=1` — паритет с CLI `--emit wasm`: runtime.h активирует WASM-ветки тем же дефайном, что и в проде.
+
+### Матрица платформ
+
+`platformMatrix.targetBackends` — честная модель «профиль → доступный бэкенд» для всех 12 профилей компилятора (`packages/compiler/src/profiles/*`): `backend: null` = реальное железо недоступно (нет симулятора/бэкенда — NES, Genesis, PS2, Spectrum, DOS, ARM), такой профиль тестируется только C-фрагментами на desktop-компиляторе. `platformMatrix.targets` — runnable-подмножество, вычисляется из модели (единственный источник истины).
+
+### 4-фазный конвейер
 
 ```
 TSC > C > [C-check] > binary > run
   1    1.5       2        3
 ```
 
-`run()` ������������ ��� 3 ����. `compile()` ��������������� ����� ���� 1.
+`run()` останавливается на 3 фазах. `compile()` останавливается после фазы 1.
