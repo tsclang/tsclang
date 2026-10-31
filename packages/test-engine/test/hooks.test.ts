@@ -45,14 +45,14 @@ test("nested: outer beforeAll → inner beforeAll → beforeEach chain → test"
   expect(nested.join(",")).toBe("outer:beforeAll,inner:beforeAll,outer:beforeEach,it")
 })
 
-// Sandbox: a poisoned describe registered at top level, verified and cleaned up
-// by the test right after it — the expected failure must not leak into totals
-// (xfail model lands in step 9). Deferred execution: results only exist after
-// the poison context has run, so assertions live in the following test.
+// Sandbox: a poisoned describe registered at top level, verified by the test
+// right after it. Deferred execution: results only exist after the poison
+// context has run, so assertions live in the following test. The deliberate
+// failure carries an xfail marker and counts as xfailed, not red.
 const poisonSeen: string[] = []
 describe("hooks — poison sandbox", () => {
   before(() => { poisonSeen.push("beforeAll"); throw new Error("setup exploded") })
-  test("inner", () => { poisonSeen.push("never") })
+  test("inner", () => { poisonSeen.push("never") }, { xfail: "#206" })
 })
 
 test("failing beforeAll fails its tests with a setup error, callback not executed", () => {
@@ -61,6 +61,6 @@ test("failing beforeAll fails its tests with a setup error, callback not execute
   expect(String(idx >= 0)).toBe("true")
   expect(String(rs[idx].passed)).toBe("false")
   expect(rs[idx].error ?? "").toContain("beforeAll failed")
+  expect(rs[idx].xfail ?? "").toBe("#206")
   expect(poisonSeen.join(",")).toBe("beforeAll")
-  rs.splice(idx, 1)
 })

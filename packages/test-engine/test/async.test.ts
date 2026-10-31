@@ -49,11 +49,12 @@ test("async hooks fire in lifecycle order", () => {
 })
 
 // --- Rejected promise is a failed result, not an unhandled rejection ----------------
+// The deliberate failure is xfail-marked: it counts as xfailed, not red.
 describe("async — rejection sandbox", () => {
   test("rejects after await", async () => {
     await Promise.resolve()
     throw new Error("async boom")
-  })
+  }, { xfail: "#206" })
 })
 test("rejected promise → failed result with the error message", () => {
   const rs = getResults()
@@ -61,14 +62,14 @@ test("rejected promise → failed result with the error message", () => {
   expect(String(idx >= 0)).toBe("true")
   expect(String(rs[idx].passed)).toBe("false")
   expect(rs[idx].error ?? "").toContain("async boom")
-  rs.splice(idx, 1) // sandbox failure must not leak into totals (xfail lands in step 9)
+  expect(rs[idx].xfail ?? "").toBe("#206")
 })
 
 // --- Hook failures don't crash the runner -------------------------------------------
 const beforeEachSeen: string[] = []
 describe("failing beforeEach sandbox", () => {
   beforeEach(() => { throw new Error("per-test setup exploded") })
-  test("victim", () => { beforeEachSeen.push("never") })
+  test("victim", () => { beforeEachSeen.push("never") }, { xfail: "#206" })
 })
 test("failing beforeEach → failed result, callback skipped, runner alive", () => {
   const rs = getResults()
@@ -77,13 +78,14 @@ test("failing beforeEach → failed result, callback skipped, runner alive", () 
   expect(String(rs[idx].passed)).toBe("false")
   expect(rs[idx].error ?? "").toContain("beforeEach failed")
   expect(beforeEachSeen.join(",")).toBe("")
-  rs.splice(idx, 1)
 })
 
 const afterEachSeen: string[] = []
 describe("failing afterEach sandbox", () => {
   afterEach(() => { throw new Error("teardown exploded") })
-  test("body", () => { afterEachSeen.push("ran") })
+  // xfail on the test covers its whole lifecycle: the synthetic afterEach
+  // failure inherits the marker and counts as xfailed, not red
+  test("body", () => { afterEachSeen.push("ran") }, { xfail: "#206" })
 })
 test("failing afterEach → synthetic failed result, body still counted", () => {
   const rs = getResults()
@@ -91,6 +93,6 @@ test("failing afterEach → synthetic failed result, body still counted", () => 
   expect(String(idx >= 0)).toBe("true")
   expect(String(rs[idx].passed)).toBe("false")
   expect(rs[idx].error ?? "").toContain("afterEach failed")
+  expect(rs[idx].xfail ?? "").toBe("#206")
   expect(afterEachSeen.join(",")).toBe("ran")
-  rs.splice(idx, 1)
 })

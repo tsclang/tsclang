@@ -223,6 +223,15 @@ export interface TestResult {
   error?: string
   /** Pipeline phase the failure came from: tsc | c-compile | run */
   phase?: string
+  /** Known-bug marker ('#NNN'): a failing xfail test counts as xfailed,
+   *  a passing one as xpass — neither paints the run red */
+  xfail?: string
+}
+
+/** Per-test options. */
+export interface TestOpts {
+  /** Issue reference for a known bug; the test keeps failing without going red */
+  xfail?: string
 }
 
 interface DescribeContext {
@@ -246,6 +255,7 @@ interface TestEntry {
   kind: "test"
   name: string
   callback: () => unknown
+  opts?: TestOpts
 }
 
 let results: TestResult[] = []
@@ -584,8 +594,8 @@ export function afterEach(fn: () => unknown): void {
   if (currentContext !== root) currentContext.afterEach = fn
 }
 
-export function test(name: string, callback: () => unknown): void {
-  currentContext.entries.push({ kind: "test", name, callback })
+export function test(name: string, callback: () => unknown, opts?: TestOpts): void {
+  currentContext.entries.push({ kind: "test", name, callback, opts })
 }
 
 /** Context chain root→ctx; the root is excluded (it carries no hooks). */
@@ -595,19 +605,22 @@ function chainOf(ctx: DescribeContext): DescribeContext[] {
   return chain
 }
 
-async function runAfterEach(chain: DescribeContext[], fullName: string): Promise<void> {
+/** Synthetic hook-failure results inherit the test's xfail marker — the
+ *  marker covers the test's whole lifecycle, cleanup included. */
+async function runAfterEach(chain: DescribeContext[], fullName: string, xfail?: string): Promise<void> {
   for (const c of chain) {
     try {
       await c.afterEach?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      results.push({ name: `${fullName} > afterEach`, passed: false, error: `afterEach failed: ${msg}` })
+      results.push({ name: `${fullName} > afterEach`, passed: false, error: `afterEach failed: ${msg}`, xfail })
     }
   }
 }
 
 async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
   const fullName = ctx === root ? entry.name : `${ctx.name} > ${entry.name}`
+  const xfail = entry.opts?.xfail
   const chain = chainOf(ctx)
 
   // Lazy beforeAll: fire once per context, right before its first test
@@ -625,7 +638,7 @@ async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
   // callbacks and per-test hooks are skipped
   const brokenSetup = chain.find(c => c.beforeAllError !== undefined)
   if (brokenSetup) {
-    results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}` })
+    results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}`, xfail })
     return
   }
 
@@ -634,23 +647,23 @@ async function runTest(entry: TestEntry, ctx: DescribeContext): Promise<void> {
       await c.beforeEach?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      results.push({ name: fullName, passed: false, error: `beforeEach failed: ${msg}` })
-      await runAfterEach(chain, fullName)
+      results.push({ name: fullName, passed: false, error: `beforeEach failed: ${msg}`, xfail })
+      await runAfterEach(chain, fullName, xfail)
       return
     }
   }
 
   try {
     await entry.callback()
-    results.push({ name: fullName, passed: true })
+    results.push({ name: fullName, passed: true, xfail })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
     const phase = err instanceof TscCompilationError || err instanceof CompileError || err instanceof RuntimeError
       ? err.phase
       : undefined
-    results.push({ name: fullName, passed: false, error: err.message, phase })
+    results.push({ name: fullName, passed: false, error: err.message, phase, xfail })
   } finally {
-    await runAfterEach(chain, fullName)
+    await runAfterEach(chain, fullName, xfail)
   }
 }
 
@@ -702,15 +715,31 @@ export function formatFailure(r: TestResult): string {
 }
 
 /** Execute all registered tests (awaiting async callbacks), then print totals.
- *  Fire-and-forget calls keep the process alive until the run completes. */
+ *  Fire-and-forget calls keep the process alive until the run completes.
+ *  xfail-marked tests are excluded from passed/failed: they count as xfailed
+ *  (still broken, expected) or xpass (bug apparently fixed — remove marker). */
 export async function printSummary(): Promise<void> {
   await runContext(root)
-  const passed = results.filter(r => r.passed).length
-  const failed = results.filter(r => !r.passed).length
-  console.log(`\n${passed} passed, ${failed} failed, ${results.length} total`)
+  const plain = results.filter(r => !r.xfail)
+  const passed = plain.filter(r => r.passed).length
+  const failed = plain.filter(r => !r.passed).length
+  const xfailed = results.filter(r => r.xfail && !r.passed).length
+  const xpassed = results.filter(r => r.xfail && r.passed).length
+
+  const parts = [`${passed} passed`, `${failed} failed`]
+  if (xfailed > 0) parts.push(`${xfailed} xfailed`)
+  if (xpassed > 0) parts.push(`${xpassed} xpassed`)
+  console.log(`\n${parts.join(", ")}, ${results.length} total`)
+
   if (failed > 0) {
     console.log("\nFailures:")
-    for (const r of results.filter(x => !x.passed)) console.log(formatFailure(r))
+    for (const r of plain.filter(x => !x.passed)) console.log(formatFailure(r))
+  }
+  if (xpassed > 0) {
+    console.log("\nXPASS (xfail no longer reproducible — bug fixed? remove the marker):")
+    for (const r of results.filter(x => x.xfail && x.passed)) {
+      console.log(`  ✓ ${r.name} (xfail: ${r.xfail})`)
+    }
   }
   process.exit(failed > 0 ? 1 : 0)
 }

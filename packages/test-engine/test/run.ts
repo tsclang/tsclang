@@ -8,6 +8,7 @@ import "./expect-matchers.test.ts"
 import "./backends.test.ts"
 import "./hygiene.test.ts"
 import "./async.test.ts"
+import "./xfail.test.ts"
 import { printSummary } from "../src/engine.ts"
 
 printSummary()
