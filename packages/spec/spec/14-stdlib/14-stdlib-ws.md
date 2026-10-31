@@ -1,5 +1,7 @@
 # TSClang — std/ws: реализация
 
+> Spec status: unverified · #205
+
 > Детальная спецификация реализации `std/ws`.
 > Реализовано.
 

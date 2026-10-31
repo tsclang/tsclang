@@ -1,5 +1,7 @@
 # Ownership и Borrow Checker
 
+> Spec status: unverified · #205
+
 **Гибридная модель:** статический ownership/borrow checker + опциональный ARC. Нет GC, нет ручного `free`.
 
 ## Типы владения

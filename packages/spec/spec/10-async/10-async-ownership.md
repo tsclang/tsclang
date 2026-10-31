@@ -1,5 +1,7 @@
 # 05b — Ownership в async-функциях
 
+> Spec status: unverified · #205
+
 Async-функции компилируются в state machine (SM) — struct с полями для переменных, живых через `await`. Ownership для строк и классов в SM отличается от синхронного кода.
 
 ### 7.1 String params — retain-on-capture

@@ -1,5 +1,7 @@
 # TSClang — Замыкания: capture model, семантика, ограничения
 
+> Spec status: unverified · #205
+
 > **СТАТУС: РЕШЕНО.**
 >
 > **Ключевое решение:** capture model — **гибридная**. Примитивы и строки = copy (snapshot). Class/array = reference (pointer). Source **всегда жив** после capture. Нет move capture, нет E002 для implicit capture.

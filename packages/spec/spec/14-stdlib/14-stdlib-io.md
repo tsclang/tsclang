@@ -1,5 +1,7 @@
 # TSClang — std/io: реализация
 
+> Spec status: unverified · #205
+
 > Детальная спецификация реализации `std/io`.
 > Реализовано.
 

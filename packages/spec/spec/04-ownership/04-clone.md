@@ -1,5 +1,7 @@
 ## Clone
 
+> Spec status: unverified · #205
+
 `Clone` — интерфейс для deep copy. Два синтаксиса, одна семантика:
 
 ```typescript

@@ -1,5 +1,7 @@
 # TSClang — std/avr: реализация
 
+> Spec status: unverified · #205
+
 > Детальная спецификация реализации `std/avr` (AVR-специфичный API).
 > Реализовано (desktop stubs + AVR platform profile spec).
 

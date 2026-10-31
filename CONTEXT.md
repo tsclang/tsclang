@@ -103,9 +103,11 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1932 (spec-based) + 166 (engine)
+### Tests: 1858 case corpus (by input.tsc) + 222 spec-suite + 135 engine
 
-**Spec-based:** 1932 pass, 0 fail, 2 skipped
+**Case corpus:** 1858 cases. Verified green 2026-10-31 (#205 audit): 02-syntax 127✓, 09-errors 47✓, 13-build 174✓ (runner counts CLI-section tests higher — multivariants). Full phased runs (П5) required before claiming all-green.
+
+**Spec audit (#205):** spec files carry `> Spec status:` markers (verified @ commit / unverified). 01-intro verified @ 4ad8489d. Chapter files + tests are the source of truth; #205 is the decision log. Rules: move keeps status; split → recheck seams.
 
 **Spec-suites (`packages/tests/test/spec/`, run via per-folder `run.ts`):**
 
@@ -119,12 +121,12 @@ Known failures carry `// KNOWN BUG (scope):` comments in tests. Entry points: `p
 | Section | Tests | Topic |
 |---------|-------|-------|
 | 02-syntax | 127 | Arithmetic, variables, formatting |
-| 03-types | 412 | Numbers, enums, tuples, null |
-| 04-ownership | 116 | Ownership, Arc, Weak, Clone |
+| 03-types | 539 | Numbers, enums, tuples, null |
+| 04-ownership | 117 | Ownership, Arc, Weak, Clone |
 | 06-functions | 66 | Functions, closures, overloads |
 | 08-collections | 236 | Arrays, Map, Set, strings |
 | 09-errors | 47 | throws, try/catch, bare-throws |
-| 14-stdlib | 302 | console, Math, Date, JSON, std/* |
+| 14-stdlib | 299 | console, Math, Date, JSON, std/* |
 
 ### Deferred / NOT YET
 
@@ -136,8 +138,8 @@ Known failures carry `// KNOWN BUG (scope):` comments in tests. Entry points: `p
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #179 (warnings), #180 (decimal types)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #179 (warnings), #205 (spec audit — active)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning), #180 (decimal types)
 
 ---
 

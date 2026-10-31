@@ -1,5 +1,7 @@
 # TSClang — Migration Guide: TypeScript → TSClang
 
+> Spec status: unverified · #205
+
 Руководство для разработчиков, переходящих с TypeScript на TSClang.
 
 **Автоматизированная миграция:** `tsclang migrate` *(roadmap — фаза 13)* применяет все механические правки из раздела ниже автоматически. Детали команды — в [13-build.md](../13-build/13-build.md) (раздел «`tsclang migrate`»).

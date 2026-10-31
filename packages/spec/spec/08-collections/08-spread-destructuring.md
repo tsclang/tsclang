@@ -1,5 +1,7 @@
 # TSClang — Spread, деструктуризация, merge: проектирование
 
+> Spec status: unverified · #205
+
 > **СТАТУС: РЕШЕНО.**
 >
 > **Ключевое решение:** spread/destructuring/merge = **всегда copy**, source **всегда жив**. Move — только для прямого присваивания `let b = a`. `let`/`const` на source не влияет на copy/move. `let`/`const` на result — только про мутабельность результата.

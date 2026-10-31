@@ -1,5 +1,7 @@
 # TSClang — Модульная система
 
+> Spec status: unverified · #205
+
 - Синтаксис как в TypeScript: именованные `export` / `import { } from ""`
 - Один файл = один модуль
 - **Циклические импорты разрешены** — компилятор автоматически генерирует forward declarations в C

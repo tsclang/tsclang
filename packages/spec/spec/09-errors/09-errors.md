@@ -1,5 +1,7 @@
 # TSClang — Обработка ошибок
 
+> Spec status: unverified · #205
+
 ## Принцип
 
 Синтаксис как в TypeScript (`throw`, `try`/`catch`/`finally`), но под капотом компилируется в **Result-структуры в C** — без `setjmp`/`longjmp`. Это даёт:

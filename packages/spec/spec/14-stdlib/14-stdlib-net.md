@@ -1,5 +1,7 @@
 # TSClang — std/net: реализация
 
+> Spec status: unverified · #205
+
 > Детальная спецификация реализации `std/net`.
 > Реализовано.
 

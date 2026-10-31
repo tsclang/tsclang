@@ -1,5 +1,7 @@
 # Async/Await и генераторы
 
+> Spec status: unverified · #205
+
 ## 1. Async/Await — стандартный способ
 
 ### Архитектура async runtime

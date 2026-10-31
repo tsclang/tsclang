@@ -1,5 +1,7 @@
 ## `const` vs `let`
 
+> Spec status: unverified · #205
+
 - `const obj` — нельзя вызывать `mut` методы, нельзя передать как `Mut`, нельзя move
 - `let obj` — можно всё
 

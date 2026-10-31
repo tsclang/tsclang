@@ -1,5 +1,7 @@
 ﻿## Truthy / Falsy
 
+> Spec status: unverified · #205
+
 Как в JS, без `undefined` и `NaN`:
 
 | Тип | Falsy | Truthy |

@@ -1,5 +1,7 @@
 # TSClang — Система сборки
 
+> Spec status: unverified · #205
+
 ## Типы проектов
 
 Четыре вида проектов TSClang — отличаются структурой и полями `tsc.package.json`.

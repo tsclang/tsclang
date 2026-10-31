@@ -1,5 +1,7 @@
 ﻿## Enum
 
+> Spec status: unverified · #205
+
 ### Числовой enum
 
 ```typescript

@@ -1,5 +1,7 @@
 # TSClang — Итерация: for..of, Iterable\<T\>, семантика item
 
+> Spec status: unverified · #205
+
 > **СТАТУС: РЕШЕНО.**
 >
 > **Связь со spread:** for-of использует **borrow** (pointer) для complex-типов — zero-cost итерация без создания новых данных. Spread/destructuring (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md)) использует **copy** (struct copy + retain) — создание нового контейнера. Разные операции = разная семантика. Это осознанный дизайн, не противоречие.

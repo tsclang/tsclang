@@ -1,5 +1,7 @@
 ﻿## while / do-while
 
+> Spec status: unverified · #205
+
 ```typescript
 // while — проверка условия до итерации
 let i = 0;

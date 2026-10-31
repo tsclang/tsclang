@@ -1,5 +1,7 @@
 # Конкурентность: Threads, ISR, Embedded
 
+> Spec status: unverified · #205
+
 Async/await и генераторы — см. [10-async/](../10-async/)
 
 ## Уровни модели

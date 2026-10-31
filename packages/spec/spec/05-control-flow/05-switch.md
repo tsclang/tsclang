@@ -1,5 +1,7 @@
 ﻿## switch / case
 
+> Spec status: unverified · #205
+
 Синтаксис как в JS/TS. **Implicit fallthrough запрещён** — забытый `break` или `return` это ошибка компилятора.
 
 ```typescript

@@ -1,5 +1,7 @@
 ## Функции
 
+> Spec status: unverified · #205
+
 - Ключевое слово: `function`
   ```typescript
   function add(a: i32, b: i32): i32 {

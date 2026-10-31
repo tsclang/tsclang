@@ -1,5 +1,7 @@
 # Cleanup: Auto-Drop, Result+ARC, goto cleanup
 
+> Spec status: unverified · #205
+
 ## Автоматический Drop
 
 > Подробности по ClassName_free для классов — см. [07-classes-ownership.md](../07-classes/07-classes-ownership.md) (раздел «Классы с string-полями»). Async cleanup — см. [10-async-ownership.md](../10-async/10-async-ownership.md).

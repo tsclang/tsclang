@@ -1,5 +1,7 @@
 # Hello World
 
+> Spec status: verified @ 4ad8489d · 2026-10-31 · #205
+
 ```typescript
 console.log("Hello, TSClang!")
 ```
@@ -8,9 +10,12 @@ console.log("Hello, TSClang!")
 
 ```bash
 tsclang build hello.tsc --outDir out/
-cd out && cmake --build . && ./hello
+cmake -B out/build out/ && cmake --build out/build
+./out/build/hello
 # → Hello, TSClang!
 ```
+
+`tsclang build` генерирует `.c` + `CMakeLists.txt`, но не запускает cmake — configure нужно выполнить вручную (на Windows с Visual Studio бинарник окажется в `out/build/Debug/`, см. ниже).
 
 Упрощённый вариант (одна команда):
 

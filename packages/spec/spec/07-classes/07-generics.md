@@ -1,5 +1,7 @@
 ## Generics
 
+> Spec status: unverified · #205
+
 - **Монорфизация** — компилятор генерирует отдельный код для каждого конкретного типа:
   - `identity<i32>` → `identity_i32` в C
   - `identity<User>` → `identity_User` в C

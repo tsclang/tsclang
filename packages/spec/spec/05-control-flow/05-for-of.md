@@ -1,5 +1,7 @@
 ﻿## For-of цикл
 
+> Spec status: unverified · #205
+
 > **Подробная спецификация for-of** — в [05-for-of-iteration.md](05-for-of-iteration.md).
 
 `const`/`let` в for-of означают то же, что и везде в языке:

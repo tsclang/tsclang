@@ -1,5 +1,7 @@
 ﻿## match
 
+> Spec status: unverified · #205
+
 > Синтаксис соответствует [TC39 Pattern Matching proposal](https://github.com/tc39/proposal-pattern-matching) и ожидаемому TypeScript 7.
 
 Expression-based pattern matching. Возвращает значение, exhaustiveness проверяется компилятором.

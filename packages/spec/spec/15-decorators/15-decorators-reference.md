@@ -1,5 +1,7 @@
 ## Built-in decorators — quick reference
 
+> Spec status: unverified · #205
+
 Для каждого декоратора: что делает, где применяется, и что происходит **без** него.
 
 ---

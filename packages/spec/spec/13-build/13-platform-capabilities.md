@@ -1,5 +1,7 @@
 # TSClang — Platform Capabilities Design
 
+> Spec status: unverified · #205
+
 > Дата: 2026-06-05 (создание), 2026-06-06 (обновление v3), 2026-06-08 (обновление v4 — posix/strtoll)
 > Статус: APPROVED (все открытые вопросы закрыты)
 

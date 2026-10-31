@@ -1,5 +1,7 @@
 ## Decimal fixed-point types
 
+> Spec status: unverified · #205
+
 TSClang поддерживает десятичные типы с фиксированной точкой — для финансов, измерений и embedded-систем без FPU. Эти типы не требуют hardware FPU и обеспечивают точное представление десятичных дробей (без ошибок binary floating-point).
 
 ### Типы

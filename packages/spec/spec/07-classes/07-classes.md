@@ -1,5 +1,7 @@
 ﻿## Классы
 
+> Spec status: unverified · #205
+
 **Наследования нет** — только композиция. `extends` запрещён, **кроме одного исключения**: `class MyError extends Error` — прямой наследник `Error`. Цепочки запрещены: `class TimeoutError extends NetworkError` — ошибка компилятора. Полиморфизм — только через `interface` + `implements`.
 
 Для логической группировки ошибок — интерфейс:

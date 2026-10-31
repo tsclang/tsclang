@@ -1,5 +1,7 @@
 # 05b — Arc\<T\> и Weak\<T\>: ARC ownership
 
+> Spec status: unverified · #205
+
 `Arc<T>` и `Weak<T>` — не отдельные типы данных, а модификаторы схемы владения. Применяются только к классам (и массивам классов). Desktop-only: нет heap → нет ARC → нет shared ownership.
 
 ### Arc\<T\> — ARC ownership

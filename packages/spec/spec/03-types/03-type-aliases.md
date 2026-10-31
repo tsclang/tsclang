@@ -1,5 +1,7 @@
 ﻿## Type Aliases
 
+> Spec status: unverified · #205
+
 `type` — compile-time алиас, не генерирует новый тип в C:
 
 ```typescript

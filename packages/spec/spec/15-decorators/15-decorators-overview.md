@@ -1,5 +1,7 @@
 ## Built-in decorators overview
 
+> Spec status: unverified · #205
+
 TSClang имеет набор встроенных декораторов, которые всегда обрабатываются компилятором и не требуют импорта. Они влияют на codegen, ownership и платформенные ограничения.
 
 ### Class decorators

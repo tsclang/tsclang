@@ -1,5 +1,7 @@
 ## 2. a — string
 
+> Spec status: unverified · #205
+
 Строки — **immutable + ARC**. Не move, не чистый copy. Каждый владелец `String` struct делает `tsc_string_retain` при получении и `tsc_string_release` при потере значения.
 
 Литералы (`"hello"`) не выделяют heap: `capacity = 0`, `data → rodata`, `_refcount = NULL`. Для литералов retain/release — no-ops.

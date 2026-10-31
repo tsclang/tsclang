@@ -1,5 +1,7 @@
 # TSClang — std/hal: реализация
 
+> Spec status: unverified · #205
+
 > Детальная спецификация реализации `std/hal` (Hardware Abstraction Layer).
 > Реализовано (desktop mock + AVR platform profile spec).
 

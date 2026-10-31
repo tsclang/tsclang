@@ -1,5 +1,7 @@
 # Borrow: Ref\<T\>, Mut\<T\>, Borrow Checker, Scope Constraint
 
+> Spec status: unverified · #205
+
 ## Ref\<T\> — immutable borrow
 
 Только чтение, без изменения и удаления.
