@@ -231,6 +231,10 @@ interface DescribeContext {
   afterAll?: () => void
   beforeEach?: () => void
   afterEach?: () => void
+  /** Lazily set when beforeAll has run (it fires before the first test only) */
+  beforeAllRan?: boolean
+  /** Set when beforeAll threw — every test in the context fails with this */
+  beforeAllError?: string
 }
 
 let results: TestResult[] = []
@@ -422,7 +426,28 @@ export function file(path: string): string {
   return readFileSync(resolve(callerDir(), path), "utf8")
 }
 
-export function expect(actual: any) {
+/** Matchers available when actual is a function (assert on throwing). */
+export interface FunctionMatchers {
+  toThrow(ErrorClass?: any, codeOrSubstring?: string): void
+  not: { toThrow(): void }
+}
+
+/** Matchers available for value assertions. */
+export interface ValueMatchers {
+  toBe(expected: any): void
+  toBeGreaterThan(n: number): void
+  toBeLessThan(n: number): void
+  toContain(sub: string): void
+  toMatch(regex: string): void
+  toBeTruthy(): void
+  toBeFalsy(): void
+  toBeNull(): void
+  not: { toContain(sub: string): void }
+}
+
+export function expect(actual: (...args: any[]) => unknown): FunctionMatchers
+export function expect(actual: any): ValueMatchers
+export function expect(actual: any): FunctionMatchers | ValueMatchers {
   if (typeof actual === "function") {
     return {
       toThrow(ErrorClass?: any, codeOrSubstring?: string) {
@@ -473,9 +498,22 @@ export function describe(name: string, fn: () => void): void {
   currentDescribe = prev ? `${prev} > ${name}` : name
   const ctx: DescribeContext = { name }
   describeStack.push(ctx)
-  fn()
-  describeStack.pop()
-  currentDescribe = prev
+  try {
+    fn()
+  } finally {
+    describeStack.pop()
+    currentDescribe = prev
+    // afterAll fires at describe completion — even when the context has no
+    // tests (mirrors jest; beforeAll stays lazy, afterAll does not)
+    if (ctx.afterAll) {
+      try {
+        ctx.afterAll()
+      } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e))
+        results.push({ name: `${currentDescribe ? currentDescribe + " > " : ""}${name} > afterAll`, passed: false, error: err.message })
+      }
+    }
+  }
 }
 
 export function before(fn: () => void): void {
@@ -500,6 +538,25 @@ export function afterEach(fn: () => void): void {
 
 export function test(name: string, callback: () => void): void {
   const fullName = currentDescribe ? `${currentDescribe} > ${name}` : name
+
+  // Lazy beforeAll: fire once, right before the first test of each context
+  for (const ctx of describeStack) {
+    if (ctx.beforeAll && !ctx.beforeAllRan) {
+      ctx.beforeAllRan = true
+      try {
+        ctx.beforeAll()
+      } catch (e) {
+        ctx.beforeAllError = e instanceof Error ? e.message : String(e)
+      }
+    }
+  }
+  // A failed beforeAll poisons the context: tests fail with the setup error,
+  // callbacks and per-test hooks are skipped
+  const brokenSetup = describeStack.find(c => c.beforeAllError !== undefined)
+  if (brokenSetup) {
+    results.push({ name: fullName, passed: false, error: `beforeAll failed: ${brokenSetup.beforeAllError}` })
+    return
+  }
 
   // Вызвать beforeEach для всех describe в стеке
   for (const ctx of describeStack) { ctx.beforeEach?.() }

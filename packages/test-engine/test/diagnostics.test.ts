@@ -98,7 +98,7 @@ describe("failure diagnostics", () => {
   describe("real gcc backend — stderr is captured", () => {
     test("invalid C produces non-empty stderr", () => {
       const backend = getBackend("gcc")
-      if (!backend?.isAvailable()) return
+      if (!backend || !backend.isAvailable()) return
       const dir = mkdtempSync(join(tmpdir(), "tsc-diag-cc-"))
       try {
         const res = backend.compile("int main(void) { this is not C }", dir)
