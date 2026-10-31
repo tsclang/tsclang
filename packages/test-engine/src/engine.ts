@@ -2,7 +2,7 @@ import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs
 import { tmpdir } from "os"
 import { join, resolve, dirname } from "path"
 import { fileURLToPath } from "url"
-import { lex, parse, codegen, compileTsc, parsePlatformDecl } from "@tsclang/compiler"
+import { compileTsc, parsePlatformDecl } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
 
@@ -323,16 +323,11 @@ export function run(code: string, opts?: RunOptions): string {
     }
     let c: string
     try {
-      if (code.includes("import ")) {
-        const tmpFile = join(tmpDir, "test.tsc")
-        writeFileSync(tmpFile, code, "utf8")
-        c = compileTsc(tmpFile, codegenOpts).c
-      } else {
-        const tokens = lex(code, "<run>")
-        const { ast, errors } = parse(tokens, "<run>", code)
-        if (errors.length > 0) throw { isTscErrorBag: true, errors }
-        c = codegen(ast, "<run>", code, codegenOpts).c
-      }
+      // Unified semantics: always through compileTsc (temp file) — the full
+      // compiler pipeline resolves imports/aliases the raw path would skip
+      const tmpFile = join(tmpDir, "test.tsc")
+      writeFileSync(tmpFile, code, "utf8")
+      c = compileTsc(tmpFile, codegenOpts).c
     } catch (e: any) {
       if (e?.isTscErrorBag) {
         const msgs = e.errors.map((er: any) => er.code ? `[${er.code}] ${er.message || ''}` : (er.message || String(er)))
@@ -370,27 +365,22 @@ export function run(code: string, opts?: RunOptions): string {
 
 export function compile(codeOrPath: string): string {
   const codegenOpts: any = {}
-  // Check if input is a file path
-  const isFilePath = codeOrPath.endsWith('.tsc') || codeOrPath.includes('/') || codeOrPath.includes('\\')
-  if (isFilePath) {
-    const filePath = resolve(callerDir(), codeOrPath)
-    return compileTsc(filePath, codegenOpts).c
+  // Explicit .tsc path (resolved from the calling test file). Only the suffix
+  // identifies a path — '/'/'\\' checks false-positive on division and
+  // escapes inside code strings.
+  if (codeOrPath.endsWith(".tsc")) {
+    return compileTsc(resolve(callerDir(), codeOrPath), codegenOpts).c
   }
-  // Otherwise treat as inline code
-  if (codeOrPath.includes("import ")) {
-    const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-compile-"))
-    try {
-      const tmpFile = join(tmpDir, "test.tsc")
-      writeFileSync(tmpFile, codeOrPath, "utf8")
-      return compileTsc(tmpFile, codegenOpts).c
-    } finally {
-      try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
-    }
+  // Inline code: always through compileTsc — same pipeline as run(), so
+  // imports/aliases resolve regardless of what the code text contains
+  const tmpDir = mkdtempSync(join(tmpdir(), "tsclang-compile-"))
+  try {
+    const tmpFile = join(tmpDir, "test.tsc")
+    writeFileSync(tmpFile, codeOrPath, "utf8")
+    return compileTsc(tmpFile, codegenOpts).c
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch {}
   }
-  const tokens = lex(codeOrPath, "<compile>")
-  const { ast, errors } = parse(tokens, "<compile>", codeOrPath)
-  if (errors.length > 0) throw new TscCompilationError(errors[0].message)
-  return codegen(ast, "<compile>", codeOrPath, codegenOpts).c
 }
 
 const ENGINE_PATH = fileURLToPath(import.meta.url)

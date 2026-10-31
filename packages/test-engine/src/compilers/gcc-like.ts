@@ -3,7 +3,14 @@ import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
 import { C_STANDARD_FLAG, GCC_LINK_FLAGS, GCC_WARN_FLAGS, TSC_DEFINES, DEFAULT_OPTIMIZE_FLAG, DEBUG_FLAG, WIN32_LINK_FLAGS } from "@tsclang/shared"
 import { msys2Bash, toMsysPath, shQuote, bashExec } from "./msys2.js"
+import { DEFAULT_COMPILE_TIMEOUT_MS } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
+
+/** spawnSync reports a timeout as status=null + error=ETIMEDOUT — fold the
+ *  error text into stderr so a killed compile shows its reason. */
+function stderrOf(result: SpawnSyncReturns<Buffer>): string {
+  return (result.stderr?.toString() ?? "") + (result.error ? `\n${result.error}` : "")
+}
 
 export class GccLikeBackend implements CompilerBackend {
   readonly name: string
@@ -18,7 +25,7 @@ export class GccLikeBackend implements CompilerBackend {
       // With MSYS2 bash the toolchain may live only inside MSYS2, and a PATH
       // gcc still cannot run outside bash — probe through bash, not `where`.
       if (msys2Bash()) {
-        this.available = bashExec(`${shQuote(this.name)} --version`).status === 0
+        this.available = bashExec(`${shQuote(this.name)} --version`, 5_000).status === 0
       } else {
         const cmd = process.platform === "win32" ? "where" : "which"
         this.available = spawnSync(cmd, [this.name], { stdio: "pipe", shell: true }).status === 0
@@ -39,6 +46,8 @@ export class GccLikeBackend implements CompilerBackend {
       ? [...GCC_LINK_FLAGS, ...WIN32_LINK_FLAGS]
       : [...GCC_LINK_FLAGS]
 
+    const timeoutMs = opts?.timeoutMs ?? DEFAULT_COMPILE_TIMEOUT_MS
+
     let result: SpawnSyncReturns<Buffer>
     if (msys2Bash()) {
       // Windows: gcc requires the MSYS2 runtime — rebuild argv as a quoted
@@ -55,7 +64,7 @@ export class GccLikeBackend implements CompilerBackend {
       if (opts?.debug) words.push(DEBUG_FLAG)
       if (opts?.extraFlags) words.push(...opts.extraFlags)
       words.push(...linkFlags)
-      result = bashExec(words.join(" "))
+      result = bashExec(words.join(" "), timeoutMs)
     } else {
       const args = [cPath, "-o", binPath, C_STANDARD_FLAG, ...GCC_WARN_FLAGS]
       if (opts?.includes) {
@@ -68,13 +77,13 @@ export class GccLikeBackend implements CompilerBackend {
       if (opts?.debug) args.push(DEBUG_FLAG)
       if (opts?.extraFlags) args.push(...opts.extraFlags)
       args.push(...linkFlags)
-      result = spawnSync(this.name, args, { stdio: "pipe", shell: true })
+      result = spawnSync(this.name, args, { stdio: "pipe", shell: true, timeout: timeoutMs })
     }
 
     return {
       success: result.status === 0,
       binaryPath: result.status === 0 ? binPath : undefined,
-      stderr: result.stderr?.toString() ?? "",
+      stderr: stderrOf(result),
       exitCode: result.status ?? 1,
     }
   }
@@ -89,7 +98,7 @@ export class GccLikeBackend implements CompilerBackend {
       const result = bashExec(script, opts?.timeoutMs ?? 5000)
       status = result.status
       stdout = result.stdout?.toString() ?? ""
-      stderr = result.stderr?.toString() ?? ""
+      stderr = stderrOf(result)
     } else {
       const result = spawnSync(binaryPath, opts?.args ?? [], {
         stdio: "pipe",
@@ -98,7 +107,7 @@ export class GccLikeBackend implements CompilerBackend {
       })
       status = result.status
       stdout = result.stdout?.toString() ?? ""
-      stderr = result.stderr?.toString() ?? ""
+      stderr = stderrOf(result)
     }
 
     return {

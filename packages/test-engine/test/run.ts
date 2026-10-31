@@ -6,6 +6,7 @@ import "./file-param.test.ts"
 import "./hooks.test.ts"
 import "./expect-matchers.test.ts"
 import "./backends.test.ts"
+import "./hygiene.test.ts"
 import "./async.test.ts"
 import { printSummary } from "../src/engine.ts"
 

@@ -2,6 +2,10 @@ import { spawnSync, type SpawnSyncReturns } from "child_process"
 import { existsSync } from "fs"
 import { join } from "path"
 
+/** Default wall-clock budget for one C compilation. A hung compiler must
+ *  surface as a failed compile, not a stuck test run. */
+export const DEFAULT_COMPILE_TIMEOUT_MS = 30_000
+
 export function isInPath(name: string): boolean {
   const cmd = process.platform === "win32" ? "where" : "which"
   const result = spawnSync(cmd, [name], { stdio: "pipe", shell: true })

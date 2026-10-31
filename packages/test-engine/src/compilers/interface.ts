@@ -7,6 +7,8 @@ export interface CompileOpts {
   extraFlags?: string[]
   optimize?: boolean
   debug?: boolean
+  /** Wall-clock budget for the compilation; default 30s */
+  timeoutMs?: number
 }
 
 export interface CompileResult {

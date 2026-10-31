@@ -1,8 +1,14 @@
-import { spawnSync } from "child_process"
+import { spawnSync, type SpawnSyncReturns } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { findMsVC } from "./utils.js"
+import { findMsVC, DEFAULT_COMPILE_TIMEOUT_MS } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
+
+/** spawnSync reports a timeout as status=null + error=ETIMEDOUT — fold the
+ *  error text into stderr so a killed process shows its reason. */
+function stderrOf(result: SpawnSyncReturns<Buffer>): string {
+  return (result.stderr?.toString() ?? "") + (result.error ? `\n${result.error}` : "")
+}
 
 /** Parse cmd.exe `set` output into an env record.
  *  Skips cmd's dynamic `=X:=` pseudo-vars, blank lines and junk. */
@@ -71,12 +77,16 @@ export class MsvcBackend implements CompilerBackend {
     if (opts?.extraFlags) args.push(...opts.extraFlags)
 
     const env = this.env ? { ...process.env, ...this.env } : process.env
-    const result = spawnSync(this.clPath ?? "cl.exe", args, { stdio: "pipe", env })
+    const result = spawnSync(this.clPath ?? "cl.exe", args, {
+      stdio: "pipe",
+      env,
+      timeout: opts?.timeoutMs ?? DEFAULT_COMPILE_TIMEOUT_MS,
+    })
 
     return {
       success: result.status === 0,
       binaryPath: result.status === 0 ? binPath : undefined,
-      stderr: result.stderr?.toString() ?? "",
+      stderr: stderrOf(result),
       exitCode: result.status ?? 1,
     }
   }
@@ -90,7 +100,7 @@ export class MsvcBackend implements CompilerBackend {
     return {
       success: result.status === 0,
       stdout: result.stdout?.toString() ?? "",
-      stderr: result.stderr?.toString() ?? "",
+      stderr: stderrOf(result),
       exitCode: result.status ?? 1,
     }
   }
