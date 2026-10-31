@@ -17,7 +17,7 @@ describe('02-syntax/02-formatting — стрелочные функции', () =
       console.log(f(5))
     `)
     expect(result).toBe('6')
-  })
+  }, { xfail: '#209' })
 
   test('скобки всегда ok', () => {
     // KNOWN BUG (codegen): аналогично — нетипизированный параметр лямбды.
@@ -26,5 +26,5 @@ describe('02-syntax/02-formatting — стрелочные функции', () =
       console.log(f(5))
     `)
     expect(result).toBe('6')
-  })
+  }, { xfail: '#209' })
 })

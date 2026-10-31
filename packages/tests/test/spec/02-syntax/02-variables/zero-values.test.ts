@@ -99,7 +99,7 @@ describe('02-syntax/02-variables — zero-values', () => {
         console.log(x)
       `)
       expect(c).toBe('null')
-    })
+    }, { xfail: '#215' })
 
     test('Weak<T> без инициализатора → NULL', () => {
       const c = run(`
@@ -108,6 +108,6 @@ describe('02-syntax/02-variables — zero-values', () => {
         console.log(x)
       `)
       expect(c).toBe('null')
-    })
+    }, { xfail: '#215' })
   })
 })

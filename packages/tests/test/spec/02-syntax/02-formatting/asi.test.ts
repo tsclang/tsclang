@@ -20,7 +20,7 @@ describe('02-syntax/02-formatting — ASI', () => {
         [1, 2].forEach(x => console.log(x))
       `)
       expect(result).toBe('1\n2')
-    })
+    }, { xfail: '#210' })
 
     test('( на новой строке — вызов (ошибка)', () => {
       let threw = false
@@ -50,7 +50,7 @@ describe('02-syntax/02-formatting — ASI', () => {
         \`hello\`
       `) } catch { threw = true }
       expect(threw).toBe(true)
-    })
+    }, { xfail: '#211' })
 
     test('Template literal на новой строке — с ; разделяет', () => {
       // JS: template literal — expression statement без вывода
@@ -126,7 +126,7 @@ describe('02-syntax/02-formatting — ASI', () => {
         console.log(a)
       `)
       expect(result).toBe('6')
-    })
+    }, { xfail: '#212' })
 
     test('-- на новой строке', () => {
       // KNOWN BUG (parser): аналогично ++
@@ -136,7 +136,7 @@ describe('02-syntax/02-formatting — ASI', () => {
         console.log(a)
       `)
       expect(result).toBe('4')
-    })
+    }, { xfail: '#212' })
   })
 
   test('Унарные операторы требуют ;', () => {

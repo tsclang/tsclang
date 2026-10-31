@@ -85,7 +85,7 @@ console.log(x)`)
       expect(() => run(`
         let x: char = 256
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test("let x: char = 'ab'; → compile error (multi-char)", () => {
       expect(() => run(`

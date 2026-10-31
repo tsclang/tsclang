@@ -103,20 +103,22 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1858 case corpus (by input.tsc) + 222 spec-suite + 135 engine
+### Tests: 1858 case corpus (by input.tsc) + 222 spec-suite + 104 engine self-tests
 
 **Case corpus:** 1858 cases. Verified green 2026-10-31 (#205 audit): 02-syntax 127✓, 09-errors 47✓, 13-build 174✓ (runner counts CLI-section tests higher — multivariants). Full phased runs (П5) required before claiming all-green.
+
+**Engine self-tests (`packages/test-engine/test/`, `pnpm tsx packages/test-engine/test/run.ts`):** 97p/0f/5xf/2xp (104). The 2 xpass are intentional self-tests of the xpass path. Engine is THE primary testing mechanism (#206): collect-then-run (async), hooks with poison propagation, xfail markers, three-phase errors (TscCompilationError/CompileError/RuntimeError), 30s compile timeouts.
 
 **Spec audit (#205):** spec files carry `> Spec status:` markers (verified @ commit / unverified). 01-intro verified @ 4ad8489d. Chapter files + tests are the source of truth; #205 is the decision log. Rules: move keeps status; split → recheck seams.
 
 **Spec-suites (`packages/tests/test/spec/`, run via per-folder `run.ts`):**
 
-| Suite | Result | Known bugs |
-|-------|--------|-----------|
-| 02-syntax/02-variables | 150/162 | 12 (Arc crash, Weak E022, enum? zero, boolean↔number ×6, char range) |
-| 02-syntax/02-formatting | 52/60 | 8 (untyped lambda void* ×2, forEach f64→i32 macro, tagged template, ++/-- ASI glue ×2, anon-struct Array typedef, tsc_dtoa digits) |
+| Suite | Result | xfail (issue) |
+|-------|--------|---------------|
+| 02-syntax/02-variables | 150p/0f/12xf (162) | #208 no semantic checks ×9, #215 Arc/Weak zero-value ×2, #216 enum `?` sugar |
+| 02-syntax/02-formatting | 52p/0f/8xf (60) | #209 untyped arrow param ×2, #210 forEach macro, #211 tagged template, #212 ++/-- ASI ×2, #213 anon-struct Array typedef, #214 tsc_dtoa digits |
 
-Known failures carry `// KNOWN BUG (scope):` comments in tests. Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
+Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfailed`, excluded from pass/fail and exit code; XPASS prints loudly (marker → remove). Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
 
 | Section | Tests | Topic |
 |---------|-------|-------|

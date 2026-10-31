@@ -95,7 +95,7 @@ describe('02-syntax/02-formatting — перенос строки', () => {
       console.log(obj.arr[0] + obj.arr[1])
     `)
     expect(result).toBe('3')
-  })
+  }, { xfail: '#213' })
 
   test('перенос внутри выражения', () => {
     const result = run(`

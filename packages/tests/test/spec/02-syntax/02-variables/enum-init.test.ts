@@ -25,7 +25,7 @@ describe('02-syntax/02-variables — enum-init', () => {
         console.log(x)
       `)
       expect(c).toBe('0')
-    })
+    }, { xfail: '#216' })
 
     test('Enum с дырками (A=5, B=10) → compile error без инициализатора', () => {
       expect(() => run(`

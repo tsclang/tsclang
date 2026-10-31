@@ -18,7 +18,7 @@ describe('02-syntax/02-variables — type-mismatch', () => {
       expect(() => run(`
         let x: boolean = 1
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: boolean = "true"; → compile error', () => {
       expect(() => run(`
@@ -44,7 +44,7 @@ describe('02-syntax/02-variables — type-mismatch', () => {
       expect(() => run(`
         let x: u32 = 2.0
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: i64 = 2; → OK (integer literal)', () => {
       const c = run(`

@@ -18,5 +18,5 @@ describe('02-syntax/02-formatting — длина строки', () => {
       console.log(veryLongVariableNameThatExceedsRecommendedLineLength)
     `)
     expect(result).toBe('1.2345678901234568e+89')
-  })
+  }, { xfail: '#214' })
 })

@@ -6,25 +6,25 @@ describe('02-syntax/02-variables — invalid-values', () => {
       expect(() => run(`
         let x: i32 = true
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: i32 = false; → compile error', () => {
       expect(() => run(`
         let x: i32 = false
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: u8 = true; → compile error', () => {
       expect(() => run(`
         let x: u8 = true
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: f64 = true; → compile error', () => {
       expect(() => run(`
         let x: f64 = true
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
   })
 
   describe('10.2. String как значение для числовых типов', () => {
@@ -52,13 +52,13 @@ describe('02-syntax/02-variables — invalid-values', () => {
       expect(() => run(`
         let x: boolean = 42
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: boolean = 0; → compile error', () => {
       expect(() => run(`
         let x: boolean = 0
       `)).toThrow()
-    })
+    }, { xfail: '#208' })
 
     test('let x: boolean = "hello"; → compile error', () => {
       expect(() => run(`
