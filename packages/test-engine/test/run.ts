@@ -4,6 +4,7 @@ import "./pipeline.test.ts"
 import "./diagnostics.test.ts"
 import "./file-param.test.ts"
 import "./hooks.test.ts"
+import "./expect-matchers.test.ts"
 import "./backends.test.ts"
 import { printSummary } from "../src/engine.ts"
 

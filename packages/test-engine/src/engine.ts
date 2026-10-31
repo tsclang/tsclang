@@ -432,6 +432,20 @@ export interface FunctionMatchers {
   not: { toThrow(): void }
 }
 
+/** Matchers available for value assertions, inverted polarity. */
+export interface ValueNotMatchers {
+  toBe(expected: any): void
+  toBeGreaterThan(n: number): void
+  toBeLessThan(n: number): void
+  toContain(sub: string): void
+  toMatch(regex: string): void
+  toBeTruthy(): void
+  toBeFalsy(): void
+  toBeNull(): void
+  toBeCloseTo(expected: number, precision?: number): void
+  toBeNaN(): void
+}
+
 /** Matchers available for value assertions. */
 export interface ValueMatchers {
   toBe(expected: any): void
@@ -442,7 +456,31 @@ export interface ValueMatchers {
   toBeTruthy(): void
   toBeFalsy(): void
   toBeNull(): void
-  not: { toContain(sub: string): void }
+  toBeCloseTo(expected: number, precision?: number): void
+  toBeNaN(): void
+  not: ValueNotMatchers
+}
+
+/** NaN as printed by C printf: "nan", "NaN", "-nan", "nan(ind)" (MSVC). */
+const NAN_OUTPUT = /^-?nan(\([a-z0-9]+\))?$/i
+/** A full numeric literal (no trailing junk) — stricter than parseFloat. */
+const NUMERIC_OUTPUT = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/
+
+/** Parse stdout as a number or fail with a readable message. */
+function numberOutput(s: string): number {
+  const v = s.trim()
+  if (!NUMERIC_OUTPUT.test(v)) throw new Error(`expected a number but got "${s}"`)
+  return Number(v)
+}
+
+/** Language truthiness applied to captured stdout (spec 03-types/03-truthy-falsy.md):
+ *  falsy = null, "", any numeric zero, false, NaN. Everything else is truthy. */
+function isFalsyOutput(s: string): boolean {
+  const v = s.trim()
+  if (v === "" || v === "null" || v === "false") return true
+  if (NAN_OUTPUT.test(v)) return true
+  if (NUMERIC_OUTPUT.test(v)) return Number(v) === 0
+  return false
 }
 
 export function expect(actual: (...args: any[]) => unknown): FunctionMatchers
@@ -474,18 +512,35 @@ export function expect(actual: any): FunctionMatchers | ValueMatchers {
   const s = String(actual)
   return {
     toBe(expected: any) { if (s !== String(expected)) throw new Error(`expected "${String(expected)}" but got "${s}"`) },
-    toBeGreaterThan(n: number) { if (parseFloat(s) <= n) throw new Error(`expected ${s} > ${n}`) },
-    toBeLessThan(n: number) { if (parseFloat(s) >= n) throw new Error(`expected ${s} < ${n}`) },
+    toBeGreaterThan(n: number) { if (numberOutput(s) <= n) throw new Error(`expected ${s} > ${n}`) },
+    toBeLessThan(n: number) { if (numberOutput(s) >= n) throw new Error(`expected ${s} < ${n}`) },
     toContain(sub: string) { if (!s.includes(sub)) throw new Error(`expected "${s}" to contain "${sub}"`) },
     toMatch(regex: string) { if (!new RegExp(regex).test(s)) throw new Error(`expected "${s}" to match ${regex}`) },
-    toBeTruthy() { if (!s || s === "0" || s === "false") throw new Error(`expected truthy but got "${s}"`) },
-    toBeFalsy() { if (s && s !== "0" && s !== "false") throw new Error(`expected falsy but got "${s}"`) },
+    toBeTruthy() { if (isFalsyOutput(s)) throw new Error(`expected truthy but got "${s}"`) },
+    toBeFalsy() { if (!isFalsyOutput(s)) throw new Error(`expected falsy but got "${s}"`) },
     toBeNull() { if (s !== "null") throw new Error(`expected null but got "${s}"`) },
+    toBeNaN() { if (!NAN_OUTPUT.test(s.trim())) throw new Error(`expected NaN but got "${s}"`) },
+    toBeCloseTo(expected: number, precision = 2) {
+      const actualNum = numberOutput(s)
+      if (Math.abs(actualNum - expected) >= Math.pow(10, -precision) / 2)
+        throw new Error(`expected "${s}" to be close to ${expected} (precision ${precision})`)
+    },
     get not() {
-      const self = this
       return {
+        toBe(expected: any) { if (s === String(expected)) throw new Error(`expected "${s}" not to be "${String(expected)}"`) },
+        toBeGreaterThan(n: number) { if (numberOutput(s) > n) throw new Error(`expected ${s} not to be greater than ${n}`) },
+        toBeLessThan(n: number) { if (numberOutput(s) < n) throw new Error(`expected ${s} not to be less than ${n}`) },
         toContain(sub: string) { if (s.includes(sub)) throw new Error(`expected "${s}" not to contain "${sub}"`) },
-        toThrow() { /* handled above */ }
+        toMatch(regex: string) { if (new RegExp(regex).test(s)) throw new Error(`expected "${s}" not to match ${regex}`) },
+        toBeTruthy() { if (!isFalsyOutput(s)) throw new Error(`expected falsy but got "${s}"`) },
+        toBeFalsy() { if (isFalsyOutput(s)) throw new Error(`expected truthy but got "${s}"`) },
+        toBeNull() { if (s === "null") throw new Error(`expected "${s}" not to be "null"`) },
+        toBeNaN() { if (NAN_OUTPUT.test(s.trim())) throw new Error(`expected "${s}" not to be NaN`) },
+        toBeCloseTo(expected: number, precision = 2) {
+          const actualNum = numberOutput(s)
+          if (Math.abs(actualNum - expected) < Math.pow(10, -precision) / 2)
+            throw new Error(`expected "${s}" not to be close to ${expected} (precision ${precision})`)
+        }
       }
     }
   }
