@@ -1,0 +1,2 @@
+// fixture for file-param tests — content is asserted verbatim
+console.log(42)

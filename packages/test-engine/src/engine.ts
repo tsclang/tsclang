@@ -1,6 +1,7 @@
 import { writeFileSync, mkdtempSync, rmSync, existsSync, readFileSync } from "fs"
 import { tmpdir } from "os"
-import { join, resolve } from "path"
+import { join, resolve, dirname } from "path"
+import { fileURLToPath } from "url"
 import { lex, parse, codegen, compileTsc, parsePlatformDecl } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
@@ -358,7 +359,7 @@ export function compile(codeOrPath: string): string {
   // Check if input is a file path
   const isFilePath = codeOrPath.endsWith('.tsc') || codeOrPath.includes('/') || codeOrPath.includes('\\')
   if (isFilePath) {
-    const filePath = resolve(codeOrPath)
+    const filePath = resolve(callerDir(), codeOrPath)
     return compileTsc(filePath, codegenOpts).c
   }
   // Otherwise treat as inline code
@@ -378,8 +379,47 @@ export function compile(codeOrPath: string): string {
   return codegen(ast, "<compile>", codeOrPath, codegenOpts).c
 }
 
+const ENGINE_PATH = fileURLToPath(import.meta.url)
+
+/** Extract an absolute .ts path from a stack frame location, or null.
+ *  Handles both ESM frames (file:///C:/...) and CJS/tsx frames (C:\...). */
+function framePath(loc: string): string | null {
+  let s = loc
+  if (s.startsWith("file://")) {
+    try {
+      s = fileURLToPath(s)
+    } catch {
+      return null
+    }
+  }
+  s = s.replace(/:\d+(:\d+)?$/, "")
+  if (!/\.ts$/.test(s)) return null
+  // must be absolute: Windows drive, UNC, or POSIX root
+  if (!/^([A-Za-z]:[\\/]|\/|\\\\)/.test(s)) return null
+  return s
+}
+
+/** Directory of the first stack frame outside this module — i.e. the file
+ *  that called file()/compile(). Paths resolve against it, so process.cwd()
+ *  (and pnpm --filter package-dir cwd) never matters. Falls back to cwd when
+ *  no source frame is found (exotic transpiled callers). */
+function callerDir(): string {
+  const stack = new Error().stack ?? ""
+  for (const rawLine of stack.split("\n")) {
+    const line = rawLine.trim()
+    if (!line.startsWith("at ")) continue
+    // frames: "at fn (loc)" | "at fn loc" | "at loc" — loc may or may not be parenthesized
+    const paren = line.match(/\(([^)]+)\)/)
+    const inner = paren ? paren[1] : line.slice(3).trim()
+    const p = framePath(inner)
+    if (!p || p === ENGINE_PATH) continue
+    return dirname(p)
+  }
+  return process.cwd()
+}
+
 export function file(path: string): string {
-  return require("fs").readFileSync(resolve(path), "utf8")
+  return readFileSync(resolve(callerDir(), path), "utf8")
 }
 
 export function expect(actual: any) {
