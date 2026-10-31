@@ -266,7 +266,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       };
       const uType = unsignedType[targetRank];
       const sType = signedType[targetRank];
-      return `(${sType})(${uType}${l} >> ${r})`;
+      return `(${sType})((${uType})${l} >> ${r})`;
     }
 
     const bitwiseOps = ['&', '|', '^', '<<', '>>'];
