@@ -1,6 +1,6 @@
 # CONTEXT.md — TSClang Internal Knowledge Base
 
-> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-07-11.
+> **Purpose:** Self-contained knowledge dump for AI sessions. Read this FIRST. Last updated: 2026-10-31.
 
 ---
 
@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1932 spec-based tests (`--no-gcc`) + 166 engine tests
+- **Tests:** 1875 case corpus + 544 spec-suite (3 suites) + 158 engine self-tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -25,7 +25,7 @@ input.tsc → lexer.ts → parser.ts → semantics.ts → [optimizer.ts] → cod
 
 **Entry points:** `codegen()` in `codegen.ts:26`, `compileTsc()` in `compile.ts` (recursive imports).
 
-**Semantic pass (#208, `semantics.ts`):** runs in `compileTsc()` after parsing, **before codegen and before the artifact cache**. Two namespaces: type space (file-level set, hoisted, position-insensitive) + value space (scope chain, TDZ positional check, `var` hoists to function scope, nested-fn deferred execution bypasses TDZ). Codes: E121 unknown type, E122 undeclared ident (incl. TDZ), E123 duplicate decl (overload sets + interface/class merging legal, first binding wins), E124 literal/annotation mismatch (kind mismatch only; fractional value → E100, int range → E101, char string length → E102 stay in codegen). Allowlists: `BUILTIN_TYPE_NAMES` / `BUILTIN_VALUE_NAMES` (wrapper ctors, numeric namespaces `i32.parse`, utility types). Max 10 errors. Throws standard error bag (`isTscErrorBag`). `strict: ['safe-math']` pre-declares `MathError` type.
+**Semantic pass (#208, `semantics.ts`):** runs in `compileTsc()` after parsing, **before codegen and before the artifact cache**. Two namespaces: type space (file-level set, hoisted, position-insensitive) + value space (scope chain, TDZ positional check, `var` hoists to function scope, nested-fn deferred execution bypasses TDZ). Codes: E121 unknown type, E122 undeclared ident (incl. TDZ), E123 duplicate decl (overload sets + interface/class merging legal, first binding wins), E124 literal/annotation mismatch (kind mismatch only; fractional value → E100, int range → E101, char string length → E102 stay in codegen; target `number` IS checked — it is not in PRIMITIVE_MAP, explicit branch, `let x: number = true` → E124). Allowlists: `BUILTIN_TYPE_NAMES` / `BUILTIN_VALUE_NAMES` (wrapper ctors, numeric namespaces `i32.parse`, utility types). Max 10 errors. Throws standard error bag (`isTscErrorBag`). `strict: ['safe-math']` pre-declares `MathError` type.
 
 **Pre-scan:** Populates `this.classes`, `this.interfaces`, function signatures before body codegen.
 
@@ -105,11 +105,11 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1858 case corpus (by input.tsc) + 222 spec-suite + 104 engine self-tests
+### Tests: 1875 case corpus (by input.tsc) + 544 spec-suite + 158 engine self-tests
 
-**Case corpus:** 1858 cases. Full phased run 2026-10-31 (#208 semantic pass merged, dist build clean): 02-syntax 127✓, 03-types 538/539, 04-ownership 117✓, 05-control-flow 53✓, 06-functions 65/66, 07-classes 45✓, 08-collections 236✓, 09-errors 47✓, 10-async 82/83, 11-concurrency 44✓, 12-modules 28✓, 13-build 174✓, 14-stdlib 302✓, 15-decorators 22✓, 16-tooling 45✓, book 4✓ (runner-side sum 1932 — multivariants counted higher than case count). The 3 failures are **pre-existing, baseline-verified** (stash-cycle): `03-types/widening/warn-not-array` [gcc], `06-functions/function-values/store-in-var` [c-compare, since 42532ebc console closure print], `10-async/async-fn/warn-async-recursion` [gcc] — separate bug issues filed. `12-modules` warn-native-block/warn-unsafe-block were broken test data since #179 (main never called `run()`, wrong expected.out) — fixed in #208 commit.
+**Case corpus:** 1875 cases. Phased reruns 2026-10-31 (bigint #220 + isize/usize/number fixes, dist build clean): 02-syntax 127✓, 03-types 556✓, 05-control-flow 53✓, 06-functions 66✓ (04/07–16 phases were green earlier the same day after #220; rerun on next full sweep). All three former baseline failures are resolved: `03-types/widening/warn-not-array` fixed in dd2a8348 (#226), `10-async/async-fn/warn-async-recursion` replaced by `err-async-recursion` E307 in 5b0d9a86 (#228), `06-functions/function-values/store-in-var` turned green after the #227 closure-inferCall fix (3970fde3). `12-modules` warn-native-block/warn-unsafe-block were broken test data since #179 — fixed in #208 commit.
 
-**Engine self-tests (`packages/test-engine/test/`, `pnpm tsx packages/test-engine/test/run.ts`):** 97p/0f/5xf/2xp (104). The 2 xpass are intentional self-tests of the xpass path. Engine is THE primary testing mechanism (#206): collect-then-run (async), hooks with poison propagation, xfail markers, three-phase errors (TscCompilationError/CompileError/RuntimeError), 30s compile timeouts.
+**Engine self-tests (`packages/test-engine/test/`, `pnpm tsx packages/test-engine/test/run.ts`):** 151p/0f/5xf/2xp (158; +7 matrix structural tests in `matrix.test.ts`). The 2 xpass are intentional self-tests of the xpass path. Engine is THE primary testing mechanism (#206): collect-then-run (async), hooks with poison propagation, xfail markers, three-phase errors (TscCompilationError/CompileError/RuntimeError), 30s compile timeouts.
 
 **Spec audit (#205):** spec files carry `> Spec status:` markers (verified @ commit / unverified). 01-intro verified @ 4ad8489d. Chapter files + tests are the source of truth; #205 is the decision log. Rules: move keeps status; split → recheck seams.
 
@@ -117,8 +117,9 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 | Suite | Result | xfail (issue) |
 |-------|--------|---------------|
-| 02-syntax/02-variables | 186p/0f/3xf (189) | #208 semantic checks landed (9 xfail → real E-tests in `semantic-errors.test.ts`); #215 Arc/Weak zero-value ×2, #216 enum `?` sugar ×1 |
+| 02-syntax/02-variables | 280p/0f/3xf (283) | 3 literal-case files are **matrix-driven** (#223): range/invalid/alt-literals iterate `test-engine/src/matrix.ts` (anchors 8.x per type, 9.x by radix, 10.x per type); #215 Arc/Weak zero-value ×2, #216 enum `?` sugar ×1 |
 | 02-syntax/02-formatting | 52p/0f/8xf (60) | #209 untyped arrow param ×2, #210 forEach macro, #211 tagged template, #212 ++/-- ASI ×2, #213 anon-struct Array typedef, #214 tsc_dtoa digits |
+| 03-types/cast-pairs | 201p/0f (201) | 14×14 numeric `as`-cast pairs (desktop gcc, self-casts included) + 5 avr samples gated on avr-gcc availability; expectations probed, zero cast bugs found |
 
 Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfailed`, excluded from pass/fail and exit code; XPASS prints loudly (marker → remove). Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
 
@@ -142,8 +143,8 @@ Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfaile
 ### Project tracking
 
 - **Branch:** `develop` on `https://github.com/tsclang/tsclang.git`
-- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #205 (spec audit — deferred to separate session), #207 (test-engine v2 P1: C-snapshot/platform-matrix/parallelism)
-- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning), #179 (warnings), #180 (decimal types), #206 (test-engine repair), #208 (semantic checks E121–E124)
+- **Open:** #23, #30–#31 (IR), #32 (bindgen), #33 (QNX), #47–#50 (self-hosting), #72–#82 (epics), #178 (AsyncMutex), #205 (spec audit — deferred to separate session), #207 (test-engine v2 P1: C-snapshot/platform-matrix/parallelism), #228 (recursive async → heap state machines, E307 interim)
+- **Closed:** #66, #67 (throws on methods), #69 (saturatingCast), #101 (no-lossy-cast + safe alternatives), #111 (Number.*), #132–#137 (test engine), #149 (monorepo consolidation), #150–#152 (Phase 2 typing), #153–#165 (Phase 2.4 functional passes — Variant E), #166–#172 (pre-existing test failures + Phase 2.4 Step 0), #173 (named fn .map() type inference), #174 (string concat 2-op leak + Return cleanup flush), #175 (escaping closure ref/mut compile error), #176 (recursive + mutual type alias forward declaration), #177 (run.ts warning print + expected.no-warning), #179 (warnings), #180 (decimal types), #206 (test-engine repair), #208 (semantic checks E121–E124), #220 (bigint n-suffix literals, fed0d08a), #223 (value matrix v2 + suites, b4da8132/10ca689b/d73b024e), #224 (isize %d truncation, da31f22b), #225 (usize range check, cd45699c), #226 (truthy !array invalid C, dd2a8348), #227 (closure inferCall ret type, 3970fde3), #229 (isize range check, 9c5049ca). Bonus fix without issue: `number`-target literal checks in semantics (cc63e4ce).
 
 ---
 
@@ -169,7 +170,7 @@ Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfaile
 - **`_postStmtCleanups` in Return.** All Return paths in `control-flow.ts` now call `_flushPostStmtCleanups` before the actual return. Previously, temps created during return expression evaluation (e.g. string concat with non-String operand) were leaked. If adding new Return paths, always flush post-stmt cleanups before the return.
 - **Named fn callbacks in `.map()`.** `infer.ts` handles both `Arrow` and `Ident` callbacks. Codegen (`_extractCallbackFn`) already worked — only type inference needed the fix. String array callbacks still have calling convention mismatch (macro passes `String *`, named fn takes `String` by value) — use arrow functions for string arrays.
 - **Spec-suites gotchas (02-syntax).** Import engine as `@tsclang/test-engine` (NOT `@tslang` — dead name from early commits). Each folder needs `run.ts` entry + `printSummary()` — without it `expect` failures are swallowed (test() catches, exit 0). Engine `run()` normalizes CRLF → LF (Windows text-mode stdout). Console prints closure as `null`/`[Function]` (console.ts). Default init: pointer ctypes get `= NULL`, structs `{0}` (vardecl.ts `_visitVarDecl`).
-- **Parser recovery debris (matters for `semantics.ts`).** `keyof T` in value position → `Ident('keyof')` + stray `ExprStmt(Ident)`: skip Ident `keyof`, skip bare ExprStmt of known type names. BigInt suffix `1000000000000n` → number `1000000000000` + stray `Ident('n')` (parse bug, open issue) — corpus tests avoid `n` suffixes. Destructuring patterns from parser are FLAT, not AST-typed: import `names` = plain strings, obj pattern = `{name, alias?, defaultVal?}[]`, arr pattern = `{name?, rest?}[]|null`, ForOf binding = `{kind:'Ident'|'ObjPattern'|'ArrayPattern', ...}` — use `declarePatternItems()` in semantics.ts, don't switch on AST kinds. Match patterns: `MatchObjLit {discriminators, fields: string[]}`, `MatchClass {className, fields}`, `MatchTuple {elements}` with `MatchIdent {name}`.
+- **Parser recovery debris (matters for `semantics.ts`).** `keyof T` in value position → `Ident('keyof')` + stray `ExprStmt(Ident)`: skip Ident `keyof`, skip bare ExprStmt of known type names. BigInt `n`-suffix literals are FULLY supported since #220 (lexer TK.BIGINT → ast `litType:'bigint'` → i64/u64 only; type-position/enum/match patterns rejected by parser; E124 elsewhere) — the old "number + stray Ident('n')" parse bug is gone. Destructuring patterns from parser are FLAT, not AST-typed: import `names` = plain strings, obj pattern = `{name, alias?, defaultVal?}[]`, arr pattern = `{name?, rest??}[]|null`, ForOf binding = `{kind:'Ident'|'ObjPattern'|'ArrayPattern', ...}` — use `declarePatternItems()` in semantics.ts, don't switch on AST kinds. Match patterns: `MatchObjLit {discriminators, fields: string[]}`, `MatchClass {className, fields}`, `MatchTuple {elements}` with `MatchIdent {name}`.
 - **`declare function` returning `Promise<T>`** now emits the `Promise_T` typedef via `_emitPromiseTypedef` in `visitDeclareFunction` (dispatch.ts) — nothing else emits it for bodyless externs, and the extern line alone doesn't compile.
 
 ---
@@ -207,6 +208,7 @@ Module map (all under `packages/cli/src/cli/`): `args.ts`, `help.ts`, `helpers.t
 ## 12. Test Engine (`packages/test-engine/`)
 
 - **API:** describe, test, expect (matchers), hooks (beforeEach/afterEach), 4-phase pipeline. `test(name, fn, { xfail: '#NNN' })`, `test.only/skip`, filter via `run.ts <substring>` / `TSC_TEST_FILTER`, JSON report (`--json[=path]` / `TSC_TEST_JSON`) with toolchain env (#207 P0)
+- **Value matrix (`src/matrix.ts`, #223):** the single source of truth for per-type literal cases — `TypeCases { type, min?, max?, valid[], outOfRange[], invalidValues[], altLiterals[] }`, ALL values as string pairs (d8 `0` → `"0.00"`, u64 max via `n`-literal are not JS numbers). i64/u64 bounds are honest n-literals (post-#220); usize max is a plain literal (n-suffix is E124 for anything but i64/u64); usize `-1`/isize overflow are E101 (post-#225/#229); multi-char strings into char/u8 are E102. Every entry verified against desktop gcc (170-case probe) before extraction; `matrix.test.ts` guards structure. `filterValidTypes` lives here too (printf-safe types per profile: i16 deliberately stays at bits:8 — avr-gcc int is 16-bit). engine.ts re-exports both.
 - **`toMatchC(expectedC?)` (#207 P1.5):** normalizeC() both sides; no-arg = file snapshots (`__c-snapshots__/<file>.jsonl` next to the test file, key = full test name; missing entry created, `TSC_SNAPSHOT_UPDATE=1` rewrites). Under `CI=true` a missing snapshot **fails** instead of being created (fresh checkout must not pass on an empty store); explicit update works under CI too. Secondary mode for codegen details invisible to behavior. `not.toMatchC` — inline only.
 - **Backends:** gcc (MSYS2 on Windows), clang, msvc, avr-gcc, wasm (pluggable). Pure arg-builders exported for toolchain-free unit tests: `buildAvrCompileArgs` / `buildSimavrArgs` / `normalizeSimavrOut` (avr-gcc.ts), `buildEmccArgs` (wasm.ts — always `-DTSC_WASM -sWASM=1 -sSTANDALONE_WASM=1`, CLI `--emit wasm` parity). `mcu`/`freq` flow RunOptions → CompileOpts+RunOpts (#207 P1.6). Every spawn has a wall-clock timeout (compile 30s, run `timeoutMs` default 5s).
 - **run() = CLI parity for C defines:** the target profile's `capabilityDefines()` go to `backend.compile()` exactly like `tsclang build` (avr: `TSC_NO_POSIX`, `TSC_NO_STRTOLL`, `TSC_CONSOLE_UART`, `TSC_CONSOLE_BAUD=9600`). AVR e2e therefore needs BOTH `target: "avr"` and `compiler: "avr-gcc"` — without the profile the UART console never inits and simavr sees no output. avr-gcc backend adds only toolchain constants (`-mmcu=`, `-Os`, `-DTSC_EMBEDDED`).
