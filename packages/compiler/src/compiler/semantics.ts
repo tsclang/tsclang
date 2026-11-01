@@ -756,7 +756,10 @@ class SemanticChecker {
   private checkInitMismatch(node: Pos, name: string, typeAnn: TypeAnn | null | undefined, init: Expression | null | undefined): void {
     if (!typeAnn || typeAnn.kind !== 'TypeRef' || !init) return;
     const target = typeAnn.name;
-    if (!isPrimitive(target)) return;
+    // 'number' is not in PRIMITIVE_MAP (it resolves via defaultNumber), but
+    // it is still a primitive target: 'let x: number = true' must be E124
+    // (TS2322 parity), not fall through to codegen as `double x = true`
+    if (target !== 'number' && !isPrimitive(target)) return;
     // any/unknown accept every literal kind by design.
     if (target === 'any' || target === 'unknown') return;
 

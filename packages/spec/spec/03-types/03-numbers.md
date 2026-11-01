@@ -123,6 +123,8 @@ const n64: i64 = n      // неявно — без потерь
   const d = 1.0;         // error: float literal not supported (fpu: false)
   ```
 
+  `number` принимает только числовые литералы: `let x: number = true` / `= "hello"` / `= 42n` → error[E124] (как в TS — TS2322).
+
 - **Performance warnings на 8-bit таргетах (AVR, NES) — W011**
 
   На `"target": "avr"` компилятор выдаёт предупреждения для типов, которые дороги на 8-bit ALU:
