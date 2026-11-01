@@ -1,95 +1,20 @@
-import { describe, test, run, expect, TscCompilationError } from "../../../../../test-engine/src/engine.ts"
+import { describe, test, run, expect, TscCompilationError, matrix } from "../../../../../test-engine/src/engine.ts"
+
+// Invalid values — matrix-driven: wrong-type initializers come from every
+// type's invalidValues in the value matrix. Section anchors 10.1–10.20 follow
+// the matrix order (mirroring the 8.x series of range-values).
+let anchor = 0
 
 describe('02-syntax/02-variables — invalid-values', () => {
-  describe('10.1. Boolean как значение для числовых типов', () => {
-    test('let x: i32 = true; → compile error', () => {
-      expect(() => run(`
-        let x: i32 = true
-      `)).toThrow(TscCompilationError, 'E124')
+  for (const [key, tc] of Object.entries(matrix)) {
+    anchor++
+    describe(`10.${anchor}. ${key} — wrong-type initializers`, () => {
+      for (const [src, code] of tc.invalidValues) {
+        const expected = code ? `→ ${code}` : '→ compile error'
+        test(`let x: ${key} = ${src} ${expected}`, () => {
+          expect(() => run(`let x: ${key} = ${src}`)).toThrow(TscCompilationError, code)
+        })
+      }
     })
-
-    test('let x: i32 = false; → compile error', () => {
-      expect(() => run(`
-        let x: i32 = false
-      `)).toThrow(TscCompilationError, 'E124')
-    })
-
-    test('let x: u8 = true; → compile error', () => {
-      expect(() => run(`
-        let x: u8 = true
-      `)).toThrow(TscCompilationError, 'E124')
-    })
-
-    test('let x: f64 = true; → compile error', () => {
-      expect(() => run(`
-        let x: f64 = true
-      `)).toThrow(TscCompilationError, 'E124')
-    })
-  })
-
-  describe('10.2. String как значение для числовых типов', () => {
-    test('let x: i32 = "hello"; → compile error', () => {
-      expect(() => run(`
-        let x: i32 = "hello"
-      `)).toThrow()
-    })
-
-    test('let x: u8 = "hello"; → compile error', () => {
-      expect(() => run(`
-        let x: u8 = "hello"
-      `)).toThrow()
-    })
-
-    test('let x: f64 = "hello"; → compile error', () => {
-      expect(() => run(`
-        let x: f64 = "hello"
-      `)).toThrow()
-    })
-  })
-
-  describe('10.3. Числа/строки как значение для boolean', () => {
-    test('let x: boolean = 42; → compile error', () => {
-      expect(() => run(`
-        let x: boolean = 42
-      `)).toThrow(TscCompilationError, 'E124')
-    })
-
-    test('let x: boolean = 0; → compile error', () => {
-      expect(() => run(`
-        let x: boolean = 0
-      `)).toThrow(TscCompilationError, 'E124')
-    })
-
-    test('let x: boolean = "hello"; → compile error', () => {
-      expect(() => run(`
-        let x: boolean = "hello"
-      `)).toThrow()
-    })
-
-    test('let x: boolean = ""; → compile error', () => {
-      expect(() => run(`
-        let x: boolean = ""
-      `)).toThrow()
-    })
-  })
-
-  describe('10.4. Числа/boolean как значение для string', () => {
-    test('let x: string = 42; → compile error', () => {
-      expect(() => run(`
-        let x: string = 42
-      `)).toThrow()
-    })
-
-    test('let x: string = true; → compile error', () => {
-      expect(() => run(`
-        let x: string = true
-      `)).toThrow()
-    })
-
-    test('let x: string = false; → compile error', () => {
-      expect(() => run(`
-        let x: string = false
-      `)).toThrow()
-    })
-  })
+  }
 })
