@@ -114,6 +114,10 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
       'uint16_t': { min: 0n,                       max: 65535n,                  ts: 'u16' },
       'uint32_t': { min: 0n,                       max: 4294967295n,             ts: 'u32' },
       'uint64_t': { min: 0n,                       max: 18446744073709551615n,   ts: 'u64' },
+      // size_t: usize with the u64 profile — the only profile where usize
+      // resolves to size_t (u8/u16/u32 profiles map to uint8/16/32_t above).
+      // Width comes from the pointer size so exotic profiles stay honest.
+      'size_t':   { min: 0n,                       max: 256n ** BigInt(ctx._ptrBytes()) - 1n, ts: 'usize' },
     };
 
     // Decimal types: check scaled value against raw integer range
