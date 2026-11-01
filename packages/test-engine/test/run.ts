@@ -2,6 +2,7 @@
 // Run: pnpm tsx packages/test-engine/test/run.ts  (from repo root)
 import "./run-pipeline.test.ts"
 import "./engine-api.test.ts"
+import "./matrix.test.ts"
 import "./to-throw.test.ts"
 import "./diagnostics.test.ts"
 import "./file-param.test.ts"

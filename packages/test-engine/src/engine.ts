@@ -5,10 +5,12 @@ import { fileURLToPath } from "url"
 import { compileTsc, parsePlatformDecl, capabilityDefines } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
 import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
+import { matrix, filterValidTypes } from "./matrix.js"
 
 registerAll()
 
 export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec }
+export { matrix, filterValidTypes }
 
 /** Target profile → backend able to compile AND run code for that platform.
  *  backend: null means no backend/simulator is registered for the real
@@ -52,188 +54,8 @@ export const platformMatrix = {
   compilers: ["gcc", "clang", "msvc", "avr-gcc", "wasm"],
 }
 
-const ALL_NUMERIC_TYPES = ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "d8", "d16", "d32", "d64"]
-
-export function filterValidTypes(caps: { fpu?: boolean; bits?: number }): string[] {
-  let types = [...ALL_NUMERIC_TYPES]
-  if (caps.fpu === false) {
-    types = types.filter(t => t !== "f32" && t !== "f64")
-  }
-  if (caps.bits !== undefined && caps.bits < 64) {
-    types = types.filter(t => t !== "i64" && t !== "u64" && t !== "d64")
-  }
-  if (caps.bits !== undefined && caps.bits < 32) {
-    types = types.filter(t => t !== "i32" && t !== "u32" && t !== "d32")
-  }
-  return types
-}
-
-export const matrix = {
-  i8: {
-    type: "i8",
-    min: -128,
-    max: 127,
-    values: [0, 1, -128, 127, -129, 128],
-    validValues: [0, 1, -128, 127],
-    invalidRange: [-129, 128], invalidValues: [true, "hello"],
-    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7F", "127"]]
-  },
-  i16: {
-    type: "i16",
-    min: -32768,
-    max: 32767,
-    values: [0, 1, -32768, 32767, -32769, 32768],
-    validValues: [0, 1, -32768, 32767],
-    invalidRange: [-32769, 32768], invalidValues: [true, "hello"],
-    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7FFF", "32767"]]
-  },
-  i32: {
-    type: "i32",
-    min: -2147483648,
-    max: 2147483647,
-    values: [0, 1, -2147483648, 2147483647, -2147483649, 2147483648],
-    validValues: [0, 1, -2147483648, 2147483647],
-    invalidRange: [-2147483649, 2147483648], invalidValues: [true, "hello"],
-    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0x7FFFFFFF", "2147483647"]]
-  },
-  i64: {
-    type: "i64",
-    min: Number.MIN_SAFE_INTEGER,
-    max: Number.MAX_SAFE_INTEGER,
-    values: [0, 1, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-    validValues: [0, 1, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-    invalidValues: [true, "hello"],
-    altLiterals: [["0x0F", "15"], ["0b1001", "9"], ["0o17", "15"], ["0xFFFFFFFFFFFFF", "4503599627370495"]]
-  },
-  u8: {
-    type: "u8",
-    min: 0,
-    max: 255,
-    values: [0, 1, 255, 256, -1],
-    validValues: [0, 1, 255],
-    invalidRange: [256, -1], invalidValues: [true, "hello"],
-    altLiterals: [["0xFF", "255"], ["0b11111111", "255"], ["0o377", "255"], ["0x0A", "10"]]
-  },
-  u16: {
-    type: "u16",
-    min: 0,
-    max: 65535,
-    values: [0, 1, 65535, 65536, -1],
-    validValues: [0, 1, 65535],
-    invalidRange: [65536, -1], invalidValues: [true, "hello"],
-    altLiterals: [["0xFFFF", "65535"], ["0b1000000000000000", "32768"], ["0o177777", "65535"], ["0x0A", "10"]]
-  },
-  u32: {
-    type: "u32",
-    min: 0,
-    max: 4294967295,
-    values: [0, 1, 4294967295, 4294967296, -1],
-    validValues: [0, 1, 4294967295],
-    invalidRange: [4294967296, -1], invalidValues: [true, "hello"],
-    altLiterals: [["0xFFFFFFFF", "4294967295"], ["0b10000000000000000000000000000000", "2147483648"], ["0o37777777777", "4294967295"]]
-  },
-  u64: {
-    type: "u64",
-    min: 0,
-    max: Number.MAX_SAFE_INTEGER,
-    values: [0, 1, Number.MAX_SAFE_INTEGER],
-    validValues: [0, 1, Number.MAX_SAFE_INTEGER],
-    invalidValues: [true, "hello"],
-    altLiterals: [["0xFFFFFFFFFFFFF", "4503599627370495"], ["0b1001", "9"], ["0o17", "15"]]
-  },
-  d8: {
-    type: "d8",
-    min: -1.27,
-    max: 1.27,
-    values: [0, 0.01, 0.5, 1.27, -1.27, 1.28, -1.29],
-    validValues: [0, 0.01, 0.5, 1.27, -1.27],
-    invalidRange: [1.28, -1.29], invalidValues: [true, "hello"]
-  },
-  d16: {
-    type: "d16",
-    min: -327.67,
-    max: 327.67,
-    values: [0, 0.01, 1.5, 327.67, -327.67, 327.68, -327.69],
-    validValues: [0, 0.01, 1.5, 327.67, -327.67],
-    invalidRange: [327.68, -327.69], invalidValues: [true, "hello"]
-  },
-  d32: {
-    type: "d32",
-    min: -214748.3647,
-    max: 214748.3647,
-    values: [0, 0.0001, 1.5, 3.14, 214748.3647, -214748.3647, 214748.3648],
-    validValues: [0, 0.0001, 1.5, 3.14, 214748.3647, -214748.3647],
-    invalidRange: [214748.3648], invalidValues: [true, "hello"]
-  },
-  d64: {
-    type: "d64",
-    min: -92233720368.54775808,
-    max: 92233720368.54775807,
-    values: [0, 0.1, 1.5, 3.14],
-    validValues: [0, 0.1, 1.5, 3.14],
-    invalidValues: [true, "hello"]
-  },
-  f32: {
-    type: "f32",
-    min: -3.4028235e+38,
-    max: 3.4028235e+38,
-    values: [0.0, 1.0, 3.4028235e+38, -3.4028235e+38, Infinity, -Infinity, NaN],
-    validValues: [0.0, 1.0, 3.4028235e+38, -3.4028235e+38, Infinity, -Infinity, NaN],
-    invalidValues: [true, "hello"]
-  },
-  f64: {
-    type: "f64",
-    min: -1.7976931348623157e+308,
-    max: 1.7976931348623157e+308,
-    values: [0.0, 1.0, 1.7976931348623157e+308, -1.7976931348623157e+308, Infinity, -Infinity, NaN],
-    validValues: [0.0, 1.0, 1.7976931348623157e+308, -1.7976931348623157e+308, Infinity, -Infinity, NaN],
-    invalidValues: [true, "hello"]
-  },
-  number: {
-    type: "number",
-    min: -1.7976931348623157e+308,
-    max: 1.7976931348623157e+308,
-    values: [0, 1, 3.14],
-    validValues: [0, 1, 3.14],
-    invalidValues: [true, "hello"]
-  },
-  boolean: {
-    type: "boolean",
-    values: [true, false],
-    validValues: [true, false],
-    invalidValues: [42, "hello"]
-  },
-  string: {
-    type: "string",
-    values: ["", "hello"],
-    validValues: ["", "hello"],
-    invalidValues: [42, true]
-  },
-  char: {
-    type: "char",
-    min: 0,
-    max: 255,
-    values: [0, 65, 255, 256],
-    validValues: [0, 65, 255],
-    invalidValues: [256, true, "hello"]
-  },
-  usize: {
-    type: "usize",
-    min: 0,
-    max: Number.MAX_SAFE_INTEGER,
-    values: [0, 1],
-    validValues: [0, 1],
-    invalidValues: [true, "hello"]
-  },
-  isize: {
-    type: "isize",
-    min: Number.MIN_SAFE_INTEGER,
-    max: Number.MAX_SAFE_INTEGER,
-    values: [0, 1],
-    validValues: [0, 1],
-    invalidValues: [true, "hello"]
-  }
-}
+// Per-type literal value matrix lives in matrix.ts (single source of truth
+// for the 02-variables suites); re-exported here for import stability.
 
 export interface CodegenOptions {
   defaultNumber?: string
