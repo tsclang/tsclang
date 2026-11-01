@@ -66,6 +66,16 @@ export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
     const stateType = `${name}_state`;
     const pollFn = `${name}_poll`;
 
+    // Register BEFORE scanning the body: a self-recursive `await name(...)`
+    // (or a forward reference to a not-yet-emitted async fn) must resolve to
+    // this poll fn, otherwise the await state is marked unknown and the poll
+    // function is silently dropped, leaving an undeclared reference in C.
+    ctx._asyncFuncs.set(name, { stateType, pollFn, resultCType, innerResultCType: innerResultCType ?? undefined, params });
+    ctx.define(name, {
+      ctype: resultCType ?? 'int', funcName: name,
+      _isAsync: true, _stateType: stateType, _pollFn: pollFn, params,
+    });
+
     // Ref<T>/Mut<T> across await: borrow types can't cross await
     const awaitStatesCount = ctx._collectAwaitStates(body).length;
     if (awaitStatesCount > 0) {
@@ -123,12 +133,7 @@ export function emitAsyncFunc(ctx: CodeGenContext, node: FuncDecl) {
       ctx._emitStructMultiline(stateType, sFields);
     }
 
-    // Register
-    ctx._asyncFuncs.set(name, { stateType, pollFn, resultCType, innerResultCType: innerResultCType ?? undefined, params });
-    ctx.define(name, {
-      ctype: resultCType ?? 'int', funcName: name,
-      _isAsync: true, _stateType: stateType, _pollFn: pollFn, params,
-    });
+    // Register (moved to the top of this function — see the comment there)
 
     if (!body) return;
 

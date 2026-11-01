@@ -158,6 +158,73 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       for (const node of ast.body) _walkWasm(node);
     }
 
+    // Pre-scan: async await-recursion — a cycle of `await` calls between async
+    // functions cannot be lowered to by-value nested state structs. The spec'd
+    // heap-allocated state machines are not implemented yet (see the issue in
+    // the E307 diagnostic), so cycles are a hard error instead of invalid C.
+    {
+      const awaitGraph = new Map<string, Set<string>>();
+      const _collectAwaits = (nd: unknown, result: Set<string>) => {
+        if (!nd || typeof nd !== 'object') return;
+        if (Array.isArray(nd)) { nd.forEach((x: unknown) => _collectAwaits(x, result)); return; }
+        const n = nd as Record<string, unknown>;
+        // Don't recurse into nested function bodies
+        if (n.kind === 'FuncDecl' || n.kind === 'ArrowFunc') return;
+        if (n.kind === 'Await') {
+          const call = n.expr as Record<string, unknown> | undefined;
+          const callee = call?.callee as Record<string, unknown> | undefined;
+          if (call?.kind === 'Call' && callee?.kind === 'Ident') result.add(callee.name as string);
+        }
+        for (const v of Object.values(n)) {
+          if (v && typeof v === 'object') _collectAwaits(v, result);
+        }
+      };
+      for (const node of ast.body) {
+        const n = node.kind === 'Export' ? node.decl : node;
+        if (n?.kind === 'FuncDecl' && n.async && n.body) {
+          const awaits = new Set<string>();
+          _collectAwaits(n.body, awaits);
+          awaitGraph.set(n.name, awaits);
+        }
+      }
+      const visitedAsync = new Set<string>();
+      const inStackAsync = new Map<string, number>();
+      const pathAsync: string[] = [];
+      const _dfsAsync = (fn: string) => {
+        if (inStackAsync.has(fn)) {
+          const cycle = pathAsync.slice(inStackAsync.get(fn));
+          const cycleStr = cycle.length === 1
+            ? `async function '${fn}()' awaits itself`
+            : [...cycle, fn].join(' → ');
+          throw ctx.errorCode('E307', null, { detail: `${cycleStr}: recursive async requires a heap-allocated state machine, which is not supported yet — rewrite iteratively or with an explicit stack` });
+        }
+        if (visitedAsync.has(fn)) return;
+        inStackAsync.set(fn, pathAsync.length);
+        pathAsync.push(fn);
+        for (const callee of (awaitGraph.get(fn) ?? [])) {
+          if (awaitGraph.has(callee)) _dfsAsync(callee);
+        }
+        pathAsync.pop();
+        inStackAsync.delete(fn);
+        visitedAsync.add(fn);
+      };
+      for (const fn of awaitGraph.keys()) {
+        try {
+          _dfsAsync(fn);
+        } catch (e) {
+          // Pre-scan throws outside Phase B — bag it the same way so the
+          // rendered output keeps the `error[E307]:` header (runner contract)
+          if ((e as Record<string, unknown>)?.isTscError) {
+            const bag = new Error('compilation failed') as Error & { isTscErrorBag: boolean; errors: unknown[] };
+            bag.isTscErrorBag = true;
+            bag.errors = [e];
+            throw bag;
+          }
+          throw e;
+        }
+      }
+    }
+
     // Pre-scan: recursion detection when no-recursion strict rule is set
     if (ctx._strictRules?.has('no-recursion')) {
       // Build call graph: funcName → Set of called top-level funcNames

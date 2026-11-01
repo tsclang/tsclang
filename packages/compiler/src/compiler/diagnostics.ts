@@ -1127,6 +1127,26 @@ Fix: wrap the value in Arc<T>, or use Atomic<T> for primitives.
 `,
   },
 
+  E307: {
+    code: 'E307',
+    severity: 'error',
+    title: 'recursive async not supported',
+    message: `{detail}`,
+    help: ['rewrite the recursion iteratively', 'use an explicit stack (@stack) or a worklist of state machines'],
+    body: `
+An async function that (directly or mutually) awaits itself needs a
+heap-allocated state machine, which is not implemented yet. Until it is,
+recursive async is rejected at compile time.
+
+  async function recurse(n: i32): Promise<void> {
+    if (n > 0) await recurse(n - 1);   // error[E307]
+  }
+
+Fix: rewrite iteratively, or keep a worklist of state structs and poll
+them in a loop.
+`,
+  },
+
   // ── E4xx: Misc compiler errors ──────────────────────────────────────────────
   E400: {
     code: 'E400',

@@ -1,0 +1,2 @@
+async function 'recurse()' awaits itself: recursive async requires a heap-allocated state machine
+error[E307]
