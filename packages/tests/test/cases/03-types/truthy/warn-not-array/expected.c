@@ -6,7 +6,7 @@ int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3};
     const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
-    if (!arr) {
+    if (0) {
         printf("dead code\n");
     }
     return 0;

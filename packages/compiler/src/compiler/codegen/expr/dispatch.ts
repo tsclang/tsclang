@@ -952,6 +952,8 @@ export function _truthyToC(ctx: CodeGenContext, node: Expression, lines: string[
       const innerType = ctx.inferType(node.expr);
       if (ctx.classes.has(innerType) || innerType.startsWith('Array_') || innerType.startsWith('TscMap_') || innerType.startsWith('Map_') || innerType.startsWith('TscSet_') || innerType.startsWith('Set_')) {
         ctx.warnCode('W002', node);
+        // `!struct` is not valid C — the operand is provably truthy, fold to 0
+        return '0';
       }
     }
     const type = ctx.inferType(node);

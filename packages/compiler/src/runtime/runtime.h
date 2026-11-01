@@ -1697,8 +1697,10 @@ static inline ptrdiff_t tsc_string_index_of(String s, String sub) {
 
 static inline String tsc_string_slice(String s, int32_t start, int32_t end_idx) {
     int32_t len = (int32_t)s.length;
-    if (start < 0) start = len + start; if (start < 0) start = 0;
-    if (end_idx < 0) end_idx = len + end_idx; if (end_idx > len) end_idx = len;
+    if (start < 0) start = len + start;
+    if (start < 0) start = 0;
+    if (end_idx < 0) end_idx = len + end_idx;
+    if (end_idx > len) end_idx = len;
     if (start >= end_idx) { char *e = _tsc_str_malloc(1); e[0] = '\0'; return _tsc_str_make(e, 0, 1); }
     size_t n = (size_t)(end_idx - start);
     char *buf = _tsc_str_malloc(n + 1);
@@ -1708,8 +1710,10 @@ static inline String tsc_string_slice(String s, int32_t start, int32_t end_idx) 
 
 static inline String tsc_string_substring(String s, int32_t start, int32_t end_idx) {
     int32_t len = (int32_t)s.length;
-    if (start < 0) start = 0; if (end_idx < 0) end_idx = 0;
-    if (start > len) start = len; if (end_idx > len) end_idx = len;
+    if (start < 0) start = 0;
+    if (end_idx < 0) end_idx = 0;
+    if (start > len) start = len;
+    if (end_idx > len) end_idx = len;
     if (start > end_idx) { int32_t t = start; start = end_idx; end_idx = t; }
     return tsc_string_slice(s, start, end_idx);
 }
