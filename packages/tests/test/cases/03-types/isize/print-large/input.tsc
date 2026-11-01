@@ -1,0 +1,4 @@
+const a: isize = 4294967295;
+const b: isize = -4294967296;
+console.log(a);
+console.log(b);

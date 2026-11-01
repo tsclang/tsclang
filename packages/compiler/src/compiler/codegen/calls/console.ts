@@ -215,6 +215,11 @@ export function consoleCall(ctx: CodeGenContext, method: string, args: Argument[
       } else if (ctype === 'char') {
         fmtParts.push('%c');
         fmtArgs.push(cexpr);
+      } else if (ctype === 'ptrdiff_t') {
+        // isize is pointer-sized: outside bits<32 targets it can exceed int32,
+        // so print via the 64-bit path (generic %d truncates, e.g. 4294967295 → -1)
+        if (ctx._cap('bits') < 32) { fmtParts.push('%d'); fmtArgs.push(`(int)${cexpr}`); }
+        else { fmtParts.push('%lld'); fmtArgs.push(`(long long)${cexpr}`); }
       } else if (ctype === 'size_t') {
         if (ctx._cap('bits') < 32) { fmtParts.push('%u'); fmtArgs.push(`(unsigned)${cexpr}`); }
         else { fmtParts.push('%zu'); fmtArgs.push(cexpr); }
