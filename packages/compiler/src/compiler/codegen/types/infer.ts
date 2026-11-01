@@ -472,7 +472,9 @@ export function _inferCall(ctx: CodeGenContext, node: Call): string {
       if (n2 === 'parseFloat' || n2 === 'tryParseFloat' || n2 === 'Number') return 'opt_f64';
       if (n2 === 'String') return 'String';
       const sym = ctx.lookup(n2);
-      if (sym?.ctype === 'tsc_closure' && sym.closureRetType && !sym.funcName) return sym.closureRetType;
+      // A closure var (with or without the funcName shortcut) always calls
+      // through `.fn` — the result type is the closure's return type
+      if (sym?.ctype === 'tsc_closure' && sym.closureRetType) return sym.closureRetType;
       if (sym) return sym.ctype ?? 'int32_t';
     }
     return 'int32_t';
