@@ -102,5 +102,11 @@ export function inferLiteralCType(node: Literal, defaultNumber: string = 'f64'):
   if (node.litType === 'char')    return 'String';
   if (node.litType === 'bool')    return 'bool';
   if (node.litType === 'null')    return 'void *';
+  // BigInt n-literals infer to the narrowest 64-bit type that holds them
+  // (matching TS); overflow past u64 is rejected later by the E101 range check.
+  if (node.litType === 'bigint') {
+    const v = BigInt(node.value);
+    return v > 9223372036854775807n || v < -9223372036854775808n ? 'uint64_t' : 'int64_t';
+  }
   return PRIMITIVE_MAP[defaultNumber] || 'double';
 }

@@ -174,6 +174,9 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       const val = eat(TK.NUMBER).value;
       return { kind: 'TypeLiteral', litKind: 'number', value: val };
     }
+    if (cur().type === TK.BIGINT) {
+      err('bigint literal types are not supported; annotate with i64/u64 instead');
+    }
 
     // null/undefined in type position: i32 | null
     if (cur().type === TK.NULL) {
@@ -988,6 +991,11 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       const mname = eat(TK.IDENT).value;
       let value: Expression | null = null;
       if (tryEat(TK.EQ)) value = parseExpr();
+      // TS rejects bigint enum members — mirror that with a clear message
+      const valLit = value?.kind === 'Unary' && value.op === '-' ? value.expr : value;
+      if (valLit?.kind === 'Literal' && valLit.litType === 'bigint') {
+        err(`bigint literals are not allowed in enum members (in enum ${name})`);
+      }
       members.push({ name: mname, value });
       tryEat(TK.COMMA);
     }
@@ -1561,6 +1569,12 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         return { kind: 'MatchTuple', elements };
       }
       // Negative number literal
+      if (t.type === TK.MINUS && peek().type === TK.BIGINT) {
+        err('bigint literals are not supported in match patterns; match on an i64/u64 variable with if instead');
+      }
+      if (t.type === TK.BIGINT) {
+        err('bigint literals are not supported in match patterns; match on an i64/u64 variable with if instead');
+      }
       if (t.type === TK.MINUS && peek().type === TK.NUMBER) {
         eat(TK.MINUS);
         const numTok = eat(TK.NUMBER);
@@ -1737,6 +1751,7 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
 
     // Literals
     if (t.type === TK.NUMBER) { pos++; return { kind: 'Literal', litType: 'number', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
+    if (t.type === TK.BIGINT) { pos++; return { kind: 'Literal', litType: 'bigint', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.STRING) { pos++; return { kind: 'Literal', litType: 'string', value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.SQUOTE)  { pos++; return { kind: 'Literal', litType: 'char',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }
     if (t.type === TK.BOOL)   { pos++; return { kind: 'Literal', litType: 'bool',   value: t.value, line: t.line, col: t.col, endCol: t.endCol }; }

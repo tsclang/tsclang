@@ -1395,12 +1395,17 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                   throw ctx.errorCode('E100', null, { detail: `float literal ${init.value} assigned to integer type ${dstTs} вЂ” fractional part will be lost\nhint: use '${init.value} as ${dstTs}' for explicit truncation, or Math.trunc(${init.value})` });}
               }
             }
-            if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char')) {
+            if (init.kind === 'Literal' && (init.litType === 'number' || init.litType === 'char' || init.litType === 'bigint')) {
               initC = ctx.literalToCTyped(init, ctype);
-            } else if (init.kind === 'Unary' && init.op === '-' && init.expr?.kind === 'Literal' && (init.expr as Literal).litType === 'number') {
+            } else if (init.kind === 'Unary' && init.op === '-' && init.expr?.kind === 'Literal' && ((init.expr as Literal).litType === 'number' || (init.expr as Literal).litType === 'bigint')) {
               const di = ctx._numericTypeInfo(ctype);
               if (di && di.kind === 'decimal') {
                 initC = '-' + ctx.literalToCTyped(init.expr as Literal, ctype);
+              } else if ((init.expr as Literal).litType === 'bigint' && ctype === 'int64_t'
+                         && (init.expr as Literal).value === '9223372036854775808') {
+                // i64 min: the positive constant 9223372036854775808 does not
+                // fit int64_t in C — emit the canonical split form
+                initC = '(-9223372036854775807LL - 1)';
               } else {
                 initC = ctx.exprToC(init, lines, depth);
               }

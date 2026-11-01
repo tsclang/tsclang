@@ -142,9 +142,9 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
     }
 
     if (!(ctype in INT_RANGES)) return;
-    const isLit = node.kind === 'Literal' && node.litType === 'number';
+    const isLit = node.kind === 'Literal' && (node.litType === 'number' || node.litType === 'bigint');
     const isNegLit = node.kind === 'Unary' && node.op === '-'
-      && node.expr?.kind === 'Literal' && node.expr.litType === 'number';
+      && node.expr?.kind === 'Literal' && (node.expr.litType === 'number' || node.expr.litType === 'bigint');
     if (!isLit && !isNegLit) return;
     const val = ctx.constVal(node);
     if (val === null) return;
@@ -159,7 +159,7 @@ export function _checkLiteralFitsType(ctx: CodeGenContext, node: Expression, cty
   // ----------------------------------------------------------------
   // Get compile-time constant value of a const-literal variable or literal node (BigInt or null)
 export function constVal(ctx: CodeGenContext, node: Expression): bigint | null {
-    if (node.kind === 'Literal' && node.litType === 'number') {
+    if (node.kind === 'Literal' && (node.litType === 'number' || node.litType === 'bigint')) {
       const raw = node.value.replace(/_/g, '');
       try { return BigInt(raw); } catch(_) {
         const fval = parseFloat(raw);

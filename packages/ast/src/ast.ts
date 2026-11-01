@@ -510,7 +510,7 @@ export type Expression =
 
 export interface Literal extends BaseNode {
   kind: 'Literal';
-  litType: 'number' | 'string' | 'boolean' | 'bool' | 'null' | 'int' | 'char';
+  litType: 'number' | 'string' | 'boolean' | 'bool' | 'null' | 'int' | 'char' | 'bigint';
   value: string;
 }
 

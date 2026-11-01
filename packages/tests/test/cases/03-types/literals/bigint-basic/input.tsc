@@ -1,0 +1,6 @@
+let a: i64 = 42n;
+let b: u64 = 42n;
+let c: i64 = -42n;
+console.log(a);
+console.log(b);
+console.log(c);

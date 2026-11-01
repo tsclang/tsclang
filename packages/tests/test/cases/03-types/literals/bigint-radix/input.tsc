@@ -1,0 +1,6 @@
+let a: u64 = 0xFFn;
+let b: i64 = 0b1010n;
+let c: i64 = 0o17n;
+console.log(a);
+console.log(b);
+console.log(c);

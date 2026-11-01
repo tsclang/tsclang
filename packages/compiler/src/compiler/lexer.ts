@@ -6,6 +6,7 @@ import type { NativeTemplatePart } from '@tsclang/ast';
 export const TK = {
   // Literals
   NUMBER: 'NUMBER',       // 42, 3.14
+  BIGINT: 'BIGINT',       // 42n (integer, any radix base)
   STRING: 'STRING',       // "hello"
   BOOL:   'BOOL',         // true / false
   NULL:   'NULL',         // null
@@ -174,15 +175,19 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
     // Number
     if (ch >= '0' && ch <= '9') {
       let num = '';
+      let isBig = false;
       if (ch === '0' && (peek() === 'x' || peek() === 'X')) {
         num += advance() + advance(); // 0x
         while (i < src.length && /[0-9a-fA-F_]/.test(cur())) num += advance();
+        if (cur() === 'n') { isBig = true; advance(); }
       } else if (ch === '0' && (peek() === 'b' || peek() === 'B')) {
         num += advance() + advance(); // 0b
         while (i < src.length && /[01_]/.test(cur())) num += advance();
+        if (cur() === 'n') { isBig = true; advance(); }
       } else if (ch === '0' && (peek() === 'o' || peek() === 'O')) {
         num += advance() + advance(); // 0o
         while (i < src.length && /[0-7_]/.test(cur())) num += advance();
+        if (cur() === 'n') { isBig = true; advance(); }
       } else {
         if (ch === '0' && peek() >= '0' && peek() <= '9') {
           throw new Error(`${filename}:${startLine}:${startCol}: legacy octal notation is not supported; use 0o prefix`);
@@ -197,8 +202,16 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
           if (cur() === '+' || cur() === '-') num += advance();
           while (i < src.length && cur() >= '0' && cur() <= '9') num += advance();
         }
+        // Trailing 'n' is only valid on plain integer forms (JS/TS rule)
+        if (i < src.length && cur() === 'n') {
+          if (/[.eE]/.test(num)) {
+            throw new Error(`${filename}:${startLine}:${startCol}: bigint literal must be an integer (no fraction or exponent)`);
+          }
+          isBig = true;
+          advance();
+        }
       }
-      tokens.push(new Token(TK.NUMBER, num.replace(/_/g, ''), startLine, startCol));
+      tokens.push(new Token(isBig ? TK.BIGINT : TK.NUMBER, num.replace(/_/g, ''), startLine, startCol));
       continue;
     }
 

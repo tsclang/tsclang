@@ -763,13 +763,16 @@ class SemanticChecker {
     let lit = init;
     if (init.kind === 'Unary' && init.op === '-') {
       const inner = init.expr;
-      if (inner && inner.kind === 'Literal' && (inner.litType === 'number' || inner.litType === 'int')) lit = inner;
+      if (inner && inner.kind === 'Literal' && (inner.litType === 'number' || inner.litType === 'int' || inner.litType === 'bigint')) lit = inner;
       else return;
     }
     if (lit.kind !== 'Literal') return;
 
     const err = (literal: string) => this.error('E124', node, { name, type: target, literal });
     switch (lit.litType) {
+      case 'bigint':
+        // n-suffixed literals are only meaningful for the 64-bit integer types
+        return target === 'i64' || target === 'u64' ? undefined : err('bigint');
       case 'number': case 'int': {
         if (target === 'boolean' || target === 'string') return err('number');
         if (target === 'char') {

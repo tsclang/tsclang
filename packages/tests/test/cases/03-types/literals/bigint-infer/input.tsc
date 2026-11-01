@@ -1,0 +1,4 @@
+let a = 42n;
+let b = 9223372036854775808n;
+console.log(a);
+console.log(b);
