@@ -39,6 +39,7 @@ export interface CompileOptions {
   debugLines?: boolean;
   sourcemap?: boolean;
   strict?: string[] | null;
+  defaultNumber?: string;
   importedModules?: Record<string, Record<string, SymbolInfo> | null>;
   sourceToPath?: Record<string, string>;
   depInitFns?: string[];
@@ -248,7 +249,7 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
   // Pre-codegen semantic checks (#208): unknown types, undeclared identifiers,
   // duplicate declarations, literal/annotation mismatches — before codegen and
   // before the cache, so a cached artifact is always semantically valid.
-  checkSemantics(ast, filename, src, { strict: opts.strict });
+  checkSemantics(ast, filename, src, { strict: opts.strict, defaultNumber: opts.defaultNumber });
 
   // Unicode identifiers → ASCII-mangled C names. Runs after semantic checks
   // (diagnostics keep source names) and before codegen / the artifact cache.

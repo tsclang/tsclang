@@ -53,6 +53,18 @@ export function literalToC(ctx: CodeGenContext, node: Literal): string {
     if (v === 'NaN') return 'NAN';
     if (v === 'Infinity') return 'INFINITY';
     if (v.startsWith('0o') || v.startsWith('0O')) return '0' + v.slice(2);
+    if (node.litType === 'bigint') {
+      // n-literals are exact 64-bit integers: the value range picks the C
+      // suffix. A bare out-of-int64-range decimal (18446744073709551615) is
+      // a C constraint violation — gcc only salvages it as unsigned with
+      // a warning, other compilers may reject it.
+      let n: bigint | null = null;
+      try {
+        const raw = v.replace(/_/g, '');
+        n = /^0[0-7]+$/.test(raw) ? BigInt('0o' + raw.slice(1)) : BigInt(raw);
+      } catch { /* unreachable: lexer guarantees a valid literal */ }
+      if (n !== null) return n > 9223372036854775807n ? `${v}ULL` : `${v}LL`;
+    }
     return v;
 }
 

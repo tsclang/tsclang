@@ -3,6 +3,17 @@ import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block, L
 import type { SymbolInfo } from '@tsclang/ast';
 import { resolveDecimalBase } from '../types/decimal.js';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','d8','d16','d32','d64','boolean','usize']);
+
+// True when the expression contains an n-suffixed literal anywhere
+// (`42n`, `42n + 1`, `-(x + 2n)`, ternary branches).
+function hasBigintLiteral(e: Expression | null | undefined): boolean {
+  if (!e) return false;
+  if (e.kind === 'Literal') return e.litType === 'bigint';
+  if (e.kind === 'Binary') return hasBigintLiteral(e.left) || hasBigintLiteral(e.right);
+  if (e.kind === 'Unary') return hasBigintLiteral(e.expr);
+  if (e.kind === 'Ternary') return hasBigintLiteral(e.yes) || hasBigintLiteral(e.no);
+  return false;
+}
 const HEAP_ARRAY_KEYWORDS = ['tsc_array_create', 'tsc_array_filter', 'tsc_array_map',
                               'tsc_array_concat', 'tsc_array_slice'];
 export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[], depth: number) {
@@ -806,6 +817,13 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           } // end if innerInit2?.kind === 'Ident'
         }
         let ctype = typeAnn ? ctx.resolveType(typeAnn) : (init ? ctx.inferType(init) : 'double');
+        // An n-suffixed literal keeps 64-bit exactness: under a float default the
+        // plain `1` in `42n + 1` would drag inferType to double; the effective
+        // (integer-ranked) type must win instead.
+        if (!typeAnn && init && hasBigintLiteral(init)) {
+          const eff = ctx._effectiveType(init);
+          if (eff === 'int64_t' || eff === 'uint64_t') ctype = eff;
+        }
         // W011: warn about expensive types on 8-bit targets
         if (ctx._cap('bits') < 32) {
           const expensive: Record<string, string> = { int64_t: 'i64', uint64_t: 'u64', double: 'f64', float: 'f32' };

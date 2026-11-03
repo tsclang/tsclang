@@ -113,8 +113,8 @@ function isFloatLiteralText(value: string): boolean {
  * protocol as the parse-error bag, consumed by the CLI reporter and the test
  * engine without special-casing.
  */
-export function checkSemantics(ast: Program, filename: string, src: string, opts?: { strict?: string[] | null }): void {
-  const checker = new SemanticChecker(filename, src, new Set(opts?.strict ?? []));
+export function checkSemantics(ast: Program, filename: string, src: string, opts?: { strict?: string[] | null; defaultNumber?: string }): void {
+  const checker = new SemanticChecker(filename, src, new Set(opts?.strict ?? []), opts?.defaultNumber);
   checker.run(ast);
   if (checker.errors.length > 0) {
     throw { isTscErrorBag: true, errors: checker.errors };
@@ -128,7 +128,7 @@ class SemanticChecker {
   private scope: Scope;
   private typeParams = new Set<string>();       // active generic params
 
-  constructor(private filename: string, private src: string, private strictRules: Set<string> = new Set()) {
+  constructor(private filename: string, private src: string, private strictRules: Set<string> = new Set(), private defaultNumber: string | null = null) {
     this.root = { parent: null, vars: new Map(), isFunction: true };
     this.scope = this.root;
     // safe-math injects MathError as the overflow error type.
@@ -774,8 +774,13 @@ class SemanticChecker {
     const err = (literal: string) => this.error('E124', node, { name, type: target, literal });
     switch (lit.litType) {
       case 'bigint':
-        // n-suffixed literals are only meaningful for the 64-bit integer types
-        return target === 'i64' || target === 'u64' ? undefined : err('bigint');
+        // n-suffixed literals are only meaningful for the 64-bit integer types;
+        // 'number' resolves through defaultNumber first (with i64 default,
+        // `let a: number = 42n` is a plain int64 init, not a mismatch)
+        {
+          const target0 = target === 'number' ? (this.defaultNumber ?? 'f64') : target;
+          return target0 === 'i64' || target0 === 'u64' ? undefined : err('bigint');
+        }
       case 'number': case 'int': {
         if (target === 'boolean' || target === 'string') return err('number');
         if (target === 'char') {

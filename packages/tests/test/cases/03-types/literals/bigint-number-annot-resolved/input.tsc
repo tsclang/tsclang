@@ -1,0 +1,2 @@
+let a: number = 42n
+console.log(a)

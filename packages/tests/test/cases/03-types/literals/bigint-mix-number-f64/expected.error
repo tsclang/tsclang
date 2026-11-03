@@ -1,0 +1,2 @@
+cannot implicitly convert i64 to f64
+error[E100]

@@ -5,7 +5,7 @@ import { resolveDecimalBase } from '../types/decimal.js';
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
 export function binaryWidened(ctx: CodeGenContext, node: Binary, targetCtype: string, lines: string[], depth: number) {
     const widenOperand = (operand: Expression): string => {
-      if (operand.kind === 'Literal' && operand.litType === 'number') {
+      if (operand.kind === 'Literal' && (operand.litType === 'number' || operand.litType === 'bigint')) {
         return ctx.literalToCTyped(operand, targetCtype);
       }
       const ot = ctx.inferType(operand);

@@ -318,7 +318,7 @@
 | Раздел | Тестов | Что покрывает |
 |--------|--------|---------------|
 | `02-syntax` | 135 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, идентификаторы (юникод + манглинг), spread, truthy |
-| `03-types` | 539 | Числа, decimal fixed-point, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
+| `03-types` | 561 | Числа, decimal fixed-point, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
 | `04-ownership` | 117 | Ownership, Arc, Weak, Clone, @static let, destructuring |
 | `05-control-flow` | 53 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue, match-as-expression |
 | `06-functions` | 66 | Функции, стрелочные, function expressions, default params, rest params, closures, overloads, extensions |
@@ -328,13 +328,13 @@
 | `10-async` | 83 | async/await, Promise, generators, AbortSignal, AsyncMutex, timers, state machines |
 | `11-concurrency` | 44 | Threads, Atomic, AtomicArray, channels, select, ISR, Volatile, Readonly |
 | `12-modules` | 28 | import/export, entry point, declaration merging |
-| `13-build` | 123 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct, declare platform |
-| `14-stdlib` | 299 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
+| `13-build` | 174 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct, declare platform |
+| `14-stdlib` | 302 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
 | `15-decorators` | 22 | decorator function, factories, before/after, order, async methods |
-| `16-tooling` | 25 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
-| `book` | 4 | Примеры из документации |
+| `16-tooling` | 45 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
+| `book` | 6 | Примеры из документации |
 
-**Всего: 1866 кейсов** (по наличию `input.tsc`; раннер для CLI-секций считает больше — мультиварианты). Прогон 2026-11-03: полный корпус — все 16 секций + book ✓ (feat: unicode identifiers, 8 новых кейсов).
+**Всего: 1964 кейсов** (по прогону раннера; CLI-секции считают мультиварианты). Прогон 2026-11-03: полный корпус — все 16 секций + book ✓ (fix: bigint mixing, +5 кейсов).
 
 ## Roadmap
 
