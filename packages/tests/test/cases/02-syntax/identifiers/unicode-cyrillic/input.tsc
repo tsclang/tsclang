@@ -1,0 +1,2 @@
+let цена = 10
+console.log(цена)

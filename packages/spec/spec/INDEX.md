@@ -48,6 +48,7 @@
 |--------|-------|
 | **Форматирование** | Форматирование — никогда не ошибка компилятора; правила пробелов, кавычек, ASI, отступов; `tsclang lint`. |
 | **Переменные** | `let` — мутабельная, `const` — иммутабельная; влияет на передачу как `Mut<T>` и вызов `mut`-методов. |
+| **Идентификаторы** | Допустимые символы (юникод-буквы, UAX #31 subset); манглинг в ASCII для C (`цена` → `u0446u0435u043du0430`); `$` → `u0024`. |
 | **Операторы** | Арифметика, присваивание, сравнения, логика, битовые, прочие; таблица приоритетов. |
 | **Truthy / Falsy** | Правила неявного приведения к boolean (отличия от JS). |
 
@@ -316,7 +317,7 @@
 
 | Раздел | Тестов | Что покрывает |
 |--------|--------|---------------|
-| `02-syntax` | 127 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, spread, truthy |
+| `02-syntax` | 135 | Арифметика, присваивание, битовые, сравнения, логика, переменные, formatting, идентификаторы (юникод + манглинг), spread, truthy |
 | `03-types` | 539 | Числа, decimal fixed-point, enum, type aliases, tuples, utility types, null/optional, unknown, as-operator, widening, char, usize, Date |
 | `04-ownership` | 117 | Ownership, Arc, Weak, Clone, @static let, destructuring |
 | `05-control-flow` | 53 | if/else, while, do-while, switch, ternary, for-of, match, labeled break/continue, match-as-expression |
@@ -333,7 +334,7 @@
 | `16-tooling` | 25 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
 | `book` | 4 | Примеры из документации |
 
-**Всего: 1858 кейсов** (по наличию `input.tsc`; раннер для CLI-секций считает больше — мультиварианты). Прогон 2026-10-31: 02-syntax 127✓, 09-errors 47✓, 13-build 174✓ (#205).
+**Всего: 1866 кейсов** (по наличию `input.tsc`; раннер для CLI-секций считает больше — мультиварианты). Прогон 2026-11-03: полный корпус — все 16 секций + book ✓ (feat: unicode identifiers, 8 новых кейсов).
 
 ## Roadmap
 

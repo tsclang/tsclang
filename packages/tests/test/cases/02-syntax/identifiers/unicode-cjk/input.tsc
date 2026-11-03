@@ -1,0 +1,2 @@
+let 日本語 = 7
+console.log(日本語)

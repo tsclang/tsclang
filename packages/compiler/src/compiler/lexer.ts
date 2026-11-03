@@ -63,6 +63,13 @@ export const KEYWORDS = new Set([
   'match', 'spawn', 'drop', 'native', 'unsafe',
 ]);
 
+// Identifier charset (UAX #31 subset, matches JS/TS ID_Start/ID_Continue for
+// practical cases): any unicode letter may start an identifier; letters,
+// digits and combining marks may continue. Emoji/currency/symbols are NOT
+// identifiers — same as ECMAScript.
+const ID_START = /[\p{L}_$]/u;
+const ID_CONT  = /[\p{L}\p{N}\p{M}_$]/u;
+
 export class Token {
   type: string;
   value: string;
@@ -87,6 +94,16 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
 
   function cur(): string  { return src[i]; }
   function peek(n: number = 1): string { return src[i + n]; }
+  // Current character as a full codepoint (surrogate pairs kept together),
+  // so astral letters (e.g. U+1D4B3) test correctly against \p{L}.
+  function curCp(): string {
+    const c = src[i];
+    if (c >= '\ud800' && c <= '\udbff') {
+      const lo = src[i + 1];
+      if (lo >= '\udc00' && lo <= '\udfff') return c + lo;
+    }
+    return c;
+  }
   function advance(): string {
     const ch = src[i++];
     if (ch === '\n') { line++; col = 1; } else { col++; }
@@ -215,10 +232,22 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
       continue;
     }
 
-    // Identifier / keyword
-    if (ch === '_' || ch === '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) {
+    // Identifier / keyword (ASCII fast path, unicode letters via UAX #31 subset)
+    const cp = curCp();
+    const asciiStart = ch === '_' || ch === '$' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+    if (asciiStart || (ch.charCodeAt(0) > 0x7f && ID_START.test(cp))) {
       let id = '';
-      while (i < src.length && /[\w$]/.test(cur())) id += advance();
+      while (i < src.length) {
+        const c = cur();
+        const asciiCont = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+          || (c >= '0' && c <= '9') || c === '_' || c === '$';
+        if (asciiCont) { id += advance(); continue; }
+        const c2 = curCp();
+        if (!ID_CONT.test(c2)) break;
+        id += c2;
+        advance();
+        if (c2.length === 2) advance();
+      }
       if (id === 'true' || id === 'false') {
         tokens.push(new Token(TK.BOOL, id, startLine, startCol));
       } else if (id === 'null' || id === 'undefined') {
