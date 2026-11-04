@@ -52,11 +52,6 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     // Process @embedded.* decorators
     const inlineDec = decorators?.find((d: Decorator) => d.name === 'struct');
     const poolDec   = decorators?.find((d: Decorator) => d.name === 'pool');
-    const isEmbedded = ctx._cap('allocator') !== 'heap';
-
-    if (inlineDec && !isEmbedded) {
-      throw ctx.errorCode('E304', node, { detail: `@struct on '${name}' has no effect on non-embedded platform; annotation ignored` });
-    }
     // @pool: require numeric capacity arg
     if (poolDec) {
       const poolSizeArg = poolDec.args?.[0];
@@ -79,7 +74,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
     if (heapDec && ctx._classHasInheritance(superClass)) {
       throw ctx.errorCode('E412', node, { detail: '@heap class cannot have inheritance (no @heap + extends)' });
     }
-    if (inlineDec && isEmbedded) {
+    if (inlineDec) {
       const badMethods = members.filter((m): m is Method => m.kind === 'Method' && m.name !== 'constructor' && (m.body?.body?.length ?? 0) > 0);
       if (badMethods.length > 0) {
         throw ctx.errorCode('E412', node, { detail: `TypeError: @struct class '${name}' cannot have non-trivial methods; remove '${badMethods[0].name}()' or use a regular class` });
@@ -343,7 +338,7 @@ export function visitClassDecl(ctx: CodeGenContext, node: ClassDecl) {
       ctx._markHeapClass(cname, node);
     }
     // Mark class as inline value type
-    if (inlineDec && isEmbedded) {
+    if (inlineDec) {
       const cls = ctx.classes.get(cname);
       if (cls) cls._isInline = true;
     }

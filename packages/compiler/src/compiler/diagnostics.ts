@@ -1091,7 +1091,6 @@ Embedded platforms have stricter constraints than desktop:
   - std/embedded requires an embedded target
   - Unknown inline buffer is limited to 3 words
   - Error stack traces may not be available
-  - @struct has no effect on non-embedded platforms
 
 Fix: use an embedded-compatible approach, or target a different platform.
 `,

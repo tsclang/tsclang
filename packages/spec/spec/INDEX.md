@@ -329,12 +329,12 @@
 | `11-concurrency` | 44 | Threads, Atomic, AtomicArray, channels, select, ISR, Volatile, Readonly |
 | `12-modules` | 28 | import/export, entry point, declaration merging |
 | `13-build` | 174 | CLI, build, strict mode, CMake, platform profile, C interop, @platform, @pool, @struct, declare platform |
-| `14-stdlib` | 302 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
+| `14-stdlib` | 303 | console, Math, Date, JSON, Buffer, Map, Set, std/* (string, net, ws, fs, hal, reactive, regex, temporal, url, random, embedded) |
 | `15-decorators` | 22 | decorator function, factories, before/after, order, async methods |
 | `16-tooling` | 45 | LSP, linter, formatter, optimizer, sourcemap, wasm, capabilities, retro platforms |
 | `book` | 6 | Примеры из документации |
 
-**Всего: 1964 кейсов** (по прогону раннера; CLI-секции считают мультиварианты). Прогон 2026-11-03: полный корпус — все 16 секций + book ✓ (fix: bigint mixing, +5 кейсов).
+**Всего: 1965 кейсов** (по прогону раннера; CLI-секции считают мультиварианты). Прогон 2026-11-03: полный корпус — все 16 секций + book ✓ (fix: bigint mixing, +5 кейсов). 2026-11-04: `@struct` разрешён на всех платформах (#236) — +desktop-ok, +err-with-methods-desktop, −err-non-embedded.
 
 ## Roadmap
 

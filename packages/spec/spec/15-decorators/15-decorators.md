@@ -633,7 +633,7 @@ TSClang имеет набор **встроенных декораторов**, �
 | `@static` | `function*` (sync gen) | Один экземпляр генератора в BSS | [10-async.md](../10-async/10-async.md#static-function--единственный-экземпляр-генератора) |
 | `@static` | `async function*` (async gen) | Async генератор в BSS (cooperative scheduler) | [10-async.md](../10-async/10-async.md#static-async-function--async-генератор-в-bss-cooperative-scheduler) |
 | `@readonly` | `class field` | Поле неизменяемо после конструктора (`const` квалификатор). На method — error | [07-classes-ownership.md](../07-classes/ownership/07-classes-ownership.md#readonly-class-field) |
-| `@struct` | `class` | Value-type class (inline, no vtable, no methods — embedded) | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class) |
+| `@struct` | `class` | Value-type class (inline, no vtable, no methods — все платформы) | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#struct--value-type-class) |
 | `@pool(N)` | `class` | Статический пул из N слотов в BSS (N ≤ 64), `opt_ref_T` | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#pooln--статический-пул-объектов) |
 | `@heap` | `class` | Heap-аллокация через `malloc`/`free`, pointer type `Foo *` | [07-classes-ownership.md](../07-classes/07-classes-ownership.md#heap--heap-аллокация-классов) |
 | `@packed` | `class` | Compact struct layout — `__attribute__((packed))` | [07-packed-align.md](../07-classes/07-packed-align.md) |
