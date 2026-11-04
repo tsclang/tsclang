@@ -152,7 +152,7 @@
 
 | Раздел | О чём |
 |--------|-------|
-| **Уровни модели** | Четыре механизма: async/await (все платформы), threads (desktop), @embedded.isr (embedded), аннотации. |
+| **Уровни модели** | Четыре механизма: async/await (все платформы), threads (desktop), @isr (embedded), аннотации. |
 | **Async runtime** | Event loop → state machines в C → Runtime Interface → libuv / io_uring / poll loop. |
 | **State machine size** | Компилятор минимизирует struct: только live переменные через await; статический анализ stack. |
 | **Promise\<T\>** | Базовый тип async-значения; `.then/.catch/.finally`; как работает под капотом. |
@@ -178,10 +178,10 @@
 | **select** | Ожидание нескольких каналов/промисов; type-safe через match; только async-контекст. |
 | **Readonly\<T\>** | Send-safe обёртка для передачи данных в потоки; рекурсивная проверка полей. |
 | **Thread\<T\>** | Типизированный результат `Thread.spawn`; `await t.join()`. |
-| **@embedded.isr** | Embedded: обработчики прерываний (`@embedded.isr`); запреты (no alloc, no throw, no await). |
+| **@isr** | Embedded: обработчики прерываний (`@isr(VECTOR)`); запреты (no alloc, no throw, no await). |
 | **Volatile\<T\>** | MMIO регистры; гарантирует отсутствие оптимизации компилятором. |
 | **std/sync** | Критические секции на embedded: `interrupts.disable()`. |
-| **Embedded-аннотации** | `@signal` — fine-grained контроль над поведением на embedded. |
+| **POSIX-сигналы** | `@signal("SIGTERM")` — обработчики сигналов на desktop *[NOT YET IMPLEMENTED]* (#233). |
 | **Итоговая картина** | Сводная схема всей модели конкурентности: async, threads, embedded, связи между ними. |
 
 ### 12 — Модульная система ([12-modules/](./12-modules/))

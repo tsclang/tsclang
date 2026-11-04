@@ -212,7 +212,7 @@ const sub = sliceChars(s, 1, 3)  // codepoints 1..2 ✅
 - **`mut` методы** — явное обозначение мутирующих методов
 - **`as` overflow** — wrap-truncation (предсказуемо, не UB)
 - **Фиксированные массивы** — `T[N]` на стеке
-- **`@embedded.*` аннотации** — для ISR, inline, no-heap
+- **Платформенные аннотации** — `@isr` (обработчики прерываний), `@stack(name, N)` (стек для рекурсивных async); `@signal` и `@inline` — [NOT YET IMPLEMENTED]; no-heap — не декоратор, а `allocator: "static"` в профиле платформы
 - **Platform profiles** — условная компиляция без препроцессора
 - **Extension methods** — добавление методов к чужим типам без inheritance
 - **`?` propagate** — сокращение для return-on-error (Rust `?`, не существует в TS)

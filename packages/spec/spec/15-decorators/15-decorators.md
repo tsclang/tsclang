@@ -649,6 +649,16 @@ TSClang имеет набор **встроенных декораторов**, �
 3. **Контекстно-зависимы** — `@static` имеет разную семантику для let, function, async function, generator. См. таблицу выше
 4. **Комбинируются** — `@static async function*`, `@struct class`, `@packed @align(N) class` (взаимоисключающие: `@packed`+`@align`, `@pool`+`@heap`+`@struct`)
 
+### Конвенция именования
+
+Имена встроенных декораторов — **плоские идентификаторы** (`@struct`, `@pool(N)`, `@isr`), без пространств имён вида `@embedded.*`:
+
+- П2: в TypeScript декоратор — плоское имя; точечная форма `@a.b` в TS — это expression (обращение к свойству), а не namespace.
+- Платформенная специфичность живёт в самом имени: `@isr` — прерывания (embedded), `@stack(name, N)` — BSS-стек для рекурсивных async.
+- No-heap — не декоратор: запрет heap задаётся в профиле платформы (`allocator: "static"`, см. [13-build.md](../13-build/13-build.md)).
+- `@inline` и `@signal` — спроектированы, но *[NOT YET IMPLEMENTED]* ([06-functions.md](../06-functions/06-functions.md), [11-concurrency.md](../11-concurrency/11-concurrency.md)).
+
+⚠️ Неизвестные декораторы компилятор пока **молча игнорирует** — `@embedded.noHeap`, `@signal` или опечатка в имени компилируются без предупреждения, декоратор просто отбрасывается (#233).
 
 ---
 

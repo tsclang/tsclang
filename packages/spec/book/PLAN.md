@@ -384,7 +384,7 @@ pnpm tsx test/runner.ts book
 | 10.6 | Классы с string-полями | ownership, cleanup, _free, C-output |
 | 10.7 | Автоматический cleanup | `_free` генерация, RAII, goto cleanup, C-output |
 | 10.8 | Наследование | ограничения, почему композиция, отличие от TS |
-| 10.9 | Классы на AVR | @embedded.inline, @embedded.pool(N), no heap, стек |
+| 10.9 | Классы на AVR | @struct, @pool(N), no heap, стек |
 | 10.10 | Классы в async | capture в state machine, ownership через await, _free timing |
 | 10.11 | @packed и @align | выравнивание структур, embedded, padding диагностика |
 | 10.12 | Extension methods | добавление методов к существующим типам |
@@ -519,7 +519,7 @@ pnpm tsx test/runner.ts book
 | 20.8 | Async ownership | retain-on-capture string, Ref<T> через await запрещено, cleanup |
 | 20.9 | AbortSignal | отмена задач, паттерн, C-output |
 | 20.10 | AsyncMutex | координация async-функций |
-| 20.11 | Рекурсивные async | @embedded.stack(name, N), ограничения |
+| 20.11 | Рекурсивные async | @stack(name, N) — BSS-стек, ограничения |
 | 20.12 | Async на AVR | cooperative scheduler, no heap, singleton SM, ограничения |
 
 ### Блок 21: Генераторы
@@ -530,7 +530,7 @@ pnpm tsx test/runner.ts book
 | 21.2 | for-of по генератору | итерация, ленивость, C-output |
 | 21.3 | Async generators | async function*, yield, for await, C-output |
 | 21.4 | Generator cleanup | return(), throw(), C-output |
-| 21.5 | @embedded.singleton | единственный экземпляр, uint8_t state, embedded |
+| 21.5 | @singleton [NOT YET DESIGNED] | единственный экземпляр, uint8_t state, embedded |
 | 21.6 | Генераторы на AVR | стек, no heap, альтернативы |
 | 21.7 | Кооперативная многозадачность | генераторы как корутины, паттерн |
 
@@ -552,10 +552,10 @@ pnpm tsx test/runner.ts book
 | # | Глава | Темы |
 |---|-------|------|
 | 23.1 | Введение в embedded | зачем TSClang на железе, платформы, ограничения |
-| 23.2 | @embedded.inline | классы без heap, стек, C-output |
-| 23.3 | @embedded.noHeap | проверка отсутствия heap, C-output |
-| 23.4 | @embedded.pool(N) | pool allocator, фиксированный размер, C-output |
-| 23.5 | @embedded.isr | Interrupt Service Routine, правила, ограничения |
+| 23.2 | @struct | value-type классы без heap, стек, C-output |
+| 23.3 | Heap-free профиль | allocator: "static" — compile-time запрет heap, C-output |
+| 23.4 | @pool(N) | pool allocator, фиксированный размер, C-output |
+| 23.5 | @isr | Interrupt Service Routine, правила, ограничения |
 | 23.6 | Volatile<T> | MMIO регистры, pointer semantics, C-output |
 | 23.7 | EmbeddedSignal | мост ISR → async, автоматическая битовая упаковка |
 | 23.8 | std/sync | критические секции на embedded |

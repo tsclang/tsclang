@@ -398,7 +398,7 @@
 - 04.10.1-static-dispatch.md — Static dispatch всегда
 - 04.10.2-no-recursion.md — Рекурсия: ограничение стека
 - 04.10.3-stack-usage.md — Стек: сколько занимает вызов функции
-- 04.10.4-inlining.md — Когда компилятор инлайнит: @embedded.inline
+- 04.10.4-inlining.md — Когда компилятор инлайнит: @inline [NOT YET IMPLEMENTED]
 
 ---
 
@@ -794,8 +794,8 @@
 - 10.8.3-inheritance-vs-ts.md — Отличие от TS
 
 ### 10.9 Классы на AVR
-- 10.9.1-embedded-inline.md — @embedded.inline
-- 10.9.2-embedded-pool.md — @embedded.pool(N)
+- 10.9.1-struct-classes.md — @struct: value-type классы
+- 10.9.2-pool-classes.md — @pool(N)
 - 10.9.3-class-stack-avr.md — На стеке: фиксированный размер
 - 10.9.4-class-avr-c-output.md — C-output: static struct
 
@@ -1354,7 +1354,7 @@
 
 ### 20.11 Рекурсивные async
 - 20.11.1-recursive-async.md — Рекурсивные async функции
-- 20.11.2-embedded-stack.md — @embedded.stack(name, N)
+- 20.11.2-stack-decorator.md — @stack(name, N): статический стек в BSS
 - 20.11.3-recursive-async-limitations.md — Ограничения
 
 ### 20.12 Async на AVR
@@ -1387,8 +1387,8 @@
 - 21.4.2-generator-throw.md — gen.throw(error)
 - 21.4.3-generator-cleanup-c-output.md — C-output
 
-### 21.5 @embedded.singleton
-- 21.5.1-singleton-syntax.md — @embedded.singleton
+### 21.5 @singleton [NOT YET DESIGNED]
+- 21.5.1-singleton-syntax.md — @singleton
 - 21.5.2-singleton-sm.md — uint8_t state, single instance
 - 21.5.3-singleton-c-output.md — C-output
 
@@ -1458,23 +1458,23 @@
 - 23.1.2-supported-platforms.md — Платформы: AVR, ARM, ESP32, retro
 - 23.1.3-embedded-limitations.md — Ограничения: no heap, no OS, no stdio
 
-### 23.2 @embedded.inline
-- 23.2.1-inline-syntax.md — @embedded.inline на классах
-- 23.2.2-inline-how.md — Как работает: стек вместо heap
-- 23.2.3-inline-c-output.md — C-output: static struct
+### 23.2 @struct
+- 23.2.1-struct-syntax.md — @struct на классах: value-type
+- 23.2.2-struct-how.md — Как работает: стек вместо heap
+- 23.2.3-struct-c-output.md — C-output: static struct
 
-### 23.3 @embedded.noHeap
-- 23.3.1-noheap-syntax.md — @embedded.noHeap
-- 23.3.2-noheap-check.md — Проверка: компилятор ошибается при heap usage
-- 23.3.3-noheap-c-output.md — C-output
+### 23.3 Heap-free профиль
+- 23.3.1-heap-free-profile.md — allocator: "static" в профиле платформы
+- 23.3.2-heap-free-check.md — Проверка: компилятор ошибается при heap usage
+- 23.3.3-heap-free-c-output.md — C-output
 
-### 23.4 @embedded.pool(N)
-- 23.4.1-pool-syntax.md — @embedded.pool(N) на классах
+### 23.4 @pool(N)
+- 23.4.1-pool-syntax.md — @pool(N) на классах
 - 23.4.2-pool-how.md — Как работает: fixed-size pool allocator
 - 23.4.3-pool-c-output.md — C-output
 
-### 23.5 @embedded.isr
-- 23.5.1-isr-syntax.md — @embedded.isr(VECTOR)
+### 23.5 @isr
+- 23.5.1-isr-syntax.md — @isr(VECTOR)
 - 23.5.2-isr-rules.md — Правила: no heap, no async, no channels
 - 23.5.3-isr-limitations.md — Ограничения
 - 23.5.4-isr-c-output.md — C-output: ISR vector
@@ -1512,7 +1512,7 @@
 - 23.11.3-scheduler-vs-desktop.md — Embedded vs desktop runtime
 
 ### 23.12 Heap-free платформы
-- 23.12.1-classes-no-heap.md — Классы: @embedded.inline
+- 23.12.1-classes-no-heap.md — Классы: @struct, @pool(N)
 - 23.12.2-arrays-no-heap.md — Массивы: стек, BSS
 - 23.12.3-map-set-no-heap.md — Map/Set: static hashmap
 - 23.12.4-async-no-heap.md — Async: singleton SM

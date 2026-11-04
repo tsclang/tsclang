@@ -861,7 +861,9 @@ static inline uint32_t _tsc_signal_snapshot(volatile uint32_t *bank) {
 
 > **Удалён:** `@embedded.noHeap` (был документирован, никогда не реализован в компиляторе). Существующая защита достаточна: `allocator: "static"` запрещает heap-операции (`new Array` без N, `new Map` без capacity, `Arc<T>`, `@heap` class) compile-time. Отдельный function-уровневый маркер избыточен.
 
-### `@signal` — POSIX-сигналы (desktop)
+### `@signal` — POSIX-сигналы (desktop) *[NOT YET IMPLEMENTED]*
+
+> **Статус:** не реализован (#233). Компилятор не распознаёт `@signal` — декоратор молча игнорируется, функция компилируется как обычная. Раздел ниже — дизайн будущей реализации.
 
 Аналог `@isr` для desktop — обработка POSIX-сигналов.
 
@@ -923,7 +925,7 @@ uv_signal_init(loop, &_sig_hup);  uv_signal_start(&_sig_hup, _onHangup, SIGHUP);
 |-----------|---------|----------|----------|
 | `@inline` *[NOT YET IMPLEMENTED]* | ✅ | ✅ | — |
 | `@isr` | ❌ | ✅ | Compile-time |
-| `@signal` | ✅ | ❌ | Compile-time |
+| `@signal` *[NOT YET IMPLEMENTED]* | ✅ | ❌ | — |
 
 
 ## 6. Кооперативная многозадачность через генераторы
