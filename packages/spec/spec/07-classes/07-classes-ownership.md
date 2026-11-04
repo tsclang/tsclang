@@ -358,7 +358,7 @@ const { name, email } = user;
 | Тип класса | Синтаксис | C-вывод | Размещение | `T \| null` | Move | Drop |
 |------------|-----------|---------|------------|-------------|------|------|
 | `class` (default) | `new Point(10, 20)` | `Point p = Point_new(10, 20)` | Стек (на всех платформах) | `opt_Point` inline | memset src=0 | `_free()` release string-полей |
-| `@struct` | `Point(10, 20)` (без `new`) | `Point p = {10, 20}` | Стек/inline | Запрещён | copy | no-op |
+| `@struct` | `new Point()` + присваивание полей | `Point p = {0}` | Стек/inline | Запрещён | copy | no-op |
 | `@pool(N)` | `new Gem(42)` | alloc from pool + constructor | BSS static pool | `opt_ref_Gem` pointer | pointer copy + `a = NULL` | `drop()` или auto-drop |
 | `@heap` | `new Node(42)` | `malloc + constructor` | Heap | `Node*` (NULL) | pointer copy + `a = NULL` | auto-free при scope exit |
 
@@ -386,9 +386,10 @@ Move semantics = zero-cost abstraction. Нет refcount, нет runtime overhead
 @struct
 class Point { x: i32; y: i32; }
 
-// Используется БЕЗ new — value, как struct
-let p = Point(10, 20);
-p.x = 15;
+// Создание — через new, без аргументов; значение живёт на стеке
+let p = new Point();
+p.x = 10;
+p.y = 20;
 ```
 
 ### C-вывод
@@ -396,10 +397,11 @@ p.x = 15;
 ```c
 typedef struct { int32_t x; int32_t y; } Point;
 
-// Inline в scope, без вызова Point_new()
-int32_t main(void) {
-    Point p = {10, 20};
-    p.x = 15;
+int main(void) {
+    TSC_INIT();
+    Point p = {0};
+    p.x = 10;
+    p.y = 20;
     return 0;
 }
 ```
@@ -409,7 +411,7 @@ int32_t main(void) {
 - **Нет методов** (кроме `constructor`) — компилятор выдаёт ошибку если класс содержит не-конструктор методы
 - **Нет интерфейсов** (no vtable) — `Point` не может реализовывать интерфейсы
 - **Нет `@pool`/`@heap`** — `@struct` исключает другие декораторы аллокации
-- **На non-embedded платформах** — `@struct` допустим, компилируется в тот же inline-стиль
+- **Только embedded-платформы** — на остальных профилях ошибка E304 («no effect on non-embedded platform»): обычный класс и так размещается inline на стеке, `@struct` ничего не добавляет
 
 ### Когда использовать
 
