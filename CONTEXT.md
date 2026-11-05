@@ -11,7 +11,7 @@
 - **Compiler:** `packages/compiler/src/compiler/` (lexer → parser → codegen → C). Public API barrel: `packages/compiler/src/index.ts`. `strict: true`, ZERO @ts-nocheck.
 - **Runtime:** `packages/compiler/src/runtime/runtime.h` (single-header C library)
 - **CLI:** `packages/cli/src/index.ts` (диспетчер) → `packages/cli/src/cli/commands/*.ts`
-- **Tests:** 1875 case corpus + 544 spec-suite (3 suites) + 158 engine self-tests
+- **Tests:** 1875 case corpus + 601 spec-suite (4 suites) + 158 engine self-tests
 - **Targets:** desktop, AVR, NES, Genesis, Spectrum, DOS, PS2, WASM
 - **Next goal:** Self-hosting (#47–#50)
 
@@ -105,7 +105,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 
 ## 8. Current State
 
-### Tests: 1965 case corpus (by runner) + 544 spec-suite + 158 engine self-tests
+### Tests: 1965 case corpus (by runner) + 601 spec-suite + 158 engine self-tests
 
 **Case corpus:** 1965 cases. Full phased rerun 2026-11-03 (unicode idents #230 + bigint mixing #231, dist build clean): all 16 sections + book green. 2026-11-04 (#236): `@struct` allowed on ALL platforms — E304 non-embedded branch removed from class.ts; methods-ban (E412) and `_isInline` marking no longer gated on `isEmbedded`; desktop C-output is byte-identical to avr for data-only classes; runner resolves `@tsclang/compiler` from dist — `pnpm build` BEFORE rerunning tests after compiler changes. Manual gcc from Git Bash fails SILENTLY (exit 1, zero diagnostics — cc1.exe needs the MSYS2 runtime); for ad-hoc compile checks use `/c/msys64/usr/bin/bash -lc "gcc input.c -o app.exe -I.../runtime && ./app.exe"` — the same way the runner does it (tests/src/compilers/msys2.ts). Phased rerun after #236: 14-stdlib 303✓, 07-classes 45✓, 13-build 174✓. Bigint mixing rules (#231): any expression containing an n-literal infers 64-bit (`let a = 42n + 1` → int64_t even under defaultNumber=f64 — vardecl uses `_effectiveType` when `hasBigintLiteral(init)`); E124 target `number` resolves through defaultNumber BEFORE the bigint check (i64 default accepts `let a: number = 42n`, f64 → E124; `42n + 1` into f64-number → E100); n-literals always emit C suffix by value range in ANY expression position (`42LL`, `18446744073709551615ULL` — bare out-of-i64-range decimal is a C constraint violation; `literalToC` + `binaryWidened` both suffix). Known edge, separate issue: unary minus on `-9223372036854775808n` (i64 min) is inconsistent — annotated i64 OK (vardecl split-form special case), unannotated → false E101, in binary expr → silently uint64. All three former baseline failures are resolved: `03-types/widening/warn-not-array` fixed in dd2a8348 (#226), `10-async/async-fn/warn-async-recursion` replaced by `err-async-recursion` E307 in 5b0d9a86 (#228), `06-functions/function-values/store-in-var` turned green after the #227 closure-inferCall fix (3970fde3). `12-modules` warn-native-block/warn-unsafe-block were broken test data since #179 — fixed in #208 commit.
 
@@ -120,6 +120,7 @@ Single-header C library. Key components: `String` (ARC), `Array_T` macros, `TscM
 | 02-syntax/02-variables | 280p/0f/3xf (283) | 3 literal-case files are **matrix-driven** (#223): range/invalid/alt-literals iterate `test-engine/src/matrix.ts` (anchors 8.x per type, 9.x by radix, 10.x per type); #215 Arc/Weak zero-value ×2, #216 enum `?` sugar ×1 |
 | 02-syntax/02-formatting | 52p/0f/8xf (60) | #209 untyped arrow param ×2, #210 forEach macro, #211 tagged template, #212 ++/-- ASI ×2, #213 anon-struct Array typedef, #214 tsc_dtoa digits |
 | 03-types/cast-pairs | 201p/0f (201) | 14×14 numeric `as`-cast pairs (desktop gcc, self-casts included) + 5 avr samples gated on avr-gcc availability; expectations probed, zero cast bugs found |
+| 13-build/cli | 55p/0f/2s (57) | CLI surface suite (#238): dictionary-driven from `dictionary.json` = what book 00.2.2/00.2.3 CLAIMS (book is the priority source, every entry carries provenance). Spawns `packages/cli/dist/index.js` (`pnpm build` first); gcc-dependent probes (run, --emit binary) use `runCli({viaMsys2:true})` — MSYS2 login-bash wrap, plain win32 spawn has broken gcc (#241 hides it: "gcc failed:" with empty diagnostics). 2 skips = emcc/avr-gcc absent. Fact-check verdict: book is accurate; bugs filed #239–#246 |
 
 Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfailed`, excluded from pass/fail and exit code; XPASS prints loudly (marker → remove). Entry points: `pnpm tsx packages/tests/test/spec/<section>/<folder>/run.ts`.
 
