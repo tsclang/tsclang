@@ -1,7 +1,7 @@
 {
   "name": "myapp",
   "version": "1.0.0",
-  "main": "src/main.tsc",
+  "main": "main.tsc",
   "type": "executable",
   "builds": {
     "release": { "optimize": "O2" }

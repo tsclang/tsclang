@@ -1,1 +1,2 @@
-tsclang build-cmake tsc.package.json
+tsclang build main.tsc --build avr --emit cmake
+cat CMakeLists.txt

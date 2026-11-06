@@ -1,1 +1,2 @@
-tsclang build-cmake tsc.package.json --build release
+tsclang build main.tsc --build release --emit cmake
+cat CMakeLists.txt
