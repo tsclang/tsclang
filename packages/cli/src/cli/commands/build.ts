@@ -5,7 +5,7 @@ import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, ca
 import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType } from '../args.js';
 import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
-import { generateBuildCmake } from '../cmake.js';
+import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
 import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
@@ -204,6 +204,21 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (_stale.removed.length) parts.push(`removed: ${_stale.removed.join(', ')}`);
     if (_stale.changed.length) parts.push(`changed: ${_stale.changed.join(', ')}`);
     process.stderr.write(`tsclang build: warning: tsc.package.lock is out of date (${parts.join('; ')}). Run 'tsclang install' to sync.\n`);
+  }
+
+  // --emit cmake: generate CMakeLists.txt only, no .c compilation (replaces the old build-cmake command)
+  if (emit === 'cmake') {
+    const stem = basename(inputFile, extname(inputFile));
+    const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
+    const toolchain = String(_buildCfg?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
+    const projectName = (typeof _pkg?.name === 'string' && _pkg.name ? _pkg.name : stem)
+      .replace(/^@[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'CMakeLists.txt'), generateProjectCmake({
+      projectName, target, mcu: _mcu, toolchain, optimize, mainFile: `${stem}.c`,
+    }), 'utf8');
+    process.stdout.write(`Built ${join(outDir, 'CMakeLists.txt')}\n`);
+    return;
   }
 
   const buildOpts = {

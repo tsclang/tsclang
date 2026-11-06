@@ -47,7 +47,6 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   run: new Set(['--optimize', '--no-cache']),
   debug: new Set(),
   init: new Set(['--type', '--library', '-l', '--declaration', '-d', '--platform', '-p']),
-  'build-cmake': new Set(['--build']),
   lint: new Set(['--fix']),
   format: new Set(),
   'emit-dts': new Set(),

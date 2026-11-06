@@ -55,23 +55,22 @@
 - 00.6.4-async-on-avr.md — Async на AVR: cooperative scheduler, singleton SM
 
 ### 00.7 CLI — справочник команд
-- 00.7.1-overview.md — Карта всех 16 команд, глобальные флаги, соглашения выхода
+- 00.7.1-overview.md — Карта всех 15 команд, глобальные флаги, соглашения выхода
 - 00.7.2-build.md — build: 18 опций, именованные сборки, кэш, watch
 - 00.7.3-run.md — run: компиляция и запуск, передача аргументов через --
 - 00.7.4-debug.md — debug: отладка под gdb, #line и source map
 - 00.7.5-test.md — test: *.test.tsc из test/, формат теста, таймаут
 - 00.7.6-init.md — init: 4 типа проектов, флаги -d/-l/-p, --type
-- 00.7.7-build-cmake.md — build-cmake: CMakeLists.txt из builds в stdout
-- 00.7.8-validate-config.md — validate-config: все проверки манифеста, резолв зависимостей
-- 00.7.9-lint.md — lint: prefer-const, no-unreachable, --fix, --rule=
-- 00.7.10-format.md — format: форматирование на месте
-- 00.7.11-explain.md — explain: коды ошибок E0xx, каталог диагностик
-- 00.7.12-emit-dts.md — emit-dts: генерация .d.tsc для C interop
-- 00.7.13-install.md — install: синхронизация, .tspkg, реестр, --production
-- 00.7.14-update.md — update: обновление записи до latest
-- 00.7.15-search.md — search: поиск по реестру
-- 00.7.16-publish.md — publish: упаковка .tspkg
-- 00.7.17-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
+- 00.7.7-validate-config.md — validate-config: все проверки манифеста, резолв зависимостей
+- 00.7.8-lint.md — lint: prefer-const, no-unreachable, --fix, --rule=
+- 00.7.9-format.md — format: форматирование на месте
+- 00.7.10-explain.md — explain: коды ошибок E0xx, каталог диагностик
+- 00.7.11-emit-dts.md — emit-dts: генерация .d.tsc для C interop
+- 00.7.12-install.md — install: синхронизация, .tspkg, реестр, --production
+- 00.7.13-update.md — update: обновление записи до latest
+- 00.7.14-search.md — search: поиск по реестру
+- 00.7.15-publish.md — publish: упаковка .tspkg
+- 00.7.16-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
 
 ---
 

@@ -2187,7 +2187,6 @@ build/avr/
 | `tsclang debug` | Отладка под gdb |
 | `tsclang test` | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
-| `tsclang build-cmake` | Сгенерировать CMakeLists.txt |
 | `tsclang lint` | Линтер (`prefer-const`, `no-unreachable`) |
 | `tsclang format` | Форматирование исходника |
 | `tsclang explain` | Объяснение кода ошибки |
@@ -2270,6 +2269,7 @@ tsclang build --emit c        # только генерация C
 tsclang build --emit binary   # C + компиляция в бинарь
 tsclang build --emit hex      # C + avr-gcc → .hex
 tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошивка
+tsclang build --emit cmake    # только CMakeLists.txt (без компиляции .c)
 tsclang build --outDir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
 ```

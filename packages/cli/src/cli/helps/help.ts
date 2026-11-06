@@ -11,7 +11,6 @@ COMMANDS:
   debug            Debug a .tsc program
   test             Run tests in test/ directory
   init             Create a new project
-  build-cmake      Generate CMakeLists.txt
   lint             Run linter
   format           Format source code
   explain          Explain an error code

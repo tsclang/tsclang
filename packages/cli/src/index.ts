@@ -14,7 +14,6 @@ import { runValidateConfigCommand } from './cli/commands/config.js';
 import { runInitCommand } from './cli/commands/init.js';
 import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/commands/source.js';
 import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from './cli/commands/package.js';
-import { runBuildCmakeCommand } from './cli/commands/build-cmake.js';
 import { runRunCommand, runDebugCommand } from './cli/commands/run.js';
 import { runTestCommand } from './cli/commands/test.js';
 
@@ -67,9 +66,6 @@ switch (command) {
     break;
   case 'init':
     runInitCommand(args);
-    break;
-  case 'build-cmake':
-    runBuildCmakeCommand(args);
     break;
   case 'lint':
     runLintCommand(args);

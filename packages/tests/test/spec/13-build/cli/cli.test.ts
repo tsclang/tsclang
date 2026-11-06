@@ -151,7 +151,7 @@ describe("13-build/cli — помощь по команде (00.2.2:77-87)", () 
 // === smoke: every dictionary command is dispatched (not "unknown command") ===
 
 describe("13-build/cli — smoke: каждая команда словаря диспетчеризуется", () => {
-  const missingInput = ["build", "run", "debug", "build-cmake", "lint", "format", "validate-config"]
+  const missingInput = ["build", "run", "debug", "lint", "format", "validate-config"]
   for (const name of missingInput) {
     test(`${name} без аргументов — ошибка входа, не unknown command`, async () => {
       const r = await runCli([name], { cwd: mkTmp() })
@@ -236,7 +236,7 @@ describe("13-build/cli — build: заявленный результат и о�
     })
   }
 
-  test("--build <имя> — именованная сборка из tsc.package.json (00.7.2:28,43-56)", async () => {
+  test("--build <имя> — именованная сборка из tsc.package.json (00.7.2:29,43-56)", async () => {
     const dir = mkTmp()
     mkdirSync(join(dir, "src"))
     writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
@@ -280,6 +280,16 @@ describe("13-build/cli — build: заявленный результат и о�
   } else {
     test.skip("--target avr --emit hex (пропуск: avr-gcc недоступен)", () => {})
   }
+
+  test("--emit cmake → CMakeLists.txt в outDir, без компиляции .c (toolchain не нужен)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit", "cmake", "--outDir", "out"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "out", "CMakeLists.txt"))).toBe(true)
+    expect(existsSync(join(dir, "out", "hello.c"))).toBe(false)
+    expect(readFileSync(join(dir, "out", "CMakeLists.txt"), "utf8")).toContain("project(hello C)")
+  })
 })
 
 // === run / debug (gcc-gated; 00.2.3:11-18, 00.7.3-00.7.4) ===
@@ -333,9 +343,9 @@ describe("13-build/cli — init (00.2.3:5-20)", () => {
   })
 })
 
-// === lint / format / explain / emit-dts / validate-config / packages (00.7.8-00.7.16) ===
+// === lint / format / explain / emit-dts / validate-config / packages (00.7.7-00.7.15) ===
 
-describe("13-build/cli — lint (00.7.9)", () => {
+describe("13-build/cli — lint (00.7.8)", () => {
   test("lint файл с no-unreachable — ненулевой exit, LintError в выводе", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "bad.tsc"), 'function f(): void { return; console.log("x"); }\n')
@@ -344,14 +354,14 @@ describe("13-build/cli — lint (00.7.9)", () => {
     expect(out(r)).toContain("no-unreachable")
   })
 
-  test("lint --rule=prefer-const — фильтр по одному правилу (00.7.9:30)", async () => {
+  test("lint --rule=prefer-const — фильтр по одному правилу (00.7.8:30)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     const r = await runCli(["lint", "letty.tsc", "--rule=prefer-const"], { cwd: dir })
     expect(out(r)).toContain("prefer-const")
   })
 
-  test("lint --fix переписывает let → const (00.7.9:29)", async () => {
+  test("lint --fix переписывает let → const (00.7.8:29)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     await runCli(["lint", "letty.tsc", "--fix"], { cwd: dir })
@@ -360,7 +370,7 @@ describe("13-build/cli — lint (00.7.9)", () => {
   })
 })
 
-describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.10-00.7.12, 00.7.8)", () => {
+describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.9-00.7.11, 00.7.7)", () => {
   test("format hello.tsc — exit 0", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
@@ -368,13 +378,13 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.10-00.7
     expect(r.code).toBe(0)
   })
 
-  test("explain E012 — объяснение кода ошибки (00.7.11)", async () => {
+  test("explain E012 — объяснение кода ошибки (00.7.10)", async () => {
     const r = await runCli(["explain", "E012"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("E012")
   })
 
-  test("emit-dts hello.tsc создаёт hello.d.tsc (00.7.12)", async () => {
+  test("emit-dts hello.tsc создаёт hello.d.tsc (00.7.11)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["emit-dts", "hello.tsc"], { cwd: dir })
@@ -382,7 +392,7 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.10-00.7
     expect(existsSync(join(dir, "hello.d.tsc"))).toBe(true)
   })
 
-  test("validate-config tsc.package.json — exit 0 (00.7.8)", async () => {
+  test("validate-config tsc.package.json — exit 0 (00.7.7)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
     const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
@@ -390,8 +400,8 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.10-00.7
   })
 })
 
-describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.13-00.7.16)", () => {
-  test("search regex — exit 0, непустой вывод (00.7.15)", async () => {
+describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.12-00.7.15)", () => {
+  test("search regex — exit 0, непустой вывод (00.7.14)", async () => {
     const r = await runCli(["search", "regex"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout.length > 0).toBeTruthy()
@@ -402,7 +412,7 @@ describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.13-
     notUnknown(r)
   })
 
-  test("update mylib в изолированном cwd — не unknown command (00.7.14)", async () => {
+  test("update mylib в изолированном cwd — не unknown command (00.7.13)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
     const r = await runCli(["update", "mylib"], { cwd: dir })
@@ -459,6 +469,12 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     const r = await runCli(["build", "hello.tsc", "-w"], { cwd: dir, timeoutMs: 15000 })
     expect(r.code).toBe(1)
     expect(out(r)).toContain("unknown option '-w'")
+  })
+
+  test("build-cmake удалена — unknown command (заменена на build --emit cmake)", async () => {
+    const r = await runCli(["build-cmake"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown command 'build-cmake'")
   })
 
   test("глобальный help не рекламирует пер-командную --no-cache — она в справках build/run", async () => {
