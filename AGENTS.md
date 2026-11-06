@@ -136,10 +136,10 @@ pnpm test:engine                             # запуск генератора
 
 ## Запуск CLI вручную
 
-При ручном запуске `tsclang build` ВСЕГДА указывай `--outDir` во временную папку:
+При ручном запуске `tsclang build` ВСЕГДА указывай `--out-dir` во временную папку:
 
 ```bash
-node packages/cli/dist/index.js build input.tsc --outDir .tsclang-tmp/
+node packages/cli/dist/index.js build input.tsc --out-dir .tsclang-tmp/
 ```
 
 Или используй программный API вместо CLI:
@@ -150,4 +150,4 @@ const result = codegen(ast, 'desktop');
 // result.c — C-код как строка
 ```
 
-**Никогда не запускай `tsclang build` без `--outDir` из корня проекта** — артефакты (`.c`, `CMakeLists.txt`) попадут в корень и засорят его.
+**Никогда не запускай `tsclang build` без `--out-dir` из корня проекта** — артефакты (`.c`, `CMakeLists.txt`) попадут в корень и засорят его.

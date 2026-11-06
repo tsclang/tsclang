@@ -514,7 +514,7 @@ pnpm test --platform wasm
 # Проверить CONTEXT.md, README.md, CHANGELOG.md
 
 # 4. Инструментарий
-tsclang build input.tsc --outDir .tsclang-tmp/
+tsclang build input.tsc --out-dir .tsclang-tmp/
 tsclang lint input.tsc
 tsclang format input.tsc
 tsclang lsp  # запустить и проверить

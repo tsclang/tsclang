@@ -47,7 +47,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   }
 
   let emit: string       = flagValue(args, '--emit') ?? 'c';
-  let outDir: string     = flagValue(args, '--outDir') ?? '.';
+  let outDir: string     = flagValue(args, '--out-dir') ?? '.';
   const allErrors        = hasFlag(args, '--all-errors');
   const debugLines       = hasFlag(args, '--debug');
   const noCache          = hasFlag(args, '--no-cache');

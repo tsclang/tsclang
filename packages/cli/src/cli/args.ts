@@ -41,7 +41,7 @@ export function isValidNumberType(val: string): boolean {
 const GLOBAL_FLAGS = new Set(['--no-color', '--version', '-v', '--help', '-h']);
 
 export const COMMAND_FLAGS: Record<string, Set<string>> = {
-  build: new Set(['--emit', '--outDir', '--all-errors', '--debug', '--no-cache', '--sourcemap',
+  build: new Set(['--emit', '--out-dir', '--all-errors', '--debug', '--no-cache', '--sourcemap',
     '--watch', '--optimize', '--target', '--default-number', '--allocator', '--async',
     '--strict', '--ram-size', '--stack-size', '--platform', '--build', '--mcu']),
   run: new Set(['--optimize', '--no-cache']),

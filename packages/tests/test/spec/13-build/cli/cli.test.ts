@@ -200,10 +200,10 @@ describe("13-build/cli — smoke: каждая команда словаря д�
 // === build — claimed result (00.2.3) and options table (00.7.2) ===
 
 describe("13-build/cli — build: заявленный результат и опции (00.2.3:37, таблица 00.7.2)", () => {
-  test("build hello.tsc --outDir out → out/hello.c + out/CMakeLists.txt (00.2.3:37)", async () => {
+  test("build hello.tsc --out-dir out → out/hello.c + out/CMakeLists.txt (00.2.3:37)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-    const r = await runCli(["build", "hello.tsc", "--outDir", "out"], { cwd: dir })
+    const r = await runCli(["build", "hello.tsc", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "out", "hello.c"))).toBe(true)
     expect(existsSync(join(dir, "out", "CMakeLists.txt"))).toBe(true)
@@ -231,7 +231,7 @@ describe("13-build/cli — build: заявленный результат и о�
     test(`build принимает ${label} (таблица 00.7.2)`, async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", ...flags, "--outDir", "out"], { cwd: dir })
+      const r = await runCli(["build", "hello.tsc", ...flags, "--out-dir", "out"], { cwd: dir })
       expect(r.code).toBe(0)
     })
   }
@@ -241,7 +241,7 @@ describe("13-build/cli — build: заявленный результат и о�
     mkdirSync(join(dir, "src"))
     writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
-    const r = await runCli(["build", "src/main.tsc", "--build", "desktop", "--outDir", "out"], { cwd: dir })
+    const r = await runCli(["build", "src/main.tsc", "--build", "desktop", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "out", "main.c"))).toBe(true)
   })
@@ -251,7 +251,7 @@ describe("13-build/cli — build: заявленный результат и о�
     test("--emit binary → бинарник (требует gcc)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--outDir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: true })
+      const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: true })
       expect(r.code).toBe(0)
       expect(existsSync(join(dir, "out", "hello.exe")) || existsSync(join(dir, "out", "hello"))).toBe(true)
     })
@@ -263,7 +263,7 @@ describe("13-build/cli — build: заявленный результат и о�
     test("--emit wasm (требует emcc)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--emit", "wasm", "--outDir", "out"], { cwd: dir, timeoutMs: 120000 })
+      const r = await runCli(["build", "hello.tsc", "--emit", "wasm", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000 })
       expect(r.code).toBe(0)
     })
   } else {
@@ -274,7 +274,7 @@ describe("13-build/cli — build: заявленный результат и о�
     test("--target avr --emit hex (требует avr-gcc)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--target", "avr", "--emit", "hex", "--outDir", "out"], { cwd: dir, timeoutMs: 120000 })
+      const r = await runCli(["build", "hello.tsc", "--target", "avr", "--emit", "hex", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000 })
       expect(r.code).toBe(0)
     })
   } else {
@@ -284,7 +284,7 @@ describe("13-build/cli — build: заявленный результат и о�
   test("--emit cmake → CMakeLists.txt в outDir, без компиляции .c (toolchain не нужен)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-    const r = await runCli(["build", "hello.tsc", "--emit", "cmake", "--outDir", "out"], { cwd: dir })
+    const r = await runCli(["build", "hello.tsc", "--emit", "cmake", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "out", "CMakeLists.txt"))).toBe(true)
     expect(existsSync(join(dir, "out", "hello.c"))).toBe(false)
@@ -475,6 +475,14 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     const r = await runCli(["build-cmake"], { cwd: mkTmp() })
     expect(r.code).toBe(1)
     expect(out(r)).toContain("unknown command 'build-cmake'")
+  })
+
+  test("--outDir (camelCase) → unknown option (переименован в --out-dir, без алиаса)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--outDir", "out"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown option '--outDir'")
   })
 
   test("глобальный help не рекламирует пер-командную --no-cache — она в справках build/run", async () => {

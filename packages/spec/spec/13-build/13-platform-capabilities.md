@@ -228,7 +228,7 @@ CLI флаги  >  profile capabilities  >  builds.*  >  desktop default
 - CLI `--allocator heap` → **ошибка** (конфликт с профилем)
 - `builds.avr.allocator: "heap"` → **ошибка** (конфликт с профилем)
 
-CLI может задать только **проектные настройки** (не capabilities): `--optimize`, `--outDir`, `--emit`, `--default-number` (если не конфликтует с `fpu`).
+CLI может задать только **проектные настройки** (не capabilities): `--optimize`, `--out-dir`, `--emit`, `--default-number` (если не конфликтует с `fpu`).
 
 ### Таблица — что где можно задать
 

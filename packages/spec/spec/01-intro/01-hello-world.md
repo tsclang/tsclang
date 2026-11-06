@@ -9,7 +9,7 @@ console.log("Hello, TSClang!")
 Компиляция и запуск:
 
 ```bash
-tsclang build hello.tsc --outDir out/
+tsclang build hello.tsc --out-dir out/
 cmake -B out/build out/ && cmake --build out/build
 ./out/build/hello
 # → Hello, TSClang!
@@ -45,7 +45,7 @@ tsclang run hello.tsc
 Требуется gcc в PATH (например, из MSYS2: `C:/msys64/mingw64/bin`).
 
 ```bash
-node packages/cli/dist/index.js build hello.tsc --outDir out/
+node packages/cli/dist/index.js build hello.tsc --out-dir out/
 cmake -G "MinGW Makefiles" -DCMAKE_C_COMPILER="C:/msys64/mingw64/bin/gcc.exe" -B out/build out/
 cmake --build out/build
 ```
@@ -55,7 +55,7 @@ cmake --build out/build
 cmake автоматически находит Visual Studio:
 
 ```bash
-node packages/cli/dist/index.js build hello.tsc --outDir out/
+node packages/cli/dist/index.js build hello.tsc --out-dir out/
 cmake -B out/build out/
 ```
 

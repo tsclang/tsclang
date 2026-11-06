@@ -194,7 +194,7 @@ Known bugs are marked `test(name, fn, { xfail: '#NNN' })` — counted as `xfaile
 | Fix async codegen | `async/scan.ts` + `async/async-stmt.ts` + `async/async-emit.ts` |
 | Add test | `packages/tests/test/cases/<NN>/<feature>/<name>/` |
 | Run tests | `pnpm tsx packages/tests/test/runner.ts 03-types` |
-| Compile manually | `node packages/cli/dist/index.js build input.tsc --outDir .tsclang-tmp/` |
+| Compile manually | `node packages/cli/dist/index.js build input.tsc --out-dir .tsclang-tmp/` |
 
 ---
 

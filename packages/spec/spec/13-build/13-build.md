@@ -2270,7 +2270,7 @@ tsclang build --emit binary   # C + компиляция в бинарь
 tsclang build --emit hex      # C + avr-gcc → .hex
 tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошивка
 tsclang build --emit cmake    # только CMakeLists.txt (без компиляции .c)
-tsclang build --outDir ./dist # переопределить outDir
+tsclang build --out-dir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
 ```
 

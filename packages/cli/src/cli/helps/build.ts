@@ -10,7 +10,7 @@ USAGE:
 
 OPTIONS:
   --emit <${emitOptions}>  Output format (default: c)
-  --outDir <dir>           Output directory (default: .)
+  --out-dir <dir>          Output directory (default: .)
   --target <name>          Target platform (desktop, avr, nes, wasm, ...)
   --platform <profile>     Use built-in profile (avr, nes, wasm, desktop, ...)
   --build <name>           Use named build from ${PACKAGE_FILE}

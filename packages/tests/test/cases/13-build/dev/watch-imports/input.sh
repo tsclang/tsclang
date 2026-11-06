@@ -9,7 +9,7 @@ export function greet(): string { return "hello"; }
 ENDTSC
 
 # Start watcher in background (redirect stdout to avoid cache-hit messages)
-tsclang build main.tsc --outDir build/ --watch >watch.log 2>&1 &
+tsclang build main.tsc --out-dir build/ --watch >watch.log 2>&1 &
 WPID=$!
 sleep 2
 

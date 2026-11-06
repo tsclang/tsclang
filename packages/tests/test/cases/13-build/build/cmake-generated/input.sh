@@ -1,2 +1,2 @@
-tsclang build main.tsc --emit c --outDir dist
+tsclang build main.tsc --emit c --out-dir dist
 test -f dist/CMakeLists.txt && echo "cmake-exists"

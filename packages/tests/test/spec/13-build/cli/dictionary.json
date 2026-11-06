@@ -38,7 +38,7 @@
       "resultProvenance": "00.2.3-quick-start.md:37",
       "options": [
         { "name": "--emit", "takesValue": true, "values": ["c", "binary", "hex", "flash", "wasm", "cmake"], "default": "c", "provenance": "00.7.2-build.md:25" },
-        { "name": "--outDir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
+        { "name": "--out-dir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
         { "name": "--target", "takesValue": true, "description": "desktop, avr, nes, wasm, ...", "default": "desktop", "provenance": "00.7.2-build.md:27" },
         { "name": "--platform", "takesValue": true, "description": "built-in platform profile", "default": null, "provenance": "00.7.2-build.md:28" },
         { "name": "--build", "takesValue": true, "description": "named build from tsc.package.json", "default": null, "provenance": "00.7.2-build.md:29" },

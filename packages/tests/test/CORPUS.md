@@ -1463,7 +1463,7 @@ input.tsc:1:
 - [R] компилирует hello world (executable)
 - [R] `--emit c` — только C-output, не вызывает gcc
 - [R] `--emit binary` — C + компиляция в бинарь
-- [R] `--outDir ./dist` — C-файлы в указанную директорию
+- [R] `--out-dir ./dist` — C-файлы в указанную директорию
 - [R] одиночный файл: `tsclang build hello.tsc`
 - [R] компилирует с локальными зависимостями
 - [R] debug профиль — генерирует `#line` директивы

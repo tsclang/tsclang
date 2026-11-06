@@ -34,7 +34,7 @@
 
 ### 00.4 Hello World — desktop
 - 00.4.1-first-file.md — Создание hello.tsc, console.log("Hello, World!")
-- 00.4.2-compilation.md — tsclang build hello.tsc --outDir dist
+- 00.4.2-compilation.md — tsclang build hello.tsc --out-dir dist
 - 00.4.3-c-output.md — Разбор hello.c: #include "runtime.h", main, TSC_INIT(), printf
 - 00.4.4-cmakelists.md — Разбор CMakeLists.txt
 - 00.4.5-running.md — Сборка через CMake, запуск бинарника
