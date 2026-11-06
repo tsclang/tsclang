@@ -2178,29 +2178,26 @@ build/avr/
 
 ## CLI команды
 
-| Команда | Алиас | Описание |
-|---------|-------|----------|
-| `tsclang init` | — | Создать новый проект |
-| `tsclang build` | `b` | Собрать проект |
-| `tsclang install` | `i` | Установить зависимости |
-| `tsclang update` | `u` | Обновить зависимости |
-| `tsclang remove` | `r` | Удалить зависимость |
-| `tsclang clean` | `c` | Удалить build артефакты |
-| `tsclang run` | — | Собрать и запустить |
-| `tsclang dev` | — | Режим отслеживания изменений |
-| `tsclang lint` | `l` | Проверить форматирование |
-| `tsclang migrate` | — | Миграция TypeScript → TSClang *(roadmap)* |
-| `tsclang debug` | — | DAP-сервер для отладки *(roadmap)* |
-| `tsclang lsp` | — | Language Server Protocol сервер для IDE *(roadmap)* |
+Таблица — только реализованные команды (единый список с `tsclang --help`). Запланированная команда `dev` — в секции ниже.
 
-```bash
-tsclang b                     # = tsclang build
-tsclang i                     # = tsclang install
-tsclang i @tsc/sqlite3 -d     # добавить dev-зависимость
-tsclang u                     # = tsclang update
-tsclang r @tsc/sqlite3        # = tsclang remove
-tsclang l -f                  # форматировать
-```
+| Команда | Описание |
+|---------|----------|
+| `tsclang build` | Компиляция `.tsc` → C / бинарник / прошивка |
+| `tsclang run` | Собрать и запустить |
+| `tsclang debug` | Отладка под gdb |
+| `tsclang test` | Запуск тестов из `test/` |
+| `tsclang init` | Создать новый проект |
+| `tsclang build-cmake` | Сгенерировать CMakeLists.txt |
+| `tsclang lint` | Линтер (`prefer-const`, `no-unreachable`) |
+| `tsclang format` | Форматирование исходника |
+| `tsclang explain` | Объяснение кода ошибки |
+| `tsclang emit-dts` | Генерация `.d.tsc` |
+| `tsclang lsp` | Language Server (stdio) |
+| `tsclang validate-config` | Проверка `tsc.package.json` |
+| `tsclang install` | Установить зависимости |
+| `tsclang update` | Обновить lock-файл |
+| `tsclang search` | Поиск пакетов |
+| `tsclang publish` | Упаковка пакета в `.tspkg` |
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора
@@ -2245,23 +2242,6 @@ tsclang install @tsc/test -d        # добавить в devDependencies
 tsclang install @tsc/a @tsc/b -d    # добавить несколько сразу
 tsclang install @tsc/sqlite3@^1.2.0 # с указанием версии
 ```
-
-### Удаление зависимостей
-
-```bash
-tsclang remove                      # удалить все
-tsclang remove @tsc/sqlite3         # удалить из dependencies или devDependencies
-tsclang remove @tsc/a @tsc/b        # удалить несколько сразу
-tsclang remove @tsc/sqlite3 -f      # --force, без подтверждения
-```
-
-Удаление требует подтверждения:
-
-```
-? Remove @tsc/sqlite3 from dependencies? (Y/n)
-```
-
-Флаг `--force` / `-f` пропускает подтверждение.
 
 ## `tsclang update` подробно
 
@@ -2434,90 +2414,17 @@ myapp/
 }
 ```
 
-## `tsclang migrate` *(roadmap — фаза 13)*
-
-Инструмент для однократной миграции TypeScript-проекта в TSClang. Применяет механические преобразования, которые невозможно сделать вручную без ошибок в большом кодебейзе.
-
-```bash
-tsclang migrate [path]           # показать что изменится (dry-run по умолчанию)
-tsclang migrate [path] --fix     # применить изменения на месте
-tsclang migrate [path] --check   # CI-режим: exit 1 если есть несовместимости
-```
-
-`path` — файл, директория или glob. По умолчанию — текущая директория.
-
-**Входные файлы:** `.ts` / `.tsx` (TypeScript-источник)
-**Выходные файлы:** `.tsc` (переименованные + трансформированные, оригиналы не удаляются)
-
-**Что автоматизируется:**
-
-| Трансформация | Пример |
-|--------------|--------|
-| `undefined` → `null` | `x === undefined` → `x == null` |
-| `throw "msg"` → `throw new Error("msg")` | везде |
-| `export default X` → `export { X }` | везде |
-| `x === y` → `x == y` | везде |
-| `x !== y` → `x != y` | везде |
-| Переименование `.ts` → `.tsc` | `user.ts` → `user.tsc` |
-| `import X from "./m"` → `import X from "./m"` | без изменений (уже совместимо) |
-
-**Что НЕ автоматизируется** (требует ручной правки — `--check` выводит список):
-
-- Классовое наследование (`extends` не `Error`) → нет безопасной автозамены
-- `s[i]` строковая индексация → семантика изменилась (u8 вместо string)
-- `for (let x of arr)` → нужен анализ типа элемента
-- Числовые аннотации (`number` → конкретный тип) → зависит от контекста
-- Ownership аннотации → требует понимания flow
-
-**Вывод dry-run:**
-
-```
-tsclang migrate ./src
-
-  src/user.ts → src/user.tsc
-    line 12: throw "not found"  →  throw new Error("not found")
-    line 34: x === undefined    →  x == null
-    line 67: export default User  →  export { User }
-
-  src/api.ts → src/api.tsc
-    line 5:  x !== undefined    →  x != null
-
-  Manual review required (2 files):
-    src/base.ts:15  — class Dog extends Animal (inheritance)
-    src/parser.ts:8 — s[i] string indexing
-
-  3 files to transform, 2 require manual review.
-  Run with --fix to apply automatic changes.
-```
-
-**Позиция в roadmap:** реализуется вместе с фазой 13 (линтер/форматтер) — использует тот же AST и infrastructure.
-
-## `tsclang lsp` *(roadmap)*
+## `tsclang lsp`
 
 LSP-сервер для интеграции с IDE (VS Code, JetBrains, Neovim и любой LSP-совместимый редактор).
 
 ```bash
 tsclang lsp           # запустить LSP-сервер (stdio transport)
-tsclang lsp --port 7777   # TCP transport
 ```
 
-**Возможности:**
+**Реализовано** (stdio): `initialize`, `hover`, `completion`, `definition`, `didOpen`/`didChange` — индекс символов текущего файла (функции, переменные, методы).
 
-| Функция | Описание |
-|---------|----------|
-| Completions | Автодополнение по типам, методам, импортам |
-| Hover | Тип выражения, документация |
-| Go-to-definition | Переход к объявлению |
-| Find references | Поиск использований |
-| Diagnostics | Ошибки и предупреждения в реальном времени |
-| Rename | Переименование символов |
-| Format | Форматирование через `tsclang lint --fix` |
-
-**Error recovery:** lsp-режим продолжает работу при синтаксических ошибках — парсер вставляет `ErrorNode` в AST и синхронизируется на ближайшей границе (`}`, `;`, `class`, `function`). IDE получает частичный AST и показывает корректные completions в неповреждённых частях файла.
-
-Вторичные ошибки вызванные `ErrorNode` помечаются как cascade и не показываются пользователю — только первичные.
-
-**Позиция в roadmap:** требует стабильного AST и type checker — реализуется после фазы 10 (полная компиляция).
+**Roadmap:** TCP transport (`--port`), find references, rename, diagnostics (push при сохранении), интеграция `tsclang format`.
 
 ## Быстрый старт
 
