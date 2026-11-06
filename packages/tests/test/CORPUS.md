@@ -1471,13 +1471,6 @@ input.tsc:1:
 - [E] `--emit hex` без embedded target → ошибка
 - [R] CMakeLists.txt генерируется рядом с C-файлами
 
-### tsclang run
-
-- [R] компилирует и запускает (desktop)
-- [R] аргументы через `--`: `tsclang run -- --port 8080`
-- [R] код выхода бинаря пробрасывается
-- [E] `tsclang run` для library-проекта → ошибка
-
 ### tsclang install
 
 - [R] устанавливает зависимость из npm-реестра

@@ -24,7 +24,7 @@ Requires: Node.js ≥ 18, GCC or Clang, CMake (for embedded targets).
 tsclang init my-project
 cd my-project
 tsclang build src/main.tsc
-tsclang run src/main.tsc
+tsclang build src/main.tsc --emit binary --command "./main"   # build & run
 ```
 
 ## Language features
@@ -73,7 +73,6 @@ See [spec/13-build/13-strict-mode.md](spec/13-build/13-strict-mode.md) for full 
 
 ```
 tsclang build <file.tsc>          Compile to C + binary
-tsclang run <file.tsc>            Compile and run
 tsclang build <file.tsc> --command <cmd>   Run shell command after successful build
 tsclang init <name>               Create new project
 tsclang install [package]         Install dependencies
@@ -150,14 +149,14 @@ pnpm test:engine           # on-the-fly generated tests
 ```bash
 pnpm build
 node packages/cli/dist/index.js --version
-node packages/cli/dist/index.js run hello.tsc
+node packages/cli/dist/index.js build hello.tsc --out-dir out/
 ```
 
 Dev mode (from source, no build needed):
 
 ```bash
 pnpm tsclang:dev --version
-pnpm tsclang:dev run hello.tsc
+pnpm tsclang:dev build hello.tsc --out-dir out/
 ```
 
 ### Repository structure

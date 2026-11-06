@@ -61,11 +61,6 @@ export function runValidateConfigCommand(args: string[]): void {
     if (err) cfgErr(err);
   }
 
-  if (type === 'library') {
-    process.stderr.write(`ConfigError: 'tsclang run' is not available for library projects\n`);
-    process.exit(1);
-  }
-
   if (type === 'package' && config.dependencies) {
     const deps = config.dependencies as Record<string, string>;
     const resolved: Record<string, string> = {};

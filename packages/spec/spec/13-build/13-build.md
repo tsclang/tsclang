@@ -2203,7 +2203,6 @@ build/avr/
 | Команда | Описание |
 |---------|----------|
 | `tsclang build` | Компиляция `.tsc` → C / бинарник / прошивка |
-| `tsclang run` | Собрать и запустить |
 | `tsclang debug` | Отладка под gdb |
 | `tsclang test` | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
@@ -2301,31 +2300,21 @@ tsclang build hello.tsc --watch --command "./out/hello"       # watch: пере�
 - Параметры build переопределяют дефолтные настройки компилятора
 - `--command "<cmd>"` — пост-билд команда; эквивалент `builds.<name>.command` в манифесте (см. «Поля build конфига → command»)
 
-## `tsclang run` подробно
+## Запуск программы (`--command`; `run` удалена)
+
+Отдельной команды запуска нет: `tsclang run` удалена — её случай полностью покрывает
+пост-билд хук `--command` (см. «Поля build конфига → command» и «`tsclang build` подробно»).
 
 ```bash
-tsclang run                   # собрать дефолтный build + запустить бинарь
-tsclang run <name>            # собрать конкретный build + запустить бинарь
-tsclang run -- --foo bar      # передать аргументы в запускаемый бинарь
+tsclang build hello.tsc --emit binary --command "out\hello"    # Windows (cmd)
+tsclang build hello.tsc --emit binary --command "./out/hello"  # Linux/macOS (sh)
+tsclang build hello.tsc --watch --command "./out/hello"        # цикл разработки: пересборка + перезапуск
 ```
 
-`tsclang run` = `tsclang build` + запуск скомпилированного бинаря. Только для `emit: "binary"`.
-
-```
-tsclang run
-  │
-  ├─ 1. tsclang build        ← компилирует .tsc → .c → бинарь
-  └─ 2. exec <outDir>/myapp  ← запускает бинарь, stdout/stderr в терминал
-```
-
-- Если `emit` не `"binary"` — ошибка: `error: tsclang run requires emit: "binary"`
-- Код выхода бинаря пробрасывается как код выхода `tsclang run`
-- Аргументы после `--` передаются напрямую в бинарь:
-  ```bash
-  tsclang run -- --port 8080 --verbose
-  # запускает: ./build/desktop/myapp --port 8080 --verbose
-  ```
-- Флаги компиляции `--optimize <уровень>` и `--no-cache` — те же, что у `build` (пробрасываются в компиляцию)
+- Код выхода команды становится кодом выхода CLI (как раньше у `run`).
+- Аргументы программы передаются в строке команды: `--command "./out/hello --port 8080"`.
+  Прежний синтаксис `run -- --foo bar` удалён вместе с командой.
+- Подробная семантика (shell хоста, `TSC_OUT_DIR`, watch-респаун, безопасность) — в разделе `command` выше.
 
 ## `tsclang test` подробно
 
@@ -2433,7 +2422,7 @@ npm install -g tsclang   # установить компилятор
 tsclang init myapp       # создать проект
 cd myapp
 tsclang install          # установить зависимости
-tsclang run              # собрать и запустить
+tsclang build src/main.tsc --emit binary --command "./main"   # собрать и запустить
 ```
 
 ## Источники зависимостей (все варианты вместе)

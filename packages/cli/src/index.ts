@@ -14,7 +14,7 @@ import { runValidateConfigCommand } from './cli/commands/config.js';
 import { runInitCommand } from './cli/commands/init.js';
 import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/commands/source.js';
 import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from './cli/commands/package.js';
-import { runRunCommand, runDebugCommand } from './cli/commands/run.js';
+import { runDebugCommand } from './cli/commands/debug.js';
 import { runTestCommand } from './cli/commands/test.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,9 +57,6 @@ if (flagError) {
 switch (command) {
   case 'build':
     runBuildCommand(args, COMPILER_ROOT);
-    break;
-  case 'run':
-    runRunCommand(args, COMPILER_ROOT);
     break;
   case 'debug':
     runDebugCommand(args, COMPILER_ROOT);

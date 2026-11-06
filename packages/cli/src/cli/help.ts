@@ -3,7 +3,6 @@ import { join } from 'path';
 import { format } from './helps/format.js';
 import { help } from './helps/help.js';
 import { build } from './helps/build.js';
-import { run } from './helps/run.js';
 import { init } from './helps/init.js';
 import { lint } from './helps/lint.js';
 import { explain } from './helps/explain.js';
@@ -18,7 +17,6 @@ export function getHelpText(version: string): string {
 
 export const CMD_HELP: Record<string, string> = {
   build,
-  run,
   init,
   lint,
   format,

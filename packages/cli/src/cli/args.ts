@@ -17,11 +17,6 @@ export function getPositional(args: string[], command: string): string | undefin
   return args.find((a) => !a.startsWith('-') && a !== command);
 }
 
-export function getPositionalAfter(args: string[], marker: string): string[] {
-  const i = args.indexOf(marker);
-  return i !== -1 ? args.slice(i + 1) : [];
-}
-
 const OPTIMIZE_SET = new Set<string>(OPTIMIZE_LEVELS);
 
 export function isValidOptimizeLevel(val: string): boolean {
@@ -44,7 +39,6 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   build: new Set(['--emit', '--out-dir', '--command', '--all-errors', '--debug', '--no-cache', '--sourcemap',
     '--watch', '--optimize', '--target', '--default-number', '--allocator', '--async',
     '--strict', '--ram-size', '--stack-size', '--platform', '--build', '--mcu']),
-  run: new Set(['--optimize', '--no-cache']),
   debug: new Set(),
   init: new Set(['--type', '--library', '-l', '--declaration', '-d', '--platform', '-p']),
   lint: new Set(['--fix']),
@@ -67,15 +61,12 @@ export function isKnownCommand(command: string): boolean {
 /**
  * Validate that every option-looking token is a known option of `command`.
  * Returns an error message, or null when everything is recognized.
- * Tokens after `--` (run's program arguments) are not CLI options and are skipped.
  * The only inline `--opt=value` form is lint's `--rule=<name>`.
  */
 export function checkUnknownFlags(args: string[], command: string): string | null {
   const known = COMMAND_FLAGS[command];
   if (!known) return null; // unknown commands are reported by the dispatcher
-  const sepIdx = command === 'run' ? args.indexOf('--') : -1;
-  const end = sepIdx === -1 ? args.length : sepIdx;
-  for (let i = 1; i < end; i++) {
+  for (let i = 1; i < args.length; i++) {
     const tok = args[i];
     if (!tok.startsWith('-') || tok === '-') continue;
     if (GLOBAL_FLAGS.has(tok) || known.has(tok)) continue;

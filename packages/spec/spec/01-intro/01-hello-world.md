@@ -17,10 +17,11 @@ cmake -B out/build out/ && cmake --build out/build
 
 `tsclang build` генерирует `.c` + `CMakeLists.txt`, но не запускает cmake — configure нужно выполнить вручную (на Windows с Visual Studio бинарник окажется в `out/build/Debug/`, см. ниже).
 
-Упрощённый вариант (одна команда):
+Упрощённый вариант (собрать и запустить одной командой):
 
 ```bash
-tsclang run hello.tsc
+tsclang build hello.tsc --emit binary --command "./hello"   # Linux/macOS
+tsclang build hello.tsc --emit binary --command ".\\hello"  # Windows (cmd)
 # → Hello, TSClang!
 ```
 
@@ -30,14 +31,14 @@ tsclang run hello.tsc
 
 ```bash
 pnpm build
-node packages/cli/dist/index.js run hello.tsc
+node packages/cli/dist/index.js build hello.tsc --emit binary --command "./hello"
 ```
 
 Глобальная установка:
 
 ```bash
 pnpm link --global
-tsclang run hello.tsc
+tsclang build hello.tsc --emit binary --command "./hello"
 ```
 
 ### Windows: сборка через cmake
