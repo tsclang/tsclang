@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFi
 import { join, basename, extname, resolve, dirname } from 'path';
 import { spawnSync } from 'child_process';
 import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines } from '@tsclang/compiler';
-import { flagValue, hasFlag, hasFlagAny, isValidOptimizeLevel, isValidNumberType } from '../args.js';
+import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType } from '../args.js';
 import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake } from '../cmake.js';
@@ -52,7 +52,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const debugLines       = hasFlag(args, '--debug');
   const noCache          = hasFlag(args, '--no-cache');
   const sourcemap        = hasFlag(args, '--sourcemap');
-  const watchMode        = hasFlagAny(args, '--watch', '-w');
+  const watchMode        = hasFlag(args, '--watch');
   let optimize: string | null = flagValue(args, '--optimize') ?? null;
   if (optimize && !isValidOptimizeLevel(optimize)) {
     process.stderr.write(`tsclang build: invalid --optimize value '${optimize}'; use ${OPTIMIZE_LEVELS.join(', ')}\n`);

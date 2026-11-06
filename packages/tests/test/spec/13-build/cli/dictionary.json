@@ -51,7 +51,7 @@
         { "name": "--debug", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:35" },
         { "name": "--sourcemap", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:36" },
         { "name": "--all-errors", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:37" },
-        { "name": "--watch", "alias": "-w", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:38" },
+        { "name": "--watch", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:38" },
         { "name": "--no-cache", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:39" },
         { "name": "--ram-size", "takesValue": true, "description": "RAM budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:40" },
         { "name": "--stack-size", "takesValue": true, "description": "Stack budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:41" }

@@ -453,6 +453,14 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     expect(out(r)).toContain("unknown option '--watch' for 'format'")
   })
 
+  test("-w больше не алиас --watch → unknown option (алиас вычищен)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "-w"], { cwd: dir, timeoutMs: 15000 })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown option '-w'")
+  })
+
   test("глобальный help не рекламирует пер-командную --no-cache — она в справках build/run", async () => {
     const r = await runCli(["--help"])
     expect(r.code).toBe(0)

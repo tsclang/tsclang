@@ -42,7 +42,7 @@ const GLOBAL_FLAGS = new Set(['--no-color', '--version', '-v', '--help', '-h']);
 
 export const COMMAND_FLAGS: Record<string, Set<string>> = {
   build: new Set(['--emit', '--outDir', '--all-errors', '--debug', '--no-cache', '--sourcemap',
-    '--watch', '-w', '--optimize', '--target', '--default-number', '--allocator', '--async',
+    '--watch', '--optimize', '--target', '--default-number', '--allocator', '--async',
     '--strict', '--ram-size', '--stack-size', '--platform', '--build', '--mcu']),
   run: new Set(['--optimize', '--no-cache']),
   debug: new Set(),

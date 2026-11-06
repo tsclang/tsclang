@@ -23,5 +23,5 @@ OPTIONS:
   --sourcemap              Generate source map
   --all-errors             Show all errors (no limit)
   --strict <rules>         Comma-separated strict rules (${strictOptions})
-  --watch, -w              Rebuild on file change
+  --watch                  Rebuild on file change
   --no-cache               Bypass compilation cache`;
