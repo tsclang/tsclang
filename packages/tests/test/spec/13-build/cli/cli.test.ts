@@ -1,6 +1,7 @@
 // CLI surface tests driven by dictionary.json.
-// The dictionary records what the BOOK (00.2.2-installation / 00.2.3-cli-overview)
-// claims about the CLI; these tests probe the actual binary against it.
+// The dictionary records what the BOOK (00.2.2 help output / 00.2.3 quick start /
+// 00.7-cli-overview reference) claims about the CLI; these tests probe the actual
+// binary against it.
 // Run: pnpm tsx packages/tests/test/spec/13-build/cli/run.ts (pnpm build first).
 
 import { spawn, spawnSync } from "node:child_process"
@@ -100,7 +101,7 @@ describe("13-build/cli — версия и глобальные флаги (00.2
     expect(r.stdout.trim()).toBe(dict.version.expectedOutput)
   })
 
-  test("--help печатает usage-строку из книги (00.2.2:36)", async () => {
+  test("--help печатает usage-строку из книги (00.2.2:49)", async () => {
     const r = await runCli(["--help"])
     expect(r.code).toBe(0)
     expect(r.stdout).toContain(dict.usageLine)
@@ -112,7 +113,7 @@ describe("13-build/cli — версия и глобальные флаги (00.2
     expect(r.stdout).toContain(dict.usageLine)
   })
 
-  test("--no-color не ломает глобальные флаги (00.2.2:59)", async () => {
+  test("--no-color не ломает глобальные флаги (00.2.2:72)", async () => {
     const r = await runCli(["--no-color", "--version"])
     expect(r.code).toBe(0)
     expect(r.stdout.trim()).toBe(dict.version.expectedOutput)
@@ -127,7 +128,7 @@ describe("13-build/cli — версия и глобальные флаги (00.2
 
 // === 00.2.2: help output — every dictionary command is dispatched ===
 
-describe("13-build/cli — help-вывод: команды из книги (00.2.2:38-54)", () => {
+describe("13-build/cli — help-вывод: команды из книги (00.2.2:45-75)", () => {
   test("все команды словаря присутствуют в help с книжными описаниями", async () => {
     const r = await runCli(["--help"])
     expect(r.code).toBe(0)
@@ -137,7 +138,7 @@ describe("13-build/cli — help-вывод: команды из книги (00.2
   })
 })
 
-describe("13-build/cli — помощь по команде (00.2.2:63-69)", () => {
+describe("13-build/cli — помощь по команде (00.2.2:77-87)", () => {
   for (const name of dict.perCommandHelp.examples) {
     test(`tsclang ${name} --help — exit 0, непустой вывод`, async () => {
       const r = await runCli([name, "--help"])
@@ -186,7 +187,7 @@ describe("13-build/cli — smoke: каждая команда словаря д�
     notUnknown(r)
   })
 
-  test("lsp — сервер живёт на stdio до kill (00.2.2:49)", async () => {
+  test("lsp — сервер живёт на stdio до kill (00.2.2:62)", async () => {
     const argv = USE_TSX ? ["--import", TSX_LOADER, SRC_BIN, "lsp"] : [DIST_BIN, "lsp"]
     const proc = spawn(process.execPath, argv, { cwd: mkTmp(), stdio: ["pipe", "pipe", "pipe"] })
     await new Promise((res) => setTimeout(res, 800))
@@ -196,10 +197,10 @@ describe("13-build/cli — smoke: каждая команда словаря д�
   })
 })
 
-// === 00.2.3: build — claimed options table ===
+// === build — claimed result (00.2.3) and options table (00.7.2) ===
 
-describe("13-build/cli — build: заявленный результат и опции (00.2.3:11-30)", () => {
-  test("build hello.tsc --outDir out → out/hello.c + out/CMakeLists.txt (00.2.3:30)", async () => {
+describe("13-build/cli — build: заявленный результат и опции (00.2.3:37, таблица 00.7.2)", () => {
+  test("build hello.tsc --outDir out → out/hello.c + out/CMakeLists.txt (00.2.3:37)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--outDir", "out"], { cwd: dir })
@@ -223,9 +224,11 @@ describe("13-build/cli — build: заявленный результат и о�
     ["--sourcemap", ["--sourcemap"]],
     ["--all-errors", ["--all-errors"]],
     ["--no-cache", ["--no-cache"]],
+    ["--ram-size 2048", ["--ram-size", "2048"]],
+    ["--stack-size 1024", ["--stack-size", "1024"]],
   ]
   for (const [label, flags] of probes) {
-    test(`build принимает ${label} (таблица 00.2.3)`, async () => {
+    test(`build принимает ${label} (таблица 00.7.2)`, async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
       const r = await runCli(["build", "hello.tsc", ...flags, "--outDir", "out"], { cwd: dir })
@@ -233,7 +236,7 @@ describe("13-build/cli — build: заявленный результат и о�
     })
   }
 
-  test("--build <имя> — именованная сборка из tsc.package.json (00.2.3:17)", async () => {
+  test("--build <имя> — именованная сборка из tsc.package.json (00.7.2:28,43-56)", async () => {
     const dir = mkTmp()
     mkdirSync(join(dir, "src"))
     writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
@@ -279,11 +282,11 @@ describe("13-build/cli — build: заявленный результат и о�
   }
 })
 
-// === 00.2.3: run / debug (gcc-gated) ===
+// === run / debug (gcc-gated; 00.2.3:11-18, 00.7.3-00.7.4) ===
 
-describe("13-build/cli — run/debug (00.2.3:32-47)", () => {
+describe("13-build/cli — run/debug (00.2.3:22-29, 00.7.3)", () => {
   if (hasTool("gcc")) {
-    test("run hello.tsc — компилирует, запускает, печатает вывод (00.2.3:35-39)", async () => {
+    test("run hello.tsc — компилирует, запускает, печатает вывод (00.2.3:24-29)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
       const r = await runCli(["run", "hello.tsc"], { cwd: dir, timeoutMs: 180000, viaMsys2: true })
@@ -306,8 +309,8 @@ describe("13-build/cli — run/debug (00.2.3:32-47)", () => {
 
 // === 00.2.3: init ===
 
-describe("13-build/cli — init (00.2.3:65-80)", () => {
-  test("init myapp создаёт tsc.package.json + src/main.tsc (00.2.3:73-80)", async () => {
+describe("13-build/cli — init (00.2.3:5-20)", () => {
+  test("init myapp создаёт tsc.package.json + src/main.tsc (00.2.3:13-20)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "myapp"], { cwd: dir })
     expect(r.code).toBe(0)
@@ -315,14 +318,14 @@ describe("13-build/cli — init (00.2.3:65-80)", () => {
     expect(existsSync(join(dir, "myapp", "src", "main.tsc"))).toBe(true)
   })
 
-  test("init mylib --library (00.2.3:69)", async () => {
+  test("init mylib --library (00.2.3:9)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "mylib", "--library"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "mylib", "tsc.package.json"))).toBe(true)
   })
 
-  test("init mywrapper --declaration (00.2.3:70)", async () => {
+  test("init mywrapper --declaration (00.2.3:10)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "mywrapper", "--declaration"], { cwd: dir })
     expect(r.code).toBe(0)
@@ -330,9 +333,9 @@ describe("13-build/cli — init (00.2.3:65-80)", () => {
   })
 })
 
-// === 00.2.3: lint / format / explain / emit-dts / validate-config / packages ===
+// === lint / format / explain / emit-dts / validate-config / packages (00.7.8-00.7.16) ===
 
-describe("13-build/cli — lint (00.2.3:82-88)", () => {
+describe("13-build/cli — lint (00.7.9)", () => {
   test("lint файл с no-unreachable — ненулевой exit, LintError в выводе", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "bad.tsc"), 'function f(): void { return; console.log("x"); }\n')
@@ -341,14 +344,14 @@ describe("13-build/cli — lint (00.2.3:82-88)", () => {
     expect(out(r)).toContain("no-unreachable")
   })
 
-  test("lint --rule=prefer-const — фильтр по одному правилу (00.2.3:87)", async () => {
+  test("lint --rule=prefer-const — фильтр по одному правилу (00.7.9:30)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     const r = await runCli(["lint", "letty.tsc", "--rule=prefer-const"], { cwd: dir })
     expect(out(r)).toContain("prefer-const")
   })
 
-  test("lint --fix переписывает let → const (00.2.3:86)", async () => {
+  test("lint --fix переписывает let → const (00.7.9:29)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     await runCli(["lint", "letty.tsc", "--fix"], { cwd: dir })
@@ -357,7 +360,7 @@ describe("13-build/cli — lint (00.2.3:82-88)", () => {
   })
 })
 
-describe("13-build/cli — format/explain/emit-dts/validate-config (00.2.3:90-124)", () => {
+describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.10-00.7.12, 00.7.8)", () => {
   test("format hello.tsc — exit 0", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
@@ -365,13 +368,13 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.2.3:90-12
     expect(r.code).toBe(0)
   })
 
-  test("explain E012 — объяснение кода ошибки (00.2.3:99)", async () => {
+  test("explain E012 — объяснение кода ошибки (00.7.11)", async () => {
     const r = await runCli(["explain", "E012"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("E012")
   })
 
-  test("emit-dts hello.tsc создаёт hello.d.tsc (00.2.3:105-108)", async () => {
+  test("emit-dts hello.tsc создаёт hello.d.tsc (00.7.12)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["emit-dts", "hello.tsc"], { cwd: dir })
@@ -379,7 +382,7 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.2.3:90-12
     expect(existsSync(join(dir, "hello.d.tsc"))).toBe(true)
   })
 
-  test("validate-config tsc.package.json — exit 0 (00.2.3:121)", async () => {
+  test("validate-config tsc.package.json — exit 0 (00.7.8)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
     const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
@@ -387,8 +390,8 @@ describe("13-build/cli — format/explain/emit-dts/validate-config (00.2.3:90-12
   })
 })
 
-describe("13-build/cli — install/update/search/publish (00.2.3:126-134)", () => {
-  test("search regex — exit 0, непустой вывод (00.2.3:132)", async () => {
+describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.13-00.7.16)", () => {
+  test("search regex — exit 0, непустой вывод (00.7.15)", async () => {
     const r = await runCli(["search", "regex"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout.length > 0).toBeTruthy()
@@ -399,7 +402,7 @@ describe("13-build/cli — install/update/search/publish (00.2.3:126-134)", () =
     notUnknown(r)
   })
 
-  test("update mylib в изолированном cwd — не unknown command (00.2.3:131)", async () => {
+  test("update mylib в изолированном cwd — не unknown command (00.7.14)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
     const r = await runCli(["update", "mylib"], { cwd: dir })
