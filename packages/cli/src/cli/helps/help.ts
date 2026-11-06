@@ -27,6 +27,5 @@ OPTIONS:
   --version, -v    Print version
   --help, -h       Print this help
   --no-color       Disable colored output
-  --no-cache       Bypass compilation cache
 
 Run 'tsclang <command> --help' for command-specific options.`;

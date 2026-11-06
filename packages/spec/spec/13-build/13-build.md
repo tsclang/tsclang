@@ -2212,7 +2212,6 @@ tsclang l -f                  # форматировать
 | `--version` | `-v` | Версия CLI |
 | `--help` | `-h` | Общий help; `tsclang <команда> --help` — справка по команде (для команд без отдельной справки печатается общий help) |
 | `--no-color` | — | Отключить цветной вывод |
-| `--no-cache` | — | Обход кэша компиляции (`build`, `run`) |
 
 ### Соглашения выхода
 
@@ -2292,6 +2291,7 @@ tsclang build --emit binary   # C + компиляция в бинарь
 tsclang build --emit hex      # C + avr-gcc → .hex
 tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошивка
 tsclang build --outDir ./dist # переопределить outDir
+tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
 ```
 
 - Если build не указан — используется `"desktop"` или первый в списке
@@ -2321,6 +2321,7 @@ tsclang run
   tsclang run -- --port 8080 --verbose
   # запускает: ./build/desktop/myapp --port 8080 --verbose
   ```
+- Флаги компиляции `--optimize <уровень>` и `--no-cache` — те же, что у `build` (пробрасываются в компиляцию)
 
 ## `tsclang test` подробно
 

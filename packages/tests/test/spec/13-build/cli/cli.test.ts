@@ -450,6 +450,17 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     expect(out(r)).toContain("unknown option '--watch' for 'format'")
   })
 
+  test("глобальный help не рекламирует пер-командную --no-cache — она в справках build/run", async () => {
+    const r = await runCli(["--help"])
+    expect(r.code).toBe(0)
+    expect(r.stdout).not.toContain("Bypass compilation cache")
+    for (const cmd of ["build", "run"]) {
+      const h = await runCli([cmd, "--help"])
+      expect(h.code).toBe(0)
+      expect(h.stdout).toContain("--no-cache")
+    }
+  })
+
   if (hasTool("gcc")) {
     test("run --no-cache принимается и не ломает запуск (#242)", async () => {
       const dir = mkTmp()
