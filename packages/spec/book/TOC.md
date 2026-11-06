@@ -72,6 +72,7 @@
 - 00.7.15-search.md — search: поиск по реестру
 - 00.7.16-publish.md — publish: упаковка .tspkg
 - 00.7.17-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
+- 00.7.18-dev.md — dev: пересборка + перезапуск [не реализована], альтернатива build --watch
 
 ---
 
