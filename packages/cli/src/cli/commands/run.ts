@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { OPTIMIZE_LEVELS, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_DIR, DEBUG_FLAG } from '@tsclang/shared';
-import { getPositionalAfter, isValidOptimizeLevel } from '../args.js';
+import { getPositionalAfter, isValidOptimizeLevel, hasFlag } from '../args.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
 export function runRunCommand(args: string[], rootDir: string): void {
@@ -26,7 +26,7 @@ export function runRunCommand(args: string[], rootDir: string): void {
   checkInput('run', inputPath);
   let c: string, warnings: unknown[];
   try {
-    ({ c, warnings } = compileTsc(inputPath));
+    ({ c, warnings } = compileTsc(inputPath, { noCache: hasFlag(args, '--no-cache') }));
   } catch (e) {
     reportErrors(e, basename(inputPath));
     process.exit(1);

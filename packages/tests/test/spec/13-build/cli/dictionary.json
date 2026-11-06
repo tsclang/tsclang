@@ -25,7 +25,8 @@
   ],
   "perCommandHelp": {
     "examples": ["build", "run", "init"],
-    "provenance": "00.2.2-installation.md:63-69"
+    "universal": true,
+    "provenance": "00.2.2-installation.md:63-73"
   },
   "commands": [
     {

@@ -4,7 +4,7 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import { hasFlag, hasFlagAny } from './cli/args.js';
+import { hasFlag, hasFlagAny, isKnownCommand, checkUnknownFlags } from './cli/args.js';
 import { getVersion, getHelpText, CMD_HELP } from './cli/help.js';
 import { setColorEnabled } from '@tsclang/compiler';
 import { startLsp } from './lsp/server.js';
@@ -38,12 +38,21 @@ const command = args[0];
 
 if (!command || command === '--help' || command === '-h') {
   console.log(getHelpText(VERSION));
-  process.exit(command ? 0 : 1);
+  process.exit(0);
 }
 
-if (CMD_HELP[command] && hasFlagAny(args, '--help', '-h')) {
-  console.log(CMD_HELP[command]);
+// `<cmd> --help` prints the per-command help where defined, main help otherwise (#243)
+if (isKnownCommand(command) && hasFlagAny(args, '--help', '-h')) {
+  console.log(CMD_HELP[command] ?? getHelpText(VERSION));
   process.exit(0);
+}
+
+// Typos and unknown options must fail loudly instead of being dropped (#244)
+const flagError = checkUnknownFlags(args, command);
+if (flagError) {
+  console.error(`tsclang: ${flagError}`);
+  console.error("Run 'tsclang --help' for usage.");
+  process.exit(1);
 }
 
 switch (command) {

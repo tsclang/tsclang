@@ -406,3 +406,59 @@ describe("13-build/cli — install/update/search/publish (00.2.3:126-134)", () =
     notUnknown(r)
   })
 })
+
+// === surface fixes: #247 bare exit 0, #243 universal --help, #244 unknown-option errors, #242 run --no-cache ===
+
+describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244 #247)", () => {
+  test("пустой вызов: печатает help, exit 0 (#247)", async () => {
+    const r = await runCli([])
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain(dict.usageLine)
+  })
+
+  test("<cmd> --help — exit 0 и справка для ВСЕХ команд словаря (#243)", async () => {
+    for (const cmd of dict.commands) {
+      const r = await runCli([cmd.name, "--help"], { cwd: mkTmp(), timeoutMs: 15000 })
+      expect(r.code).toBe(0)
+      expect(r.stdout.length > 0).toBeTruthy()
+      expect(out(r).includes("unknown command")).toBe(false)
+    }
+  })
+
+  test("опечатка --outdir → unknown option, exit 1, артефакты не пишутся (#244)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--outdir", "out"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown option '--outdir'")
+    expect(existsSync(join(dir, "hello.c"))).toBe(false)
+  })
+
+  test("инлайн-форма --emit=c → точная подсказка про '=' (#244)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit=c"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("does not support the inline '='")
+  })
+
+  test("unknown-опция у команды без опций (format --watch) → ошибка (#244)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["format", "hello.tsc", "--watch"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown option '--watch' for 'format'")
+  })
+
+  if (hasTool("gcc")) {
+    test("run --no-cache принимается и не ломает запуск (#242)", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      const r = await runCli(["run", "hello.tsc", "--no-cache"], { cwd: dir, timeoutMs: 180000, viaMsys2: true })
+      expect(r.code).toBe(0)
+      expect(r.stdout).toContain("hi")
+    })
+  } else {
+    test.skip("run --no-cache — требует gcc (#242)", () => {})
+  }
+})
