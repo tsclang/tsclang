@@ -75,7 +75,7 @@ after(() => { for (const d of tmpDirs) rmSync(d, { recursive: true, force: true 
 
 const HELLO_TSC = 'console.log("hi");\n'
 // builds.<name> keys must stay within VALID_BUILD_KEYS (config-validator.ts):
-// target, mcu, toolchain, toolchainFile, arch, emit, linkerScript, frequency, freq, allocator, debug
+// target, mcu, toolchain, toolchainFile, arch, emit, linkerScript, frequency, freq, allocator, debug, command
 const PKG_JSON = JSON.stringify({
   name: "probe", version: "0.1.0", type: "executable", main: "src/main.tsc",
   builds: { desktop: { emit: "c" } },
@@ -281,7 +281,7 @@ describe("13-build/cli — build: заявленный результат и о�
     test.skip("--target avr --emit hex (пропуск: avr-gcc недоступен)", () => {})
   }
 
-  test("--emit cmake → CMakeLists.txt в outDir, без компиляции .c (toolchain не нужен)", async () => {
+  test("--emit cmake → CMakeLists.txt в out-dir, без компиляции .c (toolchain не нужен)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--emit", "cmake", "--out-dir", "out"], { cwd: dir })
@@ -289,6 +289,99 @@ describe("13-build/cli — build: заявленный результат и о�
     expect(existsSync(join(dir, "out", "CMakeLists.txt"))).toBe(true)
     expect(existsSync(join(dir, "out", "hello.c"))).toBe(false)
     expect(readFileSync(join(dir, "out", "CMakeLists.txt"), "utf8")).toContain("project(hello C)")
+  })
+
+  if (hasTool("gcc")) {
+    test("--emit binary --command <binary> — запуск собранного бинаря (gcc; host-shell синтаксис)", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      // host shell: cmd.exe on win32 (backslashes, no "./"), /bin/sh elsewhere
+      const runCmd = process.platform === "win32" ? "out\\hello" : "./out/hello"
+      const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out", "--command", runCmd], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      expect(r.code).toBe(0)
+      expect(r.stdout).toContain("hi")
+    })
+  } else {
+    test.skip("--emit binary --command — требует gcc", () => {})
+  }
+})
+
+// === --command: пост-билд хук (#238) ===
+
+describe("13-build/cli — --command post-build hook", () => {
+  test("--command 'echo ok' (emit c) — выполняется после успешной сборки", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--command", "echo ok"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("ok")
+  })
+
+  test("TSC_OUT_DIR виден команде", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--out-dir", "out", "--command", "node -p process.env.TSC_OUT_DIR"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain(join(dir, "out"))
+  })
+
+  test("--command 'exit 7' — код выхода команды пробрасывается", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--command", "exit 7"], { cwd: dir })
+    expect(r.code).toBe(7)
+  })
+
+  test("провал сборки — команда НЕ выполняется", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "bad.tsc"), "let x: = ;\n")
+    const r = await runCli(["build", "bad.tsc", "--command", "echo no"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(r.stdout).not.toContain("no")
+  })
+
+  test("builds.<name>.command в манифесте — авто-запуск именованной сборки", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+      builds: { x: { emit: "c", command: "echo from-manifest" } },
+    }))
+    const r = await runCli(["build", "x"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("from-manifest")
+  })
+
+  test("CLI --command перекрывает манифестную builds.<name>.command", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+      builds: { x: { emit: "c", command: "echo from-manifest" } },
+    }))
+    const r = await runCli(["build", "x", "--command", "echo from-flag"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("from-flag")
+    expect(r.stdout).not.toContain("from-manifest")
+  })
+
+  test("--emit cmake --command — команда выполняется и после cmake-генерации", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit", "cmake", "--out-dir", "out", "--command", "echo cmake-ok"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("cmake-ok")
+  })
+
+  test("validate-config принимает builds.<name>.command", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+      builds: { x: { emit: "c", command: "echo hi" } },
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(out(r)).not.toContain("unknown key 'command'")
   })
 })
 

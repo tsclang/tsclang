@@ -39,6 +39,7 @@
       "options": [
         { "name": "--emit", "takesValue": true, "values": ["c", "binary", "hex", "flash", "wasm", "cmake"], "default": "c", "provenance": "00.7.2-build.md:25" },
         { "name": "--out-dir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
+        { "name": "--command", "takesValue": true, "description": "run shell command after successful build (overrides builds.<name>.command); host shell, env TSC_OUT_DIR", "provenance": "00.7.2-build.md:40" },
         { "name": "--target", "takesValue": true, "description": "desktop, avr, nes, wasm, ...", "default": "desktop", "provenance": "00.7.2-build.md:27" },
         { "name": "--platform", "takesValue": true, "description": "built-in platform profile", "default": null, "provenance": "00.7.2-build.md:28" },
         { "name": "--build", "takesValue": true, "description": "named build from tsc.package.json", "default": null, "provenance": "00.7.2-build.md:29" },
@@ -52,9 +53,9 @@
         { "name": "--sourcemap", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:37" },
         { "name": "--all-errors", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:38" },
         { "name": "--watch", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:39" },
-        { "name": "--no-cache", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:40" },
-        { "name": "--ram-size", "takesValue": true, "description": "RAM budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:41" },
-        { "name": "--stack-size", "takesValue": true, "description": "Stack budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:42" }
+        { "name": "--no-cache", "takesValue": false, "default": false, "provenance": "00.7.2-build.md:41" },
+        { "name": "--ram-size", "takesValue": true, "description": "RAM budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:42" },
+        { "name": "--stack-size", "takesValue": true, "description": "Stack budget for embedded targets (bytes)", "default": null, "provenance": "00.7.2-build.md:43" }
       ]
     },
     {

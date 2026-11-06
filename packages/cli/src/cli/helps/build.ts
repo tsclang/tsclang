@@ -24,4 +24,5 @@ OPTIONS:
   --all-errors             Show all errors (no limit)
   --strict <rules>         Comma-separated strict rules (${strictOptions})
   --watch                  Rebuild on file change
+  --command <cmd>          Run shell command after successful build (env: TSC_OUT_DIR)
   --no-cache               Bypass compilation cache`;

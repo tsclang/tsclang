@@ -845,6 +845,7 @@ platform/
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
 | `stringBufferSize` | размер static buffer (байт) для string escape analysis на embedded | `64` |
 | `flash` | конфигурация прошивки (объект, см. ниже) | — |
+| `command` | shell-команда после успешной сборки (см. ниже) | — |
 
 **`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avrdude` в PATH.
 
@@ -876,6 +877,25 @@ platform/
 ```
 
 `flash` — build/deploy concern, не capability. Не входит в `declare platform`.
+
+**`command`** — пост-билд hook: shell-команда, выполняемая после **успешной** сборки (провал сборки — команда не выполняется). CLI-флаг `--command "<cmd>"` перекрывает манифестное значение. Безопасность: команда читается только из корневого `tsc.package.json` проекта — манифесты установленных зависимостей для сборок не читаются; уровень доверия — «скрипты в собственном package.json».
+
+Семантика:
+
+- Команду выполняет shell хоста: `cmd` на Windows, `/bin/sh` на Unix. Синтаксис платформозависим и лежит на совести автора команды (как `flash.programmer`/`flash.port`): на Windows путь к бинарю — `out\hello` (cmd не понимает `./` и прямые слеши), на Unix — `./out/hello`.
+- Переменная окружения `TSC_OUT_DIR` содержит абсолютный путь к каталогу вывода (`%TSC_OUT_DIR%` в cmd, `$TSC_OUT_DIR` в sh).
+- Разовая сборка: код выхода команды становится кодом выхода CLI.
+- `--watch`: перед пересборкой дерево процессов прошлой команды завершается (`taskkill /T` на Windows, SIGTERM группе процессов на Unix), после успешной пересборки команда запускается заново; провалившаяся пересборка не трогает работающий процесс.
+- Команда не меняет `--emit`: ось emit производит артефакты (`c`/`binary`/`hex`/`flash`/`wasm`/`cmake`), ни одно значение не «запускает». Чтобы запустить бинарь — `--emit binary` + путь в команде.
+
+Запуск по таргетам:
+
+| Таргет | Как запускать |
+|--------|---------------|
+| desktop | `--emit binary --command "out\hello"` (win) / `"./out/hello"` (unix) |
+| avr | `--emit flash` — прошивка через avrdude, команда не нужна |
+| wasm | страница/движок подключает `.wasm` из каталога вывода; открыть: `--command "firefox %TSC_OUT_DIR%\hello.js"` |
+| nes | эмулятор или картридж — через `--command` (в разработке) |
 
 **`stringBufferSize`** — максимальный размер статического буфера, выделяемого компилятором на embedded, когда ring-buffer строка может покинуть scope (escape analysis). Компилятор оценивает верхнюю границу где возможно (литерал + литерал = точный размер); если оценить нельзя — использует `stringBufferSize`. Только для embedded (desktop использует ARC, проблем нет). См. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md).
 
@@ -2272,10 +2292,14 @@ tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошив�
 tsclang build --emit cmake    # только CMakeLists.txt (без компиляции .c)
 tsclang build --out-dir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
+tsclang build hello.tsc --emit binary --command "out\hello"   # win: собрать и запустить
+tsclang build hello.tsc --emit binary --command "./out/hello" # unix: собрать и запустить
+tsclang build hello.tsc --watch --command "./out/hello"       # watch: пересборка + перезапуск
 ```
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора
+- `--command "<cmd>"` — пост-билд команда; эквивалент `builds.<name>.command` в манифесте (см. «Поля build конфига → command»)
 
 ## `tsclang run` подробно
 

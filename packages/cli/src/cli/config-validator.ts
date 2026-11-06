@@ -5,6 +5,8 @@ export const VALID_STRICT_RULES = new Set<string>(STRICT_RULES);
 export const VALID_BUILD_KEYS = new Set<string>([
   'target', 'mcu', 'toolchain', 'toolchainFile', 'arch',
   'emit', 'linkerScript', 'frequency', 'freq', 'allocator', 'debug',
+  // post-build hook: shell command from the ROOT manifest only (see spec 13-build)
+  'command',
 ]);
 
 export function validateStrictRules(rules: unknown, source: string): string | null {

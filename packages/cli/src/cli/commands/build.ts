@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFile, unwatchFile } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines } from '@tsclang/compiler';
 import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType } from '../args.js';
 import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
@@ -68,6 +68,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const _stackSizeFlag    = flagValue(args, '--stack-size');
   const _platformFlag     = flagValue(args, '--platform');
   const _buildFlag        = flagValue(args, '--build');
+  const _commandFlag      = flagValue(args, '--command') ?? null;
   const _effectiveBuild = _buildFlag ?? _buildName;
   const _mcuFlag          = flagValue(args, '--mcu');
   if (_defaultNumberFlag && !isValidNumberType(_defaultNumberFlag)) {
@@ -83,6 +84,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
 
   let _buildCfg: BuildConfig | null = null;
   let _pkgStrict: string[] | null = null;
+  let _commandCfg: string | null = null;
 
   function _validateStrictRulesCli(rules: unknown, source: string): string[] {
     const err = validateStrictRules(rules, source);
@@ -129,6 +131,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
       if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
       if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
+      if (typeof buildCfg.command === 'string' && buildCfg.command) _commandCfg = buildCfg.command;
       if (pkg.strict) _pkgStrict = _validateStrictRulesCli(pkg.strict, 'tsc.package.json');
     } catch (e) {
       if (e instanceof Error) {
@@ -154,6 +157,45 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   }
 
   if (_mcuFlag) _mcu = _mcuFlag;
+
+  // --command: post-build hook. The CLI flag overrides builds.<name>.command from
+  // the ROOT tsc.package.json (dependency manifests are never read for builds).
+  // Runs only after a successful build; never changes the emit value.
+  const _command = _commandFlag ?? _commandCfg;
+  let _cmdChild: ReturnType<typeof spawn> | null = null;
+
+  function _killCommandChild(): void {
+    if (!_cmdChild || _cmdChild.pid === undefined) { _cmdChild = null; return; }
+    const pid = _cmdChild.pid;
+    if (process.platform === 'win32') {
+      // kill the whole process tree: the command may spawn children (pipelines)
+      spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'pipe' });
+    } else {
+      try {
+        process.kill(-pid, 'SIGTERM'); // negative pid = process group (detached spawn)
+      } catch {
+        try { _cmdChild!.kill('SIGTERM'); } catch {}
+      }
+    }
+    _cmdChild = null;
+  }
+
+  function _runCommand(): void {
+    if (!_command) return;
+    const env = { ...process.env, TSC_OUT_DIR: resolve(outDir) };
+    if (!watchMode) {
+      const r = spawnSync(_command, { shell: true, stdio: 'inherit', env });
+      process.exit(r.status ?? 0);
+    }
+    _killCommandChild();
+    _cmdChild = spawn(_command, {
+      shell: true, stdio: 'inherit', env,
+      detached: process.platform !== 'win32',
+    });
+    _cmdChild.on('error', (e) => {
+      process.stderr.write(`tsclang build: --command failed to start: ${e.message}\n`);
+    });
+  }
 
   if (!_capabilities && _targetFlag) {
     const prof = loadProfile(_targetFlag, PROFILES_PATH, inputFile);
@@ -218,6 +260,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       projectName, target, mcu: _mcu, toolchain, optimize, mainFile: `${stem}.c`,
     }), 'utf8');
     process.stdout.write(`Built ${join(outDir, 'CMakeLists.txt')}\n`);
+    _runCommand();
     return;
   }
 
@@ -405,7 +448,10 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         debounceTimer = null;
         process.stderr.write(`\n[${ts()}] Change detected вЂ” rebuilding...\n`);
         const ok = doBuild();
-        if (ok) process.stderr.write(`[${ts()}] Build succeeded\n`);
+        if (ok) {
+          process.stderr.write(`[${ts()}] Build succeeded\n`);
+          _runCommand();
+        }
         syncWatches(_lastSourceFiles);
         const n = watchedFiles.size;
         process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
@@ -427,6 +473,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     const ok = doBuild();
     if (ok) {
       process.stderr.write(`[${ts()}] Build succeeded\n`);
+      _runCommand();
       syncWatches(_lastSourceFiles);
       const n = watchedFiles.size;
       process.stderr.write(`[${ts()}] Watching ${n} file${n > 1 ? 's' : ''}...\n`);
@@ -439,5 +486,6 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     });
   } else {
     if (!doBuild()) process.exit(1);
+    _runCommand();
   }
 }

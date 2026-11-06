@@ -74,6 +74,7 @@ See [spec/13-build/13-strict-mode.md](spec/13-build/13-strict-mode.md) for full 
 ```
 tsclang build <file.tsc>          Compile to C + binary
 tsclang run <file.tsc>            Compile and run
+tsclang build <file.tsc> --command <cmd>   Run shell command after successful build
 tsclang init <name>               Create new project
 tsclang install [package]         Install dependencies
 tsclang update                    Update dependencies
