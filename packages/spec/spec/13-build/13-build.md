@@ -839,7 +839,7 @@ platform/
 | `optimize` | Уровень оптимизации (`"O0"`, `"O1"`, `"O2"`, `"O3"`, `"Os"`) | `O0` |
 | `defaultNumber` | Тип для `number` (`"f64"`, `"f32"`, `"i32"`) | `f64` |
 | `binaryMode` | `"normal"` / `"small"` (type erasure) | `"normal"` |
-| `emit` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"flash"`, `"lib"`, `"wasm"` | `"c"` |
+| `emit` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"` | `"c"` |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
@@ -2289,6 +2289,11 @@ tsclang build --emit binary   # C + компиляция в бинарь
 tsclang build --emit hex      # C + avr-gcc → .hex
 tsclang build --emit flash    # C + avr-gcc → .hex + avrdude → прошивка
 tsclang build --emit cmake    # только CMakeLists.txt (без компиляции .c)
+```
+
+Значение `--emit` валидируется (после разрешения флага и `builds.<name>.emit`): неизвестное
+значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)`,
+exit 1 (никогда не «молча как c»).
 tsclang build --out-dir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
 tsclang build hello.tsc --emit binary --command "out\hello"   # win: собрать и запустить

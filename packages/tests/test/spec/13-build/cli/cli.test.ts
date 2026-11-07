@@ -246,6 +246,14 @@ describe("13-build/cli — build: заявленный результат и о�
     expect(existsSync(join(dir, "out", "main.c"))).toBe(true)
   })
 
+  test("--emit foo → ConfigError unknown emit value (не тихий fallback на c)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit", "foo", "--out-dir", "out"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)")
+  })
+
   // Toolchain-gated emit values
   if (hasTool("gcc")) {
     test("--emit binary → бинарник (требует gcc)", async () => {

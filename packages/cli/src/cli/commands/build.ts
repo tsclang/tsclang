@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 
@@ -214,6 +214,13 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {
       _capabilities.async = 'none';
     }
+  }
+
+  // --emit is validated after all sources are resolved (flag + builds.<name>.emit):
+  // an unknown value must not silently fall back to emit=c
+  if (!(EMIT_VALUES as readonly string[]).includes(emit)) {
+    process.stderr.write(`ConfigError: unknown emit value '${emit}' (valid: ${EMIT_VALUES.join(', ')})\n`);
+    process.exit(1);
   }
 
   if (emit === 'hex' || emit === 'flash') {

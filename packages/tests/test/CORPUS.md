@@ -1469,6 +1469,7 @@ input.tsc:1:
 - [R] debug профиль — генерирует `#line` директивы
 - [R] release профиль — без `#line`, с `-O2`
 - [E] `--emit hex` без embedded target → ошибка
+- [E] `--emit foo` → `ConfigError: unknown emit value` (валидация значения)
 - [R] CMakeLists.txt генерируется рядом с C-файлами
 
 ### tsclang install
