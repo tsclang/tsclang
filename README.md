@@ -80,8 +80,7 @@ tsclang install [package]         Install dependencies
 tsclang update                    Update dependencies
 tsclang search <query>            Search package registry
 tsclang publish                   Publish package (.tspkg)
-tsclang lint [--fix]              Lint source files
-tsclang format                    Format source files (WIP)
+tsclang lint [--fix] [--format]    Lint (and optionally format) source files
 tsclang emit-dts <file.tsc>       Emit .d.tsc declaration file
 tsclang lsp                       Start Language Server (JSON-RPC)
 tsclang explain <E001>            Show error code explanation

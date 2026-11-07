@@ -5,4 +5,5 @@ USAGE:
 
 OPTIONS:
   --fix          Auto-fix issues
+  --format       Format source in place after linting
   --rule=<name>  Run specific rule only`;

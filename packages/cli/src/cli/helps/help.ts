@@ -12,7 +12,6 @@ COMMANDS:
   test (t)         Run tests in test/ directory
   init             Create a new project
   lint (l)         Run linter
-  format           Format source code
   explain          Explain an error code
   emit-dts         Generate .d.tsc declaration files
   lsp              Start Language Server

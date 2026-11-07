@@ -1,0 +1,1 @@
+tsclang lint main.tsc --format && cp main.tsc main.tsc.once && tsclang lint main.tsc --format && [ "$(md5sum main.tsc | cut -d' ' -f1)" = "$(md5sum main.tsc.once | cut -d' ' -f1)" ] && echo "idempotent"

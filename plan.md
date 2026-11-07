@@ -516,6 +516,6 @@ pnpm test --platform wasm
 # 4. Инструментарий
 tsclang build input.tsc --out-dir .tsclang-tmp/
 tsclang lint input.tsc
-tsclang format input.tsc
+tsclang lint input.tsc --format
 tsclang lsp  # запустить и проверить
 ```

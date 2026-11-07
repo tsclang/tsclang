@@ -1,6 +1,5 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { format } from './helps/format.js';
 import { help } from './helps/help.js';
 import { build } from './helps/build.js';
 import { run } from './helps/run.js';
@@ -26,7 +25,6 @@ export const CMD_HELP: Record<string, string> = {
   run,
   init,
   lint,
-  format,
   explain,
   install,
   update,

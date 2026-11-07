@@ -1,1 +1,1 @@
-tsclang format main.tsc && cat main.tsc
+tsclang lint main.tsc --format && cat main.tsc

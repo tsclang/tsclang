@@ -217,7 +217,7 @@
 | **`@pool(N)` class** | Статический пул N слотов в BSS; `new Cls()` берёт слот; release через ownership или `drop()`. |
 | **declare library** | Требования библиотеки к платформе: поля `declare library`, проверка совместимости при установке. |
 | **Pipeline сборки** | Шаги: parse → typecheck → IR → ownership → codegen → cmake → build. |
-| **CLI команды** | `build`, `run`, `dev`, `init`, `install`, `update`, `lint`, `format` — описание и флаги. |
+| **CLI команды** | `build`, `run`, `dev`, `init`, `install`, `update`, `lint` (+ `--format`) — описание и флаги. |
 | **tsclang install vs update** | Разница: install фиксирует версии, update обновляет. |
 | **Источники зависимостей** | npm-реестр, git, zip-архив, URL — все варианты вместе. |
 | **devDependencies** | Зависимости разработки; не попадают в пакет; не устанавливаются с `--production`. |

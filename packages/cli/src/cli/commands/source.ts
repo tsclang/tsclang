@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, basename, extname, dirname, join } from 'path';
 import { lex, parse, lint, applyFixes, emitDtsSync } from '@tsclang/compiler';
+import { format as formatSource } from '../../formatter.js';
 import { hasFlag, getPositional } from '../args.js';
 import { missingInput, reportErrors } from '../helpers.js';
 
@@ -20,21 +21,9 @@ export function runEmitDtsCommand(args: string[]): void {
   process.exit(0);
 }
 
-export async function runFormatCommand(args: string[]): Promise<void> {
-  const inputFile = args[1];
-  if (!inputFile) {
-    missingInput('format');
-  }
-  const inputPath = resolve(inputFile);
-  const src = readFileSync(inputPath, 'utf8');
-  const { format } = await import('../../formatter.js');
-  const formatted = format(src);
-  writeFileSync(inputPath, formatted, 'utf8');
-  process.exit(0);
-}
-
 export function runLintCommand(args: string[]): void {
   const fixFlag    = hasFlag(args, '--fix');
+  const formatFlag = hasFlag(args, '--format');
   const ruleArg    = args.find((a: string) => a.startsWith('--rule='));
   const ruleFilter = ruleArg ? [ruleArg.slice('--rule='.length)] : undefined;
   const inputFile  = getPositional(args, 'lint');
@@ -61,9 +50,16 @@ export function runLintCommand(args: string[]): void {
 
   const diagnostics = lint(ast, { rules: ruleFilter });
 
+  // --format never touches the exit code: it is a whitespace transform, not a
+  // fix — apply fixes first, format last, in a single in-place write (#256).
+  if (fixFlag || formatFlag) {
+    let content = src;
+    if (fixFlag) content = applyFixes(content, diagnostics);
+    if (formatFlag) content = formatSource(content);
+    writeFileSync(inputPath, content, 'utf8');
+  }
+
   if (fixFlag) {
-    const fixed = applyFixes(src, diagnostics);
-    writeFileSync(inputPath, fixed, 'utf8');
     const remaining = diagnostics.filter((d: { fixable?: boolean }) => !d.fixable);
     for (const d of remaining) {
       const tag = d.severity === 'error' ? 'LintError' : 'LintWarning';

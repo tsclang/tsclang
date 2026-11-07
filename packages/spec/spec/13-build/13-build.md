@@ -2260,8 +2260,7 @@ build/avr/
 | `tsclang debug` | Отладка под gdb |
 | `tsclang test` (`t`) | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
-| `tsclang lint` (`l`) | Линтер (`prefer-const`, `no-unreachable`) |
-| `tsclang format` | Форматирование исходника |
+| `tsclang lint` (`l`) | Линтер (`prefer-const`, `no-unreachable`, `no-unused-var`) + форматтер (`--format`, запись на месте) |
 | `tsclang explain` | Объяснение кода ошибки |
 | `tsclang emit-dts` | Генерация `.d.tsc` |
 | `tsclang lsp` | Language Server (stdio) |
@@ -2272,7 +2271,7 @@ build/avr/
 | `tsclang search` (`s`) | Поиск пакетов |
 | `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
 
-Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `format`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`) алиасов не имеют.
+Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора
@@ -2608,7 +2607,7 @@ tsclang lsp           # запустить LSP-сервер (stdio transport)
 
 **Реализовано** (stdio): `initialize`, `hover`, `completion`, `definition`, `didOpen`/`didChange` — индекс символов текущего файла (функции, переменные, методы).
 
-**Roadmap:** TCP transport (`--port`), find references, rename, diagnostics (push при сохранении), интеграция `tsclang format`.
+**Roadmap:** TCP transport (`--port`), find references, rename, diagnostics (push при сохранении), интеграция форматтера (`lint --format`).
 
 ## Быстрый старт
 

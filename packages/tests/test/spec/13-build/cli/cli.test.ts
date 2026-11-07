@@ -152,7 +152,7 @@ describe("13-build/cli — помощь по команде (00.2.2:77-87)", () 
 // === smoke: every dictionary command is dispatched (not "unknown command") ===
 
 describe("13-build/cli — smoke: каждая команда словаря диспетчеризуется", () => {
-  const missingInput = ["build", "debug", "lint", "format", "validate-config"]
+  const missingInput = ["build", "debug", "lint", "validate-config"]
   for (const name of missingInput) {
     test(`${name} без аргументов — ошибка входа, не unknown command`, async () => {
       const r = await runCli([name], { cwd: mkTmp() })
@@ -844,14 +844,62 @@ describe("13-build/cli — lint (00.7.7)", () => {
   })
 })
 
-describe("13-build/cli — format/explain/emit-dts/validate-config (00.7.8-00.7.10, 00.7.6)", () => {
-  test("format hello.tsc — exit 0", async () => {
+// === #256: format command removed, formatter folded into lint as --format ===
+
+describe("13-build/cli — lint --format: форматтер как опция линтера (#256)", () => {
+  test("lint messy.tsc --format — exit 0, файл нормализован in-place", async () => {
     const dir = mkTmp()
-    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-    const r = await runCli(["format", "hello.tsc"], { cwd: dir })
+    writeFileSync(join(dir, "messy.tsc"), 'if   (true)   {\n  console.log(  "hi"  );\n}\n')
+    const r = await runCli(["lint", "messy.tsc", "--format"], { cwd: dir })
     expect(r.code).toBe(0)
+    const after = readFileSync(join(dir, "messy.tsc"), "utf8")
+    expect(after).toContain("if (true) {")
+    expect(after).toContain('    console.log( "hi" );')
   })
 
+  test("lint warn.tsc --format — exit 1 (warning остаётся), но файл отформатирован", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "warn.tsc"), "let   x   =   1;\nconsole.log(x);\n")
+    const r = await runCli(["lint", "warn.tsc", "--format"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("prefer-const")
+    const after = readFileSync(join(dir, "warn.tsc"), "utf8")
+    expect(after).toContain("let x = 1;")
+  })
+
+  test("lint broken.tsc --format — parse error → exit 1, файл нетронут", async () => {
+    const dir = mkTmp()
+    const broken = "console.log(\n"
+    writeFileSync(join(dir, "broken.tsc"), broken)
+    const r = await runCli(["lint", "broken.tsc", "--format"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(readFileSync(join(dir, "broken.tsc"), "utf8")).toBe(broken)
+  })
+
+  test("lint --fix --format — фиксы, потом форматирование, одним проходом", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "letty.tsc"), "let   x   =   1;\nconsole.log(x);\n")
+    const r = await runCli(["lint", "letty.tsc", "--fix", "--format"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(readFileSync(join(dir, "letty.tsc"), "utf8")).toContain("const x = 1;")
+  })
+
+  test("format удалена — unknown command (#256)", async () => {
+    const r = await runCli(["format", "x.tsc"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown command 'format'")
+  })
+
+  test("lint --format=x → подсказка про inline '=' (#244 guard)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["lint", "hello.tsc", "--format=x"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("does not support the inline '='")
+  })
+})
+
+describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.7.6)", () => {
   test("explain E012 — объяснение кода ошибки (00.7.9)", async () => {
     const r = await runCli(["explain", "E012"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
@@ -1080,12 +1128,12 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     expect(out(r)).toContain("does not support the inline '='")
   })
 
-  test("unknown-опция у команды без опций (format --watch) → ошибка (#244)", async () => {
+  test("unknown-опция у lint (--watch) → ошибка (#244)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-    const r = await runCli(["format", "hello.tsc", "--watch"], { cwd: dir })
+    const r = await runCli(["lint", "hello.tsc", "--watch"], { cwd: dir })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("unknown option '--watch' for 'format'")
+    expect(out(r)).toContain("unknown option '--watch' for 'lint'")
   })
 
   test("-w больше не алиас --watch → unknown option (алиас вычищен)", async () => {

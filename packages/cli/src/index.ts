@@ -13,7 +13,7 @@ import { runRunCommand } from './cli/commands/run.js';
 import { runExplainCommand } from './cli/commands/explain.js';
 import { runValidateConfigCommand } from './cli/commands/config.js';
 import { runInitCommand } from './cli/commands/init.js';
-import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/commands/source.js';
+import { runEmitDtsCommand, runLintCommand } from './cli/commands/source.js';
 import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand, runRemoveCommand } from './cli/commands/package.js';
 import { runDebugCommand } from './cli/commands/debug.js';
 import { runTestCommand } from './cli/commands/test.js';
@@ -78,9 +78,6 @@ switch (command) {
     break;
   case 'lint':
     runLintCommand(args);
-    break;
-  case 'format':
-    runFormatCommand(args);
     break;
   case 'emit-dts':
     runEmitDtsCommand(args);
