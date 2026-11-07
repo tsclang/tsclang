@@ -80,7 +80,8 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   test: new Set(),
 };
 
-// Single-letter command aliases — npm/pnpm/bun muscle memory (tsclang i / u / r).
+// Single-letter command aliases — npm/pnpm/bun muscle memory (tsclang i / u / r),
+// cargo b/t, npm t/s; l/p are mnemonic (no single-letter reference).
 // Canonicalized by the dispatcher BEFORE flag checks and command dispatch, so
 // COMMAND_FLAGS and the per-command parsers only ever see canonical names
 // (getPositional skips tokens equal to the command name).
@@ -88,6 +89,11 @@ export const COMMAND_ALIASES: Record<string, string> = {
   i: 'install',
   u: 'update',
   r: 'remove',
+  b: 'build',
+  t: 'test',
+  l: 'lint',
+  s: 'search',
+  p: 'publish',
 };
 
 export function isKnownCommand(command: string): boolean {

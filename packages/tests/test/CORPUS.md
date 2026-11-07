@@ -1485,6 +1485,7 @@ input.tsc:1:
 - [E] `--emit foo` → `ConfigError: unknown emit value` (валидация значения)
 - [R] `--emit flash` e2e без железа: реальный avr-gcc/avr-objcopy + мок-avrdude (шим пишет argv в файл), точная строка доставки; `needs-unix` → на win32 исполняется в WSL
 - [R] CMakeLists.txt генерируется рядом с C-файлами
+- [R] алиас `b` — позиционный и флаги пробрасываются после канонизации (`b main.tsc --emit c`)
 
 ### tsclang run
 

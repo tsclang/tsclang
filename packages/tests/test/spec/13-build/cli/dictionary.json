@@ -31,6 +31,7 @@
   "commands": [
     {
       "name": "build",
+      "alias": "b",
       "description": "Compile .tsc to C or binary",
       "provenance": "00.2.2-installation.md:52",
       "positional": "file.tsc (examples: hello.tsc — 00.2.3:34, 00.7.2:6)",
@@ -67,7 +68,7 @@
       "resultProvenance": "00.7.3-run.md"
     },
     { "name": "debug", "description": "Debug a .tsc program", "positional": "file.tsc (00.7.4-debug.md)", "provenance": "00.2.2-installation.md:54" },
-    { "name": "test", "description": "Run tests in test/ directory", "positional": null, "provenance": "00.2.2-installation.md:55; 00.7.5-test.md (fixed ./test dir, *.test.tsc)" },
+    { "name": "test", "alias": "t", "description": "Run tests in test/ directory", "positional": null, "provenance": "00.2.2-installation.md:55; 00.7.5-test.md (fixed ./test dir, *.test.tsc)" },
     {
       "name": "init",
       "description": "Create a new project",
@@ -83,7 +84,7 @@
         { "name": "--type", "takesValue": true, "values": ["executable", "library", "declaration", "platform", "package"], "default": "executable", "provenance": "00.7.6-init.md" }
       ]
     },
-    { "name": "lint", "description": "Run linter", "positional": "file.tsc (00.7.7:6)", "provenance": "00.2.2-installation.md:57", "options": [
+    { "name": "lint", "alias": "l", "description": "Run linter", "positional": "file.tsc (00.7.7:6)", "provenance": "00.2.2-installation.md:57", "options": [
       { "name": "--fix", "takesValue": false, "provenance": "00.7.8-lint.md:29" },
       { "name": "--rule=prefer-const", "takesValue": false, "description": "single rule (inline = form)", "provenance": "00.7.8-lint.md:30" }
     ] },
@@ -97,7 +98,7 @@
     ] },
     { "name": "update", "alias": "u", "description": "Update lock file", "positional": "name (00.7.13-update.md)", "provenance": "00.2.2-installation.md:64" },
     { "name": "remove", "alias": "r", "description": "Remove a package", "positional": "name (00.7.14-remove.md)", "provenance": "00.2.2-installation.md:65; 00.7.14-remove.md" },
-    { "name": "search", "description": "Search packages", "positional": "query (00.7.15-search.md)", "provenance": "00.2.2-installation.md:66" },
-    { "name": "publish", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:67; 00.7.16-publish.md" }
+    { "name": "search", "alias": "s", "description": "Search packages", "positional": "query (00.7.15-search.md)", "provenance": "00.2.2-installation.md:66" },
+    { "name": "publish", "alias": "p", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:67; 00.7.16-publish.md" }
   ]
 }

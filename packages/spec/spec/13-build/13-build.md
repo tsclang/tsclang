@@ -2255,12 +2255,12 @@ build/avr/
 
 | Команда | Описание |
 |---------|----------|
-| `tsclang build` | Компиляция `.tsc` → C / бинарник / прошивка |
+| `tsclang build` (`b`) | Компиляция `.tsc` → C / бинарник / прошивка |
 | `tsclang run` | Запуск именованного скрипта из `tsc.package.json` |
 | `tsclang debug` | Отладка под gdb |
-| `tsclang test` | Запуск тестов из `test/` |
+| `tsclang test` (`t`) | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
-| `tsclang lint` | Линтер (`prefer-const`, `no-unreachable`) |
+| `tsclang lint` (`l`) | Линтер (`prefer-const`, `no-unreachable`) |
 | `tsclang format` | Форматирование исходника |
 | `tsclang explain` | Объяснение кода ошибки |
 | `tsclang emit-dts` | Генерация `.d.tsc` |
@@ -2269,10 +2269,10 @@ build/avr/
 | `tsclang install` (`i`) | Установить зависимости |
 | `tsclang update` (`u`) | Обновить lock-файл |
 | `tsclang remove` (`r`) | Удалить зависимость |
-| `tsclang search` | Поиск пакетов |
-| `tsclang publish` | Упаковка пакета в `.tspkg` |
+| `tsclang search` (`s`) | Поиск пакетов |
+| `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
 
-Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы `i`/`u`/`r` повторяют npm/pnpm/bun; `search`/`publish` алиасов не имеют.
+Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `format`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`) алиасов не имеют.
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора

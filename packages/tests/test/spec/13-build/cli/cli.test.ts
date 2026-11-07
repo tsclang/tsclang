@@ -1003,6 +1003,48 @@ describe("13-build/cli — pm: remove + алиасы i/u/r + честный upda
   })
 })
 
+// === command aliases b/t/l/s/p (#255) ===
+
+describe("13-build/cli — алиасы команд b/t/l/s/p (#255)", () => {
+  test("help-листинг показывает алиасы build (b) / test (t) / lint (l) / search (s) / publish (p) (#255)", async () => {
+    const r = await runCli(["--help"])
+    expect(r.code).toBe(0)
+    expect(r.stdout).toMatch(/build\s+\(b\)/)
+    expect(r.stdout).toMatch(/test\s+\(t\)/)
+    expect(r.stdout).toMatch(/lint\s+\(l\)/)
+    expect(r.stdout).toMatch(/search\s+\(s\)/)
+    expect(r.stdout).toMatch(/publish\s+\(p\)/)
+  })
+
+  test("алиасы b/t/l/s/p канонизируются — не unknown command (#255)", async () => {
+    for (const alias of ["b", "t", "l", "s", "p"]) {
+      const r = await runCli([alias], { cwd: mkTmp() })
+      expect(out(r).includes(`unknown command '${alias}'`)).toBe(false)
+    }
+  })
+
+  test("b --help показывает справку build (канонизация алиаса) (#255)", async () => {
+    const r = await runCli(["b", "--help"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("--emit")
+  })
+
+  test("s <query> ищет по реестру через алиас (#255)", async () => {
+    const r = await runCli(["s", "lib"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Found")
+    expect(r.stdout).toContain("lib@2.0.0")
+  })
+
+  test("b <file> --out-dir — позиционный и флаги пробрасываются после алиаса (#255)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), 'console.log("hello");\n')
+    const r = await runCli(["b", "main.tsc", "--emit", "c", "--out-dir", "dist"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "dist", "main.c"))).toBe(true)
+  })
+})
+
 // === surface fixes: #247 bare exit 0, #243 universal --help, #244 unknown-option errors, #242 run --no-cache ===
 
 describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244 #247)", () => {

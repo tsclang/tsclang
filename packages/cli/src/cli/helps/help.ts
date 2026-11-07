@@ -6,12 +6,12 @@ USAGE:
   tsclang <command> [options]
 
 COMMANDS:
-  build            Compile .tsc to C or binary
+  build (b)        Compile .tsc to C or binary
   run              Run a named script from tsc.package.json
   debug            Debug a .tsc program
-  test             Run tests in test/ directory
+  test (t)         Run tests in test/ directory
   init             Create a new project
-  lint             Run linter
+  lint (l)         Run linter
   format           Format source code
   explain          Explain an error code
   emit-dts         Generate .d.tsc declaration files
@@ -20,8 +20,8 @@ COMMANDS:
   install (i)      Install a package
   update (u)       Update lock file
   remove (r)       Remove a package
-  search           Search packages
-  publish          Publish a package
+  search (s)       Search packages
+  publish (p)      Publish a package
 
 OPTIONS:
   --version, -v    Print version
