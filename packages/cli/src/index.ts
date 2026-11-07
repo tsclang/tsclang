@@ -9,6 +9,7 @@ import { getVersion, getHelpText, CMD_HELP } from './cli/help.js';
 import { setColorEnabled } from '@tsclang/compiler';
 import { startLsp } from './lsp/server.js';
 import { runBuildCommand } from './cli/commands/build.js';
+import { runRunCommand } from './cli/commands/run.js';
 import { runExplainCommand } from './cli/commands/explain.js';
 import { runValidateConfigCommand } from './cli/commands/config.js';
 import { runInitCommand } from './cli/commands/init.js';
@@ -57,6 +58,9 @@ if (flagError) {
 switch (command) {
   case 'build':
     runBuildCommand(args, COMPILER_ROOT);
+    break;
+  case 'run':
+    runRunCommand(args);
     break;
   case 'debug':
     runDebugCommand(args, COMPILER_ROOT);

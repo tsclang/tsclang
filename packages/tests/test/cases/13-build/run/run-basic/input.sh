@@ -1,0 +1,1 @@
+tsclang run hello

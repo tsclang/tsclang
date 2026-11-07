@@ -61,6 +61,18 @@ export function runValidateConfigCommand(args: string[]): void {
     if (err) cfgErr(err);
   }
 
+  // scripts: named tasks for `tsclang run` — an object of non-empty strings
+  if (config.scripts !== undefined) {
+    if (!config.scripts || typeof config.scripts !== 'object' || Array.isArray(config.scripts)) {
+      cfgErr(`'scripts' must be an object of named shell commands, got ${JSON.stringify(config.scripts)}`);
+    }
+    for (const [scriptName, scriptCmd] of Object.entries(config.scripts as Record<string, unknown>)) {
+      if (typeof scriptCmd !== 'string' || !scriptCmd.trim()) {
+        cfgErr(`scripts.${scriptName} must be a non-empty string, got ${JSON.stringify(scriptCmd)}`);
+      }
+    }
+  }
+
   if (type === 'package' && config.dependencies) {
     const deps = config.dependencies as Record<string, string>;
     const resolved: Record<string, string> = {};

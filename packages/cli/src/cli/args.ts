@@ -62,6 +62,7 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   build: new Set(['--emit', '--out-dir', '--command', '--all-errors', '--debug', '--no-cache', '--sourcemap',
     '--watch', '--optimize', '--target', '--default-number', '--allocator', '--async',
     '--strict', '--ram-size', '--stack-size', '--platform', '--build', '--mcu']),
+  run: new Set(),
   debug: new Set(),
   init: new Set(['--type', '--library', '-l', '--declaration', '-d', '--platform', '-p']),
   lint: new Set(['--fix']),

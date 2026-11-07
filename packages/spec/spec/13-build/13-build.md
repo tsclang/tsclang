@@ -897,6 +897,29 @@ platform/
 | wasm | страница/движок подключает `.wasm` из каталога вывода; открыть: `--command "firefox %TSC_OUT_DIR%\hello.js"` |
 | nes | эмулятор или картридж — через `--command` (в разработке) |
 
+**`scripts`** — именованные задачи проекта для `tsclang run` (npm-модель). Top-level ключ манифеста:
+
+```json
+{
+  "scripts": {
+    "dev":   "tsclang build src/main.tsc --watch --emit exec",
+    "build": "tsclang build --build uno",
+    "flash": "tsclang build --build uno --emit flash",
+    "test":  "tsclang test"
+  }
+}
+```
+
+Семантика `tsclang run`:
+
+- `tsclang run` без аргумента — список скриптов, exit 0. `tsclang run <name>` — выполнение `scripts.<name>` через shell хоста (`cmd` на Windows, `/bin/sh` на Unix — как у `command`); код выхода скрипта становится кодом выхода CLI. Неизвестное имя: `ConfigError: unknown script 'x'; available: ...`, exit 1. Без `tsc.package.json` — ошибка `tsclang run: requires a tsc.package.json`, exit 1.
+- Внутри скриптов команда `tsclang` всегда вызывает этот же CLI: `run` добавляет в `PATH` временную обёртку (self-shim, аналог `node_modules/.bin` у npm) — глобальная установка не нужна.
+- Безопасность — как у `command`: скрипты читаются только из корневого `tsc.package.json` проекта; манифесты установленных зависимостей не читаются.
+- Развод с `builds.<name>.command`: `command` — «что сделать после этой сборки автоматически» (привязан к сборке), `scripts` — «что человек/CI вызывает явно по имени» (может не собирать вовсе: `lint`, `size`, `deploy`).
+- Архитектурный принцип: события сборки (watch, перезапуск артефакта, пост-билд действие) обслуживает сам `build` флагами `--watch`/`--emit exec`/`--command`; `scripts` — только слой именования поверх. Подписки на «пересборка успешна» из скрипта нет намеренно: новая событийная потребность решается флагом/эмитом `build`, а не скриптом. Поэтому `tsclang run dev` (`build --watch --emit exec`) работает полностью — build сам пересобирает и перезапускает артефакт при каждом изменении.
+- Схема: объект из непустых строк; `validate-config` отвергает не-объект и не-строковые значения (`scripts.<name> must be a non-empty string`).
+- Не поддерживается (намеренно): pre/post хуки (`pretest`/`posttest`), `$npm_*`-аналоги переменных, параллельный запуск.
+
 **`stringBufferSize`** — максимальный размер статического буфера, выделяемого компилятором на embedded, когда ring-buffer строка может покинуть scope (escape analysis). Компилятор оценивает верхнюю границу где возможно (литерал + литерал = точный размер); если оценить нельзя — использует `stringBufferSize`. Только для embedded (desktop использует ARC, проблем нет). См. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md).
 
 **`"binaryMode": "small"`** — режим для сильно ограниченных embedded платформ (AVR Arduino: 32 КБ flash). Включает type erasure для generic pointer types:
@@ -2326,24 +2349,26 @@ tsclang build hello.tsc --watch --emit exec           # цикл разрабо�
   компилирует `hello.tsc`, не `c`); без позиционного — `main` из `tsc.package.json`;
   позиционный может быть именем сборки (`tsclang build uno`)
 
-## Запуск программы (`--emit exec`; `run` удалена)
+## Запуск программы (`--emit exec`)
 
-Отдельной команды запуска нет: `tsclang run` удалена. Запуск — ступень лестницы emit:
-`--emit exec` = `--emit binary` (gcc, артефакт остаётся на диске) + запуск артефакта
+Запуск собранной программы — ступень лестницы emit, отдельной go run-подобной команды
+нет (старая `run` с такой семантикой удалена). `--emit exec` = `--emit binary`
+(gcc, артефакт остаётся на диске) + запуск артефакта
 прямым spawn по абсолютному пути, **без shell** — синтаксис пути (`out\hello` vs `./out/hello`)
-не зависит от платформы.
+не зависит от платформы. Именованные задачи проекта — `tsclang run` (npm-семантика,
+раздел `scripts` выше).
 
 ```bash
 tsclang build hello.tsc --emit exec          # собрать, запустить, дождаться выхода
 tsclang build hello.tsc --watch --emit exec  # цикл разработки: пересборка + перезапуск
 ```
 
-- Код выхода программы становится кодом выхода CLI (как раньше у `run`).
+- Код выхода программы становится кодом выхода CLI (как раньше у старой `run`).
 - `--watch --emit exec`: перед перезапуском дерево процессов программы завершается
   (`taskkill /T` на Windows, SIGTERM группе на Unix) — та же машинерия, что у `--command`.
 - Аргументы и окружение программы — «выпускаемся» в `--command` (лестница 80/20):
   `--emit binary --command "./out/hello --port 8080"`. Прежний синтаксис `run -- --foo bar`
-  удалён вместе с командой.
+  удалён вместе со старой командой.
 - `--emit exec` + эффективный `--command` (флаг или `builds.<name>.command`) — конфликт:
   `ConfigError: --emit exec already launches the built artifact`, exit 1.
 - Манифест: `builds.dev = { "emit": "exec" }` — работает через `tsclang build dev`.

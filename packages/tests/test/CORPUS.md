@@ -1481,6 +1481,12 @@ input.tsc:1:
 - [R] `--emit flash` e2e без железа: реальный avr-gcc/avr-objcopy + мок-avrdude (шим пишет argv в файл), точная строка доставки; `needs-unix` → на win32 исполняется в WSL
 - [R] CMakeLists.txt генерируется рядом с C-файлами
 
+### tsclang run
+
+- [R] `run <name>` выполняет `scripts.<name>` из корневого манифеста, stdout виден
+- [R] exit-код скрипта становится exit-кодом CLI (`exit 7`)
+- [E] неизвестное имя скрипта → `unknown script 'x'` + список доступных
+
 ### tsclang install
 
 - [R] устанавливает зависимость из npm-реестра

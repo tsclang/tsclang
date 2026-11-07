@@ -527,6 +527,126 @@ describe("13-build/cli — --command post-build hook", () => {
   })
 })
 
+// === run: именованные задачи из scripts (#251; npm-модель) ===
+
+describe("13-build/cli — run named scripts", () => {
+  function writeScriptsPkg(dir: string, scripts: Record<string, unknown>) {
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+      scripts,
+    }))
+  }
+
+  test("run <name> — выполняет скрипт, stdout виден", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    writeScriptsPkg(dir, { hello: "echo from-script" })
+    const r = await runCli(["run", "hello"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("from-script")
+  })
+
+  test("exit-код скрипта пробрасывается (exit 7)", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { fail: "exit 7" })
+    const r = await runCli(["run", "fail"], { cwd: dir })
+    expect(r.code).toBe(7)
+  })
+
+  test("unknown script — ConfigError + список доступных", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { build: "echo b", flash: "echo f" })
+    const r = await runCli(["run", "ghost"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown script 'ghost'")
+    expect(out(r)).toContain("build")
+    expect(out(r)).toContain("flash")
+  })
+
+  test("run без аргумента — список скриптов, exit 0", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { build: "echo b", dev: "echo d" })
+    const r = await runCli(["run"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("build")
+    expect(r.stdout).toContain("dev")
+  })
+
+  test("tsclang внутри скрипта резолвится (self-shim в PATH)", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { probe: "tsclang --version" })
+    const r = await runCli(["run", "probe"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toMatch(/tsclang \d+\.\d+\.\d+/)
+  })
+
+  test("скрипт вызывает tsclang build — компилирует через self-shim", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    writeScriptsPkg(dir, { build: "tsclang build hello.tsc --emit c" })
+    const r = await runCli(["run", "build"], { cwd: dir, timeoutMs: 90000 })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "hello.c"))).toBeTruthy()
+  })
+
+  test("scripts из манифеста зависимости не читаются (только корневой)", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { build: "echo root" })
+    mkdirSync(join(dir, "tsc_packages", "dep"), { recursive: true })
+    writeFileSync(join(dir, "tsc_packages", "dep", "tsc.package.json"), JSON.stringify({
+      name: "dep", version: "0.1.0", type: "library", scripts: { ghost: "echo dep" },
+    }))
+    const r = await runCli(["run", "ghost"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown script 'ghost'")
+  })
+
+  test("без tsc.package.json — понятная ошибка", async () => {
+    const r = await runCli(["run", "hello"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("requires a tsc.package.json")
+  })
+
+  test("validate-config принимает корректный scripts", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { build: "tsclang build", test: "tsclang test" })
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(0)
+  })
+
+  test("validate-config отвергает scripts с не-строковым значением", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { build: 42 })
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("scripts.build")
+  })
+
+  test("validate-config отвергает scripts не-объект", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, {})
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc", scripts: ["a", "b"],
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("scripts")
+  })
+
+  test("run --help — exit 0", async () => {
+    const r = await runCli(["run", "--help"])
+    expect(r.code).toBe(0)
+    expect(r.stdout.length > 0).toBeTruthy()
+  })
+
+  test("run — известная команда (не unknown; npm-семантика #251)", async () => {
+    const dir = mkTmp()
+    writeScriptsPkg(dir, { hello: "echo hi" })
+    const r = await runCli(["run", "hello"], { cwd: dir })
+    expect(out(r).includes("unknown command 'run'")).toBe(false)
+  })
+})
+
 // === debug (00.7.3-debug; живёт после удаления run — #238) ===
 
 describe("13-build/cli — debug (00.7.3-debug)", () => {
@@ -699,12 +819,15 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     expect(out(r)).toContain("unknown command 'build-cmake'")
   })
 
-  test("run удалена — unknown command (заменена на build --emit binary --command)", async () => {
+  test("run возвращена с npm-семантикой (#251): unknown command нет, покрыто в run-блоке выше", async () => {
     const dir = mkTmp()
-    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-    const r = await runCli(["run", "hello.tsc"], { cwd: dir })
-    expect(r.code).toBe(1)
-    expect(out(r)).toContain("unknown command 'run'")
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+      scripts: { hello: "echo hi" },
+    }))
+    const r = await runCli(["run", "hello"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(out(r).includes("unknown command 'run'")).toBe(false)
   })
 
   test("--outDir (camelCase) → unknown option (переименован в --out-dir, без алиаса)", async () => {

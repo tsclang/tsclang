@@ -7,6 +7,7 @@ USAGE:
 
 COMMANDS:
   build            Compile .tsc to C or binary
+  run              Run a named script from tsc.package.json
   debug            Debug a .tsc program
   test             Run tests in test/ directory
   init             Create a new project

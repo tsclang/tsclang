@@ -74,6 +74,7 @@ See [spec/13-build/13-strict-mode.md](spec/13-build/13-strict-mode.md) for full 
 ```
 tsclang build <file.tsc>          Compile to C + binary
 tsclang build <file.tsc> --command <cmd>   Run shell command after successful build
+tsclang run [script]              Run a named script from tsc.package.json (npm-style)
 tsclang init <name>               Create new project
 tsclang install [package]         Install dependencies
 tsclang update                    Update dependencies

@@ -1,0 +1,8 @@
+{
+  "name": "runexit",
+  "version": "0.1.0",
+  "type": "executable",
+  "scripts": {
+    "fail": "exit 7"
+  }
+}
