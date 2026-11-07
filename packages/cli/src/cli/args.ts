@@ -17,6 +17,29 @@ export function getPositional(args: string[], command: string): string | undefin
   return args.find((a) => !a.startsWith('-') && a !== command);
 }
 
+// Options of each command that consume the NEXT token as their value. Needed to
+// find the real positional argument when flags come first (`build --build uno`).
+const VALUE_FLAGS: Record<string, Set<string>> = {
+  build: new Set(['--emit', '--out-dir', '--command', '--target', '--platform', '--build',
+    '--mcu', '--default-number', '--allocator', '--async', '--strict', '--optimize',
+    '--ram-size', '--stack-size']),
+};
+
+/**
+ * First positional argument, skipping flags AND the values of value-taking
+ * flags (unlike getPositional, which would return `c` for `--emit c hello.tsc`).
+ */
+export function firstPositional(args: string[], command: string): string | undefined {
+  const valueFlags = VALUE_FLAGS[command];
+  for (let i = 1; i < args.length; i++) {
+    const tok = args[i];
+    if (valueFlags?.has(tok)) { i++; continue; } // flag + its value
+    if (tok.startsWith('-')) continue;           // boolean/global flag
+    return tok;
+  }
+  return undefined;
+}
+
 const OPTIMIZE_SET = new Set<string>(OPTIMIZE_LEVELS);
 
 export function isValidOptimizeLevel(val: string): boolean {

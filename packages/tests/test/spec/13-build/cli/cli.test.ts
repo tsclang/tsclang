@@ -254,6 +254,24 @@ describe("13-build/cli — build: заявленный результат и о�
     expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)")
   })
 
+  test("--build <имя> без позиционного файла — input из main манифеста (#240)", async () => {
+    const dir = mkTmp()
+    mkdirSync(join(dir, "src"))
+    writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
+    const r = await runCli(["build", "--build", "desktop", "--out-dir", "out"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "out", "main.c"))).toBe(true)
+  })
+
+  test("--emit c перед файлом — позиционный определяется верно (не значение флага)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "--emit", "c", "hello.tsc", "--out-dir", "out"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "out", "hello.c"))).toBe(true)
+  })
+
   // Toolchain-gated emit values
   if (hasTool("gcc")) {
     test("--emit binary → бинарник (требует gcc)", async () => {
@@ -400,6 +418,21 @@ describe("13-build/cli — --command post-build hook", () => {
     const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(out(r)).not.toContain("tsclang run")
+  })
+
+  test("validate-config принимает все ключи build-записи, которые build читает (#239)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "x", version: "0.1.0", main: "main.tsc",
+      builds: { uno: {
+        emit: "hex", outDir: "dist", optimize: "Os", profile: "avr",
+        defaultNumber: "i32", mcu: "atmega328p",
+        flash: { programmer: "arduino", port: "COM3" },
+      } },
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(0)
   })
 })
 

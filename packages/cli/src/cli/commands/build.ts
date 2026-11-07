@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFi
 import { join, basename, extname, resolve, dirname } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines } from '@tsclang/compiler';
-import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType } from '../args.js';
+import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType, firstPositional } from '../args.js';
 import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
@@ -24,7 +24,9 @@ interface FlashConfig {
 
 export function runBuildCommand(args: string[], rootDir: string): void {
   const ROOT = rootDir;
-  let inputFile = args[1];
+  // #240: the positional input is the first non-flag token (flag values skipped),
+  // so `tsclang build --build uno` resolves input from the manifest, not from '--build'
+  let inputFile = firstPositional(args, 'build') ?? null;
   let _buildName: string | null = null;
   const _pkgPath = findPackageJson(process.cwd());
   let _pkg: any = null;

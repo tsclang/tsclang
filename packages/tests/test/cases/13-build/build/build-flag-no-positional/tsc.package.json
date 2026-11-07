@@ -1,0 +1,8 @@
+{
+  "name": "flagfirst",
+  "version": "0.1.0",
+  "main": "main.tsc",
+  "builds": {
+    "avr": { "emit": "c", "outDir": "dist" }
+  }
+}
