@@ -847,7 +847,7 @@ platform/
 | `flash` | конфигурация прошивки (объект, см. ниже) | — |
 | `command` | shell-команда после успешной сборки (см. ниже) | — |
 
-**`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avrdude` в PATH.
+**`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avr-gcc`, `avr-objcopy` и `avrdude` в PATH (отсутствие — `ConfigError: --emit hex/flash requires <инструмент> in PATH`, exit 1). Итоговая команда: `avrdude -c <programmer> -p <mcu> -P <port> [-b <baud>] [<extraFlags>…] -U flash:w:<hex>:i`.
 
 | Поле | Тип | Обязательное | Описание |
 |------|-----|-------------|----------|
@@ -2294,6 +2294,14 @@ tsclang build --emit cmake    # только CMakeLists.txt (без компил
 Значение `--emit` валидируется (после разрешения флага и `builds.<name>.emit`): неизвестное
 значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)`,
 exit 1 (никогда не «молча как c»).
+
+Внешние тулзы проверяются до запуска (pre-check `--version`): `--emit binary` — gcc;
+`--emit hex`/`flash` — avr-gcc и avr-objcopy; `flash` дополнительно — avrdude; `--emit wasm` — emcc.
+Отсутствие — `ConfigError: --emit <value> requires <tool> in PATH`, exit 1 — вместо падения
+с пустой диагностикой `tool failed:`. Если компилятор найден, но упал без единой строки в
+stderr (типично на Windows: gcc, вынутый из MSYS2-окружения, умирает до печати диагностики),
+после `gcc failed:` печатается подсказка о вероятной причине.
+
 tsclang build --out-dir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
 tsclang build hello.tsc --emit binary --command "out\hello"   # win: собрать и запустить

@@ -10,16 +10,10 @@ import { checkLockStale } from '@tsclang/pm';
 import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
+import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
 
 interface BuildConfig {
   [key: string]: unknown;
-}
-
-interface FlashConfig {
-  programmer: string;
-  port: string;
-  baud?: number;
-  extraFlags?: string[];
 }
 
 export function runBuildCommand(args: string[], rootDir: string): void {
@@ -338,6 +332,13 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'binary') {
+      // #241: a missing gcc must fail as a config error, not as "gcc failed:" with
+      // empty diagnostics (spawnSync gives status:null + .error when not found)
+      const gccCheck = spawnSync('gcc', ['--version'], { stdio: 'pipe' });
+      if (gccCheck.status !== 0 || gccCheck.error) {
+        process.stderr.write('ConfigError: --emit binary requires gcc in PATH\n');
+        return false;
+      }
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
       const binPath = join(outDir, stem);
       const gccOptimize = optimize ? [`-${optimize}`] : [];
@@ -351,7 +352,13 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         ...capabilityDefines(_capabilities),
       ], { stdio: 'pipe' });
       if (gcc.status !== 0) {
-        process.stderr.write(`tsclang: gcc failed:\n${gcc.stderr?.toString() || ''}\n`);
+        const gccStderr = gcc.stderr?.toString() || '';
+        process.stderr.write(`tsclang: gcc failed:\n${gccStderr}\n`);
+        if (!gccStderr.trim()) {
+          // a Windows gcc copied out of its MSYS2 environment dies before printing
+          // anything — point the user at the likely cause instead of an empty log
+          process.stderr.write('(gcc exited without diagnostics; on Windows use gcc from an MSYS2/MinGW environment — see book 00.2.1)\n');
+        }
         return false;
       }
     }
@@ -407,6 +414,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         try { unlinkSync(elfPath); } catch {}
         return false;
       }
+      // like avr-gcc above: a missing avr-objcopy is a config error, not an
+      // empty "avr-objcopy failed:" log (toolchains often ship them separately)
+      const objcopyCheck = spawnSync('avr-objcopy', ['--version'], { stdio: 'pipe' });
+      if (objcopyCheck.status !== 0 || objcopyCheck.error) {
+        process.stderr.write('ConfigError: --emit hex/flash requires avr-objcopy in PATH\n');
+        try { unlinkSync(elfPath); } catch {}
+        return false;
+      }
       const objcopyResult = spawnSync('avr-objcopy', [
         '-O', 'ihex', elfPath, hexPath,
       ], { stdio: 'pipe' });
@@ -419,19 +434,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
 
       if (emit === 'flash') {
         const avrdudeCheck = spawnSync('avrdude', ['--version'], { stdio: 'pipe' });
-        if (avrdudeCheck.error) {
+        if (avrdudeCheck.status !== 0 || avrdudeCheck.error) {
           process.stderr.write('ConfigError: --emit flash requires avrdude in PATH\n');
           return false;
         }
         const flashCfg = _buildCfg?.flash as FlashConfig | undefined;
-        const avrdudeArgs = [
-          '-c', flashCfg!.programmer,
-          '-p', mcu,
-          '-P', flashCfg!.port,
-          ...(flashCfg!.baud ? ['-b', String(flashCfg!.baud)] : []),
-          ...(flashCfg!.extraFlags || []),
-          '-U', `flash:w:${hexPath}:i`,
-        ];
+        const avrdudeArgs = buildAvrdudeArgs(flashCfg!, mcu, hexPath);
         const avrdudeResult = spawnSync('avrdude', avrdudeArgs, { stdio: 'pipe' });
         if (avrdudeResult.status !== 0) {
           process.stderr.write(`tsclang: avrdude failed:\n${avrdudeResult.stderr?.toString() || ''}\n`);

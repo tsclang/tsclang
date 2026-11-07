@@ -11,6 +11,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-engine"
+import { buildAvrdudeArgs } from "../../../../../cli/src/cli/flash.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -23,7 +24,7 @@ const dict = JSON.parse(readFileSync(join(here, "dictionary.json"), "utf8"))
 
 interface CliResult { code: number; stdout: string; stderr: string }
 
-function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsys2?: boolean } = {}): Promise<CliResult> {
+function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsys2?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<CliResult> {
   return new Promise((resolveFn, reject) => {
     const cwd = opts.cwd ?? ROOT
     let proc
@@ -34,10 +35,10 @@ function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsy
       const nodeMsys = toMsysPath(process.execPath)
       const tail = USE_TSX ? ["--import", TSX_LOADER, binMsys, ...args] : [binMsys, ...args]
       const script = `cd ${shQuote(toMsysPath(cwd))} && ${shQuote(nodeMsys)} ${tail.map(shQuote).join(" ")}`
-      proc = spawn(msys2Bash(), bashLoginArgs(script), { cwd, stdio: ["ignore", "pipe", "pipe"] })
+      proc = spawn(msys2Bash(), bashLoginArgs(script), { cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] })
     } else {
       const argv = USE_TSX ? ["--import", TSX_LOADER, SRC_BIN, ...args] : [DIST_BIN, ...args]
-      proc = spawn(process.execPath, argv, { cwd, stdio: ["ignore", "pipe", "pipe"] })
+      proc = spawn(process.execPath, argv, { cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] })
     }
     let stdout = ""
     let stderr = ""
@@ -284,6 +285,43 @@ describe("13-build/cli — build: заявленный результат и о�
   } else {
     test.skip("--emit binary → бинарник (пропуск: gcc недоступен)", () => {})
   }
+
+  // #241: a missing toolchain must produce a clear ConfigError, not "gcc failed:"
+  // with empty diagnostics (spawnSync returns status:null + .error when the
+  // binary is not found). Empty PATH makes the absence deterministic everywhere.
+  test("--emit binary без gcc в PATH — ConfigError requires gcc, не 'gcc failed:'", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out"], { cwd: dir, env: { ...process.env, PATH: "" } })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("ConfigError: --emit binary requires gcc in PATH")
+    expect(out(r)).not.toContain("gcc failed")
+  })
+
+  test("--emit hex/flash без avr-gcc в PATH — ConfigError (pre-check существует)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--target", "avr", "--emit", "hex", "--out-dir", "out"], { cwd: dir, env: { ...process.env, PATH: "" } })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("ConfigError: --emit hex/flash requires avr-gcc in PATH")
+  })
+
+  // #241: the avrdude command line is pure string-building (flash delivery has no
+  // hardware-free E2E on win32 — spawn can't exec script shims), so it is a unit
+  // test against the real builder used by build.ts
+  test("buildAvrdudeArgs: programmer/port/baud/extraFlags → полная команда", () => {
+    const args = buildAvrdudeArgs(
+      { programmer: "arduino", port: "COM3", baud: 115200, extraFlags: ["-v"] },
+      "atmega328p",
+      "out/main.hex",
+    )
+    expect(args.join(" ")).toBe("-c arduino -p atmega328p -P COM3 -b 115200 -v -U flash:w:out/main.hex:i")
+  })
+
+  test("buildAvrdudeArgs: без baud/extraFlags — флаги не добавляются", () => {
+    const args = buildAvrdudeArgs({ programmer: "usbasp", port: "/dev/ttyUSB0" }, "atmega2560", "build/uno/app.hex")
+    expect(args.join(" ")).toBe("-c usbasp -p atmega2560 -P /dev/ttyUSB0 -U flash:w:build/uno/app.hex:i")
+  })
 
   if (hasTool("emcc")) {
     test("--emit wasm (требует emcc)", async () => {
