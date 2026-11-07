@@ -2256,6 +2256,7 @@ build/avr/
 | Команда | Описание |
 |---------|----------|
 | `tsclang build` | Компиляция `.tsc` → C / бинарник / прошивка |
+| `tsclang run` | Запуск именованного скрипта из `tsc.package.json` |
 | `tsclang debug` | Отладка под gdb |
 | `tsclang test` | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
@@ -2265,10 +2266,13 @@ build/avr/
 | `tsclang emit-dts` | Генерация `.d.tsc` |
 | `tsclang lsp` | Language Server (stdio) |
 | `tsclang validate-config` | Проверка `tsc.package.json` |
-| `tsclang install` | Установить зависимости |
-| `tsclang update` | Обновить lock-файл |
+| `tsclang install` (`i`) | Установить зависимости |
+| `tsclang update` (`u`) | Обновить lock-файл |
+| `tsclang remove` (`r`) | Удалить зависимость |
 | `tsclang search` | Поиск пакетов |
 | `tsclang publish` | Упаковка пакета в `.tspkg` |
+
+Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы `i`/`u`/`r` повторяют npm/pnpm/bun; `search`/`publish` алиасов не имеют.
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора
@@ -2288,46 +2292,55 @@ build/avr/
 - Неизвестная опция — `unknown option '<flag>' for '<cmd>'`, exit 1: опечатки (`--outdir`, `--out-dir`) не игнорируются молча
 - Инлайн-форма `--опция=значение` не поддерживается (кроме `lint --rule=<имя>`) — ошибка с подсказкой использовать пробел
 
-## `tsclang install` vs `tsclang update`
+## `tsclang install` vs `tsclang update` vs `tsclang remove`
 
-| | `tsclang install` | `tsclang update` |
-|---|---|---|
-| Lock-файл существует | использует точные версии из lock | игнорирует lock, ищет новые версии |
-| Lock-файл отсутствует | резолвит по constraints, создаёт lock | то же |
-| Результат | воспроизводимая установка | обновлённый lock-файл |
+Все три команды работают с тремя артефактами сразу: `dependencies`/`devDependencies` манифеста, lock-файл `tsc.package.lock` и каталог `tsc_packages/`. Семантика — как у npm: команды касаются манифеста, lock-файл коммитится и обеспечивает воспроизводимость.
+
+| | `tsclang install` | `tsclang update` | `tsclang remove` |
+|---|---|---|---|
+| Без аргументов | синхронизирует lock с манифестом | пересолвит все constraints, синхронизирует lock (авто-install) | ошибка `missing package name` |
+| С именем пакета | добавляет в `dependencies` манифеста, пинит точную версию в lock | пересолвит constraint этого пакета из манифеста | вычищает из манифеста, lock и `tsc_packages/<имя>/` |
+| Результат | `Installed <имя>@<версия>` / `N installed, M updated, K removed` | `Updated <имя> <старая> -> <новая>` / `Updated N packages` | `Removed <имя>`; не установлен → exit 1 |
 
 ### Флаги `tsclang install`
 
-| Флаг | Сокращение | Описание |
-|------|------------|----------|
-| `--production` | `-p` | Установить только `dependencies`, без `devDependencies` |
-| `--dev` | `-d` | Установить только `devDependencies` |
-| `--force` | `-f` | Игнорировать несовместимости зависимостей между собой и платформой |
+| Флаг | Описание |
+|------|----------|
+| `--production` | Установить только `dependencies`, без `devDependencies` |
 
-### Добавление зависимостей
+NOT YET (реестр не реализован): сокращение `-p`, флаги `--dev`/`-d` (только devDependencies) и `--force`/`-f` (игнорировать несовместимости зависимостей).
+
+### Добавление и удаление зависимостей
 
 ```bash
-tsclang install                     # установить все
-tsclang install @tsc/sqlite3        # добавить в dependencies
-tsclang install @tsc/test -d        # добавить в devDependencies
-tsclang install @tsc/a @tsc/b -d    # добавить несколько сразу
-tsclang install @tsc/sqlite3@^1.2.0 # с указанием версии
+tsclang install                     # синхронизировать lock с манифестом
+tsclang install mylib               # latest: ^<версия> в dependencies + lock
+tsclang install mylib@^1.2.0        # constraint как указан
+tsclang install greetlib-2.0.0.tspkg# распаковать локальный архив (source: local)
+tsclang install git+https://github.com/example/mylib
+tsclang remove mylib                # манифест + lock + tsc_packages/mylib/
 ```
+
+`tsclang install <пакет>` в каталоге без `tsc.package.json` создаёт минимальный манифест (npm-поведение), а не падает.
+
+### `tsclang remove`
+
+Удаление без запроса подтверждения: операция локальна и обратима (`tsclang install <имя>` вернёт пакет) — ни npm, ни cargo подтверждение не спрашивают. Пакета нет ни в манифесте, ни в lock, ни в `tsc_packages/` → `package '<имя>' is not installed`, exit 1.
 
 ## `tsclang update` подробно
 
-| Флаг | Сокращение | Описание |
-|------|------------|----------|
-| `--force` | `-f` | Игнорировать несовместимости зависимостей между собой и платформой |
-
 ```bash
-tsclang update                          # обновить всё что можно
-tsclang update <dep>                    # обновить конкретную зависимость
-tsclang update @scope/sdl2              # обновить только sdl2
-tsclang update @scope/sdl2 @scope/json  # обновить несколько
+tsclang update                          # пересолвить все зависимости манифеста
+tsclang update mylib                    # пересолвить одну
 ```
 
-`tsclang update` автоматически запускает `tsclang install` после обновления lock-файла.
+Constraint берётся из `dependencies`/`devDependencies` манифеста, резолвится в точную версию (максимальная удовлетворяющая constraint). Вызов без имени обновляет все зависимости и синхронизирует lock с манифестом (авто-`install`) — lock-файл никогда не стирается. Пакета нет в манифесте → `package '<имя>' is not in tsc.package.json`, exit 1.
+
+NOT YET: `--force`/`-f`, обновление нескольких пакетов за один вызов.
+
+### Будущие команды пакетного менеджера (NOT YET)
+
+`outdated` (что устарело), `list`/`tree` (дерево установленных), `why` (зачем dependency), `cache` (управление `~/.tsclang/cache/`), `link`/`unlink`. Появятся вместе с инфраструктурой реестра.
 
 ## `tsclang build` подробно
 
@@ -2730,26 +2743,33 @@ error: version conflict for @myco/utils
 
 ## Структура lock-файла
 
-`tsc.package.lock` фиксирует точные версии и хеши для воспроизводимой установки:
+`tsc.package.lock` фиксирует точные версии для воспроизводимой установки:
 
 ```json
 {
+  "version": 1,
   "packages": {
-    "@tsc/sqlite3": {
-      "version": "1.0.0",
-      "resolved": "https://registry.tsclang.org/@tsc/sqlite3/1.0.0.tgz",
-      "integrity": "sha256:abc123..."
+    "mylib": {
+      "version": "1.2.3",
+      "source": "registry"
     },
-    "@myco/utils": {
-      "version": "2.1.0",
-      "resolved": "https://registry.tsclang.org/@myco/utils/2.1.0.tgz",
-      "integrity": "sha256:def456..."
+    "greetlib": {
+      "version": "2.0.0",
+      "source": "local"
+    },
+    "mylib-git": {
+      "version": "git",
+      "source": "git+https://github.com/example/mylib"
     }
   }
 }
 ```
 
-Lock-файл коммитится в репозиторий. `tsclang install` с существующим lock-файлом устанавливает точные зафиксированные версии.
+Поле `source` фиксирует происхождение пакета: `registry` (по имени из реестра), `local` (из `.tspkg`-архива) или git-URL (тогда `version` — literal `git`, точный коммит появится с реализацией реестра). Поле опционально: записи, созданные bare-`install`/`update` (резолв из манифеста), считаются registry-пакетами и пишутся без `source`.
+
+Lock-файл коммитится в репозиторий. `tsclang install` с существующим lock-файлом переустанавливает точные зафиксированные версии; предупреждение `out of date` при сборке срабатывает, когда версия в lock перестаёт удовлетворять constraint манифеста.
+
+NOT YET (реестр не реализован): поля `resolved` (URL архива в реестре) и `integrity` (sha256-хеш) — появятся вместе со скачиванием пакетов.
 
 ## Кеш
 

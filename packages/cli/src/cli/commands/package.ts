@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
 import { join, resolve, dirname } from 'path';
-import { MOCK_REGISTRY, readLock, writeLock, readManifest } from '@tsclang/pm';
-import type { LockPackage } from '@tsclang/pm';
+import { MOCK_REGISTRY, readLock, writeLock, readManifest, resolveRange, manifestAddDependency, manifestRemoveDependency } from '@tsclang/pm';
+import type { LockPackage, LockFile } from '@tsclang/pm';
 import { PACKAGE_FILE, PACKAGES_DIR } from '@tsclang/shared';
 import { hasFlag, getPositional } from '../args.js';
 
@@ -62,44 +62,48 @@ export function runPublishCommand(): void {
   process.exit(0);
 }
 
+// Bare `install` / auto-install after `update`: reconcile the lock with the
+// manifest — resolves each constraint to an exact version, prunes entries no
+// longer listed. Returns the one-line summary.
+function syncFromManifest(production: boolean): string {
+  const manifest = readManifest();
+  if (!manifest) {
+    process.stderr.write('tsclang install: no tsc.package.json found in current directory\n');
+    process.exit(1);
+  }
+  const deps: Record<string, string> = production
+    ? (manifest.dependencies || {})
+    : { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
+  const lock = readLock();
+  let installed = 0, updated = 0;
+  for (const [name, range] of Object.entries(deps)) {
+    const resolved = resolveRange(name, range) ?? range;
+    if (!lock.packages[name]) {
+      lock.packages[name] = { version: resolved };
+      installed++;
+    } else if (lock.packages[name].version !== resolved) {
+      lock.packages[name].version = resolved;
+      updated++;
+    }
+  }
+  const removed: string[] = [];
+  for (const name of Object.keys(lock.packages)) {
+    if (!deps[name]) { delete lock.packages[name]; removed.push(name); }
+  }
+  writeLock(lock);
+  const parts: string[] = [];
+  if (installed) parts.push(`${installed} installed`);
+  if (updated) parts.push(`${updated} updated`);
+  if (removed.length) parts.push(`${removed.length} removed`);
+  return parts.length ? parts.join(', ') : 'Already up to date';
+}
+
 export function runInstallCommand(args: string[]): void {
   const productionFlag = hasFlag(args, '--production');
   const pkgArg = getPositional(args, 'install');
 
-  if (productionFlag && !pkgArg) {
-    process.exit(0);
-  }
-
   if (!pkgArg) {
-    const manifest = readManifest();
-    if (!manifest) {
-      console.error('tsclang install: no tsc.package.json found in current directory');
-      process.exit(1);
-    }
-    const deps: Record<string, string> = productionFlag
-      ? (manifest.dependencies || {})
-      : { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
-    const lock = readLock();
-    let installed = 0, updated = 0;
-    for (const [name, version] of Object.entries(deps)) {
-      if (!lock.packages[name]) {
-        lock.packages[name] = { version };
-        installed++;
-      } else if (lock.packages[name].version !== version) {
-        lock.packages[name].version = version;
-        updated++;
-      }
-    }
-    const removed: string[] = [];
-    for (const name of Object.keys(lock.packages)) {
-      if (!deps[name]) { delete lock.packages[name]; removed.push(name); }
-    }
-    writeLock(lock);
-    const parts: string[] = [];
-    if (installed) parts.push(`${installed} installed`);
-    if (updated) parts.push(`${updated} updated`);
-    if (removed.length) parts.push(`${removed.length} removed`);
-    process.stdout.write(parts.length ? parts.join(', ') + '\n' : 'Already up to date\n');
+    process.stdout.write(syncFromManifest(productionFlag) + '\n');
     process.exit(0);
   }
 
@@ -126,6 +130,7 @@ export function runInstallCommand(args: string[]): void {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content, 'utf8');
     }
+    manifestAddDependency(pkgName, pkgVersion);
     const lock = readLock();
     lock.packages[pkgName] = { version: pkgVersion, source: 'local' };
     writeLock(lock);
@@ -133,43 +138,114 @@ export function runInstallCommand(args: string[]): void {
     process.exit(0);
   }
 
-  let pkgName: string, pkgVersion: string, pkgSource: string;
+  // npm semantics: the package is recorded in dependencies of the manifest
+  // (creating one when absent) and pinned to an exact version in the lock.
+  let pkgName: string, constraint: string, lockVersion: string, pkgSource: string;
   if (pkgArg.startsWith('git+')) {
     pkgName = pkgArg.split('/').pop()!.replace(/\.git$/, '');
-    pkgVersion = 'git';
+    constraint = pkgArg;
+    lockVersion = 'git';
     pkgSource = pkgArg;
   } else {
     const atIdx = pkgArg.lastIndexOf('@');
     if (atIdx > 0) {
       pkgName = pkgArg.slice(0, atIdx);
-      pkgVersion = pkgArg.slice(atIdx + 1);
+      constraint = pkgArg.slice(atIdx + 1);
+      lockVersion = resolveRange(pkgName, constraint) ?? constraint;
     } else {
       pkgName = pkgArg;
-      pkgVersion = 'latest';
+      lockVersion = resolveRange(pkgName, 'latest') ?? 'latest';
+      constraint = /^\d/.test(lockVersion) ? `^${lockVersion}` : lockVersion;
     }
     pkgSource = 'registry';
   }
 
   mkdirSync(join(PACKAGES_DIR, pkgName), { recursive: true });
+  manifestAddDependency(pkgName, constraint);
 
   const lock = readLock();
-  lock.packages[pkgName] = { version: pkgVersion, source: pkgSource };
+  lock.packages[pkgName] = { version: lockVersion, source: pkgSource };
   writeLock(lock);
 
+  process.stdout.write(`Installed ${pkgName}@${lockVersion}\n`);
   process.exit(0);
 }
 
 export function runUpdateCommand(args: string[]): void {
   const pkgArg = getPositional(args, 'update');
+  const manifest = readManifest();
+  if (!manifest) {
+    process.stderr.write('tsclang update: no tsc.package.json found in current directory\n');
+    process.exit(1);
+  }
+  const deps: Record<string, string> = {
+    ...(manifest.dependencies || {}),
+    ...(manifest.devDependencies || {}),
+  };
+  const lock: LockFile = readLock();
 
   if (pkgArg) {
-    const lock = readLock();
-    lock.packages[pkgArg] = { ...(lock.packages[pkgArg] || {}) };
-    lock.packages[pkgArg].version = 'latest';
+    const range = deps[pkgArg];
+    if (range === undefined) {
+      process.stderr.write(`tsclang update: package '${pkgArg}' is not in tsc.package.json\n`);
+      process.exit(1);
+    }
+    const resolved = resolveRange(pkgArg, range) ?? range;
+    const prev = lock.packages[pkgArg]?.version;
+    const entry: LockPackage = { ...(lock.packages[pkgArg] || {}), version: resolved };
+    lock.packages[pkgArg] = entry;
     writeLock(lock);
-  } else {
-    writeLock({ version: 1, packages: {} });
+    process.stdout.write(prev && prev !== resolved
+      ? `Updated ${pkgArg} ${prev} -> ${resolved}\n`
+      : `Updated ${pkgArg} -> ${resolved}\n`);
+    process.exit(0);
   }
 
+  // Bare update: re-resolve every dependency, then sync the lock with the
+  // manifest (the auto-install the spec promises) — never wipe the lock.
+  let changed = 0;
+  for (const [name, range] of Object.entries(deps)) {
+    const resolved = resolveRange(name, range) ?? range;
+    const prev = lock.packages[name]?.version;
+    if (!prev || prev !== resolved) {
+      lock.packages[name] = { ...(lock.packages[name] || {}), version: resolved };
+      changed++;
+    }
+  }
+  for (const name of Object.keys(lock.packages)) {
+    if (!deps[name]) delete lock.packages[name];
+  }
+  writeLock(lock);
+  process.stdout.write(changed
+    ? `Updated ${changed} package${changed > 1 ? 's' : ''}\n`
+    : 'Already up to date\n');
+  process.exit(0);
+}
+
+export function runRemoveCommand(args: string[]): void {
+  const pkgArg = getPositional(args, 'remove');
+  if (!pkgArg) {
+    process.stderr.write('tsclang remove: missing package name\n');
+    process.exit(1);
+  }
+
+  const lock = readLock();
+  const inLock = lock.packages[pkgArg] !== undefined;
+  const inManifest = manifestRemoveDependency(pkgArg);
+  const pkgDir = join(PACKAGES_DIR, pkgArg);
+  const onDisk = existsSync(pkgDir);
+
+  if (!inLock && !inManifest && !onDisk) {
+    process.stderr.write(`tsclang remove: package '${pkgArg}' is not installed\n`);
+    process.exit(1);
+  }
+
+  if (inLock) {
+    delete lock.packages[pkgArg];
+    writeLock(lock);
+  }
+  if (onDisk) rmSync(pkgDir, { recursive: true, force: true });
+
+  process.stdout.write(`Removed ${pkgArg}\n`);
   process.exit(0);
 }

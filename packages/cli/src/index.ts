@@ -4,7 +4,7 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-import { hasFlag, hasFlagAny, isKnownCommand, checkUnknownFlags } from './cli/args.js';
+import { hasFlag, hasFlagAny, isKnownCommand, checkUnknownFlags, COMMAND_ALIASES } from './cli/args.js';
 import { getVersion, getHelpText, CMD_HELP } from './cli/help.js';
 import { setColorEnabled } from '@tsclang/compiler';
 import { startLsp } from './lsp/server.js';
@@ -14,7 +14,7 @@ import { runExplainCommand } from './cli/commands/explain.js';
 import { runValidateConfigCommand } from './cli/commands/config.js';
 import { runInitCommand } from './cli/commands/init.js';
 import { runEmitDtsCommand, runFormatCommand, runLintCommand } from './cli/commands/source.js';
-import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand } from './cli/commands/package.js';
+import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand, runRemoveCommand } from './cli/commands/package.js';
 import { runDebugCommand } from './cli/commands/debug.js';
 import { runTestCommand } from './cli/commands/test.js';
 
@@ -34,7 +34,15 @@ if (hasFlagAny(args, '--version', '-v')) {
   process.exit(0);
 }
 
-const command = args[0];
+let command = args[0];
+// Canonicalize single-letter aliases (i/u/r) in place BEFORE every check:
+// --help dispatch, unknown-flag validation and the switch below all see the
+// canonical name, and args[0] is rewritten so command parsers' getPositional
+// (which skips the token equal to the command name) works for aliases too.
+if (COMMAND_ALIASES[command]) {
+  command = COMMAND_ALIASES[command];
+  args[0] = command;
+}
 
 if (!command || command === '--help' || command === '-h') {
   console.log(getHelpText(VERSION));
@@ -88,6 +96,9 @@ switch (command) {
     break;
   case 'update':
     runUpdateCommand(args);
+    break;
+  case 'remove':
+    runRemoveCommand(args);
     break;
   case 'search':
     runSearchCommand(args);

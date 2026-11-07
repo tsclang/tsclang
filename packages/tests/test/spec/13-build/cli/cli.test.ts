@@ -894,6 +894,115 @@ describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.11-
   })
 })
 
+// === pm: remove + command aliases i/u/r + honest update (#254) ===
+
+describe("13-build/cli — pm: remove + алиасы i/u/r + честный update (#254)", () => {
+  const manifestWith = (deps: Record<string, string>) => JSON.stringify({
+    name: "probe", version: "0.1.0", type: "package", dependencies: deps,
+  }, null, 2)
+
+  test("алиасы i/u/r диспетчеризуются — не unknown command (#254)", async () => {
+    for (const alias of ["i", "u", "r"]) {
+      const r = await runCli([alias], { cwd: mkTmp() })
+      expect(out(r).includes(`unknown command '${alias}'`)).toBe(false)
+    }
+  })
+
+  test("remove без имени — ошибка входа, не unknown command (#254)", async () => {
+    const r = await runCli(["remove"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("missing package name")
+  })
+
+  test("install mylib@^1.0.0 — Installed-вывод + запись в dependencies манифеста (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({}))
+    const r = await runCli(["install", "mylib@^1.0.0"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Installed mylib@1.0.0")
+    const pkg = JSON.parse(readFileSync(join(dir, "tsc.package.json"), "utf8"))
+    expect(pkg.dependencies.mylib).toBe("^1.0.0")
+  })
+
+  test("remove вычищает манифест + lock + tsc_packages (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({}))
+    await runCli(["install", "mylib@^1.0.0"], { cwd: dir })
+    expect(existsSync(join(dir, "tsc_packages", "mylib"))).toBe(true)
+    const r = await runCli(["remove", "mylib"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Removed mylib")
+    const pkg = JSON.parse(readFileSync(join(dir, "tsc.package.json"), "utf8"))
+    expect(pkg.dependencies?.mylib).toBe(undefined)
+    const lock = JSON.parse(readFileSync(join(dir, "tsc.package.lock"), "utf8"))
+    expect(lock.packages.mylib).toBe(undefined)
+    expect(existsSync(join(dir, "tsc_packages", "mylib"))).toBe(false)
+  })
+
+  test("remove неустановленного пакета — exit 1 (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({}))
+    const r = await runCli(["remove", "ghost"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("not installed")
+  })
+
+  test("update <pkg> резолвит range из манифеста через реестр (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({ lib: "^1.0.0" }))
+    const r = await runCli(["update", "lib"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Updated lib")
+    const lock = JSON.parse(readFileSync(join(dir, "tsc.package.lock"), "utf8"))
+    expect(lock.packages.lib.version).toBe("1.2.3")
+  })
+
+  test("bare update не стирает lock: резолвит все deps (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({ lib: "^1.0.0", mylib: "^1.0.0" }))
+    const r = await runCli(["update"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const lock = JSON.parse(readFileSync(join(dir, "tsc.package.lock"), "utf8"))
+    expect(lock.packages.lib.version).toBe("1.2.3")
+    expect(lock.packages.mylib.version).toBe("1.0.0")
+  })
+
+  test("update пакета вне манифеста — exit 1 (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), manifestWith({}))
+    const r = await runCli(["update", "ghost"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("not in tsc.package.json")
+  })
+
+  test("bare install --production — prod-only sync, не молчаливый exit (#254)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "probe", version: "0.1.0", type: "package",
+      dependencies: { lib: "1.0.0" }, devDependencies: { pkgB: "2.0.0" },
+    }, null, 2))
+    const r = await runCli(["install", "--production"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const lock = JSON.parse(readFileSync(join(dir, "tsc.package.lock"), "utf8"))
+    expect(lock.packages.lib.version).toBe("1.0.0")
+    expect(lock.packages.pkgB).toBe(undefined)
+  })
+
+  test("help-листинг показывает алиасы install (i) / update (u) / remove (r) (#254)", async () => {
+    const r = await runCli(["--help"])
+    expect(r.code).toBe(0)
+    expect(r.stdout).toMatch(/install\s+\(i\)/)
+    expect(r.stdout).toMatch(/update\s+\(u\)/)
+    expect(r.stdout).toMatch(/remove\s+\(r\)/)
+  })
+
+  test("i --help показывает справку install (канонизация алиаса) (#254)", async () => {
+    const r = await runCli(["i", "--help"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("--production")
+  })
+})
+
 // === surface fixes: #247 bare exit 0, #243 universal --help, #244 unknown-option errors, #242 run --no-cache ===
 
 describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244 #247)", () => {

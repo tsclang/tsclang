@@ -17,8 +17,9 @@ COMMANDS:
   emit-dts         Generate .d.tsc declaration files
   lsp              Start Language Server
   validate-config  Validate ${PACKAGE_FILE}
-  install          Install a package
-  update           Update lock file
+  install (i)      Install a package
+  update (u)       Update lock file
+  remove (r)       Remove a package
   search           Search packages
   publish          Publish a package
 

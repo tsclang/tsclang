@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { LOCK_FILE, PACKAGE_FILE } from '@tsclang/shared';
 import { semverParse, semverCmp, semverSatisfies } from './semver.js';
 
@@ -29,6 +29,7 @@ export function resolveRange(pkg: string, range: string): string | null {
   const entry = MOCK_REGISTRY[pkg];
   const versions = entry?.versions ?? null;
   if (!versions) return range.replace(/^[^\d]*/, '');
+  if (range === '*' || range === 'latest') return versions[versions.length - 1];
   const satisfying = versions.filter((v: string) => semverSatisfies(v, range));
   if (satisfying.length === 0) return null;
   return satisfying.sort((a: string, b: string) => semverCmp(semverParse(a), semverParse(b))).pop()!;
@@ -82,6 +83,49 @@ export function readManifest(): Manifest | null {
   }
 }
 
+function writeManifestFile(manifest: Manifest): void {
+  writeFileSync(PACKAGE_FILE, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+}
+
+// npm semantics: `install <pkg>` in a directory without tsc.package.json
+// creates a minimal manifest instead of failing.
+export function ensureManifest(): Manifest {
+  let manifest = readManifest();
+  if (!manifest) {
+    manifest = { name: basename(process.cwd()), version: '0.1.0', type: 'package' };
+    writeManifestFile(manifest);
+  }
+  return manifest;
+}
+
+export function manifestAddDependency(name: string, range: string): Manifest {
+  const manifest = ensureManifest();
+  if (!manifest.dependencies) manifest.dependencies = {};
+  manifest.dependencies[name] = range;
+  writeManifestFile(manifest);
+  return manifest;
+}
+
+// Removes the dependency from both dependencies and devDependencies.
+// Returns true when it was actually listed (and the manifest rewritten).
+export function manifestRemoveDependency(name: string): boolean {
+  const manifest = readManifest();
+  if (!manifest) return false;
+  let removed = false;
+  if (manifest.dependencies?.[name] !== undefined) { delete manifest.dependencies[name]; removed = true; }
+  if (manifest.devDependencies?.[name] !== undefined) { delete manifest.devDependencies[name]; removed = true; }
+  if (removed) writeManifestFile(manifest);
+  return removed;
+}
+
+// A lock entry satisfies a manifest range when its exact version matches it.
+// Legacy entries may store the raw constraint ('^1.0.0', 'git', 'latest') —
+// those fall back to string equality.
+function lockEntrySatisfies(lockVersion: string, range: string): boolean {
+  if (!/^\d+\.\d+\.\d+$/.test(lockVersion)) return lockVersion === range;
+  return semverSatisfies(lockVersion, range);
+}
+
 export interface LockStaleResult {
   added: string[];
   removed: string[];
@@ -100,7 +144,7 @@ export function checkLockStale(): LockStaleResult | null {
   const added: string[] = [], removed: string[] = [], changed: string[] = [];
   for (const [name, version] of Object.entries(deps)) {
     if (!lockPkgs[name]) added.push(name);
-    else if (lockPkgs[name].version !== version) changed.push(name);
+    else if (!lockEntrySatisfies(lockPkgs[name].version, version)) changed.push(name);
   }
   for (const name of Object.keys(lockPkgs)) {
     if (!deps[name]) removed.push(name);

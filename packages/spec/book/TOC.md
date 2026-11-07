@@ -55,7 +55,7 @@
 - 00.6.4-async-on-avr.md — Async на AVR: cooperative scheduler, singleton SM
 
 ### 00.7 CLI — справочник команд
-- 00.7.1-overview.md — Карта всех 15 команд, глобальные флаги, соглашения выхода
+- 00.7.1-overview.md — Карта всех 16 команд, глобальные флаги, соглашения выхода
 - 00.7.2-build.md — build: 18 опций, именованные сборки, кэш, watch
 - 00.7.3-run.md — run: именованные задачи из scripts, self-shim, dev-цикл
 - 00.7.4-debug.md — debug: отладка под gdb, #line и source map
@@ -66,11 +66,12 @@
 - 00.7.9-format.md — format: форматирование на месте
 - 00.7.10-explain.md — explain: коды ошибок E0xx, каталог диагностик
 - 00.7.11-emit-dts.md — emit-dts: генерация .d.tsc для C interop
-- 00.7.12-install.md — install: синхронизация, .tspkg, реестр, --production
-- 00.7.13-update.md — update: обновление записи до latest
-- 00.7.14-search.md — search: поиск по реестру
-- 00.7.15-publish.md — publish: упаковка .tspkg
-- 00.7.16-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
+- 00.7.12-install.md — install (i): синхронизация, добавление в dependencies, .tspkg, git+, --production
+- 00.7.13-update.md — update (u): пересолв constraint из манифеста, bare-обновление
+- 00.7.14-remove.md — remove (r): удаление из манифеста, лок-файла и tsc_packages/
+- 00.7.15-search.md — search: поиск по реестру
+- 00.7.16-publish.md — publish: упаковка .tspkg
+- 00.7.17-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
 
 ---
 

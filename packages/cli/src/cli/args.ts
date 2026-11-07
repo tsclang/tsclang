@@ -73,10 +73,21 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   'validate-config': new Set(),
   install: new Set(['--production']),
   update: new Set(),
+  remove: new Set(),
   search: new Set(),
   publish: new Set(),
   lsp: new Set(),
   test: new Set(),
+};
+
+// Single-letter command aliases — npm/pnpm/bun muscle memory (tsclang i / u / r).
+// Canonicalized by the dispatcher BEFORE flag checks and command dispatch, so
+// COMMAND_FLAGS and the per-command parsers only ever see canonical names
+// (getPositional skips tokens equal to the command name).
+export const COMMAND_ALIASES: Record<string, string> = {
+  i: 'install',
+  u: 'update',
+  r: 'remove',
 };
 
 export function isKnownCommand(command: string): boolean {

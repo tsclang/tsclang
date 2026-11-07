@@ -4,7 +4,7 @@
   "sources": [
     "packages/spec/book/00-intro/00.2-setup/00.2.2-installation.md",
     "packages/spec/book/00-intro/00.2-setup/00.2.3-quick-start.md",
-    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.15)"
+    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.17)"
   ],
   "install": {
     "global": "npm install -g tsclang",
@@ -19,14 +19,14 @@
   },
   "usageLine": "tsclang <command> [options]",
   "globalOptions": [
-    { "name": "--version", "alias": "-v", "description": "Print version", "provenance": "00.2.2-installation.md:68" },
-    { "name": "--help", "alias": "-h", "description": "Print this help", "provenance": "00.2.2-installation.md:69" },
-    { "name": "--no-color", "description": "Disable colored output", "provenance": "00.2.2-installation.md:70" }
+    { "name": "--version", "alias": "-v", "description": "Print version", "provenance": "00.2.2-installation.md:70" },
+    { "name": "--help", "alias": "-h", "description": "Print this help", "provenance": "00.2.2-installation.md:71" },
+    { "name": "--no-color", "description": "Disable colored output", "provenance": "00.2.2-installation.md:72" }
   ],
   "perCommandHelp": {
     "examples": ["build", "init"],
     "universal": true,
-    "provenance": "00.2.2-installation.md:77"
+    "provenance": "00.2.2-installation.md:79"
   },
   "commands": [
     {
@@ -61,17 +61,17 @@
     {
       "name": "run",
       "description": "Run a named script from tsc.package.json",
-      "provenance": "00.7.3-run.md",
+      "provenance": "00.7.3-run.md; 00.2.2-installation.md:53",
       "positional": "script name (omitted: list all scripts)",
       "result": "script stdout/stderr via host shell; script exit code becomes the CLI exit code; `tsclang` inside scripts resolves via a temp PATH shim",
       "resultProvenance": "00.7.3-run.md"
     },
-    { "name": "debug", "description": "Debug a .tsc program", "positional": "file.tsc (00.7.4-debug.md)", "provenance": "00.2.2-installation.md:53" },
-    { "name": "test", "description": "Run tests in test/ directory", "positional": null, "provenance": "00.2.2-installation.md:54; 00.7.5-test.md (fixed ./test dir, *.test.tsc)" },
+    { "name": "debug", "description": "Debug a .tsc program", "positional": "file.tsc (00.7.4-debug.md)", "provenance": "00.2.2-installation.md:54" },
+    { "name": "test", "description": "Run tests in test/ directory", "positional": null, "provenance": "00.2.2-installation.md:55; 00.7.5-test.md (fixed ./test dir, *.test.tsc)" },
     {
       "name": "init",
       "description": "Create a new project",
-      "provenance": "00.2.2-installation.md:55",
+      "provenance": "00.2.2-installation.md:56",
       "positional": "project name (example: myapp, 00.2.3:8)",
       "creates": ["<name>/tsc.package.json", "<name>/src/main.tsc", "<name>/test/main.test.tsc"],
       "createsProvenance": "00.2.3-quick-start.md:13-20",
@@ -83,20 +83,21 @@
         { "name": "--type", "takesValue": true, "values": ["executable", "library", "declaration", "platform", "package"], "default": "executable", "provenance": "00.7.6-init.md" }
       ]
     },
-    { "name": "lint", "description": "Run linter", "positional": "file.tsc (00.7.7:6)", "provenance": "00.2.2-installation.md:56", "options": [
+    { "name": "lint", "description": "Run linter", "positional": "file.tsc (00.7.7:6)", "provenance": "00.2.2-installation.md:57", "options": [
       { "name": "--fix", "takesValue": false, "provenance": "00.7.8-lint.md:29" },
       { "name": "--rule=prefer-const", "takesValue": false, "description": "single rule (inline = form)", "provenance": "00.7.8-lint.md:30" }
     ] },
-    { "name": "format", "description": "Format source code", "positional": "file.tsc (00.7.9-format.md)", "provenance": "00.2.2-installation.md:57" },
-    { "name": "explain", "description": "Explain an error code", "positional": "error code (example: E012, 00.7.10-explain.md)", "provenance": "00.2.2-installation.md:58" },
-    { "name": "emit-dts", "description": "Generate .d.tsc declaration files", "positional": "file.tsc (00.7.11-emit-dts.md)", "creates": "<stem>.d.tsc", "createsProvenance": "00.7.11-emit-dts.md", "provenance": "00.2.2-installation.md:59" },
-    { "name": "lsp", "description": "Start Language Server", "positional": null, "provenance": "00.2.2-installation.md:60; 00.7.16-lsp.md (stdio)" },
-    { "name": "validate-config", "description": "Validate tsc.package.json", "positional": "tsc.package.json (00.7.7-validate-config.md)", "provenance": "00.2.2-installation.md:61" },
-    { "name": "install", "description": "Install a package", "positional": "name | name@1.2.3 (00.2.3:42-43)", "provenance": "00.2.2-installation.md:62", "options": [
+    { "name": "format", "description": "Format source code", "positional": "file.tsc (00.7.9-format.md)", "provenance": "00.2.2-installation.md:58" },
+    { "name": "explain", "description": "Explain an error code", "positional": "error code (example: E012, 00.7.10-explain.md)", "provenance": "00.2.2-installation.md:59" },
+    { "name": "emit-dts", "description": "Generate .d.tsc declaration files", "positional": "file.tsc (00.7.11-emit-dts.md)", "creates": "<stem>.d.tsc", "createsProvenance": "00.7.11-emit-dts.md", "provenance": "00.2.2-installation.md:60" },
+    { "name": "lsp", "description": "Start Language Server", "positional": null, "provenance": "00.2.2-installation.md:61; 00.7.17-lsp.md (stdio)" },
+    { "name": "validate-config", "description": "Validate tsc.package.json", "positional": "tsc.package.json (00.7.7-validate-config.md)", "provenance": "00.2.2-installation.md:62" },
+    { "name": "install", "alias": "i", "description": "Install a package", "positional": "name | name@1.2.3 (00.2.3:48-49)", "provenance": "00.2.2-installation.md:63", "options": [
       { "name": "--production", "takesValue": false, "provenance": "00.7.12-install.md" }
     ] },
-    { "name": "update", "description": "Update lock file", "positional": "name (00.7.13-update.md)", "provenance": "00.2.2-installation.md:63" },
-    { "name": "search", "description": "Search packages", "positional": "query (00.7.14-search.md)", "provenance": "00.2.2-installation.md:64" },
-    { "name": "publish", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:65; 00.7.15-publish.md" }
+    { "name": "update", "alias": "u", "description": "Update lock file", "positional": "name (00.7.13-update.md)", "provenance": "00.2.2-installation.md:64" },
+    { "name": "remove", "alias": "r", "description": "Remove a package", "positional": "name (00.7.14-remove.md)", "provenance": "00.2.2-installation.md:65; 00.7.14-remove.md" },
+    { "name": "search", "description": "Search packages", "positional": "query (00.7.15-search.md)", "provenance": "00.2.2-installation.md:66" },
+    { "name": "publish", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:67; 00.7.16-publish.md" }
   ]
 }

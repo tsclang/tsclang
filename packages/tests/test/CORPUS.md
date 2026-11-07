@@ -1501,11 +1501,23 @@ input.tsc:1:
 - [R] `--production` — не ставит devDependencies
 - [R] `install` без аргументов — синхронизация с `tsc.package.json`
 - [R] `build` предупреждает если `tsc.package.lock` устарел
+- [R] `install <пакет>` дописывает constraint в `dependencies` манифеста (npm-семантика)
 
 ### tsclang update
 
 - [R] обновляет зависимость до latest compatible
 - [R] обновляет `tsc.package.lock`
+- [R] constraint берётся из манифеста, резолв через реестр (`^1.0.0` → `1.2.3`)
+- [R] bare `update` — все зависимости, lock обновляется, но не стирается
+
+### tsclang remove
+
+- [R] удаляет пакет из манифеста, lock и `tsc_packages/`
+- [E] пакет не установлен → `package '<имя>' is not installed`, exit 1
+
+### Алиасы pm-команд
+
+- [R] `i`/`u`/`r` работают как `install`/`update`/`remove` (канонизация в диспетчере)
 
 ### tsclang dev
 
