@@ -58,11 +58,14 @@ export function runRunCommand(args: string[]): void {
   try {
     const env = { ...process.env };
     if (cliBin) {
+      // process.execPath (absolute) instead of bare `node`: the spawned shell
+      // may have a PATH that cannot resolve node (e.g. cmd.exe under a
+      // unix-format PATH in test sandboxes)
       if (process.platform === 'win32') {
-        writeFileSync(join(shimDir, 'tsclang.cmd'), `@node "${cliBin}" %*\r\n`);
+        writeFileSync(join(shimDir, 'tsclang.cmd'), `@"${process.execPath}" "${cliBin}" %*\r\n`);
       } else {
         const shim = join(shimDir, 'tsclang');
-        writeFileSync(shim, `#!/bin/sh\nexec node "${cliBin}" "$@"\n`);
+        writeFileSync(shim, `#!/bin/sh\nexec "${process.execPath}" "${cliBin}" "$@"\n`);
         chmodSync(shim, 0o755);
       }
       env.PATH = `${shimDir}${delimiter}${env.PATH ?? ''}`;

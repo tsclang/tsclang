@@ -252,7 +252,7 @@ describe("13-build/cli — build: заявленный результат и о�
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--emit", "foo", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake)")
+    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake, dts)")
   })
 
   test("--build <имя> без позиционного файла — input из main манифеста (#240)", async () => {
@@ -515,7 +515,7 @@ describe("13-build/cli — --command post-build hook", () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "main.tsc"), HELLO_TSC)
     writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
-      name: "x", version: "0.1.0", main: "main.tsc",
+      name: "x", version: "0.1.0", type: "executable", main: "main.tsc",
       builds: { uno: {
         emit: "hex", outDir: "dist", optimize: "Os", profile: "avr",
         defaultNumber: "i32", mcu: "atmega328p",
@@ -524,6 +524,36 @@ describe("13-build/cli — --command post-build hook", () => {
     }))
     const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
     expect(r.code).toBe(0)
+  })
+
+  test("validate-config требует type — отсутствует → ConfigError (#252)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", main: "main.tsc",
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("missing required field 'type'")
+  })
+
+  test("validate-config принимает type package — родовый тип (#252)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "package",
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(0)
+  })
+
+  test("validate-config отвергает неизвестный type (#252)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "weird",
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("'type' must be one of")
+    expect(out(r)).toContain("package")
   })
 })
 
@@ -682,6 +712,108 @@ describe("13-build/cli — init (00.2.3:5-20)", () => {
     const r = await runCli(["init", "mywrapper", "--declaration"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "mywrapper", "tsc.package.json"))).toBe(true)
+  })
+
+  test("init --type library mylib — имя читается после значения флага (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "--type", "library", "mylib"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "mylib", "tsc.package.json"))).toBe(true)
+    expect(existsSync(join(dir, "library"))).toBe(false)
+  })
+
+  test("init mylib --library — создаёт index.tsc (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "mylib", "--library"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "mylib", "index.tsc"))).toBe(true)
+  })
+
+  test("init mywrapper --declaration — создаёт index.d.tsc (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "mywrapper", "--declaration"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "mywrapper", "index.d.tsc"))).toBe(true)
+  })
+
+  test("init myapp — манифест со scripts (start/dev) и builds.desktop (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "myapp"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const pkg = JSON.parse(readFileSync(join(dir, "myapp", "tsc.package.json"), "utf8"))
+    expect(pkg.scripts?.start).toBe("tsclang build --emit exec")
+    expect(pkg.scripts?.dev).toBe("tsclang build --watch --emit exec")
+    expect(pkg.builds?.desktop?.emit).toBe("binary")
+  })
+
+  test("init mylib --library — манифест с builds.dts и scripts.dts (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "mylib", "--library"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const pkg = JSON.parse(readFileSync(join(dir, "mylib", "tsc.package.json"), "utf8"))
+    expect(pkg.builds?.dts?.main).toBe("index.tsc")
+    expect(pkg.builds?.dts?.emit).toBe("dts")
+    expect(pkg.scripts?.dts).toBe("tsclang build --build dts")
+  })
+
+  test("init myavr --avr — builds.avr + scripts.flash + файлы executable (#252)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "myavr", "--avr"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const pkg = JSON.parse(readFileSync(join(dir, "myavr", "tsc.package.json"), "utf8"))
+    expect(pkg.type).toBe("executable")
+    expect(pkg.builds?.avr?.profile).toBe("avr")
+    expect(pkg.builds?.avr?.mcu).toBe("atmega328p")
+    expect(pkg.builds?.avr?.emit).toBe("flash")
+    expect(pkg.builds?.avr?.flash?.programmer).toBe("arduino")
+    expect(pkg.scripts?.flash).toBe("tsclang build --build avr")
+    expect(existsSync(join(dir, "myavr", "src", "main.tsc"))).toBe(true)
+    expect(existsSync(join(dir, "myavr", "test", "main.test.tsc"))).toBe(true)
+  })
+})
+
+// === emit dts + builds.<n>.main (#252) ===
+
+describe("13-build/cli — emit dts + builds.<n>.main (#252)", () => {
+  test("build --build dts генерирует build/dts/index.d.tsc", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "index.tsc"), "export function hello(): string {\n  return \"Hello, World!\"\n}\n")
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "mylib", version: "0.1.0", type: "library",
+      builds: { dts: { main: "index.tsc", emit: "dts", outDir: "build/dts" } },
+    }))
+    const r = await runCli(["build", "--build", "dts"], { cwd: dir })
+    expect(r.code).toBe(0)
+    const dts = join(dir, "build", "dts", "index.d.tsc")
+    expect(existsSync(dts)).toBe(true)
+    expect(readFileSync(dts, "utf8")).toContain("hello")
+  })
+
+  test("builds.<n>.main переопределяет main манифеста (#252)", async () => {
+    const dir = mkTmp()
+    mkdirSync(join(dir, "src"))
+    writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "other.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      builds: { dev: { main: "other.tsc", emit: "c", outDir: "out" } },
+    }))
+    const r = await runCli(["build", "--build", "dev"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(existsSync(join(dir, "out", "other.c"))).toBe(true)
+    expect(existsSync(join(dir, "out", "main.c"))).toBe(false)
+  })
+
+  test("validate-config принимает builds.<n>.main (#252)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "index.tsc"), HELLO_TSC)
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "mylib", version: "0.1.0", type: "library",
+      builds: { dts: { main: "index.tsc", emit: "dts", outDir: "build/dts" } },
+    }))
+    const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(out(r)).not.toContain("unknown key 'main'")
   })
 })
 

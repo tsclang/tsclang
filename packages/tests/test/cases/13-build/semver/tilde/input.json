@@ -1,1 +1,1 @@
-{ "name": "a", "version": "1.0.0", "dependencies": { "lib": "~1.0.0" } }
+{ "name": "a", "version": "1.0.0", "type": "package", "dependencies": { "lib": "~1.0.0" } }

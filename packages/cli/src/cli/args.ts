@@ -23,6 +23,7 @@ const VALUE_FLAGS: Record<string, Set<string>> = {
   build: new Set(['--emit', '--out-dir', '--command', '--target', '--platform', '--build',
     '--mcu', '--default-number', '--allocator', '--async', '--strict', '--optimize',
     '--ram-size', '--stack-size']),
+  init: new Set(['--type']),
 };
 
 /**
@@ -64,7 +65,7 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
     '--strict', '--ram-size', '--stack-size', '--platform', '--build', '--mcu']),
   run: new Set(),
   debug: new Set(),
-  init: new Set(['--type', '--library', '-l', '--declaration', '-d', '--platform', '-p']),
+  init: new Set(['--type', '--library', '-l', '--declaration', '-d', '--platform', '-p', '--avr']),
   lint: new Set(['--fix']),
   format: new Set(),
   'emit-dts': new Set(),

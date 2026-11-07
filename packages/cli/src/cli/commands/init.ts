@@ -1,20 +1,15 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
-import { flagValue, hasFlagAny } from '../args.js';
+import { flagValue, firstPositional, hasFlagAny } from '../args.js';
 import { packageGenerate } from '@tsclang/pm';
 import { PackageType, PACKAGE_FILE } from '@tsclang/shared';
 
 export function runInitCommand(args: string[]): void {
-  let name: string | null = null;
-  for (let i = 1; i < args.length; i++) {
-    if (!args[i].startsWith('-')) {
-      name = args[i];
-      break;
-    }
-  }
+  const name = firstPositional(args, 'init');
 
   const hasDeclaration = hasFlagAny(args, '--declaration', '-d');
   const hasLibrary = hasFlagAny(args, '--library', '-l');
   const hasPlatform = hasFlagAny(args, '--platform', '-p');
+  const hasAvr = hasFlagAny(args, '--avr');
 
   let type: PackageType = (flagValue(args, '--type') ?? 'executable') as PackageType;
 
@@ -22,6 +17,7 @@ export function runInitCommand(args: string[]): void {
   if (hasLibrary) type = 'library';
   if (hasPlatform) type = 'platform';
 
+  const preset: 'desktop' | 'avr' = hasAvr ? 'avr' : 'desktop';
   const pkgName = name || 'myapp';
 
   if (name) {
@@ -29,7 +25,7 @@ export function runInitCommand(args: string[]): void {
     process.chdir(name);
   }
 
-  const pkg = packageGenerate(pkgName, type);
+  const pkg = packageGenerate(pkgName, type, preset);
 
   writeFileSync(PACKAGE_FILE, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
@@ -55,6 +51,18 @@ export function runInitCommand(args: string[]): void {
         '',
       ].join('\n'), 'utf8');
     }
+  }
+
+  if (type === 'library' && !existsSync('index.tsc')) {
+    writeFileSync('index.tsc', 'export function hello(): string {\n  return "Hello, World!"\n}\n', 'utf8');
+  }
+
+  if (type === 'declaration' && !existsSync('index.d.tsc')) {
+    writeFileSync('index.d.tsc', [
+      'declare function example_add(a: i32, b: i32): i32',
+      'declare const EXAMPLE_OK: i32 = 0',
+      '',
+    ].join('\n'), 'utf8');
   }
 
   process.exit(0);

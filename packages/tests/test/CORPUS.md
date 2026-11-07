@@ -1462,8 +1462,13 @@ input.tsc:1:
 
 - [R] создаёт `tsc.package.json` с нужными полями
 - [R] создаёт `src/main.tsc` с заглушкой
-- [R] `--name` флаг задаёт имя проекта
+- [R] позиционное имя (`init hello-world`) задаёт имя проекта
 - [R] `--type library` — создаёт library-проект
+- [R] `--type library` → `index.tsc` с `export function hello()` — компилируется `build --emit c`
+- [R] library: `builds.dts` + `scripts.dts`; `run dts` создаёт `build/dts/index.d.tsc`
+- [R] `--declaration` → `index.d.tsc` с `declare function` / `declare const`
+- [R] `--avr` → `builds.avr` (profile avr, mcu atmega328p, emit flash, flash-конфиг) + `scripts.flash` + `src/main.tsc`
+- [R] `--type library mylib` — значение флага не съедается как позиционное имя
 
 ### tsclang build
 

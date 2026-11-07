@@ -37,7 +37,7 @@
       "result": ".c file (+ CMakeLists.txt when --emit c) or binary (when --emit binary)",
       "resultProvenance": "00.2.3-quick-start.md:37",
       "options": [
-        { "name": "--emit", "takesValue": true, "values": ["c", "binary", "exec", "hex", "flash", "wasm", "cmake"], "default": "c", "provenance": "00.7.2-build.md:27" },
+        { "name": "--emit", "takesValue": true, "values": ["c", "binary", "exec", "hex", "flash", "wasm", "cmake", "dts"], "default": "c", "provenance": "00.7.2-build.md:27" },
         { "name": "--out-dir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
         { "name": "--command", "takesValue": true, "description": "run shell command after successful build (overrides builds.<name>.command); host shell, env TSC_OUT_DIR", "provenance": "00.7.2-build.md:40" },
         { "name": "--target", "takesValue": true, "description": "desktop, avr, nes, wasm, ...", "default": "desktop", "provenance": "00.7.2-build.md:27" },
@@ -73,13 +73,14 @@
       "description": "Create a new project",
       "provenance": "00.2.2-installation.md:55",
       "positional": "project name (example: myapp, 00.2.3:8)",
-      "creates": ["<name>/tsc.package.json", "<name>/src/main.tsc"],
+      "creates": ["<name>/tsc.package.json", "<name>/src/main.tsc", "<name>/test/main.test.tsc"],
       "createsProvenance": "00.2.3-quick-start.md:13-20",
       "options": [
         { "name": "--library", "alias": "-l", "takesValue": false, "provenance": "00.2.3-quick-start.md:9; 00.7.6-init.md" },
         { "name": "--declaration", "alias": "-d", "takesValue": false, "provenance": "00.2.3-quick-start.md:10; 00.7.6-init.md" },
         { "name": "--platform", "alias": "-p", "takesValue": false, "provenance": "00.7.6-init.md" },
-        { "name": "--type", "takesValue": true, "values": ["executable", "library", "declaration", "platform"], "default": "executable", "provenance": "00.7.6-init.md" }
+        { "name": "--avr", "takesValue": false, "description": "AVR executable preset: builds.avr (emit flash + flash config) + scripts flash", "provenance": "00.7.6-init.md" },
+        { "name": "--type", "takesValue": true, "values": ["executable", "library", "declaration", "platform", "package"], "default": "executable", "provenance": "00.7.6-init.md" }
       ]
     },
     { "name": "lint", "description": "Run linter", "positional": "file.tsc (00.7.7:6)", "provenance": "00.2.2-installation.md:56", "options": [

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFile, unwatchFile } from 'fs';
 import { join, basename, extname, resolve, dirname } from 'path';
 import { spawn, spawnSync } from 'child_process';
-import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines } from '@tsclang/compiler';
+import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines, emitDtsSync } from '@tsclang/compiler';
 import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType, firstPositional } from '../args.js';
 import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
@@ -34,12 +34,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     inputFile = _pkg.main ?? null;
   }
 
+  // An explicit positional .tsc file always wins over manifest entry points
+  const _positionalFile = inputFile && inputFile.endsWith('.tsc') && !_buildName ? inputFile : null;
+
   // If no inputFile, read main from tsc.package.json
   if (!inputFile && _pkg?.main) {
     inputFile = _pkg.main;
-  }
-  if (!inputFile) {
-    missingInput('build');
   }
 
   let emit: string       = flagValue(args, '--emit') ?? 'c';
@@ -91,8 +91,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     return rules as string[];
   }
 
+  // --platform does not load a build config, so the entry point must already
+  // be resolved (builds.<n>.main is not in play on this path)
+  if (_platformFlag && !inputFile) missingInput('build');
+
   if (_platformFlag) {
-    const prof = loadProfile(_platformFlag, PROFILES_PATH, inputFile);
+    const prof = loadProfile(_platformFlag, PROFILES_PATH, inputFile ?? undefined);
     if (!prof) {
       process.stderr.write(`tsclang build: unknown profile '${_platformFlag}'; available: ${listAvailableProfiles(PROFILES_PATH).join(', ')}\n`);
       process.exit(1);
@@ -100,7 +104,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     _capabilities = prof;
     _profileTarget = prof.target || _platformFlag;
   } else if (_effectiveBuild) {
-    const pkgPath = findPackageJson(dirname(resolve(inputFile)));
+    const pkgPath = findPackageJson(inputFile ? dirname(resolve(inputFile)) : process.cwd());
     if (!pkgPath) {
       process.stderr.write(`tsclang build: --build requires a tsc.package.json\n`);
       process.exit(1);
@@ -113,8 +117,13 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         process.exit(1);
       }
       _buildCfg = buildCfg;
+      // builds.<n>.main overrides the top-level manifest main (spec 13-build);
+      // an explicit positional .tsc file still wins
+      if (typeof buildCfg.main === 'string' && buildCfg.main && !_positionalFile) {
+        inputFile = buildCfg.main;
+      }
       if (buildCfg.profile) {
-        const prof = loadProfile(buildCfg.profile, PROFILES_PATH, inputFile);
+        const prof = loadProfile(buildCfg.profile, PROFILES_PATH, inputFile ?? undefined);
         if (!prof) {
           process.stderr.write(`tsclang build: unknown profile '${buildCfg.profile}' in build '${_buildFlag}'\n`);
           process.exit(1);
@@ -136,6 +145,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
       throw e;
     }
+  }
+
+  // Entry chain complete: positional .tsc > builds.<n>.main > pkg.main.
+  // Libraries have no top-level main — their entry comes from builds.<n>.main.
+  if (!inputFile) {
+    missingInput('build');
   }
 
   let _pkgAliases: { paths: Record<string, string>; pkgDir: string } | null = null;
@@ -282,6 +297,19 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (_stale.removed.length) parts.push(`removed: ${_stale.removed.join(', ')}`);
     if (_stale.changed.length) parts.push(`changed: ${_stale.changed.join(', ')}`);
     process.stderr.write(`tsclang build: warning: tsc.package.lock is out of date (${parts.join('; ')}). Run 'tsclang install' to sync.\n`);
+  }
+
+  // --emit dts: generate .d.tsc declarations only — the library entry for
+  // consumers (same emitter as the emit-dts command, but with outDir support).
+  // No codegen, no toolchain. Input existence is guaranteed by checkInput above.
+  if (emit === 'dts') {
+    const decls = emitDtsSync(readFileSync(inputPath, 'utf8'), basename(inputPath));
+    mkdirSync(outDir, { recursive: true });
+    const outPath = join(outDir, basename(inputPath, extname(inputPath)) + '.d.tsc');
+    writeFileSync(outPath, decls.join('\n') + '\n', 'utf8');
+    process.stdout.write(`Emitted ${outPath} (${decls.length} declarations)\n`);
+    _runCommand();
+    return;
   }
 
   // --emit cmake: generate CMakeLists.txt only, no .c compilation (replaces the old build-cmake command)

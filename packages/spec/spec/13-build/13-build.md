@@ -23,6 +23,7 @@ myapp/
 {
   "name": "myapp",
   "version": "1.0.0",
+  "type": "executable",
   "main": "src/main.tsc"
 }
 ```
@@ -30,6 +31,7 @@ myapp/
 **Обязательные поля:**
 - `name` — имя пакета
 - `version` — версия (semver)
+- `type` — `"executable"`
 - `main` — точка входа
 
 ### main.tsc
@@ -67,6 +69,27 @@ mylib/
 - `name`
 - `version`
 - `type: "library"`
+
+Декларации `.d.tsc` у TSClang-библиотеки — **генерируемый артефакт сборки**, а не рукописный
+файл (как `.d.ts` у TS-библиотек): их создаёт `emit: "dts"`. `tsclang init mylib --library`
+кладёт это в шаблон сразу:
+
+```json
+{
+  "name": "mylib",
+  "version": "0.1.0",
+  "type": "library",
+  "builds": {
+    "dts": { "main": "index.tsc", "emit": "dts", "outDir": "build/dts" }
+  },
+  "scripts": {
+    "dts": "tsclang build --build dts"
+  }
+}
+```
+
+`builds.<name>.main` — entry point конкретной сборки, переопределяет верхний уровень
+(полезно библиотекам без собственного `main`).
 
 ### index.tsc
 
@@ -115,7 +138,7 @@ sqlite3/
 {
   "name": "@tsc/sqlite3",
   "version": "1.0.0",
-  "type": "library"
+  "type": "declaration"
 }
 ```
 
@@ -409,7 +432,7 @@ C-wrapper должен указать, откуда брать C-библиот�
 {
   "name": "@tsc/openssl",
   "version": "1.0.0",
-  "type": "library",
+  "type": "declaration",
   "link": {
     "mode": "system",
     "pkg_config": "openssl"
@@ -431,7 +454,7 @@ target_link_libraries(myapp PRIVATE ${OPENSSL_LIBRARIES})
 {
   "name": "@tsc/sqlite3",
   "version": "1.0.0",
-  "type": "library",
+  "type": "declaration",
   "link": {
     "mode": "bundled",
     "sources": ["lib/sqlite3.c"],
@@ -448,7 +471,7 @@ target_link_libraries(myapp PRIVATE ${OPENSSL_LIBRARIES})
 {
   "name": "@tsc/sqlite3",
   "version": "1.0.0",
-  "type": "library",
+  "type": "declaration",
   "link": {
     "mode": "bundled",
     "fetch": {
@@ -550,7 +573,7 @@ target_link_libraries(myapp PRIVATE ${OPENSSL_LIBRARIES})
 {
   "name": "@tsc/openssl",
   "version": "1.0.0",
-  "type": "library",
+  "type": "declaration",
   "link": {
     "platforms": {
       "desktop": {
@@ -780,23 +803,30 @@ platform/
 | `tscVersion` | Требуемая версия TSClang (`">=0.1.0"`) |
 | `files` | Файлы для публикации (массив путей). `devDependencies` исключаются автоматически. |
 
-**Четыре типа проектов:**
+**Пять типов проектов:**
 
 | Тип | Описание | `"type"` | Entry point |
 |-----|----------|----------|-------------|
-| **Executable** | Приложение | не указан (дефолт) | `"main"` (обязательно) |
+| **Executable** | Приложение | `"executable"` | `"main"` (обязательно) |
 | **TSClang-библиотека** | Библиотека на TSClang | `"library"` | `index.tsc` (конвенция) |
-| **C-wrapper** | Обёртка над C-библиотекой | `"library"` | `index.d.tsc` |
+| **C-wrapper** | Обёртка над C-библиотекой | `"declaration"` | `index.d.tsc` |
 | **Platform profile** | Профиль платформы | `"platform"` | `index.d.tsc` |
+| **Package** | Родовый пакет (метаданные без спец-поведения) | `"package"` | — |
 
-`"type"` управляет поведением автодетекта:
+`"type"` — обязательное поле: `executable | library | declaration | platform | package`.
+TSClang-библиотека и C-wrapper различаются явным типом, а не сниффингом entry-файла:
+у library исходник — `index.tsc`, а `.d.tsc` — **генерируемый артефакт сборки** (`emit: "dts"`);
+у declaration `index.d.tsc` — рукописный исходник (только `declare`-конструкции).
+
+`"type"` управляет поведением:
 
 | Значение | Поведение |
 |----------|-----------|
-| не указан | то же, что `"executable"` |
-| `"executable"` | компилятор ищет entry point, ошибка если не найден |
-| `"library"` | entry point не ищется, генерируются только `.h` + `.a`/`.so` |
+| `"executable"` | компилятор ищет entry point (`main`, обязательно), ошибка если не найден |
+| `"library"` | entry point не ищется, генерируются только `.h` + `.a`/`.so`; декларации `.d.tsc` — через `builds` с `emit: "dts"` |
+| `"declaration"` | C-wrapper: только рукописные `index.d.tsc` (`declare function/const/opaque/link`) |
 | `"platform"` | платформенный профиль — только `declare platform {}` и `declare module`, без кода |
+| `"package"` | родовый: без спец-поведения (метаданные, зависимости) |
 
 ```json
 // явная библиотека
@@ -839,7 +869,7 @@ platform/
 | `optimize` | Уровень оптимизации (`"O0"`, `"O1"`, `"O2"`, `"O3"`, `"Os"`) | `O0` |
 | `defaultNumber` | Тип для `number` (`"f64"`, `"f32"`, `"i32"`) | `f64` |
 | `binaryMode` | `"normal"` / `"small"` (type erasure) | `"normal"` |
-| `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"` | `"c"` |
+| `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"`, `"dts"` | `"c"` |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
@@ -2315,13 +2345,15 @@ tsclang build --emit cmake    # только CMakeLists.txt (без компил
 ```
 
 Значение `--emit` валидируется (после разрешения флага и `builds.<name>.emit`): неизвестное
-значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake)`,
+значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake, dts)`,
 exit 1 (никогда не «молча как c»).
 
 Ось `--emit` — лестница пайплайна: каждое значение включает предыдущую ступень desktop-цепочки
 и добавляет одну. Desktop: `c` → `binary` → `exec` (запуск собранного артефакта). Embedded:
 `c` → `hex` → `flash` (прошивка). `wasm` — свой конец цепочки; `cmake` — альтернативный выход
-со ступени C (только CMakeLists.txt, без компиляции). Симметрия: `exec`:binary = `flash`:hex —
+со ступени C (только CMakeLists.txt, без компиляции); `dts` — декларационный выход без кодогена:
+`.d.tsc` для потребителей TSClang-библиотеки (тот же эмиттер, что у `tsclang emit-dts`, но с
+поддержкой `outDir`). Симметрия: `exec`:binary = `flash`:hex —
 артефакт остаётся на диске, emit добавляет действие последней мили. `--command` — ортогональный
 люк с любой ступени (произвольная shell-команда после сборки); для `exec` он избыточен и
 запрещён: `--emit exec` + эффективный `--command` (флаг или `builds.<name>.command`) →
@@ -2419,47 +2451,139 @@ describe("math", () => {
 ## `tsclang init` подробно
 
 ```bash
-tsclang init myapp                    # executable
+tsclang init myapp                    # executable (desktop)
+tsclang init blink --avr              # executable под AVR (прошивка)
 tsclang init mylib --library          # TSClang-библиотека
 tsclang init sqlite3 --declaration    # C-wrapper
+tsclang init --type package           # родовый пакет
 ```
 
-Короткие флаги:
+| Пресет | Короткий | Что создаёт |
+|--------|----------|-------------|
+| (без флага) | — | executable: `builds.desktop` + `scripts` start/dev + `src/main.tsc` + `test/main.test.tsc` |
+| `--avr` | — | executable для AVR: `builds.avr` (профиль avr, `emit: "flash"` + конфиг прошивки) + `scripts` flash + те же файлы |
+| `--library` | `-l` | TSClang-библиотека: `index.tsc` + `builds.dts` + `scripts` dts |
+| `--declaration` | `-d` | C-wrapper: рукописный `index.d.tsc` (только `declare`-конструкции) |
+| `--platform` | `-p` | манифест platform profile (продвинутый сценарий, без шаблона файлов) |
+| `--type <знач>` | — | явный тип; шорткаты выше приоритетнее |
 
-```bash
-tsclang init mylib -l      # TSClang-библиотека
-tsclang init sqlite3 -d    # C-wrapper
-```
+Позиционный аргумент — имя проекта и создаваемый каталог: `tsclang init myapp` → каталог
+`myapp/`. Без аргумента — проект в текущей директории, имя пакета по умолчанию `myapp`.
+Файлы шаблонов не перезаписываются, если уже существуют (кроме `tsc.package.json`).
 
-| Флаг | Короткий | Что создаёт |
-|------|----------|-------------|
-| (без флага) | — | executable |
-| `--library` | `-l` | TSClang-библиотека |
-| `--declaration` | `-d` | C-wrapper |
-
-Без аргумента — создаёт проект в текущей директории: `tsclang init`
-
-`tsclang init` создаёт:
+### executable (default)
 
 ```
 myapp/
-  src/
-    main.tsc
   tsc.package.json
+  src/
+    main.tsc            # console.log("Hello, World!");
+  test/
+    main.test.tsc       # самопроверяющийся тест add(1, 1) = 2
 ```
 
-Минимальный `tsc.package.json`:
+`tsc.package.json` (точный вывод init):
 
 ```json
 {
   "name": "myapp",
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "type": "executable",
   "main": "src/main.tsc",
   "builds": {
-    "desktop": { "emit": "binary", "outDir": "build/desktop" }
+    "desktop": { "emit": "binary", "outDir": "build/desktop", "optimize": "O2" }
+  },
+  "scripts": {
+    "start": "tsclang build --emit exec",
+    "dev": "tsclang build --watch --emit exec"
   }
 }
 ```
+
+`tsclang run dev` — цикл разработки (watch + перезапуск артефакта), `tsclang run start` —
+сборка и запуск.
+
+### --avr
+
+Файлы те же (executable), манифест:
+
+```json
+{
+  "name": "blink",
+  "version": "0.1.0",
+  "type": "executable",
+  "main": "src/main.tsc",
+  "builds": {
+    "avr": {
+      "profile": "avr",
+      "mcu": "atmega328p",
+      "emit": "flash",
+      "outDir": "build/avr",
+      "optimize": "Os",
+      "flash": {
+        "programmer": "arduino",
+        "port": "/dev/ttyUSB0",
+        "baud": 115200
+      }
+    }
+  },
+  "scripts": {
+    "flash": "tsclang build --build avr"
+  }
+}
+```
+
+`tsclang run flash` = сборка + прошивка через avrdude одной командой. `flash.programmer`
+и `flash.port` — плейсхолдеры под конкретную плату: поменяйте под своё подключение
+(`--emit flash` требует оба поля). `optimize: "Os"` — норма для embedded.
+
+### --library
+
+```
+mylib/
+  tsc.package.json
+  index.tsc            # export function hello(): string
+```
+
+`tsc.package.json`:
+
+```json
+{
+  "name": "mylib",
+  "version": "0.1.0",
+  "type": "library",
+  "builds": {
+    "dts": { "main": "index.tsc", "emit": "dts", "outDir": "build/dts" }
+  },
+  "scripts": {
+    "dts": "tsclang build --build dts"
+  }
+}
+```
+
+`tsclang run dts` генерирует `build/dts/index.d.tsc` — декларации для потребителей
+библиотеки (см. раздел TSClang-библиотека выше: `.d.tsc` — артефакт сборки, не исходник).
+
+### --declaration
+
+```
+sqlite3/
+  tsc.package.json
+  index.d.tsc          # declare function example_add(...); declare const EXAMPLE_OK
+```
+
+`tsc.package.json`:
+
+```json
+{
+  "name": "sqlite3",
+  "version": "0.1.0",
+  "type": "declaration"
+}
+```
+
+`index.d.tsc` — рукописный исходник C-wrapper'а: замените шаблонные декларации на
+реальный API обёртываемой C-библиотеки (см. раздел C-wrapper выше).
 
 ## `tsclang lsp`
 

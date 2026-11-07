@@ -1,5 +1,6 @@
 {
   "name": "a",
   "version": "1.0.0",
+  "type": "package",
   "dependencies": { "pkgA": "^1.0.0", "pkgB": "^2.0.0" }
 }

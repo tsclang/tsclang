@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { MOCK_PKG_DEPS, resolveRange, rangesCompatible } from '@tsclang/pm';
+import { PACKAGE_TYPE_VALUES } from '@tsclang/shared';
 import { validateBuildKeys, validateStrictRules } from '../config-validator.js';
 
 export function runValidateConfigCommand(args: string[]): void {
@@ -38,7 +39,12 @@ export function runValidateConfigCommand(args: string[]): void {
     cfgErr(`'version' must be a valid semver string, got '${config.version}'`);
   }
 
-  const type = (config.type as string) || 'package';
+  const type = config.type as string | undefined;
+
+  if (!type) cfgErr(`missing required field 'type'`);
+  if (!(PACKAGE_TYPE_VALUES as readonly string[]).includes(type!)) {
+    cfgErr(`'type' must be one of: ${PACKAGE_TYPE_VALUES.join(', ')}; got '${type}'`);
+  }
 
   if (type === 'library' && config.main) {
     cfgErr(`library projects must not have a 'main' entry point`);
