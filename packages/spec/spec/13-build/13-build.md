@@ -839,7 +839,7 @@ platform/
 | `optimize` | Уровень оптимизации (`"O0"`, `"O1"`, `"O2"`, `"O3"`, `"Os"`) | `O0` |
 | `defaultNumber` | Тип для `number` (`"f64"`, `"f32"`, `"i32"`) | `f64` |
 | `binaryMode` | `"normal"` / `"small"` (type erasure) | `"normal"` |
-| `emit` | тип вывода: `"c"`, `"binary"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"` | `"c"` |
+| `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"` | `"c"` |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
@@ -886,13 +886,13 @@ platform/
 - Переменная окружения `TSC_OUT_DIR` содержит абсолютный путь к каталогу вывода (`%TSC_OUT_DIR%` в cmd, `$TSC_OUT_DIR` в sh).
 - Разовая сборка: код выхода команды становится кодом выхода CLI.
 - `--watch`: перед пересборкой дерево процессов прошлой команды завершается (`taskkill /T` на Windows, SIGTERM группе процессов на Unix), после успешной пересборки команда запускается заново; провалившаяся пересборка не трогает работающий процесс.
-- Команда не меняет `--emit`: ось emit производит артефакты (`c`/`binary`/`hex`/`flash`/`wasm`/`cmake`), ни одно значение не «запускает». Чтобы запустить бинарь — `--emit binary` + путь в команде.
+- Команда не меняет `--emit` и не является ступенью лестницы: это ортогональный люк (произвольная shell-команда после сборки). Сама лестница описана выше: desktop `c`/`binary`/`exec`, embedded `hex`/`flash` — `exec` и `flash` сами выполняют действие последней мили.
 
 Запуск по таргетам:
 
 | Таргет | Как запускать |
 |--------|---------------|
-| desktop | `--emit binary --command "out\hello"` (win) / `"./out/hello"` (unix) |
+| desktop | `--emit exec` — запуск собранного артефакта без shell (синтаксис пути не зависит от платформы) |
 | avr | `--emit flash` — прошивка через avrdude, команда не нужна |
 | wasm | страница/движок подключает `.wasm` из каталога вывода; открыть: `--command "firefox %TSC_OUT_DIR%\hello.js"` |
 | nes | эмулятор или картридж — через `--command` (в разработке) |
@@ -2292,8 +2292,18 @@ tsclang build --emit cmake    # только CMakeLists.txt (без компил
 ```
 
 Значение `--emit` валидируется (после разрешения флага и `builds.<name>.emit`): неизвестное
-значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)`,
+значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake)`,
 exit 1 (никогда не «молча как c»).
+
+Ось `--emit` — лестница пайплайна: каждое значение включает предыдущую ступень desktop-цепочки
+и добавляет одну. Desktop: `c` → `binary` → `exec` (запуск собранного артефакта). Embedded:
+`c` → `hex` → `flash` (прошивка). `wasm` — свой конец цепочки; `cmake` — альтернативный выход
+со ступени C (только CMakeLists.txt, без компиляции). Симметрия: `exec`:binary = `flash`:hex —
+артефакт остаётся на диске, emit добавляет действие последней мили. `--command` — ортогональный
+люк с любой ступени (произвольная shell-команда после сборки); для `exec` он избыточен и
+запрещён: `--emit exec` + эффективный `--command` (флаг или `builds.<name>.command`) →
+`ConfigError: --emit exec already launches the built artifact`, exit 1. Аргументы и окружение
+программы — часть команды: `--emit binary --command "./out/hello --port 8080"`.
 
 Внешние тулзы проверяются до запуска (pre-check `--version`): `--emit binary` — gcc;
 `--emit hex`/`flash` — avr-gcc и avr-objcopy; `flash` дополнительно — avrdude; `--emit wasm` — emcc.
@@ -2304,9 +2314,9 @@ stderr (типично на Windows: gcc, вынутый из MSYS2-окруже
 
 tsclang build --out-dir ./dist # переопределить outDir
 tsclang build hello.tsc --no-cache  # пересобрать, минуя кэш компиляции
-tsclang build hello.tsc --emit binary --command "out\hello"   # win: собрать и запустить
-tsclang build hello.tsc --emit binary --command "./out/hello" # unix: собрать и запустить
-tsclang build hello.tsc --watch --command "./out/hello"       # watch: пересборка + перезапуск
+tsclang build hello.tsc --emit exec                       # собрать и запустить (без shell)
+tsclang build hello.tsc --emit binary --command "out\hello"   # win: запуск произвольной командой
+tsclang build hello.tsc --watch --emit exec           # цикл разработки: пересборка + перезапуск
 ```
 
 - Если build не указан — используется `"desktop"` или первый в списке
@@ -2316,21 +2326,28 @@ tsclang build hello.tsc --watch --command "./out/hello"       # watch: пере�
   компилирует `hello.tsc`, не `c`); без позиционного — `main` из `tsc.package.json`;
   позиционный может быть именем сборки (`tsclang build uno`)
 
-## Запуск программы (`--command`; `run` удалена)
+## Запуск программы (`--emit exec`; `run` удалена)
 
-Отдельной команды запуска нет: `tsclang run` удалена — её случай полностью покрывает
-пост-билд хук `--command` (см. «Поля build конфига → command» и «`tsclang build` подробно»).
+Отдельной команды запуска нет: `tsclang run` удалена. Запуск — ступень лестницы emit:
+`--emit exec` = `--emit binary` (gcc, артефакт остаётся на диске) + запуск артефакта
+прямым spawn по абсолютному пути, **без shell** — синтаксис пути (`out\hello` vs `./out/hello`)
+не зависит от платформы.
 
 ```bash
-tsclang build hello.tsc --emit binary --command "out\hello"    # Windows (cmd)
-tsclang build hello.tsc --emit binary --command "./out/hello"  # Linux/macOS (sh)
-tsclang build hello.tsc --watch --command "./out/hello"        # цикл разработки: пересборка + перезапуск
+tsclang build hello.tsc --emit exec          # собрать, запустить, дождаться выхода
+tsclang build hello.tsc --watch --emit exec  # цикл разработки: пересборка + перезапуск
 ```
 
-- Код выхода команды становится кодом выхода CLI (как раньше у `run`).
-- Аргументы программы передаются в строке команды: `--command "./out/hello --port 8080"`.
-  Прежний синтаксис `run -- --foo bar` удалён вместе с командой.
-- Подробная семантика (shell хоста, `TSC_OUT_DIR`, watch-респаун, безопасность) — в разделе `command` выше.
+- Код выхода программы становится кодом выхода CLI (как раньше у `run`).
+- `--watch --emit exec`: перед перезапуском дерево процессов программы завершается
+  (`taskkill /T` на Windows, SIGTERM группе на Unix) — та же машинерия, что у `--command`.
+- Аргументы и окружение программы — «выпускаемся» в `--command` (лестница 80/20):
+  `--emit binary --command "./out/hello --port 8080"`. Прежний синтаксис `run -- --foo bar`
+  удалён вместе с командой.
+- `--emit exec` + эффективный `--command` (флаг или `builds.<name>.command`) — конфликт:
+  `ConfigError: --emit exec already launches the built artifact`, exit 1.
+- Манифест: `builds.dev = { "emit": "exec" }` — работает через `tsclang build dev`.
+- Подробная семантика shell-команд (`TSC_OUT_DIR`, watch-респаун, безопасность) — в разделе `command` выше.
 
 ## `tsclang test` подробно
 
@@ -2438,7 +2455,7 @@ npm install -g tsclang   # установить компилятор
 tsclang init myapp       # создать проект
 cd myapp
 tsclang install          # установить зависимости
-tsclang build src/main.tsc --emit binary --command "./main"   # собрать и запустить
+tsclang build src/main.tsc --emit exec    # собрать и запустить
 ```
 
 ## Источники зависимостей (все варианты вместе)

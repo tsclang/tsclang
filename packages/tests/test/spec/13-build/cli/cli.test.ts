@@ -252,7 +252,7 @@ describe("13-build/cli — build: заявленный результат и о�
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--emit", "foo", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, hex, flash, wasm, cmake)")
+    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake)")
   })
 
   test("--build <имя> без позиционного файла — input из main манифеста (#240)", async () => {
@@ -367,6 +367,59 @@ describe("13-build/cli — build: заявленный результат и о�
     })
   } else {
     test.skip("--emit binary --command — требует gcc", () => {})
+  }
+
+  // --emit exec (#238): emit axis = pipeline ladder; exec = binary + launch the
+  // artifact by direct spawn (no shell, absolute path — the cmd.exe "./x" vs "x\"
+  // quirk never applies). Symmetry: exec:binary = flash:hex.
+  test("--emit exec --command — конфликт: exec сам запускает артефакт (ConfigError)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["build", "hello.tsc", "--emit", "exec", "--command", "echo no"], { cwd: dir })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("ConfigError: --emit exec already launches the built artifact")
+    expect(out(r)).not.toContain("no")
+  })
+
+  if (hasTool("gcc")) {
+    test("--emit exec — запускает собранный бинарник, stdout программы виден", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      const r = await runCli(["build", "hello.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      expect(r.code).toBe(0)
+      expect(r.stdout).toContain("hi")
+    })
+
+    test("--emit exec — бинарник остаётся на диске после запуска", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      const r = await runCli(["build", "hello.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      expect(r.code).toBe(0)
+      expect(existsSync(join(dir, "out", "hello.exe")) || existsSync(join(dir, "out", "hello"))).toBe(true)
+    })
+
+    test("--emit exec — exit-код программы пробрасывается (process.exit(7))", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "exit7.tsc"), 'console.log("running");\nprocess.exit(7);\n')
+      const r = await runCli(["build", "exit7.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      expect(r.stdout).toContain("running")
+      expect(r.code).toBe(7)
+    })
+
+    test("манифест builds.dev = {emit: exec} через --build — запускает", async () => {
+      const dir = mkTmp()
+      mkdirSync(join(dir, "src"), { recursive: true })
+      writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+        builds: { dev: { emit: "exec" } },
+      }))
+      const r = await runCli(["build", "dev", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      expect(r.code).toBe(0)
+      expect(r.stdout).toContain("hi")
+    })
+  } else {
+    test.skip("--emit exec — требует gcc", () => {})
   }
 })
 

@@ -177,8 +177,32 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   }
 
   function _runCommand(): void {
-    if (!_command) return;
     const env = { ...process.env, TSC_OUT_DIR: resolve(outDir) };
+    if (emit === 'exec') {
+      // exec = the binary rung + the last-mile action: launch the artifact by
+      // direct spawn on its absolute path, no shell (the host-shell "./x" vs
+      // "x\" quirk never applies). One-shot propagates the program's exit code.
+      const binPath = join(outDir, basename(inputFile!, extname(inputFile!)));
+      const exePath = process.platform === 'win32' && existsSync(`${binPath}.exe`) ? `${binPath}.exe` : binPath;
+      if (!watchMode) {
+        const r = spawnSync(exePath, { stdio: 'inherit', env });
+        if (r.error) {
+          process.stderr.write(`tsclang build: --emit exec failed to start ${exePath}: ${r.error.message}\n`);
+          process.exit(1);
+        }
+        process.exit(r.status ?? 0);
+      }
+      _killCommandChild();
+      _cmdChild = spawn(exePath, {
+        stdio: 'inherit', env,
+        detached: process.platform !== 'win32',
+      });
+      _cmdChild.on('error', (e) => {
+        process.stderr.write(`tsclang build: --emit exec failed to start: ${e.message}\n`);
+      });
+      return;
+    }
+    if (!_command) return;
     if (!watchMode) {
       const r = spawnSync(_command, { shell: true, stdio: 'inherit', env });
       process.exit(r.status ?? 0);
@@ -216,6 +240,15 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   // an unknown value must not silently fall back to emit=c
   if (!(EMIT_VALUES as readonly string[]).includes(emit)) {
     process.stderr.write(`ConfigError: unknown emit value '${emit}' (valid: ${EMIT_VALUES.join(', ')})\n`);
+    process.exit(1);
+  }
+
+  // --emit exec is itself a launcher; an effective --command (flag or
+  // builds.<name>.command) would be a second, competing one
+  if (emit === 'exec' && _command) {
+    process.stderr.write(
+      'ConfigError: --emit exec already launches the built artifact; for a custom command use --emit binary --command "<cmd>"\n'
+    );
     process.exit(1);
   }
 
@@ -331,7 +364,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
     }
 
-    if (emit === 'binary') {
+    if (emit === 'binary' || emit === 'exec') {
       // #241: a missing gcc must fail as a config error, not as "gcc failed:" with
       // empty diagnostics (spawnSync gives status:null + .error when not found)
       const gccCheck = spawnSync('gcc', ['--version'], { stdio: 'pipe' });
@@ -463,7 +496,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       if (debounceTimer) return;
       debounceTimer = setTimeout(() => {
         debounceTimer = null;
-        process.stderr.write(`\n[${ts()}] Change detected вЂ” rebuilding...\n`);
+        process.stderr.write(`\n[${ts()}] Change detected — rebuilding...\n`);
         const ok = doBuild();
         if (ok) {
           process.stderr.write(`[${ts()}] Build succeeded\n`);

@@ -24,7 +24,7 @@ Requires: Node.js ≥ 18, GCC or Clang, CMake (for embedded targets).
 tsclang init my-project
 cd my-project
 tsclang build src/main.tsc
-tsclang build src/main.tsc --emit binary --command "./main"   # build & run
+tsclang build src/main.tsc --emit exec    # build & run
 ```
 
 ## Language features
