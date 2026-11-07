@@ -17,6 +17,13 @@ packages/tests/test/cases/<section>/<feature>/<test-name>/
     expected.error     — ожидаемое сообщение об ошибке (для error-тестов)
     expected.warning   — ожидаемый текст warning'а (опционально)
     expected.no-warning — пустой файл: assert что warning'ов нет (опционально)
+    input.sh           — shell-сценарий вместо input.tsc: CLI-эндпойнт,
+                         stdout сравнивается с expected.out (опционально)
+    needs-unix         — маркер для input.sh: требуемые unix-команды через
+                         пробел (например `node avr-gcc avr-objcopy`). На win32
+                         скрипт исполняется внутри WSL; если WSL или команд нет
+                         — тест skip. На нативном unix — проверка наличия команд
+                         и обычный запуск (опционально)
 ```
 
 ### Типы тестов
@@ -1471,6 +1478,7 @@ input.tsc:1:
 - [R] release профиль — без `#line`, с `-O2`
 - [E] `--emit hex` без embedded target → ошибка
 - [E] `--emit foo` → `ConfigError: unknown emit value` (валидация значения)
+- [R] `--emit flash` e2e без железа: реальный avr-gcc/avr-objcopy + мок-avrdude (шим пишет argv в файл), точная строка доставки; `needs-unix` → на win32 исполняется в WSL
 - [R] CMakeLists.txt генерируется рядом с C-файлами
 
 ### tsclang install

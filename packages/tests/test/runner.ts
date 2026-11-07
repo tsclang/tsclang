@@ -618,9 +618,13 @@ async function executeShTest(testDir, kind, tmpBase) {
 
   const script = await readFile(join(testDir, 'input.sh'), 'utf8');
 
-  // Copy fixture files (non-special) from test dir to tmpBase
-  const specialFiles = new Set(['input.sh', 'input.json', 'input.tsc', 'expected.out', 'expected.error', 'expected.c']);
+  // Copy fixture files (non-special) from test dir to tmpBase.
+  // `needs-unix` marks scripts that must run in a real unix environment (e.g. a
+  // mock toolchain made of shell shims): on win32 a native spawn executes only
+  // .exe, so such a case is re-executed inside WSL instead of MSYS bash.
+  const specialFiles = new Set(['input.sh', 'input.json', 'input.tsc', 'expected.out', 'expected.error', 'expected.c', 'needs-unix']);
   const testFiles = await readdir(testDir);
+  const needsUnix = testFiles.includes('needs-unix');
   for (const f of testFiles) {
     if (!specialFiles.has(f)) {
       await copyFile(join(testDir, f), join(tmpBase, f));
@@ -629,23 +633,58 @@ async function executeShTest(testDir, kind, tmpBase) {
 
   // Substitute TSCLANG_BIN in the script so `tsclang` calls work.
   // Use the full node executable path (MSYS2-compatible) so bash can find it.
-  const nodeExec = MSYS2_BASH ? `"${toMsysPath(process.execPath)}"` : 'node';
-  const tscBin   = MSYS2_BASH ? toMsysPath(TSCLANG_BIN) : TSCLANG_BIN;
-  const tsclangCmd = USE_TSX
-    ? `${nodeExec} --import ${TSX_LOADER} ${JSON.stringify(tscBin)}`
-    : `${nodeExec} ${JSON.stringify(tscBin)}`;
-  const patchedScript = script
-    .replace(/\bnode\b/g, nodeExec)
-    .replace(/\btsclang\b/g, tsclangCmd);
-
-  const finalScript = MSYS2_BASH
-    ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`
-    : patchedScript;
-
   const env = { ...process.env };
   if (USE_TSX) env.NODE_OPTIONS = `--import ${TSX_LOADER}`;
 
-  const result = await runShell(finalScript, { cwd: tmpBase, env });
+  let result;
+  if (needsUnix && process.platform === 'win32') {
+    // The marker file lists unix commands the script relies on (one line,
+    // space-separated). On win32 a needs-unix script runs INSIDE WSL: its mock
+    // toolchain (shell shims) must resolve in the CLI's own spawns, which needs
+    // a unix runtime end to end — a native win32 spawn executes only .exe.
+    // Dist only: the tsx loader path is a win32 file URL, unusable from WSL node.
+    if (USE_TSX) {
+      return { status: 'skip', testDir, reason: 'needs-unix requires the built CLI (pnpm build)' };
+    }
+    const reqTools = (await readFile(join(testDir, 'needs-unix'), 'utf8')).trim().split(/\s+/).filter(Boolean);
+    const probeCmd = reqTools.map(t => `command -v ${t} >/dev/null`).join(' && ');
+    const probe = await runWsl(probeCmd);
+    if (probe.code !== 0) {
+      return { status: 'skip', testDir, reason: `needs-unix: WSL lacks [${reqTools.join(', ')}]` };
+    }
+    // wsl.exe passes `wsl bash -c <text>` through an extra shell expansion in
+    // the relay: `$PWD`, `$(...)` etc. in the script text are substituted in the
+    // RELAY's context (cwd of the node process) before bash parses the residue,
+    // silently breaking `PATH="$PWD/..."`. Base64 contains nothing expandable,
+    // so the script reaches bash byte-identical.
+    const inner = `cd '${toWslPath(tmpBase)}' && ${script.replace(/\btsclang\b/g, `node '${toWslPath(TSCLANG_BIN)}'`)}`;
+    const b64 = Buffer.from(inner, 'utf8').toString('base64');
+    result = await runWsl(`echo '${b64}' | base64 -d | bash`);
+  } else {
+    if (needsUnix) {
+      // native unix: same probe, executed directly
+      const reqTools = (await readFile(join(testDir, 'needs-unix'), 'utf8')).trim().split(/\s+/).filter(Boolean);
+      const probeCmd = reqTools.map(t => `command -v ${t} >/dev/null`).join(' && ');
+      const probe = await runShell(probeCmd);
+      if (probe.code !== 0) {
+        return { status: 'skip', testDir, reason: `needs-unix: lacks [${reqTools.join(', ')}]` };
+      }
+    }
+    const nodeExec = MSYS2_BASH ? `"${toMsysPath(process.execPath)}"` : 'node';
+    const tscBin   = MSYS2_BASH ? toMsysPath(TSCLANG_BIN) : TSCLANG_BIN;
+    const tsclangCmd = USE_TSX
+      ? `${nodeExec} --import ${TSX_LOADER} ${JSON.stringify(tscBin)}`
+      : `${nodeExec} ${JSON.stringify(tscBin)}`;
+    const patchedScript = script
+      .replace(/\bnode\b/g, nodeExec)
+      .replace(/\btsclang\b/g, tsclangCmd);
+
+    const finalScript = MSYS2_BASH
+      ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`
+      : patchedScript;
+
+    result = await runShell(finalScript, { cwd: tmpBase, env });
+  }
 
   if (kind === 'E') {
     if (result.code === 0) {

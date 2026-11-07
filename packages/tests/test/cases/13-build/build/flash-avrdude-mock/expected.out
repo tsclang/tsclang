@@ -1,0 +1,3 @@
+Flashed main.hex to atmega328p via arduino
+hex-ok
+avrdude -c arduino -p atmega328p -P COM3 -b 115200 -U flash:w:out/main.hex:i
