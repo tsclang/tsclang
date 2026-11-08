@@ -258,8 +258,24 @@ export function run(code: string, opts?: RunOptions): string {
   }
 }
 
-export function compile(codeOrPath: string): string {
-  const codegenOpts: any = {}
+export function compile(codeOrPath: string, opts?: RunOptions): string {
+  // Same target/capability resolution as run(): opts spread into codegen opts,
+  // then the platform profile caps merged with direct overrides — so
+  // compile(code, { target: "avr" }) produces real AVR-shaped C, not desktop.
+  const codegenOpts: any = { ...opts }
+  const directCaps = buildDirectCapabilities(opts)
+  if (codegenOpts.target && codegenOpts.target !== "desktop") {
+    const profilesDir = resolve(import.meta.dirname, "..", "..", "compiler", PROFILES_DIR)
+    const profilePath = join(profilesDir, codegenOpts.target, "index.d.tsc")
+    if (existsSync(profilePath)) {
+      const profileCaps = parsePlatformDecl(readFileSync(profilePath, "utf8"), profilePath)
+      codegenOpts.capabilities = { ...profileCaps, ...directCaps }
+    } else if (directCaps) {
+      codegenOpts.capabilities = directCaps
+    }
+  } else if (directCaps) {
+    codegenOpts.capabilities = directCaps
+  }
   // Explicit .tsc path (resolved from the calling test file). Only the suffix
   // identifies a path — '/'/'\\' checks false-positive on division and
   // escapes inside code strings.
