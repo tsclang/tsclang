@@ -118,17 +118,16 @@ function f(mut x: i32): void { x = x + 1 }
 console.log(f(1))`)).toThrow(Error, '"mut" parameter modifier is not supported')
   })
 
-  test("00.1.4:62 Shared<T> — BOOK BUG: в компиляторе только Arc<T> (E121 unknown type)", () => {
-    // The 00.1.4 concepts table names the ARC type `Shared<T>`, but the
-    // compiler implements `Arc<T>` (see the passing Arc test above). The file
-    // carries the user's uncommitted manual edits, so the book is not fixed
-    // here — reported in #257. Test asserts the book spelling works; it fails
-    // with E121, hence xfail until the table says Arc<T>.
-    expect(compile(`
+  test("00.1.4:62 таблица называет ARC-тип Arc<T> — Shared<T> не существует", () => {
+    // 00.1.4 originally named the ARC type `Shared<T>`; the language renamed
+    // it to `Arc<T>` in f7a04761 (June 2026). The book table now says Arc<T>
+    // (user edit, 2026-11-09), so the old spelling must be a clean unknown-
+    // type error — no silent alias back to Arc.
+    expect(() => run(`
 class Box { v: i32 = 1 }
 let b: Shared<Box> = new Box()
-console.log(b.v)`)).toBeTruthy()
-  }, { xfail: "#257" })
+console.log(b.v)`)).toThrow(Error, "[E121] unknown type name 'Shared'")
+  })
 
   // 00.1.5:18-24 — Map example; 00.1.5:28-32 — String example
   test("00.1.5 Map<string, i32>: set/get → 42", () => {
