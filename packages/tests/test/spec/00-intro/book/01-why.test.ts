@@ -239,10 +239,11 @@ console.log(m.get("a"))`)).toBe("1")
     expect(run("for (const x of [1, 2, 3]) { console.log(x) }")).toBe("1\n2\n3")
   })
   test("00.1.7 таблица: try/catch — catch требует явный тип ошибки", () => {
-    // NOTE (#257 finding): the book table shows `catch (e) { }` (TS spelling),
-    // but the compiler requires an explicit error type — `catch (e: Error)`
-    // (E111 "catch clause requires explicit error type"). 00.1.7 is a
-    // user-managed file with uncommitted edits, so it is reported, not fixed.
+    // NOTE (#257 finding): the book table used to show the bare TS spelling
+    // `catch (e) { }`, but the compiler requires an explicit error type —
+    // `catch (e: Error)` (E111 "catch clause requires explicit error type").
+    // The annotated form is valid TS too; 00.1.7 (user edit, 2026-11-09) now
+    // shows it in the sameness table.
     expect(run('try { throw new Error("boom") } catch (e: Error) { console.log("caught") }')).toBe("caught")
     expect(() => compile('try { throw new Error("boom") } catch (e) { console.log("caught") }')).toThrow()
   })
