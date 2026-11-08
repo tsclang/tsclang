@@ -1,0 +1,7 @@
+class Box {
+    v: i32 = 7;
+}
+let a: Arc<Box> = new Box();
+console.log(a.v);
+let b = new Arc<Box>(new Box());
+console.log(b.v);

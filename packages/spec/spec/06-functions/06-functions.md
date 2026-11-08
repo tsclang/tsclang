@@ -66,6 +66,8 @@
 
 ## Модификаторы функций
 
+Модификатора параметра `mut` **не существует** — `function f(mut x: i32)` это ошибка парсера: `"mut" parameter modifier is not supported; use "x: Mut<T>" instead`. Мутабельный borrow параметра — только через generic-обёртку `Mut<T>` (см. [04-borrow](../04-ownership/04-borrow.md)).
+
 ### `@static function` — статическая функция
 
 Декоратор `@static` на функции делает её **статической** (видимость ограничена translation unit). В C это `static <return_type> <name>(...)`.

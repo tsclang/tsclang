@@ -9,7 +9,6 @@ int32_t view_ref_Node(const Node *n) {
 int main(void) {
     TSC_INIT();
     Node *x = tsc_arc_alloc(sizeof(Node));
-    x->value = 0;
     x->value = 42;
     printf("%d\n", view_ref_Node(x));
     tsc_arc_release(x);

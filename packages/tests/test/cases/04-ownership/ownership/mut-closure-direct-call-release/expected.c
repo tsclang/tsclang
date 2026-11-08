@@ -15,7 +15,7 @@ static void _closure_0_fn(_closure_0_env *env) {
 
 int main(void) {
     TSC_INIT();
-    Counter c = {0};
+    Counter c = { .count = 0 };
     c.count = 5;
     _closure_0_env *fn_env = tsc_malloc(sizeof(_closure_0_env));
     *fn_env = (_closure_0_env){.c = &c};

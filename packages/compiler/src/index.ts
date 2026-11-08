@@ -2,7 +2,7 @@
 // Thin barrel re-exporting the compiler front-end and diagnostics surface.
 // CLI, test-engine and the spec test runner import from here.
 
-export { lex } from './compiler/lexer.js';
+export { lex, KEYWORDS } from './compiler/lexer.js';
 export { parse } from './compiler/parser.js';
 export { codegen, DESKTOP_CAPABILITIES } from './compiler/codegen.js';
 export { compileTsc, findPackageJson } from './compiler/compile.js';

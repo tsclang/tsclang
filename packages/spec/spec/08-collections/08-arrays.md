@@ -274,6 +274,10 @@ let m: Map<string, i32> = { "a": 1, "b": 2 };
 let m = new Map<string, i32>();
 ```
 
+На embedded (allocator `static`) пустой конструктор — ошибка E301 («provide a capacity argument»); укажите статическую ёмкость — `new Map<string, i32>(32)` (допустимо и на desktop).
+
+Инстанциация в C: runtime.h содержит только `TscMap_string_i32` и `TscMap_string_string`; любая другая пара скалярных типов (`Map<string, number>` → `TscMap_string_f64`) генерируется в C-выводе по требованию — тем же паттерном, что `TSC_MAP_DECL` в runtime.h.
+
 Методы:
 ```typescript
 m.set(key, value)   // key: move (сложный тип) / copy (примитив); value: move — Map владеет обоими

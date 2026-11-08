@@ -10,7 +10,6 @@ Node *share_arc_Node(Node *n) {
 int main(void) {
     TSC_INIT();
     Node *x = tsc_arc_alloc(sizeof(Node));
-    x->value = 0;
     x->value = 42;
     const Node *s = share_arc_Node(x);
     x->value = 99;

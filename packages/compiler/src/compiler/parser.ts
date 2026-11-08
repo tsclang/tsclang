@@ -802,6 +802,13 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       let rest = false;
       if (cur().type === TK.SPREAD) { eat(TK.SPREAD); rest = true; hadRest = true; }
 
+      // `mut x: T` modifier is claimed by the book (00.1.4) but not implemented;
+      // the canonical spelling is `x: Mut<T>` (spec 04-borrow). Without this
+      // check `mut` parses as a parameter name and generates invalid C later.
+      if (cur().type === TK.IDENT && cur().value === 'mut' && peek().type === TK.IDENT) {
+        err('"mut" parameter modifier is not supported; use "x: Mut<T>" instead');
+      }
+
       // Array destructuring param: [a, b, , c]
       if (cur().type === TK.LBRACK) {
         eat(TK.LBRACK);

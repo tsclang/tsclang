@@ -218,6 +218,7 @@ export function inferType(ctx: CodeGenContext, node: Expression | null | undefin
           const [kt, vt] = (node.typeArgs ?? []).map((t: TypeAnn) => ctx.resolveType(t));
           const k = kt ? ctx.cTypeToIdent(kt) : 'string';
           const v = vt ? ctx.cTypeToIdent(vt) : 'i32';
+          ctx._ensureMapStruct(`${k}_${v}`);
           return `TscMap_${k}_${v}`;
         }
         if (node.name === 'Set') {

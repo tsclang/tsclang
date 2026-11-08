@@ -10,7 +10,7 @@ void describe_Readonly_Vec(Vec v) {
 
 int main(void) {
     TSC_INIT();
-    Vec vec = {0};
+    Vec vec = { .x = 0, .y = 0, .z = 0 };
     vec.x = 1;
     vec.y = 2;
     vec.z = 3;

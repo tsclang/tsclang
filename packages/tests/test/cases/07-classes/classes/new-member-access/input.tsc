@@ -1,0 +1,4 @@
+class Foo {
+    v: i32 = 3;
+}
+console.log(new Foo().v);

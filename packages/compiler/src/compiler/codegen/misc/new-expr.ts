@@ -2,8 +2,25 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { New, Argument, TypeAnn, Arrow, FuncExpr, Expression, Param } from '@tsclang/ast';
 
 interface RtCtorMethod { name: string; }
-interface RtClassField { name?: string; modifiers?: string[]; init?: Expression; decorators?: { name: string }[]; }
+interface RtClassField { name?: string; modifiers?: string[]; init?: Expression; decorators?: { name: string }[]; typeAnn?: TypeAnn | null; _ctype?: string; }
 interface RtTypeParam { name: string; }
+
+// Zero/field-default initializer literal for a ctor-less class:
+// `{ .v = 3, .name = STR_LIT("x") }` when fields carry defaults, `{0}` otherwise.
+// TS semantics: field defaults apply at instantiation even without a constructor.
+function classInitLiteral(ctx: CodeGenContext, cls: { fields?: RtClassField[] }, lines: string[], depth: number): string {
+    const inited = (cls.fields ?? []).filter((f) => f.init);
+    if (inited.length === 0) return '{0}';
+    const parts = inited.map((f) => {
+      const ftype = f._ctype ?? (f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t');
+      const prev = ctx._expectedType;
+      ctx._expectedType = ftype;
+      const c = ctx.exprToC(f.init!, lines, depth);
+      ctx._expectedType = prev;
+      return `.${f.name} = ${c}`;
+    });
+    return `{ ${parts.join(', ')} }`;
+}
 
 // new-expr.ts
 export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: number): string {
@@ -32,10 +49,9 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       const k = kt ? ctx.cTypeToIdent(kt) : 'string';
       const v = vt ? ctx.cTypeToIdent(vt) : 'i32';
       const suffix = `${k}_${v}`;
-      // Emit Map_K_V struct only when the target type is Map_* (not TscMap_* from runtime.h)
-      if (!ctx._expectedType?.startsWith('TscMap_')) {
-        ctx._ensureMapStruct(suffix);
-      }
+      // Idempotent: runtime suffixes (string_i32/string_string) no-op, everything
+      // else emits the TscMap_K_V block into the generated C
+      ctx._ensureMapStruct(suffix);
       return `tsc_map_create_${k}_${v}()`;
     }
 
@@ -170,7 +186,7 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
           const ctorArgs = node.args.map((a: Argument) => ctx.exprToC(a.expr ?? a, lines, depth)).join(', ');
           lines.push(`*${tmpName} = ${cname}_new(${ctorArgs});`);
         } else {
-          lines.push(`*${tmpName} = (${cname}){0};`);
+          lines.push(`*${tmpName} = (${cname})${classInitLiteral(ctx, cls, lines, depth)};`);
         }
         return tmpName;
       }
@@ -216,16 +232,11 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
       if (cls._isThrowsClass) return `${cname}_new(${argsC})`;
       // Class decorator inits: flag for injection after VarDecl emit
       if (cls._decoratorInits?.length) ctx._pendingDecoratorInits = cls._decoratorInits;
-      // @readonly fields with initializers → designated initializer syntax
-      const readonlyInits = (cls.fields ?? []).filter((f: RtClassField) =>
-        f.init && (f.decorators ?? []).some((d: { name: string }) => d.name === 'readonly')
-      );
-      if (readonlyInits.length > 0) {
-        const parts = readonlyInits.map((f: RtClassField) => `.${f.name} = ${ctx.exprToC(f.init!, lines, depth)}`);
-        return `{ ${parts.join(', ')} }`;
-      }
+      // Field defaults (plain, readonly modifier or @readonly decorator) →
+      // designated initializer literal; `{0}` when no field has a default.
       // In return context, compound literal syntax is required; in declarations, {0} works too
-      return ctx._inReturnContext ? `(${cname}){0}` : `{0}`;
+      const lit = classInitLiteral(ctx, cls, lines, depth);
+      return ctx._inReturnContext ? `(${cname})${lit}` : lit;
     }
 
     // Unknown: zero-init struct

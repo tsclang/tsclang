@@ -1,0 +1,7 @@
+class Box {
+    v: i32 = 7;
+    tag: string = "box";
+}
+const b = new Box();
+console.log(b.v);
+console.log(b.tag);

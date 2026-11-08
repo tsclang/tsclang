@@ -4,7 +4,7 @@ typedef struct { int32_t x; int32_t y; } Point;
 
 int main(void) {
     TSC_INIT();
-    Point p = {0};
+    Point p = { .x = 0, .y = 0 };
     p.x = 10;
     p.y = 20;
     const Point ro = p;

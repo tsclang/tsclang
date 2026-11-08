@@ -370,7 +370,16 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             return `${objC}->${node.prop}`;
           }
         }
-        return isPtr ? `${objC}->${node.prop}` : `${objC}.${node.prop}`;
+        // `new Foo()` of a ctor-less class emits a brace initializer (`{0}` or
+        // `{ .v = ... }` field defaults) — not a valid member-access base.
+        // Wrap it in a C99 compound literal so `new Foo().v` works.
+        let base = objC;
+        if (node.object.kind === 'New' && objC.startsWith('{')) {
+          const t = ctx.inferType(node.object);
+          const cname = ctx.classes.get(t)?._cname ?? t;
+          base = `((${cname})${objC})`;
+        }
+        return isPtr ? `${base}->${node.prop}` : `${base}.${node.prop}`;
       }
 
       case 'Index': {

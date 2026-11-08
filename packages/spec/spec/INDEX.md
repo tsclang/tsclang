@@ -236,7 +236,7 @@
 | **Принципы** | Общие принципы stdlib: что входит, что выносится в реестр, платформенная доступность. |
 | **Error** | Базовый класс `Error { message: string }`; C-output через struct с первым полем. |
 | **Globals** | `console`, `setTimeout/setInterval`, `sleep`, `performance.now`, `process.*` — без импорта. |
-| **Map\<K,V\>** | Hash map с открытой адресацией; ownership для значений; запрещён на embedded. |
+| **Map\<K,V\>** | Hash map с открытой адресацией; ownership для значений; на embedded — только `new Map<K,V>(N)` с явной ёмкостью (E301 без неё). |
 | **Buffer** | Байтовый буфер фиксированного размера; основа для I/O. |
 | **DataView** | Типизированный чтение/запись в Buffer: `getU32`, `setI16` и т.д. |
 | **process.stdin/stdout/stderr** | Стандартные потоки; только desktop/server. |

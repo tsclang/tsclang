@@ -132,11 +132,79 @@ export function _mapSuffix(ctx: CodeGenContext, ctype: string) {
     return null;
 }
 
-  // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32 via TSC_MAP_DECL.
-export function _ensureMapStruct(ctx: CodeGenContext, suffix: string) {
+  // Map suffixes runtime.h instantiates itself via TSC_MAP_DECL + get macros
+const _RUNTIME_TSCMAP_SUFFIXES = new Set(['string_i32', 'string_string']);
 
+  // Ensure TscMap_K_V is defined (idempotent). runtime.h provides string_i32
+  // and string_string via TSC_MAP_DECL; every other K/V combination is emitted
+  // into the generated C here (struct + create/set/has/get/get_ref/delete/free).
+export function _ensureMapStruct(ctx: CodeGenContext, suffix: string) {
+    if (ctx._emittedMapStructs.has(suffix)) return;
     ctx._emittedMapStructs.add(suffix);
-}
+    if (_RUNTIME_TSCMAP_SUFFIXES.has(suffix)) return;
+    const us = suffix.indexOf('_');
+    if (us < 0) return;
+    const kIdent = suffix.slice(0, us);
+    const vIdent = suffix.slice(us + 1);
+    // group-by maps (array-valued) emit their own struct — _ensureGroupByMapStruct
+    if (vIdent.startsWith('array_')) return;
+    const kC = _arrIdentToCType(ctx, kIdent);
+    const vC = _arrIdentToCType(ctx, vIdent);
+    const keyEq = (a: string, b: string) => kC === 'String' ? `_tsc_str_eq(${a}, ${b})` : `${a} == ${b}`;
+    const T = `TscMap_${suffix}`;
+    const cap = 'TSC_MAP_CAP';
+    ctx.addTop(`typedef struct { ${kC} _keys[${cap}]; ${vC} _vals[${cap}]; size_t size; } ${T};`);
+    ctx.addTop(`static inline ${T} tsc_map_create_${suffix}(void) { ${T} m; m.size = 0; return m; }`);
+    ctx.addTop(`static inline void tsc_map_set_${suffix}(${T} *m, ${kC} key, ${vC} val) {`);
+    ctx.addTop(`    for (size_t _i = 0; _i < m->size; _i++) {`);
+    ctx.addTop(`        if (${keyEq('m->_keys[_i]', 'key')}) { m->_vals[_i] = val; return; } }`);
+    ctx.addTop(`    if (m->size < ${cap}) { m->_keys[m->size] = key; m->_vals[m->size] = val; m->size++; } }`);
+    ctx.addTop(`static inline bool tsc_map_has_${suffix}(const ${T} *m, ${kC} key) {`);
+    ctx.addTop(`    for (size_t _i = 0; _i < m->size; _i++) {`);
+    ctx.addTop(`        if (${keyEq('m->_keys[_i]', 'key')}) return true; }`);
+    ctx.addTop(`    return false; }`);
+    ctx.addTop(`static inline void tsc_map_delete_impl_${suffix}(${T} *m, ${kC} key) {`);
+    ctx.addTop(`    for (size_t _i = 0; _i < m->size; _i++) {`);
+    ctx.addTop(`        if (${keyEq('m->_keys[_i]', 'key')}) {`);
+    ctx.addTop(`            memmove(&m->_keys[_i], &m->_keys[_i+1], (m->size-_i-1)*sizeof(${kC}));`);
+    ctx.addTop(`            memmove(&m->_vals[_i], &m->_vals[_i+1], (m->size-_i-1)*sizeof(${vC}));`);
+    ctx.addTop(`            m->size--; return; } } }`);
+    ctx.addTop(`static inline void tsc_map_clear_${suffix}(${T} *m) { m->size = 0; }`);
+    ctx.addTop(`#define tsc_map_get_${suffix}(_m_, _key_) ({ \\`);
+    ctx.addTop(`    const ${T} *_mm_ = (_m_); \\`);
+    ctx.addTop(`    ${kC} _kk_ = (_key_); \\`);
+    ctx.addTop(`    ${vC} _vv_ = 0; bool _ff_ = false; \\`);
+    ctx.addTop(`    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \\`);
+    ctx.addTop(`        if (${keyEq('_mm_->_keys[_ii_]', '_kk_')}) \\`);
+    ctx.addTop(`            { _vv_ = _mm_->_vals[_ii_]; _ff_ = true; break; } \\`);
+    ctx.addTop(`    } \\`);
+    ctx.addTop(`    (opt_${vIdent}){ _ff_, _vv_ }; \\`);
+    ctx.addTop(`})`);
+    ctx.addTop(`#define tsc_map_get_ref_${suffix}(_m_, _key_) ({ \\`);
+    ctx.addTop(`    const ${T} *_mm_ = (_m_); \\`);
+    ctx.addTop(`    ${kC} _kk_ = (_key_); \\`);
+    ctx.addTop(`    ${vC} *_vp_ = NULL; \\`);
+    ctx.addTop(`    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \\`);
+    ctx.addTop(`        if (${keyEq('_mm_->_keys[_ii_]', '_kk_')}) \\`);
+    ctx.addTop(`            { _vp_ = (${vC} *)&_mm_->_vals[_ii_]; break; } \\`);
+    ctx.addTop(`    } \\`);
+    ctx.addTop(`    (opt_ref_${vIdent}){ _vp_ != NULL, _vp_ }; \\`);
+    ctx.addTop(`})`);
+    ctx.addTop(`#define tsc_map_delete_${suffix}(_m_, _key_) ({ \\`);
+    ctx.addTop(`    ${T} *_mm_ = (_m_); \\`);
+    ctx.addTop(`    ${kC} _kk_ = (_key_); \\`);
+    ctx.addTop(`    bool _ff_ = false; \\`);
+    ctx.addTop(`    for (size_t _ii_ = 0; _ii_ < _mm_->size; _ii_++) { \\`);
+    ctx.addTop(`        if (${keyEq('_mm_->_keys[_ii_]', '_kk_')}) { \\`);
+    ctx.addTop(`            _ff_ = true; \\`);
+    ctx.addTop(`            memmove(&_mm_->_keys[_ii_], &_mm_->_keys[_ii_+1], (_mm_->size-_ii_-1)*sizeof(${kC})); \\`);
+    ctx.addTop(`            memmove(&_mm_->_vals[_ii_], &_mm_->_vals[_ii_+1], (_mm_->size-_ii_-1)*sizeof(${vC})); \\`);
+    ctx.addTop(`            _mm_->size--; break; } } \\`);
+    ctx.addTop(`    _ff_; \\`);
+    ctx.addTop(`})`);
+    ctx.addTop(`#define tsc_map_free_${suffix}(m) ((void)(m))`);
+    ctx.addTop('');
+  }
 
   // Emit MapEntry_K_V and Array_MapEntry_K_V struct typedefs (idempotent)
 export function _ensureMapEntry(ctx: CodeGenContext, suffix: string, kCType: string, vCType: string) {

@@ -1,0 +1,4 @@
+function inc(mut x: i32): void {
+    x = x + 1;
+}
+inc(1);

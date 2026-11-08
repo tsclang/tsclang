@@ -20,6 +20,21 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
     ctx._currentNode = node;
     const I = ' '.repeat(ctx.indent * depth);
     const p = (s: string) => lines.push(I + s);
+    // Apply class field defaults right after a raw tsc_arc_alloc. tsc_arc_alloc
+    // calloc()s, so fields without an initializer are already zeroed — only
+    // fields WITH a default need an explicit assignment.
+    const emitArcFieldInits = (name: string, innerType: string) => {
+      const fields = ctx.classes.get(innerType)?.fields;
+      if (!fields) return;
+      for (const f of fields as unknown as Array<{ name?: string; init?: Expression | null; typeAnn?: TypeAnn | null; _ctype?: string }>) {
+        if (typeof f === 'string' || !f.init) continue;
+        const prev = ctx._expectedType;
+        ctx._expectedType = f._ctype ?? (f.typeAnn ? ctx.resolveType(f.typeAnn) : 'int32_t');
+        const c = ctx.exprToC(f.init, lines, depth);
+        ctx._expectedType = prev;
+        p(`${name}->${f.name} = ${c};`);
+      }
+    };
     {
         const { varKind, name, typeAnn, init } = node;
 
@@ -591,7 +606,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           return;
         }
 
-        // new Arc<T>() С‚Р–Рў arc alloc
+        // new Arc<T>() — arc alloc (+ field default initializers)
         if (!typeAnn && init?.kind === 'New' && init.name === 'Arc') {
           const tArg = init.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
@@ -600,6 +615,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               throw ctx.errorCode('E301', null, { detail: `'new Arc<${innerType}>()' requires heap allocation (ARC), which is unavailable when allocator is "${ctx._allocatorName}"` });
             }
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
+            emitArcFieldInits(name, innerType);
             ctx.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isArc: true, derefType: innerType });
             const sFields = ctx._getStringFields(innerType);
             if (sFields.length > 0) {
@@ -644,19 +660,13 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           throw ctx.errorCode('E301', null, { detail: `"Arc<T>" requires a heap allocator; "${ctx._allocatorName}" allocator does not support ARC` });
         }
 
-        // let x: Arc<T> = new T() С‚Р–Рў arc alloc with explicit field init
-        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && init?.kind === 'New' && init.name !== 'Arc') {
+        // let x: Arc<T> = new T() / new Arc<T>(...) — arc alloc with field defaults applied
+        if (typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Arc' && init?.kind === 'New') {
           const tArg = typeAnn.typeArgs?.[0];
           if (tArg?.kind === 'TypeRef') {
             const innerType = tArg.name;
-            const structDef = ctx.classes.get(innerType);
             p(`${innerType} *${name} = tsc_arc_alloc(sizeof(${innerType}));`);
-            if (structDef?.fields) {
-              for (const f of structDef.fields) {
-                const fname = typeof f === 'string' ? f : f.name;
-                p(`${name}->${fname} = 0;`);
-              }
-            }
+            emitArcFieldInits(name, innerType);
             ctx.define(name, { ctype: `${innerType} *`, varKind, isPointer: true, isArc: true, derefType: innerType });
             ctx._registerCleanup(`tsc_arc_release(${name})`);
             return;
