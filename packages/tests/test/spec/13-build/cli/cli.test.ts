@@ -17,6 +17,7 @@ import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/
 import { RECOMMENDED_TOOLS, profileFromBuilds } from "../../../../../cli/src/cli/doctor/recommended.js"
 import { suggestManifestAdditions } from "../../../../../cli/src/cli/doctor/suggest.js"
 import { msvcDetect } from "../../../../../cli/src/cli/toolchain.js"
+import { applyUserPathWin, pathFixCommandWin } from "../../../../../cli/src/cli/doctor/pathfix.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -29,7 +30,7 @@ const dict = JSON.parse(readFileSync(join(here, "dictionary.json"), "utf8"))
 
 interface CliResult { code: number; stdout: string; stderr: string }
 
-function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsys2?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<CliResult> {
+function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsys2?: boolean; env?: NodeJS.ProcessEnv; stdin?: string } = {}): Promise<CliResult> {
   return new Promise((resolveFn, reject) => {
     const cwd = opts.cwd ?? ROOT
     let proc
@@ -43,7 +44,14 @@ function runCli(args: string[], opts: { cwd?: string; timeoutMs?: number; viaMsy
       proc = spawn(msys2Bash(), bashLoginArgs(script), { cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] })
     } else {
       const argv = USE_TSX ? ["--import", TSX_LOADER, SRC_BIN, ...args] : [DIST_BIN, ...args]
-      proc = spawn(process.execPath, argv, { cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] })
+      // stdin: write-then-close a pipe — drives doctor's interactive prompts
+      // (TSC_DOCTOR_INTERACTIVE=1 forces them on under a pipe)
+      const stdinMode = opts.stdin !== undefined ? "pipe" : "ignore"
+      proc = spawn(process.execPath, argv, { cwd, env: opts.env, stdio: [stdinMode, "pipe", "pipe"] })
+      if (opts.stdin !== undefined && proc.stdin) {
+        proc.stdin.write(opts.stdin)
+        proc.stdin.end()
+      }
     }
     let stdout = ""
     let stderr = ""
@@ -1468,5 +1476,71 @@ describe("13-build/cli — doctor (#259)", () => {
     const r = await runCli(["doctor", "--bogus"], { env: noUpdate })
     expect(r.code).toBe(1)
     expect(out(r)).toContain("unknown option '--bogus' for 'doctor'")
+  })
+})
+
+// === doctor: interactive prompts + fixes (#259) ===
+
+describe("13-build/cli — doctor interactive (#259)", () => {
+  const forceInteractive = { ...process.env, TSC_DOCTOR_NO_UPDATE: "1", TSC_DOCTOR_INTERACTIVE: "1" }
+
+  function writeProject(dir: string): void {
+    mkdirSync(join(dir, "src"), { recursive: true })
+    writeFileSync(join(dir, "src", "main.tsc"), 'console.log("hi")\n')
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+    }))
+  }
+
+  test("pathfix: команда PowerShell и результат применения (DI-раннер)", () => {
+    expect(pathFixCommandWin("C:\\msys64\\mingw64\\bin")).toContain('[Environment]::SetEnvironmentVariable("Path"')
+    expect(applyUserPathWin("C:\\x", () => ({ status: 0 })).ok).toBe(true)
+    const fail = applyUserPathWin("C:\\x", () => ({ status: 5 }))
+    expect(fail.ok).toBe(false)
+    expect(fail.error).toContain("5")
+  })
+
+  test("интерактив: y (проект) + a (auto) — манифест дописан пресетом", async () => {
+    const dir = mkTmp()
+    writeProject(dir)
+    const r = await runCli(["doctor"], { cwd: dir, env: forceInteractive, stdin: "y\na\ny\n" })
+    const o = out(r)
+    expect(o).toContain("Проверим ваш проект?")
+    expect(o).toContain("Проверим рекомендуемые тулчейны? (профиль: desktop)")
+    expect(o).toContain("fixed: tsc.package.json (+scripts: start, dev; +builds: desktop)")
+    const pkg = JSON.parse(readFileSync(join(dir, "tsc.package.json"), "utf8"))
+    expect(pkg.scripts?.start).toBe("tsclang build --emit exec")
+    expect(pkg.builds?.desktop?.emit).toBe("binary")
+  })
+
+  test("интерактив: n/n — секции пропущены, манифест нетронут", async () => {
+    const dir = mkTmp()
+    writeProject(dir)
+    const r = await runCli(["doctor"], { cwd: dir, env: forceInteractive, stdin: "n\nn\n" })
+    const o = out(r)
+    expect(o).not.toContain("ok: manifest valid")
+    expect(o).not.toContain("Toolchains (desktop):")
+    const raw = readFileSync(join(dir, "tsc.package.json"), "utf8")
+    expect(raw).not.toContain('"scripts"')
+  })
+
+  test("интерактив: m (manual) — подсказка со сниппетом, манифест нетронут", async () => {
+    const dir = mkTmp()
+    writeProject(dir)
+    const r = await runCli(["doctor", "--project"], { cwd: dir, env: forceInteractive, stdin: "m\n" })
+    const o = out(r)
+    expect(o).toContain("(a)uto / (m)anual / (s)kip")
+    expect(o).toContain('"start": "tsclang build --emit exec"')
+    const raw = readFileSync(join(dir, "tsc.package.json"), "utf8")
+    expect(raw).not.toContain('"scripts"')
+  })
+
+  test("интерактив: s (skip) — манифест нетронут, проблема осталась (exit 1)", async () => {
+    const dir = mkTmp()
+    writeProject(dir)
+    const r = await runCli(["doctor", "--project"], { cwd: dir, env: forceInteractive, stdin: "s\n" })
+    expect(r.code).toBe(1)
+    const raw = readFileSync(join(dir, "tsc.package.json"), "utf8")
+    expect(raw).not.toContain('"scripts"')
   })
 })
