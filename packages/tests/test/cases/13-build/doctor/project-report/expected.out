@@ -1,0 +1,10 @@
+exit=1
+Project: tsc.package.json - myapp (executable)
+  ok: manifest valid
+  ok: main file src/main.tsc found
+  [!] scripts missing: start, dev (preset executable/desktop)
+  [!] builds missing: desktop (preset executable/desktop)
+    manual: add to tsc.package.json:
+      scripts: start, dev
+      builds: desktop
+problems found: 2

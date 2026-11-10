@@ -1493,6 +1493,13 @@ input.tsc:1:
 - [R] exit-код скрипта становится exit-кодом CLI (`exit 7`)
 - [E] неизвестное имя скрипта → `unknown script 'x'` + список доступных
 
+### tsclang doctor
+
+- [R] `doctor --project` non-TTY: отчёт по манифесту без scripts/builds → `[!]`-строки с manual-подсказкой, `problems found: 2`, exit 1 (Platform/Version/Update grep-фильтруются — машинозависимы)
+- [R] `doctor --project --fix` дописывает пресетные builds/scripts без вопросов → exit 0, `scripts.start` в манифесте
+- [E] невалидный манифест → `ConfigError`-строка (та же диагностика, что validate-config), exit 1
+- сетевой update-check гейтится `TSC_DOCTOR_NO_UPDATE=1` (в тестах всегда)
+
 ### tsclang install
 
 - [R] устанавливает зависимость из npm-реестра

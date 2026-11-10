@@ -1,0 +1,3 @@
+exit=1
+  ConfigError: tsc.package.json: 'version' must be a valid semver string, got 'not-semver'
+problems found: 3

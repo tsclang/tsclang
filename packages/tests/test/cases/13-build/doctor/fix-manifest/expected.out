@@ -1,0 +1,4 @@
+exit=0
+  fixed: tsc.package.json (+scripts: start, dev; +builds: desktop)
+"start": "tsclang build --emit exec"
+"desktop"
