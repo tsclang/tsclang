@@ -13,6 +13,7 @@ import { after, describe, expect, test } from "@tsclang/test-engine"
 import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-engine"
 import { buildAvrdudeArgs } from "../../../../../cli/src/cli/flash.js"
 import { findTool, toolAvailable } from "../../../../../cli/src/cli/toolchain.js"
+import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/config.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -1252,5 +1253,26 @@ describe("13-build/cli — toolchain helpers (#259)", () => {
     const loc = findTool("gcc", { probe: () => false, candidates: ["/a", "/b"], exists: () => false })
     expect(loc.inPath).toBe(false)
     expect(loc.foundAt).toBe(null)
+  })
+})
+
+// === collectManifestDiagnostics (#259 — validate-config refactor, reused by doctor) ===
+
+describe("13-build/cli — collectManifestDiagnostics (#259)", () => {
+  test("пустой объект → все базовые ошибки сразу (команда печатает только первую)", () => {
+    const d = collectManifestDiagnostics({})
+    expect(d[0]).toBe("ConfigError: tsc.package.json: missing required field 'name'")
+    expect(d.length).toBeGreaterThan(3)
+    expect(d.join("\n")).toContain("missing required field 'type'")
+  })
+
+  test("валидный executable → нет ошибок", () => {
+    const d = collectManifestDiagnostics({ name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc" })
+    expect(d.length).toBe(0)
+  })
+
+  test("library с main → ошибка как в validate-config", () => {
+    const d = collectManifestDiagnostics({ name: "l", version: "0.1.0", type: "library", main: "index.tsc" })
+    expect(d.join("\n")).toContain("ConfigError: tsc.package.json: library projects must not have a 'main' entry point")
   })
 })
