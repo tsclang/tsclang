@@ -75,6 +75,7 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   remove: new Set(),
   search: new Set(),
   publish: new Set(),
+  doctor: new Set(['--project', '--tools', '--fix']),
   lsp: new Set(),
   test: new Set(),
 };

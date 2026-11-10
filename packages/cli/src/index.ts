@@ -17,6 +17,7 @@ import { runEmitDtsCommand, runLintCommand } from './cli/commands/source.js';
 import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateCommand, runRemoveCommand } from './cli/commands/package.js';
 import { runDebugCommand } from './cli/commands/debug.js';
 import { runTestCommand } from './cli/commands/test.js';
+import { runDoctorCommand } from './cli/commands/doctor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const _require = createRequire(import.meta.url);
@@ -108,6 +109,10 @@ switch (command) {
     break;
   case 'test':
     runTestCommand(args, COMPILER_ROOT);
+    break;
+  case 'doctor':
+    // first async command (npm update check); owns its exit codes
+    void runDoctorCommand(args, CLI_ROOT);
     break;
   default:
     console.error(`tsclang: unknown command '${command}'`);

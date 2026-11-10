@@ -14,6 +14,9 @@ import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-eng
 import { buildAvrdudeArgs } from "../../../../../cli/src/cli/flash.js"
 import { findTool, toolAvailable } from "../../../../../cli/src/cli/toolchain.js"
 import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/config.js"
+import { RECOMMENDED_TOOLS, profileFromBuilds } from "../../../../../cli/src/cli/doctor/recommended.js"
+import { suggestManifestAdditions } from "../../../../../cli/src/cli/doctor/suggest.js"
+import { msvcDetect } from "../../../../../cli/src/cli/toolchain.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -1274,5 +1277,196 @@ describe("13-build/cli — collectManifestDiagnostics (#259)", () => {
   test("library с main → ошибка как в validate-config", () => {
     const d = collectManifestDiagnostics({ name: "l", version: "0.1.0", type: "library", main: "index.tsc" })
     expect(d.join("\n")).toContain("ConfigError: tsc.package.json: library projects must not have a 'main' entry point")
+  })
+})
+
+// === doctor units (#259) ===
+
+describe("13-build/cli — doctor units (#259)", () => {
+  test("RECOMMENDED_TOOLS: desktop = gcc+cmake required, msvc/gdb optional; msvc только win32", () => {
+    const desktop = RECOMMENDED_TOOLS.desktop
+    const byName = Object.fromEntries(desktop.map((t) => [t.name, t]))
+    expect(byName["gcc"].required).toBe(true)
+    expect(byName["cmake"].required).toBe(true)
+    expect(byName["gdb"].required).toBe(false)
+    expect(byName["msvc"].required).toBe(false)
+    expect(byName["msvc"].platforms).toContain("win32")
+    expect(RECOMMENDED_TOOLS.embedded.map((t) => t.name).join(",")).toBe("avr-gcc,avr-objcopy,avrdude")
+    expect(RECOMMENDED_TOOLS.wasm.map((t) => t.name).join(",")).toBe("emcc")
+  })
+
+  test("profileFromBuilds: avr → embedded, wasm → wasm, прочее/нет builds → desktop", () => {
+    expect(profileFromBuilds({ builds: { avr: { profile: "avr", emit: "flash" } } })).toBe("embedded")
+    expect(profileFromBuilds({ builds: { web: { emit: "wasm" } } })).toBe("wasm")
+    expect(profileFromBuilds({ builds: { desktop: { emit: "binary" } } })).toBe("desktop")
+    expect(profileFromBuilds({})).toBe("desktop")
+  })
+
+  test("suggestManifestAdditions: executable без builds/scripts → весь desktop-пресет", () => {
+    const a = suggestManifestAdditions({ name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc" })
+    expect(a?.preset).toBe("desktop")
+    expect(a?.scripts?.start).toBe("tsclang build --emit exec")
+    expect(a?.scripts?.dev).toBe("tsclang build --watch --emit exec")
+    expect(a?.builds?.desktop?.emit).toBe("binary")
+  })
+
+  test("suggestManifestAdditions: полный пресет → null", () => {
+    const a = suggestManifestAdditions({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      builds: { desktop: { emit: "binary", outDir: "build/desktop", optimize: "O2" } },
+      scripts: { start: "tsclang build --emit exec", dev: "tsclang build --watch --emit exec" },
+    })
+    expect(a).toBe(null)
+  })
+
+  test("suggestManifestAdditions: частичный — только недостающее (scripts есть, builds нет)", () => {
+    const a = suggestManifestAdditions({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      scripts: { start: "echo custom" },
+    })
+    expect(Object.keys(a?.scripts ?? {}).join(",")).toBe("dev")
+    expect(a?.builds?.desktop?.emit).toBe("binary")
+  })
+
+  test("suggestManifestAdditions: library → dts; declaration → null", () => {
+    const lib = suggestManifestAdditions({ name: "l", version: "0.1.0", type: "library" })
+    expect(lib?.scripts?.dts).toBe("tsclang build --build dts")
+    expect(suggestManifestAdditions({ name: "d", version: "0.1.0", type: "declaration" })).toBe(null)
+  })
+
+  test("msvcDetect: cl в PATH", () => {
+    const m = msvcDetect({ probe: () => true })
+    expect(m.inPath).toBe(true)
+    expect(m.clPath).toBe(null)
+  })
+
+  test("msvcDetect: VS найден через vswhere, cl вне PATH (installed-not-on-PATH)", () => {
+    const m = msvcDetect({
+      probe: () => false,
+      runVswhere: () => "C:\\VS",
+      readdir: () => ["14.29.30133", "14.36.32532"],
+      exists: (p) => p.endsWith("cl.exe"),
+    })
+    expect(m.inPath).toBe(false)
+    expect(m.vsRoot).toBe("C:\\VS")
+    expect(m.clPath).toBe("C:\\VS\\VC\\Tools\\MSVC\\14.36.32532\\bin\\Hostx64\\x64\\cl.exe")
+  })
+
+  test("msvcDetect: ничего нет", () => {
+    const m = msvcDetect({ probe: () => false, runVswhere: () => null })
+    expect(m.inPath).toBe(false)
+    expect(m.vsRoot).toBe(null)
+    expect(m.clPath).toBe(null)
+  })
+})
+
+// === doctor e2e (#259) — non-TTY report (stdin ignored → no questions, manual hints) ===
+
+describe("13-build/cli — doctor (#259)", () => {
+  const noUpdate = { ...process.env, TSC_DOCTOR_NO_UPDATE: "1" }
+
+  test("doctor: отчёт по валидному проекту (--project) — exit 0", async () => {
+    const dir = mkTmp()
+    mkdirSync(join(dir, "src"), { recursive: true })
+    writeFileSync(join(dir, "src", "main.tsc"), 'console.log("hi")\n')
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      builds: { desktop: { emit: "binary", outDir: "build/desktop" } },
+      scripts: { start: "tsclang build --emit exec", dev: "tsclang build --watch --emit exec" },
+    }))
+    const r = await runCli(["doctor", "--project"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(0)
+    const o = out(r)
+    expect(o).toContain("Platform:")
+    expect(o).toContain("Version:")
+    expect(o).toContain("Update:")
+    expect(o).toContain("Project: tsc.package.json - app (executable)")
+    expect(o).toContain("ok: manifest valid")
+    expect(o).toContain("ok: main file src/main.tsc found")
+    expect(o).not.toContain("Toolchains")
+  })
+
+  test("doctor: полный отчёт печатает секцию тулчейнов (exit не проверяем — машина)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      builds: { desktop: { emit: "binary", outDir: "build/desktop" } },
+      scripts: { start: "tsclang build --emit exec", dev: "tsclang build --watch --emit exec" },
+    }))
+    const r = await runCli(["doctor"], { cwd: dir, env: noUpdate })
+    expect(out(r)).toContain("Toolchains (desktop)")
+  })
+
+  test("doctor --project без манифеста — не проект, exit 0", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["doctor", "--project"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(0)
+    expect(out(r)).toContain("Project: no tsc.package.json")
+  })
+
+  test("doctor: битый манифест (library + main) — диагностика + exit 1", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "l", version: "0.1.0", type: "library", main: "index.tsc",
+    }))
+    const r = await runCli(["doctor"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("library projects must not have a 'main' entry point")
+  })
+
+  test("doctor: executable без scripts — [!] предупреждение + manual-подсказка + exit 1", async () => {
+    const dir = mkTmp()
+    mkdirSync(join(dir, "src"), { recursive: true })
+    writeFileSync(join(dir, "src", "main.tsc"), 'console.log("hi")\n')
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+    }))
+    const r = await runCli(["doctor"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(1)
+    const o = out(r)
+    expect(o).toContain("[!] scripts missing: start, dev (preset executable/desktop)")
+    expect(o).toContain("manual:")
+  })
+
+  test("doctor: main-файл отсутствует — [!] + exit 1", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
+    }))
+    const r = await runCli(["doctor"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("[!] main file not found: src/main.tsc")
+  })
+
+  test("doctor --project — только секция проекта", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "index.tsc"), "export function f(): i32 { return 1 }\n")
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "lib", version: "0.1.0", type: "library",
+      builds: { dts: { main: "index.tsc", emit: "dts", outDir: "build/dts" } },
+      scripts: { dts: "tsclang build --build dts" },
+    }))
+    const r = await runCli(["doctor", "--project"], { cwd: dir, env: noUpdate })
+    expect(r.code).toBe(0)
+    expect(out(r)).toContain("Project: tsc.package.json - lib (library)")
+    expect(out(r)).not.toContain("Toolchains")
+  })
+
+  test("doctor --tools — только тулчейны, профиль из манифеста", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "fw", version: "0.1.0", type: "executable", main: "src/main.tsc",
+      builds: { avr: { profile: "avr", mcu: "atmega328p", emit: "flash", outDir: "build/avr" } },
+      scripts: { flash: "tsclang build --build avr" },
+    }))
+    const r = await runCli(["doctor", "--tools"], { cwd: dir, env: noUpdate })
+    expect(out(r)).toContain("Toolchains (embedded)")
+    expect(out(r)).not.toContain("Project:")
+  })
+
+  test("doctor --bogus → unknown option", async () => {
+    const r = await runCli(["doctor", "--bogus"], { env: noUpdate })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("unknown option '--bogus' for 'doctor'")
   })
 })

@@ -21,6 +21,7 @@ COMMANDS:
   remove (r)       Remove a package
   search (s)       Search packages
   publish (p)      Publish a package
+  doctor           Diagnose environment & project
 
 OPTIONS:
   --version, -v    Print version

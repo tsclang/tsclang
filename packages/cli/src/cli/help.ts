@@ -11,6 +11,7 @@ import { update } from './helps/update.js';
 import { remove } from './helps/remove.js';
 import { search } from './helps/search.js';
 import { publish } from './helps/publish.js';
+import { doctor } from './helps/doctor.js';
 
 export function getVersion(rootDir: string): string {
   return JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')).version;
@@ -31,4 +32,5 @@ export const CMD_HELP: Record<string, string> = {
   remove,
   search,
   publish,
+  doctor,
 };
