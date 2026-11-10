@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process';
 import { compileTsc } from '@tsclang/compiler';
 import { GCC_LINK_FLAGS, RUNTIME_DIR, DEBUG_FLAG } from '@tsclang/shared';
 import { missingInput } from '../helpers.js';
+import { toolAvailable } from '../toolchain.js';
 
 export function runDebugCommand(args: string[], rootDir: string): void {
   const inputFile = args[1];
@@ -23,8 +24,7 @@ export function runDebugCommand(args: string[], rootDir: string): void {
     process.stderr.write(gccResult.stderr || 'gcc failed\n');
     process.exit(1);
   }
-  const gdbCheck = spawnSync('gdb', ['--version'], { encoding: 'utf8' });
-  if (gdbCheck.status === 0) {
+  if (toolAvailable('gdb')) {
     const gdbArgs = ['--source-directory', dirname(inputPath), '-q', binaryPath];
     spawnSync('gdb', gdbArgs, { stdio: 'inherit' });
   } else {

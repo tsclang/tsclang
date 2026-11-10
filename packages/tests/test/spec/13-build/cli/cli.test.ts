@@ -12,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-engine"
 import { buildAvrdudeArgs } from "../../../../../cli/src/cli/flash.js"
+import { findTool, toolAvailable } from "../../../../../cli/src/cli/toolchain.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -1216,5 +1217,40 @@ describe("13-build/cli — фиксы поверхности CLI (#242 #243 #244
     const h = await runCli(["build", "--help"])
     expect(h.code).toBe(0)
     expect(h.stdout).toContain("--no-cache")
+  })
+})
+
+// === toolchain helpers (#259 — extracted from build.ts pre-checks, used by doctor) ===
+
+describe("13-build/cli — toolchain helpers (#259)", () => {
+  test("toolAvailable: node есть, несуществующего инструмента нет", () => {
+    expect(toolAvailable("node")).toBe(true)
+    expect(toolAvailable("tsc-no-such-tool-xyz")).toBe(false)
+  })
+
+  test("findTool: в PATH → inPath, кандидаты не сканируются", () => {
+    const loc = findTool("anything", {
+      probe: () => true,
+      candidates: ["/nope"],
+      exists: () => { throw new Error("must not scan candidates when tool is in PATH") },
+    })
+    expect(loc.inPath).toBe(true)
+    expect(loc.foundAt).toBe(null)
+  })
+
+  test("findTool: не в PATH, но найден среди кандидатов (installed-not-on-PATH)", () => {
+    const loc = findTool("gcc", {
+      probe: () => false,
+      candidates: ["C:/msys64/mingw64/bin/gcc.exe", "C:/none.exe"],
+      exists: (p) => p === "C:/msys64/mingw64/bin/gcc.exe",
+    })
+    expect(loc.inPath).toBe(false)
+    expect(loc.foundAt).toBe("C:/msys64/mingw64/bin/gcc.exe")
+  })
+
+  test("findTool: нигде нет", () => {
+    const loc = findTool("gcc", { probe: () => false, candidates: ["/a", "/b"], exists: () => false })
+    expect(loc.inPath).toBe(false)
+    expect(loc.foundAt).toBe(null)
   })
 })

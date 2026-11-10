@@ -11,6 +11,7 @@ import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
+import { toolAvailable } from '../toolchain.js';
 
 interface BuildConfig {
   [key: string]: unknown;
@@ -395,8 +396,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (emit === 'binary' || emit === 'exec') {
       // #241: a missing gcc must fail as a config error, not as "gcc failed:" with
       // empty diagnostics (spawnSync gives status:null + .error when not found)
-      const gccCheck = spawnSync('gcc', ['--version'], { stdio: 'pipe' });
-      if (gccCheck.status !== 0 || gccCheck.error) {
+      if (!toolAvailable('gcc')) {
         process.stderr.write('ConfigError: --emit binary requires gcc in PATH\n');
         return false;
       }
@@ -425,8 +425,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'wasm') {
-      const emcc = spawnSync('emcc', ['--version'], { stdio: 'pipe' });
-      if (emcc.status !== 0 || emcc.error) {
+      if (!toolAvailable('emcc')) {
         process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
         return false;
       }
@@ -451,8 +450,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'hex' || emit === 'flash') {
-      const avrGcc = spawnSync('avr-gcc', ['--version'], { stdio: 'pipe' });
-      if (avrGcc.status !== 0 || avrGcc.error) {
+      if (!toolAvailable('avr-gcc')) {
         process.stderr.write('ConfigError: --emit hex/flash requires avr-gcc in PATH\n');
         return false;
       }
@@ -477,8 +475,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
       // like avr-gcc above: a missing avr-objcopy is a config error, not an
       // empty "avr-objcopy failed:" log (toolchains often ship them separately)
-      const objcopyCheck = spawnSync('avr-objcopy', ['--version'], { stdio: 'pipe' });
-      if (objcopyCheck.status !== 0 || objcopyCheck.error) {
+      if (!toolAvailable('avr-objcopy')) {
         process.stderr.write('ConfigError: --emit hex/flash requires avr-objcopy in PATH\n');
         try { unlinkSync(elfPath); } catch {}
         return false;
@@ -494,8 +491,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       try { unlinkSync(elfPath); } catch {}
 
       if (emit === 'flash') {
-        const avrdudeCheck = spawnSync('avrdude', ['--version'], { stdio: 'pipe' });
-        if (avrdudeCheck.status !== 0 || avrdudeCheck.error) {
+        if (!toolAvailable('avrdude')) {
           process.stderr.write('ConfigError: --emit flash requires avrdude in PATH\n');
           return false;
         }
