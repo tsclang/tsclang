@@ -4,7 +4,7 @@
   "sources": [
     "packages/spec/book/00-intro/00.2-setup/00.2.2-installation.md",
     "packages/spec/book/00-intro/00.2-setup/00.2.4-quick-start.md",
-    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.16)"
+    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.17)"
   ],
   "install": {
     "global": "npm install -g tsclang",
@@ -99,6 +99,19 @@
     { "name": "update", "alias": "u", "description": "Update lock file", "positional": "name (00.7.12-update.md)", "provenance": "00.2.2-installation.md:63" },
     { "name": "remove", "alias": "r", "description": "Remove a package", "positional": "name (00.7.13-remove.md)", "provenance": "00.2.2-installation.md:64; 00.7.13-remove.md" },
     { "name": "search", "alias": "s", "description": "Search packages", "positional": "query (00.7.14-search.md)", "provenance": "00.2.2-installation.md:65" },
-    { "name": "publish", "alias": "p", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:66; 00.7.15-publish.md" }
+    { "name": "publish", "alias": "p", "description": "Publish a package", "positional": null, "provenance": "00.2.2-installation.md:66; 00.7.15-publish.md" },
+    {
+      "name": "doctor",
+      "description": "Diagnose environment & project",
+      "provenance": "00.2.2-installation.md:67; 00.7.17-doctor.md",
+      "positional": null,
+      "result": "report (Platform/Version/Update/Project/Toolchains); exit 1 when a required check fails; interactive fixes (a)uto/(m)anual/(s)kip in a TTY",
+      "resultProvenance": "00.7.17-doctor.md",
+      "options": [
+        { "name": "--project", "takesValue": false, "description": "check only the project manifest", "provenance": "00.7.17-doctor.md" },
+        { "name": "--tools", "takesValue": false, "description": "check only the recommended toolchains", "provenance": "00.7.17-doctor.md" },
+        { "name": "--fix", "takesValue": false, "description": "apply manifest fixes without asking (PATH is never touched)", "provenance": "00.7.17-doctor.md" }
+      ]
+    }
   ]
 }

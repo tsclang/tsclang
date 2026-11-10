@@ -2270,8 +2270,9 @@ build/avr/
 | `tsclang remove` (`r`) | Удалить зависимость |
 | `tsclang search` (`s`) | Поиск пакетов |
 | `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
+| `tsclang doctor` | Диагностика окружения и проекта (тулчейны, манифест, обновление) |
 
-Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
+Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`, `doctor`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
 
 - Если build не указан — используется `"desktop"` или первый в списке
 - Параметры build переопределяют дефолтные настройки компилятора
@@ -2608,6 +2609,26 @@ tsclang lsp           # запустить LSP-сервер (stdio transport)
 **Реализовано** (stdio): `initialize`, `hover`, `completion`, `definition`, `didOpen`/`didChange` — индекс символов текущего файла (функции, переменные, методы).
 
 **Roadmap:** TCP transport (`--port`), find references, rename, diagnostics (push при сохранении), интеграция форматтера (`lint --format`).
+
+## `tsclang doctor`
+
+Диагностика окружения и проекта (конвенция `npm doctor` / `flutter doctor`). Опции: `--project` (только манифест), `--tools` (только тулчейны), `--fix` (применить манифест-фиксы без вопросов; PATH не трогает).
+
+```bash
+tsclang doctor             # полный отчёт
+tsclang doctor --project   # только tsc.package.json
+tsclang doctor --fix       # дописать недостающие builds/scripts по пресету init
+```
+
+**Секции отчёта:** Platform (ОС/архитектура), Version (версия + источник: npm или dev-линк), Update (npm registry), Project (`tsc.package.json`: валидация как `validate-config`, наличие `main`, недостающие `builds`/`scripts` против пресета `init`), Toolchains (профиль из `builds`: desktop → gcc+cmake, опц. gdb/msvc; embedded → avr-gcc+avr-objcopy+avrdude; wasm → emcc).
+
+**Метки:** `[ok]` / `[!]` (чинимо) / `[x]` (отсутствует) / `[~]` (опционально, на exit-код не влияет). Exit 0 — проблем нет, 1 — есть обязательные `[!]`/`[x]` или диагностики манифеста.
+
+**Интерактив:** в TTY спрашивает перед секциями и предлагает каждый фикс как `(a)uto / (m)anual / (s)kip` с JSON-превью до записи; упавший авто-фикс печатает причину и ручную инструкцию. Тулчейн «установлен, но не в PATH» (поиск в типичных местах: `C:\msys64\mingw64\bin`, `C:\MinGW\bin`, emsdk, `/usr/local/bin`…) → PATH-фикс автоматически на Windows (PowerShell `[Environment]::SetEnvironmentVariable("Path", …, "User")`, не `setx` — обрезает 1024 симв.), на unix — ручная инструкция. Без TTY — тот же отчёт без вопросов, сразу ручные инструкции.
+
+**Сеть:** единственное сетевое обращение CLI — `GET https://registry.npmjs.org/tsclang/latest` с таймаутом 3 с. Любой сбой тихо печатает `check failed (offline?)`; отчёт из-за сети не падает. npm-установкам предлагается `update available`, dev-линкам — `not applicable`. Env-гейты: `TSC_DOCTOR_NO_UPDATE=1` — не ходить в сеть, `TSC_DOCTOR_INTERACTIVE=1` — форсировать интерактив под пайпом (CI/тесты).
+
+**Ограничения:** тулчейны не устанавливает (печатает winget/pacman/apt-инструкцию), пакеты не проверяет (реестр mock), MSVC не PATH-чинит (cl требует INCLUDE/LIB из vcvarsall — подсказка «запускайте из Developer PowerShell»).
 
 ## Быстрый старт
 

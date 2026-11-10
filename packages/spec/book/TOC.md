@@ -56,7 +56,7 @@
 - 00.6.4-async-on-avr.md — Async на AVR: cooperative scheduler, singleton SM
 
 ### 00.7 CLI — справочник команд
-- 00.7.1-overview.md — Карта всех 15 команд, глобальные флаги, соглашения выхода
+- 00.7.1-overview.md — Карта всех 16 команд, глобальные флаги, соглашения выхода
 - 00.7.2-build.md — build (b): 18 опций, именованные сборки, кэш, watch
 - 00.7.3-run.md — run: именованные задачи из scripts, self-shim, dev-цикл
 - 00.7.4-debug.md — debug: отладка под gdb, #line и source map
@@ -72,6 +72,7 @@
 - 00.7.14-search.md — search (s): поиск по реестру
 - 00.7.15-publish.md — publish (p): упаковка .tspkg
 - 00.7.16-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
+- 00.7.17-doctor.md — doctor: диагностика окружения и проекта, тулчейны, PATH-фиксы
 
 ---
 
