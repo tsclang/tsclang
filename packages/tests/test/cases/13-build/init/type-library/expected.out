@@ -1,1 +1,6 @@
+Created project 'mylib' (library)
+
+Next steps:
+  cd mylib
+  tsclang run dts
   "type": "library",

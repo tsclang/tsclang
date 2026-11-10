@@ -65,5 +65,19 @@ export function runInitCommand(args: string[]): void {
     ].join('\n'), 'utf8');
   }
 
+  // A silent success looks like a failure in a terminal — say what was
+  // created and how to run it. The suggested script is the preset's primary
+  // one (start/flash/dts); declaration/platform presets ship no scripts.
+  const mainScript = type === 'executable'
+    ? (preset === 'avr' ? 'flash' : 'start')
+    : type === 'library' ? 'dts' : null;
+  const lines = [`Created project '${pkgName}' (${type})`];
+  if (mainScript) {
+    lines.push('', 'Next steps:');
+    if (name) lines.push(`  cd ${name}`);
+    lines.push(`  tsclang run ${mainScript}`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+
   process.exit(0);
 }

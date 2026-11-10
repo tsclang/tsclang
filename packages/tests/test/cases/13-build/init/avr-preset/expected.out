@@ -1,3 +1,8 @@
+Created project 'myavr' (executable)
+
+Next steps:
+  cd myavr
+  tsclang run flash
 profile-ok
 emit-ok
 main-ok

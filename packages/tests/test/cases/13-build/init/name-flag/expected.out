@@ -1,1 +1,6 @@
+Created project 'hello-world' (executable)
+
+Next steps:
+  cd hello-world
+  tsclang run start
   "name": "hello-world",

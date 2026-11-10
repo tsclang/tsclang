@@ -770,6 +770,46 @@ describe("13-build/cli — init (00.2.4:5-20)", () => {
     expect(existsSync(join(dir, "myavr", "src", "main.tsc"))).toBe(true)
     expect(existsSync(join(dir, "myavr", "test", "main.test.tsc"))).toBe(true)
   })
+
+  test("init печатает Created project + next steps (cd + run start)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "myapp"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Created project 'myapp' (executable)")
+    expect(r.stdout).toContain("cd myapp")
+    expect(r.stdout).toContain("tsclang run start")
+  })
+
+  test("init --avr советует run flash", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "myavr", "--avr"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("tsclang run flash")
+  })
+
+  test("init --library советует run dts", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "mylib", "--library"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("tsclang run dts")
+  })
+
+  test("init --declaration — нет run-подсказки (скриптов нет)", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init", "mywrapper", "--declaration"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Created project 'mywrapper' (declaration)")
+    expect(r.stdout).not.toContain("tsclang run")
+  })
+
+  test("init без имени — проект в текущей папке, без cd-шага", async () => {
+    const dir = mkTmp()
+    const r = await runCli(["init"], { cwd: dir })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("Created project 'myapp' (executable)")
+    expect(r.stdout).not.toContain("cd ")
+    expect(existsSync(join(dir, "tsc.package.json"))).toBe(true)
+  })
 })
 
 // === emit dts + builds.<n>.main (#252) ===
