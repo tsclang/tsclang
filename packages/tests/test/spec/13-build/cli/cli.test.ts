@@ -1,5 +1,5 @@
 // CLI surface tests driven by dictionary.json.
-// The dictionary records what the BOOK (00.2.2 help output / 00.2.3 quick start /
+// The dictionary records what the BOOK (00.2.2 help output / 00.2.4 quick start /
 // 00.7-cli-overview reference) claims about the CLI; these tests probe the actual
 // binary against it.
 // Run: pnpm tsx packages/tests/test/spec/13-build/cli/run.ts (pnpm build first).
@@ -198,10 +198,10 @@ describe("13-build/cli — smoke: каждая команда словаря д�
   })
 })
 
-// === build — claimed result (00.2.3) and options table (00.7.2) ===
+// === build — claimed result (00.2.4) and options table (00.7.2) ===
 
-describe("13-build/cli — build: заявленный результат и опции (00.2.3:37, таблица 00.7.2)", () => {
-  test("build hello.tsc --out-dir out → out/hello.c + out/CMakeLists.txt (00.2.3:37)", async () => {
+describe("13-build/cli — build: заявленный результат и опции (00.2.4:37, таблица 00.7.2)", () => {
+  test("build hello.tsc --out-dir out → out/hello.c + out/CMakeLists.txt (00.2.4:37)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--out-dir", "out"], { cwd: dir })
@@ -689,10 +689,10 @@ describe("13-build/cli — debug (00.7.3-debug)", () => {
   })
 })
 
-// === 00.2.3: init ===
+// === 00.2.4: init ===
 
-describe("13-build/cli — init (00.2.3:5-20)", () => {
-  test("init myapp создаёт tsc.package.json + src/main.tsc (00.2.3:13-20)", async () => {
+describe("13-build/cli — init (00.2.4:5-20)", () => {
+  test("init myapp создаёт tsc.package.json + src/main.tsc (00.2.4:13-20)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "myapp"], { cwd: dir })
     expect(r.code).toBe(0)
@@ -700,14 +700,14 @@ describe("13-build/cli — init (00.2.3:5-20)", () => {
     expect(existsSync(join(dir, "myapp", "src", "main.tsc"))).toBe(true)
   })
 
-  test("init mylib --library (00.2.3:9)", async () => {
+  test("init mylib --library (00.2.4:9)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "mylib", "--library"], { cwd: dir })
     expect(r.code).toBe(0)
     expect(existsSync(join(dir, "mylib", "tsc.package.json"))).toBe(true)
   })
 
-  test("init mywrapper --declaration (00.2.3:10)", async () => {
+  test("init mywrapper --declaration (00.2.4:10)", async () => {
     const dir = mkTmp()
     const r = await runCli(["init", "mywrapper", "--declaration"], { cwd: dir })
     expect(r.code).toBe(0)
@@ -922,7 +922,7 @@ describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.
   })
 })
 
-describe("13-build/cli — install/update/search/publish (00.2.3:39-46, 00.7.11-00.7.14)", () => {
+describe("13-build/cli — install/update/search/publish (00.2.4:39-46, 00.7.11-00.7.14)", () => {
   test("search regex — exit 0, непустой вывод (00.7.13)", async () => {
     const r = await runCli(["search", "regex"], { cwd: mkTmp() })
     expect(r.code).toBe(0)

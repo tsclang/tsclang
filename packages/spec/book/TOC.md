@@ -20,8 +20,9 @@
 ### 00.2 Установка и первый запуск
 - 00.2.1-requirements.md — Node.js 18+, GCC/Clang, опционально AVR-GCC
 - 00.2.2-installation.md — npm install -g tsclang, проверка установки
-- 00.2.3-quick-start.md — Быстрый старт: build, запуск через --command, init, установка пакета
-- 00.2.4-project-structure.md — Структура проекта: tsc.package.json, src/, main.tsc
+- 00.2.3-dev-install.md — Установка для разработки: сборка из репозитория, npm link
+- 00.2.4-quick-start.md — Быстрый старт: build, запуск через --command, init, установка пакета
+- 00.2.5-project-structure.md — Структура проекта: tsc.package.json, src/, main.tsc
 
 ### 00.3 Архитектура компилятора
 - 00.3.1-compilation-pipeline.md — Фазы: lexer → parser → AST → decorator pass → typecheck → codegen

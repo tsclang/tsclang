@@ -1,9 +1,9 @@
 {
-  "$comment": "CLI surface AS CLAIMED BY THE BOOK. Sources: 00.2.2-installation.md (help output), 00.2.3-quick-start.md (quick start: init/build/install), 00.7-cli-overview/*.md (per-command reference — full option tables). Every entry carries provenance. The cli.test.ts suite probes the actual CLI against this dictionary; discrepancies go to the fact-check matrix.",
+  "$comment": "CLI surface AS CLAIMED BY THE BOOK. Sources: 00.2.2-installation.md (help output), 00.2.4-quick-start.md (quick start: init/build/install), 00.7-cli-overview/*.md (per-command reference — full option tables). Every entry carries provenance. The cli.test.ts suite probes the actual CLI against this dictionary; discrepancies go to the fact-check matrix.",
   "binary": "tsclang",
   "sources": [
     "packages/spec/book/00-intro/00.2-setup/00.2.2-installation.md",
-    "packages/spec/book/00-intro/00.2-setup/00.2.3-quick-start.md",
+    "packages/spec/book/00-intro/00.2-setup/00.2.4-quick-start.md",
     "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.16)"
   ],
   "install": {
@@ -34,9 +34,9 @@
       "alias": "b",
       "description": "Compile .tsc to C or binary",
       "provenance": "00.2.2-installation.md:52",
-      "positional": "file.tsc (examples: hello.tsc — 00.2.3:34, 00.7.2:6)",
+      "positional": "file.tsc (examples: hello.tsc — 00.2.4:34, 00.7.2:6)",
       "result": ".c file (+ CMakeLists.txt when --emit c) or binary (when --emit binary)",
-      "resultProvenance": "00.2.3-quick-start.md:37",
+      "resultProvenance": "00.2.4-quick-start.md:37",
       "options": [
         { "name": "--emit", "takesValue": true, "values": ["c", "binary", "exec", "hex", "flash", "wasm", "cmake", "dts"], "default": "c", "provenance": "00.7.2-build.md:27" },
         { "name": "--out-dir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
@@ -73,12 +73,12 @@
       "name": "init",
       "description": "Create a new project",
       "provenance": "00.2.2-installation.md:56",
-      "positional": "project name (example: myapp, 00.2.3:8)",
+      "positional": "project name (example: myapp, 00.2.4:8)",
       "creates": ["<name>/tsc.package.json", "<name>/src/main.tsc", "<name>/test/main.test.tsc"],
-      "createsProvenance": "00.2.3-quick-start.md:13-20",
+      "createsProvenance": "00.2.4-quick-start.md:13-20",
       "options": [
-        { "name": "--library", "alias": "-l", "takesValue": false, "provenance": "00.2.3-quick-start.md:9; 00.7.6-init.md" },
-        { "name": "--declaration", "alias": "-d", "takesValue": false, "provenance": "00.2.3-quick-start.md:10; 00.7.6-init.md" },
+        { "name": "--library", "alias": "-l", "takesValue": false, "provenance": "00.2.4-quick-start.md:9; 00.7.6-init.md" },
+        { "name": "--declaration", "alias": "-d", "takesValue": false, "provenance": "00.2.4-quick-start.md:10; 00.7.6-init.md" },
         { "name": "--platform", "alias": "-p", "takesValue": false, "provenance": "00.7.6-init.md" },
         { "name": "--avr", "takesValue": false, "description": "AVR executable preset: builds.avr (emit flash + flash config) + scripts flash", "provenance": "00.7.6-init.md" },
         { "name": "--type", "takesValue": true, "values": ["executable", "library", "declaration", "platform", "package"], "default": "executable", "provenance": "00.7.6-init.md" }
@@ -93,7 +93,7 @@
     { "name": "emit-dts", "description": "Generate .d.tsc declaration files", "positional": "file.tsc (00.7.10-emit-dts.md)", "creates": "<stem>.d.tsc", "createsProvenance": "00.7.10-emit-dts.md", "provenance": "00.2.2-installation.md:59" },
     { "name": "lsp", "description": "Start Language Server", "positional": null, "provenance": "00.2.2-installation.md:60; 00.7.16-lsp.md (stdio)" },
     { "name": "validate-config", "description": "Validate tsc.package.json", "positional": "tsc.package.json (00.7.7-validate-config.md)", "provenance": "00.2.2-installation.md:61" },
-    { "name": "install", "alias": "i", "description": "Install a package", "positional": "name | name@1.2.3 (00.2.3:48-49)", "provenance": "00.2.2-installation.md:62", "options": [
+    { "name": "install", "alias": "i", "description": "Install a package", "positional": "name | name@1.2.3 (00.2.4:48-49)", "provenance": "00.2.2-installation.md:62", "options": [
       { "name": "--production", "takesValue": false, "provenance": "00.7.11-install.md" }
     ] },
     { "name": "update", "alias": "u", "description": "Update lock file", "positional": "name (00.7.12-update.md)", "provenance": "00.2.2-installation.md:63" },
