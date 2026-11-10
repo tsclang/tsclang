@@ -97,7 +97,7 @@ export async function runDoctorCommand(args: string[], rootDir: string): Promise
   w(`Platform:  ${PLATFORM_NAMES[osPlatform()] ?? osPlatform()} ${arch()}`);
   const source = installSource();
   w(`Version:   ${localVersion(rootDir)} (${source === 'dev' ? 'dev install: npm link' : 'npm global'})`);
-  w(`Update:    ${updateLine(rootDir, source)}`);
+  w(`Update:    ${await updateLine(rootDir, source)}`);
   w('');
 
   // --- Project ---

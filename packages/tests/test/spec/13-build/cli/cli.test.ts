@@ -14,6 +14,7 @@ import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-eng
 import { buildAvrdudeArgs } from "../../../../../cli/src/cli/flash.js"
 import { findTool, toolAvailable } from "../../../../../cli/src/cli/toolchain.js"
 import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/config.js"
+import { compareVersions, fetchLatestNpm, formatUpdate, parseRegistryLatest, updateLine } from "../../../../../cli/src/cli/doctor/version.js"
 import { RECOMMENDED_TOOLS, profileFromBuilds } from "../../../../../cli/src/cli/doctor/recommended.js"
 import { suggestManifestAdditions } from "../../../../../cli/src/cli/doctor/suggest.js"
 import { msvcDetect } from "../../../../../cli/src/cli/toolchain.js"
@@ -1365,6 +1366,51 @@ describe("13-build/cli — doctor units (#259)", () => {
     expect(m.inPath).toBe(false)
     expect(m.vsRoot).toBe(null)
     expect(m.clPath).toBe(null)
+  })
+})
+
+// === doctor update-check (#259) — npm latest: pure parse/compare/format units + DI fetch ===
+
+describe("13-build/cli — doctor update-check (#259)", () => {
+  test("parseRegistryLatest: version из registry-JSON; мусор → null", () => {
+    expect(parseRegistryLatest({ version: "0.2.0" })).toBe("0.2.0")
+    expect(parseRegistryLatest({})).toBe(null)
+    expect(parseRegistryLatest(null)).toBe(null)
+    expect(parseRegistryLatest("nope")).toBe(null)
+    expect(parseRegistryLatest({ version: 5 })).toBe(null)
+  })
+
+  test("compareVersions: числовое сравнение, не строковое (0.10.0 > 0.9.0)", () => {
+    expect(compareVersions("0.1.0", "0.2.0")).toBeLessThan(0)
+    expect(compareVersions("0.10.0", "0.9.0")).toBeGreaterThan(0)
+    expect(compareVersions("1.0.0", "1.0.0")).toBe(0)
+  })
+
+  test("fetchLatestNpm: ok-ответ отдаёт версию; сбой/не-ok → null (без throw)", async () => {
+    const ok = (async () => ({ ok: true, json: async () => ({ version: "0.2.0" }) })) as unknown as typeof fetch
+    expect(await fetchLatestNpm(ok)).toBe("0.2.0")
+    const offline = (async () => { throw new Error("offline") }) as unknown as typeof fetch
+    expect(await fetchLatestNpm(offline)).toBe(null)
+    const badStatus = (async () => ({ ok: false, json: async () => ({ version: "0.2.0" }) })) as unknown as typeof fetch
+    expect(await fetchLatestNpm(badStatus)).toBe(null)
+  })
+
+  test("formatUpdate: offline / равная / новее локальной / npm отстаёт", () => {
+    expect(formatUpdate("0.1.0", null)).toBe("check failed (offline?)")
+    expect(formatUpdate("0.2.0", "0.2.0")).toBe("up to date (npm 0.2.0)")
+    expect(formatUpdate("0.1.0", "0.2.0")).toBe("update available: 0.2.0 (npm i -g tsclang)")
+    // npm latest behind the local build (pre-release installs) — never suggest a downgrade
+    expect(formatUpdate("0.3.0", "0.2.0")).toBe("up to date (npm 0.2.0)")
+  })
+
+  test("updateLine: dev-установка — npm-check неприменим", async () => {
+    const saved = process.env.TSC_DOCTOR_NO_UPDATE
+    delete process.env.TSC_DOCTOR_NO_UPDATE
+    try {
+      expect(await updateLine(ROOT, "dev")).toBe("dev install - npm check not applicable")
+    } finally {
+      if (saved !== undefined) process.env.TSC_DOCTOR_NO_UPDATE = saved
+    }
   })
 })
 
