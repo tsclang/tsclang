@@ -27,6 +27,13 @@ packages/tests/test/cases/<section>/<feature>/<test-name>/
                          скрипт исполняется внутри WSL; если WSL или команд нет
                          — тест skip. На нативном unix — проверка наличия команд
                          и обычный запуск (опционально)
+    needs-tools        — маркер для input.sh: реальные тулчейны через пробел
+                         (например `avr-gcc avr-objcopy`, `emcc`). Runner
+                         проверяет `command -v` каждой; нет хоть одной — тест
+                         skip с reason `needs-tools: lacks [...]` (skip-политика
+                         корпуса: чужие тулчейны не мокаем). В отличие от
+                         needs-unix скрипт остаётся в обычном окружении
+                         (MSYS2-bash на win32) (опционально)
 ```
 
 ### Типы тестов
@@ -1536,6 +1543,10 @@ input.tsc:1:
 - [R] install конфликт имён в не-TTY: пользовательская запись не перезаписывается (skip + notice в stderr), остальные записи применяются, exit 0 (`install-conflict`)
 - [R] remove полный: builds/scripts/dependencies вычищены (пустые maps удалены), lock пуст, `tsc_packages/` удалён, `platform list` пуст (`remove-full`)
 - [R] remove частичный: install → ручная правка build-записи → remove — правленая осталась (`! ... kept — edited by you`), свой script/dependency/lock/`tsc_packages/` вычищены (`remove-edited`)
+- [R] install `@tsclang/avr` из каталога-фикстуры: пресет `avr` (emit hex), скрипт `avr:flash`, профиль `tsc_packages/@tsclang/avr/index.d.tsc` с `target: "avr"` (`install-avr`)
+- [R] install `@tsclang/wasm` из каталога-фикстуры: пресет `wasm` (emit wasm), профиль с `target: "wasm"` + `toolchain: "emcc"` (`install-wasm`)
+- [R] install → `build --build avr`: hex-артефакт `build/avr/main.hex`; требует реальный avr-gcc/avr-objcopy — `needs-tools`, на машине без них skip (`build-avr-hex`)
+- [R] install → `build --build wasm`: артефакт `build/wasm/main.wasm`; требует реальный emcc — `needs-tools`, на машине без него skip (`build-wasm`)
 
 ### Алиасы pm-команд
 

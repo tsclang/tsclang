@@ -1,0 +1,7 @@
+Installed @tsclang/avr@0.1.0
+  + build avr
+  + script avr:flash
+preset-added
+script-added
+profile-extracted
+profile-avr-target

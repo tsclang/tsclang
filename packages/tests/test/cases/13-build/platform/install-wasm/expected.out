@@ -1,0 +1,6 @@
+Installed @tsclang/wasm@0.1.0
+  + build wasm
+preset-added
+profile-extracted
+profile-wasm-target
+profile-emcc-toolchain

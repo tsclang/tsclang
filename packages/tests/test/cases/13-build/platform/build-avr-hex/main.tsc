@@ -1,0 +1,6 @@
+function main(): void {
+    const counter: u8 = 1;
+    const wide: u16 = counter;
+}
+
+main();

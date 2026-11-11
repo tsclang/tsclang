@@ -1,0 +1,16 @@
+declare platform {
+    target: "avr"
+    allocator: "static"
+    async: "none"
+    fpu: false
+    bits: 8
+    usize: "u16"
+    defaultNumber: "i16"
+    unaligned_access: false
+    os: false
+    posix: false
+    strtoll: false
+    console_uart: true
+    console_baud: 9600
+    toolchain: "avr-gcc"
+}

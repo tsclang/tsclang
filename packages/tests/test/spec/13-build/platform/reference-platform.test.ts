@@ -23,9 +23,16 @@ import { detectSystemCommand } from "../../../../../pm/src/toolchains.js"
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
 const DIST_BIN = join(ROOT, "packages", "cli", "dist", "index.js")
-const PLATFORM_DIR = join(ROOT, "packages", "platforms", "desktop")
+const PLATFORMS_ROOT = join(ROOT, "packages", "platforms")
 const REGISTRY_DIR = join(ROOT, "packages", "registry")
-const ARCHIVE = join(REGISTRY_DIR, "archives", "@tsclang-desktop-0.1.0.tspkg")
+
+// The reference platform set (#275 desktop, #276 avr + wasm): package source
+// dir in the monorepo, published archive name in packages/registry/archives.
+const REFERENCE_PLATFORMS = [
+  { name: "@tsclang/desktop", dir: "desktop", file: "@tsclang-desktop-0.1.0.tspkg" },
+  { name: "@tsclang/avr", dir: "avr", file: "@tsclang-avr-0.1.0.tspkg" },
+  { name: "@tsclang/wasm", dir: "wasm", file: "@tsclang-wasm-0.1.0.tspkg" },
+] as const
 
 const tmpDirs: string[] = []
 function mkTmp(): string {
@@ -39,61 +46,69 @@ function shaText(path: string): string {
   return createHash("sha256").update(readFileSync(path, "utf8"), "utf8").digest("hex")
 }
 
-// ── source package in the monorepo ─────────────────────────────────────────
+// ── source packages in the monorepo ────────────────────────────────────────
 
-describe("13-build/platform 4.1 — эталон packages/platforms/desktop (#275)", () => {
-  test("манифест валиден: platform-секция, профиль, пресет билда", () => {
-    const manifest = JSON.parse(readFileSync(join(PLATFORM_DIR, "tsc.package.json"), "utf8"))
-    expect(manifest.name).toBe("@tsclang/desktop")
-    expect(manifest.type).toBe("platform")
-    expect(validatePlatformSection(manifest.platform)).toBe(null)
-    expect(manifest.platform.profile).toBe("desktop")
-    const build = manifest.platform.builds.desktop
-    expect(build.profile).toBe("desktop")
-    expect(typeof build.emit).toBe("string")
-    expect(typeof manifest.platform.scripts.start).toBe("string")
-  })
+describe("13-build/platform 4.1 — эталонные пакеты в монорепо (#275, #276)", () => {
+  for (const ref of REFERENCE_PLATFORMS) {
+    test(`${ref.name}: манифест валиден — platform-секция, профиль, пресет билда`, () => {
+      const manifest = JSON.parse(readFileSync(join(PLATFORMS_ROOT, ref.dir, "tsc.package.json"), "utf8"))
+      expect(manifest.name).toBe(ref.name)
+      expect(manifest.type).toBe("platform")
+      expect(validatePlatformSection(manifest.platform)).toBe(null)
+      expect(manifest.platform.profile).toBe(ref.dir)
+      const preset = Object.values(manifest.platform.builds)[0] as { profile: string; emit: string }
+      expect(preset.profile).toBe(ref.dir)
+      expect(typeof preset.emit).toBe("string")
+    })
 
-  test("профиль-декларация едет внутри пакета (index.d.tsc)", () => {
-    const dts = readFileSync(join(PLATFORM_DIR, "index.d.tsc"), "utf8")
-    expect(dts.includes("declare platform")).toBe(true)
-    expect(dts.includes("allocator")).toBe(true)
-  })
+    test(`${ref.name}: профиль-декларация едет внутри пакета (index.d.tsc)`, () => {
+      const dts = readFileSync(join(PLATFORMS_ROOT, ref.dir, "index.d.tsc"), "utf8")
+      expect(dts.includes("declare platform")).toBe(true)
+    })
+  }
 })
 
 // ── registry catalog ↔ committed archive ───────────────────────────────────
 
-describe("13-build/platform 4.1 — каталог реестра синхронен с архивом (#275)", () => {
-  test("catalog.json валиден; запись @tsclang/desktop указывает на https нашего репо", () => {
+describe("13-build/platform 4.1 — каталог реестра синхронен с архивами (#275, #276)", () => {
+  test("catalog.json валиден; каждая запись указывает на https нашего репо + sha256", () => {
     const catalog = parseCatalog(readFileSync(join(REGISTRY_DIR, "catalog.json"), "utf8"))
-    const entry = catalog.packages.find((p) => p.name === "@tsclang/desktop")
-    expect(entry !== undefined).toBe(true)
-    expect(entry!.type).toBe("platform")
-    expect(entry!.version).toBe("0.1.0")
-    expect(entry!.location?.url.startsWith("https://raw.githubusercontent.com/tsclang/tsclang/")).toBe(true)
-    expect(/^[0-9a-f]{64}$/.test(entry!.location?.sha256 ?? "")).toBe(true)
+    expect(catalog.packages.length).toBe(REFERENCE_PLATFORMS.length)
+    for (const ref of REFERENCE_PLATFORMS) {
+      const entry = catalog.packages.find((p) => p.name === ref.name)
+      expect(entry !== undefined).toBe(true)
+      expect(entry!.type).toBe("platform")
+      expect(entry!.version).toBe("0.1.0")
+      expect(entry!.location?.url.startsWith("https://raw.githubusercontent.com/tsclang/tsclang/")).toBe(true)
+      expect(/^[0-9a-f]{64}$/.test(entry!.location?.sha256 ?? "")).toBe(true)
+    }
   })
 
-  test("коммитнутый .tspkg: sha совпадает с каталогом, состав валиден", () => {
+  test("коммитнутые .tspkg: sha совпадает с каталогом, состав валиден", () => {
     const catalog = parseCatalog(readFileSync(join(REGISTRY_DIR, "catalog.json"), "utf8"))
-    const entry = catalog.packages.find((p) => p.name === "@tsclang/desktop")!
-    expect(existsSync(ARCHIVE)).toBe(true)
-    expect(shaText(ARCHIVE)).toBe(entry.location!.sha256)
-    const archive = JSON.parse(readFileSync(ARCHIVE, "utf8"))
-    expect(archive.name).toBe("@tsclang/desktop")
-    expect(archive.version).toBe("0.1.0")
-    expect(typeof archive.files["tsc.package.json"]).toBe("string")
-    expect(typeof archive.files["index.d.tsc"]).toBe("string")
-    const manifest = JSON.parse(archive.files["tsc.package.json"])
-    expect(validatePlatformSection(manifest.platform)).toBe(null)
+    for (const ref of REFERENCE_PLATFORMS) {
+      const entry = catalog.packages.find((p) => p.name === ref.name)!
+      const archivePath = join(REGISTRY_DIR, "archives", ref.file)
+      expect(existsSync(archivePath)).toBe(true)
+      expect(shaText(archivePath)).toBe(entry.location!.sha256)
+      const archive = JSON.parse(readFileSync(archivePath, "utf8"))
+      expect(archive.name).toBe(ref.name)
+      expect(archive.version).toBe("0.1.0")
+      expect(typeof archive.files["tsc.package.json"]).toBe("string")
+      expect(typeof archive.files["index.d.tsc"]).toBe("string")
+      const manifest = JSON.parse(archive.files["tsc.package.json"])
+      expect(validatePlatformSection(manifest.platform)).toBe(null)
+    }
   })
 
-  test("архив не протух: platform-секция совпадает с исходником в монорепо", () => {
-    const archive = JSON.parse(readFileSync(ARCHIVE, "utf8"))
-    const manifest = JSON.parse(archive.files["tsc.package.json"])
-    const source = JSON.parse(readFileSync(join(PLATFORM_DIR, "tsc.package.json"), "utf8"))
-    expect(JSON.stringify(manifest.platform)).toBe(JSON.stringify(source.platform))
-    expect(archive.files["index.d.tsc"]).toBe(readFileSync(join(PLATFORM_DIR, "index.d.tsc"), "utf8"))
+  test("архивы не протухли: platform-секция и профиль совпадают с исходниками", () => {
+    for (const ref of REFERENCE_PLATFORMS) {
+      const archive = JSON.parse(readFileSync(join(REGISTRY_DIR, "archives", ref.file), "utf8"))
+      const manifest = JSON.parse(archive.files["tsc.package.json"])
+      const source = JSON.parse(readFileSync(join(PLATFORMS_ROOT, ref.dir, "tsc.package.json"), "utf8"))
+      expect(JSON.stringify(manifest.platform)).toBe(JSON.stringify(source.platform))
+      expect(archive.files["index.d.tsc"]).toBe(readFileSync(join(PLATFORMS_ROOT, ref.dir, "index.d.tsc"), "utf8"))
+    }
   })
 })
 
@@ -137,9 +152,10 @@ describe("13-build/platform 4.1 — краш-тест: чистая машина
     writeFileSync(join(dir, "hello.tsc"), 'function main(): void {\n    console.log("hello desktop");\n}\n\nmain();\n', "utf8")
     // Local catalog fixture: the REAL catalog with the url pointed at the
     // REAL committed archive (same bytes — sha still matches)
+    const desktopArchive = join(REGISTRY_DIR, "archives", "@tsclang-desktop-0.1.0.tspkg")
     const catalog = JSON.parse(readFileSync(join(REGISTRY_DIR, "catalog.json"), "utf8"))
     catalog.packages.find((p: { name: string }) => p.name === "@tsclang/desktop").location.url =
-      `file://${ARCHIVE.replace(/\\/g, "/")}`
+      `file://${desktopArchive.replace(/\\/g, "/")}`
     const fixture = join(dir, "catalog.json")
     writeFileSync(fixture, JSON.stringify(catalog), "utf8")
     const env = {

@@ -1,0 +1,12 @@
+{
+  "name": "@tsclang/wasm",
+  "version": "0.1.0",
+  "type": "platform",
+  "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX",
+  "platform": {
+    "profile": "wasm",
+    "builds": {
+      "wasm": { "profile": "wasm", "emit": "wasm", "outDir": "build/wasm" }
+    }
+  }
+}

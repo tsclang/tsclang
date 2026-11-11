@@ -10,6 +10,26 @@
         "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-desktop-0.1.0.tspkg",
         "sha256": "5a908a9c0d87628c4450ffc949ca1c151b63c211cb8d7b62aac564f38c5c3e86"
       }
+    },
+    {
+      "name": "@tsclang/avr",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)",
+      "location": {
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-avr-0.1.0.tspkg",
+        "sha256": "b7e175cfc699edb1fe1ac8b7f42a2e154c486c5eefc397493f5b33cfd83188ca"
+      }
+    },
+    {
+      "name": "@tsclang/wasm",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX",
+      "location": {
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-wasm-0.1.0.tspkg",
+        "sha256": "c87a1701e1e6c6b62e76be9ca28c6357172390d7233a267b0f6d61930ae1c452"
+      }
     }
   ]
 }

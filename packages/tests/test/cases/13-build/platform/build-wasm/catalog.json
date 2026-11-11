@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "name": "@tsclang/wasm",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX",
+      "location": { "url": "@tsclang-wasm-0.1.0.tspkg", "sha256": "c87a1701e1e6c6b62e76be9ca28c6357172390d7233a267b0f6d61930ae1c452" }
+    }
+  ]
+}

@@ -614,12 +614,24 @@ async function executeShTest(testDir, kind, tmpBase) {
   // `needs-unix` marks scripts that must run in a real unix environment (e.g. a
   // mock toolchain made of shell shims): on win32 a native spawn executes only
   // .exe, so such a case is re-executed inside WSL instead of MSYS bash.
-  const specialFiles = new Set(['input.sh', 'input.json', 'input.tsc', 'expected.out', 'expected.error', 'expected.c', 'needs-unix']);
+  // `needs-tools` gates a case on REAL toolchains being present (avr-gcc,
+  // emcc, …): the file lists the required commands; the runner probes them
+  // and skips the case when any is missing (the corpus skip policy).
+  const specialFiles = new Set(['input.sh', 'input.json', 'input.tsc', 'expected.out', 'expected.error', 'expected.c', 'needs-unix', 'needs-tools']);
   const testFiles = await readdir(testDir);
   const needsUnix = testFiles.includes('needs-unix');
   for (const f of testFiles) {
     if (!specialFiles.has(f)) {
       await copyFile(join(testDir, f), join(tmpBase, f));
+    }
+  }
+
+  if (testFiles.includes('needs-tools')) {
+    const reqTools = (await readFile(join(testDir, 'needs-tools'), 'utf8')).trim().split(/\s+/).filter(Boolean);
+    const probeCmd = reqTools.map(t => `command -v ${t} >/dev/null`).join(' && ');
+    const probe = await runShell(probeCmd);
+    if (probe.code !== 0) {
+      return { status: 'skip', testDir, reason: `needs-tools: lacks [${reqTools.join(', ')}]` };
     }
   }
 

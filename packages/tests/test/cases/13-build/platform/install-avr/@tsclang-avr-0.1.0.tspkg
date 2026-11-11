@@ -1,0 +1,8 @@
+{
+  "name": "@tsclang/avr",
+  "version": "0.1.0",
+  "files": {
+    "index.d.tsc": "declare platform {\n    target: \"avr\"\n    allocator: \"static\"\n    async: \"none\"\n    fpu: false\n    bits: 8\n    usize: \"u16\"\n    defaultNumber: \"i16\"\n    unaligned_access: false\n    os: false\n    posix: false\n    strtoll: false\n    console_uart: true\n    console_baud: 9600\n    toolchain: \"avr-gcc\"\n}\n",
+    "tsc.package.json": "{\n  \"name\": \"@tsclang/avr\",\n  \"version\": \"0.1.0\",\n  \"type\": \"platform\",\n  \"description\": \"AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)\",\n  \"platform\": {\n    \"profile\": \"avr\",\n    \"builds\": {\n      \"avr\": { \"profile\": \"avr\", \"emit\": \"hex\", \"outDir\": \"build/avr\" }\n    },\n    \"scripts\": {\n      \"flash\": \"tsclang build --build avr --emit flash\"\n    }\n  }\n}\n"
+  }
+}

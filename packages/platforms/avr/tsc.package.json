@@ -1,0 +1,15 @@
+{
+  "name": "@tsclang/avr",
+  "version": "0.1.0",
+  "type": "platform",
+  "description": "AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)",
+  "platform": {
+    "profile": "avr",
+    "builds": {
+      "avr": { "profile": "avr", "emit": "hex", "outDir": "build/avr" }
+    },
+    "scripts": {
+      "flash": "tsclang build --build avr --emit flash"
+    }
+  }
+}
