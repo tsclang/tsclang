@@ -10,6 +10,7 @@ import { after, describe, expect, test } from "@tsclang/test-engine"
 import { validatePlatformSection, platformNames } from "../../../../../pm/src/platform.js"
 import { packageGenerate } from "../../../../../pm/src/package.js"
 import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/config.js"
+import { loadProfile } from "../../../../../cli/src/cli/profile-loader.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -242,5 +243,70 @@ describe("13-build/platform 0.3 — генератор имён: docker-моде
     const n = platformNames("@someuser/cpc")!
     expect(n.build.endsWith(":cpc")).toBe(true)
     expect(n.build.startsWith("cpc")).toBe(false)
+  })
+})
+
+// === 0.4 (#264): tsc_packages profile overrides the built-in of the same name ===
+
+describe("13-build/platform 0.4 — приоритет профилей: пакет > built-in (#264)", () => {
+  const BUILTIN_PROFILES = join(ROOT, "packages", "compiler", "src", "profiles")
+
+  test("tsc_packages-профиль с именем built-in выигрывает (красный → зелёный)", () => {
+    const dir = mkTmp()
+    // a platform package claiming the built-in profile name 'desktop'
+    const pkgDir = join(dir, "tsc_packages", "probe-desktop")
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(pkgDir, "tsc.package.json"), JSON.stringify({
+      name: "probe-desktop", version: "1.0.0", type: "platform",
+      platform: { profile: "desktop", builds: { desktop: { emit: "c" } } },
+    }, null, 2))
+    // distinctive capability: 8 bits (built-in desktop is 64)
+    writeFileSync(join(pkgDir, "index.d.tsc"), "declare platform {\n  bits: 8\n  allocator: \"static\"\n}\n")
+    writeFileSync(join(dir, "main.tsc"), "console.log(\"x\")\n")
+
+    const caps = loadProfile("desktop", BUILTIN_PROFILES, join(dir, "main.tsc"))
+    expect(caps).not.toBe(null)
+    expect(caps!.bits).toBe(8)
+    expect(caps!.allocator).toBe("static")
+  })
+
+  test("точный scoped путь tsc_packages/@scope/name/index.d.tsc резолвится", () => {
+    const dir = mkTmp()
+    const pkgDir = join(dir, "tsc_packages", "@someuser", "cpc")
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(pkgDir, "tsc.package.json"), JSON.stringify({
+      name: "@someuser/cpc", version: "1.0.0", type: "platform",
+      platform: { profile: "cpc", builds: { cpc: { emit: "c" } } },
+    }, null, 2))
+    writeFileSync(join(pkgDir, "index.d.tsc"), "declare platform {\n  bits: 8\n}\n")
+    writeFileSync(join(dir, "main.tsc"), "console.log(\"x\")\n")
+
+    const caps = loadProfile("@someuser/cpc", BUILTIN_PROFILES, join(dir, "main.tsc"))
+    expect(caps).not.toBe(null)
+    expect(caps!.bits).toBe(8)
+  })
+
+  test("нет пакета-претендента → built-in профиль как раньше", () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), "console.log(\"x\")\n")
+    const caps = loadProfile("desktop", BUILTIN_PROFILES, join(dir, "main.tsc"))
+    expect(caps).not.toBe(null)
+    expect(caps!.bits).toBe(64)
+  })
+
+  test("пакет с чужим именем профиля built-in не перекрывает", () => {
+    const dir = mkTmp()
+    const pkgDir = join(dir, "tsc_packages", "other-plat")
+    mkdirSync(pkgDir, { recursive: true })
+    writeFileSync(join(pkgDir, "tsc.package.json"), JSON.stringify({
+      name: "other-plat", version: "1.0.0", type: "platform",
+      platform: { profile: "z80-probe", builds: { "z80-probe": { emit: "c" } } },
+    }, null, 2))
+    writeFileSync(join(pkgDir, "index.d.tsc"), "declare platform {\n  bits: 8\n}\n")
+    writeFileSync(join(dir, "main.tsc"), "console.log(\"x\")\n")
+
+    // 'desktop' does not match the package's profile 'z80-probe' → built-in
+    const caps = loadProfile("desktop", BUILTIN_PROFILES, join(dir, "main.tsc"))
+    expect(caps!.bits).toBe(64)
   })
 })

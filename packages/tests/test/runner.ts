@@ -9,7 +9,7 @@ import { spawn, spawnSync } from 'child_process';
 import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { parsePlatformDecl, compileTsc, renderDiagnostic } from '@tsclang/compiler';
+import { compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS } from '@tsclang/shared';
 import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs } from '@tsclang/test-engine';
 
@@ -358,20 +358,12 @@ async function executeTest(testDir, { kind, inputType, hasWarning, hasNoWarning 
 // ---------------------------------------------------------------------------
 const PROFILES_PATH = join(ROOT, "packages", "compiler", PROFILES_DIR);
 
+// Deduplicated with the CLI loader (#264): the runner used to carry a stale
+// copy that only knew built-ins. Same resolution order — a platform package
+// in the project's tsc_packages overrides the built-in of the same name.
+import { loadProfile as loadProfileImpl } from "../../cli/src/cli/profile-loader.js";
 function loadProfile(name) {
-  const newDtsPath = join(PROFILES_PATH, name, "index.d.tsc");
-  const dtsPath = join(PROFILES_PATH, name + ".d.tsc");
-  const jsonPath = join(PROFILES_PATH, name + ".json");
-  if (existsSync(newDtsPath)) {
-    try { return parsePlatformDecl(readFileSync(newDtsPath, "utf8"), newDtsPath); } catch { return null; }
-  }
-  if (existsSync(dtsPath)) {
-    try { return parsePlatformDecl(readFileSync(dtsPath, "utf8"), dtsPath); } catch { return null; }
-  }
-  if (existsSync(jsonPath)) {
-    try { return JSON.parse(readFileSync(jsonPath, "utf8")); } catch { return null; }
-  }
-  return null;
+  return loadProfileImpl(name, PROFILES_PATH);
 }
 
 function readMeta(testDir) {
