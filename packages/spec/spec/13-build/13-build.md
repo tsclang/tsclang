@@ -372,19 +372,19 @@ tsclang publish
 #### Что публикуется
 
 ```
-@tsc/sqlite3@1.0.0/
+@tsclang/sqlite3@1.0.0/
   tsc.package.json
   index.d.tsc
 ```
 
-Только два файла — никакого C-кода.
+Без `.c`-исходников — C-библиотека подключается из системы. Заголовки `.h` архив нести может: они нужны пакетам платформ (`include/`).
 
 #### Использование
 
 **Установка:**
 
 ```bash
-tsclang install @tsc/sqlite3
+tsclang install @tsclang/sqlite3
 ```
 
 **tsc.package.json потребителя:**
@@ -640,7 +640,21 @@ platform/
 {
   "name": "@nes/platform",
   "version": "1.0.0",
-  "type": "platform"
+  "type": "platform",
+  "platform": {
+    "profile": "nes",
+    "toolchains": {
+      "cc65": {
+        "version": "2.19",
+        "downloads": {
+          "win32-x64": { "url": "...", "sha256": "...", "size": 6 },
+          "linux-x64":  { "url": "...", "sha256": "...", "size": 4 }
+        }
+      }
+    },
+    "builds":  { "nes": { "profile": "nes", "emit": "c", "outDir": "build/nes" } },
+    "scripts": { "dev": "...", "dist": "..." }
+  }
 }
 ```
 
@@ -648,6 +662,12 @@ platform/
 - `name`
 - `version`
 - `type: "platform"`
+
+**Секция `platform`** — дистрибутив платформы:
+
+- `profile` — имя профиля; сам профиль живёт в `index.d.tsc` (`declare platform { ... }`), секция его не дублирует;
+- `toolchains.<имя>.downloads.<os-arch>` — `{url, sha256, size}` для скачивания тулчейна в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (архив `.tar.gz`, распаковка системным `tar`, проверка sha256 обязательна);
+- `builds` / `scripts` — пресеты конфигураций и задач с **непрефиксованными внутренними именами**; префиксы и итоговые имена вычисляет установщик (см. «Подключение к проекту»).
 
 ---
 
@@ -1020,20 +1040,24 @@ TSClang-библиотека и C-wrapper различаются явным ти
 
 #### 1. Community профиль
 
-```json
-{
-  "dependencies": {
-    "@nes/platform": "^1.0.0"
-  },
-  "builds": {
-    "nes": {
-      "arch": "6502",
-      "toolchain": "cc65",
-      "profile": "@nes/platform"
-    }
-  }
-}
+Платформы ставятся группой `tsclang platform` — не обычным `install`:
+
+```bash
+tsclang platform install @nes/platform
 ```
+
+Установщик: ставит пакет в `tsc_packages/@nes/platform/`, дописывает `dependencies`, **автоматически дописывает `builds`/`scripts` из пресетов** секции `platform` и предлагает скачать тулчейны в `~/.tsclang/platforms/` (см. выше).
+
+**Имена (docker-модель):** официальный scope `@tsclang/*` пишется без префикса, чужой scope становится префиксом с двоеточием:
+
+| Пакет | Билд | Скрипт | Папка |
+|---|---|---|---|
+| `@tsclang/spectrum` | `spectrum` | `spectrum:dev` | `build/spectrum/` |
+| `@nes/platform` | `nes:platform` | `nes:platform:dev` | `build/nes-platform/` |
+
+Двоеточие — единый разделитель в манифесте и командах; при материализации имени билда в путь/цель сборки `:` заменяется на `-` (ограничение NTFS). Явный `outDir` не переконвертируется.
+
+Установленные записи **не перезаписываются**: конфликт с ручной записью — спросить (TTY) / пропустить с печатью; lock хранит снапшот каждой созданной записи, `tsclang platform remove` чистит только свои (пользовательские правки не трогает).
 
 #### 2. Локальный профиль
 
@@ -1286,7 +1310,7 @@ declare platform { toolchain } в profile
 | Значение | Поведение |
 |----------|-----------|
 | `"avr-gcc"` | ищет бинарь в PATH |
-| `"avr-gcc@12.1"` | pinned версия — ищет в `~/.tsc/toolchains/avr-gcc@12.1/bin/`, затем PATH |
+| `"avr-gcc@12.1"` | pinned версия — ищет в `~/.tsclang/platforms/<платформа>@<в>/<тулчейн>@<в>/bin/` (кеш платформы), затем PATH |
 | `"/opt/avr/bin/avr-gcc"` | абсолютный путь — используется напрямую |
 | `"./tools/cc65/bin/cl65"` | путь относительно корня проекта (vendored toolchain) |
 
@@ -1304,13 +1328,13 @@ declare platform { toolchain } в profile
 ```
 
 Логика поиска для `avr-gcc@12.1`:
-1. `~/.tsc/toolchains/avr-gcc@12.1/bin/avr-gcc` — локальный кэш
+1. `~/.tsclang/platforms/<платформа>@<версия>/avr-gcc@12.1/bin/avr-gcc` — кеш платформы (скачивается при `tsclang platform install`)
 2. `avr-gcc` в PATH с проверкой версии (`avr-gcc --version`)
 3. Ошибка с подсказкой:
 
 ```
 error: toolchain 'avr-gcc@12.1' not found
-hint: tsclang toolchain install avr-gcc@12.1
+hint: tsclang platform install avr   (тулчейн входит в пакет платформы)
 ```
 
 Если бинарь не найден без версии — TSClang даёт понятную подсказку:
@@ -1998,8 +2022,9 @@ tsclang publish
 
 ```
 @nes/platform@1.0.0/
-  tsc.package.json
+  tsc.package.json     (включая секцию platform: toolchains, пресеты builds/scripts)
   index.d.tsc
+  include/             (C-заголовки: runtime, HAL)
   toolchain.cmake
 ```
 
@@ -2251,7 +2276,7 @@ build/avr/
 
 ## CLI команды
 
-Таблица — только реализованные команды (единый список с `tsclang --help`).
+Таблица — команды CLI. Реализованные команды составляют единый список с `tsclang --help`; строки с пометкой `[NOT YET]` — зафиксированный план (группа `platform`, см. «Реестр» ниже).
 
 | Команда | Описание |
 |---------|----------|
@@ -2271,6 +2296,7 @@ build/avr/
 | `tsclang search` (`s`) | Поиск пакетов |
 | `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
 | `tsclang doctor` | Диагностика окружения и проекта (тулчейны, манифест, обновление) |
+| `tsclang platform install/search/remove/list` `[NOT YET]` | Платформы как пакеты: установка из реестра-каталога (builds/scripts по правилам имён, тулчейны в `~/.tsclang/platforms/`), поиск, удаление |
 
 Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`, `doctor`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
 
@@ -2718,8 +2744,10 @@ error: dependency conflict
 
 ## Реестр
 
-- Централизованный реестр `registry.tsclang.org`
-- Публикация `.tsc` пакетов и `.d.tsc` деклараций для C-либ
+- **v1 — JSON-каталог в GitHub-репозитории TSClang** (`packages/registry/catalog.json`): `{name, version, description, location}` — URL `.tspkg` + sha256. Никакого выделенного сервиса (`registry.tsclang.org` — отложено).
+- Платформы (`type: "platform"`) ставятся группой `tsclang platform install/search/remove/list`; их тулчейны скачиваются в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (`.tar.gz`, sha256, системный `tar`).
+- Публикация `.tsc` пакетов и `.d.tsc` деклараций для C-либ; npm-мост (npm как источник пакетов) — после первых чужих платформ.
+- Сеть: таймауты и тихий офлайн-провал (паттерн doctor), гейты `TSC_NO_NETWORK` / `--offline`; для тестов — локальный каталог-фикстура через `TSC_REGISTRY`. Реестр помечает `type` пакета явно (факт из манифеста, не описание) — `platform search` разделяет платформы и библиотеки.
 
 ## Flat dependency tree
 

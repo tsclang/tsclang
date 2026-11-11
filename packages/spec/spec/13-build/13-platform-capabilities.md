@@ -69,6 +69,8 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 `declare platform` — единый блок: capabilities + build config вместе. Не разделяем.
 
+Профиль-пакет с `type: "platform"` — это **платформа-пакет**: ставится группой `tsclang platform` (не обычным `install`), манифест несёт секцию `platform` с дистрибутивом тулчейнов (`downloads.<os-arch>` с url/sha256/size) и пресетами `builds`/`scripts` — установщик дописывает их в проект по правилам имён (см. 13-build.md, «Подключение к проекту» и «Реестр»). Профиль из установленного пакета **перекрывает одноимённый встроенный** (приоритет: `tsc_packages/` проекта выше built-in).
+
 ## Референс полей `declare platform`
 
 ### Обязательные поля (с профилем)

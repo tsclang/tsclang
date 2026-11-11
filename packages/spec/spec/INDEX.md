@@ -226,7 +226,7 @@
 | **Flat dependency tree** | Одна версия каждого пакета; конфликты — ошибка компилятора. |
 | **Структура lock-файла** | Формат `tsc.package.lock` (JSON); фиксация точных версий для воспроизводимых сборок. |
 | **Кеш** | Локальный кеш установленных пакетов; инвалидация. |
-| **Реестр** | Как работает пакетный реестр TSClang (`registry.tsclang.org`). |
+| **Реестр** | Пакетный реестр TSClang: v1 — JSON-каталог в GitHub-репо + группа `tsclang platform` (платформы как пакеты). |
 | **Strict Mode** | Granular compile-time правила: `no-any`, `no-unsafe`, `no-native`, `safe-math`, `no-lossy-cast`, `no-dynamic-alloc`. Для safety-critical кода (IEC 61508). |
 
 ### 14 — Стандартная библиотека ([14-stdlib/](./14-stdlib/))
@@ -241,7 +241,7 @@
 | **DataView** | Типизированный чтение/запись в Buffer: `getU32`, `setI16` и т.д. |
 | **process.stdin/stdout/stderr** | Стандартные потоки; только desktop/server. |
 | **Совместимость с платформами** | Таблица: что доступно на desktop vs embedded. |
-| **Официальные пакеты в реестре (`@tsc/*`)** | C-wrappers для популярных C-библиотек: sqlite3, openssl, curl, zlib. |
+| **Официальные пакеты в реестре (`@tsclang/*`)** | C-wrappers для популярных C-библиотек: sqlite3, openssl, curl, zlib. |
 | **std/io** | Базовые I/O абстракции: `Reader`, `Writer`. |
 | **std/fs** | Файловая система: read, write, stat, watch. |
 | **std/net** | `fetch` (глобальный); HTTP сервер; TCP/UDP сокеты. |

@@ -1211,7 +1211,7 @@
 ### 18.1 Файл = модуль
 - 18.1.1-file-is-module.md — Конвенции
 - 18.1.2-index-tsc.md — index.tsc
-- 18.1.3-std-prefix.md — std/ prefix, @tsc/ scope
+- 18.1.3-std-prefix.md — std/ prefix, @tsclang/ scope
 
 ### 18.2 Export
 - 18.2.1-named-exports.md — export function, export class
