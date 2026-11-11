@@ -70,6 +70,9 @@
 #include <windows.h>
 #endif
 #ifdef __AVR__
+/* io.h declares the UART registers used by _tsc_console_init (TSC_CONSOLE_UART);
+ * pgmspace.h alone does not pull it in */
+#include <avr/io.h>
 #include <avr/pgmspace.h>
 #endif
 #if !defined(TSC_EMBEDDED) && !defined(__STDC_NO_ATOMICS__)

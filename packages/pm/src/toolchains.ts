@@ -295,7 +295,12 @@ export function listIsolatedToolchains(
 /** Find a toolchain in the isolated platform cache (~/.tsclang/platforms).
  * With `version` — an exact match; without — the newest installed version
  * across all platform packages. `bin/` wins; a flat toolchain root serves as
- * its own bin dir. null when the cache has no such toolchain. */
+ * its own bin dir. null when the cache has no such toolchain.
+ *
+ * `name` may also be a TOOL shipped inside another toolchain's bundle
+ * (avr-gcc's bin/ carries avr-objcopy, avr-as…). A bundle named exactly
+ * `name` wins; otherwise the newest bundle whose bin dir contains the
+ * `name`(.exe) binary resolves the tool, with the bundle's version. */
 export function findIsolatedToolchain(
   name: string,
   opts: { version?: string; home?: string } = {},
@@ -308,7 +313,7 @@ export function findIsolatedToolchain(
   } catch {
     return null;
   }
-  const prefix = `${name}@`;
+  let bestIsExact = false;
   for (const platformEntry of platforms) {
     let entries: string[];
     try {
@@ -317,14 +322,27 @@ export function findIsolatedToolchain(
       continue;
     }
     for (const tcEntry of entries) {
-      if (!tcEntry.startsWith(prefix)) continue;
-      const version = tcEntry.slice(prefix.length);
+      if (!tcEntry.includes('@')) continue;
+      const at = tcEntry.lastIndexOf('@');
+      const tcName = tcEntry.slice(0, at);
+      const version = tcEntry.slice(at + 1);
       if (!version) continue;
       if (opts.version && version !== opts.version) continue;
-      if (best && compareVersions(best.version, version) >= 0) continue;
       const root = join(platformsRoot, platformEntry, tcEntry);
       const binDir = existsSync(join(root, 'bin')) ? join(root, 'bin') : root;
-      best = { binDir, version };
+      if (tcName === name) {
+        // exact bundle name always wins over a bundle merely containing the tool
+        if (!bestIsExact || !best || compareVersions(best.version, version) < 0) {
+          best = { binDir, version };
+          bestIsExact = true;
+        }
+      } else {
+        // bundled tool: the binary sits in the bundle's bin dir
+        if (bestIsExact) continue;
+        if (!existsSync(join(binDir, process.platform === 'win32' ? `${name}.exe` : name))) continue;
+        if (best && compareVersions(best.version, version) >= 0) continue;
+        best = { binDir, version };
+      }
     }
   }
   return best;

@@ -79,6 +79,63 @@ describe("13-build/platform 2.2 — findIsolatedToolchain (#271)", () => {
   })
 })
 
+// ── findIsolatedToolchain: tools shipped inside another toolchain's bundle ───
+// A bundle is a set of tools in one bin/ (avr-gcc ships avr-objcopy, avr-as…);
+// a tool with no bundle of its own resolves to the bundle whose bin/ has it.
+
+describe("13-build/platform 2.2 — findIsolatedToolchain: bundled tools (#278)", () => {
+  function makeBundle(home: string, platform: string, tc: string, tools: string[]): void {
+    const bin = join(home, ".tsclang", "platforms", platform, tc, "bin")
+    mkdirSync(bin, { recursive: true })
+    for (const tool of tools) {
+      const file = join(bin, process.platform === "win32" ? `${tool}.exe` : tool)
+      writeFileSync(file, "", "utf8")
+    }
+  }
+
+  test("инструмент без своего бандла резолвится в bin/ бандла-хозяина", () => {
+    const home = mkTmp()
+    makeBundle(home, "avr@0.2.0", "avr-gcc@16.1.0", ["avr-gcc", "avr-objcopy", "avr-as"])
+    const iso = findIsolatedToolchain("avr-objcopy", { home })
+    expect(iso?.version).toBe("16.1.0")
+    expect(iso?.binDir).toBe(join(home, ".tsclang", "platforms", "avr@0.2.0", "avr-gcc@16.1.0", "bin"))
+  })
+
+  test("собственный бандл инструмента выигрывает у содержащего", () => {
+    const home = mkTmp()
+    makeBundle(home, "avr@0.2.0", "avr-gcc@16.1.0", ["avr-gcc", "avr-objcopy"])
+    makeBundle(home, "other@1.0.0", "avr-objcopy@12.0.0", ["avr-objcopy"])
+    expect(findIsolatedToolchain("avr-objcopy", { home })?.version).toBe("12.0.0")
+  })
+
+  test("несколько содержащих бандлов — новейшая версия; пин — точная версия бандла", () => {
+    const home = mkTmp()
+    makeBundle(home, "avr@0.2.0", "avr-gcc@16.1.0", ["avr-gcc", "avr-objcopy"])
+    makeBundle(home, "avr@0.2.0", "avr-gcc@15.0.0", ["avr-gcc", "avr-objcopy"])
+    expect(findIsolatedToolchain("avr-objcopy", { home })?.version).toBe("16.1.0")
+    expect(findIsolatedToolchain("avr-objcopy", { home, version: "15.0.0" })?.version).toBe("15.0.0")
+    expect(findIsolatedToolchain("avr-objcopy", { home, version: "9.9.9" })).toBe(null)
+  })
+
+  test("бандл без нужного бинарника — не кандидат", () => {
+    const home = mkTmp()
+    makeBundle(home, "avr@0.2.0", "avr-gcc@16.1.0", ["avr-gcc"])
+    expect(findIsolatedToolchain("avr-objcopy", { home })).toBe(null)
+  })
+
+  test("resolveToolchain: bundled tool → isolated, без PATH-пробы", () => {
+    const home = mkTmp()
+    makeBundle(home, "avr@0.2.0", "avr-gcc@16.1.0", ["avr-gcc", "avr-objcopy"])
+    let probed = false
+    const r = resolveToolchain("avr-objcopy", {
+      home,
+      probeVersion: () => { probed = true; return "x" },
+    })
+    expect(r && r.kind === "isolated" ? r.kind : "").toBe("isolated")
+    expect(probed).toBe(false)
+  })
+})
+
 // ── versionMatches + resolveToolchain ────────────────────────────────────────
 
 describe("13-build/platform 2.2 — resolveToolchain (#271)", () => {
