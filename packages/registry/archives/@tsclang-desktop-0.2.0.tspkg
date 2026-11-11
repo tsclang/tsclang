@@ -1,0 +1,8 @@
+{
+  "name": "@tsclang/desktop",
+  "version": "0.2.0",
+  "files": {
+    "index.d.tsc": "declare platform {\n    allocator: \"heap\"\n    async: \"libuv\"\n    fpu: true\n    bits: 64\n    usize: \"u64\"\n    defaultNumber: \"f64\"\n    unaligned_access: true\n    os: true\n    posix: true\n    strtoll: true\n}\n",
+    "tsc.package.json": "{\n  \"name\": \"@tsclang/desktop\",\n  \"version\": \"0.2.0\",\n  \"type\": \"platform\",\n  \"description\": \"Desktop reference platform: gcc build-and-run (system gcc first, bundled WinLibs as fallback)\",\n  \"platform\": {\n    \"profile\": \"desktop\",\n    \"toolchains\": {\n      \"gcc\": {\n        \"version\": \"16.2.0\",\n        \"downloads\": {\n          \"win32-x64\": {\n            \"url\": \"https://github.com/tsclang/tsclang/releases/download/toolchains-v1/gcc-16.2.0-win32-x64.tar.gz\",\n            \"sha256\": \"2168cf5c7b82e048fea0da8a744847b87559b7b4b625787a0292a217e1205d92\",\n            \"size\": 438\n          }\n        }\n      }\n    },\n    \"builds\": {\n      \"desktop\": { \"profile\": \"desktop\", \"emit\": \"exec\", \"outDir\": \"build/desktop\" }\n    },\n    \"scripts\": {\n      \"start\": \"tsclang build --build desktop\",\n      \"dev\": \"tsclang build --build desktop --watch\"\n    }\n  }\n}\n"
+  }
+}

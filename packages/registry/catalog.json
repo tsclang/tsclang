@@ -3,32 +3,32 @@
   "packages": [
     {
       "name": "@tsclang/desktop",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "platform",
-      "description": "Desktop reference platform: system gcc build-and-run (cmake/make for the cmake flow)",
+      "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled WinLibs as fallback)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-desktop-0.1.0.tspkg",
-        "sha256": "5a908a9c0d87628c4450ffc949ca1c151b63c211cb8d7b62aac564f38c5c3e86"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-desktop-0.2.0.tspkg",
+        "sha256": "17e2c010be5787584c60590989973a584fd2e56c42044d306dbfa5c20d9eafc4"
       }
     },
     {
       "name": "@tsclang/avr",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "platform",
-      "description": "AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)",
+      "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first, bundled as fallback)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-avr-0.1.0.tspkg",
-        "sha256": "b7e175cfc699edb1fe1ac8b7f42a2e154c486c5eefc397493f5b33cfd83188ca"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-avr-0.2.0.tspkg",
+        "sha256": "46b02c40081d62f82ad0c8af4e053a2d2a3b69b989c76e41e8fd54234eda02b8"
       }
     },
     {
       "name": "@tsclang/wasm",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "platform",
-      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX",
+      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX; emcc ships as a bundle",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-wasm-0.1.0.tspkg",
-        "sha256": "c87a1701e1e6c6b62e76be9ca28c6357172390d7233a267b0f6d61930ae1c452"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-wasm-0.2.0.tspkg",
+        "sha256": "557e745f28434b4c752ea9b2107b64d036963ab620216557b83e0a97faac7520"
       }
     }
   ]

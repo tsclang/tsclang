@@ -1,10 +1,22 @@
 {
   "name": "@tsclang/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "platform",
-  "description": "Desktop reference platform: system gcc build-and-run (cmake/make for the cmake flow)",
+  "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled WinLibs as fallback)",
   "platform": {
     "profile": "desktop",
+    "toolchains": {
+      "gcc": {
+        "version": "16.2.0",
+        "downloads": {
+          "win32-x64": {
+            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/gcc-16.2.0-win32-x64.tar.gz",
+            "sha256": "2168cf5c7b82e048fea0da8a744847b87559b7b4b625787a0292a217e1205d92",
+            "size": 438
+          }
+        }
+      }
+    },
     "builds": {
       "desktop": { "profile": "desktop", "emit": "exec", "outDir": "build/desktop" }
     },

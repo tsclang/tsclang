@@ -13,6 +13,7 @@ import "./doctor-platforms.test"
 import "./wizard.test"
 import "./reference-platform.test"
 import "./runtime-header.test"
+import "./bundle-e2e.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

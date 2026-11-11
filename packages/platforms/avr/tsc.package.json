@@ -1,10 +1,32 @@
 {
   "name": "@tsclang/avr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "platform",
-  "description": "AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)",
+  "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first, bundled as fallback)",
   "platform": {
     "profile": "avr",
+    "toolchains": {
+      "avr-gcc": {
+        "version": "16.1.0",
+        "downloads": {
+          "win32-x64": {
+            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avr-gcc-16.1.0-win32-x64.tar.gz",
+            "sha256": "cce55e54a7af8021c725ecd8a9f3c4400b4293f50f9be0cf6b5c1d6b9d7ff30c",
+            "size": 163
+          }
+        }
+      },
+      "avrdude": {
+        "version": "8.3",
+        "downloads": {
+          "win32-x64": {
+            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avrdude-8.3-win32-x64.tar.gz",
+            "sha256": "7d53a0461698cceeb2f3542850f0d45d54553c95822855597e842b5a14c0199b",
+            "size": 8
+          }
+        }
+      }
+    },
     "builds": {
       "avr": { "profile": "avr", "emit": "hex", "outDir": "build/avr" }
     },

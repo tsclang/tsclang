@@ -1,0 +1,8 @@
+{
+  "name": "@tsclang/avr",
+  "version": "0.2.0",
+  "files": {
+    "index.d.tsc": "declare platform {\n    target: \"avr\"\n    allocator: \"static\"\n    async: \"none\"\n    fpu: false\n    bits: 8\n    usize: \"u16\"\n    defaultNumber: \"i16\"\n    unaligned_access: false\n    os: false\n    posix: false\n    strtoll: false\n    console_uart: true\n    console_baud: 9600\n    toolchain: \"avr-gcc\"\n}\n",
+    "tsc.package.json": "{\n  \"name\": \"@tsclang/avr\",\n  \"version\": \"0.2.0\",\n  \"type\": \"platform\",\n  \"description\": \"AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first, bundled as fallback)\",\n  \"platform\": {\n    \"profile\": \"avr\",\n    \"toolchains\": {\n      \"avr-gcc\": {\n        \"version\": \"16.1.0\",\n        \"downloads\": {\n          \"win32-x64\": {\n            \"url\": \"https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avr-gcc-16.1.0-win32-x64.tar.gz\",\n            \"sha256\": \"cce55e54a7af8021c725ecd8a9f3c4400b4293f50f9be0cf6b5c1d6b9d7ff30c\",\n            \"size\": 163\n          }\n        }\n      },\n      \"avrdude\": {\n        \"version\": \"8.3\",\n        \"downloads\": {\n          \"win32-x64\": {\n            \"url\": \"https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avrdude-8.3-win32-x64.tar.gz\",\n            \"sha256\": \"7d53a0461698cceeb2f3542850f0d45d54553c95822855597e842b5a14c0199b\",\n            \"size\": 8\n          }\n        }\n      }\n    },\n    \"builds\": {\n      \"avr\": { \"profile\": \"avr\", \"emit\": \"hex\", \"outDir\": \"build/avr\" }\n    },\n    \"scripts\": {\n      \"flash\": \"tsclang build --build avr --emit flash\"\n    }\n  }\n}\n"
+  }
+}
