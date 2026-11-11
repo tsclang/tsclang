@@ -1,20 +1,20 @@
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { PACKAGES_DIR } from '@tsclang/shared';
 import {
   loadCatalog, filterCatalog, CatalogError,
   platformNames, validatePlatformSection,
-  planPlatformApply, applyPlatformPlan, ownershipFromPlan,
-  fetchPackageArchive, extractTspkg,
-  readLock, writeLock, ensureManifest, writeManifest,
+  planPlatformApply, applyPlatformPlan, ownershipFromPlan, planPlatformRemoval,
+  fetchPackageArchive, extractTspkg, packageNameParts,
+  readLock, writeLock, ensureManifest, writeManifest, readManifest,
 } from '@tsclang/pm';
-import type { PlatformSection, PlatformApplyPlan } from '@tsclang/pm';
+import type { PlatformSection, PlatformApplyPlan, PlanAction } from '@tsclang/pm';
 import { hasFlag } from '../args.js';
 import { askYesNo } from '../doctor/prompt.js';
 
 // `tsclang platform <sub>` — nested command group (#265). The dispatcher
 // validates the subcommand and its flags before calling here. search/list
-// landed in #266, install in #267; remove lands in #268 (explicit stub).
+// landed in #266, install in #267, remove in #268.
 
 export const PLATFORM_SUBCOMMANDS = ['install', 'search', 'remove', 'list'] as const;
 
@@ -22,11 +22,8 @@ export async function runPlatformCommand(sub: string, restArgs: string[]): Promi
   switch (sub) {
     case 'install': return runPlatformInstall(restArgs);
     case 'search':  return runPlatformSearch(restArgs);
+    case 'remove':  return runPlatformRemove(restArgs);
     case 'list':    return runPlatformList();
-    default:
-      // remove stub — honest refusal until #268 lands.
-      console.error(`tsclang: platform ${sub} is not implemented yet`);
-      process.exit(1);
   }
 }
 
@@ -172,6 +169,72 @@ function printInstallSummary(name: string, version: string, platform: PlatformSe
     lines.push(`  toolchains: ${toolchains.join(', ')} (download consent arrives with toolchain support; system-installed ones already work)`);
   }
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+// ── platform remove ─────────────────────────────────────────────────────────
+
+function runPlatformRemove(restArgs: string[]): void {
+  const name = restArgs.find((a) => !a.startsWith('-'));
+  if (!name) {
+    process.stderr.write('tsclang platform remove: missing <name> (usage: tsclang platform remove <name>)\n');
+    process.exit(1);
+  }
+  const parts = packageNameParts(name);
+  if (!parts) {
+    process.stderr.write(`tsclang platform remove: invalid platform name '${name}'\n`);
+    process.exit(1);
+  }
+
+  const lock = readLock();
+  const lockEntry = lock.packages[name];
+  const manifest = readManifest() as unknown as Record<string, unknown> | null;
+  const pkgDir = join(PACKAGES_DIR, ...parts);
+  const onDisk = existsSync(pkgDir);
+  const depsMap = manifest?.dependencies as Record<string, unknown> | undefined;
+  const inManifest = depsMap?.[name] !== undefined;
+
+  if (!lockEntry && !onDisk && !inManifest) {
+    process.stderr.write(`tsclang platform remove: '${name}' is not installed\n`);
+    process.exit(1);
+  }
+
+  // Clean up only what the platform created, by lock snapshots: matching
+  // entries are removed, user-edited ones stay with a warning.
+  const actions = planPlatformRemoval(manifest ?? {}, lockEntry?.platform);
+  const lines = [`Removed ${name}`];
+  for (const action of actions as PlanAction[]) {
+    const label = action.target === 'builds' ? `build ${action.key}` : `script ${action.key}`;
+    if (action.kind === 'remove') {
+      lines.push(`  - ${label} (platform entry removed)`);
+    } else if (action.kind === 'skip' && action.reason === 'edited') {
+      process.stderr.write(`tsclang: kept ${action.target}.${action.key} — you edited it (left in place)\n`);
+      lines.push(`  ! ${label} kept — edited by you`);
+    }
+  }
+  if (manifest) {
+    const removals = actions.filter((a) => a.kind === 'remove');
+    if (removals.length) {
+      applyPlatformPlan(manifest, { actions: removals });
+      for (const depMap of ['dependencies', 'devDependencies'] as const) {
+        const deps = manifest[depMap] as Record<string, unknown> | undefined;
+        if (deps && deps[name] !== undefined) delete deps[name];
+      }
+      // Don't leave empty builds/scripts/dependencies maps behind.
+      for (const mapKey of ['builds', 'scripts', 'dependencies', 'devDependencies'] as const) {
+        const map = manifest[mapKey] as Record<string, unknown> | undefined;
+        if (map && typeof map === 'object' && Object.keys(map).length === 0) delete manifest[mapKey];
+      }
+      writeManifest(manifest as never);
+    }
+  }
+  if (onDisk) rmSync(pkgDir, { recursive: true, force: true });
+  if (lockEntry) {
+    delete lock.packages[name];
+    writeLock(lock);
+  }
+
+  process.stdout.write(lines.join('\n') + '\n');
+  process.exit(0);
 }
 
 // ── platform search ─────────────────────────────────────────────────────────

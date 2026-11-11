@@ -1,0 +1,8 @@
+{
+  "name": "@nes/zxdev",
+  "version": "0.3.1",
+  "files": {
+    "tsc.package.json": "{\n  \"name\": \"@nes/zxdev\",\n  \"version\": \"0.3.1\",\n  \"type\": \"platform\",\n  \"platform\": {\n    \"profile\": \"zxdev\",\n    \"builds\": {\n      \"zxdev\": {\n        \"profile\": \"zxdev\",\n        \"emit\": \"c\"\n      }\n    },\n    \"scripts\": {\n      \"dev\": \"tsclang build --build nes:zxdev\"\n    }\n  }\n}\n",
+    "index.d.tsc": "declare platform {\n  bits: 8\n}\n"
+  }
+}

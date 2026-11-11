@@ -118,7 +118,7 @@
       "description": "Manage platform packages (install, search, remove, list)",
       "provenance": "00.2.2-installation.md:67; 00.7.18-platform.md",
       "positional": "<command>: install <name> | search [query] | list | remove <name>",
-      "result": "group help when no subcommand; per-subcommand help via 'platform <cmd> --help'; search: catalog matches with [type] marker or 'No platforms found...' (exit 0); list: installed platforms with profile/toolchains or 'No platforms installed...' (exit 0); install: 'Installed <name>@<version>' + applied build/script entries (exit 0; loud errors — not found / not a platform / sha256 mismatch / offline — exit 1; conflicts skipped, never overwritten); remove: not implemented yet, exit 1; unknown subcommand/option → exit 1",
+      "result": "group help when no subcommand; per-subcommand help via 'platform <cmd> --help'; search: catalog matches with [type] marker or 'No platforms found...' (exit 0); list: installed platforms with profile/toolchains or 'No platforms installed...' (exit 0); install: 'Installed <name>@<version>' + applied build/script entries (exit 0; loud errors — not found / not a platform / sha256 mismatch / offline — exit 1; conflicts skipped, never overwritten); remove: 'Removed <name>' cleaning lock-owned build/script entries and the dependency/lock/tsc_packages records (edited entries kept with a warning, exit 0; not installed → exit 1); unknown subcommand/option → exit 1",
       "resultProvenance": "00.7.18-platform.md",
       "options": [
         { "name": "--offline", "takesValue": false, "description": "subcommands search/install: skip network (search fails quiet, install fails loud)", "provenance": "00.7.18-platform.md" }

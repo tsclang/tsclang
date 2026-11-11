@@ -174,6 +174,31 @@ export function ownershipFromPlan(plan: PlatformApplyPlan): PlatformOwnership {
   return ownership;
 }
 
+/**
+ * Plan the removal side of `platform remove` (#268): every owned entry whose
+ * current value still matches its lock snapshot is removed; a user-edited one
+ * (hash mismatch) is kept and reported as skip/edited; entries already gone
+ * from the manifest produce no action. Pure.
+ */
+export function planPlatformRemoval(
+  manifest: ManifestLike,
+  owned: PlatformOwnership | undefined,
+): PlanAction[] {
+  const actions: PlanAction[] = [];
+  for (const target of ['builds', 'scripts'] as const) {
+    const ownedMap = target === 'builds' ? owned?.builds : owned?.scripts;
+    const manifestMap = target === 'builds' ? manifest.builds : manifest.scripts;
+    for (const [key, hash] of Object.entries(ownedMap ?? {})) {
+      const current = manifestMap?.[key];
+      if (current === undefined) continue; // already gone
+      actions.push(entryHash(current) === hash
+        ? { kind: 'remove', target, key }
+        : { kind: 'skip', target, key, reason: 'edited' });
+    }
+  }
+  return actions;
+}
+
 // ── archive fetching ────────────────────────────────────────────────────────
 
 export interface ArchiveLocation {
@@ -226,6 +251,14 @@ export async function fetchPackageArchive(
 
 const isWindowsAbsolute = (p: string): boolean => /^[a-zA-Z]:[\\/]/.test(p);
 
+/** Valid package name shape ('name' or '@scope/name') → its path parts, else null. */
+export function packageNameParts(pkgName: string): string[] | null {
+  const parts = pkgName.split('/');
+  const scopeOk = parts.length === 2 && parts[0].startsWith('@') && NAME_PART_RE.test(parts[0].slice(1));
+  const nameOk = NAME_PART_RE.test(parts[parts.length - 1]);
+  return (parts.length === 1 && nameOk) || (scopeOk && nameOk) ? parts : null;
+}
+
 /**
  * Extract a .tspkg archive (files map from the publish format) into
  * `<packagesDir>/<full package name>/`. Rejects path escapes in both the
@@ -233,12 +266,8 @@ const isWindowsAbsolute = (p: string): boolean => /^[a-zA-Z]:[\\/]/.test(p);
  * destination directory.
  */
 export function extractTspkg(files: Record<string, string>, packagesDir: string, pkgName: string): string {
-  const parts = pkgName.split('/');
-  const scopeOk = parts.length === 2 && parts[0].startsWith('@') && NAME_PART_RE.test(parts[0].slice(1));
-  const nameOk = NAME_PART_RE.test(parts[parts.length - 1]);
-  if (!((parts.length === 1 && nameOk) || (scopeOk && nameOk))) {
-    throw new Error(`invalid package name in .tspkg: '${pkgName}'`);
-  }
+  const parts = packageNameParts(pkgName);
+  if (!parts) throw new Error(`invalid package name in .tspkg: '${pkgName}'`);
   const dest = join(packagesDir, ...parts);
   for (const rel of Object.keys(files)) {
     if (isAbsolute(rel) || isWindowsAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {

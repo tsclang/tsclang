@@ -349,14 +349,6 @@ describe("13-build/platform 1.0 — диспетчер: группа platform (#
     }
   })
 
-  test("нереализованная подкоманда remove — явное not implemented, exit 1", async () => {
-    // search/list became real in #266, install in #267 (own test files);
-    // remove lands in #268 — until then it refuses honestly.
-    const r = await runCli(["platform", "remove", "x"], { cwd: mkTmp() })
-    expect(r.code).toBe(1)
-    expect(r.stderr).toContain("platform remove is not implemented yet")
-  })
-
   test("`platform install --help` — справка подкоманды (не общий help)", async () => {
     const r = await runCli(["platform", "install", "--help"], { cwd: mkTmp() })
     expect(r.code).toBe(0)

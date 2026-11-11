@@ -1523,6 +1523,10 @@ input.tsc:1:
 - [R] удаляет пакет из манифеста, lock и `tsc_packages/`
 - [E] пакет не установлен → `package '<имя>' is not installed`, exit 1
 
+### tsclang platform
+
+- [R] полный цикл на локальной фикстуре реестра (ноль сети: `TSC_REGISTRY=catalog.json`, архив и каталог — файлы кейса): `platform install` → пользователь правит build-запись платформы → `platform remove` — правленая запись осталась (`! ... kept — edited by you`), свой script/dependency/lock/`tsc_packages/` вычищены (`13-build/platform/remove-edited`)
+
 ### Алиасы pm-команд
 
 - [R] `i`/`u`/`r` работают как `install`/`update`/`remove` (канонизация в диспетчере)
