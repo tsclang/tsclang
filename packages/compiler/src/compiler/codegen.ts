@@ -38,6 +38,7 @@ export function codegen(ast: Program, filename: string = 'input', src: string | 
   if (opts.maxErrors !== undefined) ctx._maxErrors = opts.maxErrors;
   if (opts.debugLines) ctx._debugLines = true;
   if (opts.libraryMode) ctx._libraryMode = true;
+  if (opts.declarationModule) ctx._declarationModule = true;
   if (opts.depInitFns) ctx._depInitFns = opts.depInitFns;
   if (opts.modulePrefix) ctx._modulePrefix = opts.modulePrefix;
   if (opts.target) ctx._optsTarget = opts.target;
@@ -346,6 +347,9 @@ export interface CodeGenOptions {
   libraryMode?: boolean;
   depInitFns?: string[];
   modulePrefix?: string | null;
+  /** Declaration-only module (.d.tsc): every top-level binding is implicitly
+   *  exported — TS ambient-module semantics for declaration files. */
+  declarationModule?: boolean;
   target?: string;
   defaultNumber?: string;
   allocator?: string;
@@ -462,6 +466,7 @@ class Context {
 
   // Library mode
   _libraryMode!: boolean;
+  _declarationModule!: boolean;
   _libInitStmts!: string[];
   _depInitFns!: string[];
   _exports!: Map<string, SymbolInfo>;
@@ -715,6 +720,7 @@ class Context {
 
     // Library mode: emit without includes/main (for bundled deps)
     this._libraryMode = false;
+    this._declarationModule = false;
     // Runtime init statements for library mode (non-const top-level vars)
     this._libInitStmts = [];
     // Dep init function names to call (from imported modules)

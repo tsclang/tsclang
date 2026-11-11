@@ -155,7 +155,11 @@ export function resolvePackageImport(pkgName: string, fromDir: string): string |
           }
         } catch {}
       }
-      for (const candidate of [join(pkgDir, 'index.tsc'), join(pkgDir, 'src', 'main.tsc')]) {
+      // Code first, declarations second: a package shipping both resolves to
+      // its implementation; declaration-only packages (ambient types, platform
+      // profiles) resolve to index.d.tsc — DeclareFunction/DeclarePlatform
+      // nodes compile to no C, the import only binds the types/externs.
+      for (const candidate of [join(pkgDir, 'index.tsc'), join(pkgDir, 'index.d.tsc'), join(pkgDir, 'src', 'main.tsc')]) {
         if (existsSync(candidate)) return candidate;
       }
     }
@@ -234,6 +238,8 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
       ...opts,
       libraryMode: true,
       modulePrefix: depPrefix,
+      // .d.tsc deps are ambient modules: their top-level declares are exports
+      declarationModule: depPath.endsWith('.d.tsc'),
       importedModules,
       sourceToPath,
       _compilingStack: compilingStack,

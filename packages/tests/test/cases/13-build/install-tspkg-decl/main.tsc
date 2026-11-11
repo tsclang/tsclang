@@ -1,0 +1,4 @@
+import { decl_add } from "greetdecl";
+
+let sum: i32 = decl_add(1, 2);
+console.log("sum=" + sum.toString());

@@ -292,6 +292,8 @@ export function visitDeclareConst(ctx: CodeGenContext, node: DeclareConst) {
     ctx.topLevel.push('');
     // Register in scope so later references work
     ctx.define(name, { ctype: ct, varKind: 'const' });
+    // Declaration modules (.d.tsc) implicitly export every top-level binding
+    if (ctx._declarationModule) ctx._exports.set(name, { ctype: ct, varKind: 'const' });
     ctx._inDeclare = prevDeclare;
 }
 
@@ -317,6 +319,9 @@ export function visitDeclareFunction(ctx: CodeGenContext, node: DeclareFunction)
     ctx.topLevel.push(`extern ${retC} ${name}(${paramStr});`);
     ctx.topLevel.push('');
     // Register in scope
-    ctx.define(name, { ctype: retC, varKind: 'const', funcName: name, params: node.params ?? [] });
+    const declEntry = { ctype: retC, varKind: 'const' as const, funcName: name, params: node.params ?? [] };
+    ctx.define(name, declEntry);
+    // Declaration modules (.d.tsc) implicitly export every top-level binding
+    if (ctx._declarationModule) ctx._exports.set(name, declEntry);
     ctx._inDeclare = prevDeclare;
 }

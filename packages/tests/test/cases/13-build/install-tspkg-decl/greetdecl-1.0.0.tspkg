@@ -1,0 +1,8 @@
+{
+  "name": "greetdecl",
+  "version": "1.0.0",
+  "files": {
+    "tsc.package.json": "{\n  \"name\": \"greetdecl\",\n  \"version\": \"1.0.0\",\n  \"type\": \"declaration\"\n}\n",
+    "index.d.tsc": "declare function decl_add(a: i32, b: i32): i32\n"
+  }
+}

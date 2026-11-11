@@ -367,6 +367,17 @@ int main(void) {
   - Для C-библиотек без встроенных деклараций
   - Для `.tsc` модулей без исходников (бинарные пакеты)
   - Сообщество публикует `.d.tsc` для популярных C-либ в реестре
+- **Declaration-only пакеты** — пакет без `index.tsc`, только с `index.d.tsc`:
+  - Резолв-цепочка entry пакета: `manifest.main` → `index.tsc` → `index.d.tsc` → `src/main.tsc` — реализация всегда выигрывает у деклараций
+  - `.d.tsc`-модуль — ambient-модуль (семантика TS `.d.ts`): **каждое top-level объявление неявно экспортировано** — `export declare function` не нужен
+  - `declare function` генерирует `extern`-прототип в C; реализацию предоставляет C-wrapper пакет (`.h`/`.c`) или runtime платформы
+  ```typescript
+  // tsc_packages/greetdecl/index.d.tsc — весь файл:
+  declare function decl_add(a: i32, b: i32): i32
+
+  // consumer:
+  import { decl_add } from "greetdecl"   // OK — extern int32_t decl_add(...)
+  ```
 - **Если деклараций нет** — тип `any`, компилятор не ругается
 
 ## Declaration Merging — расширение без замены
