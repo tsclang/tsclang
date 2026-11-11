@@ -197,7 +197,18 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   }
 
   function _runCommand(): void {
-    const env = { ...process.env, TSC_OUT_DIR: resolve(outDir) };
+    // #272: platform scripts reach their inputs and toolchains cross-platform:
+    // the generated .c (TSC_C_FILE), the isolated toolchain bin dirs
+    // (TSC_TOOLS, delimiter-joined and prepended to PATH so tools are callable
+    // by name) and the platform name (TSC_PLATFORM)
+    const env: NodeJS.ProcessEnv = { ...process.env, TSC_OUT_DIR: resolve(outDir) };
+    env.TSC_PLATFORM = String(_profileName ?? _profileTarget ?? DEFAULT_TARGET);
+    if (_lastCPath) env.TSC_C_FILE = _lastCPath;
+    const toolDirs = [..._toolBinDirs];
+    if (toolDirs.length) {
+      env.TSC_TOOLS = toolDirs.join(delimiter);
+      _withToolsOnPath(env, toolDirs);
+    }
     if (emit === 'exec') {
       // exec = the binary rung + the last-mile action: launch the artifact by
       // direct spawn on its absolute path, no shell (the host-shell "./x" vs
@@ -284,6 +295,11 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     typeof _buildCfg?.toolchain === 'string' && _buildCfg.toolchain ? String(_buildCfg.toolchain) : '',
   );
 
+  // #272: collected across the build so --command/scripts get the toolchain
+  // bin dirs and the generated .c through env
+  const _toolBinDirs = new Set<string>();
+  let _lastCPath: string | null = null;
+
   interface ResolvedTool { command: string; env?: NodeJS.ProcessEnv }
 
   function _resolveTool(name: string, configError: string): ResolvedTool | null {
@@ -300,12 +316,28 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       return null;
     }
     if (r.kind === 'path') return { command: name };
+    _toolBinDirs.add(r.binDir);
     // absolute path + PATH prepend: toolchain drivers call their own
     // assemblers/linkers by name (avr-gcc → avr-as), so the bin dir must
     // stay reachable even when the binary is spawned by absolute path
-    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
-    const current = process.env[pathKey] ?? process.env.PATH ?? '';
-    return { command: join(r.binDir, name), env: { ...process.env, [pathKey]: `${r.binDir}${delimiter}${current}` } };
+    return { command: join(r.binDir, name), env: _withToolsOnPath({ ...process.env }, [r.binDir]) };
+  }
+
+  // The toolchain reference a build uses: builds.<n>.toolchain → the profile
+  // `toolchain` capability → the platform default.
+  function _toolchainSpecName(): string {
+    const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
+    return String(_buildCfg?.toolchain ?? _capabilities?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
+  }
+
+  // Prepend tool bin dirs to PATH. The variable may arrive as either `PATH`
+  // or `Path` (MSYS/Git-Bash parents send `PATH`, native Windows sends `Path`)
+  // — set BOTH keys to the same value so a stale duplicate can't shadow it.
+  function _withToolsOnPath(env: NodeJS.ProcessEnv, dirs: string[]): NodeJS.ProcessEnv {
+    const value = `${dirs.join(delimiter)}${delimiter}${process.env.Path ?? process.env.PATH ?? ''}`;
+    env.PATH = value;
+    env.Path = value;
+    return env;
   }
 
   // --emit is validated after all sources are resolved (flag + builds.<name>.emit):
@@ -373,7 +405,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   if (emit === 'cmake') {
     const stem = basename(inputFile, extname(inputFile));
     const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
-    const toolchainSpec = String(_buildCfg?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
+    const toolchainSpec = _toolchainSpecName();
     // #271: the isolated platform cache resolves to an absolute compiler
     // path (forward slashes for cmake); a pinned version matching nothing —
     // neither cache nor PATH — is a config error with the install hint
@@ -382,6 +414,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     const isolated = findIsolatedToolchain(spec.name, { version: spec.version });
     if (isolated) {
       toolchain = join(isolated.binDir, spec.name).replace(/\\/g, '/');
+      _toolBinDirs.add(isolated.binDir);
     } else if (spec.version && !resolveToolchain(spec.name, { version: spec.version })) {
       process.stderr.write(`error: toolchain '${spec.name}@${spec.version}' not found\n`);
       process.stderr.write('hint: tsclang platform install <platform>  (the toolchain ships with the platform package)\n');
@@ -398,6 +431,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     process.stdout.write(`Built ${join(outDir, 'CMakeLists.txt')}\n`);
     _runCommand();
     return;
+  }
+
+  // --emit c spawns nothing, but platform scripts (#272) still need their
+  // toolchain reachable through TSC_TOOLS
+  if (emit === 'c') {
+    const spec = parseToolchainSpec(_toolchainSpecName());
+    const iso = findIsolatedToolchain(spec.name, { version: spec.version });
+    if (iso) _toolBinDirs.add(iso.binDir);
   }
 
   const buildOpts = {
@@ -438,6 +479,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
 
     const cPath = join(outDir, stem + '.c');
     writeFileSync(cPath, c, 'utf8');
+    _lastCPath = resolve(cPath);
 
     if (sourcemap && lineMap) {
       const mapPath = join(outDir, stem + '.tsc.map');

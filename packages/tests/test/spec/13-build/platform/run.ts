@@ -8,6 +8,7 @@ import "./platform-install.test"
 import "./platform-remove.test"
 import "./toolchains.test"
 import "./toolchain-resolve.test"
+import "./build-env.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()
