@@ -109,3 +109,51 @@ export function profileNameFromPackage(pkgName: string): string {
   const at = pkgName.lastIndexOf('/');
   return at === -1 ? pkgName : pkgName.slice(at + 1);
 }
+
+// ── Docker-model name mapping (#263) ────────────────────────────────────────
+//
+//   @tsclang/spectrum → build `spectrum`        script `spectrum:dev`      outDir build/spectrum
+//   @someuser/cpc     → build `someuser:cpc`    script `someuser:cpc:dev`  outDir build/someuser-cpc
+//
+// The official scope ships without a prefix (short, first-class names); any
+// other scope is prefixed with its owner. `:` is the single separator in the
+// manifest and on the command line; it degrades to `-` only when a build name
+// materializes as a path (NTFS forbids `:` in paths).
+
+/** The one scope whose packages get unprefixed build names. */
+export const OFFICIAL_PLATFORM_SCOPE = 'tsclang';
+
+export interface PlatformNames {
+  /** `builds.<key>` in the consumer manifest — `:`-separated */
+  build: string;
+  /** `scripts.<key>` for a package-internal script name */
+  script(name: string): string;
+  /** Default output dir relative to the consumer root (`:` → `-`). An explicit
+   *  `outDir` from the package preset is honored as-is and never re-converted. */
+  outDir: string;
+}
+
+// Each part (scope / name) must be usable as a manifest key and a path segment.
+const NAME_PART_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+/**
+ * Map a platform package name to its build/script/outDir names, or null when
+ * the package name cannot produce a valid build key. Pure — no fs, no throw.
+ */
+export function platformNames(pkgName: string): PlatformNames | null {
+  if (typeof pkgName !== 'string' || pkgName.length === 0) return null;
+  const slash = pkgName.indexOf('/');
+  if (slash === -1) {
+    if (!NAME_PART_RE.test(pkgName)) return null;
+    const build = pkgName;
+    return { build, script: (s) => `${build}:${s}`, outDir: `build/${build}` };
+  }
+  // Exactly one slash: @scope/name. Anything deeper is not a package name.
+  if (slash !== pkgName.lastIndexOf('/')) return null;
+  const scope = pkgName.slice(0, slash);
+  const name = pkgName.slice(slash + 1);
+  if (!scope.startsWith('@')) return null;
+  if (!NAME_PART_RE.test(scope.slice(1)) || !NAME_PART_RE.test(name)) return null;
+  const build = scope === `@${OFFICIAL_PLATFORM_SCOPE}` ? name : `${scope.slice(1)}:${name}`;
+  return { build, script: (s) => `${build}:${s}`, outDir: `build/${build.replace(/:/g, '-')}` };
+}

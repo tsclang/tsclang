@@ -7,7 +7,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
-import { validatePlatformSection } from "../../../../../pm/src/platform.js"
+import { validatePlatformSection, platformNames } from "../../../../../pm/src/platform.js"
 import { packageGenerate } from "../../../../../pm/src/package.js"
 import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/config.js"
 
@@ -180,5 +180,67 @@ describe("13-build/platform 0.1 — publish: состав архива плат�
     const archive = JSON.parse(readFileSync(join(dir, "@tsclang-probe-plat-1.0.0.tspkg"), "utf8"))
     const names = Object.keys(archive.files).sort()
     expect(names.join(",")).toBe("include/hal.h,index.d.tsc,toolchain.cmake,tsc.package.json")
+  })
+})
+
+// === 0.3 (#263): docker-model name generator — package → build/script/outDir ===
+
+describe("13-build/platform 0.3 — генератор имён: docker-модель (#263)", () => {
+  test("официальный scope без префикса: @tsclang/spectrum → build 'spectrum'", () => {
+    const n = platformNames("@tsclang/spectrum")
+    expect(n).not.toBe(null)
+    expect(n!.build).toBe("spectrum")
+    expect(n!.script("dev")).toBe("spectrum:dev")
+    expect(n!.outDir).toBe("build/spectrum")
+  })
+
+  test("чужой scope с префиксом: @someuser/cpc → build 'someuser:cpc'", () => {
+    const n = platformNames("@someuser/cpc")
+    expect(n).not.toBe(null)
+    expect(n!.build).toBe("someuser:cpc")
+    expect(n!.script("dev")).toBe("someuser:cpc:dev")
+    expect(n!.script("dist")).toBe("someuser:cpc:dist")
+    expect(n!.outDir).toBe("build/someuser-cpc")
+  })
+
+  test("':' материализуется в '-' только в пути: outDir someuser-cpc", () => {
+    const n = platformNames("@someuser/cpc")!
+    expect(n.outDir.includes(":")).toBe(false)
+    expect(n.outDir).toBe("build/" + n.build.replace(/:/g, "-"))
+  })
+
+  test("unscoped имя ведёт себя как официальное: cpc → build 'cpc'", () => {
+    const n = platformNames("cpc")
+    expect(n!.build).toBe("cpc")
+    expect(n!.script("dev")).toBe("cpc:dev")
+    expect(n!.outDir).toBe("build/cpc")
+  })
+
+  test("имена с дефисами проходят во все позиции", () => {
+    const n = platformNames("@someuser/my-cpc")!
+    expect(n.build).toBe("someuser:my-cpc")
+    expect(n.script("flash-dev")).toBe("someuser:my-cpc:flash-dev")
+    expect(n.outDir).toBe("build/someuser-my-cpc")
+  })
+
+  test("build-ключ валиден как ключ builds (без слэшей/пробелов)", () => {
+    for (const pkgName of ["@tsclang/spectrum", "@someuser/cpc", "cpc", "@tsclang/avr"]) {
+      const n = platformNames(pkgName)!
+      expect(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(n.build)).toBe(true)
+    }
+  })
+
+  test("невалидные имена → null (без throw)", () => {
+    for (const bad of ["", "@tsclang/", "@/cpc", "@someuser/cpc/sub", "some pkg", "@tsclang/c p c"]) {
+      expect(platformNames(bad)).toBe(null)
+    }
+  })
+
+  test("согласованность с profileNameFromPackage: профиль не префиксуется", () => {
+    // The profile inside the package keeps its bare name even for foreign
+    // scopes — only builds/scripts carry the owner prefix.
+    const n = platformNames("@someuser/cpc")!
+    expect(n.build.endsWith(":cpc")).toBe(true)
+    expect(n.build.startsWith("cpc")).toBe(false)
   })
 })
