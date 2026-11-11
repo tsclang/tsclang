@@ -19,6 +19,10 @@ export interface Capabilities {
   toolchain?: string;
   toolchainFile?: string;
   include?: string;
+  /** C-runtime header file name emitted as #include (defaults: runtime.h,
+   * runtime_wasm.h for the wasm target). Plain file name only — the value
+   * lands verbatim inside #include "..." of the generated C. */
+  runtimeHeader?: string;
   heap_size?: number;
   stack_size?: number;
   ram_size?: number;
@@ -54,6 +58,7 @@ const VALID_FIELDS = {
   toolchain:         'string',
   toolchainFile:     'string',
   include:           'string',
+  runtimeHeader:     'string',
   heap_size:         'number',
   stack_size:        'number',
   ram_size:          'number',
@@ -105,6 +110,11 @@ export function parsePlatformDecl(src: string, filename = '<profile>') {
           const expected = (VALID_FIELDS as Record<string, string>)[key];
           if (typeof val !== expected) {
             throw new Error(`${filename}: field '${key}' expects ${expected}, got ${typeof val}`);
+          }
+          // runtimeHeader lands verbatim inside #include "..." of the
+          // generated C — path components would be an injection vector.
+          if (key === 'runtimeHeader' && !/^[A-Za-z0-9_.-]+\.h$/.test(val as string)) {
+            throw new Error(`${filename}: runtimeHeader expects a plain header file name (e.g. "runtime_spectrum.h"), got '${val}'`);
           }
           (caps as Record<string, unknown>)[key] = val;
         }

@@ -12,6 +12,7 @@ import "./build-env.test"
 import "./doctor-platforms.test"
 import "./wizard.test"
 import "./reference-platform.test"
+import "./runtime-header.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

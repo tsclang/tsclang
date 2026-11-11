@@ -1547,6 +1547,7 @@ input.tsc:1:
 - [R] install `@tsclang/wasm` из каталога-фикстуры: пресет `wasm` (emit wasm), профиль с `target: "wasm"` + `toolchain: "emcc"` (`install-wasm`)
 - [R] install → `build --build avr`: hex-артефакт `build/avr/main.hex`; требует реальный avr-gcc/avr-objcopy — `needs-tools`, на машине без них skip (`build-avr-hex`)
 - [R] install → `build --build wasm`: артефакт `build/wasm/main.wasm`; требует реальный emcc — `needs-tools`, на машине без него skip (`build-wasm`)
+- [R] профиль-пакет с `runtimeHeader: "runtime_spectrum.h"` → генерируемый C начинается с `#include "runtime_spectrum.h"` (пакет написан руками в `tsc_packages/`, `--emit c` — тулчейн не нужен) (`runtime-header`)
 
 ### Алиасы pm-команд
 

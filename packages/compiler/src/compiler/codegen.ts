@@ -618,8 +618,12 @@ class Context {
     this.filename = filename;
     this.src = src;           // full source text (for error snippets)
     this._currentNode = null; // updated at entry of exprToC / visitStmt
-    // Output buffers: delegated to OutputBuffer
-    const _initInclude = opts.target === WASM_TARGET ? `#include "${RUNTIME_WASM_HEADER}"` : `#include "${RUNTIME_HEADER}"`;
+    // Output buffers: delegated to OutputBuffer. A profile may point codegen
+    // at its own C-runtime header (runtimeHeader, e.g. runtime_spectrum.h for
+    // a retro platform package); without it the wasm target gets
+    // runtime_wasm.h and everything else runtime.h.
+    const _initInclude = `#include "${opts.capabilities?.runtimeHeader
+      ?? (opts.target === WASM_TARGET ? RUNTIME_WASM_HEADER : RUNTIME_HEADER)}"`;
     this._output = new OutputBuffer(_initInclude);
     this.lambdaCount = 0;
     this.restCount = 0;

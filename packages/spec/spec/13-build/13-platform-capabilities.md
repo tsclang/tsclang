@@ -87,6 +87,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `toolchain` | `string` | — | Имя компилятора (`"avr-gcc"`, `"cc65"`, `"arm-none-eabi-gcc"`). Capability профиля, не переопределяется в `builds.*`. Потребляется: переопределяет имя компилятора для `--emit binary` (вместо `gcc`); резолвится через кеш платформ → PATH (см. 13-build). |
 | `toolchainFile` | `string` | — | Путь к CMake toolchain file внутри пакета (без `./`). Потребляется: `--emit cmake` пишет `set(CMAKE_TOOLCHAIN_FILE <путь>)` до `project()`; относительный путь резолвится от каталога профиля (пакет платформы — рядом с `index.d.tsc`). |
 | `include` | `string` | `"include"` если директория существует | Путь к директории с C-заголовками внутри пакета. Потребляется: `-I <путь>` в прямых спавнах компилятора (`--emit binary`/`wasm`/`hex`) и `include_directories(<путь>)` в `--emit cmake`. |
+| `runtimeHeader` | `string` | — (см. ниже) | Имя C-runtime хедера, который codegen пишет в `#include` первой строкой генерируемого C. Дефолты: `runtime.h`; для target `wasm` — `runtime_wasm.h`. Только простое имя файла (`runtime_spectrum.h`) — компоненты пути запрещены (значение попадает в генерируемый C как есть). Хедер резолвится через include-path сборки: runtime-директория компилятора, `include` пакета платформы (#277). |
 
 ### Hardware
 
@@ -162,6 +163,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `strtoll: false` | `strtoll()` недоступна; CLI передаёт `-DTSC_NO_STRTOLL`; runtime использует `strtol()` |
 | `console_uart: true` | CLI передаёт `-DTSC_CONSOLE_UART` + `-DTSC_CONSOLE_BAUD=N`; `TSC_INIT()` подключает `stdout` к UART |
 | `console_uart: false` / не задано | `printf` компилируется, но вывод никуда не идёт (stdout не подключён) |
+| `runtimeHeader` задан | Генерируемый C начинается с `#include "<runtimeHeader>"` вместо дефолтного `runtime.h` (`runtime_wasm.h` для target wasm). Выбор файла, а не уровня — уровень runtime по-прежнему выводится из `async` |
 | `usize: "u16"` | `usize` → `uint16_t` |
 | `stack_size` задан | Проверяет call graph, рекурсия → ошибка с подсказкой про `@stack` |
 | `stack_size` не задан | Рекурсия разрешена, warning для async (heap) |
@@ -174,7 +176,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | `"state_machine"` | Minimal: `console.log` без форматирования, `Error.message` без стека |
 | `"none"` | Bare: только что компилятор сам генерирует |
 
-Отдельное поле `runtime` не нужно.
+Отдельное поле для runtime **level** не нужно — уровень выводится из `async`. Выбор **файла** runtime — поле `runtimeHeader` (см. Build выше): платформа-пакет указывает свой C-runtime хедер (`runtime_spectrum.h`), codegen пишет его в `#include` вместо дефолтного.
 
 ### `toolchain` — capability профиля
 
