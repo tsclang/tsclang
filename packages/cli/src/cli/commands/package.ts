@@ -47,7 +47,9 @@ export function runPublishCommand(): void {
       const rel  = base ? `${base}/${entry}` : entry;
       if (statSync(full).isDirectory()) {
         collectFiles(full, rel);
-      } else if (entry.endsWith('.tsc') || entry === PACKAGE_FILE) {
+      // Platform packages carry C headers + toolchain files alongside sources:
+      // .tsc (incl. .d.tsc declarations), .h, .cmake (toolchain.cmake).
+      } else if (entry.endsWith('.tsc') || entry.endsWith('.h') || entry.endsWith('.cmake') || entry === PACKAGE_FILE) {
         files[rel] = readFileSync(full, 'utf8');
       }
     }
@@ -55,7 +57,9 @@ export function runPublishCommand(): void {
   collectFiles(process.cwd());
 
   const archive = JSON.stringify({ name, version, files }, null, 2);
-  const outFile = join(process.cwd(), `${name}-${version}.tspkg`);
+  // Scoped names carry '/', which is not a valid filename — materialize with
+  // a dash (npm does the same for tarballs): @tsclang/probe → @tsclang-probe-1.0.0.tspkg
+  const outFile = join(process.cwd(), `${name.replace('/', '-')}-${version}.tspkg`);
   writeFileSync(outFile, archive, 'utf8');
   const n = Object.keys(files).length;
   process.stdout.write(`Published ${name}@${version} (${n} file${n !== 1 ? 's' : ''})\n`);

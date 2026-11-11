@@ -9,3 +9,4 @@ export * from './strict-rules.js';
 export * from './filenames.js';
 export * from './defaults.js';
 export * from './toolchain.js';
+export * from './build-keys.js';

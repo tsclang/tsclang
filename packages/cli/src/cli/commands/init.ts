@@ -65,6 +65,22 @@ export function runInitCommand(args: string[]): void {
     ].join('\n'), 'utf8');
   }
 
+  // A platform package ships its profile as index.d.tsc — the `declare
+  // platform {}` block is what the host project's profile loader reads.
+  if (type === 'platform' && !existsSync('index.d.tsc')) {
+    const profile = pkgName.includes('/')
+      ? pkgName.slice(pkgName.lastIndexOf('/') + 1)
+      : pkgName;
+    writeFileSync('index.d.tsc', [
+      'declare platform {',
+      '  arch: "x86-64"',
+      '  allocator: "heap"',
+      '}',
+      '',
+    ].join('\n'), 'utf8');
+    process.stdout.write(`Profile name: ${profile} (tsc_packages → overrides built-in)\n`);
+  }
+
   // A silent success looks like a failure in a terminal — say what was
   // created and how to run it. The suggested script is the preset's primary
   // one (start/flash/dts); declaration/platform presets ship no scripts.

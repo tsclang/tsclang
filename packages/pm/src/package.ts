@@ -1,4 +1,6 @@
 import { Emit, PackageType, DEFAULT_MAIN_FILE } from '@tsclang/shared';
+import { profileNameFromPackage } from './platform.js';
+import type { PlatformSection } from './platform.js';
 
 interface FlashConfig {
   programmer: string;
@@ -31,6 +33,7 @@ interface Pkg {
   main?: string;
   builds?: PkgBuilds;
   scripts?: PkgScripts;
+  platform?: PlatformSection;
 }
 
 // Manifest presets for `tsclang init`: scripts name build invocations so a
@@ -90,6 +93,25 @@ export function packageGenerate (name: string, type: PackageType, preset: 'deskt
     };
     pkg.scripts = {
       dts: 'tsclang build --build dts'
+    };
+  }
+
+  if (type === 'platform') {
+    // Platform package skeleton: the profile comes from the package's own
+    // index.d.tsc (created by `init --platform`); toolchains/downloads are
+    // filled in by the platform author before publishing.
+    const profile = profileNameFromPackage(name);
+    pkg.platform = {
+      profile,
+      toolchains: {},
+      builds: {
+        [profile]: {
+          profile,
+          emit: 'c',
+          outDir: `build/${profile}`,
+        },
+      },
+      scripts: {},
     };
   }
 

@@ -669,6 +669,8 @@ platform/
 - `toolchains.<имя>.downloads.<os-arch>` — `{url, sha256, size}` для скачивания тулчейна в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (архив `.tar.gz`, распаковка системным `tar`, проверка sha256 обязательна);
 - `builds` / `scripts` — пресеты конфигураций и задач с **непрефиксованными внутренними именами**; префиксы и итоговые имена вычисляет установщик (см. «Подключение к проекту»).
 
+**Валидация** (`validate-config` / `init`): пара `type: "platform"` ↔ секция `platform` неразделима — у платформы без секции ошибка `platform package requires a 'platform' section`, секция у любого другого типа — `'platform' section is only allowed for type "platform"` (пиннинг тулчейнов проекта живёт в `builds.<n>.toolchain`). Схема секции: `profile` — непустая строка (обязательна), `toolchains.<имя>` — `{version, downloads}` с ≥1 записью `os-arch → {url (http/https), sha256 (64 hex), size? (МБ)}`, `builds` — ≥1 пресета с ключами из `VALID_BUILD_KEYS`, `scripts` — непустые строки.
+
 ---
 
 ## Разделение ответственности

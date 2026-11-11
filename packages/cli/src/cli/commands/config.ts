@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { MOCK_PKG_DEPS, resolveRange, rangesCompatible } from '@tsclang/pm';
+import { MOCK_PKG_DEPS, resolveRange, rangesCompatible, validatePlatformSection } from '@tsclang/pm';
 import { PACKAGE_TYPE_VALUES } from '@tsclang/shared';
 import { validateBuildKeys, validateStrictRules } from '../config-validator.js';
 
@@ -67,6 +67,21 @@ export function collectManifestDiagnostics(config: Record<string, unknown>): str
   }
   if (type === 'executable' && !config.main) {
     err(`executable project requires 'main' field`);
+  }
+
+  // Platform section: `type: "platform"` and the section are inseparable.
+  // For every other type the key is rejected — project toolchain pinning
+  // lives in builds.<n>.toolchain (spec 13-build.md, "Pinned toolchain").
+  const hasPlatformSection = config.platform !== undefined;
+  if (type === 'platform' && !hasPlatformSection) {
+    err(`platform package requires a 'platform' section (profile, toolchains, builds)`);
+  }
+  if (type !== 'platform' && hasPlatformSection) {
+    err(`'platform' section is only allowed for type "platform"; toolchain pinning belongs in builds.<n>.toolchain`);
+  }
+  if (hasPlatformSection) {
+    const platformErr = validatePlatformSection(config.platform);
+    if (platformErr) err(platformErr);
   }
 
   if (config.builds) {
