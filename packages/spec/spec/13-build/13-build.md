@@ -1929,7 +1929,7 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
-| `wasm` | WebAssembly bare (минимальный runtime) | — | wasm32-unknown-unknown | .wasm | emscripten | -s WASM=1, -s STANDALONE_WASM=1, -DTSC_WASM |
+| `wasm` | WebAssembly bare (минимальный runtime) | — | wasm32-unknown-unknown | .wasm | emscripten | -s WASM=1, -s STANDALONE_WASM=1, -DTSC_WASM, --js-library runtime_wasm_lib.js |
 | `wasm32` | WebAssembly + полный emscripten POSIX | — | wasm32-unknown-unknown | .wasm / .html | emscripten | -s WASM=1, --no-entry |
 | `wasi` | WebAssembly System Interface | `wasm32` | wasm32-wasi | .wasm | wasi-sdk | --target=wasm32-wasi |
 
@@ -1953,6 +1953,8 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 | `env.log` | `(ptr: number, len: number) => void` | Вывод строки в консоль |
 | `env.random_seed` | `() => number` | Возвращает seed для PRNG (из `Math.random()`) |
 | `env.time_now` | `() => number` | Возвращает время в ms (из `performance.now()`) |
+
+При `--emit wasm` реализация `env.log` для сгенерированного JS-глю линкуется автоматически (`runtime_wasm_lib.js` через `--js-library` — UTF-8 декодирование и `console.log`). Хост, встраивающий голый `.wasm` без сгенерированного глю, предоставляет import-функции сам.
 
 **Ограничения компилятора** (compile-time ошибки):
 

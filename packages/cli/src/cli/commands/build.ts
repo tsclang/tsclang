@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profi
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
@@ -545,12 +545,16 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const emccTool = _resolveTool('emcc', 'ConfigError: --emit wasm requires emcc (Emscripten) in PATH');
       if (!emccTool) return false;
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_WASM_HEADER);
+      const wasmLib = join(ROOT, RUNTIME_DIR, RUNTIME_WASM_LIB);
       const wasmPath = join(outDir, stem + '.wasm');
       const jsPath   = join(outDir, stem + '.js');
       const emccOpts = optimize ? [`-${optimize}`] : [DEFAULT_OPTIMIZE_FLAG];
       const emccResult = spawnSync(emccTool.command, [
         cPath, '-o', jsPath,
         '-I', dirname(runtimeH),
+        // runtime_wasm.h imports env.log for console.log; the JS side of that
+        // import ships next to the header and must be linked in explicitly
+        '--js-library', wasmLib,
         '-sWASM=1',
         '-sSTANDALONE_WASM=1',
         `-D${TSC_DEFINES.WASM}`,

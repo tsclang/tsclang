@@ -22,6 +22,10 @@ export const RUNTIME_HEADER = 'runtime.h';
 
 export const RUNTIME_WASM_HEADER = 'runtime_wasm.h';
 
+/** Emscripten JS library providing env.log (console.log) for the wasm
+ * runtime header; passed to emcc via --js-library. */
+export const RUNTIME_WASM_LIB = 'runtime_wasm_lib.js';
+
 export const DEFAULT_AVR_MCU = 'atmega328p';
 
 export const DEFAULT_AVR_FREQ = 16000000;
