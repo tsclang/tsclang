@@ -1,0 +1,16 @@
+{
+  "name": "@tsclang/desktop",
+  "version": "0.1.0",
+  "type": "platform",
+  "description": "Desktop reference platform: system gcc build-and-run (cmake/make for the cmake flow)",
+  "platform": {
+    "profile": "desktop",
+    "builds": {
+      "desktop": { "profile": "desktop", "emit": "exec", "outDir": "build/desktop" }
+    },
+    "scripts": {
+      "start": "tsclang build --build desktop",
+      "dev": "tsclang build --build desktop --watch"
+    }
+  }
+}

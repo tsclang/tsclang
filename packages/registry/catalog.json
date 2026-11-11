@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "name": "@tsclang/desktop",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "Desktop reference platform: system gcc build-and-run (cmake/make for the cmake flow)",
+      "location": {
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-desktop-0.1.0.tspkg",
+        "sha256": "5a908a9c0d87628c4450ffc949ca1c151b63c211cb8d7b62aac564f38c5c3e86"
+      }
+    }
+  ]
+}
