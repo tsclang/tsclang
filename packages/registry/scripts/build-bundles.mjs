@@ -18,7 +18,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -231,15 +231,28 @@ async function fetchSource(url, file) {
   if (existsSync(path) && statSync(path).size > 10_000) return path;
   mkdirSync(SRC, { recursive: true });
   process.stdout.write(`downloading ${url} ...\n`);
-  const res = await fetch(url, { signal: AbortSignal.timeout(20 * 60_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
+  // curl streams to disk and is dramatically faster than buffering the
+  // body in JS (multi-GB LLVM tarballs took ~1h via fetch on CI runners).
+  // Fall back to fetch on hosts without curl.
+  const curl = spawnSync('curl', ['-fL', '--retry', '3', '-o', path, url], { windowsHide: true });
+  if (curl.error?.code !== 'ENOENT') {
+    if (curl.status !== 0) {
+      throw new Error(`curl ${url} failed: ${(curl.stderr ?? '').toString().trim() || `exit ${curl.status}`}`);
+    }
+  } else {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20 * 60_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    writeFileSync(path, bytes);
+  }
   // GCS answers missing keys with a small XML body instead of an HTTP error
   // status — catch it here rather than unpacking garbage later.
-  if (bytes.length < 10_000 && bytes.subarray(0, 5).toString() === '<?xml') {
-    throw new Error(`error body fetched from ${url}: ${bytes.subarray(0, 120).toString()}`);
+  const head = Buffer.alloc(5);
+  const fd = openSync(path, 'r');
+  try { readSync(fd, head, 0, 5, 0); } finally { closeSync(fd); }
+  if (statSync(path).size < 10_000 && head.toString() === '<?xml') {
+    throw new Error(`error body fetched from ${url}`);
   }
-  writeFileSync(path, bytes);
   return path;
 }
 
