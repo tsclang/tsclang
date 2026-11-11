@@ -31,6 +31,74 @@ export async function runPlatformCommand(sub: string, restArgs: string[]): Promi
 
 // ── platform install ────────────────────────────────────────────────────────
 
+export interface PlatformArchive {
+  name: string;
+  version: string;
+  files: Record<string, string>;
+  platform: PlatformSection;
+  location: string;
+  integrity: string;
+}
+
+/** Resolve a platform package from the registry and validate it: catalog
+ * entry → archive fetch → manifest → platform section. Shared by
+ * `platform install` and the first-run wizard (#274; the wizard only reads
+ * the toolchain section — machine-level, no project manifest writes). */
+export async function fetchPlatformArchive(
+  name: string,
+  opts: { registry?: string; offline?: boolean } = {},
+): Promise<PlatformArchive> {
+  let packages;
+  try {
+    const { catalog } = await loadCatalog({ registry: opts.registry ?? process.env.TSC_REGISTRY, offline: opts.offline });
+    packages = catalog.packages;
+  } catch (e) {
+    if (e instanceof CatalogError) throw new Error(e.message);
+    throw e;
+  }
+  const entry = packages.find((p) => p.name === name);
+  if (!entry) throw new Error(`'${name}' not found in the platform registry`);
+  if (entry.type !== 'platform') {
+    throw new Error(`'${name}' is a ${entry.type} package, not a platform — use 'tsclang install'`);
+  }
+  if (!entry.location?.url) throw new Error(`registry entry for '${name}' has no download location`);
+
+  let archiveText: string, integrity: string;
+  try {
+    ({ text: archiveText, integrity } = await fetchPackageArchive(entry.location, { offline: opts.offline }));
+  } catch (e) {
+    throw new Error((e as Error).message);
+  }
+  let archive: { name?: string; version?: string; files?: Record<string, string> };
+  try {
+    archive = JSON.parse(archiveText);
+  } catch (e) {
+    throw new Error(`invalid .tspkg for '${name}': ${(e as Error).message}`);
+  }
+  if (!archive.name || !archive.version || !archive.files) {
+    throw new Error(`malformed .tspkg for '${name}' (missing name/version/files)`);
+  }
+  if (archive.name !== name) {
+    throw new Error(`archive name mismatch — catalog says '${name}', archive says '${archive.name}'`);
+  }
+  let pkgManifest: { platform?: unknown };
+  try {
+    pkgManifest = JSON.parse(archive.files['tsc.package.json'] ?? '{}');
+  } catch (e) {
+    throw new Error(`package manifest is not valid JSON: ${(e as Error).message}`);
+  }
+  const invalid = validatePlatformSection(pkgManifest.platform);
+  if (invalid) throw new Error(`package '${name}' has an invalid platform section: ${invalid}`);
+  return {
+    name: archive.name,
+    version: archive.version,
+    files: archive.files,
+    platform: pkgManifest.platform as PlatformSection,
+    location: entry.location.url,
+    integrity,
+  };
+}
+
 async function runPlatformInstall(restArgs: string[]): Promise<void> {
   const name = restArgs.find((a) => !a.startsWith('-'));
   if (!name) {
@@ -41,69 +109,15 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   const registry = process.env.TSC_REGISTRY; // local fixture or URL override
 
   // A write operation fails loud: unlike search, offline/catalog errors abort.
-  let packages;
+  let fetched: PlatformArchive;
   try {
-    const { catalog } = await loadCatalog({ registry, offline });
-    packages = catalog.packages;
-  } catch (e) {
-    if (e instanceof CatalogError) {
-      process.stderr.write(`tsclang platform install: ${e.message}\n`);
-      process.exit(1);
-    }
-    throw e;
-  }
-  const entry = packages.find((p) => p.name === name);
-  if (!entry) {
-    process.stderr.write(`tsclang platform install: '${name}' not found in the platform registry\n`);
-    process.exit(1);
-  }
-  if (entry.type !== 'platform') {
-    process.stderr.write(`tsclang platform install: '${name}' is a ${entry.type} package, not a platform — use 'tsclang install'\n`);
-    process.exit(1);
-  }
-  if (!entry.location?.url) {
-    process.stderr.write(`tsclang platform install: registry entry for '${name}' has no download location\n`);
-    process.exit(1);
-  }
-
-  let archiveText: string, integrity: string;
-  try {
-    ({ text: archiveText, integrity } = await fetchPackageArchive(entry.location, { offline }));
+    fetched = await fetchPlatformArchive(name, { registry, offline });
   } catch (e) {
     process.stderr.write(`tsclang platform install: ${(e as Error).message}\n`);
     process.exit(1);
   }
-
-  let archive: { name?: string; version?: string; files?: Record<string, string> };
-  try {
-    archive = JSON.parse(archiveText);
-  } catch (e) {
-    process.stderr.write(`tsclang platform install: invalid .tspkg for '${name}': ${(e as Error).message}\n`);
-    process.exit(1);
-  }
-  if (!archive.name || !archive.version || !archive.files) {
-    process.stderr.write(`tsclang platform install: malformed .tspkg for '${name}' (missing name/version/files)\n`);
-    process.exit(1);
-  }
-  if (archive.name !== name) {
-    process.stderr.write(`tsclang platform install: archive name mismatch — catalog says '${name}', archive says '${archive.name}'\n`);
-    process.exit(1);
-  }
-
-  // The platform section travels inside the package manifest.
-  let pkgManifest: { platform?: unknown };
-  try {
-    pkgManifest = JSON.parse(archive.files['tsc.package.json'] ?? '{}');
-  } catch (e) {
-    process.stderr.write(`tsclang platform install: package manifest is not valid JSON: ${(e as Error).message}\n`);
-    process.exit(1);
-  }
-  const invalid = validatePlatformSection(pkgManifest.platform);
-  if (invalid) {
-    process.stderr.write(`tsclang platform install: package '${name}' has an invalid platform section: ${invalid}\n`);
-    process.exit(1);
-  }
-  const platform = pkgManifest.platform as PlatformSection;
+  const archive = { name: fetched.name, version: fetched.version, files: fetched.files };
+  const platform = fetched.platform;
   const names = platformNames(archive.name);
   if (!names) {
     process.stderr.write(`tsclang platform install: cannot map package name '${archive.name}' to build names\n`);
@@ -144,8 +158,8 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   const lockEntry: Record<string, unknown> = {
     version: archive.version,
     source: 'registry',
-    resolved: entry.location.url,
-    integrity,
+    resolved: fetched.location,
+    integrity: fetched.integrity,
   };
   if (Object.keys(ownership.builds ?? {}).length || Object.keys(ownership.scripts ?? {}).length) {
     lockEntry.platform = ownership;
@@ -160,8 +174,9 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
 
 /** Toolchain handling after a successful platform install (#270). One line
  * per toolchain; failures degrade to a manual instruction — the platform
- * itself is already installed, a missing toolchain must not fail the run. */
-async function installToolchains(
+ * itself is already installed, a missing toolchain must not fail the run.
+ * Also used by the first-run wizard (#274), which installs toolchains only. */
+export async function installToolchains(
   pkgName: string, pkgVersion: string, platform: PlatformSection, offline: boolean,
 ): Promise<void> {
   const entries = Object.entries(platform.toolchains ?? {});
