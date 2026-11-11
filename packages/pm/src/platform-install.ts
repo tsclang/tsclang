@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, isAbsolute, join } from 'path';
 import { NAME_PART_RE } from './platform.js';
+import { fetchWithTimeout } from './net.js';
 import type { PlatformNames, PlatformSection } from './platform.js';
 
 // `tsclang platform install` (#267): applying a platform package to the host
@@ -226,10 +227,9 @@ export async function fetchPackageArchive(
   }
   let text: string;
   if (/^https?:\/\//.test(location.url)) {
-    const doFetch = opts.fetchImpl ?? fetch;
     let res: Response;
     try {
-      res = await doFetch(location.url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000) });
+      res = await fetchWithTimeout(location.url, opts.timeoutMs ?? 30_000, opts.fetchImpl ?? fetch);
     } catch (e) {
       throw new Error(`network error fetching ${location.url}: ${(e as Error).message}`);
     }

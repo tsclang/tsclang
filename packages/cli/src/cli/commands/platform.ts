@@ -100,10 +100,14 @@ export async function fetchPlatformArchive(
 }
 
 async function runPlatformInstall(restArgs: string[]): Promise<void> {
+  // Async command handlers set process.exitCode and RETURN instead of
+  // process.exit(): a hard exit right after fetches races the undici
+  // keep-alive teardown and trips a win32 libuv assertion (0xC0000409).
   const name = restArgs.find((a) => !a.startsWith('-'));
   if (!name) {
     process.stderr.write('tsclang platform install: missing <name> (usage: tsclang platform install <name>)\n');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const offline = hasFlag(restArgs, '--offline') || !!process.env.TSC_NO_NETWORK;
   const registry = process.env.TSC_REGISTRY; // local fixture or URL override
@@ -114,14 +118,16 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
     fetched = await fetchPlatformArchive(name, { registry, offline });
   } catch (e) {
     process.stderr.write(`tsclang platform install: ${(e as Error).message}\n`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   const archive = { name: fetched.name, version: fetched.version, files: fetched.files };
   const platform = fetched.platform;
   const names = platformNames(archive.name);
   if (!names) {
     process.stderr.write(`tsclang platform install: cannot map package name '${archive.name}' to build names\n`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   extractTspkg(archive.files, PACKAGES_DIR, archive.name);
@@ -145,7 +151,8 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
       const skipIt = await askYesNo(`tsclang platform install: entry ${label} conflicts (${why}). Platform entries never overwrite — skip it?`, true);
       if (!skipIt) {
         process.stderr.write(`tsclang platform install: aborted on conflict with ${label} (the manifest was not touched)\n`);
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
     }
     process.stderr.write(`tsclang: skipped ${label} — ${why} (never overwritten)\n`);
@@ -169,7 +176,7 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
 
   printInstallSummary(archive.name, archive.version, platform, plan);
   await installToolchains(archive.name, archive.version, platform, offline);
-  process.exit(0);
+  process.exitCode = 0;
 }
 
 /** Toolchain handling after a successful platform install (#270). One line
@@ -330,20 +337,22 @@ async function runPlatformSearch(restArgs: string[]): Promise<void> {
     if (e instanceof CatalogError) {
       process.stderr.write(`tsclang: ${e.message}\n`);
       process.stdout.write(`No platforms found matching "${query}"\n`);
-      process.exit(0);
+      process.exitCode = 0;
+      return;
     }
     throw e;
   }
 
   if (entries.length === 0) {
     process.stdout.write(`No platforms found matching "${query}"\n`);
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
   process.stdout.write(`Found ${entries.length} package${entries.length > 1 ? 's' : ''}${query ? ` matching "${query}"` : ''}:\n`);
   for (const p of entries) {
     process.stdout.write(`  ${p.name}@${p.version} [${p.type}] — ${p.description}\n`);
   }
-  process.exit(0);
+  process.exitCode = 0;
 }
 
 // ── platform list ───────────────────────────────────────────────────────────

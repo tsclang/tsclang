@@ -280,8 +280,9 @@ export async function runDoctorCommand(args: string[], rootDir: string): Promise
   closePrompt();
   if (problems > 0) {
     w(`problems found: ${problems}`);
-    process.exit(1);
+    process.exitCode = 1; // not process.exit: post-fetch hard exit races the undici teardown (win32 uv assertion)
+    return;
   }
   w('no problems found');
-  process.exit(0);
+  process.exitCode = 0;
 }

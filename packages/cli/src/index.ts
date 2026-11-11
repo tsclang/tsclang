@@ -92,7 +92,10 @@ async function main(): Promise<void> {
     }
     runPlatformCommand(sub!, args.slice(2)).catch((e: unknown) => {
       console.error(`tsclang: ${(e as Error)?.message ?? e}`);
-      process.exit(1);
+      // Not process.exit(1): the error path runs right after fetches, and
+      // exiting while undici keep-alive handles are still tearing down trips
+      // a win32 libuv assertion (exit 0xC0000409 instead of 1).
+      process.exitCode = 1;
     });
   } else {
     // `<cmd> --help` prints the per-command help where defined, main help otherwise (#243)

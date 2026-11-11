@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { fetchWithTimeout } from './net.js';
 
 // Platform registry v1 (#266, epic #260) — a JSON catalog hosted in the
 // TSClang GitHub repo (`packages/registry/catalog.json`). No dedicated
@@ -191,7 +192,7 @@ export async function loadCatalog(opts: LoadCatalogOptions = {}): Promise<LoadCa
   const url = opts.registry ?? DEFAULT_CATALOG_URL;
   let raw: string;
   try {
-    const res = await fetchImpl(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000) });
+    const res = await fetchWithTimeout(url, opts.timeoutMs ?? 10_000, fetchImpl);
     if (!res.ok) {
       throw new CatalogError(`platform catalog fetch failed: HTTP ${res.status}`, 'network');
     }

@@ -3,6 +3,7 @@
 import { realpathSync } from 'fs';
 import { dirname } from 'path';
 import { getVersion } from '../help.js';
+import { fetchWithTimeout } from '@tsclang/pm';
 
 export function localVersion(rootDir: string): string {
   return getVersion(rootDir);
@@ -57,9 +58,7 @@ export function formatUpdate(local: string, latest: string | null): string {
 // the report must never break because of the network. fetchImpl is DI for tests.
 export async function fetchLatestNpm(fetchImpl: typeof fetch = fetch): Promise<string | null> {
   try {
-    const res = await fetchImpl('https://registry.npmjs.org/tsclang/latest', {
-      signal: AbortSignal.timeout(3000),
-    });
+    const res = await fetchWithTimeout('https://registry.npmjs.org/tsclang/latest', 3000, fetchImpl);
     if (!res.ok) return null;
     return parseRegistryLatest(await res.json());
   } catch {

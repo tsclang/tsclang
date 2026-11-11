@@ -4,6 +4,7 @@
 // e2e spawns the CLI against a local registry fixture (zero network).
 
 import { spawn } from "node:child_process"
+import { createServer, type AddressInfo } from "node:http"
 import { createHash } from "node:crypto"
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -12,9 +13,11 @@ import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import {
   stableStringify, entryHash, planPlatformApply, applyPlatformPlan,
-  ownershipFromPlan, extractTspkg,
+  ownershipFromPlan, extractTspkg, fetchPackageArchive,
 } from "../../../../../pm/src/platform-install.js"
 import { platformNames } from "../../../../../pm/src/platform.js"
+import { loadCatalog } from "../../../../../pm/src/platform-registry.js"
+import { downloadToolchain } from "../../../../../pm/src/toolchains.js"
 import type { CatalogPackage } from "../../../../../pm/src/platform-registry.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -444,5 +447,106 @@ describe("13-build/platform 1.2 — e2e: platform install (#267)", () => {
     const r = await runCli(["platform", "install"], { cwd: mkTmp() })
     expect(r.code).toBe(1)
     expect(r.stderr).toContain("usage")
+  })
+})
+
+// ── HTTP error paths must exit cleanly (#278) ───────────────────────────────
+// AbortSignal.timeout() keeps an unclearable libuv timer; process.exit() while
+// it is pending trips a uv assertion on win32 (exit 0xC0000409 instead of 1 —
+// reproduced by the toolchain-bundle e2e 404s). Every CLI fetch must own and
+// clear its timeout timer once the fetch settles.
+
+describe("13-build/platform — сетевые ошибки не роняют процесс (#278)", () => {
+  test("HTTP 404 реестра → чистый exit 1 (не краш 0xC0000409)", async () => {
+    const server = createServer((_req, res) => { res.statusCode = 404; res.end("not found") })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const dir = mkTmp()
+      const home = mkTmp()
+      const r = await runCli(["platform", "install", "@tsclang/desktop"], {
+        cwd: dir, timeoutMs: 30_000,
+        env: {
+          ...process.env,
+          TSC_HOME: home,
+          TSC_REGISTRY: `http://127.0.0.1:${port}/catalog.json`,
+          TSC_CATALOG_CACHE: join(home, "cache.json"),
+        },
+      })
+      expect(r.code).toBe(1)
+      expect(r.stderr).toContain("HTTP 404")
+    } finally {
+      server.close()
+    }
+  })
+})
+
+// ── fetch timers must not outlive the call (#278) ───────────────────────────
+// AbortSignal.timeout() creates an unclearable libuv timer; a pending one at
+// process.exit() trips a uv assertion on win32 (0xC0000409 — seen live in the
+// toolchain-bundle e2e 404s). Deterministic contract: after every fetch-based
+// API settles (even on failure) the process must hold no extra 'Timeout'.
+
+describe("13-build/platform — fetch не оставляет висячих таймеров (#278)", () => {
+  function timeoutHandles(): number {
+    return process.getActiveResourcesInfo().filter((r) => r === "Timeout").length
+  }
+
+  test("loadCatalog: сетевой отказ — таймер очищен", async () => {
+    const before = timeoutHandles()
+    const failing: typeof fetch = () => Promise.reject(new Error("boom"))
+    let msg = ""
+    try {
+      await loadCatalog({ registry: "http://127.0.0.1:1/catalog.json", fetchImpl: failing, cachePath: join(mkTmp(), "cache.json") })
+    } catch (e) { msg = (e as Error).message }
+    expect(msg.includes("unreachable")).toBe(true)
+    expect(timeoutHandles()).toBe(before)
+  })
+
+  test("fetchPackageArchive: сетевой отказ — таймер очищен", async () => {
+    const before = timeoutHandles()
+    const failing: typeof fetch = () => Promise.reject(new Error("boom"))
+    let msg = ""
+    try {
+      await fetchPackageArchive({ url: "http://127.0.0.1:1/x.tspkg" }, { fetchImpl: failing })
+    } catch (e) { msg = (e as Error).message }
+    expect(msg.includes("network error")).toBe(true)
+    expect(timeoutHandles()).toBe(before)
+  })
+
+  test("downloadToolchain: сетевой отказ — таймер очищен", async () => {
+    const before = timeoutHandles()
+    const failing: typeof fetch = () => Promise.reject(new Error("boom"))
+    let msg = ""
+    try {
+      await downloadToolchain({
+        pkgName: "@tsclang/desktop", pkgVersion: "0.2.0", toolchain: "gcc",
+        spec: { version: "16.2.0", downloads: {} },
+        download: { url: "http://127.0.0.1:1/gcc.tar.gz", sha256: "0".repeat(64) },
+        home: mkTmp(), fetchImpl: failing,
+      })
+    } catch (e) { msg = (e as Error).message }
+    expect(msg.includes("network error")).toBe(true)
+    expect(timeoutHandles()).toBe(before)
+  })
+})
+
+// ── HTTP error responses must release their body (#278) ─────────────────────
+// Throwing on !res.ok without consuming/cancelling the body leaves the undici
+// socket half-open; tearing that down inside process.exit() trips the win32 uv
+// assertion `!(handle->flags & UV_HANDLE_CLOSING)` (exit 0xC0000409 — seen in
+// the toolchain-bundle e2e TLS 404s). Contract: an HTTP-error response comes
+// back with its body cancelled.
+
+describe("13-build/platform — HTTP-ошибки освобождают body (#278)", () => {
+  test("fetchPackageArchive: !res.ok → тело ответа отменено (сокет свободен)", async () => {
+    const response = new Response("not found", { status: 404 })
+    const fetch404: typeof fetch = () => Promise.resolve(response)
+    let msg = ""
+    try {
+      await fetchPackageArchive({ url: "http://127.0.0.1:1/x.tspkg" }, { fetchImpl: fetch404 })
+    } catch (e) { msg = (e as Error).message }
+    expect(msg.includes("HTTP 404")).toBe(true)
+    expect(response.bodyUsed).toBe(true)
   })
 })

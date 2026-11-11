@@ -12,6 +12,7 @@ import { homedir } from 'os';
 import { isAbsolute, join } from 'path';
 import { fileURLToPath } from 'url';
 import { platformNames } from './platform.js';
+import { fetchWithTimeout } from './net.js';
 import type { PlatformToolchain } from './platform.js';
 
 // ── os-arch selection ───────────────────────────────────────────────────────
@@ -219,7 +220,7 @@ async function fetchArchiveBytes(url: string, opts: DownloadToolchainOptions): P
   const doFetch = opts.fetchImpl ?? fetch;
   let res: Response;
   try {
-    res = await doFetch(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000) });
+    res = await fetchWithTimeout(url, opts.timeoutMs ?? 120_000, doFetch);
   } catch (e) {
     throw new Error(`network error fetching ${url}: ${(e as Error).message}`);
   }
