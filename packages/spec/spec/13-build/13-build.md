@@ -1348,22 +1348,23 @@ declare platform { toolchain } в profile
 }
 ```
 
-Логика поиска для `avr-gcc@12.1` (`<платформа>` материализуется как имя билда: `desktop`, `nes-zxdev`):
-1. `~/.tsclang/platforms/<платформа>@<версия>/avr-gcc@12.1/bin/avr-gcc` — кеш платформы (скачивается при `tsclang platform install`)
-2. `avr-gcc` в PATH с проверкой версии (`avr-gcc --version`)
+Логика поиска для `avr-gcc@12.1` (кеш сканируется по всем установленным платформам):
+1. `~/.tsclang/platforms/<платформа>@<версия>/avr-gcc@12.1/bin/avr-gcc` — кеш платформы (скачивается при `tsclang platform install`). Без пина версии берётся новейшая установленная
+2. `avr-gcc` в PATH с проверкой версии (`avr-gcc --version`): пин `12.1` совпадает с `12.1.0`, но не с `12.10.0` (граница сегмента, не подстрока)
 3. Ошибка с подсказкой:
 
 ```
 error: toolchain 'avr-gcc@12.1' not found
-hint: tsclang platform install avr   (тулчейн входит в пакет платформы)
+hint: tsclang platform install <platform>  (the toolchain ships with the platform package)
 ```
 
-Если бинарь не найден без версии — TSClang даёт понятную подсказку:
+Изолированный тулчейн спавнится по абсолютному пути с prepended bin-dir в PATH (драйверы вызывают свои ассемблеры/линкеры по имени: `avr-gcc` → `avr-as`). В `--emit cmake` в `set(CMAKE_C_COMPILER ...)` подставляется абсолютный путь (posix-слэши), пин без кеша и без совпавшей версии PATH — ошибка с тем же хинтом.
+
+Если бинарь не найден без версии — ConfigError с per-OS подсказкой:
 
 ```
-error: toolchain 'avr-gcc' not found in PATH
-hint: brew install avr-gcc      (macOS)
-      apt install gcc-avr       (Ubuntu)
+ConfigError: --emit hex/flash requires avr-gcc in PATH
+install avr-gcc manually: MSYS2 (https://www.msys2.org) or the vendor installer; re-run with TSC_TOOLCHAINS=always to download an isolated copy   (Windows)
 ```
 
 **Экзотические компиляторы и CMake toolchain files:**

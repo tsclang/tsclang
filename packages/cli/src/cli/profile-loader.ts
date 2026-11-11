@@ -22,7 +22,7 @@ export type { Capabilities };
  *
  * Returns the index.d.tsc path or null when no package claims the name.
  */
-function findPackageProfile(name: string, baseDir: string): string | null {
+export function findPackageProfile(name: string, baseDir: string): string | null {
   const pkgsRoot = join(baseDir, PACKAGES_DIR);
 
   if (name.startsWith('@')) {

@@ -1,17 +1,16 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, watchFile, unwatchFile } from 'fs';
-import { join, basename, extname, resolve, dirname } from 'path';
+import { join, basename, extname, resolve, dirname, delimiter } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { compileTsc, findPackageJson, renderDiagnostic, DESKTOP_CAPABILITIES, capabilityDefines, emitDtsSync } from '@tsclang/compiler';
 import { flagValue, hasFlag, isValidOptimizeLevel, isValidNumberType, firstPositional } from '../args.js';
-import { loadProfile, listAvailableProfiles } from '../profile-loader.js';
+import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profile-loader.js';
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
-import { checkLockStale } from '@tsclang/pm';
+import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
 import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
-import { toolAvailable } from '../toolchain.js';
 
 interface BuildConfig {
   [key: string]: unknown;
@@ -78,6 +77,9 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   let _capabilities: Capabilities | null = null;
   let _profileTarget: string | null = null;
   let _mcu: string | null = null;
+  // The name the profile was loaded under — used to locate the profile's
+  // source dir (platform package vs built-in) for toolchainFile/include (#271)
+  let _profileName: string | null = null;
 
   let _buildCfg: BuildConfig | null = null;
   let _pkgStrict: string[] | null = null;
@@ -104,6 +106,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
     _capabilities = prof;
     _profileTarget = prof.target || _platformFlag;
+    _profileName = _platformFlag;
   } else if (_effectiveBuild) {
     const pkgPath = findPackageJson(inputFile ? dirname(resolve(inputFile)) : process.cwd());
     if (!pkgPath) {
@@ -131,6 +134,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         }
         _capabilities = prof;
         _profileTarget = prof.target || buildCfg.profile;
+        _profileName = buildCfg.profile;
       }
       if (buildCfg.optimize && !optimize) optimize = buildCfg.optimize;
       if (buildCfg.outDir && outDir === '.') outDir = buildCfg.outDir;
@@ -238,6 +242,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (prof) {
       _capabilities = prof;
       if (!_profileTarget) _profileTarget = prof.target || _targetFlag;
+      _profileName = _targetFlag;
     }
   }
 
@@ -250,6 +255,57 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (_capabilities.allocator === 'static' && _capabilities.async === 'libuv') {
       _capabilities.async = 'none';
     }
+  }
+
+  // ── isolated toolchains + profile extras (#271) ──
+  // toolchainFile/include capability paths resolve against the profile's
+  // source dir: a platform package ships them next to index.d.tsc.
+  let _profileExtras: { includeDirs: string[]; toolchainFile?: string } = { includeDirs: [] };
+  if (_capabilities && _profileName) {
+    const baseDir = inputFile ? dirname(resolve(inputFile)) : process.cwd();
+    const pkgProfile = findPackageProfile(_profileName, baseDir);
+    let sourceDir: string | null = null;
+    if (pkgProfile) sourceDir = dirname(pkgProfile);
+    else if (existsSync(join(PROFILES_PATH, _profileName, 'index.d.tsc'))) sourceDir = join(PROFILES_PATH, _profileName);
+    else if (existsSync(join(PROFILES_PATH, _profileName + '.d.tsc'))) sourceDir = PROFILES_PATH;
+    if (sourceDir) {
+      _profileExtras = resolveProfileExtras(
+        { toolchainFile: _capabilities.toolchainFile, include: _capabilities.include },
+        sourceDir,
+      );
+    }
+  }
+
+  // Toolchain resolution order (spec 13-build): the isolated platform cache
+  // (~/.tsclang/platforms) first, then PATH. A pinned builds.<n>.toolchain
+  // 'name@version' accepts PATH only with a matching --version; otherwise a
+  // config error with the platform-install hint.
+  const _toolchainPin = parseToolchainSpec(
+    typeof _buildCfg?.toolchain === 'string' && _buildCfg.toolchain ? String(_buildCfg.toolchain) : '',
+  );
+
+  interface ResolvedTool { command: string; env?: NodeJS.ProcessEnv }
+
+  function _resolveTool(name: string, configError: string): ResolvedTool | null {
+    const version = _toolchainPin.name === name ? _toolchainPin.version : undefined;
+    const r = resolveToolchain(name, { version });
+    if (!r) {
+      if (version) {
+        process.stderr.write(`error: toolchain '${name}@${version}' not found\n`);
+        process.stderr.write('hint: tsclang platform install <platform>  (the toolchain ships with the platform package)\n');
+      } else {
+        process.stderr.write(configError + '\n');
+        process.stderr.write(toolchainInstructions(name) + '\n');
+      }
+      return null;
+    }
+    if (r.kind === 'path') return { command: name };
+    // absolute path + PATH prepend: toolchain drivers call their own
+    // assemblers/linkers by name (avr-gcc → avr-as), so the bin dir must
+    // stay reachable even when the binary is spawned by absolute path
+    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+    const current = process.env[pathKey] ?? process.env.PATH ?? '';
+    return { command: join(r.binDir, name), env: { ...process.env, [pathKey]: `${r.binDir}${delimiter}${current}` } };
   }
 
   // --emit is validated after all sources are resolved (flag + builds.<name>.emit):
@@ -317,12 +373,27 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   if (emit === 'cmake') {
     const stem = basename(inputFile, extname(inputFile));
     const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
-    const toolchain = String(_buildCfg?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
+    const toolchainSpec = String(_buildCfg?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
+    // #271: the isolated platform cache resolves to an absolute compiler
+    // path (forward slashes for cmake); a pinned version matching nothing —
+    // neither cache nor PATH — is a config error with the install hint
+    const spec = parseToolchainSpec(toolchainSpec);
+    let toolchain = toolchainSpec;
+    const isolated = findIsolatedToolchain(spec.name, { version: spec.version });
+    if (isolated) {
+      toolchain = join(isolated.binDir, spec.name).replace(/\\/g, '/');
+    } else if (spec.version && !resolveToolchain(spec.name, { version: spec.version })) {
+      process.stderr.write(`error: toolchain '${spec.name}@${spec.version}' not found\n`);
+      process.stderr.write('hint: tsclang platform install <platform>  (the toolchain ships with the platform package)\n');
+      process.exit(1);
+    }
     const projectName = (typeof _pkg?.name === 'string' && _pkg.name ? _pkg.name : stem)
       .replace(/^@[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '_');
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'CMakeLists.txt'), generateProjectCmake({
       projectName, target, mcu: _mcu, toolchain, optimize, mainFile: `${stem}.c`,
+      toolchainFile: _profileExtras.toolchainFile,
+      includeDirs: _profileExtras.includeDirs,
     }), 'utf8');
     process.stdout.write(`Built ${join(outDir, 'CMakeLists.txt')}\n`);
     _runCommand();
@@ -394,27 +465,31 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'binary' || emit === 'exec') {
-      // #241: a missing gcc must fail as a config error, not as "gcc failed:" with
-      // empty diagnostics (spawnSync gives status:null + .error when not found)
-      if (!toolAvailable('gcc')) {
-        process.stderr.write('ConfigError: --emit binary requires gcc in PATH\n');
-        return false;
-      }
+      // #241 + #271: a missing/mismatched toolchain is a config error, not a
+      // "gcc failed:" with empty diagnostics. The compiler resolves from the
+      // isolated platform cache first, then PATH; a profile `toolchain`
+      // capability (clang, zcc, …) overrides the compiler name.
+      const ccName = (typeof _capabilities?.toolchain === 'string' && _capabilities.toolchain
+        ? parseToolchainSpec(_capabilities.toolchain).name
+        : 'gcc');
+      const ccTool = _resolveTool(ccName, `ConfigError: --emit binary requires ${ccName} in PATH`);
+      if (!ccTool) return false;
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
       const binPath = join(outDir, stem);
       const gccOptimize = optimize ? [`-${optimize}`] : [];
       const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
-      const gcc = spawnSync('gcc', [
+      const gcc = spawnSync(ccTool.command, [
         cPath, '-o', binPath,
         '-I', dirname(runtimeH),
         ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
         ...gccOptimize,
         ...(useLibuv ? [LIBUV_LINK_FLAG] : []),
+        ..._profileExtras.includeDirs.flatMap((d) => ['-I', d]),
         ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: ccTool.env });
       if (gcc.status !== 0) {
         const gccStderr = gcc.stderr?.toString() || '';
-        process.stderr.write(`tsclang: gcc failed:\n${gccStderr}\n`);
+        process.stderr.write(`tsclang: ${ccName} failed:\n${gccStderr}\n`);
         if (!gccStderr.trim()) {
           // a Windows gcc copied out of its MSYS2 environment dies before printing
           // anything — point the user at the likely cause instead of an empty log
@@ -425,23 +500,22 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'wasm') {
-      if (!toolAvailable('emcc')) {
-        process.stdout.write('ConfigError: --emit wasm requires emcc (Emscripten) in PATH\n');
-        return false;
-      }
+      const emccTool = _resolveTool('emcc', 'ConfigError: --emit wasm requires emcc (Emscripten) in PATH');
+      if (!emccTool) return false;
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_WASM_HEADER);
       const wasmPath = join(outDir, stem + '.wasm');
       const jsPath   = join(outDir, stem + '.js');
       const emccOpts = optimize ? [`-${optimize}`] : [DEFAULT_OPTIMIZE_FLAG];
-      const emccResult = spawnSync('emcc', [
+      const emccResult = spawnSync(emccTool.command, [
         cPath, '-o', jsPath,
         '-I', dirname(runtimeH),
         '-sWASM=1',
         '-sSTANDALONE_WASM=1',
         `-D${TSC_DEFINES.WASM}`,
         ...emccOpts,
+        ..._profileExtras.includeDirs.flatMap((d) => ['-I', d]),
         ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: emccTool.env });
       if (emccResult.status !== 0) {
         process.stderr.write(`tsclang: emcc failed:\n${emccResult.stderr?.toString() || ''}\n`);
         return false;
@@ -450,24 +524,23 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'hex' || emit === 'flash') {
-      if (!toolAvailable('avr-gcc')) {
-        process.stderr.write('ConfigError: --emit hex/flash requires avr-gcc in PATH\n');
-        return false;
-      }
+      const avrGccTool = _resolveTool('avr-gcc', 'ConfigError: --emit hex/flash requires avr-gcc in PATH');
+      if (!avrGccTool) return false;
       const mcu = buildOpts.mcu || DEFAULT_AVR_MCU;
       const elfPath = join(outDir, stem + '.elf');
       const hexPath = join(outDir, stem + '.hex');
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
       const gccOptimize = optimize ? [`-${optimize}`] : [SIZE_OPTIMIZE_FLAG];
-      const gccResult = spawnSync('avr-gcc', [
+      const gccResult = spawnSync(avrGccTool.command, [
         cPath, '-o', elfPath,
         '-I', dirname(runtimeH),
         `-mmcu=${mcu}`,
         C_STANDARD_FLAG,
         `-D${TSC_DEFINES.EMBEDDED}`,
         ...gccOptimize,
+        ..._profileExtras.includeDirs.flatMap((d) => ['-I', d]),
         ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: avrGccTool.env });
       if (gccResult.status !== 0) {
         process.stderr.write(`tsclang: avr-gcc failed:\n${gccResult.stderr?.toString() || ''}\n`);
         try { unlinkSync(elfPath); } catch {}
@@ -475,14 +548,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
       // like avr-gcc above: a missing avr-objcopy is a config error, not an
       // empty "avr-objcopy failed:" log (toolchains often ship them separately)
-      if (!toolAvailable('avr-objcopy')) {
-        process.stderr.write('ConfigError: --emit hex/flash requires avr-objcopy in PATH\n');
+      const objcopyTool = _resolveTool('avr-objcopy', 'ConfigError: --emit hex/flash requires avr-objcopy in PATH');
+      if (!objcopyTool) {
         try { unlinkSync(elfPath); } catch {}
         return false;
       }
-      const objcopyResult = spawnSync('avr-objcopy', [
+      const objcopyResult = spawnSync(objcopyTool.command, [
         '-O', 'ihex', elfPath, hexPath,
-      ], { stdio: 'pipe' });
+      ], { stdio: 'pipe', env: objcopyTool.env });
       if (objcopyResult.status !== 0) {
         process.stderr.write(`tsclang: avr-objcopy failed:\n${objcopyResult.stderr?.toString() || ''}\n`);
         try { unlinkSync(elfPath); } catch {}
@@ -491,13 +564,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       try { unlinkSync(elfPath); } catch {}
 
       if (emit === 'flash') {
-        if (!toolAvailable('avrdude')) {
-          process.stderr.write('ConfigError: --emit flash requires avrdude in PATH\n');
+        const avrdudeTool = _resolveTool('avrdude', 'ConfigError: --emit flash requires avrdude in PATH');
+        if (!avrdudeTool) {
+          try { unlinkSync(elfPath); } catch {}
           return false;
         }
         const flashCfg = _buildCfg?.flash as FlashConfig | undefined;
         const avrdudeArgs = buildAvrdudeArgs(flashCfg!, mcu, hexPath);
-        const avrdudeResult = spawnSync('avrdude', avrdudeArgs, { stdio: 'pipe' });
+        const avrdudeResult = spawnSync(avrdudeTool.command, avrdudeArgs, { stdio: 'pipe', env: avrdudeTool.env });
         if (avrdudeResult.status !== 0) {
           process.stderr.write(`tsclang: avrdude failed:\n${avrdudeResult.stderr?.toString() || ''}\n`);
           return false;

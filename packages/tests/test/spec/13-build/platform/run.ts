@@ -7,6 +7,7 @@ import "./platform-registry.test"
 import "./platform-install.test"
 import "./platform-remove.test"
 import "./toolchains.test"
+import "./toolchain-resolve.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

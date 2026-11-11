@@ -7,9 +7,9 @@
 
 import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { isAbsolute, join } from 'path';
 import { fileURLToPath } from 'url';
 import { platformNames } from './platform.js';
 import type { PlatformToolchain } from './platform.js';
@@ -225,5 +225,139 @@ async function fetchArchiveBytes(url: string, opts: DownloadToolchainOptions): P
   }
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+// ── build-time resolution (#271) ────────────────────────────────────────────
+
+export interface ToolchainSpec {
+  name: string;
+  version?: string;
+}
+
+/** Split a toolchain reference like 'avr-gcc@12.1' into name + pinned
+ * version. A bare name pins nothing. */
+export function parseToolchainSpec(spec: string): ToolchainSpec {
+  const at = spec.lastIndexOf('@');
+  if (at > 0) return { name: spec.slice(0, at), version: spec.slice(at + 1) };
+  return { name: spec };
+}
+
+/** Segment-wise numeric version compare ('12.10' > '12.9' > '12.1'). */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((s) => parseInt(s, 10) || 0);
+  const pb = b.split('.').map((s) => parseInt(s, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+export interface IsolatedToolchain {
+  /** The dir to prepend to PATH / take binaries from. */
+  binDir: string;
+  version: string;
+}
+
+/** Find a toolchain in the isolated platform cache (~/.tsclang/platforms).
+ * With `version` — an exact match; without — the newest installed version
+ * across all platform packages. `bin/` wins; a flat toolchain root serves as
+ * its own bin dir. null when the cache has no such toolchain. */
+export function findIsolatedToolchain(
+  name: string,
+  opts: { version?: string; home?: string } = {},
+): IsolatedToolchain | null {
+  const platformsRoot = join(opts.home ?? userHome(), '.tsclang', 'platforms');
+  let best: IsolatedToolchain | null = null;
+  let platforms: string[];
+  try {
+    platforms = readdirSync(platformsRoot);
+  } catch {
+    return null;
+  }
+  const prefix = `${name}@`;
+  for (const platformEntry of platforms) {
+    let entries: string[];
+    try {
+      entries = readdirSync(join(platformsRoot, platformEntry));
+    } catch {
+      continue;
+    }
+    for (const tcEntry of entries) {
+      if (!tcEntry.startsWith(prefix)) continue;
+      const version = tcEntry.slice(prefix.length);
+      if (!version) continue;
+      if (opts.version && version !== opts.version) continue;
+      if (best && compareVersions(best.version, version) >= 0) continue;
+      const root = join(platformsRoot, platformEntry, tcEntry);
+      const binDir = existsSync(join(root, 'bin')) ? join(root, 'bin') : root;
+      best = { binDir, version };
+    }
+  }
+  return best;
+}
+
+/** Does a `--version` output satisfy a pinned version? Segment boundary, not
+ * substring: '12.1' matches '12.1.0' but not '12.10.0'. */
+export function versionMatches(haystack: string, version: string): boolean {
+  const esc = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${esc}(?:\\.|\\s|$)`).test(haystack);
+}
+
+export type ResolvedToolchain =
+  | { kind: 'isolated'; binDir: string; version: string }
+  | { kind: 'path'; command: string };
+
+export interface ResolveToolchainOptions {
+  version?: string;
+  home?: string;
+  /** Returns the `--version` output of a PATH command, null when it does not
+   * run. Injectable for unit tests; defaults to a real probe. */
+  probeVersion?: (command: string) => string | null;
+}
+
+/** Resolution order (spec 13-build): the isolated platform cache first, then
+ * PATH. A pinned version accepts a PATH toolchain only when its --version
+ * output matches; otherwise null — the caller reports the
+ * `tsclang platform install` hint. */
+export function resolveToolchain(name: string, opts: ResolveToolchainOptions = {}): ResolvedToolchain | null {
+  const isolated = findIsolatedToolchain(name, { version: opts.version, home: opts.home });
+  if (isolated) return { kind: 'isolated', ...isolated };
+  const probe = opts.probeVersion ?? ((cmd: string): string | null => {
+    try {
+      const r = spawnSync(cmd, ['--version'], { timeout: 10_000, windowsHide: true });
+      return r.status === 0 && !r.error ? `${r.stdout ?? ''}${r.stderr ?? ''}` : null;
+    } catch {
+      return null;
+    }
+  });
+  const output = probe(name);
+  if (output === null) return null;
+  if (opts.version && !versionMatches(output, opts.version)) return null;
+  return { kind: 'path', command: name };
+}
+
+export interface ProfileExtras {
+  includeDirs: string[];
+  toolchainFile?: string;
+}
+
+/** Resolve profile capability paths (`toolchainFile`, `include`) against the
+ * directory the profile came from — a platform package ships them next to
+ * index.d.tsc. Absolute paths pass through. */
+export function resolveProfileExtras(
+  caps: { toolchainFile?: string; include?: string | string[] },
+  profileDir: string,
+): ProfileExtras {
+  const resolvePath = (p: string): string => (isAbsolute(p) ? p : join(profileDir, p));
+  const includeDirs: string[] = [];
+  if (typeof caps.include === 'string') includeDirs.push(resolvePath(caps.include));
+  else if (Array.isArray(caps.include)) {
+    for (const inc of caps.include) if (typeof inc === 'string') includeDirs.push(resolvePath(inc));
+  }
+  return {
+    includeDirs,
+    toolchainFile: typeof caps.toolchainFile === 'string' ? resolvePath(caps.toolchainFile) : undefined,
+  };
 }
 

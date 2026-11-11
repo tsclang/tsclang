@@ -84,9 +84,9 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 
 | Поле | Тип | Дефолт | Описание |
 |------|-----|--------|----------|
-| `toolchain` | `string` | — | Имя компилятора (`"avr-gcc"`, `"cc65"`, `"arm-none-eabi-gcc"`). Capability профиля, не переопределяется в `builds.*`. |
-| `toolchainFile` | `string` | — | Путь к CMake toolchain file внутри пакета (без `./`). |
-| `include` | `string` | `"include"` если директория существует | Путь к директории с C-заголовками внутри пакета. TSClang добавляет `include_directories(BEFORE ...)` в CMakeLists.txt. |
+| `toolchain` | `string` | — | Имя компилятора (`"avr-gcc"`, `"cc65"`, `"arm-none-eabi-gcc"`). Capability профиля, не переопределяется в `builds.*`. Потребляется: переопределяет имя компилятора для `--emit binary` (вместо `gcc`); резолвится через кеш платформ → PATH (см. 13-build). |
+| `toolchainFile` | `string` | — | Путь к CMake toolchain file внутри пакета (без `./`). Потребляется: `--emit cmake` пишет `set(CMAKE_TOOLCHAIN_FILE <путь>)` до `project()`; относительный путь резолвится от каталога профиля (пакет платформы — рядом с `index.d.tsc`). |
+| `include` | `string` | `"include"` если директория существует | Путь к директории с C-заголовками внутри пакета. Потребляется: `-I <путь>` в прямых спавнах компилятора (`--emit binary`/`wasm`/`hex`) и `include_directories(<путь>)` в `--emit cmake`. |
 
 ### Hardware
 

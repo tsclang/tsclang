@@ -8,14 +8,24 @@ export interface ProjectCmakeOptions {
   toolchain: string;
   optimize: string | null;
   mainFile: string;
+  /** Profile capability `toolchainFile` — applied before project() so it
+   * takes effect (#271). */
+  toolchainFile?: string;
+  /** Profile capability `include` — extra header dirs (#271). */
+  includeDirs?: string[];
 }
 
+// quoted cmake path literal with forward slashes — identical output on every
+// OS (cmake accepts / on Windows; \\ escapes would vary the generated text)
+const cmakePath = (p: string): string => JSON.stringify(p.replace(/\\/g, '/'));
+
 export function generateProjectCmake(opts: ProjectCmakeOptions): string {
-  const { projectName, target, mcu, toolchain, optimize, mainFile } = opts;
+  const { projectName, target, mcu, toolchain, optimize, mainFile, toolchainFile, includeDirs } = opts;
   const lines: string[] = [
     'cmake_minimum_required(VERSION 3.16)',
-    `project(${projectName} C)`,
   ];
+  if (toolchainFile) lines.push(`set(CMAKE_TOOLCHAIN_FILE ${cmakePath(toolchainFile)})`);
+  lines.push(`project(${projectName} C)`);
 
   if (target === 'avr') {
     lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
@@ -25,12 +35,14 @@ export function generateProjectCmake(opts: ProjectCmakeOptions): string {
       lines.push('add_link_options(-mmcu=${MCU})');
     }
     if (optimize) lines.push(`add_compile_options(-${optimize})`);
+    if (includeDirs?.length) lines.push(`include_directories(${includeDirs.map(cmakePath).join(' ')})`);
     lines.push(`add_executable(${projectName} ${mainFile})`);
   } else {
     if (toolchain !== 'gcc') lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
     lines.push(`set(CMAKE_C_STANDARD ${C_STANDARD})`);
     lines.push('set(CMAKE_C_STANDARD_REQUIRED ON)');
     if (optimize) lines.push(`add_compile_options(-${optimize})`);
+    if (includeDirs?.length) lines.push(`include_directories(${includeDirs.map(cmakePath).join(' ')})`);
     lines.push(`add_executable(${projectName} ${mainFile})`);
   }
 
