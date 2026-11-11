@@ -1314,16 +1314,17 @@ declare platform { toolchain } в profile
 | `"/opt/avr/bin/avr-gcc"` | абсолютный путь — используется напрямую |
 | `"./tools/cc65/bin/cl65"` | путь относительно корня проекта (vendored toolchain) |
 
-**Pinned toolchain** (`name@version`) — гарантирует воспроизводимость на CI:
+**Pinned toolchain** (`name@version`) — гарантирует воспроизводимость на CI. Пин живёт прямо в build-пресете, отдельной секции манифеста для него нет:
 
 ```json
 {
-    "platform": {
-        "avr": {
-            "mcu": "atmega328p",
-            "toolchain": "avr-gcc@12.1"
-        }
+  "builds": {
+    "avr": {
+      "target": "avr",
+      "mcu": "atmega328p",
+      "toolchain": "avr-gcc@12.1"
     }
+  }
 }
 ```
 
