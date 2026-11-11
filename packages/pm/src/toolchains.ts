@@ -259,6 +259,38 @@ export interface IsolatedToolchain {
   version: string;
 }
 
+/** All toolchains installed for one platform package version (doctor's
+ * Platforms section): every `<toolchain>@<version>/` entry under the
+ * platform's cache dir, bin/ when present, the flat root otherwise. */
+export function listIsolatedToolchains(
+  pkgName: string,
+  pkgVersion: string,
+  home: string = userHome(),
+): Array<{ name: string; version: string; dir: string; binDir: string }> {
+  const names = platformNames(pkgName);
+  if (!names) return [];
+  const platformDir = join(home, '.tsclang', 'platforms', `${names.build.replace(/:/g, '-')}@${pkgVersion}`);
+  let entries: string[];
+  try {
+    entries = readdirSync(platformDir);
+  } catch {
+    return [];
+  }
+  const result: Array<{ name: string; version: string; dir: string; binDir: string }> = [];
+  for (const entry of entries) {
+    const at = entry.lastIndexOf('@');
+    if (at <= 0) continue;
+    const dir = join(platformDir, entry);
+    result.push({
+      name: entry.slice(0, at),
+      version: entry.slice(at + 1),
+      dir,
+      binDir: existsSync(join(dir, 'bin')) ? join(dir, 'bin') : dir,
+    });
+  }
+  return result;
+}
+
 /** Find a toolchain in the isolated platform cache (~/.tsclang/platforms).
  * With `version` — an exact match; without — the newest installed version
  * across all platform packages. `bin/` wins; a flat toolchain root serves as

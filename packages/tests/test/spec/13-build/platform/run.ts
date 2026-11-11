@@ -9,6 +9,7 @@ import "./platform-remove.test"
 import "./toolchains.test"
 import "./toolchain-resolve.test"
 import "./build-env.test"
+import "./doctor-platforms.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

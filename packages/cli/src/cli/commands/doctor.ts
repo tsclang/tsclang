@@ -13,10 +13,12 @@ import { hasFlag } from '../args.js';
 import { findTool, msvcDetect } from '../toolchain.js';
 import { collectManifestDiagnostics } from './config.js';
 import { RECOMMENDED_TOOLS, profileFromBuilds, type ToolProfile } from '../doctor/recommended.js';
+import { scanInstalledPlatforms } from './platform.js';
 import { suggestManifestAdditions, type ManifestAdditions } from '../doctor/suggest.js';
 import { installSource, localVersion, updateLine } from '../doctor/version.js';
 import { askFixAction, askYesNo, closePrompt } from '../doctor/prompt.js';
 import { applyUserPathWin } from '../doctor/pathfix.js';
+import { listIsolatedToolchains } from '@tsclang/pm';
 
 type Write = (s: string) => void;
 
@@ -183,6 +185,42 @@ export async function runDoctorCommand(args: string[], rootDir: string): Promise
     w('');
   } else if (interactive && !toolsOnly) {
     w('');
+  }
+
+  // --- Platforms (#273) ---
+  // Installed platform packages of the project with per-toolchain status:
+  // isolated (version + bin dir), system (PATH) or not found. A missing
+  // platform toolchain is informational only — emit c + system tools is a
+  // valid setup — so it never counts towards `problems`.
+  if (!projectOnly) {
+    const platforms = scanInstalledPlatforms(process.cwd());
+    let wantPlatforms = true;
+    if (interactive && !toolsOnly && platforms.length) {
+      wantPlatforms = await askYesNo('Проверим платформы проекта?');
+    }
+    if (wantPlatforms && platforms.length) {
+      w('Platforms:');
+      for (const p of platforms) {
+        w(`  ${p.name} ${p.version}`);
+        const manifestTools = Object.keys((p.section.toolchains ?? {}) as Record<string, unknown>);
+        const isolated = listIsolatedToolchains(p.name, p.version);
+        const toolNames = [...new Set([...manifestTools, ...isolated.map((t) => t.name)])];
+        for (const name of toolNames) {
+          const iso = isolated.find((t) => t.name === name);
+          if (iso) {
+            w(`    [ok] ${name} - isolated ${iso.version} (${iso.binDir})`);
+            continue;
+          }
+          if (findTool(name).inPath) {
+            w(`    [ok] ${name} - system (found in PATH)`);
+            continue;
+          }
+          w(`    [x] ${name} - not found`);
+          w(`      install: tsclang platform install ${p.name}   (or ${name} from the system package manager)`);
+        }
+      }
+      w('');
+    }
   }
 
   // --- Toolchains ---

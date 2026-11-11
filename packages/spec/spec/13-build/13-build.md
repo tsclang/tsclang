@@ -2668,7 +2668,7 @@ tsclang doctor --project   # только tsc.package.json
 tsclang doctor --fix       # дописать недостающие builds/scripts по пресету init
 ```
 
-**Секции отчёта:** Platform (ОС/архитектура), Version (версия + источник: npm или dev-линк), Update (npm registry), Project (`tsc.package.json`: валидация как `validate-config`, наличие `main`, недостающие `builds`/`scripts` против пресета `init`), Toolchains (профиль из `builds`: desktop → gcc+cmake, опц. gdb/msvc; embedded → avr-gcc+avr-objcopy+avrdude; wasm → emcc).
+**Секции отчёта:** Platform (ОС/архитектура), Version (версия + источник: npm или dev-линк), Update (npm registry), Project (`tsc.package.json`: валидация как `validate-config`, наличие `main`, недостающие `builds`/`scripts` против пресета `init`), Platforms (установленные платформы проекта из `tsc_packages`: каждый тулчейн — `[ok] isolated <версия> (<bin-каталог>)` / `[ok] system (found in PATH)` / `[x] not found` + hint `tsclang platform install <имя>`; отсутствующий тулчейн платформы — informational, exit-код не меняет — `emit c` + системные тулчейны валидны; секция полностью локальна, сети не касается), Toolchains (профиль из `builds`: desktop → gcc+cmake, опц. gdb/msvc; embedded → avr-gcc+avr-objcopy+avrdude; wasm → emcc).
 
 **Метки:** `[ok]` / `[!]` (чинимо) / `[x]` (отсутствует) / `[~]` (опционально, на exit-код не влияет). Exit 0 — проблем нет, 1 — есть обязательные `[!]`/`[x]` или диагностики манифеста.
 
@@ -2676,7 +2676,7 @@ tsclang doctor --fix       # дописать недостающие builds/scri
 
 **Сеть:** единственное сетевое обращение CLI — `GET https://registry.npmjs.org/tsclang/latest` с таймаутом 3 с. Любой сбой тихо печатает `check failed (offline?)`; отчёт из-за сети не падает. npm-установкам предлагается `update available`, dev-линкам — `not applicable`. Env-гейты: `TSC_DOCTOR_NO_UPDATE=1` — не ходить в сеть, `TSC_DOCTOR_INTERACTIVE=1` — форсировать интерактив под пайпом (CI/тесты).
 
-**Ограничения:** тулчейны не устанавливает (печатает winget/pacman/apt-инструкцию), пакеты не проверяет (реестр mock), MSVC не PATH-чинит (cl требует INCLUDE/LIB из vcvarsall — подсказка «запускайте из Developer PowerShell»).
+**Ограничения:** тулчейны не устанавливает (печатает winget/pacman/apt-инструкцию или `tsclang platform install`), pm-пакеты не проверяет, MSVC не PATH-чинит (cl требует INCLUDE/LIB из vcvarsall — подсказка «запускайте из Developer PowerShell»).
 
 ## Быстрый старт
 
