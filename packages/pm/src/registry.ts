@@ -38,6 +38,14 @@ export function resolveRange(pkg: string, range: string): string | null {
 export interface LockPackage {
   version: string;
   source?: string;
+  /** Archive URL for registry installs (`platform install`) */
+  resolved?: string;
+  /** sha256 of the archive text for registry installs */
+  integrity?: string;
+  /** Hash snapshots of manifest entries created by a platform package (#267):
+   *  lets later installs update their own entries without ever touching
+   *  user entries, and lets `platform remove` clean up exactly what it made. */
+  platform?: import('./platform-install.js').PlatformOwnership;
 }
 
 export interface LockFile {
@@ -81,6 +89,11 @@ export function readManifest(): Manifest | null {
   } catch {
     return null;
   }
+}
+
+// Writes the whole manifest (applyPlatformPlan mutates in memory first).
+export function writeManifest(manifest: Manifest): void {
+  writeManifestFile(manifest);
 }
 
 function writeManifestFile(manifest: Manifest): void {

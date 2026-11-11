@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from 'fs';
-import { join, resolve, dirname } from 'path';
-import { MOCK_REGISTRY, readLock, writeLock, readManifest, resolveRange, manifestAddDependency, manifestRemoveDependency } from '@tsclang/pm';
+import { join, resolve } from 'path';
+import { MOCK_REGISTRY, readLock, writeLock, readManifest, resolveRange, manifestAddDependency, manifestRemoveDependency, extractTspkg } from '@tsclang/pm';
 import type { LockPackage, LockFile } from '@tsclang/pm';
 import { PACKAGE_FILE, PACKAGES_DIR } from '@tsclang/shared';
 import { hasFlag, getPositional } from '../args.js';
@@ -127,12 +127,13 @@ export function runInstallCommand(args: string[]): void {
       process.stderr.write('tsclang install: malformed .tspkg (missing name/version/files)\n');
       process.exit(1);
     }
-    const pkgDir = join(PACKAGES_DIR, pkgName);
-    mkdirSync(pkgDir, { recursive: true });
-    for (const [rel, content] of Object.entries(files)) {
-      const dest = join(pkgDir, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, content, 'utf8');
+    // Shared zip-slip-safe extraction (platform install uses it for network
+    // archives — the same guard belongs on local installs).
+    try {
+      extractTspkg(files, PACKAGES_DIR, pkgName);
+    } catch (e) {
+      process.stderr.write(`tsclang install: ${(e as Error).message}\n`);
+      process.exit(1);
     }
     manifestAddDependency(pkgName, pkgVersion);
     const lock = readLock();
@@ -162,6 +163,13 @@ export function runInstallCommand(args: string[]): void {
       constraint = /^\d/.test(lockVersion) ? `^${lockVersion}` : lockVersion;
     }
     pkgSource = 'registry';
+  }
+
+  // Honest not-found: an unregistered name must fail loudly instead of
+  // creating an empty package dir and a lock entry pinning 'latest'.
+  if (pkgSource === 'registry' && !MOCK_REGISTRY[pkgName]) {
+    process.stderr.write(`tsclang install: package '${pkgName}' not found in the registry\n`);
+    process.exit(1);
   }
 
   mkdirSync(join(PACKAGES_DIR, pkgName), { recursive: true });

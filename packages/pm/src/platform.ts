@@ -79,6 +79,11 @@ export function validatePlatformSection(platform: unknown): string | null {
     return `'platform.builds' must have at least one build preset, got ${JSON.stringify(platform.builds)}`;
   }
   for (const [name, cfgRaw] of Object.entries(platform.builds)) {
+    // Preset names become manifest build keys via the docker-model mapping —
+    // they must be usable as a key and a path segment (no ':' etc.).
+    if (!NAME_PART_RE.test(name)) {
+      return `'platform.builds.${name}': invalid preset name (must match ${NAME_PART_RE}, it becomes a manifest build name)`;
+    }
     if (!isPlainObject(cfgRaw)) {
       return `'platform.builds.${name}' must be an object`;
     }
@@ -94,6 +99,9 @@ export function validatePlatformSection(platform: unknown): string | null {
       return `'platform.scripts' must be an object, got ${JSON.stringify(platform.scripts)}`;
     }
     for (const [name, cmd] of Object.entries(platform.scripts)) {
+      if (!NAME_PART_RE.test(name)) {
+        return `'platform.scripts.${name}': invalid script name (must match ${NAME_PART_RE}, it becomes a manifest script name)`;
+      }
       if (typeof cmd !== 'string' || !cmd.trim()) {
         return `platform.scripts.${name} must be a non-empty string, got ${JSON.stringify(cmd)}`;
       }
@@ -126,6 +134,9 @@ export const OFFICIAL_PLATFORM_SCOPE = 'tsclang';
 export interface PlatformNames {
   /** `builds.<key>` in the consumer manifest — `:`-separated */
   build: string;
+  /** Manifest key for ANY package-internal preset name (multi-preset
+   *  packages map each internal name with the same scope rule). */
+  key(internal: string): string;
   /** `scripts.<key>` for a package-internal script name */
   script(name: string): string;
   /** Default output dir relative to the consumer root (`:` → `-`). An explicit
@@ -133,8 +144,9 @@ export interface PlatformNames {
   outDir: string;
 }
 
-// Each part (scope / name) must be usable as a manifest key and a path segment.
-const NAME_PART_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+// Each part (scope / name / preset name) must be usable as a manifest key and
+// a path segment.
+export const NAME_PART_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * Map a platform package name to its build/script/outDir names, or null when
@@ -146,7 +158,11 @@ export function platformNames(pkgName: string): PlatformNames | null {
   if (slash === -1) {
     if (!NAME_PART_RE.test(pkgName)) return null;
     const build = pkgName;
-    return { build, script: (s) => `${build}:${s}`, outDir: `build/${build}` };
+    const key = (internal: string): string => {
+      if (!NAME_PART_RE.test(internal)) throw new Error(`invalid platform preset name '${internal}' of '${pkgName}'`);
+      return internal;
+    };
+    return { build, key, script: (s) => `${build}:${s}`, outDir: `build/${build}` };
   }
   // Exactly one slash: @scope/name. Anything deeper is not a package name.
   if (slash !== pkgName.lastIndexOf('/')) return null;
@@ -155,5 +171,9 @@ export function platformNames(pkgName: string): PlatformNames | null {
   if (!scope.startsWith('@')) return null;
   if (!NAME_PART_RE.test(scope.slice(1)) || !NAME_PART_RE.test(name)) return null;
   const build = scope === `@${OFFICIAL_PLATFORM_SCOPE}` ? name : `${scope.slice(1)}:${name}`;
-  return { build, script: (s) => `${build}:${s}`, outDir: `build/${build.replace(/:/g, '-')}` };
+  const key = (internal: string): string => {
+    if (!NAME_PART_RE.test(internal)) throw new Error(`invalid platform preset name '${internal}' of '${pkgName}'`);
+    return scope === `@${OFFICIAL_PLATFORM_SCOPE}` ? internal : `${scope.slice(1)}:${internal}`;
+  };
+  return { build, key, script: (s) => `${build}:${s}`, outDir: `build/${build.replace(/:/g, '-')}` };
 }

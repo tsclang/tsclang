@@ -82,7 +82,7 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   // dispatcher routes `platform <sub>` and validates flags against the
   // subcommand entry below. Keys use the 'platform <sub>' spelling.
   platform: new Set(),
-  'platform install': new Set(),
+  'platform install': new Set(['--offline']),
   'platform search': new Set(['--offline']),
   'platform remove': new Set(),
   'platform list': new Set(),

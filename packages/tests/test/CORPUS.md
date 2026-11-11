@@ -1502,8 +1502,8 @@ input.tsc:1:
 
 ### tsclang install
 
-- [R] устанавливает зависимость из npm-реестра
-- [R] устанавливает из git URL
+- [R] `install mylib@1.0.0` — установка из MOCK-реестра pm (сетевого кода в pm нет; настоящий реестр — только у `platform install`, см. `13-build/platform`)
+- [R] `install git+<url>` — фиксация git-зависимости в lock без клонирования (источник сохраняется, скачивание — после реестра)
 - [R] создаёт `tsc.package.lock`
 - [R] повторный install не меняет `tsc.package.lock` (reproducible)
 - [R] `--production` — не ставит devDependencies
