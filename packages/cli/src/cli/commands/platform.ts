@@ -7,6 +7,8 @@ import {
   planPlatformApply, applyPlatformPlan, ownershipFromPlan, planPlatformRemoval,
   fetchPackageArchive, extractTspkg, packageNameParts,
   readLock, writeLock, ensureManifest, writeManifest, readManifest,
+  decideToolchain, detectSystemCommand, downloadToolchain, platformToolchainDir,
+  readConsent, writeConsent, selectDownload, toolchainInstructions, userHome,
 } from '@tsclang/pm';
 import type { PlatformSection, PlatformApplyPlan, PlanAction } from '@tsclang/pm';
 import { hasFlag } from '../args.js';
@@ -152,7 +154,70 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   writeLock(lock);
 
   printInstallSummary(archive.name, archive.version, platform, plan);
+  await installToolchains(archive.name, archive.version, platform, offline);
   process.exit(0);
+}
+
+/** Toolchain handling after a successful platform install (#270). One line
+ * per toolchain; failures degrade to a manual instruction — the platform
+ * itself is already installed, a missing toolchain must not fail the run. */
+async function installToolchains(
+  pkgName: string, pkgVersion: string, platform: PlatformSection, offline: boolean,
+): Promise<void> {
+  const entries = Object.entries(platform.toolchains ?? {});
+  if (!entries.length) return;
+  const home = userHome();
+  const consent = readConsent(home);
+  const envPolicy = process.env.TSC_TOOLCHAINS === 'always' || process.env.TSC_TOOLCHAINS === 'never'
+    ? (process.env.TSC_TOOLCHAINS as 'always' | 'never')
+    : undefined;
+  const tty = process.env.TSC_TOOLCHAIN_INTERACTIVE === '1' || process.stdin.isTTY === true;
+
+  for (const [tcName, spec] of entries) {
+    const dir = platformToolchainDir(pkgName, pkgVersion, tcName, spec.version, home);
+    if (existsSync(dir)) {
+      process.stdout.write(`  toolchain ${tcName}: already installed (${dir})\n`);
+      continue;
+    }
+    const download = selectDownload(spec);
+    const systemCommand = detectSystemCommand(tcName) ?? undefined;
+    let decision = decideToolchain({ systemCommand, tty, consent, envPolicy, hasDownload: !!download });
+
+    // TTY: the system toolchain is confirmed before use; declining it moves
+    // on to the download question.
+    if (decision.action === 'ask-system') {
+      const useSystem = await askYesNo(`toolchain ${tcName}: found in PATH (${decision.command}) — use the system one?`, true);
+      if (useSystem) {
+        decision = { action: 'use-system', command: decision.command };
+      } else {
+        decision = decideToolchain({ tty, consent, envPolicy, hasDownload: !!download });
+      }
+    }
+    if (decision.action === 'ask-download' && download) {
+      const sizeNote = download.size !== undefined ? ` (~${download.size} MB)` : '';
+      const yes = await askYesNo(`toolchain ${tcName}: download an isolated copy to ${join(home, '.tsclang', 'platforms')}${sizeNote}?`, true);
+      writeConsent(yes ? 'yes' : 'no', home); // remembered machine-level
+      decision = yes ? { action: 'download' } : { action: 'instruct' };
+    }
+
+    if (decision.action === 'use-system') {
+      process.stdout.write(`  toolchain ${tcName}: using system ${decision.command} (found in PATH)\n`);
+      continue;
+    }
+    if (decision.action === 'instruct' || !download) {
+      process.stdout.write(`  toolchain ${tcName}: manual install — ${toolchainInstructions(tcName)}\n`);
+      continue;
+    }
+    try {
+      const r = await downloadToolchain({
+        pkgName, pkgVersion, toolchain: tcName, spec, download, home, offline,
+      });
+      process.stdout.write(`  toolchain ${tcName}: downloaded to ${r.dir}\n`);
+    } catch (e) {
+      process.stderr.write(`tsclang: toolchain ${tcName} download failed: ${(e as Error).message}\n`);
+      process.stdout.write(`  toolchain ${tcName}: manual install — ${toolchainInstructions(tcName)}\n`);
+    }
+  }
 }
 
 function printInstallSummary(name: string, version: string, platform: PlatformSection, plan: PlatformApplyPlan): void {
@@ -163,10 +228,6 @@ function printInstallSummary(name: string, version: string, platform: PlatformSe
     else if (action.kind === 'update') lines.push(`  ~ ${label} (updated)`);
     else if (action.kind === 'remove') lines.push(`  - ${label} (stale platform entry removed)`);
     // keep → silent (idempotent); skip → already noticed on stderr
-  }
-  const toolchains = Object.keys(platform.toolchains ?? {});
-  if (toolchains.length) {
-    lines.push(`  toolchains: ${toolchains.join(', ')} (download consent arrives with toolchain support; system-installed ones already work)`);
   }
   process.stdout.write(lines.join('\n') + '\n');
 }

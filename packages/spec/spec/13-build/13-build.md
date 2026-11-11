@@ -666,10 +666,10 @@ platform/
 **Секция `platform`** — дистрибутив платформы:
 
 - `profile` — имя профиля; сам профиль живёт в `index.d.tsc` (`declare platform { ... }`), секция его не дублирует;
-- `toolchains.<имя>.downloads.<os-arch>` — `{url, sha256, size}` для скачивания тулчейна в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (архив `.tar.gz`, распаковка системным `tar`, проверка sha256 обязательна);
+- `toolchains.<имя>.downloads.<os-arch>` — `{url, sha256, size}` для скачивания тулчейна в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (архив `.tar.gz`, распаковка системным `tar`, проверка sha256 обязательна). `url` — `http(s)` или `file://` (локальные зеркала, офлайн-фикстуры). `<платформа>` материализуется как имя билда: официальный scope без префикса (`@tsclang/desktop` → `desktop@1.0.0`), чужой — `scope-name` (`@nes/zxdev` → `nes-zxdev@0.3.1`; `:` в NTFS-путях запрещено);
 - `builds` / `scripts` — пресеты конфигураций и задач с **непрефиксованными внутренними именами**; префиксы и итоговые имена вычисляет установщик (см. «Подключение к проекту»).
 
-**Валидация** (`validate-config` / `init`): пара `type: "platform"` ↔ секция `platform` неразделима — у платформы без секции ошибка `platform package requires a 'platform' section`, секция у любого другого типа — `'platform' section is only allowed for type "platform"` (пиннинг тулчейнов проекта живёт в `builds.<n>.toolchain`). Схема секции: `profile` — непустая строка (обязательна), `toolchains.<имя>` — `{version, downloads}` с ≥1 записью `os-arch → {url (http/https), sha256 (64 hex), size? (МБ)}`, `builds` — ≥1 пресета с ключами из `VALID_BUILD_KEYS`, `scripts` — непустые строки.
+**Валидация** (`validate-config` / `init`): пара `type: "platform"` ↔ секция `platform` неразделима — у платформы без секции ошибка `platform package requires a 'platform' section`, секция у любого другого типа — `'platform' section is only allowed for type "platform"` (пиннинг тулчейнов проекта живёт в `builds.<n>.toolchain`). Схема секции: `profile` — непустая строка (обязательна), `toolchains.<имя>` — `{version, downloads}` с ≥1 записью `os-arch → {url (http/https/file), sha256 (64 hex), size? (МБ)}`, `builds` — ≥1 пресета с ключами из `VALID_BUILD_KEYS`, `scripts` — непустые строки.
 
 ---
 
@@ -1048,7 +1048,17 @@ TSClang-библиотека и C-wrapper различаются явным ти
 tsclang platform install @nes/platform
 ```
 
-Установщик: ставит пакет в `tsc_packages/@nes/platform/`, дописывает `dependencies`, **автоматически дописывает `builds`/`scripts` из пресетов** секции `platform` и предлагает скачать тулчейны в `~/.tsclang/platforms/` (см. выше).
+Установщик: ставит пакет в `tsc_packages/@nes/platform/`, дописывает `dependencies`, **автоматически дописывает `builds`/`scripts` из пресетов** секции `platform` и обрабатывает тулчейны (семантика ниже). Тулчейн уже скачан изолированно — используется как есть (идемпотентность).
+
+**Тулчейны при установке** — решение по каждому `toolchains.<имя>`:
+
+- найден в системе (PATH) — TTY (`TSC_TOOLCHAIN_INTERACTIVE=1` форсирует) подтверждает использование системного; не-TTY использует молча;
+- системного нет — вопрос `[Y/n]` «скачать изолированную копию (~N MB)?»; ответ запоминается на машину (`~/.tsclang/toolchain-consent.json`);
+- env `TSC_TOOLCHAINS=always` — качать без вопросов; `=never` — никогда не качать (только системный или инструкция); env перекрывает вопросы и файл;
+- не-TTY без запомненного согласия — печатная инструкция per-OS, ничего не качается и не запоминается;
+- сборки под `os-arch` нет — инструкция per-OS (даже при согласии «да»);
+- скачивание (`.tar.gz`, sha256 до распаковки, системный `tar`) провалилось — ошибка в stderr + инструкция, установка платформы считается успешной (тулчейн доставляем отдельно);
+- `TSC_HOME` переопределяет корень `~` (тесты, CI-кэши): всё живёт в `$TSC_HOME/.tsclang/`.
 
 **Имена (docker-модель):** официальный scope `@tsclang/*` пишется без префикса, чужой scope становится префиксом с двоеточием:
 
@@ -1338,7 +1348,7 @@ declare platform { toolchain } в profile
 }
 ```
 
-Логика поиска для `avr-gcc@12.1`:
+Логика поиска для `avr-gcc@12.1` (`<платформа>` материализуется как имя билда: `desktop`, `nes-zxdev`):
 1. `~/.tsclang/platforms/<платформа>@<версия>/avr-gcc@12.1/bin/avr-gcc` — кеш платформы (скачивается при `tsclang platform install`)
 2. `avr-gcc` в PATH с проверкой версии (`avr-gcc --version`)
 3. Ошибка с подсказкой:
@@ -2307,7 +2317,7 @@ build/avr/
 | `tsclang search` (`s`) | Поиск пакетов |
 | `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
 | `tsclang doctor` | Диагностика окружения и проекта (тулчейны, манифест, обновление) |
-| `tsclang platform install <name>`/`search`/`list`/`remove <name>` | Платформы как пакеты: установка из реестра-каталога (builds/scripts по правилам имён, владение записями через lock-снапшоты, тулчейны в `~/.tsclang/platforms/` — скачивание в #270), поиск, удаление. Группа диспетчеризована (`platform`/`platform --help` — help группы, `platform <cmd> --help` — справка подкоманды, неизвестная подкоманда/опция — ошибка). Все четыре подкоманды реализованы (реестр v1: кэш с TTL, гейты `--offline`/`TSC_NO_NETWORK`, env `TSC_REGISTRY`/`TSC_CATALOG_CACHE`; `remove` — чистка по lock-снапшотам: правленые записи остаются с warning) |
+| `tsclang platform install <name>`/`search`/`list`/`remove <name>` | Платформы как пакеты: установка из реестра-каталога (builds/scripts по правилам имён, владение записями через lock-снапшоты, тулчейны в `~/.tsclang/platforms/` — скачивание с согласием, см. «Подключение к проекту»), поиск, удаление. Группа диспетчеризована (`platform`/`platform --help` — help группы, `platform <cmd> --help` — справка подкоманды, неизвестная подкоманда/опция — ошибка). Все четыре подкоманды реализованы (реестр v1: кэш с TTL, гейты `--offline`/`TSC_NO_NETWORK`, env `TSC_REGISTRY`/`TSC_CATALOG_CACHE`; `remove` — чистка по lock-снапшотам: правленые записи остаются с warning) |
 
 Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`, `doctor`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
 

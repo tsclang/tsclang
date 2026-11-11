@@ -62,8 +62,9 @@ export function validatePlatformSection(platform: unknown): string | null {
           return `'platform.toolchains.${tcName}.downloads.${osArch}' must be an object`;
         }
         const dl = dlRaw as unknown as PlatformDownload;
-        if (typeof dl.url !== 'string' || !/^https?:\/\//.test(dl.url)) {
-          return `'platform.toolchains.${tcName}.downloads.${osArch}.url' must be a string (http/https URL), got ${JSON.stringify(dl.url)}`;
+        // file:// is allowed for local mirrors and offline fixtures.
+        if (typeof dl.url !== 'string' || !/^(https?|file):\/\//.test(dl.url)) {
+          return `'platform.toolchains.${tcName}.downloads.${osArch}.url' must be a string (http/https/file URL), got ${JSON.stringify(dl.url)}`;
         }
         if (typeof dl.sha256 !== 'string' || !SHA256_RE.test(dl.sha256)) {
           return `'platform.toolchains.${tcName}.downloads.${osArch}.sha256' must be 64 hex characters, got ${JSON.stringify(dl.sha256)}`;
