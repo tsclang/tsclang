@@ -78,6 +78,14 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   doctor: new Set(['--project', '--tools', '--fix']),
   lsp: new Set(),
   test: new Set(),
+  // Nested command group (#265): the group itself accepts no options; the
+  // dispatcher routes `platform <sub>` and validates flags against the
+  // subcommand entry below. Keys use the 'platform <sub>' spelling.
+  platform: new Set(),
+  'platform install': new Set(),
+  'platform search': new Set(),
+  'platform remove': new Set(),
+  'platform list': new Set(),
 };
 
 // Single-letter command aliases — npm/pnpm/bun muscle memory (tsclang i / u / r),

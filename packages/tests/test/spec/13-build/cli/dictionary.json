@@ -4,7 +4,7 @@
   "sources": [
     "packages/spec/book/00-intro/00.2-setup/00.2.2-installation.md",
     "packages/spec/book/00-intro/00.2-setup/00.2.4-quick-start.md",
-    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.17)"
+    "packages/spec/book/00-intro/00.7-cli-overview/ (00.7.1-00.7.18)"
   ],
   "install": {
     "global": "npm install -g tsclang",
@@ -112,6 +112,15 @@
         { "name": "--tools", "takesValue": false, "description": "check only the recommended toolchains", "provenance": "00.7.17-doctor.md" },
         { "name": "--fix", "takesValue": false, "description": "apply manifest fixes without asking (PATH is never touched)", "provenance": "00.7.17-doctor.md" }
       ]
+    },
+    {
+      "name": "platform",
+      "description": "Manage platform packages (install, search, remove, list)",
+      "provenance": "00.2.2-installation.md:67; 00.7.18-platform.md",
+      "positional": "<command>: install <name> | search [query] | list | remove <name>",
+      "result": "group help when no subcommand; per-subcommand help via 'platform <cmd> --help'; unknown subcommand/option → exit 1",
+      "resultProvenance": "00.7.18-platform.md",
+      "options": []
     }
   ]
 }

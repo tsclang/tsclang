@@ -21,6 +21,7 @@ COMMANDS:
   remove (r)       Remove a package
   search (s)       Search packages
   publish (p)      Publish a package
+  platform         Manage platform packages (install, search, remove, list)
   doctor           Diagnose environment & project
 
 OPTIONS:

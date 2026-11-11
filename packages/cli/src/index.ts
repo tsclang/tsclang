@@ -18,6 +18,7 @@ import { runSearchCommand, runPublishCommand, runInstallCommand, runUpdateComman
 import { runDebugCommand } from './cli/commands/debug.js';
 import { runTestCommand } from './cli/commands/test.js';
 import { runDoctorCommand } from './cli/commands/doctor.js';
+import { runPlatformCommand, PLATFORM_SUBCOMMANDS } from './cli/commands/platform.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const _require = createRequire(import.meta.url);
@@ -48,6 +49,37 @@ if (COMMAND_ALIASES[command]) {
 if (!command || command === '--help' || command === '-h') {
   console.log(getHelpText(VERSION));
   process.exit(0);
+}
+
+// `platform` — first nested command group (#265). Handled BEFORE the flat
+// --help/flag machinery: the group has its own subcommand routing, per-
+// subcommand help and per-subcommand flag validation ('platform <sub>' keys
+// in COMMAND_FLAGS), so the generic paths above must not intercept it.
+if (command === 'platform') {
+  const sub = args[1] !== undefined && !args[1].startsWith('-') ? args[1] : undefined;
+  if (args.length === 1 || hasFlagAny(args, '--help', '-h')) {
+    // Bare group / --help: group help, or the subcommand's help when given
+    // (`platform install --help`).
+    console.log(CMD_HELP[sub ? `platform ${sub}` : 'platform'] ?? CMD_HELP['platform']);
+    process.exit(0);
+  }
+  if (!PLATFORM_SUBCOMMANDS.includes(sub as (typeof PLATFORM_SUBCOMMANDS)[number])) {
+    if (sub === undefined) {
+      // first token after `platform` is a flag the group does not accept
+      console.error(`tsclang: unknown option '${args[1]}' for 'platform'`);
+    } else {
+      console.error(`tsclang: unknown platform command '${sub}'`);
+    }
+    console.error("Run 'tsclang platform --help' for usage.");
+    process.exit(1);
+  }
+  const platformFlagError = checkUnknownFlags(args.slice(1), `platform ${sub}`);
+  if (platformFlagError) {
+    console.error(`tsclang: ${platformFlagError}`);
+    console.error(`Run 'tsclang platform ${sub} --help' for usage.`);
+    process.exit(1);
+  }
+  runPlatformCommand(sub!);
 }
 
 // `<cmd> --help` prints the per-command help where defined, main help otherwise (#243)

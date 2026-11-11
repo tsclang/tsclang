@@ -73,6 +73,7 @@
 - 00.7.15-publish.md — publish (p): упаковка .tspkg
 - 00.7.16-lsp.md — lsp: LSP-сервер на stdio, реализованное и roadmap
 - 00.7.17-doctor.md — doctor: диагностика окружения и проекта, тулчейны, PATH-фиксы
+- 00.7.18-platform.md — платформы как пакеты: группа platform (install, search, remove, list)
 
 ---
 

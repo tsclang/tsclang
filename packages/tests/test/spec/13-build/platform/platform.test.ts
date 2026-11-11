@@ -310,3 +310,62 @@ describe("13-build/platform 0.4 — приоритет профилей: пак�
     expect(caps!.bits).toBe(64)
   })
 })
+
+// === 1.0 (#265): dispatcher — nested `platform` command group ===
+
+describe("13-build/platform 1.0 — диспетчер: группа platform (#265)", () => {
+  test("`platform` без подкоманды — help группы, exit 0", async () => {
+    const r = await runCli(["platform"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("tsclang platform <command>")
+    for (const sub of ["install", "search", "remove", "list"]) {
+      expect(r.stdout.includes(sub)).toBe(true)
+    }
+  })
+
+  test("`platform --help` — тот же help группы", async () => {
+    const r = await runCli(["platform", "--help"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("tsclang platform <command>")
+  })
+
+  test("`platform <неизвестная>` — ошибка именно о подкоманде, exit 1", async () => {
+    const r = await runCli(["platform", "frobnicate"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain("unknown platform command 'frobnicate'")
+  })
+
+  test("`platform --bogus` — unknown option для platform, не unknown command", async () => {
+    const r = await runCli(["platform", "--bogus"], { cwd: mkTmp() })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain("unknown option '--bogus' for 'platform'")
+  })
+
+  test("флаги подкоманд валидируются по своей подкоманде (#244-механика)", async () => {
+    for (const sub of ["install", "search", "remove", "list"]) {
+      const r = await runCli(["platform", sub, "--bogus"], { cwd: mkTmp() })
+      expect(r.code).toBe(1)
+      expect(r.stderr).toContain(`unknown option '--bogus' for 'platform ${sub}'`)
+    }
+  })
+
+  test("`platform list` — заглушка: явное not implemented, exit 1", async () => {
+    for (const sub of ["list", "search", "install", "remove"]) {
+      const r = await runCli(["platform", sub], { cwd: mkTmp() })
+      expect(r.code).toBe(1)
+      expect(r.stderr).toContain(`platform ${sub} is not implemented yet`)
+    }
+  })
+
+  test("`platform install --help` — справка подкоманды (не общий help)", async () => {
+    const r = await runCli(["platform", "install", "--help"], { cwd: mkTmp() })
+    expect(r.code).toBe(0)
+    expect(r.stdout).toContain("tsclang platform install")
+  })
+
+  test("главный help-листинг содержит строку platform", async () => {
+    const r = await runCli(["--help"])
+    expect(r.code).toBe(0)
+    expect(r.stdout).toMatch(/platform\s+/)
+  })
+})
