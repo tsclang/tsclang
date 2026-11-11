@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "name": "@nes/zxdev",
+      "type": "platform",
+      "version": "0.3.1",
+      "description": "ZX Spectrum dev platform (fixture)",
+      "location": {
+        "url": "nes-zxdev-0.3.1.tspkg",
+        "sha256": "1428b6fda8626a86cf82dd492d9fb4166d299052cdd44b6fc7684d6d3cd0b842"
+      }
+    },
+    {
+      "name": "@tsclang/hello",
+      "type": "platform",
+      "version": "1.0.0",
+      "description": "Official desktop starter platform (fixture)",
+      "location": {
+        "url": "tsclang-hello-1.0.0.tspkg",
+        "sha256": "c9d0cd2c8d1e5d76ecee7b57bef84c8b69727e62c3282aa3fa56a0d94cd8ae49"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@tsclang/hello",
+  "version": "1.0.0",
+  "files": {
+    "tsc.package.json": "{\n  \"name\": \"@tsclang/hello\",\n  \"version\": \"1.0.0\",\n  \"type\": \"platform\",\n  \"platform\": {\n    \"profile\": \"desktop\",\n    \"builds\": {\n      \"hello\": {\n        \"profile\": \"desktop\",\n        \"emit\": \"c\"\n      }\n    },\n    \"scripts\": {\n      \"run\": \"tsclang build --build hello\"\n    }\n  }\n}\n",
+    "index.d.tsc": "declare platform {\n  bits: 32\n}\n"
+  }
+}

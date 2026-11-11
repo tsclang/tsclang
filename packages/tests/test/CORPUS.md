@@ -18,7 +18,10 @@ packages/tests/test/cases/<section>/<feature>/<test-name>/
     expected.warning   — ожидаемый текст warning'а (опционально)
     expected.no-warning — пустой файл: assert что warning'ов нет (опционально)
     input.sh           — shell-сценарий вместо input.tsc: CLI-эндпойнт,
-                         stdout сравнивается с expected.out (опционально)
+                         stdout сравнивается с expected.out (опционально).
+                         Runner подменяет в тексте скрипта слова `tsclang`/`node`
+                         на полные пути к бинарникам; имена пакетов `@tsclang/*`
+                         (после `@`) подменой не затрагиваются
     needs-unix         — маркер для input.sh: требуемые unix-команды через
                          пробел (например `node avr-gcc avr-objcopy`). На win32
                          скрипт исполняется внутри WSL; если WSL или команд нет
@@ -1525,7 +1528,14 @@ input.tsc:1:
 
 ### tsclang platform
 
-- [R] полный цикл на локальной фикстуре реестра (ноль сети: `TSC_REGISTRY=catalog.json`, архив и каталог — файлы кейса): `platform install` → пользователь правит build-запись платформы → `platform remove` — правленая запись осталась (`! ... kept — edited by you`), свой script/dependency/lock/`tsc_packages/` вычищены (`13-build/platform/remove-edited`)
+Все кейсы — на локальной фикстуре реестра (`TSC_REGISTRY=catalog.json`, архив и каталог — файлы кейса), ноль сети.
+
+- [R] search: нашёл / не нашёл / весь каталог / тихий офлайн-провал без реестра и кэша (`TSC_NO_NETWORK=1` + несуществующий `TSC_CATALOG_CACHE` — notice в stderr, пустой результат, exit 0) (`search-local`)
+- [R] install: чистая установка — builds/scripts по правилам имён, lock-владение (`install-build-cycle`, официальный scope `@tsclang/*` — билд без префикса; сборка по дописанному пресету `--build hello`, `emit: "c"` — gcc не нужен)
+- [R] install идемпотентен: повторный вызов не меняет манифест и lock байт-в-байт (`install-idempotent`)
+- [R] install конфликт имён в не-TTY: пользовательская запись не перезаписывается (skip + notice в stderr), остальные записи применяются, exit 0 (`install-conflict`)
+- [R] remove полный: builds/scripts/dependencies вычищены (пустые maps удалены), lock пуст, `tsc_packages/` удалён, `platform list` пуст (`remove-full`)
+- [R] remove частичный: install → ручная правка build-записи → remove — правленая осталась (`! ... kept — edited by you`), свой script/dependency/lock/`tsc_packages/` вычищены (`remove-edited`)
 
 ### Алиасы pm-команд
 

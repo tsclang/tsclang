@@ -649,7 +649,7 @@ async function executeShTest(testDir, kind, tmpBase) {
     // RELAY's context (cwd of the node process) before bash parses the residue,
     // silently breaking `PATH="$PWD/..."`. Base64 contains nothing expandable,
     // so the script reaches bash byte-identical.
-    const inner = `cd '${toWslPath(tmpBase)}' && ${script.replace(/\btsclang\b/g, `node '${toWslPath(TSCLANG_BIN)}'`)}`;
+    const inner = `cd '${toWslPath(tmpBase)}' && ${script.replace(/(?<!@)\btsclang\b/g, `node '${toWslPath(TSCLANG_BIN)}'`)}`;
     const b64 = Buffer.from(inner, 'utf8').toString('base64');
     result = await runWsl(`echo '${b64}' | base64 -d | bash`);
   } else {
@@ -667,9 +667,12 @@ async function executeShTest(testDir, kind, tmpBase) {
     const tsclangCmd = USE_TSX
       ? `${nodeExec} --import ${TSX_LOADER} ${JSON.stringify(tscBin)}`
       : `${nodeExec} ${JSON.stringify(tscBin)}`;
+    // (?<!@) keeps scoped package names intact: `@tsclang/hello` is an
+    // argument, not the command word — substituting it would corrupt the
+    // install target (see corpus 13-build/platform/install-build-cycle).
     const patchedScript = script
-      .replace(/\bnode\b/g, nodeExec)
-      .replace(/\btsclang\b/g, tsclangCmd);
+      .replace(/(?<!@)\bnode\b/g, nodeExec)
+      .replace(/(?<!@)\btsclang\b/g, tsclangCmd);
 
     const finalScript = MSYS2_BASH
       ? `cd "${toMsysPath(tmpBase)}" && ${patchedScript}`

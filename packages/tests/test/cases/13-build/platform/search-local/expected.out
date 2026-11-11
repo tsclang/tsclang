@@ -1,0 +1,8 @@
+Found 1 package matching "zxdev":
+  @nes/zxdev@0.3.1 [platform] — ZX Spectrum dev platform (fixture)
+No platforms found matching "frobnicate"
+Found 2 packages:
+  @nes/zxdev@0.3.1 [platform] — ZX Spectrum dev platform (fixture)
+  @tsclang/hello@1.0.0 [platform] — Official desktop starter platform (fixture)
+No platforms found matching "zxdev"
+offline-exit=0

@@ -1,0 +1,8 @@
+Installed @nes/zxdev@0.3.1
+  + build nes:zxdev
+  + script nes:zxdev:dev
+Removed @nes/zxdev
+  - build nes:zxdev (platform entry removed)
+  - script nes:zxdev:dev (platform entry removed)
+all-clean
+No platforms installed (see tsclang platform search)

@@ -1,0 +1,5 @@
+Installed @tsclang/hello@1.0.0
+  + build hello
+  + script hello:run
+build-ok
+c-generated
