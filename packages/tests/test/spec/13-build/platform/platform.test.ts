@@ -349,8 +349,10 @@ describe("13-build/platform 1.0 — диспетчер: группа platform (#
     }
   })
 
-  test("`platform list` — заглушка: явное not implemented, exit 1", async () => {
-    for (const sub of ["list", "search", "install", "remove"]) {
+  test("нереализованные подкоманды (install/remove) — явное not implemented, exit 1", async () => {
+    // search/list became real in #266 (covered in platform-registry.test.ts);
+    // install lands in #267, remove in #268 — until then they refuse honestly.
+    for (const sub of ["install", "remove"]) {
       const r = await runCli(["platform", sub], { cwd: mkTmp() })
       expect(r.code).toBe(1)
       expect(r.stderr).toContain(`platform ${sub} is not implemented yet`)

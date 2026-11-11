@@ -3,6 +3,7 @@
 // Unit tests import source directly; e2e tests spawn dist — `pnpm build` first.
 // Run: pnpm tsx packages/tests/test/spec/13-build/platform/run.ts [filter]
 import "./platform.test"
+import "./platform-registry.test"
 import { printSummary } from "../../../../../test-engine/src/engine.ts"
 
 printSummary()

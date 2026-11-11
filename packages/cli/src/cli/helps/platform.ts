@@ -41,9 +41,11 @@ USAGE:
   tsclang platform search [query]
 
 Lists platform packages from the registry catalog matching the query.
-Works offline from cache; --offline / TSC_NO_NETWORK disables all network.
+Env TSC_REGISTRY points to a local catalog file or URL (tests, mirrors).
 
 OPTIONS:
+  --offline        No network: fresh cache only; without it a quiet notice
+                   and an empty result (exit 0). Same as TSC_NO_NETWORK.
   --help, -h       Print this help`;
 
 export const platformRemove = `tsclang platform remove — remove an installed platform

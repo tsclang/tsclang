@@ -2299,7 +2299,7 @@ build/avr/
 | `tsclang search` (`s`) | Поиск пакетов |
 | `tsclang publish` (`p`) | Упаковка пакета в `.tspkg` |
 | `tsclang doctor` | Диагностика окружения и проекта (тулчейны, манифест, обновление) |
-| `tsclang platform install <name>`/`search`/`list`/`remove <name>` | Платформы как пакеты: установка из реестра-каталога (builds/scripts по правилам имён, тулчейны в `~/.tsclang/platforms/`), поиск, удаление. Группа диспетчеризована (`platform`/`platform --help` — help группы, `platform <cmd> --help` — справка подкоманды, неизвестная подкоманда/опция — ошибка); подкоманды до реализации отвечают `not implemented yet` |
+| `tsclang platform install <name>`/`search`/`list`/`remove <name>` | Платформы как пакеты: установка из реестра-каталога (builds/scripts по правилам имён, тулчейны в `~/.tsclang/platforms/`), поиск, удаление. Группа диспетчеризована (`platform`/`platform --help` — help группы, `platform <cmd> --help` — справка подкоманды, неизвестная подкоманда/опция — ошибка). `search` и `list` реализованы (реестр v1: кэш с TTL, гейты `--offline`/`TSC_NO_NETWORK`, env `TSC_REGISTRY`/`TSC_CATALOG_CACHE`); `install`/`remove` до реализации отвечают `not implemented yet` |
 
 Имена команд пакетного менеджера — пересечение мускульной памяти npm (TS-аудитория) и cargo (системные программисты): `install`/`update`/`search`/`publish` совпадают у обоих; для удаления мажоритарное у pnpm/cargo/deno/bun — `remove`. Однобуквенные алиасы — та же логика: `i`/`u`/`r` повторяют npm/pnpm/bun, `b`/`t` — cargo (`cargo b`/`cargo t`), `s` — npm (`npm s`), `l`/`p` — мнемонические (однобуквенных референсов нет, буквы свободны и очевидны). `run` сознательно без алиаса: `r` занят `remove` (npm-семантика), а npm-мышка для `run` однобуквенного алиаса тоже не имеет. Остальные команды (`debug`, `explain`, `emit-dts`, `lsp`, `validate-config`, `init`, `doctor`) алиасов не имеют. Отдельной команды `format` нет: форматтер — опция `lint --format` (дополнительное действие после линта; exit-код не меняет — форматирование не чинит диагностики, толерантный режим `--fix`).
 
@@ -2747,7 +2747,7 @@ error: dependency conflict
 
 ## Реестр
 
-- **v1 — JSON-каталог в GitHub-репозитории TSClang** (`packages/registry/catalog.json`): `{name, version, description, location}` — URL `.tspkg` + sha256. Никакого выделенного сервиса (`registry.tsclang.org` — отложено).
+- **v1 — JSON-каталог в GitHub-репозитории TSClang** (`packages/registry/catalog.json`): `{version, packages: [{name, type, version, description, location}]}` — `location` — URL `.tspkg` + sha256. Никакого выделенного сервиса (`registry.tsclang.org` — отложено). Схема версионируется (`version: 1`); неизвестная версия — явная ошибка, не тихий сбой. Кэш каталога `~/.tsclang/platform-catalog-cache.json` с TTL 5 минут (env `TSC_CATALOG_CACHE` переопределяет путь); `TSC_REGISTRY` — путь к файлу или URL (читается напрямую, без кэша и сети).
 - Платформы (`type: "platform"`) ставятся группой `tsclang platform install/search/remove/list`; их тулчейны скачиваются в `~/.tsclang/platforms/<платформа>@<версия>/<тулчейн>@<версия>/` (`.tar.gz`, sha256, системный `tar`).
 - Публикация `.tsc` пакетов и `.d.tsc` деклараций для C-либ; npm-мост (npm как источник пакетов) — после первых чужих платформ.
 - Сеть: таймауты и тихий офлайн-провал (паттерн doctor), гейты `TSC_NO_NETWORK` / `--offline`; для тестов — локальный каталог-фикстура через `TSC_REGISTRY`. Реестр помечает `type` пакета явно (факт из манифеста, не описание) — `platform search` разделяет платформы и библиотеки.
