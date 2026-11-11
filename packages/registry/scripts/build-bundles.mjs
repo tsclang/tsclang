@@ -59,7 +59,7 @@ const BUNDLES = [
   },
   {
     toolchain: 'avrdude', version: '8.3',
-    license: 'BSD-3-Clause (avrdude)',
+    license: 'GPL-2.0-or-later (avrdude)',
     targets: {
       'win32-x64': {
         source: 'https://github.com/avrdudes/avrdude/releases/download/v8.3/avrdude-v8.3-windows-x64.zip',
