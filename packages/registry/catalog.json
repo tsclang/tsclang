@@ -3,19 +3,33 @@
   "packages": [
     {
       "name": "@tsclang/desktop",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "type": "platform",
-      "description": "Desktop reference platform: gcc build-and-run (system gcc first; bundled toolchain covers Windows, Linux and macOS arm64)",
+      "description": "Desktop reference platform: clang build-and-run (isolated clang/LLVM bundles for Windows, Linux and macOS arm64; darwin-x64 -> Xcode CLT; #282)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-desktop-0.3.0.tspkg",
-        "sha256": "6d5bcf0acb44c3b91021b02c447c3c27e666fe960b3d7e0a15b85c5e0706cd0c"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-desktop-0.4.0.tspkg",
+        "sha256": "ae3619f360a634ce19993a1e6c85acf210005cda395e01393b8586a3ea354690"
+      },
+      "versions": {
+        "0.3.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-desktop-0.3.0.tspkg",
+            "sha256": "6d5bcf0acb44c3b91021b02c447c3c27e666fe960b3d7e0a15b85c5e0706cd0c"
+          }
+        },
+        "0.4.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-desktop-0.4.0.tspkg",
+            "sha256": "ae3619f360a634ce19993a1e6c85acf210005cda395e01393b8586a3ea354690"
+          }
+        }
       }
     },
     {
       "name": "@tsclang/avr",
       "version": "0.3.0",
       "type": "platform",
-      "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first; bundled toolchains cover Windows, Linux and macOS arm64)",
+      "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (isolated bundles cover Windows, Linux and macOS arm64; #282: system never scanned)",
       "location": {
         "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-avr-0.3.0.tspkg",
         "sha256": "e0889ea06d914b4085ad2d0ed63a253ec667d83d9188f0f174d8e417c7f7873b"

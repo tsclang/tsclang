@@ -1,27 +1,27 @@
 {
   "name": "@tsclang/desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "platform",
-  "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled LLVM/Clang-based gcc for win/linux/macos-arm64)",
+  "description": "Desktop reference platform: clang build-and-run (isolated clang/LLVM bundles for win/linux/macos-arm64; darwin-x64 -> Xcode CLT; #282: PATH only for pinned toolchains)",
   "platform": {
     "profile": "desktop",
     "toolchains": {
-      "gcc": {
-        "version": "16.2.0",
+      "clang": {
+        "version": "23.1.5",
         "downloads": {
           "win32-x64": {
-            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-win32-x64.tar.gz",
-            "sha256": "2168cf5c7b82e048fea0da8a744847b87559b7b4b625787a0292a217e1205d92",
-            "size": 438
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v2/clang-23.1.5-win32-x64.tar.gz",
+            "sha256": "6b05ceb57ebabdb4d5d21385976a196eba625fa0e30e1c15b91bd3a221ed8b2b",
+            "size": 186
           },
           "linux-x64": {
-            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-linux-x64.tar.xz",
-            "sha256": "df6bb9eb9b5cabbe6518e8ad371cecd411fdf213a547638b0eaefeb6e91acb93",
-            "size": 1997
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v2/clang-23.1.5-linux-x64.tar.xz",
+            "sha256": "4ab196902dde81bc42137fbc61b045106370d22fb7511a13072c316bb80c9e3e",
+            "size": 1999
           },
           "darwin-arm64": {
-            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-darwin-arm64.tar.xz",
-            "sha256": "0bea39ba1b62ad1c92d19ac837440ace32a35ce12185398828a41c5eea0b5c7e",
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v2/clang-23.1.5-darwin-arm64.tar.xz",
+            "sha256": "61241aba35cbec918eb690870b6a65659d5fc2f0c37a5e2fb1abb5268afc5ddf",
             "size": 1553
           }
         }

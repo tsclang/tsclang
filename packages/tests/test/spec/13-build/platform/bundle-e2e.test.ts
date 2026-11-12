@@ -41,7 +41,7 @@ after(() => { for (const d of tmpDirs) rmSync(d, { recursive: true, force: true 
 function runCli(args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): Promise<{ code: number; stdout: string; stderr: string }> {
   // Same win32 MSYS2-login wrapper as reference-platform.test.ts — the CLI
   // itself then spawns the ISOLATED toolchains directly (no MSYS2 needed
-  // for them: WinLibs/Zak's are standalone mingw distros).
+  // for them: llvm-mingw/Zak's are standalone mingw distros).
   const bash = process.platform === "win32" ? msys2Bash() : null
   const argv: string[] = []
   let cmd: string
@@ -57,8 +57,8 @@ function runCli(args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): 
     const proc = spawn(cmd, argv, { cwd: opts.cwd, env: opts.env, stdio: ["ignore", "pipe", "pipe"] })
     let stdout = ""
     let stderr = ""
-    // Bundles are big (gcc ~400 MB, emcc ~750 MB): download+extract can take
-    // minutes on slow links.
+    // Bundles are big (clang ~190 MB, emcc ~750 MB): download+extract can
+    // take minutes on slow links.
     const timer = setTimeout(() => { proc.kill("SIGKILL"); reject(new Error("runCli timeout")) }, 20 * 60_000)
     proc.stdout.on("data", (d: Buffer) => { stdout += d.toString() })
     proc.stderr.on("data", (d: Buffer) => { stderr += d.toString() })
@@ -69,6 +69,7 @@ function runCli(args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): 
 
 interface Case {
   platform: string
+  version: string
   toolchains: Array<[name: string, version: string, dir: string]>
   source: string
   buildArgs: string[]
@@ -78,13 +79,15 @@ interface Case {
 const CASES: Case[] = [
   {
     platform: "desktop",
-    toolchains: [["gcc", "16.2.0", "desktop@0.3.0/gcc@16.2.0"]],
-    source: 'function main(): void {\n    console.log("hello isolated gcc");\n}\n\nmain();\n',
+    version: "0.4.0", // #282: clang/LLVM-only bundles, release toolchains-v2
+    toolchains: [["clang", "23.1.5", "desktop@0.4.0/clang@23.1.5"]],
+    source: 'function main(): void {\n    console.log("hello isolated clang");\n}\n\nmain();\n',
     buildArgs: ["build", "--build", "desktop"],
     verify: () => { /* emit exec: the program's stdout is checked directly */ },
   },
   {
     platform: "avr",
+    version: "0.3.0",
     toolchains: [["avr-gcc", "16.1.0", "avr@0.3.0/avr-gcc@16.1.0"], ["avrdude", "8.3", "avr@0.3.0/avrdude@8.3"]],
     source: "function main(): void {\n    let x: u8 = 1;\n    x = (x + 2) as u8;\n}\n\nmain();\n",
     buildArgs: ["build", "--build", "avr"],
@@ -94,6 +97,7 @@ const CASES: Case[] = [
   },
   {
     platform: "wasm",
+    version: "0.3.0",
     toolchains: [["emcc", "7.0.0", "wasm@0.3.0/emcc@7.0.0"]],
     source: 'function main(): void {\n    console.log("hello wasm");\n}\n\nmain();\n',
     buildArgs: ["build", "--build", "wasm"],
@@ -115,14 +119,23 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
       }, null, 2), "utf8")
       writeFileSync(join(dir, "main.tsc"), c.source, "utf8")
       // Catalog fixture: committed catalog, .tspkg urls → local files,
-      // toolchain urls stay real (GitHub release).
+      // toolchain urls stay real (GitHub release). The versions map (#280)
+      // must follow the flat location — the parser rejects flat/versions
+      // url desync entries.
       const catalog = JSON.parse(readFileSync(join(REGISTRY_DIR, "catalog.json"), "utf8"))
       // Archive files are committed as "@tsclang-desktop-0.2.0.tspkg" — the
       // leading @ survives the scope→dash rewrite of the inner "/" only.
       for (const pkg of catalog.packages) {
         const file = `${pkg.name.replace("/", "-")}-${pkg.version}.tspkg`
         const local = join(REGISTRY_DIR, "archives", file)
-        if (existsSync(local)) pkg.location.url = `file://${local.replace(/\\/g, "/")}`
+        if (existsSync(local)) {
+          const fileUrl = `file://${local.replace(/\\/g, "/")}`
+          const flatUrl = pkg.location.url
+          pkg.location.url = fileUrl
+          for (const v of Object.values(pkg.versions ?? {})) {
+            if (v.location.url === flatUrl) v.location.url = fileUrl
+          }
+        }
       }
       const fixture = join(dir, "catalog.json")
       writeFileSync(fixture, JSON.stringify(catalog), "utf8")
@@ -136,7 +149,7 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
 
       const install = await runCli(["platform", "install", `@tsclang/${c.platform}`], { cwd: dir, env })
       expect(install.code).toBe(0)
-      expect(install.stdout).toContain(`Installed @tsclang/${c.platform}@0.3.0`)
+      expect(install.stdout).toContain(`Installed @tsclang/${c.platform}@${c.version}`)
       for (const [name, version, rel] of c.toolchains) {
         const tcDir = join(home, ".tsclang", "platforms", ...rel.split("/"))
         expect(existsSync(tcDir)).toBe(true)
@@ -149,7 +162,7 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
       const build = await runCli(c.buildArgs, { cwd: dir, env })
       expect(build.code).toBe(0)
       c.verify(dir)
-      if (c.platform === "desktop") expect(build.stdout).toContain("hello isolated gcc")
+      if (c.platform === "desktop") expect(build.stdout).toContain("hello isolated clang")
     })
   }
 })
