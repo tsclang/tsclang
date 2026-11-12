@@ -9,7 +9,7 @@ import {
   planPlatformUpdates, parsePlatformRequest, resolveCatalogVersion,
   fetchPackageArchive, extractTspkg, packageNameParts,
   readLock, writeLock, ensureManifest, writeManifest, readManifest,
-  decideToolchain, detectSystemCommand, downloadToolchain, platformToolchainDir,
+  decideToolchain, downloadToolchain, platformToolchainDir,
   readConsent, writeConsent, selectDownload, toolchainInstructions, userHome,
 } from '@tsclang/pm';
 import type { PlatformSection, PlatformApplyPlan, PlanAction } from '@tsclang/pm';
@@ -276,20 +276,12 @@ export async function installToolchains(
       process.stdout.write(`  toolchain ${tcName}: already installed (${dir})\n`);
       continue;
     }
+    // #282: the SYSTEM toolchain is never detected or offered — a platform
+    // is self-sufficient; the outcome is the isolated bundle or a manual
+    // instruction
     const download = selectDownload(spec);
-    const systemCommand = detectSystemCommand(tcName) ?? undefined;
-    let decision = decideToolchain({ systemCommand, tty, consent, envPolicy, hasDownload: !!download });
+    let decision = decideToolchain({ tty, consent, envPolicy, hasDownload: !!download });
 
-    // TTY: the system toolchain is confirmed before use; declining it moves
-    // on to the download question.
-    if (decision.action === 'ask-system') {
-      const useSystem = await askYesNo(`toolchain ${tcName}: found in PATH (${decision.command}) — use the system one?`, true);
-      if (useSystem) {
-        decision = { action: 'use-system', command: decision.command };
-      } else {
-        decision = decideToolchain({ tty, consent, envPolicy, hasDownload: !!download });
-      }
-    }
     if (decision.action === 'ask-download' && download) {
       const sizeNote = download.size !== undefined ? ` (~${download.size} MB)` : '';
       const yes = await askYesNo(`toolchain ${tcName}: download an isolated copy to ${join(home, '.tsclang', 'platforms')}${sizeNote}?`, true);
@@ -297,10 +289,6 @@ export async function installToolchains(
       decision = yes ? { action: 'download' } : { action: 'instruct' };
     }
 
-    if (decision.action === 'use-system') {
-      process.stdout.write(`  toolchain ${tcName}: using system ${decision.command} (found in PATH)\n`);
-      continue;
-    }
     if (decision.action === 'instruct' || !download) {
       process.stdout.write(`  toolchain ${tcName}: manual install — ${toolchainInstructions(tcName)}\n`);
       continue;

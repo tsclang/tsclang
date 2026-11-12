@@ -10,7 +10,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import {
-  decideToolchain, detectSystemCommand, downloadToolchain, osArchKey,
+  decideToolchain, downloadToolchain, osArchKey,
   platformToolchainDir, readConsent, selectDownload, toolchainInstructions,
   writeConsent,
 } from "../../../../../pm/src/toolchains.js"
@@ -79,14 +79,18 @@ describe("13-build/platform 2.1 — platformToolchainDir (#270)", () => {
 
 // ── decision core ───────────────────────────────────────────────────────────
 
-describe("13-build/platform 2.1 — decideToolchain (#270)", () => {
+describe("13-build/platform 2.1 — decideToolchain (#270; #282: система не участвует)", () => {
   const base = { hasDownload: true }
 
-  test("системный тулчейн: TTY — спросить, не-TTY — использовать молча", () => {
-    expect(JSON.stringify(decideToolchain({ ...base, systemCommand: "/usr/bin/gcc", tty: true })))
-      .toBe(JSON.stringify({ action: "ask-system", command: "/usr/bin/gcc" }))
-    expect(JSON.stringify(decideToolchain({ ...base, systemCommand: "/usr/bin/gcc", tty: false })))
-      .toBe(JSON.stringify({ action: "use-system", command: "/usr/bin/gcc" }))
+  test("#282: системный тулчейн не ищется и не предлагается — только бандл или инструкция", () => {
+    // even with gcc sitting in PATH the decision never mentions the system:
+    // a platform is self-sufficient, the toolchain name must equal the content
+    const actions = new Set<string>()
+    for (const tty of [true, false])
+      for (const consent of [undefined, "yes", "no"] as const)
+        for (const envPolicy of [undefined, "always", "never"] as const)
+          actions.add(decideToolchain({ hasDownload: true, tty, consent, envPolicy }).action)
+    expect(JSON.stringify([...actions].sort())).toBe(JSON.stringify(["ask-download", "download", "instruct"]))
   })
 
   test("env TSC_TOOLCHAINS=always — качать без вопросов; нет сборки под os-arch — инструкция", () => {
@@ -94,8 +98,7 @@ describe("13-build/platform 2.1 — decideToolchain (#270)", () => {
     expect(decideToolchain({ hasDownload: false, envPolicy: "always" }).action).toBe("instruct")
   })
 
-  test("env never — только системный или инструкция", () => {
-    expect(decideToolchain({ ...base, envPolicy: "never", systemCommand: "gcc" }).action).toBe("use-system")
+  test("env never — инструкция (системный тулчейн больше не вариант)", () => {
     expect(decideToolchain({ ...base, envPolicy: "never" }).action).toBe("instruct")
   })
 
@@ -131,20 +134,16 @@ describe("13-build/platform 2.1 — consent file (#270)", () => {
 
 // ── per-OS instructions ─────────────────────────────────────────────────────
 
-describe("13-build/platform 2.1 — toolchainInstructions (#270)", () => {
+describe("13-build/platform 2.1 — toolchainInstructions (#270; #282 clang)", () => {
   test("инструкция per-OS содержит имя тулчейна и пакетный менеджер", () => {
     expect(toolchainInstructions("z88dk", "win32")).toContain("z88dk")
     expect(toolchainInstructions("z88dk", "win32")).toContain("MSYS2")
     expect(toolchainInstructions("z88dk", "linux")).toContain("apt")
     expect(toolchainInstructions("z88dk", "darwin")).toContain("brew")
   })
-})
 
-// ── system detection ────────────────────────────────────────────────────────
-
-describe("13-build/platform 2.1 — detectSystemCommand (#270)", () => {
-  test("несуществующая команда → null", () => {
-    expect(detectSystemCommand("definitely-not-a-real-tool-xyz-42")).toBe(null)
+  test("clang на darwin — Xcode Command Line Tools (darwin-x64 без апстрим-бандла)", () => {
+    expect(toolchainInstructions("clang", "darwin")).toContain("xcode-select --install")
   })
 })
 

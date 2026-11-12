@@ -17,7 +17,6 @@ import { collectManifestDiagnostics } from "../../../../../cli/src/cli/commands/
 import { compareVersions, fetchLatestNpm, formatUpdate, parseRegistryLatest, updateLine } from "../../../../../cli/src/cli/doctor/version.js"
 import { RECOMMENDED_TOOLS, profileFromBuilds } from "../../../../../cli/src/cli/doctor/recommended.js"
 import { suggestManifestAdditions } from "../../../../../cli/src/cli/doctor/suggest.js"
-import { msvcDetect } from "../../../../../cli/src/cli/toolchain.js"
 import { applyUserPathWin, pathFixCommandWin } from "../../../../../cli/src/cli/doctor/pathfix.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -289,10 +288,15 @@ describe("13-build/cli — build: заявленный результат и о�
 
   // Toolchain-gated emit values
   if (hasTool("gcc")) {
-    test("--emit binary → бинарник (требует gcc)", async () => {
+    test("--emit binary → бинарник (пин gcc — явный тулчейн #282)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: true })
+      // explicit toolchain pin: bare PATH rides are gone (#282)
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { app: { emit: "binary", toolchain: "gcc" } },
+      }))
+      const r = await runCli(["build", "--build", "app", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: true })
       expect(r.code).toBe(0)
       expect(existsSync(join(dir, "out", "hello.exe")) || existsSync(join(dir, "out", "hello"))).toBe(true)
     })
@@ -300,24 +304,27 @@ describe("13-build/cli — build: заявленный результат и о�
     test.skip("--emit binary → бинарник (пропуск: gcc недоступен)", () => {})
   }
 
-  // #241: a missing toolchain must produce a clear ConfigError, not "gcc failed:"
-  // with empty diagnostics (spawnSync returns status:null + .error when the
-  // binary is not found). Empty PATH makes the absence deterministic everywhere.
-  test("--emit binary без gcc в PATH — ConfigError requires gcc, не 'gcc failed:'", async () => {
+  // #241 + #282: a compiling emit without an explicitly named toolchain
+  // fails loud with the install-or-pin instruction — never a silent PATH
+  // build (bare tsclang is a transpiler; PATH matters only for explicit pins)
+  test("--emit binary без платформы и пина — инструкция install-or-pin (#282)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out"], { cwd: dir, env: { ...process.env, PATH: "" } })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("ConfigError: --emit binary requires gcc in PATH")
+    expect(out(r)).toContain("requires a toolchain 'clang'")
+    expect(out(r)).toContain("platform install @tsclang/desktop")
+    expect(out(r)).toContain('builds.<n>.toolchain = "clang"')
     expect(out(r)).not.toContain("gcc failed")
   })
 
-  test("--emit hex/flash без avr-gcc в PATH — ConfigError (pre-check существует)", async () => {
+  test("--emit hex/flash без avr-платформы и пина — инструкция с @tsclang/avr (#282)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--target", "avr", "--emit", "hex", "--out-dir", "out"], { cwd: dir, env: { ...process.env, PATH: "" } })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("ConfigError: --emit hex/flash requires avr-gcc in PATH")
+    expect(out(r)).toContain("requires a toolchain 'avr-gcc'")
+    expect(out(r)).toContain("platform install @tsclang/avr")
   })
 
   // #241: the avrdude command line is pure string-building (flash delivery has no
@@ -370,12 +377,17 @@ describe("13-build/cli — build: заявленный результат и о�
   })
 
   if (hasTool("gcc")) {
-    test("--emit binary --command <binary> — запуск собранного бинаря (gcc; host-shell синтаксис)", async () => {
+    test("--emit binary --command <binary> — запуск собранного бинаря (пин gcc — явный тулчейн #282; host-shell синтаксис)", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      // explicit toolchain pin: bare PATH rides are gone (#282)
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { app: { emit: "binary", toolchain: "gcc" } },
+      }))
       // host shell: cmd.exe on win32 (backslashes, no "./"), /bin/sh elsewhere
       const runCmd = process.platform === "win32" ? "out\\hello" : "./out/hello"
-      const r = await runCli(["build", "hello.tsc", "--emit", "binary", "--out-dir", "out", "--command", runCmd], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      const r = await runCli(["build", "--build", "app", "--out-dir", "out", "--command", runCmd], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
       expect(r.code).toBe(0)
       expect(r.stdout).toContain("hi")
     })
@@ -396,10 +408,14 @@ describe("13-build/cli — build: заявленный результат и о�
   })
 
   if (hasTool("gcc")) {
-    test("--emit exec — запускает собранный бинарник, stdout программы виден", async () => {
+    test("--emit exec — запускает собранный бинарник (пин gcc #282), stdout программы виден", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { app: { emit: "exec", toolchain: "gcc" } },
+      }))
+      const r = await runCli(["build", "--build", "app", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
       expect(r.code).toBe(0)
       expect(r.stdout).toContain("hi")
     })
@@ -407,7 +423,11 @@ describe("13-build/cli — build: заявленный результат и о�
     test("--emit exec — бинарник остаётся на диске после запуска", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { app: { emit: "exec", toolchain: "gcc" } },
+      }))
+      const r = await runCli(["build", "--build", "app", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
       expect(r.code).toBe(0)
       expect(existsSync(join(dir, "out", "hello.exe")) || existsSync(join(dir, "out", "hello"))).toBe(true)
     })
@@ -415,18 +435,22 @@ describe("13-build/cli — build: заявленный результат и о�
     test("--emit exec — exit-код программы пробрасывается (process.exit(7))", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "exit7.tsc"), 'console.log("running");\nprocess.exit(7);\n')
-      const r = await runCli(["build", "exit7.tsc", "--emit", "exec", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "exit7.tsc",
+        builds: { app: { emit: "exec", toolchain: "gcc" } },
+      }))
+      const r = await runCli(["build", "--build", "app", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
       expect(r.stdout).toContain("running")
       expect(r.code).toBe(7)
     })
 
-    test("манифест builds.dev = {emit: exec} через --build — запускает", async () => {
+    test("манифест builds.dev = {emit: exec, toolchain: gcc} через --build — запускает", async () => {
       const dir = mkTmp()
       mkdirSync(join(dir, "src"), { recursive: true })
       writeFileSync(join(dir, "src", "main.tsc"), HELLO_TSC)
       writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
         name: "app", version: "0.1.0", type: "executable", main: "src/main.tsc",
-        builds: { dev: { emit: "exec" } },
+        builds: { dev: { emit: "exec", toolchain: "gcc" } },
       }))
       const r = await runCli(["build", "dev", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000, viaMsys2: process.platform === "win32" })
       expect(r.code).toBe(0)
@@ -701,6 +725,35 @@ describe("13-build/cli — debug (00.7.3-debug)", () => {
     expect(r.code).toBe(0)
     expect(r.stdout.length > 0).toBeTruthy()
   })
+
+  // #282: debug compiles — the toolchain contract of `build` applies; a bare
+  // debug used to spawn whatever gcc sat in PATH, silently
+  test("debug без платформы и пина — ConfigError install-or-pin, не тихий PATH-gcc (#282)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+    const r = await runCli(["debug", "hello.tsc"], { cwd: dir, env: { ...process.env, PATH: "" } })
+    expect(r.code).toBe(1)
+    expect(out(r)).toContain("requires a toolchain 'clang'")
+    expect(out(r)).toContain("platform install @tsclang/desktop")
+    expect(out(r)).toContain('builds.<n>.toolchain = "clang"')
+  })
+
+  if (hasTool("gcc")) {
+    test("debug с пином gcc — компилирует (пин = явный тулчейн #282)", async () => {
+      const dir = mkTmp()
+      writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { app: { emit: "binary", toolchain: "gcc" } },
+      }))
+      const r = await runCli(["debug", "hello.tsc"], { cwd: dir, timeoutMs: 120000, viaMsys2: true })
+      // debugger found or not — the compile must happen and never ConfigError
+      expect(r.code).toBe(0)
+      expect(out(r)).not.toContain("requires a toolchain")
+    })
+  } else {
+    test.skip("debug с пином gcc — требует gcc", () => {})
+  }
 })
 
 // === 00.2.4: init ===
@@ -1292,14 +1345,14 @@ describe("13-build/cli — collectManifestDiagnostics (#259)", () => {
 // === doctor units (#259) ===
 
 describe("13-build/cli — doctor units (#259)", () => {
-  test("RECOMMENDED_TOOLS: desktop = gcc+cmake required, msvc/gdb optional; msvc только win32", () => {
+  test("RECOMMENDED_TOOLS: desktop = clang+cmake required, lldb optional; msvc больше не рекомендуем (#282)", () => {
     const desktop = RECOMMENDED_TOOLS.desktop
     const byName = Object.fromEntries(desktop.map((t) => [t.name, t]))
-    expect(byName["gcc"].required).toBe(true)
+    expect(byName["clang"].required).toBe(true)
     expect(byName["cmake"].required).toBe(true)
-    expect(byName["gdb"].required).toBe(false)
-    expect(byName["msvc"].required).toBe(false)
-    expect(byName["msvc"].platforms).toContain("win32")
+    expect(byName["lldb"].required).toBe(false)
+    // #282: desktop is clang/LLVM-only — msvc is not our concern anymore
+    expect(byName["msvc"]).toBe(undefined)
     expect(RECOMMENDED_TOOLS.embedded.map((t) => t.name).join(",")).toBe("avr-gcc,avr-objcopy,avrdude")
     expect(RECOMMENDED_TOOLS.wasm.map((t) => t.name).join(",")).toBe("emcc")
   })
@@ -1341,31 +1394,6 @@ describe("13-build/cli — doctor units (#259)", () => {
     const lib = suggestManifestAdditions({ name: "l", version: "0.1.0", type: "library" })
     expect(lib?.scripts?.dts).toBe("tsclang build --build dts")
     expect(suggestManifestAdditions({ name: "d", version: "0.1.0", type: "declaration" })).toBe(null)
-  })
-
-  test("msvcDetect: cl в PATH", () => {
-    const m = msvcDetect({ probe: () => true })
-    expect(m.inPath).toBe(true)
-    expect(m.clPath).toBe(null)
-  })
-
-  test("msvcDetect: VS найден через vswhere, cl вне PATH (installed-not-on-PATH)", () => {
-    const m = msvcDetect({
-      probe: () => false,
-      runVswhere: () => "C:\\VS",
-      readdir: () => ["14.29.30133", "14.36.32532"],
-      exists: (p) => p.endsWith("cl.exe"),
-    })
-    expect(m.inPath).toBe(false)
-    expect(m.vsRoot).toBe("C:\\VS")
-    expect(m.clPath).toBe("C:\\VS\\VC\\Tools\\MSVC\\14.36.32532\\bin\\Hostx64\\x64\\cl.exe")
-  })
-
-  test("msvcDetect: ничего нет", () => {
-    const m = msvcDetect({ probe: () => false, runVswhere: () => null })
-    expect(m.inPath).toBe(false)
-    expect(m.vsRoot).toBe(null)
-    expect(m.clPath).toBe(null)
   })
 })
 

@@ -287,13 +287,43 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
   }
 
-  // Toolchain resolution order (spec 13-build): the isolated platform cache
-  // (~/.tsclang/platforms) first, then PATH. A pinned builds.<n>.toolchain
+  // Toolchain resolution (#282): the isolated platform cache is the only
+  // DEFAULT source — bare tsclang never silently compiles with whatever PATH
+  // carries. PATH is honored exclusively for a hand-written pinned
+  // builds.<n>.toolchain: the user named the compiler themselves. A pinned
   // 'name@version' accepts PATH only with a matching --version; otherwise a
-  // config error with the platform-install hint.
+  // config error with the install-or-pin instruction.
   const _toolchainPin = parseToolchainSpec(
     typeof _buildCfg?.toolchain === 'string' && _buildCfg.toolchain ? String(_buildCfg.toolchain) : '',
   );
+
+  // The toolchain reference a build uses: builds.<n>.toolchain → the profile
+  // `toolchain` capability → the target default (avr → avr-gcc, otherwise
+  // clang — the desktop reference platform is LLVM/Clang-based, #282).
+  // `explicit` is ONLY a hand-written builds.<n>.toolchain — the one place
+  // the user names a compiler themselves. A capability (built-in or package
+  // profile) names the toolchain but never authorizes a PATH ride: the
+  // isolated cache is its single source (#282: bare = transpile-only).
+  function _toolchainSpec(): { name: string; explicit: boolean } {
+    const fromBuild = _buildCfg?.toolchain;
+    if (typeof fromBuild === 'string' && fromBuild) return { name: parseToolchainSpec(fromBuild).name, explicit: true };
+    const fromCaps = _capabilities?.toolchain;
+    if (typeof fromCaps === 'string' && fromCaps) return { name: parseToolchainSpec(fromCaps).name, explicit: false };
+    const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
+    return { name: target === 'avr' ? 'avr-gcc' : 'clang', explicit: false };
+  }
+  const _tcRef = _toolchainSpec();
+  function _toolchainSpecName(): string {
+    return _tcRef.name;
+  }
+
+  // Which reference platform carries this toolchain — the install hint names it
+  function _hintPlatform(): string {
+    const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
+    if (target === 'avr') return '@tsclang/avr';
+    if (target === 'wasm') return '@tsclang/wasm';
+    return '@tsclang/desktop';
+  }
 
   // #272: collected across the build so --command/scripts get the toolchain
   // bin dirs and the generated .c through env
@@ -304,11 +334,15 @@ export function runBuildCommand(args: string[], rootDir: string): void {
 
   function _resolveTool(name: string, configError: string): ResolvedTool | null {
     const version = _toolchainPin.name === name ? _toolchainPin.version : undefined;
-    const r = resolveToolchain(name, { version });
+    const r = resolveToolchain(name, { version, allowPath: _tcRef.explicit });
     if (!r) {
       if (version) {
         process.stderr.write(`error: toolchain '${name}@${version}' not found\n`);
         process.stderr.write('hint: tsclang platform install <platform>  (the toolchain ships with the platform package)\n');
+      } else if (!_tcRef.explicit) {
+        process.stderr.write(`ConfigError: --emit ${emit} requires a toolchain '${name}' — none is configured\n`);
+        process.stderr.write(`hint: tsclang platform install ${_hintPlatform()}  (toolchains ship with the platform package)\n`);
+        process.stderr.write(`hint: or pin one explicitly: builds.<n>.toolchain = "${name}"\n`);
       } else {
         process.stderr.write(configError + '\n');
         process.stderr.write(toolchainInstructions(name) + '\n');
@@ -321,13 +355,6 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     // assemblers/linkers by name (avr-gcc → avr-as), so the bin dir must
     // stay reachable even when the binary is spawned by absolute path
     return { command: join(r.binDir, name), env: _withToolsOnPath({ ...process.env }, [r.binDir]) };
-  }
-
-  // The toolchain reference a build uses: builds.<n>.toolchain → the profile
-  // `toolchain` capability → the platform default.
-  function _toolchainSpecName(): string {
-    const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
-    return String(_buildCfg?.toolchain ?? _capabilities?.toolchain ?? (target === 'avr' ? 'avr-gcc' : 'gcc'));
   }
 
   // Prepend tool bin dirs to PATH. The variable may arrive as either `PATH`
@@ -507,13 +534,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
 
     if (emit === 'binary' || emit === 'exec') {
-      // #241 + #271: a missing/mismatched toolchain is a config error, not a
-      // "gcc failed:" with empty diagnostics. The compiler resolves from the
-      // isolated platform cache first, then PATH; a profile `toolchain`
-      // capability (clang, zcc, …) overrides the compiler name.
-      const ccName = (typeof _capabilities?.toolchain === 'string' && _capabilities.toolchain
-        ? parseToolchainSpec(_capabilities.toolchain).name
-        : 'gcc');
+      // #241 + #271 + #282: a missing toolchain is a config error, not a
+      // "cc failed:" with empty diagnostics. The compiler name is the unified
+      // toolchain reference (builds.<n>.toolchain → profile capability →
+      // 'clang' default); bare tsclang resolves isolated-cache-only and
+      // reports the install-or-pin instruction (#282).
+      const ccName = _toolchainSpecName();
       const ccTool = _resolveTool(ccName, `ConfigError: --emit binary requires ${ccName} in PATH`);
       if (!ccTool) return false;
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);

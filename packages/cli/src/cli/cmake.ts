@@ -38,7 +38,9 @@ export function generateProjectCmake(opts: ProjectCmakeOptions): string {
     if (includeDirs?.length) lines.push(`include_directories(${includeDirs.map(cmakePath).join(' ')})`);
     lines.push(`add_executable(${projectName} ${mainFile})`);
   } else {
-    if (toolchain !== 'gcc') lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
+    // #282: the compiler is always stated explicitly — a CMakeLists that
+    // silently inherits whatever the system cmake finds is a hidden toolchain
+    lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
     lines.push(`set(CMAKE_C_STANDARD ${C_STANDARD})`);
     lines.push('set(CMAKE_C_STANDARD_REQUIRED ON)');
     if (optimize) lines.push(`add_compile_options(-${optimize})`);

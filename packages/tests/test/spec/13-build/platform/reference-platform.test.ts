@@ -18,7 +18,6 @@ import { after, describe, expect, test } from "@tsclang/test-engine"
 import { bashLoginArgs, msys2Bash, shQuote, toMsysPath } from "@tsclang/test-engine"
 import { parseCatalog } from "../../../../../pm/src/platform-registry.js"
 import { validatePlatformSection } from "../../../../../pm/src/platform.js"
-import { detectSystemCommand } from "../../../../../pm/src/toolchains.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -168,7 +167,7 @@ function runCli(args: string[], opts: { cwd: string; env: NodeJS.ProcessEnv }): 
 }
 
 describe("13-build/platform 4.1 — краш-тест: чистая машина → hello-world (#275)", () => {
-  test("install добавляет пресеты; build --build desktop компилирует и запускает", async () => {
+  test("install добавляет пресеты; без тулчейна build громко отказывает с инструкцией (#282)", async () => {
     const dir = mkTmp()
     const home = mkTmp()
     // A user project: a manifest with main (install will add builds/scripts)
@@ -184,6 +183,9 @@ describe("13-build/platform 4.1 — краш-тест: чистая машина
       `file://${desktopArchive.replace(/\\/g, "/")}`
     const fixture = join(dir, "catalog.json")
     writeFileSync(fixture, JSON.stringify(catalog), "utf8")
+    // TSC_TOOLCHAINS=never: the machine keeps NO isolated toolchain (the
+    // declined-download path) — and even a system gcc in PATH must NOT be
+    // silently picked up for a compiling emit (#282: bare = transpile-only)
     const env = {
       ...process.env,
       TSC_HOME: home,
@@ -195,19 +197,23 @@ describe("13-build/platform 4.1 — краш-тест: чистая машина
     const install = await runCli(["platform", "install", "@tsclang/desktop"], { cwd: dir, env })
     expect(install.code).toBe(0)
     expect(install.stdout).toContain(`Installed @tsclang/desktop@${REFERENCE_VERSION}`)
+    // #282: even with a system gcc in PATH the platform never picks it up —
+    // the machine keeps NO isolated toolchain (declined download), so the
+    // honest outcome is a manual instruction, not a silent system ride
+    expect(install.stdout).toContain("manual install")
+    expect(install.stdout.includes("using system")).toBe(false)
     // The package profile travels into tsc_packages and overrides built-ins
     expect(existsSync(join(dir, "tsc_packages", "@tsclang", "desktop", "index.d.tsc"))).toBe(true)
     const manifest = JSON.parse(readFileSync(join(dir, "tsc.package.json"), "utf8"))
     expect(typeof manifest.builds.desktop).toBe("object")
     expect(typeof manifest.scripts["desktop:start"]).toBe("string")
 
-    if (!detectSystemCommand("gcc")) {
-      // Crash part needs gcc; the install contract above is machine-independent
-      process.stdout.write("    (gcc not found — crash run part skipped on this machine)\n")
-      return
-    }
     const build = await runCli(["build", "--build", "desktop"], { cwd: dir, env })
-    expect(build.code).toBe(0)
-    expect(build.stdout).toContain("hello desktop")
+    expect(build.code).toBe(1)
+    expect(build.stderr).toContain("requires a toolchain")
+    expect(build.stderr).toContain("platform install @tsclang/desktop")
+    expect(build.stderr).toContain("builds.<n>.toolchain")
+    // The real compile-and-run path (an isolated clang bundle under TSC_HOME)
+    // is covered by the gated bundle e2e (TSC_E2E_BUNDLES, bundle-e2e.test.ts)
   })
 })

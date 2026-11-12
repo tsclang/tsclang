@@ -10,7 +10,7 @@ import { dirname, resolve } from 'path';
 import { arch, platform as osPlatform } from 'os';
 import { PACKAGE_FILE } from '@tsclang/shared';
 import { hasFlag } from '../args.js';
-import { findTool, msvcDetect } from '../toolchain.js';
+import { findTool } from '../toolchain.js';
 import { collectManifestDiagnostics } from './config.js';
 import { RECOMMENDED_TOOLS, profileFromBuilds, type ToolProfile } from '../doctor/recommended.js';
 import { scanInstalledPlatforms } from './platform.js';
@@ -32,19 +32,6 @@ function pathFixHint(w: Write, foundAt: string): void {
   } else {
     w('    manual PATH fix:');
     w(`      export PATH="${dir}:$PATH"   # add to ~/.profile`);
-  }
-}
-
-function reportMsvc(w: Write): void {
-  const m = msvcDetect();
-  if (m.inPath) {
-    w('  [~] msvc - optional: cl.exe in PATH');
-  } else if (m.clPath) {
-    w(`  [~] msvc - optional: VS found (${m.vsRoot}), cl.exe not in PATH - run from a Developer PowerShell`);
-    w('      (PATH alone is not enough: cl needs INCLUDE/LIB from vcvarsall - no auto-fix)');
-  } else {
-    w('  [~] msvc - optional: not found');
-    w('    install: winget install Microsoft.VisualStudio.2022.BuildTools (+ C++ workload) (book 00.2.1)');
   }
 }
 
@@ -234,7 +221,6 @@ export async function runDoctorCommand(args: string[], rootDir: string): Promise
       w(`Toolchains (${profile}):`);
       for (const tool of RECOMMENDED_TOOLS[profile]) {
         if (tool.platforms && !tool.platforms.includes(osPlatform())) continue;
-        if (tool.name === 'msvc') { reportMsvc(w); continue; }
 
         const loc = findTool(tool.name);
         if (loc.inPath) {

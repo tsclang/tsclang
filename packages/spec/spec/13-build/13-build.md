@@ -899,7 +899,7 @@ TSClang-библиотека и C-wrapper различаются явным ти
 | `flash` | конфигурация прошивки (объект, см. ниже) | — |
 | `command` | shell-команда после успешной сборки (см. ниже) | — |
 
-**`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avr-gcc`, `avr-objcopy` и `avrdude` в PATH (отсутствие — `ConfigError: --emit hex/flash requires <инструмент> in PATH`, exit 1). Итоговая команда: `avrdude -c <programmer> -p <mcu> -P <port> [-b <baud>] [<extraFlags>…] -U flash:w:<hex>:i`.
+**`flash`** — конфигурация прошивки для `--emit flash`. Pipeline: `.tsc` → `.c` → `.elf` → `.hex` → flash через avrdude. Требует `avr-gcc`, `avr-objcopy` и `avrdude` (изолированный кеш платформы `@tsclang/avr` или явный пин `builds.<n>.toolchain`; голый вызов без того и другого — `ConfigError: --emit hex requires a toolchain 'avr-gcc' — none is configured` с инструкцией install-or-pin, exit 1, #282). Итоговая команда: `avrdude -c <programmer> -p <mcu> -P <port> [-b <baud>] [<extraFlags>…] -U flash:w:<hex>:i`.
 
 | Поле | Тип | Обязательное | Описание |
 |------|-----|-------------|----------|
@@ -1054,13 +1054,13 @@ tsclang platform install @nes/platform@0.4.0      # exact — пин
 
 **dependencies — запрошенная спека, lock — резолвнутая exact** (npm-семантика): bare-установка записывает каре от резолвнутой версии (`^0.4.0` — у обновлений есть диапазон), явная спека — сама себя; `tsc.package.lock` хранит точную версию. Версия в каталоге может требовать минимальную версию CLI (`minCli`): требование новее текущего CLI — громкий отказ `requires tsclang >= …`, exit 1; в диапазоне несовместимые по minCli версии тихо пропускаются (резолвится старшая совместимая), bare/`*` не откатывается на старые — отказ громкий. Нет версии по спеке — громкий отказ со списком доступных.
 
-**Тулчейны при установке** — решение по каждому `toolchains.<имя>`:
+**Тулчейны при установке** — решение по каждому `toolchains.<имя>` (#282: система не сканируется — PATH никогда не источник тулчейнов при установке):
 
-- найден в системе (PATH) — TTY (`TSC_TOOLCHAIN_INTERACTIVE=1` форсирует) подтверждает использование системного; не-TTY использует молча;
-- системного нет — вопрос `[Y/n]` «скачать изолированную копию (~N MB)?»; ответ запоминается на машину (`~/.tsclang/toolchain-consent.json`);
-- env `TSC_TOOLCHAINS=always` — качать без вопросов; `=never` — никогда не качать (только системный или инструкция); env перекрывает вопросы и файл;
-- не-TTY без запомненного согласия — печатная инструкция per-OS, ничего не качается и не запоминается;
-- сборки под `os-arch` нет — инструкция per-OS (даже при согласии «да»);
+- тулчейн уже скачан изолированно — используется как есть (идемпотентность);
+- консент-файл `~/.tsclang/toolchain-consent.json`: `yes` — качать, `no` — печатная инструкция per-OS;
+- нет консента: TTY (`TSC_TOOLCHAIN_INTERACTIVE=1` форсирует) — вопрос `[Y/n]` «скачать изолированную копию (~N MB)?», ответ запоминается на машину; не-TTY — печатная инструкция per-OS, ничего не качается и не запоминается;
+- env `TSC_TOOLCHAINS=always` — качать без вопросов; `=never` — никогда не качать (инструкция); env перекрывает вопрос и файл;
+- сборки под `os-arch` нет — инструкция per-OS (даже при согласии «да»); для `clang` на darwin-x64 апстрим LLVM не публикует сборки — инструкция ставит clang из Xcode Command Line Tools (`xcode-select --install`) или brew: единственное исключение с системной установкой, и то через официальный инсталлятор, а не молчаливый PATH-поиск;
 - скачивание (`.tar.gz`, sha256 до распаковки, системный `tar`) провалилось — ошибка в stderr + инструкция, установка платформы считается успешной (тулчейн доставляем отдельно);
 - `TSC_HOME` переопределяет корень `~` (тесты, CI-кэши): всё живёт в `$TSC_HOME/.tsclang/`.
 
@@ -1324,7 +1324,8 @@ toolchain поле в конфиге
 declare platform { toolchain } в profile
     ↓ нет?
 дефолт по arch из внутренней таблицы:
-    x86-64  → clang, fallback gcc
+    x86-64  → clang (desktop — LLVM/Clang; резолв — изолированный кеш
+              платформы, PATH только по явному пину, #282)
     arm     → arm-none-eabi-gcc
     avr     → avr-gcc
     wasm32  → clang (wasm target)
@@ -1335,8 +1336,8 @@ declare platform { toolchain } в profile
 
 | Значение | Поведение |
 |----------|-----------|
-| `"avr-gcc"` | ищет бинарь в PATH |
-| `"avr-gcc@12.1"` | pinned версия — ищет в `~/.tsclang/platforms/<платформа>@<в>/<тулчейн>@<в>/bin/` (кеш платформы), затем PATH |
+| `"avr-gcc"` | пин имени — кеш платформы (новейшая установленная), затем PATH: пин и есть явное разрешение PATH (#282) |
+| `"avr-gcc@12.1"` | pinned версия — ищет в `~/.tsclang/platforms/<платформа>@<в>/<тулчейн>@<в>/bin/` (кеш платформы), затем PATH с проверкой версии |
 | `"/opt/avr/bin/avr-gcc"` | абсолютный путь — используется напрямую |
 | `"./tools/cc65/bin/cl65"` | путь относительно корня проекта (vendored toolchain) |
 
@@ -1364,9 +1365,17 @@ error: toolchain 'avr-gcc@12.1' not found
 hint: tsclang platform install <platform>  (the toolchain ships with the platform package)
 ```
 
-Изолированный тулчейн спавнится по абсолютному пути с prepended bin-dir в PATH (драйверы вызывают свои ассемблеры/линкеры по имени: `avr-gcc` → `avr-as`). В `--emit cmake` в `set(CMAKE_C_COMPILER ...)` подставляется абсолютный путь (posix-слэши), пин без кеша и без совпавшей версии PATH — ошибка с тем же хинтом.
+Изолированный тулчейн спавнится по абсолютному пути с prepended bin-dir в PATH (драйверы вызывают свои ассемблеры/линкеры по имени: `avr-gcc` → `avr-as`). В `--emit cmake` в `set(CMAKE_C_COMPILER ...)` всегда подставляется заявленный компилятор (posix-слэши) — CMakeLists честно называет тулчейн и не наследует то, что найдёт системный cmake; пин без кеша и без совпавшей версии PATH — ошибка с тем же хинтом.
 
-Если бинарь не найден без версии — ConfigError с per-OS подсказкой:
+**Голый tsclang — транслятор, не компилятор (#282).** Компилирующие `emit` (`binary`/`exec`/`hex`/`flash`/`wasm`) без пина `builds.<n>.toolchain` знают про тулчейн ровно одно: изолированный кеш платформы. Профильная capability `toolchain` (встроенная или из пакета платформы) задаёт ИМЯ, но не разрешает PATH — она не рукописная. PATH не найден в кеше — громкий отказ с инструкцией install-or-pin, а не тихая сборка тем, что подвернулось в системе:
+
+```
+ConfigError: --emit hex requires a toolchain 'avr-gcc' — none is configured
+hint: tsclang platform install @tsclang/avr  (toolchains ship with the platform package)
+hint: or pin one explicitly: builds.<n>.toolchain = "avr-gcc"
+```
+
+Явный пин имени без версии, которого нет ни в кеше, ни в PATH — ConfigError с per-OS подсказкой:
 
 ```
 ConfigError: --emit hex/flash requires avr-gcc in PATH
@@ -2312,7 +2321,7 @@ build/avr/
 |---------|----------|
 | `tsclang build` (`b`) | Компиляция `.tsc` → C / бинарник / прошивка |
 | `tsclang run` | Запуск именованного скрипта из `tsc.package.json` |
-| `tsclang debug` | Отладка под gdb |
+| `tsclang debug` | Отладка под gdb/lldb |
 | `tsclang test` (`t`) | Запуск тестов из `test/` |
 | `tsclang init` | Создать новый проект |
 | `tsclang lint` (`l`) | Линтер (`prefer-const`, `no-unreachable`, `no-unused-var`) + форматтер (`--format`, запись на месте) |
@@ -2429,10 +2438,13 @@ exit 1 (никогда не «молча как c»).
 `ConfigError: --emit exec already launches the built artifact`, exit 1. Аргументы и окружение
 программы — часть команды: `--emit binary --command "./out/hello --port 8080"`.
 
-Внешние тулзы проверяются до запуска (pre-check `--version`): `--emit binary` — gcc;
-`--emit hex`/`flash` — avr-gcc и avr-objcopy; `flash` дополнительно — avrdude; `--emit wasm` — emcc.
-Отсутствие — `ConfigError: --emit <value> requires <tool> in PATH`, exit 1 — вместо падения
-с пустой диагностикой `tool failed:`. Если компилятор найден, но упал без единой строки в
+Внешние тулзы проверяются до запуска (pre-check `--version`): `--emit binary`/`exec` — clang
+(дефолт desktop-таргета; ссылочная платформа `@tsclang/desktop` — LLVM/Clang, #282); `--emit hex`/`flash` —
+avr-gcc и avr-objcopy; `flash` дополнительно — avrdude; `--emit wasm` — emcc. Резолв тулчейна:
+изолированный кеш платформы — всегда; PATH — только при явном пине `builds.<n>.toolchain`.
+Отсутствие без пина — `ConfigError: --emit <value> requires a toolchain '<name>' — none is configured`
+с хинтами install-or-pin, exit 1; пин без находки — `ConfigError: --emit <value> requires <tool> in PATH`
+с per-OS подсказкой — вместо падения с пустой диагностикой `tool failed:`. Если компилятор найден, но упал без единой строки в
 stderr (типично на Windows: gcc, вынутый из MSYS2-окружения, умирает до печати диагностики),
 после `gcc failed:` печатается подсказка о вероятной причине.
 
@@ -2676,15 +2688,15 @@ tsclang doctor --project   # только tsc.package.json
 tsclang doctor --fix       # дописать недостающие builds/scripts по пресету init
 ```
 
-**Секции отчёта:** Platform (ОС/архитектура), Version (версия + источник: npm или dev-линк), Update (npm registry), Project (`tsc.package.json`: валидация как `validate-config`, наличие `main`, недостающие `builds`/`scripts` против пресета `init`), Platforms (установленные платформы проекта из `tsc_packages`: каждый тулчейн — `[ok] isolated <версия> (<bin-каталог>)` / `[ok] system (found in PATH)` / `[x] not found` + hint `tsclang platform install <имя>`; отсутствующий тулчейн платформы — informational, exit-код не меняет — `emit c` + системные тулчейны валидны; секция полностью локальна, сети не касается), Toolchains (профиль из `builds`: desktop → gcc+cmake, опц. gdb/msvc; embedded → avr-gcc+avr-objcopy+avrdude; wasm → emcc).
+**Секции отчёта:** Platform (ОС/архитектура), Version (версия + источник: npm или dev-линк), Update (npm registry), Project (`tsc.package.json`: валидация как `validate-config`, наличие `main`, недостающие `builds`/`scripts` против пресета `init`), Platforms (установленные платформы проекта из `tsc_packages`: каждый тулчейн — `[ok] isolated <версия> (<bin-каталог>)` / `[ok] system (found in PATH)` / `[x] not found` + hint `tsclang platform install <имя>`; отсутствующий тулчейн платформы — informational, exit-код не меняет — `emit c` + системные тулчейны валидны; секция полностью локальна, сети не касается), Toolchains (профиль из `builds`: desktop → clang+cmake, опц. lldb — LLVM-мир, #282; embedded → avr-gcc+avr-objcopy+avrdude; wasm → emcc).
 
 **Метки:** `[ok]` / `[!]` (чинимо) / `[x]` (отсутствует) / `[~]` (опционально, на exit-код не влияет). Exit 0 — проблем нет, 1 — есть обязательные `[!]`/`[x]` или диагностики манифеста.
 
-**Интерактив:** в TTY спрашивает перед секциями и предлагает каждый фикс как `(a)uto / (m)anual / (s)kip` с JSON-превью до записи; упавший авто-фикс печатает причину и ручную инструкцию. Тулчейн «установлен, но не в PATH» (поиск в типичных местах: `C:\msys64\mingw64\bin`, `C:\MinGW\bin`, emsdk, `/usr/local/bin`…) → PATH-фикс автоматически на Windows (PowerShell `[Environment]::SetEnvironmentVariable("Path", …, "User")`, не `setx` — обрезает 1024 симв.), на unix — ручная инструкция. Без TTY — тот же отчёт без вопросов, сразу ручные инструкции.
+**Интерактив:** в TTY спрашивает перед секциями и предлагает каждый фикс как `(a)uto / (m)anual / (s)kip` с JSON-превью до записи; упавший авто-фикс печатает причину и ручную инструкцию. Тулчейн «установлен, но не в PATH» (поиск в типичных местах: `C:\Program Files\LLVM\bin`, `C:\msys64\mingw64\bin`, `C:\MinGW\bin`, emsdk, `/usr/local/bin`…) → PATH-фикс автоматически на Windows (PowerShell `[Environment]::SetEnvironmentVariable("Path", …, "User")`, не `setx` — обрезает 1024 симв.), на unix — ручная инструкция. Без TTY — тот же отчёт без вопросов, сразу ручные инструкции.
 
 **Сеть:** единственное сетевое обращение CLI — `GET https://registry.npmjs.org/tsclang/latest` с таймаутом 3 с. Любой сбой тихо печатает `check failed (offline?)`; отчёт из-за сети не падает. npm-установкам предлагается `update available`, dev-линкам — `not applicable`. Env-гейты: `TSC_DOCTOR_NO_UPDATE=1` — не ходить в сеть, `TSC_DOCTOR_INTERACTIVE=1` — форсировать интерактив под пайпом (CI/тесты).
 
-**Ограничения:** тулчейны не устанавливает (печатает winget/pacman/apt-инструкцию или `tsclang platform install`), pm-пакеты не проверяет, MSVC не PATH-чинит (cl требует INCLUDE/LIB из vcvarsall — подсказка «запускайте из Developer PowerShell»).
+**Ограничения:** тулчейны не устанавливает (печатает winget/pacman/apt-инструкцию или `tsclang platform install`), pm-пакеты не проверяет, MSVC не детектит и не PATH-чинит — desktop clang/LLVM-only, msvc не наша забота (#282).
 
 ## Быстрый старт
 

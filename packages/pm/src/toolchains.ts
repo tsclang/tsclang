@@ -82,15 +82,11 @@ export function writeConsent(value: Consent, home: string = userHome()): void {
 // ── decision core (pure) ────────────────────────────────────────────────────
 
 export type ToolchainDecision =
-  | { action: 'use-system'; command: string }
-  | { action: 'ask-system'; command: string }
   | { action: 'ask-download' }
   | { action: 'download' }
   | { action: 'instruct' };
 
 export interface DecisionState {
-  /** Resolved system toolchain path/command, if one is found in PATH. */
-  systemCommand?: string;
   tty: boolean;
   /** Machine-level remembered consent file value. */
   consent?: Consent;
@@ -100,47 +96,31 @@ export interface DecisionState {
   hasDownload: boolean;
 }
 
-/** Decide what install does with one toolchain. Order: env policy → system
- * toolchain (TTY asks before using it, non-TTY uses it silently) → consent
- * file → ask (TTY) / instruct (non-TTY). No download for this os-arch —
- * always a manual instruction. */
+/** Decide what install does with one toolchain (#282: a platform is
+ * self-sufficient — the SYSTEM toolchain is never looked at, named or
+ * offered; the only choices are the isolated bundle or a manual
+ * instruction). Order: env policy → consent file → ask (TTY) / instruct
+ * (non-TTY). No download for this os-arch — always a manual instruction. */
 export function decideToolchain(state: DecisionState): ToolchainDecision {
   if (state.envPolicy === 'always') {
     return state.hasDownload ? { action: 'download' } : { action: 'instruct' };
   }
-  if (state.envPolicy === 'never') {
-    return state.systemCommand
-      ? { action: 'use-system', command: state.systemCommand }
-      : { action: 'instruct' };
-  }
-  if (state.systemCommand) {
-    return state.tty
-      ? { action: 'ask-system', command: state.systemCommand }
-      : { action: 'use-system', command: state.systemCommand };
-  }
+  if (state.envPolicy === 'never') return { action: 'instruct' };
   if (!state.hasDownload) return { action: 'instruct' };
   if (state.consent === 'yes') return { action: 'download' };
   if (state.consent === 'no') return { action: 'instruct' };
   return state.tty ? { action: 'ask-download' } : { action: 'instruct' };
 }
 
-// ── system detection ────────────────────────────────────────────────────────
-
-/** Resolve a toolchain command through PATH (`<cmd> --version`). Returns the
- * command name when it runs, null otherwise. */
-export function detectSystemCommand(command: string): string | null {
-  try {
-    const r = spawnSync(command, ['--version'], { timeout: 10_000, windowsHide: true });
-    return r.status === 0 ? command : null;
-  } catch {
-    return null;
-  }
-}
-
 // ── per-OS manual instructions ──────────────────────────────────────────────
 
 /** Short per-OS install instruction printed on a declined/failed download. */
 export function toolchainInstructions(toolchain: string, os: string = process.platform): string {
+  // clang on darwin: darwin-x64 has no upstream LLVM bundle — the system
+  // clang from Xcode Command Line Tools is the one honest source there
+  if (toolchain === 'clang' && os === 'darwin') {
+    return 'install clang manually: Xcode Command Line Tools (xcode-select --install) or brew install llvm; re-run with TSC_TOOLCHAINS=always to download an isolated copy';
+  }
   switch (os) {
     case 'win32':
       return `install ${toolchain} manually: MSYS2 (https://www.msys2.org) or the vendor installer; re-run with TSC_TOOLCHAINS=always to download an isolated copy`;
@@ -363,18 +343,26 @@ export type ResolvedToolchain =
 export interface ResolveToolchainOptions {
   version?: string;
   home?: string;
+  /** #282: bare tsclang never compiles with a silently picked toolchain.
+   * PATH is probed ONLY when the caller resolved an EXPLICIT reference (a
+   * pinned builds.<n>.toolchain or a profile capability) — the user named
+   * the toolchain, so honoring PATH is their stated intent. The default
+   * (target default name) resolves isolated-cache-only and returns null
+   * otherwise; the caller reports the install-or-pin instruction. */
+  allowPath?: boolean;
   /** Returns the `--version` output of a PATH command, null when it does not
    * run. Injectable for unit tests; defaults to a real probe. */
   probeVersion?: (command: string) => string | null;
 }
 
-/** Resolution order (spec 13-build): the isolated platform cache first, then
- * PATH. A pinned version accepts a PATH toolchain only when its --version
- * output matches; otherwise null — the caller reports the
- * `tsclang platform install` hint. */
+/** Resolution order (spec 13-build, #282): the isolated platform cache
+ * always; PATH only for an explicitly named toolchain (`allowPath`). A
+ * pinned version accepts a PATH toolchain only when its --version output
+ * matches; otherwise null — the caller reports the install-or-pin hint. */
 export function resolveToolchain(name: string, opts: ResolveToolchainOptions = {}): ResolvedToolchain | null {
   const isolated = findIsolatedToolchain(name, { version: opts.version, home: opts.home });
   if (isolated) return { kind: 'isolated', ...isolated };
+  if (!opts.allowPath) return null;
   const probe = opts.probeVersion ?? ((cmd: string): string | null => {
     try {
       const r = spawnSync(cmd, ['--version'], { timeout: 10_000, windowsHide: true });

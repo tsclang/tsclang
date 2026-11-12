@@ -6,9 +6,9 @@
 // helper the section is built on.
 
 import { spawn } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { delimiter, dirname, join, resolve } from "node:path"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import { listIsolatedToolchains } from "../../../../../pm/src/toolchains.js"
@@ -24,6 +24,24 @@ function mkTmp(): string {
   return d
 }
 after(() => { for (const d of tmpDirs) rmSync(d, { recursive: true, force: true }) })
+
+// #282: the desktop profile requires clang, and the doctor probe checks
+// `clang --version`. A machine without clang (any CI box) must not flip the
+// exit code of these tests — a copy of the node binary named clang(.exe)
+// answers --version with exit 0, exactly what toolAvailable() checks.
+function fakeToolBin(name: string): string {
+  const bin = mkTmp()
+  const target = join(bin, process.platform === "win32" ? `${name}.exe` : name)
+  copyFileSync(process.execPath, target)
+  if (process.platform !== "win32") chmodSync(target, 0o755)
+  return bin
+}
+
+function withFakeTools(...names: string[]): NodeJS.ProcessEnv {
+  const dirs = names.map(fakeToolBin)
+  const value = `${dirs.join(delimiter)}${delimiter}${process.env.Path ?? process.env.PATH ?? ""}`
+  return { ...process.env, PATH: value, Path: value }
+}
 
 function runCli(args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv }): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolveFn, reject) => {
@@ -94,7 +112,7 @@ describe("13-build/platform 2.4 — doctor: секция Platforms (#273)", () =
   test("нет платформ — секции нет", async () => {
     const dir = mkTmp()
     writeProject(dir, false)
-    const r = await runCli(["doctor"], { cwd: dir, env: { ...process.env } })
+    const r = await runCli(["doctor"], { cwd: dir, env: withFakeTools("clang") })
     expect(r.code).toBe(0)
     expect(r.stdout.includes("Platforms:")).toBe(false)
   })
@@ -110,8 +128,10 @@ describe("13-build/platform 2.4 — doctor: секция Platforms (#273)", () =
     m.platform.toolchains.gcc = { version: "13.2.0", downloads: { "win32-x64": { url: "https://x/g.tar.gz", sha256: "0".repeat(64) } } }
     writeFileSync(join(pkgDir, "tsc.package.json"), JSON.stringify(m, null, 2), "utf8")
 
-    // TSC_NO_NETWORK=1 keeps doctor offline — the section is local-only
-    const r = await runCli(["doctor"], { cwd: dir, env: { ...process.env, TSC_HOME: home, TSC_NO_NETWORK: "1" } })
+    // TSC_NO_NETWORK=1 keeps doctor offline — the section is local-only.
+    // Fake gcc too: the "system (found in PATH)" status must not depend on
+    // the host machine carrying a real gcc.
+    const r = await runCli(["doctor"], { cwd: dir, env: { ...withFakeTools("clang", "gcc"), TSC_HOME: home, TSC_NO_NETWORK: "1" } })
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("Platforms:")
     expect(r.stdout).toContain("@tsclang/avrfake 1.0.0")

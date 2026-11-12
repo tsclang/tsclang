@@ -5,7 +5,7 @@
 // CMakeLists.txt as an absolute path.
 
 import { spawn } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -157,24 +157,61 @@ describe("13-build/platform 2.2 — resolveToolchain (#271)", () => {
     expect(pathProbed).toBe(false) // cache wins without touching PATH
   })
 
-  test("пиннед: PATH с совпавшей версией; не совпала → null", () => {
+  test("пиннед + allowPath: PATH с совпавшей версией; не совпала → null (#282: PATH — только явный тулчейн)", () => {
     const r1 = resolveToolchain("avr-gcc", {
+      allowPath: true,
       version: "12.1",
       probeVersion: () => "avr-gcc (GCC) 12.1.0",
     })
     expect(r1?.kind).toBe("path")
     const r2 = resolveToolchain("avr-gcc", {
+      allowPath: true,
       version: "12.1",
       probeVersion: () => "avr-gcc (GCC) 13.2.0",
     })
     expect(r2).toBe(null)
   })
 
-  test("без пина PATH принимается без проверки версии; не запускается → null", () => {
-    const r = resolveToolchain("gcc", { probeVersion: () => "gcc (whatever) 0.0-custom-build" })
+  test("allowPath без пина: PATH принимается без проверки версии; не запускается → null", () => {
+    const r = resolveToolchain("gcc", { allowPath: true, probeVersion: () => "gcc (whatever) 0.0-custom-build" })
     expect(r?.kind).toBe("path")
-    const missing = resolveToolchain("gcc", { probeVersion: () => null })
+    const missing = resolveToolchain("gcc", { allowPath: true, probeVersion: () => null })
     expect(missing).toBe(null)
+  })
+})
+
+// ── #282: bare tsclang never compiles with a silently picked toolchain ──────
+// The isolated platform cache is the only DEFAULT source; PATH is probed
+// exclusively for an EXPLICIT reference the user wrote (a pinned
+// builds.<n>.toolchain or a profile capability → allowPath from the caller).
+
+describe("13-build/platform — resolveToolchain isolated-only default (#282)", () => {
+  test("дефолт: пустой кеш → null, PATH не пробуется", () => {
+    let probed = false
+    const r = resolveToolchain("clang", {
+      home: mkTmp(),
+      probeVersion: () => { probed = true; return "clang version 18.1.0" },
+    })
+    expect(r).toBe(null)
+    expect(probed).toBe(false)
+  })
+
+  test("дефолт: кеш найден → isolated, PATH не трогаем", () => {
+    const home = mkTmp()
+    mkdirSync(join(home, ".tsclang", "platforms", "desktop@0.4.0", "clang@18.1.0", "bin"), { recursive: true })
+    let probed = false
+    const r = resolveToolchain("clang", { home, probeVersion: () => { probed = true; return "x" } })
+    expect(r?.kind).toBe("isolated")
+    expect(probed).toBe(false)
+  })
+
+  test("пин с версией без allowPath: даже совпавшая PATH-версия не принимается", () => {
+    const r = resolveToolchain("gcc", {
+      home: mkTmp(),
+      version: "13.2",
+      probeVersion: () => "gcc (GCC) 13.2.0",
+    })
+    expect(r).toBe(null)
   })
 })
 
@@ -259,5 +296,49 @@ describe("13-build/platform 2.2 — e2e: build consumes the isolated cache (#271
     // profile toolchainFile + include land in the generated text (posix paths)
     expect(cmake).toContain("deskfake.cmake")
     expect(cmake).toContain(join(pkgDir, "include").replace(/\\/g, "/"))
+  })
+})
+
+// ── e2e: bare tsclang = transpile-only (#282) ────────────────────────────────
+// A compiling emit without an explicitly named toolchain (platform or pin)
+// fails loud with an instruction — it never silently compiles with whatever
+// PATH happens to carry.
+
+describe("13-build/platform — e2e: bare tsclang = transpile-only (#282)", () => {
+  test("bare --emit binary без платформы и пина → exit 1 + инструкция, не тихая PATH-сборка", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), "console.log(1)\n", "utf8")
+    const r = await runCli(["build", "main.tsc", "--emit", "binary"], {
+      cwd: dir, env: { ...process.env, TSC_HOME: mkTmp() },
+    })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain("requires a toolchain")
+    expect(r.stderr).toContain("platform install @tsclang/desktop")
+    expect(r.stderr).toContain("builds.<n>.toolchain")
+  })
+
+  test("явный пин имени, которого нет нигде → ConfigError про PATH (явное имя — PATH разрешён)", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), "console.log(1)\n", "utf8")
+    writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+      name: "p", version: "0.0.1", type: "package", main: "main.tsc",
+      builds: { app: { emit: "binary", toolchain: "tsc-fake-cc" } },
+    }, null, 2), "utf8")
+    const r = await runCli(["build", "--build", "app"], {
+      cwd: dir, env: { ...process.env, TSC_HOME: mkTmp(), PATH: "", Path: "" },
+    })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain("requires tsc-fake-cc in PATH")
+  })
+
+  test("cmake-emit без пина: дефолтный компилятор в CMakeLists.txt — clang", async () => {
+    const dir = mkTmp()
+    writeFileSync(join(dir, "main.tsc"), "console.log(1)\n", "utf8")
+    const r = await runCli(["build", "main.tsc", "--emit", "cmake"], {
+      cwd: dir, env: { ...process.env, TSC_HOME: mkTmp() },
+    })
+    expect(r.code).toBe(0)
+    const cmake = readFileSync(join(dir, "CMakeLists.txt"), "utf8")
+    expect(cmake).toContain("clang")
   })
 })
