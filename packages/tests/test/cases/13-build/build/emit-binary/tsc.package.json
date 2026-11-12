@@ -1,0 +1,12 @@
+{
+  "name": "emitbin",
+  "version": "0.1.0",
+  "type": "executable",
+  "main": "main.tsc",
+  "builds": {
+    "app": {
+      "emit": "binary",
+      "toolchain": "gcc"
+    }
+  }
+}

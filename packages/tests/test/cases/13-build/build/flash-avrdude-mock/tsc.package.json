@@ -8,6 +8,7 @@
       "profile": "avr",
       "mcu": "atmega328p",
       "emit": "flash",
+      "toolchain": "avr-gcc",
       "flash": { "programmer": "arduino", "port": "COM3", "baud": 115200 }
     }
   }
