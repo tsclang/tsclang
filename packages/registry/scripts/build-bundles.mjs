@@ -1,4 +1,4 @@
-// Toolchain bundle builder (issue #278). Repackages official toolchain
+// Toolchain bundle builder (issues #278, #282). Repackages official toolchain
 // distributions into our layout — `bin/` at the archive root (or a flat
 // root, which then serves as its own bin dir) — and emits the archive +
 // sha256 + size for the registry catalog and GitHub Releases upload.
@@ -8,17 +8,17 @@
 // Cache: .tsclang-tmp/bundles/src   Output: .tsclang-tmp/bundles/out
 //
 // Targets are `os-arch` keys of toolchains.downloads in tsc.package.json.
-// Posix bundles MUST be packed on a posix host (CI): executable bits and
-// symlinks live in tar metadata, but a Windows tar cannot create them.
-// Cross-arch packing is fine — binaries are never executed during packing,
-// so one arm64 runner can build both darwin targets.
+// Posix bundles MUST be packed on a posix host (CI): executable bits live in
+// tar metadata, but a Windows tar cannot set them. Cross-arch packing is
+// fine — binaries are never executed during packing, so one arm64 runner
+// can build both darwin targets.
 //
 // Sources are pinned below; re-check licenses before adding new ones
 // (packages/registry/README.md — "Toolchain bundles").
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,18 +78,18 @@ const BUNDLES = [
     },
   },
   {
-    toolchain: 'gcc', version: '16.2.0',
-    license: 'GPL-3.0-or-later with exceptions (win32: WinLibs GCC, binutils, mingw-w64, LLVM); Apache-2.0 WITH LLVM-exception (posix: LLVM/Clang)',
-    // posix desktop bundles ship LLVM/Clang (upstream publishes portable,
-    // statically linked builds) with gcc/g++/cc symlinked to clang so the
-    // bundle keeps serving the `gcc` toolchain name on every platform.
-    // darwin-x64 has no upstream LLVM build — documented fallback there is
-    // the system clang from Xcode Command Line Tools.
-    postInstall: bundleGcc,
+    toolchain: 'clang', version: '23.1.5',
+    license: 'Apache-2.0 WITH LLVM-exception (LLVM/Clang; win32: llvm-mingw build — LLVM + lld + mingw-w64 UCRT runtime)',
+    // Desktop is clang/LLVM-only (#282): every target ships real Clang from
+    // upstream — portable LLVM tarballs on posix, llvm-mingw on win32 (the
+    // only portable, self-contained Clang+mingw-w64 distribution). No gcc
+    // aliases: the bundle serves the `clang` toolchain name, nothing else.
+    // darwin-x64 has no upstream LLVM build — the documented fallback there
+    // is installing clang from Xcode Command Line Tools.
     targets: {
       'win32-x64': {
-        source: 'https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-23.1.3-14.0.0-ucrt-r3/winlibs-x86_64-posix-seh-gcc-16.2.0-llvm-23.1.3-mingw-w64ucrt-14.0.0-r3.zip',
-        file: 'winlibs-16.2.0-ucrt-r3.zip', // single root (mingw64/) -> bin/ etc.
+        source: 'https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/llvm-mingw-20261104-ucrt-x86_64.zip',
+        file: 'llvm-mingw-20261104-ucrt-x86_64.zip', // single root (llvm-mingw-…/) -> bin/ etc.
       },
       'linux-x64': {
         source: 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.5/LLVM-23.1.5-Linux-X64.tar.xz',
@@ -144,22 +144,6 @@ const BUNDLES = [
     },
   },
 ];
-
-// Posix desktop bundles alias gcc/g++/cc to clang so the toolchain keeps the
-// `gcc` name on every platform (the resolver looks for `gcc` in bin/).
-function bundleGcc(contentRoot, target) {
-  if (target === 'win32-x64') return; // WinLibs ships a real gcc
-  const binDir = join(contentRoot, 'bin');
-  for (const [alias, real] of [['cc', 'clang'], ['gcc', 'clang'], ['g++', 'clang++']]) {
-    const link = join(binDir, alias);
-    if (existsSync(link)) continue;
-    try {
-      symlinkSync(real, link); // relative symlink stays valid in the archive
-    } catch {
-      copyFileSync(join(binDir, real), link); // windows smoke-run fallback
-    }
-  }
-}
 
 // Make the emcc bundle consumable by findIsolatedToolchain (binDir=<root>/bin):
 //  - relocatable .emscripten config (config.py exec's it with __file__ set,
@@ -304,8 +288,6 @@ function buildOne(bundle, target, spec) {
     `License: ${bundle.license}`,
     `Built: ${new Date().toISOString()} by packages/registry/scripts/build-bundles.mjs`,
     'Redistributed unmodified except for the top-level layout of this archive.',
-    ...(bundle.toolchain === 'gcc' && target !== 'win32-x64'
-      ? ['Posix bundles ship LLVM/Clang; gcc/g++/cc are symlinks to clang/clang++.'] : []),
     ...(bundle.toolchain === 'emcc' && target === 'linux-x64'
       ? ['Requires python3 in PATH (same as upstream emsdk on linux).'] : []),
   ].join('\n') + '\n';
@@ -342,5 +324,5 @@ for (const bundle of BUNDLES) {
 }
 process.stdout.write('\nCatalog entries (packages/platforms/*/tsc.package.json -> toolchains.downloads):\n');
 for (const [name, r] of Object.entries(results)) {
-  process.stdout.write(`  ${name}: url .../releases/download/toolchains-v1/${r.outName}\n    sha256: ${r.sha256}\n    size: ${r.sizeMB}\n`);
+  process.stdout.write(`  ${name}: url .../releases/download/toolchains-v2/${r.outName}\n    sha256: ${r.sha256}\n    size: ${r.sizeMB}\n`);
 }

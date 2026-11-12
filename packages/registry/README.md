@@ -34,23 +34,24 @@ JSON-каталог (спека `13-build.md` → «Реестр»). CLI заб�
 Эталонные платформы (`@tsclang/desktop`, `@tsclang/avr`, `@tsclang/wasm`)
 поставляют тулчейны комплектом: `platform.toolchains.<name>.downloads`
 в манифесте пакета указывает на бандлы в GitHub-релизах профильных репо
-(`github.com/tsclang/platform-{desktop,avr,wasm}/releases/download/toolchains-v1/…`),
+(`github.com/tsclang/platform-{desktop,avr,wasm}/releases/download/toolchains-v2/…`),
 CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270).
 
-Матрица v1: `win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`.
-`darwin-x64` (Intel-маки) — неполный: LLVM не публикует x64-macOS-бинари
-(desktop → системный clang из Xcode CLT), avr-gcc собирается только под
-arm64 (нет бесплатного x64-раннера) → brew-инструкция.
+Матрица: `win32-x64`, `linux-x64`, `darwin-arm64` (+ `darwin-x64` у avrdude).
+`darwin-x64` (Intel-маки) у clang/avr-gcc не покрыт: LLVM не публикует
+x64-macOS-бинари (desktop → системный clang из Xcode CLT, #282 — единственное
+честное исключение PATH-семантики), avr-gcc собирается только под arm64
+(нет бесплатного x64-раннера) → brew-инструкция.
 
 - **Сборка**: `node packages/registry/scripts/build-bundles.mjs [--only <тулчейн>] [--target <os-arch>]`
   — скачивает официальные дистрибутивы в `.tsclang-tmp/bundles/src/`,
   переупаковывает в наш layout (`bin/` верхним уровнем или плоский корень),
   кладёт `TSC_BUNDLE_NOTICE.txt` (источник + лицензия), пишет архив + sha256
   в `.tsclang-tmp/bundles/out/`. Posix-таргеты собираются CI профильных репо:
-  exec-биты и симлинки живут в метаданных tar — виндовый tar их не создаёт,
+  exec-биты живут в метаданных tar — виндовый tar их не создаёт,
   зато кросс-архитектурная упаковка возможна (бинари не исполняются), поэтому
   одного arm64-раннера хватает на оба darwin-таргета.
-- **Заливка**: релизы профильных репо (`gh release upload toolchains-v1 …`),
+- **Заливка**: релизы профильных репо (`gh release upload toolchains-v2 …`),
   файлы >100MB gh грузит через API сам; ассеты лимит 2GB (поэтому
   LLVM-таргеты пакуются в `.tar.xz`, остальные — `.tar.gz`; системный tar
   читает оба по суффиксу).
@@ -59,14 +60,15 @@ arm64 (нет бесплатного x64-раннера) → brew-инструк
   `toolchains.downloads` в манифестах платформ и переопубликовать `.tspkg`.
   Перезаписывать ассеты существующего тега нельзя — sha256 у потребителей
   уже зафиксирован.
-- **Источники и лицензии** — закреплены в `BUNDLES` скрипта (WinLibs GCC,
-  LLVM/Clang, Zak's avr-gcc, avrdude, emsdk wasm-binaries + emsdk python/node).
+- **Источники и лицензии** — закреплены в `BUNDLES` скрипта (LLVM/Clang,
+  llvm-mingw, Zak's avr-gcc, avrdude, emsdk wasm-binaries + emsdk python/node).
   Перед добавлением нового источника проверять право редистрибуции
   (GPL+exception ок; при сомнении — режим «инструкция», не бандл).
-- **desktop posix = LLVM/Clang**: upstream GCC не публикует портативные
-  linux/macOS-бинари, LLVM — публикует (статически слинкованные); `bin/gcc`,
-  `bin/g++`, `bin/cc` — симлинки на `clang`/`clang++`, имя тулчейна `gcc`
-  сохраняется на всех платформах.
+- **desktop = clang/LLVM (#282)**: единственный тулчейн платформы — `clang`,
+  без gcc-алиасов. Posix — статически слинкованные портативные бинари
+  upstream LLVM; win32 — llvm-mingw (Martin Storsjö build: LLVM + lld +
+  mingw-w64 UCRT, единственный самодостаточный портативный Clang под
+  Windows); версии совпадают по всем таргетам (LLVM 23.1.5).
 - **emcc-бандл композитный**: голой wasm-binaries недостаточно (win-екшничке
   pylauncher нужен python на PATH, конфигу — node), поэтому бандл включает
   portable-python (win/mac; на linux upstream-подход — системный python3) и
