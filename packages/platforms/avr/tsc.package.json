@@ -1,6 +1,6 @@
 {
   "name": "@tsclang/avr",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "platform",
   "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first, bundled as fallback)",
   "platform": {
@@ -10,9 +10,19 @@
         "version": "16.1.0",
         "downloads": {
           "win32-x64": {
-            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avr-gcc-16.1.0-win32-x64.tar.gz",
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avr-gcc-16.1.0-win32-x64.tar.gz",
             "sha256": "cce55e54a7af8021c725ecd8a9f3c4400b4293f50f9be0cf6b5c1d6b9d7ff30c",
             "size": 163
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avr-gcc-16.1.0-linux-x64.tar.gz",
+            "sha256": "0e0cab36269faf2424a091c239dae8cad3061c106b8da6915a690edf07bad723",
+            "size": 164
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avr-gcc-16.1.0-darwin-arm64.tar.gz",
+            "sha256": "12d81f3f93dfa510c6081e291e278e15aca339794dd3b15dfb16ebb6f3fb25e7",
+            "size": 117
           }
         }
       },
@@ -20,9 +30,24 @@
         "version": "8.3",
         "downloads": {
           "win32-x64": {
-            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/avrdude-8.3-win32-x64.tar.gz",
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avrdude-8.3-win32-x64.tar.gz",
             "sha256": "7d53a0461698cceeb2f3542850f0d45d54553c95822855597e842b5a14c0199b",
             "size": 8
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avrdude-8.3-linux-x64.tar.gz",
+            "sha256": "28371f2bf1d22b6908e2ccb8657d3ede061c164012b758cde699b4a38eb11f1c",
+            "size": 4
+          },
+          "darwin-x64": {
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avrdude-8.3-darwin-x64.tar.gz",
+            "sha256": "8eb895d0478bc3a5c6baadca6c1e2401332aae0f6b4bfb2271304d124008fe1b",
+            "size": 3
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-avr/releases/download/toolchains-v1/avrdude-8.3-darwin-arm64.tar.gz",
+            "sha256": "87cf2911262788f52a4cda361423e427edeb519d4fa9adb5ec50da17fbe2c8e1",
+            "size": 7
           }
         }
       }

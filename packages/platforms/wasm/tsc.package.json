@@ -1,6 +1,6 @@
 {
   "name": "@tsclang/wasm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "platform",
   "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX; emcc ships as a bundle",
   "platform": {
@@ -10,9 +10,25 @@
         "version": "7.0.0",
         "downloads": {
           "win32-x64": {
-            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/emcc-7.0.0-win32-x64.tar.gz",
+            "url": "https://github.com/tsclang/platform-wasm/releases/download/toolchains-v1/emcc-7.0.0-win32-x64.tar.gz",
             "sha256": "0613c87c9ed2e72c843b7c2e884aeb5885b883a3adfcad5322653690d7b4a78d",
             "size": 807
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-wasm/releases/download/toolchains-v1/emcc-7.0.0-linux-x64.tar.gz",
+            "sha256": "f9a8346139148bc82877722c3a077e2a11505320595f0fe955414fe7e75e290d",
+            "size": 546,
+            "note": "requires system python3 in PATH (same as upstream emsdk on linux)"
+          },
+          "darwin-x64": {
+            "url": "https://github.com/tsclang/platform-wasm/releases/download/toolchains-v1/emcc-7.0.0-darwin-x64.tar.gz",
+            "sha256": "e5510a254cabac52c5983fe5359f17dfbb4728557c4d58a10c3e6b1010dbd72e",
+            "size": 545
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-wasm/releases/download/toolchains-v1/emcc-7.0.0-darwin-arm64.tar.gz",
+            "sha256": "2ffc5e83d508c9105c0abf1e59e98980234b250542c8a85f613b2a0c15be17bc",
+            "size": 574
           }
         }
       }

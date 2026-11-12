@@ -3,32 +3,32 @@
   "packages": [
     {
       "name": "@tsclang/desktop",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "platform",
-      "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled WinLibs as fallback)",
+      "description": "Desktop reference platform: gcc build-and-run (system gcc first; bundled toolchain covers Windows, Linux and macOS arm64)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-desktop-0.2.0.tspkg",
-        "sha256": "17e2c010be5787584c60590989973a584fd2e56c42044d306dbfa5c20d9eafc4"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-desktop-0.3.0.tspkg",
+        "sha256": "6d5bcf0acb44c3b91021b02c447c3c27e666fe960b3d7e0a15b85c5e0706cd0c"
       }
     },
     {
       "name": "@tsclang/avr",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "platform",
-      "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first, bundled as fallback)",
+      "description": "AVR microcontroller platform: avr-gcc hex/flash + avrdude (system tools first; bundled toolchains cover Windows, Linux and macOS arm64)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-avr-0.2.0.tspkg",
-        "sha256": "46b02c40081d62f82ad0c8af4e053a2d2a3b69b989c76e41e8fd54234eda02b8"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-avr-0.3.0.tspkg",
+        "sha256": "e0889ea06d914b4085ad2d0ed63a253ec667d83d9188f0f174d8e417c7f7873b"
       }
     },
     {
       "name": "@tsclang/wasm",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "type": "platform",
-      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX; emcc ships as a bundle",
+      "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX; emcc bundles cover Windows, Linux and macOS x64/arm64",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/archives/@tsclang-wasm-0.2.0.tspkg",
-        "sha256": "557e745f28434b4c752ea9b2107b64d036963ab620216557b83e0a97faac7520"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-wasm-0.3.0.tspkg",
+        "sha256": "926c735af4d672327b05ff93fb05bfd359af904b6fc20824c201a51c909e95c8"
       }
     }
   ]

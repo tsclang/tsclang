@@ -78,14 +78,14 @@ interface Case {
 const CASES: Case[] = [
   {
     platform: "desktop",
-    toolchains: [["gcc", "16.2.0", "desktop@0.2.0/gcc@16.2.0"]],
+    toolchains: [["gcc", "16.2.0", "desktop@0.3.0/gcc@16.2.0"]],
     source: 'function main(): void {\n    console.log("hello isolated gcc");\n}\n\nmain();\n',
     buildArgs: ["build", "--build", "desktop"],
     verify: () => { /* emit exec: the program's stdout is checked directly */ },
   },
   {
     platform: "avr",
-    toolchains: [["avr-gcc", "16.1.0", "avr@0.2.0/avr-gcc@16.1.0"], ["avrdude", "8.3", "avr@0.2.0/avrdude@8.3"]],
+    toolchains: [["avr-gcc", "16.1.0", "avr@0.3.0/avr-gcc@16.1.0"], ["avrdude", "8.3", "avr@0.3.0/avrdude@8.3"]],
     source: "function main(): void {\n    let x: u8 = 1;\n    x = (x + 2) as u8;\n}\n\nmain();\n",
     buildArgs: ["build", "--build", "avr"],
     verify: (dir) => {
@@ -94,7 +94,7 @@ const CASES: Case[] = [
   },
   {
     platform: "wasm",
-    toolchains: [["emcc", "7.0.0", "wasm@0.2.0/emcc@7.0.0"]],
+    toolchains: [["emcc", "7.0.0", "wasm@0.3.0/emcc@7.0.0"]],
     source: 'function main(): void {\n    console.log("hello wasm");\n}\n\nmain();\n',
     buildArgs: ["build", "--build", "wasm"],
     verify: (dir) => {
@@ -136,7 +136,7 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
 
       const install = await runCli(["platform", "install", `@tsclang/${c.platform}`], { cwd: dir, env })
       expect(install.code).toBe(0)
-      expect(install.stdout).toContain(`Installed @tsclang/${c.platform}@0.2.0`)
+      expect(install.stdout).toContain(`Installed @tsclang/${c.platform}@0.3.0`)
       for (const [name, version, rel] of c.toolchains) {
         const tcDir = join(home, ".tsclang", "platforms", ...rel.split("/"))
         expect(existsSync(tcDir)).toBe(true)

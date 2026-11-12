@@ -31,8 +31,11 @@ export interface Catalog {
 /** Catalog schema version this CLI understands. */
 export const CATALOG_SCHEMA_VERSION = 1;
 
+/** Catalog + archives live in the repo's default branch. TSClang releases
+ *  from `develop` until the v1 publication flow (merge to main) is set up —
+ *  main holds no registry archives yet, so pointing there breaks installs. */
 export const DEFAULT_CATALOG_URL =
-  'https://raw.githubusercontent.com/tsclang/tsclang/main/packages/registry/catalog.json';
+  'https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/catalog.json';
 
 /** npm-style metadata freshness window. */
 export const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;

@@ -1,8 +1,8 @@
 {
   "name": "@tsclang/desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "platform",
-  "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled WinLibs as fallback)",
+  "description": "Desktop reference platform: gcc build-and-run (system gcc first, bundled LLVM/Clang-based gcc for win/linux/macos-arm64)",
   "platform": {
     "profile": "desktop",
     "toolchains": {
@@ -10,9 +10,19 @@
         "version": "16.2.0",
         "downloads": {
           "win32-x64": {
-            "url": "https://github.com/tsclang/tsclang/releases/download/toolchains-v1/gcc-16.2.0-win32-x64.tar.gz",
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-win32-x64.tar.gz",
             "sha256": "2168cf5c7b82e048fea0da8a744847b87559b7b4b625787a0292a217e1205d92",
             "size": 438
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-linux-x64.tar.xz",
+            "sha256": "df6bb9eb9b5cabbe6518e8ad371cecd411fdf213a547638b0eaefeb6e91acb93",
+            "size": 1997
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-desktop/releases/download/toolchains-v1/gcc-16.2.0-darwin-arm64.tar.xz",
+            "sha256": "0bea39ba1b62ad1c92d19ac837440ace32a35ce12185398828a41c5eea0b5c7e",
+            "size": 1553
           }
         }
       }

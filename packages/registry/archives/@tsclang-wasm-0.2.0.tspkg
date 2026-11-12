@@ -1,8 +1,0 @@
-{
-  "name": "@tsclang/wasm",
-  "version": "0.2.0",
-  "files": {
-    "index.d.tsc": "declare platform {\n    target: \"wasm\"\n    allocator: \"heap\"\n    async: \"none\"\n    fpu: true\n    bits: 32\n    usize: \"u32\"\n    defaultNumber: \"f64\"\n    unaligned_access: true\n    os: false\n    posix: false\n    strtoll: false\n    toolchain: \"emcc\"\n}\n",
-    "tsc.package.json": "{\n  \"name\": \"@tsclang/wasm\",\n  \"version\": \"0.2.0\",\n  \"type\": \"platform\",\n  \"description\": \"WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX; emcc ships as a bundle\",\n  \"platform\": {\n    \"profile\": \"wasm\",\n    \"toolchains\": {\n      \"emcc\": {\n        \"version\": \"7.0.0\",\n        \"downloads\": {\n          \"win32-x64\": {\n            \"url\": \"https://github.com/tsclang/tsclang/releases/download/toolchains-v1/emcc-7.0.0-win32-x64.tar.gz\",\n            \"sha256\": \"0613c87c9ed2e72c843b7c2e884aeb5885b883a3adfcad5322653690d7b4a78d\",\n            \"size\": 807\n          }\n        }\n      }\n    },\n    \"builds\": {\n      \"wasm\": { \"profile\": \"wasm\", \"emit\": \"wasm\", \"outDir\": \"build/wasm\" }\n    }\n  }\n}\n"
-  }
-}

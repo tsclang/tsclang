@@ -26,14 +26,16 @@ const DIST_BIN = join(ROOT, "packages", "cli", "dist", "index.js")
 const PLATFORMS_ROOT = join(ROOT, "packages", "platforms")
 const REGISTRY_DIR = join(ROOT, "packages", "registry")
 
-// The reference platform set (#275 desktop, #276 avr + wasm; 0.2.0 ships
-// toolchain bundles #278): package source dir in the monorepo, published
-// archive name in packages/registry/archives, toolchain names the builds
-// resolve through findIsolatedToolchain.
+// The reference platform set (#275 desktop, #276 avr + wasm; 0.3.0 ships
+// the full per-OS toolchain matrix #278 — win32/linux/darwin × x64/arm64):
+// package source dir in the monorepo, published archive name in
+// packages/registry/archives, toolchain names the builds resolve through
+// findIsolatedToolchain.
+const REFERENCE_VERSION = "0.3.0"
 const REFERENCE_PLATFORMS = [
-  { name: "@tsclang/desktop", dir: "desktop", file: "@tsclang-desktop-0.2.0.tspkg", toolchains: ["gcc"] },
-  { name: "@tsclang/avr", dir: "avr", file: "@tsclang-avr-0.2.0.tspkg", toolchains: ["avr-gcc", "avrdude"] },
-  { name: "@tsclang/wasm", dir: "wasm", file: "@tsclang-wasm-0.2.0.tspkg", toolchains: ["emcc"] },
+  { name: "@tsclang/desktop", dir: "desktop", file: "@tsclang-desktop-0.3.0.tspkg", repo: "platform-desktop", toolchains: ["gcc"] },
+  { name: "@tsclang/avr", dir: "avr", file: "@tsclang-avr-0.3.0.tspkg", repo: "platform-avr", toolchains: ["avr-gcc", "avrdude"] },
+  { name: "@tsclang/wasm", dir: "wasm", file: "@tsclang-wasm-0.3.0.tspkg", repo: "platform-wasm", toolchains: ["emcc"] },
 ] as const
 
 const tmpDirs: string[] = []
@@ -76,12 +78,17 @@ describe("13-build/platform 4.1 — эталонные пакеты в моно�
         expect(typeof tc.version).toBe("string")
         const dl = tc.downloads["win32-x64"]
         expect(dl !== undefined).toBe(true)
-        // Bundles are hosted on OUR GitHub releases — never direct upstream
-        // links (sha256 contract: upstream re-uploads must not break users).
-        expect(dl.url.startsWith("https://github.com/tsclang/tsclang/releases/download/")).toBe(true)
+        // Bundles are hosted on OUR platform repos' GitHub releases — never
+        // direct upstream links (sha256 contract: upstream re-uploads must
+        // not break users).
+        expect(dl.url.startsWith(`https://github.com/tsclang/${ref.repo}/releases/download/toolchains-v1/`)).toBe(true)
         expect(dl.url.endsWith(".tar.gz")).toBe(true)
         expect(/^[0-9a-f]{64}$/.test(dl.sha256)).toBe(true)
         expect(typeof dl.size === "number" && dl.size > 0).toBe(true)
+        // v1 matrix: every toolchain covers at least win32-x64 + linux-x64
+        // (darwin-x64 is partial — Intel Macs get system/brew instructions)
+        const keys = Object.keys(tc.downloads)
+        expect(keys.includes("win32-x64") && keys.includes("linux-x64")).toBe(true)
       }
     })
   }
@@ -97,7 +104,7 @@ describe("13-build/platform 4.1 — каталог реестра синхрон
       const entry = catalog.packages.find((p) => p.name === ref.name)
       expect(entry !== undefined).toBe(true)
       expect(entry!.type).toBe("platform")
-      expect(entry!.version).toBe("0.2.0")
+      expect(entry!.version).toBe(REFERENCE_VERSION)
       expect(entry!.location?.url.startsWith("https://raw.githubusercontent.com/tsclang/tsclang/")).toBe(true)
       expect(/^[0-9a-f]{64}$/.test(entry!.location?.sha256 ?? "")).toBe(true)
     }
@@ -112,7 +119,7 @@ describe("13-build/platform 4.1 — каталог реестра синхрон
       expect(shaText(archivePath)).toBe(entry.location!.sha256)
       const archive = JSON.parse(readFileSync(archivePath, "utf8"))
       expect(archive.name).toBe(ref.name)
-      expect(archive.version).toBe("0.2.0")
+      expect(archive.version).toBe(REFERENCE_VERSION)
       expect(typeof archive.files["tsc.package.json"]).toBe("string")
       expect(typeof archive.files["index.d.tsc"]).toBe("string")
       const manifest = JSON.parse(archive.files["tsc.package.json"])
@@ -171,7 +178,7 @@ describe("13-build/platform 4.1 — краш-тест: чистая машина
     writeFileSync(join(dir, "hello.tsc"), 'function main(): void {\n    console.log("hello desktop");\n}\n\nmain();\n', "utf8")
     // Local catalog fixture: the REAL catalog with the url pointed at the
     // REAL committed archive (same bytes — sha still matches)
-    const desktopArchive = join(REGISTRY_DIR, "archives", "@tsclang-desktop-0.2.0.tspkg")
+    const desktopArchive = join(REGISTRY_DIR, "archives", "@tsclang-desktop-0.3.0.tspkg")
     const catalog = JSON.parse(readFileSync(join(REGISTRY_DIR, "catalog.json"), "utf8"))
     catalog.packages.find((p: { name: string }) => p.name === "@tsclang/desktop").location.url =
       `file://${desktopArchive.replace(/\\/g, "/")}`
@@ -187,7 +194,7 @@ describe("13-build/platform 4.1 — краш-тест: чистая машина
 
     const install = await runCli(["platform", "install", "@tsclang/desktop"], { cwd: dir, env })
     expect(install.code).toBe(0)
-    expect(install.stdout).toContain("Installed @tsclang/desktop@0.2.0")
+    expect(install.stdout).toContain(`Installed @tsclang/desktop@${REFERENCE_VERSION}`)
     // The package profile travels into tsc_packages and overrides built-ins
     expect(existsSync(join(dir, "tsc_packages", "@tsclang", "desktop", "index.d.tsc"))).toBe(true)
     const manifest = JSON.parse(readFileSync(join(dir, "tsc.package.json"), "utf8"))
