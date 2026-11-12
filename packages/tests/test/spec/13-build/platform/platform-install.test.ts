@@ -279,7 +279,8 @@ describe("13-build/platform 1.2 — e2e: platform install (#267)", () => {
     expect(existsSync(join(dir, "tsc_packages", "@nes", "zxdev", "index.d.tsc"))).toBe(true)
 
     const manifest = readJson(join(dir, "tsc.package.json"))
-    expect((manifest.dependencies as Record<string, string>)["@nes/zxdev"]).toBe("0.3.1")
+    // npm semantics (#280): a bare install records a caret of the resolved version
+    expect((manifest.dependencies as Record<string, string>)["@nes/zxdev"]).toBe("^0.3.1")
     const builds = manifest.builds as Record<string, Record<string, unknown>>
     expect(JSON.stringify(builds["nes:zxdev"])).toBe(JSON.stringify({ profile: "zxdev", emit: "c", outDir: "build/nes-zxdev" }))
     expect((manifest.scripts as Record<string, string>)["nes:zxdev:dev"]).toBe("tsclang build --build nes:zxdev")

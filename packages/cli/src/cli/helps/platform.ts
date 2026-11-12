@@ -25,7 +25,7 @@ Run 'tsclang platform <command> --help' for command-specific options.`;
 export const platformInstall = `tsclang platform install — install a platform package
 
 USAGE:
-  tsclang platform install <name> [options]
+  tsclang platform install <name>[@spec] [options]
 
 Installs the platform package into tsc_packages/, records it in dependencies,
 and appends the builds/scripts presets from its 'platform' section using the
@@ -34,7 +34,15 @@ docker-model names (official @tsclang/* unprefixed, foreign scopes prefixed
 skipped with a notice (or asked on a TTY). Missing toolchains are offered for
 download into ~/.tsclang/platforms/<platform>@<v>/<toolchain>@<v>.
 
+<spec> selects a version from the catalog history: an exact version
+('0.3.1'), a range ('^0.4', '~0.3.1', '>=0.4') or bare for the latest.
+dependencies records the requested spec (bare writes a caret of the resolved
+version, npm style); the lock pins the exact resolved version. A version
+whose minCli exceeds this CLI fails loud.
+
 OPTIONS:
+  --offline        No network: loud failure (a write operation), same as
+                   TSC_NO_NETWORK
   --help, -h       Print this help`;
 
 export const platformSearch = `tsclang platform search — search the platform registry
@@ -84,6 +92,11 @@ presets the new version adds appear, presets it dropped are cleaned up, and
 entries you edited are never touched (lock ownership). Toolchains of the new
 version download into ~/.tsclang/platforms/<platform>@<v>/<toolchain>@<v> —
 old version directories stay so pinned builds keep reproducing.
+
+Updates stay INSIDE the spec recorded in dependencies (#280): a range moves
+to the newest catalog version within it, an exact version is a pin and is
+reported (never updated), and a legacy manifest without a spec follows the
+catalog latest.
 
 On a non-TTY without --yes it only prints the available updates (CI-safe, no
 surprise downloads); on a TTY each update is confirmed interactively.

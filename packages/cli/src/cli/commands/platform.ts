@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'fs';
-import { join } from 'path';
-import { PACKAGES_DIR } from '@tsclang/shared';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { PACKAGES_DIR, PACKAGE_FILE } from '@tsclang/shared';
 import {
   loadCatalog, filterCatalog, CatalogError,
   platformNames, validatePlatformSection,
   planPlatformApply, applyPlatformPlan, ownershipFromPlan, planPlatformRemoval,
-  planPlatformUpdates,
+  planPlatformUpdates, parsePlatformRequest, resolveCatalogVersion,
   fetchPackageArchive, extractTspkg, packageNameParts,
   readLock, writeLock, ensureManifest, writeManifest, readManifest,
   decideToolchain, detectSystemCommand, downloadToolchain, platformToolchainDir,
@@ -17,9 +18,40 @@ import { askYesNo } from '../doctor/prompt.js';
 
 // `tsclang platform <sub>` — nested command group (#265). The dispatcher
 // validates the subcommand and its flags before calling here. search/list
-// landed in #266, install in #267, remove in #268, update in #279.
+// landed in #266, install in #267, remove in #268, update in #279, and
+// `name@spec` version resolution in #280.
 
 export const PLATFORM_SUBCOMMANDS = ['install', 'update', 'search', 'remove', 'list'] as const;
+
+/** Best-effort version of THIS CLI (its package.json up the tree). Undefined
+ * (bundled/unknown layout) never blocks resolution — the catalog's minCli
+ * filter treats an unknown CLI as compatible. */
+function cliVersion(): string | undefined {
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 5; i++) {
+      const p = join(dir, 'package.json');
+      if (existsSync(p)) {
+        const pkg = JSON.parse(readFileSync(p, 'utf8')) as { name?: string; version?: string };
+        if (pkg.name === '@tsclang/cli' && pkg.version) return pkg.version;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // fall through: unknown CLI version
+  }
+  return undefined;
+}
+
+/** npm semantics (#280): a bare install records a caret of the resolved
+ * version (`npm i foo` writes ^1.2.3) — later updates work within a range.
+ * An explicit spec is recorded verbatim (an exact version is a pin). */
+function dependencySpec(requested: string, resolved: string): string {
+  const t = requested.trim();
+  return t === '' || t === '*' || t === 'latest' ? `^${resolved}` : t;
+}
 
 export async function runPlatformCommand(sub: string, restArgs: string[]): Promise<void> {
   switch (sub) {
@@ -43,13 +75,18 @@ export interface PlatformArchive {
 }
 
 /** Resolve a platform package from the registry and validate it: catalog
- * entry → archive fetch → manifest → platform section. Shared by
- * `platform install` and the first-run wizard (#274; the wizard only reads
- * the toolchain section — machine-level, no project manifest writes). */
+ * entry → `name@spec` version resolution (#280) → archive fetch → manifest →
+ * platform section. `request` is a bare name or `name@spec` (exact, ^, ~, >=,
+ * *; bare takes the catalog latest). Shared by `platform install`,
+ * `platform update` and the first-run wizard (#274; the wizard only reads the
+ * toolchain section — machine-level, no project manifest writes). */
 export async function fetchPlatformArchive(
-  name: string,
+  request: string,
   opts: { registry?: string; offline?: boolean } = {},
 ): Promise<PlatformArchive> {
+  const parsed = parsePlatformRequest(request);
+  if (!parsed) throw new Error(`invalid platform request '${request}'`);
+  const { name, spec } = parsed;
   let packages;
   try {
     const { catalog } = await loadCatalog({ registry: opts.registry ?? process.env.TSC_REGISTRY, offline: opts.offline });
@@ -63,11 +100,20 @@ export async function fetchPlatformArchive(
   if (entry.type !== 'platform') {
     throw new Error(`'${name}' is a ${entry.type} package, not a platform — use 'tsclang install'`);
   }
-  if (!entry.location?.url) throw new Error(`registry entry for '${name}' has no download location`);
+  const cli = cliVersion();
+  const resolution = resolveCatalogVersion(entry, spec, { cliVersion: cli });
+  if (resolution.status === 'no-version') {
+    const available = resolution.available.length ? resolution.available.join(', ') : 'none';
+    const what = spec ? `no version matching '${spec}'` : 'no downloadable version';
+    throw new Error(`'${name}' has ${what} (available: ${available})`);
+  }
+  if (resolution.status === 'cli-too-old') {
+    throw new Error(`'${name}@${resolution.version}' requires tsclang >= ${resolution.requires}${cli ? ` (this CLI is ${cli})` : ''}`);
+  }
 
   let archiveText: string, integrity: string;
   try {
-    ({ text: archiveText, integrity } = await fetchPackageArchive(entry.location, { offline: opts.offline }));
+    ({ text: archiveText, integrity } = await fetchPackageArchive(resolution.location, { offline: opts.offline }));
   } catch (e) {
     throw new Error((e as Error).message);
   }
@@ -83,6 +129,9 @@ export async function fetchPlatformArchive(
   if (archive.name !== name) {
     throw new Error(`archive name mismatch — catalog says '${name}', archive says '${archive.name}'`);
   }
+  if (archive.version !== resolution.version) {
+    throw new Error(`version mismatch — catalog resolved '${name}@${resolution.version}', archive contains '${archive.version}'`);
+  }
   let pkgManifest: { platform?: unknown };
   try {
     pkgManifest = JSON.parse(archive.files['tsc.package.json'] ?? '{}');
@@ -96,7 +145,7 @@ export async function fetchPlatformArchive(
     version: archive.version,
     files: archive.files,
     platform: pkgManifest.platform as PlatformSection,
-    location: entry.location.url,
+    location: resolution.location.url,
     integrity,
   };
 }
@@ -105,9 +154,15 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   // Async command handlers set process.exitCode and RETURN instead of
   // process.exit(): a hard exit right after fetches races the undici
   // keep-alive teardown and trips a win32 libuv assertion (0xC0000409).
-  const name = restArgs.find((a) => !a.startsWith('-'));
-  if (!name) {
-    process.stderr.write('tsclang platform install: missing <name> (usage: tsclang platform install <name>)\n');
+  const request = restArgs.find((a) => !a.startsWith('-'));
+  if (!request) {
+    process.stderr.write('tsclang platform install: missing <name> (usage: tsclang platform install <name>[@spec])\n');
+    process.exitCode = 1;
+    return;
+  }
+  const parsed = parsePlatformRequest(request);
+  if (!parsed) {
+    process.stderr.write(`tsclang platform install: invalid platform request '${request}'\n`);
     process.exitCode = 1;
     return;
   }
@@ -117,14 +172,16 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   // A write operation fails loud: unlike search, offline/catalog errors abort.
   let fetched: PlatformArchive;
   try {
-    fetched = await fetchPlatformArchive(name, { registry, offline });
+    fetched = await fetchPlatformArchive(request, { registry, offline });
   } catch (e) {
     process.stderr.write(`tsclang platform install: ${(e as Error).message}\n`);
     process.exitCode = 1;
     return;
   }
   try {
-    await applyPlatformArchive(fetched, { offline });
+    // dependencies record the requested spec (bare → caret of the resolved
+    // version, npm semantics); the lock pins the exact resolved version.
+    await applyPlatformArchive(fetched, { offline, depSpec: dependencySpec(parsed.spec, fetched.version) });
   } catch (e) {
     process.stderr.write(`tsclang platform install: ${(e as Error).message}\n`);
     process.exitCode = 1;
@@ -133,15 +190,16 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   process.exitCode = 0;
 }
 
-/** Shared install/update core (#267/#279): extract the archive, apply the
+/** Shared install/update core (#267/#279/#280): extract the archive, apply the
  * platform section with lock ownership, write the manifest and lock, then run
  * the toolchain pass. The never-overwrite conflict policy lives here — non-TTY
  * skips with a notice, TTY confirms the skip, an explicit "no" aborts by
  * throwing BEFORE anything is written to the manifest. `updateFrom` switches
- * the summary header to the update form. */
+ * the summary header to the update form; `depSpec` is what dependencies
+ * records (the requested spec — a range or exact pin, never silently rewritten). */
 async function applyPlatformArchive(
   fetched: PlatformArchive,
-  opts: { offline: boolean; updateFrom?: string },
+  opts: { offline: boolean; updateFrom?: string; depSpec: string },
 ): Promise<void> {
   const archive = { name: fetched.name, version: fetched.version, files: fetched.files };
   const platform = fetched.platform;
@@ -176,7 +234,7 @@ async function applyPlatformArchive(
     process.stderr.write(`tsclang: skipped ${label} — ${why} (never overwritten)\n`);
   }
 
-  applyPlatformPlan(manifest, plan, { name: archive.name, version: archive.version });
+  applyPlatformPlan(manifest, plan, { name: archive.name, version: archive.version, spec: opts.depSpec });
   writeManifest(manifest as never);
 
   const ownership = ownershipFromPlan(plan);
@@ -311,7 +369,7 @@ async function runPlatformUpdate(restArgs: string[]): Promise<void> {
     throw e;
   }
 
-  const { updates, missingFromCatalog } = planPlatformUpdates(installedAll, catalog);
+  const { updates, missingFromCatalog, pinned } = planPlatformUpdates(installedAll, catalog, { cliVersion: cliVersion() });
   if (name && missingFromCatalog.includes(name)) {
     process.stderr.write(`tsclang platform update: '${name}' not found in the platform registry\n`);
     process.exitCode = 1;
@@ -319,6 +377,10 @@ async function runPlatformUpdate(restArgs: string[]): Promise<void> {
   }
   for (const missing of missingFromCatalog) {
     process.stderr.write(`tsclang: ${missing} not found in the platform registry — skipped\n`);
+  }
+  // Exact specs in dependencies are pins (#280): reported, never updated.
+  for (const pin of pinned) {
+    process.stderr.write(`tsclang: ${pin.name} pinned to ${pin.version} — exact spec in dependencies, not updated\n`);
   }
 
   if (!updates.length) {
@@ -348,8 +410,10 @@ async function runPlatformUpdate(restArgs: string[]): Promise<void> {
       }
     }
     try {
-      const fetched = await fetchPlatformArchive(u.name, { registry, offline });
-      await applyPlatformArchive(fetched, { offline, updateFrom: u.current });
+      // Fetch the exact planned version; dependencies keep the USER's range
+      // (u.spec) — the lock pins the resolved exact version.
+      const fetched = await fetchPlatformArchive(`${u.name}@${u.next}`, { registry, offline });
+      await applyPlatformArchive(fetched, { offline, updateFrom: u.current, depSpec: dependencySpec(u.spec, u.next) });
     } catch (e) {
       process.stderr.write(`tsclang platform update: ${(e as Error).message}\n`);
       process.exitCode = 1;
@@ -464,12 +528,25 @@ interface InstalledPlatform {
   name: string;
   version: string;
   section: PlatformSection;
+  /** Requested spec from the project's dependencies ('' = latest; an exact
+   *  version is a pin — update never touches it). */
+  spec?: string;
 }
 
 /** Platform packages installed in the project's tsc_packages (any depth of
- *  one scope), keyed by their manifest `type: "platform"`. */
+ *  one scope), keyed by their manifest `type: "platform"`. The dependency
+ *  spec comes from the PROJECT manifest (cwd), not the package's own. */
 export function scanInstalledPlatforms(cwd: string): InstalledPlatform[] {
   const root = join(cwd, PACKAGES_DIR);
+  let deps: Record<string, string> | undefined;
+  const projectManifestPath = join(cwd, PACKAGE_FILE);
+  if (existsSync(projectManifestPath)) {
+    try {
+      deps = (JSON.parse(readFileSync(projectManifestPath, 'utf8')) as { dependencies?: Record<string, string> }).dependencies;
+    } catch {
+      deps = undefined; // broken project manifest — resolve as bare latest
+    }
+  }
   if (!existsSync(root)) return [];
   const pkgDirs: string[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -490,7 +567,7 @@ export function scanInstalledPlatforms(cwd: string): InstalledPlatform[] {
     try {
       const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
       if (m?.type !== 'platform' || !m?.platform) continue;
-      installed.push({ name: m.name ?? dir, version: m.version ?? '?', section: m.platform });
+      installed.push({ name: m.name ?? dir, version: m.version ?? '?', section: m.platform, spec: deps?.[m.name] });
     } catch { /* skip broken manifests */ }
   }
   installed.sort((a, b) => a.name.localeCompare(b.name));

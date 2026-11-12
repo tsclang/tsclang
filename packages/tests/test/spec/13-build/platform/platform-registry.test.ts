@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import {
   parseCatalog, loadCatalog, filterCatalog, CatalogError, CATALOG_CACHE_TTL_MS,
+  parsePlatformRequest, resolveCatalogVersion, planPlatformUpdates,
 } from "../../../../../pm/src/platform-registry.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -246,5 +247,260 @@ describe("13-build/platform 1.1 — e2e: platform search / list (#266)", () => {
     const r = await runCli(["platform", "list"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout).toContain("No platforms installed")
+  })
+})
+
+// === #280: version history (versions map + minCli) and name@spec resolution ===
+
+const HISTORY_CATALOG = JSON.stringify({
+  version: 1,
+  packages: [
+    {
+      name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "ZX dev",
+      location: { url: "https://example.com/zxdev-0.5.0.tspkg" },
+      versions: {
+        "0.3.1": { location: { url: "https://example.com/zxdev-0.3.1.tspkg", sha256: "a".repeat(64) } },
+        "0.4.0": { location: { url: "https://example.com/zxdev-0.4.0.tspkg" }, minCli: "0.9.0" },
+        "0.5.0": { location: { url: "https://example.com/zxdev-0.5.0.tspkg" } },
+      },
+    },
+    { name: "@old/legacy", type: "platform", version: "1.0.0", description: "no versions map", location: { url: "https://example.com/legacy-1.0.0.tspkg" } },
+  ],
+})
+
+function historyEntry(): ReturnType<typeof parseCatalog>["packages"][number] {
+  return parseCatalog(HISTORY_CATALOG).packages[0]
+}
+
+describe("13-build/platform #280 — parseCatalog: карта versions", () => {
+  test("versions-карта разбирается, плоские поля остаются latest", () => {
+    const entry = historyEntry()
+    expect(entry.version).toBe("0.5.0")
+    expect(entry.versions!["0.3.1"].location.url).toBe("https://example.com/zxdev-0.3.1.tspkg")
+    expect(entry.versions!["0.3.1"].location.sha256).toBe("a".repeat(64))
+    expect(entry.versions!["0.4.0"].minCli).toBe("0.9.0")
+  })
+
+  test("каталог без versions по-прежнему валиден (обратная совместимость)", () => {
+    const cat = parseCatalog(VALID_CATALOG)
+    expect(cat.packages.length).toBe(3)
+    expect("versions" in cat.packages[0]).toBe(false)
+  })
+
+  test("versions без плоского location → schema error (latest обязан резолвиться)", () => {
+    let msg = ""
+    const bad = JSON.stringify({
+      version: 1,
+      packages: [{
+        name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "",
+        versions: { "0.5.0": { location: { url: "https://example.com/z.tspkg" } } },
+      }],
+    })
+    try { parseCatalog(bad) } catch (e) { msg = (e as Error).message }
+    expect(msg.includes("location")).toBe(true)
+  })
+
+  test("versions, не содержащий плоский version → schema error", () => {
+    let threw = false
+    const bad = JSON.stringify({
+      version: 1,
+      packages: [{
+        name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "",
+        location: { url: "https://example.com/zxdev-0.5.0.tspkg" },
+        versions: { "0.3.1": { location: { url: "https://example.com/z.tspkg" } } },
+      }],
+    })
+    try { parseCatalog(bad) } catch (e) { threw = e instanceof CatalogError }
+    expect(threw).toBe(true)
+  })
+
+  test("versions[latest] разошёлся с плоским location → schema error (desync guard)", () => {
+    let threw = false
+    const bad = JSON.stringify({
+      version: 1,
+      packages: [{
+        name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "",
+        location: { url: "https://example.com/zxdev-0.5.0.tspkg" },
+        versions: { "0.5.0": { location: { url: "https://example.com/DIFFERENT.tspkg" } } },
+      }],
+    })
+    try { parseCatalog(bad) } catch (e) { threw = e instanceof CatalogError }
+    expect(threw).toBe(true)
+  })
+
+  test("неканонический ключ versions → schema error", () => {
+    let threw = false
+    const bad = JSON.stringify({
+      version: 1,
+      packages: [{
+        name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "",
+        location: { url: "https://example.com/z.tspkg" },
+        versions: { "0.4": { location: { url: "https://example.com/z.tspkg" } }, "0.5.0": { location: { url: "https://example.com/z.tspkg" } } },
+      }],
+    })
+    try { parseCatalog(bad) } catch (e) { threw = e instanceof CatalogError }
+    expect(threw).toBe(true)
+  })
+
+  test("versions-значение без url / битый minCli → schema error", () => {
+    const base = (versions: unknown) => JSON.stringify({
+      version: 1,
+      packages: [{
+        name: "@nes/zxdev", type: "platform", version: "0.5.0", description: "",
+        location: { url: "https://example.com/z.tspkg" },
+        versions: { "0.5.0": { location: { url: "https://example.com/z.tspkg" } }, ...versions as object },
+      }],
+    })
+    let threwNoUrl = false
+    try { parseCatalog(base({ "0.4.0": { location: {} } })) } catch (e) { threwNoUrl = e instanceof CatalogError }
+    expect(threwNoUrl).toBe(true)
+    let threwMinCli = false
+    try { parseCatalog(base({ "0.4.0": { location: { url: "https://example.com/z.tspkg" }, minCli: "не-версия" } })) } catch (e) { threwMinCli = e instanceof CatalogError }
+    expect(threwMinCli).toBe(true)
+  })
+})
+
+describe("13-build/platform #280 — parsePlatformRequest: name@spec", () => {
+  test("имя со scope без спеки — bare", () => {
+    expect(JSON.stringify(parsePlatformRequest("@nes/zxdev"))).toBe(JSON.stringify({ name: "@nes/zxdev", spec: "" }))
+  })
+
+  test("имя со scope и диапазоном — split по ПОСЛЕДНЕМУ @", () => {
+    expect(JSON.stringify(parsePlatformRequest("@nes/zxdev@^0.4"))).toBe(JSON.stringify({ name: "@nes/zxdev", spec: "^0.4" }))
+  })
+
+  test("имя со scope и exact-версией", () => {
+    expect(JSON.stringify(parsePlatformRequest("@nes/zxdev@0.4.0"))).toBe(JSON.stringify({ name: "@nes/zxdev", spec: "0.4.0" }))
+  })
+
+  test("простое имя без scope", () => {
+    expect(JSON.stringify(parsePlatformRequest("zxdev@~0.3"))).toBe(JSON.stringify({ name: "zxdev", spec: "~0.3" }))
+    expect(JSON.stringify(parsePlatformRequest("zxdev"))).toBe(JSON.stringify({ name: "zxdev", spec: "" }))
+  })
+
+  test("мусор → null", () => {
+    expect(parsePlatformRequest("")).toBe(null)
+    expect(parsePlatformRequest("@")).toBe(null)
+  })
+})
+
+describe("13-build/platform #280 — resolveCatalogVersion: bare/exact/range + minCli", () => {
+  test("bare и latest/* → плоская latest-версия", () => {
+    expect(resolveCatalogVersion(historyEntry(), "").status).toBe("resolved")
+    expect(resolveCatalogVersion(historyEntry(), "").version).toBe("0.5.0")
+    expect(resolveCatalogVersion(historyEntry(), "*").version).toBe("0.5.0")
+    expect(resolveCatalogVersion(historyEntry(), "latest").version).toBe("0.5.0")
+  })
+
+  test("bare отдаёт location версии, не плоский", () => {
+    const r = resolveCatalogVersion(historyEntry(), "")
+    expect(r.status).toBe("resolved")
+    expect((r as { location: { sha256?: string } }).location.sha256).toBe(undefined)
+  })
+
+  test("exact из истории", () => {
+    const r = resolveCatalogVersion(historyEntry(), "0.3.1")
+    expect(r.status).toBe("resolved")
+    expect((r as { version: string }).version).toBe("0.3.1")
+    expect((r as { location: { sha256?: string } }).location.sha256).toBe("a".repeat(64))
+  })
+
+  test("exact, которого нет → no-version со списком доступных", () => {
+    const r = resolveCatalogVersion(historyEntry(), "9.9.9")
+    expect(r.status).toBe("no-version")
+    expect(JSON.stringify((r as { available: string[] }).available)).toBe(JSON.stringify(["0.3.1", "0.4.0", "0.5.0"]))
+  })
+
+  test("диапазон → старшая удовлетворяющая", () => {
+    expect(resolveCatalogVersion(historyEntry(), "^0.4").version).toBe("0.4.0")
+    expect(resolveCatalogVersion(historyEntry(), ">=0.3.1").version).toBe("0.5.0")
+  })
+
+  test("запись без versions-карты: bare и exact=version работают", () => {
+    const legacy = parseCatalog(HISTORY_CATALOG).packages[1]
+    expect(resolveCatalogVersion(legacy, "").version).toBe("1.0.0")
+    expect(resolveCatalogVersion(legacy, "1.0.0").version).toBe("1.0.0")
+    expect(resolveCatalogVersion(legacy, "1.0.1").status).toBe("no-version")
+  })
+
+  test("minCli: CLI старее требуемого → cli-too-old с requires", () => {
+    const r = resolveCatalogVersion(historyEntry(), "0.4.0", { cliVersion: "0.8.2" })
+    expect(r.status).toBe("cli-too-old")
+    expect((r as { version: string; requires: string }).version).toBe("0.4.0")
+    expect((r as { version: string; requires: string }).requires).toBe("0.9.0")
+  })
+
+  test("minCli: CLI достаточно новый → resolved", () => {
+    expect(resolveCatalogVersion(historyEntry(), "0.4.0", { cliVersion: "0.9.0" }).version).toBe("0.4.0")
+    expect(resolveCatalogVersion(historyEntry(), "0.4.0", { cliVersion: "2.0.0" }).version).toBe("0.4.0")
+  })
+
+  test("диапазон: несовместимая по minCli старшая пропускается, берётся совместимая", () => {
+    // 0.5.0 требует CLI 9.9.9, 0.4.0 — 0.9.0; на старых CLI диапазон
+    // '>=0.3.1' резолвится в старшую СОВМЕСТИМУЮ, а не в старшую вообще.
+    const entry = historyEntry()
+    const withMinCli = { ...entry, versions: { ...entry.versions!, "0.5.0": { location: entry.versions!["0.5.0"].location, minCli: "9.9.9" } } }
+    expect(resolveCatalogVersion(withMinCli, ">=0.3.1", { cliVersion: "0.8.2" }).version).toBe("0.3.1")
+    expect(resolveCatalogVersion(withMinCli, ">=0.3.1", { cliVersion: "0.9.5" }).version).toBe("0.4.0")
+    expect(resolveCatalogVersion(withMinCli, ">=0.3.1", { cliVersion: "9.9.9" }).version).toBe("0.5.0")
+  })
+
+  test("bare: latest несовместима по minCli → cli-too-old без отката на старые", () => {
+    const entry = historyEntry()
+    const withMinCli = { ...entry, versions: { ...entry.versions!, "0.5.0": { location: entry.versions!["0.5.0"].location, minCli: "9.9.9" } } }
+    const r = resolveCatalogVersion(withMinCli, "", { cliVersion: "0.9.0" })
+    expect(r.status).toBe("cli-too-old")
+    expect((r as { requires: string }).requires).toBe("9.9.9")
+  })
+
+  test("без cliVersion minCli не фильтрует (неизвестный CLI не блокирует)", () => {
+    expect(resolveCatalogVersion(historyEntry(), "0.4.0").version).toBe("0.4.0")
+  })
+})
+
+describe("13-build/platform #280 — planPlatformUpdates: диапазоны и пины", () => {
+  test("bare/legacy (без spec) → плоский latest, как в #279", () => {
+    const { updates, pinned } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.3.1" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(1)
+    expect(updates[0].next).toBe("0.5.0")
+    expect(updates[0].spec).toBe("")
+    expect(pinned.length).toBe(0)
+  })
+
+  test("range: цель — старшая ВНУТРИ диапазона, а не latest", () => {
+    const { updates } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.3.1", spec: "^0.4" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(1)
+    expect(updates[0].next).toBe("0.4.0")
+  })
+
+  test("range: установленная версия уже старшая в диапазоне — нет апдейта (no downgrade)", () => {
+    const { updates } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.4.0", spec: "^0.4" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(0)
+  })
+
+  test("'*' ведёт себя как bare latest", () => {
+    const { updates } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.3.1", spec: "*" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(1)
+    expect(updates[0].next).toBe("0.5.0")
+  })
+
+  test("exact-спека — пин: не обновляется даже при более новом latest", () => {
+    const { updates, pinned } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.3.1", spec: "0.3.1" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(0)
+    expect(JSON.stringify(pinned)).toBe(JSON.stringify([{ name: "@nes/zxdev", version: "0.3.1" }]))
+  })
+
+  test("диапазон пуст в каталоге — тихо нет апдейта (юзер сам выбрал диапазон)", () => {
+    const { updates } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.5.0", spec: "^0.4" }], parseCatalog(HISTORY_CATALOG))
+    expect(updates.length).toBe(0)
+  })
+
+  test("minCli тихо исключает несовместимые версии из целей update", () => {
+    const entry = historyEntry()
+    const withMinCli = { ...entry, versions: { ...entry.versions!, "0.5.0": { location: entry.versions!["0.5.0"].location, minCli: "9.9.9" } } }
+    const cat = { version: 1, packages: [withMinCli, ...parseCatalog(HISTORY_CATALOG).packages.slice(1)] }
+    const { updates } = planPlatformUpdates([{ name: "@nes/zxdev", version: "0.3.1", spec: ">=0.3.1" }], cat, { cliVersion: "0.9.5" })
+    expect(updates.length).toBe(1)
+    expect(updates[0].next).toBe("0.4.0")
   })
 })

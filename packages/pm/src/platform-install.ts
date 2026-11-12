@@ -139,16 +139,19 @@ export function planPlatformApply(
 /**
  * Apply a plan to a manifest object (mutated in place, no fs): writes
  * add/update entries, removes stale own entries, records the dependency.
- * Skipped and kept entries are untouched.
+ * Skipped and kept entries are untouched. npm semantics (#280): dependencies
+ * records the REQUESTED spec (`dep.spec`, e.g. '^0.4'; bare installs pass a
+ * caret of the resolved version) while the lock pins the resolved exact
+ * version; without a spec the exact version is recorded (legacy behavior).
  */
 export function applyPlatformPlan(
   manifest: Record<string, unknown>,
   plan: PlatformApplyPlan,
-  dep?: { name: string; version: string },
+  dep?: { name: string; version: string; spec?: string },
 ): void {
   if (dep) {
     if (!manifest.dependencies || typeof manifest.dependencies !== 'object') manifest.dependencies = {};
-    (manifest.dependencies as Record<string, string>)[dep.name] = dep.version;
+    (manifest.dependencies as Record<string, string>)[dep.name] = dep.spec ?? dep.version;
   }
   for (const action of plan.actions) {
     if (action.kind === 'add' || action.kind === 'update') {

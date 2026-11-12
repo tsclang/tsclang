@@ -4,6 +4,8 @@
 // Run: pnpm tsx packages/tests/test/spec/13-build/platform/run.ts [filter]
 import "./platform.test"
 import "./platform-registry.test"
+import "./semver.test"
+import "./platform-versions.test"
 import "./platform-install.test"
 import "./platform-update.test"
 import "./platform-remove.test"

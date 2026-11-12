@@ -130,6 +130,16 @@ function v2Env(dir: string, v2: Record<string, unknown> | null, extra: Record<st
   return { ...process.env, TSC_REGISTRY: fixtureCatalog(dir, packages), TSC_CATALOG_CACHE: join(dir, "cache.json") }
 }
 
+/** Simulate a pre-#280 manifest: no dependency spec recorded — `platform
+ *  update` then follows the flat catalog latest (legacy semantics, still
+ *  supported; a spec recorded by a #280 install constrains the update). */
+function stripDependencies(dir: string): void {
+  const manifestPath = join(dir, "tsc.package.json")
+  const manifest = readJson(manifestPath)
+  delete (manifest as { dependencies?: unknown }).dependencies
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8")
+}
+
 // ── unit: planPlatformUpdates ───────────────────────────────────────────────
 
 describe("13-build/platform 1.5 — planPlatformUpdates: installed vs catalog (#279)", () => {
@@ -141,7 +151,7 @@ describe("13-build/platform 1.5 — planPlatformUpdates: installed vs catalog (#
       [{ name: "@nes/zxdev", version: "0.3.1" }],
       catalogOf([{ name: "@nes/zxdev", type: "platform", version: "0.4.0" }]),
     )
-    expect(JSON.stringify(updates)).toBe(JSON.stringify([{ name: "@nes/zxdev", current: "0.3.1", next: "0.4.0" }]))
+    expect(JSON.stringify(updates)).toBe(JSON.stringify([{ name: "@nes/zxdev", current: "0.3.1", next: "0.4.0", spec: "" }]))
     expect(missingFromCatalog.length).toBe(0)
   })
 
@@ -191,7 +201,7 @@ describe("13-build/platform 1.5 — planPlatformUpdates: installed vs catalog (#
         { name: "@a/two", type: "platform", version: "2.0.0" },
       ]),
     )
-    expect(JSON.stringify(updates)).toBe(JSON.stringify([{ name: "@a/one", current: "1.0.0", next: "1.1.0" }]))
+    expect(JSON.stringify(updates)).toBe(JSON.stringify([{ name: "@a/one", current: "1.0.0", next: "1.1.0", spec: "" }]))
     expect(JSON.stringify(missingFromCatalog)).toBe(JSON.stringify(["@a/three"]))
   })
 })
@@ -203,6 +213,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const dir = mkTmp()
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry)
+    stripDependencies(dir) // legacy: bare-latest semantics
     const env = v2Env(dir, makeTspkg(dir, ZXDEV_V2).entry)
 
     const r = await runCli(["platform", "update"], { cwd: dir, env })
@@ -219,6 +230,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const dir = mkTmp()
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry)
+    stripDependencies(dir) // legacy: bare-latest semantics
     const env = v2Env(dir, makeTspkg(dir, ZXDEV_V2).entry)
 
     const r = await runCli(["platform", "update", "--yes"], { cwd: dir, env })
@@ -230,7 +242,8 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     expect(JSON.stringify(Object.keys(lock.packages["@nes/zxdev"].platform!.builds!).sort())).toBe(JSON.stringify(["nes:extra", "nes:zxdev"]))
 
     const manifest = readJson(join(dir, "tsc.package.json")) as { dependencies: Record<string, string>; builds: Record<string, unknown>; scripts: Record<string, string> }
-    expect(manifest.dependencies["@nes/zxdev"]).toBe("0.4.0")
+    // #280: the legacy bare update records a caret of the resolved version
+    expect(manifest.dependencies["@nes/zxdev"]).toBe("^0.4.0")
     expect(manifest.builds["nes:extra"]).toBeTruthy()
     expect("nes:oldx" in manifest.builds).toBe(false)
     expect(manifest.scripts["nes:zxdev:dev"]).toBeTruthy()
@@ -242,6 +255,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const dir = mkTmp()
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry)
+    stripDependencies(dir) // legacy: bare-latest semantics
 
     const manifestPath = join(dir, "tsc.package.json")
     const manifest = readJson(manifestPath) as { builds: Record<string, Record<string, unknown>> }
@@ -262,6 +276,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const dir = mkTmp()
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry)
+    stripDependencies(dir) // legacy: bare-latest semantics
     const env = v2Env(dir, makeTspkg(dir, ZXDEV_V2).entry)
 
     const r = await runCli(["platform", "update"], {
@@ -322,6 +337,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const fxPlain = makeTspkg(dir, plain)
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry, [fxPlain])
+    stripDependencies(dir) // legacy: bare-latest semantics for both
     const env = v2Env(dir, makeTspkg(dir, ZXDEV_V2).entry, [fxPlain.entry])
 
     const r = await runCli(["platform", "update", "--yes"], { cwd: dir, env })
@@ -337,6 +353,7 @@ describe("13-build/platform 1.5 — e2e: platform update (#279)", () => {
     const dir = mkTmp()
     const fx1 = makeTspkg(dir, ZXDEV_V1)
     await installV1(dir, fx1.entry)
+    stripDependencies(dir) // legacy: bare-latest semantics — an update is planned
     const env = v2Env(dir, makeTspkg(dir, ZXDEV_V2).entry)
     const r = await runCli(["platform", "update", "--yes", "--offline"], { cwd: dir, env })
     expect(r.code).toBe(1)
