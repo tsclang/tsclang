@@ -1,6 +1,6 @@
 // `tsclang platform` — first nested command group (#265).
-// Platforms are packages: install/search/remove/list against the platform
-// registry and the project's tsc_packages (spec 13-build.md, «Реестр»).
+// Platforms are packages: install/update/search/remove/list against the
+// platform registry and the project's tsc_packages (spec 13-build.md, «Реестр»).
 
 export const platformGroup = `tsclang platform — manage platform packages
 
@@ -11,6 +11,8 @@ COMMANDS:
   install <name>   Install a platform package into tsc_packages, add its
                    builds/scripts to tsc.package.json, optionally download
                    toolchains into ~/.tsclang/platforms/
+  update [name]    Update installed platforms to newer catalog versions
+                   (ownership-aware; --yes for non-interactive use)
   search <query>   Search the platform registry
   list             List installed platforms and their toolchain state
   remove <name>    Remove a platform and clean up the manifest entries it owns
@@ -69,4 +71,25 @@ Lists platform packages installed in tsc_packages/ with their profiles and
 toolchain state (isolated under ~/.tsclang/platforms/ or system-wide).
 
 OPTIONS:
+  --help, -h       Print this help`;
+
+export const platformUpdate = `tsclang platform update — update installed platforms
+
+USAGE:
+  tsclang platform update [name] [options]
+
+Compares every installed platform (or just <name>) with the registry catalog
+and reapplies newer versions through the install mechanics: builds/scripts
+presets the new version adds appear, presets it dropped are cleaned up, and
+entries you edited are never touched (lock ownership). Toolchains of the new
+version download into ~/.tsclang/platforms/<platform>@<v>/<toolchain>@<v> —
+old version directories stay so pinned builds keep reproducing.
+
+On a non-TTY without --yes it only prints the available updates (CI-safe, no
+surprise downloads); on a TTY each update is confirmed interactively.
+
+OPTIONS:
+  --yes            Apply without interactive confirmation (pipelines)
+  --offline        No network: loud failure (a write operation), same as
+                   TSC_NO_NETWORK
   --help, -h       Print this help`;

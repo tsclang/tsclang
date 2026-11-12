@@ -12,7 +12,7 @@ import { remove } from './helps/remove.js';
 import { search } from './helps/search.js';
 import { publish } from './helps/publish.js';
 import { doctor } from './helps/doctor.js';
-import { platformGroup, platformInstall, platformSearch, platformRemove, platformList } from './helps/platform.js';
+import { platformGroup, platformInstall, platformUpdate, platformSearch, platformRemove, platformList } from './helps/platform.js';
 
 export function getVersion(rootDir: string): string {
   return JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')).version;
@@ -36,6 +36,7 @@ export const CMD_HELP: Record<string, string> = {
   doctor,
   platform: platformGroup,
   'platform install': platformInstall,
+  'platform update': platformUpdate,
   'platform search': platformSearch,
   'platform remove': platformRemove,
   'platform list': platformList,

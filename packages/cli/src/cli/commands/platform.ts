@@ -5,6 +5,7 @@ import {
   loadCatalog, filterCatalog, CatalogError,
   platformNames, validatePlatformSection,
   planPlatformApply, applyPlatformPlan, ownershipFromPlan, planPlatformRemoval,
+  planPlatformUpdates,
   fetchPackageArchive, extractTspkg, packageNameParts,
   readLock, writeLock, ensureManifest, writeManifest, readManifest,
   decideToolchain, detectSystemCommand, downloadToolchain, platformToolchainDir,
@@ -16,13 +17,14 @@ import { askYesNo } from '../doctor/prompt.js';
 
 // `tsclang platform <sub>` — nested command group (#265). The dispatcher
 // validates the subcommand and its flags before calling here. search/list
-// landed in #266, install in #267, remove in #268.
+// landed in #266, install in #267, remove in #268, update in #279.
 
-export const PLATFORM_SUBCOMMANDS = ['install', 'search', 'remove', 'list'] as const;
+export const PLATFORM_SUBCOMMANDS = ['install', 'update', 'search', 'remove', 'list'] as const;
 
 export async function runPlatformCommand(sub: string, restArgs: string[]): Promise<void> {
   switch (sub) {
     case 'install': return runPlatformInstall(restArgs);
+    case 'update':  return runPlatformUpdate(restArgs);
     case 'search':  return runPlatformSearch(restArgs);
     case 'remove':  return runPlatformRemove(restArgs);
     case 'list':    return runPlatformList();
@@ -121,13 +123,31 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  try {
+    await applyPlatformArchive(fetched, { offline });
+  } catch (e) {
+    process.stderr.write(`tsclang platform install: ${(e as Error).message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.exitCode = 0;
+}
+
+/** Shared install/update core (#267/#279): extract the archive, apply the
+ * platform section with lock ownership, write the manifest and lock, then run
+ * the toolchain pass. The never-overwrite conflict policy lives here — non-TTY
+ * skips with a notice, TTY confirms the skip, an explicit "no" aborts by
+ * throwing BEFORE anything is written to the manifest. `updateFrom` switches
+ * the summary header to the update form. */
+async function applyPlatformArchive(
+  fetched: PlatformArchive,
+  opts: { offline: boolean; updateFrom?: string },
+): Promise<void> {
   const archive = { name: fetched.name, version: fetched.version, files: fetched.files };
   const platform = fetched.platform;
   const names = platformNames(archive.name);
   if (!names) {
-    process.stderr.write(`tsclang platform install: cannot map package name '${archive.name}' to build names\n`);
-    process.exitCode = 1;
-    return;
+    throw new Error(`cannot map package name '${archive.name}' to build names`);
   }
 
   extractTspkg(archive.files, PACKAGES_DIR, archive.name);
@@ -148,11 +168,9 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
       ? 'you edited an entry this platform created earlier'
       : 'it exists and was not created by the platform';
     if (interactive) {
-      const skipIt = await askYesNo(`tsclang platform install: entry ${label} conflicts (${why}). Platform entries never overwrite — skip it?`, true);
+      const skipIt = await askYesNo(`entry ${label} conflicts (${why}). Platform entries never overwrite — skip it?`, true);
       if (!skipIt) {
-        process.stderr.write(`tsclang platform install: aborted on conflict with ${label} (the manifest was not touched)\n`);
-        process.exitCode = 1;
-        return;
+        throw new Error(`aborted on conflict with ${label} (the manifest was not touched)`);
       }
     }
     process.stderr.write(`tsclang: skipped ${label} — ${why} (never overwritten)\n`);
@@ -174,9 +192,8 @@ async function runPlatformInstall(restArgs: string[]): Promise<void> {
   lock.packages[archive.name] = lockEntry as never;
   writeLock(lock);
 
-  printInstallSummary(archive.name, archive.version, platform, plan);
-  await installToolchains(archive.name, archive.version, platform, offline);
-  process.exitCode = 0;
+  printInstallSummary(archive.name, archive.version, platform, plan, opts.updateFrom);
+  await installToolchains(archive.name, archive.version, platform, opts.offline);
 }
 
 /** Toolchain handling after a successful platform install (#270). One line
@@ -242,8 +259,13 @@ export async function installToolchains(
   }
 }
 
-function printInstallSummary(name: string, version: string, platform: PlatformSection, plan: PlatformApplyPlan): void {
-  const lines = [`Installed ${name}@${version}`];
+function printInstallSummary(
+  name: string, version: string, platform: PlatformSection,
+  plan: PlatformApplyPlan, updateFrom?: string,
+): void {
+  const lines = [updateFrom !== undefined
+    ? `Updated ${name} ${updateFrom} → ${version}`
+    : `Installed ${name}@${version}`];
   for (const action of plan.actions) {
     const label = action.target === 'builds' ? `build ${action.key}` : `script ${action.key}`;
     if (action.kind === 'add') lines.push(`  + ${label}`);
@@ -252,6 +274,87 @@ function printInstallSummary(name: string, version: string, platform: PlatformSe
     // keep → silent (idempotent); skip → already noticed on stderr
   }
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+// ── platform update ─────────────────────────────────────────────────────────
+
+async function runPlatformUpdate(restArgs: string[]): Promise<void> {
+  const name = restArgs.find((a) => !a.startsWith('-'));
+  const offline = hasFlag(restArgs, '--offline') || !!process.env.TSC_NO_NETWORK;
+  const yes = hasFlag(restArgs, '--yes');
+  const registry = process.env.TSC_REGISTRY; // local fixture or URL override
+
+  // The disk is the truth for what is applied: scan tsc_packages manifests.
+  const installedAll = scanInstalledPlatforms(process.cwd());
+  if (name && !installedAll.some((p) => p.name === name)) {
+    process.stderr.write(`tsclang platform update: '${name}' is not installed (see tsclang platform list)\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!installedAll.length) {
+    process.stdout.write('No platforms installed (see tsclang platform search)\n');
+    process.exitCode = 0;
+    return;
+  }
+
+  // A write operation fails loud: offline/catalog errors abort (install
+  // pattern, not the quiet search one).
+  let catalog;
+  try {
+    ({ catalog } = await loadCatalog({ registry, offline }));
+  } catch (e) {
+    if (e instanceof CatalogError) {
+      process.stderr.write(`tsclang: ${e.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    throw e;
+  }
+
+  const { updates, missingFromCatalog } = planPlatformUpdates(installedAll, catalog);
+  if (name && missingFromCatalog.includes(name)) {
+    process.stderr.write(`tsclang platform update: '${name}' not found in the platform registry\n`);
+    process.exitCode = 1;
+    return;
+  }
+  for (const missing of missingFromCatalog) {
+    process.stderr.write(`tsclang: ${missing} not found in the platform registry — skipped\n`);
+  }
+
+  if (!updates.length) {
+    process.stdout.write('All platforms are up to date\n');
+    process.exitCode = 0;
+    return;
+  }
+
+  // Non-TTY without --yes only REPORTS: no surprise multi-GB downloads in
+  // pipelines. On a TTY each update is confirmed; --yes skips the questions.
+  const interactive = process.env.TSC_PLATFORM_INTERACTIVE === '1' || process.stdin.isTTY === true;
+  if (!interactive && !yes) {
+    const lines = ['Available platform updates:'];
+    for (const u of updates) lines.push(`  ${u.name} ${u.current} → ${u.next}`);
+    lines.push("Apply with 'tsclang platform update --yes' (or run on a TTY to confirm interactively)");
+    process.stdout.write(lines.join('\n') + '\n');
+    process.exitCode = 0;
+    return;
+  }
+
+  for (const u of updates) {
+    if (interactive && !yes) {
+      const ok = await askYesNo(`tsclang platform update: update ${u.name} ${u.current} → ${u.next}?`, true);
+      if (!ok) {
+        process.stdout.write(`  skipped ${u.name}\n`);
+        continue;
+      }
+    }
+    try {
+      const fetched = await fetchPlatformArchive(u.name, { registry, offline });
+      await applyPlatformArchive(fetched, { offline, updateFrom: u.current });
+    } catch (e) {
+      process.stderr.write(`tsclang platform update: ${(e as Error).message}\n`);
+      process.exitCode = 1;
+    }
+  }
 }
 
 // ── platform remove ─────────────────────────────────────────────────────────

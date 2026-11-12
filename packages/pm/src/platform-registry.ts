@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fetchWithTimeout } from './net.js';
+import { compareVersions } from './toolchains.js';
 
 // Platform registry v1 (#266, epic #260) — a JSON catalog hosted in the
 // TSClang GitHub repo (`packages/registry/catalog.json`). No dedicated
@@ -100,12 +101,51 @@ export function parseCatalog(raw: string): Catalog {
 }
 
 /** Case-insensitive substring match over name and description. Empty query
- *  returns everything — the type marker keeps platforms/libraries apart. */
+ * returns everything — the type marker keeps platforms/libraries apart. */
 export function filterCatalog(catalog: Catalog, query: string): CatalogPackage[] {
   const q = query.trim().toLowerCase();
   if (!q) return catalog.packages;
   return catalog.packages.filter((p) =>
     p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
+}
+
+// ── update planning (#279) ──────────────────────────────────────────────────
+
+export interface InstalledPlatformRef {
+  name: string;
+  version: string;
+}
+
+export interface PlatformUpdate {
+  name: string;
+  /** Version currently applied in the project. */
+  current: string;
+  /** Strictly newer catalog version to move to. */
+  next: string;
+}
+
+/** Compare installed platforms with the catalog: an entry becomes an update
+ * only when the catalog version is strictly NEWER — a stale registry must not
+ * downgrade an installation. Platforms absent from the catalog are reported
+ * separately: they cannot be updated through the registry. Pure. */
+export function planPlatformUpdates(
+  installed: ReadonlyArray<InstalledPlatformRef>,
+  catalog: Catalog,
+): { updates: PlatformUpdate[]; missingFromCatalog: string[] } {
+  const updates: PlatformUpdate[] = [];
+  const missingFromCatalog: string[] = [];
+  const byName = new Map(catalog.packages.map((p) => [p.name, p]));
+  for (const p of installed) {
+    const entry = byName.get(p.name);
+    if (!entry) {
+      missingFromCatalog.push(p.name);
+      continue;
+    }
+    if (compareVersions(entry.version, p.version) > 0) {
+      updates.push({ name: p.name, current: p.version, next: entry.version });
+    }
+  }
+  return { updates, missingFromCatalog };
 }
 
 // ── Catalog loading: registry override → cache → network, with gates ────────

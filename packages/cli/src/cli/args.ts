@@ -83,6 +83,7 @@ export const COMMAND_FLAGS: Record<string, Set<string>> = {
   // subcommand entry below. Keys use the 'platform <sub>' spelling.
   platform: new Set(),
   'platform install': new Set(['--offline']),
+  'platform update': new Set(['--offline', '--yes']),
   'platform search': new Set(['--offline']),
   'platform remove': new Set(),
   'platform list': new Set(),

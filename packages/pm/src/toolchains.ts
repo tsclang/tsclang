@@ -243,8 +243,9 @@ export function parseToolchainSpec(spec: string): ToolchainSpec {
   return { name: spec };
 }
 
-/** Segment-wise numeric version compare ('12.10' > '12.9' > '12.1'). */
-function compareVersions(a: string, b: string): number {
+/** Segment-wise numeric version compare ('12.10' > '12.9' > '12.1'). Shared
+ * by the isolated-toolchain resolver and platform update planning (#279). */
+export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map((s) => parseInt(s, 10) || 0);
   const pb = b.split('.').map((s) => parseInt(s, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
