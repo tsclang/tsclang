@@ -235,12 +235,10 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       }
     }
 
-    // Mixed-category equality with a String operand (number↔string,
-    // boolean↔string) has no coercion path and would emit invalid C
-    // (int == String struct) — reject at compile time (#237). number↔boolean
-    // stays legal: C integer promotion is well-defined and matches TS.
-    // Same-type, null-optional and typeof-narrowed comparisons return above
-    // and never reach this check.
+    // Mixed-category equality (number/boolean/string across categories) has
+    // no coercion path and would emit invalid or misleading C — reject at
+    // compile time (#237). Same-type, null-optional and typeof-narrowed
+    // comparisons return above and never reach this check.
     if (node.op === '==' || node.op === '!=' || node.op === '===' || node.op === '!==') {
       const eqCategory = (t: string | undefined): string | null => {
         if (t === 'String' || t === 'String *') return 'string';
@@ -252,7 +250,7 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       const rt = ctx.inferType(node.right);
       const lc = eqCategory(lt);
       const rc = eqCategory(rt);
-      if (lc && rc && lc !== rc && (lc === 'string' || rc === 'string')) {
+      if (lc && rc && lc !== rc) {
         throw ctx.errorCode('E125', node, {
           left: ctx.ctypeToTsName(lt),
           right: ctx.ctypeToTsName(rt),

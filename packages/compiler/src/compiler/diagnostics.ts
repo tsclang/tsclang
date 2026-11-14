@@ -842,17 +842,17 @@ as E101 at the same phase.
     severity: 'error',
     title: 'mixed-type equality',
     message: `cannot compare {left} and {right}: '{op}' has no type coercion`,
-    help: ['convert one side explicitly, e.g. n.toString() == s', 'compare values of the same type'],
+    help: ['convert both sides to the same type first (e.g. n.toString() == s)', 'compare values of the same type'],
     body: `
-Equality operators do not coerce operands. Comparing a number or boolean
-with a string would emit invalid C (an integer compared with the String
-struct), so the mix is rejected at compile time (#237). Comparing a number
-with a boolean stays allowed: C integer promotion is well-defined there.
+Equality operators require operands of the same type category — number,
+boolean or string. There is no coercion, so a category mix is always a bug:
+number vs string would emit invalid C (an integer compared with the String
+struct), and number vs boolean silently relies on C integer promotion.
 
   let a = 1;
-  let b = "1";
-  a == b;              // error[E125]
-  a.toString() == b;   // ok — explicit conversion
+  let s = "1";
+  a == s;              // error[E125]
+  a.toString() == s;   // ok — explicit conversion
 `,
   },
 
