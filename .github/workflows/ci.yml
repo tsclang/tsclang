@@ -193,7 +193,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/libuv-root"
           curl -fsSL -o "$RUNNER_TEMP/libuv-mobile.tar.gz" \
-            https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz
+            https://github.com/tsclang/platform-ios/releases/download/toolchains-v1/libuv-1.53.0-mobile.tar.gz
           tar -xzf "$RUNNER_TEMP/libuv-mobile.tar.gz" -C "$RUNNER_TEMP/libuv-root"
           ls "$RUNNER_TEMP/libuv-root/lib"
           echo "TSC_LIBUV=$RUNNER_TEMP/libuv-root" >> "$GITHUB_ENV"

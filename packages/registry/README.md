@@ -35,13 +35,16 @@ JSON-каталог (спека `13-build.md` → «Реестр»). CLI заб�
 `@tsclang/android`, `@tsclang/ios`)
 поставляют тулчейны комплектом: `platform.toolchains.<name>.downloads`
 в манифесте пакета указывает на бандлы в GitHub-релизах профильных репо
-(`github.com/tsclang/platform-{desktop,avr,wasm,android}/releases/download/<тег>/…`),
+(`github.com/tsclang/platform-{desktop,avr,wasm,android,ios}/releases/download/<тег>/…`
+— каждый пакет указывает в свою репу; mobile-ассет libuv задублирован
+в platform-android и platform-ios — байты и sha идентичны),
 CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270). Тег = версия
 матрицы бандлов: `toolchains-v1` (gcc/avr-gcc/avrdude/emcc 0.3.0 +
 android ndk-clang 0.1.1 — полная матрица хостов), `toolchains-v2`
 (desktop clang 0.4.0; + `libuv-1.53.0-mobile.tar.gz` #287 — один
-хост-независимый mobile-ассет, на который ссылаются и `@tsclang/android`
-0.2.0 (все os-arch), и `@tsclang/ios` 0.2.0 (darwin-arm64)).
+хост-независимый mobile-ассет: `@tsclang/android` 0.2.0 берёт его из
+platform-android `toolchains-v2`, `@tsclang/ios` 0.2.1 — из собственной
+репы platform-ios `toolchains-v1`, те же байты).
 Компилятор `@tsclang/ios` — по-прежнему Xcode CLT на macOS (Apple SDK не
 редистрибутируем, #283); его бандл `libuv` нужен линковщику (`-luv` для
 `--async libuv`), а не компилятору.
@@ -69,7 +72,11 @@ x64-macOS-бинари (desktop → системный clang из Xcode CLT, #28
   вызовы безусловно) и ios device/sim (только darwin-раннер: нужен Xcode).
   Layout без `bin/`: `include/` + `lib/<triple>/libuv.a`, где `<triple>` —
   ровно строки `--target`; плоский корень сам себе binDir
-  (findIsolatedToolchain-контракт для бандлов без бинарей).
+  (findIsolatedToolchain-контракт для бандлов без бинарей). Ассет заливается
+  в ДВЕ репы: `toolchains-v2` platform-android и `toolchains-v1`
+  platform-ios — один артефакт одной сборки, дублирование сознательное
+  (каждый пакет указывает в свою репу; sha идентичны, обновление — обоими
+  тегами одновременно).
 - **Заливка**: релизы профильных репо (`gh release upload toolchains-v2 …`),
   файлы >100MB gh грузит через API сам; ассеты лимит 2GB (поэтому
   LLVM-таргеты пакуются в `.tar.xz`, остальные — `.tar.gz`; системный tar

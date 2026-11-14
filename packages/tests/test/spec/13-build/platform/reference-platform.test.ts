@@ -33,9 +33,11 @@ const REGISTRY_DIR = join(ROOT, "packages", "registry")
 // original 0.3.0 / toolchains-v1 matrix — their content did not change.
 // #283 staged rollout DONE: android ships the full ndk-clang host matrix
 // (posix bundles built in the platform-android repo CI, dmg symlinks
-// dereferenced via cp -L). #287: android 0.2.0 + ios 0.2.0 add the libuv
-// mobile bundle (built from source in the platform-android repo CI, release
-// toolchains-v2) — ONE host-independent asset for both platforms; the ios
+// dereferenced via cp -L). #287: android 0.2.0 + ios 0.2.x add the libuv
+// mobile bundle (built from source in CI, one host-independent asset) —
+// android points at platform-android/toolchains-v2, and since ios 0.2.1
+// the SAME bytes are duplicated into the dedicated platform-ios repo
+// (toolchains-v1), so every package points at its own repo; the ios
 // libuv download covers darwin-arm64 only (iOS builds run on macOS).
 const REFERENCE_PLATFORMS = [
   { name: "@tsclang/desktop", dir: "desktop", version: "0.4.0", file: "@tsclang-desktop-0.4.0.tspkg",
@@ -49,8 +51,8 @@ const REFERENCE_PLATFORMS = [
       { name: "ndk-clang", repo: "platform-android", tag: "toolchains-v1", downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
       { name: "libuv", repo: "platform-android", tag: "toolchains-v2", downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
     ] },
-  { name: "@tsclang/ios", dir: "ios", version: "0.2.0", file: "@tsclang-ios-0.2.0.tspkg",
-    toolchains: [{ name: "libuv", repo: "platform-android", tag: "toolchains-v2", downloadsAtLeast: ["darwin-arm64"] }] },
+  { name: "@tsclang/ios", dir: "ios", version: "0.2.1", file: "@tsclang-ios-0.2.1.tspkg",
+    toolchains: [{ name: "libuv", repo: "platform-ios", tag: "toolchains-v1", downloadsAtLeast: ["darwin-arm64"] }] },
 ] as const
 
 const tmpDirs: string[] = []

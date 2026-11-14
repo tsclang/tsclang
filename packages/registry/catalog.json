@@ -77,12 +77,12 @@
     },
     {
       "name": "@tsclang/ios",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "type": "platform",
-      "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). libuv 1.53.0 static bundle unlocks async (--async libuv, #287); the Apple SDK itself is not redistributable — Xcode Command Line Tools ARE the compiler toolchain (darwin-x64 clang precedent)",
+      "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). libuv 1.53.0 static bundle unlocks async (--async libuv, #287) — hosted in the dedicated platform-ios repo since 0.2.1; the Apple SDK itself is not redistributable — Xcode Command Line Tools ARE the compiler toolchain (darwin-x64 clang precedent)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.0.tspkg",
-        "sha256": "ddcabed84460c3cd8e86783205870fb006796898c4cd835dc6711126542645a6"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.1.tspkg",
+        "sha256": "b32fb433ad41c7beb53532a2ffb4577780d73218d8662304cb7845f3cb7a87bc"
       },
       "versions": {
         "0.1.0": {
@@ -95,6 +95,12 @@
           "location": {
             "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.0.tspkg",
             "sha256": "ddcabed84460c3cd8e86783205870fb006796898c4cd835dc6711126542645a6"
+          }
+        },
+        "0.2.1": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.1.tspkg",
+            "sha256": "b32fb433ad41c7beb53532a2ffb4577780d73218d8662304cb7845f3cb7a87bc"
           }
         }
       }
