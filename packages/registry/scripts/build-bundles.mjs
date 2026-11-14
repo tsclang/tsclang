@@ -18,7 +18,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -253,17 +253,21 @@ function bundleNdk(contentRoot, target) {
   const binDir = join(contentRoot, 'bin');
   const exe = target === 'win32-x64' ? '.exe' : '';
   // Host layouts differ: zip builds ship plain `clang`, the darwin dmg may
-  // only carry the versioned name — probe plain first, then any clang-*
-  // driver (not clang++/clang-cl). On no match, dump bin/ so the next fix
+  // only carry the versioned name — probe plain first, then clang / clang-NN
+  // (regex rejects target wrappers like aarch64-…-clang and clang++/clang-cl).
+  // On no match, dump the c-entries WITH symlink targets so the next fix
   // needs no extra CI roundtrip.
+  const entries = readdirSync(binDir);
   let driver = `clang${exe}`;
   if (!existsSync(join(binDir, driver))) {
-    driver = readdirSync(binDir).find(
-      (f) => f.startsWith('clang') && f.endsWith(exe) && !f.includes('++') && !f.includes('cl'),
-    ) ?? '';
+    driver = entries.find((f) => new RegExp(`^clang(-\\d+(\\.\\d+)*)?${exe.replace(/\./g, '\\.')}$`).test(f)) ?? '';
   }
   if (!driver) {
-    throw new Error(`ndk-clang driver not found; bin/ contains: ${readdirSync(binDir).slice(0, 30).join(', ')}`);
+    const cEntries = entries.filter((f) => f.toLowerCase().startsWith('c')).map((f) => {
+      if (!lstatSync(join(binDir, f)).isSymbolicLink()) return f;
+      return `${f} -> ${readlinkSync(join(binDir, f))}`;
+    });
+    throw new Error(`ndk-clang driver not found; bin/ c-entries: ${cEntries.join(', ') || '(none)'}`);
   }
   copyFileSync(join(binDir, driver), join(binDir, `ndk-clang${exe}`));
   if (target !== 'win32-x64') {
