@@ -6,7 +6,10 @@
       "version": "0.1.0",
       "type": "platform",
       "description": "AVR microcontroller platform: system avr-gcc + avrdude (flash via emit: flash)",
-      "location": { "url": "@tsclang-avr-0.1.0.tspkg", "sha256": "b7e175cfc699edb1fe1ac8b7f42a2e154c486c5eefc397493f5b33cfd83188ca" }
+      "location": {
+        "url": "@tsclang-avr-0.1.0.tspkg",
+        "sha256": "d5f77cc30a394383d7aca0205ead21b15e7163f69e83d03c88194f40c38aa6be"
+      }
     }
   ]
 }

@@ -81,8 +81,10 @@ static inline Array_u8 _tsc_fs_read_file_bytes(const char *path) {
 static inline TscFileStat _tsc_fs_stat(const char *path) {
     tsc_stat_t st;
     if (tsc_stat(path, &st) != 0) return (TscFileStat){0};
-    bool is_file = (st.st_mode & S_IFREG) != 0;
-    bool is_dir  = (st.st_mode & S_IFDIR) != 0;
+    // S_IS* macros, not S_IF* masks: S_IFREG/S_IFDIR are XSI extensions and
+    // are NOT declared under strict -std=c11 on glibc (mingw declares both)
+    bool is_file = S_ISREG(st.st_mode);
+    bool is_dir  = S_ISDIR(st.st_mode);
     return (TscFileStat){
         .size = (int64_t)st.st_size,
         .isFile = is_file,
@@ -162,8 +164,8 @@ static inline TscDirEntryArray _tsc_fs_readdir(const char *path) {
         tsc_stat_t st;
         bool is_dir = false, is_file = false;
         if (tsc_stat(pbuf, &st) == 0) {
-            is_dir  = (st.st_mode & S_IFDIR) != 0;
-            is_file = (st.st_mode & S_IFREG) != 0;
+            is_dir  = S_ISDIR(st.st_mode);
+            is_file = S_ISREG(st.st_mode);
         }
         arr[len++] = (TscDirEntry){
             .name = { .data = nbuf, .length = nlen, .capacity = nlen + 1 },

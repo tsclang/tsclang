@@ -1,1 +1,3 @@
-ConfigError: --emit wasm requires emcc (Emscripten) in PATH
+ConfigError: --emit wasm requires a toolchain 'emcc' — none is configured
+hint: tsclang platform install @tsclang/wasm  (toolchains ship with the platform package)
+hint: or pin one explicitly: builds.<n>.toolchain = "emcc"

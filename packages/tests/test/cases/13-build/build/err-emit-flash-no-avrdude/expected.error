@@ -1,0 +1,2 @@
+ConfigError: --emit flash requires avrdude in PATH
+install avrdude manually: apt install avrdude (or your distro's package manager); re-run with TSC_TOOLCHAINS=always to download an isolated copy

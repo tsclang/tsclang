@@ -265,7 +265,7 @@ describe("13-build/cli — build: заявленный результат и о�
     writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
     const r = await runCli(["build", "hello.tsc", "--emit", "foo", "--out-dir", "out"], { cwd: dir })
     expect(r.code).toBe(1)
-    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake, dts)")
+    expect(out(r)).toContain("ConfigError: unknown emit value 'foo' (valid: c, binary, exec, so, hex, flash, wasm, cmake, dts)")
   })
 
   test("--build <имя> без позиционного файла — input из main манифеста (#240)", async () => {
@@ -356,14 +356,20 @@ describe("13-build/cli — build: заявленный результат и о�
   }
 
   if (hasTool("avr-gcc")) {
-    test("--target avr --emit hex (требует avr-gcc)", async () => {
+    test("--build avr-hex с пином avr-gcc (#282: PATH только через явный пин) — реальный .hex", async () => {
       const dir = mkTmp()
       writeFileSync(join(dir, "hello.tsc"), HELLO_TSC)
-      const r = await runCli(["build", "hello.tsc", "--target", "avr", "--emit", "hex", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000 })
+      // explicit toolchain pin: bare PATH rides are gone (#282)
+      writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
+        name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
+        builds: { "avr-hex": { target: "avr", emit: "hex", toolchain: "avr-gcc" } },
+      }))
+      const r = await runCli(["build", "--build", "avr-hex", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000 })
       expect(r.code).toBe(0)
+      expect(existsSync(join(dir, "out", "hello.hex"))).toBe(true)
     })
   } else {
-    test.skip("--target avr --emit hex (пропуск: avr-gcc недоступен)", () => {})
+    test.skip("--build avr-hex (пропуск: avr-gcc недоступен)", () => {})
   }
 
   test("--emit cmake → CMakeLists.txt в out-dir, без компиляции .c (toolchain не нужен)", async () => {
