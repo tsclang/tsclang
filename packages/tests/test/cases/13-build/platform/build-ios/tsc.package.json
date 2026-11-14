@@ -1,0 +1,14 @@
+{
+  "name": "iosmock",
+  "version": "0.1.0",
+  "type": "executable",
+  "main": "main.tsc",
+  "builds": {
+    "ios-device": {
+      "profile": "ios",
+      "sdk": "iphoneos",
+      "emit": "binary",
+      "toolchain": "clang"
+    }
+  }
+}

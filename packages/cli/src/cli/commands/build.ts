@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profi
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs, buildIosCompileArgs } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
@@ -325,6 +325,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     if (target === 'avr') return '@tsclang/avr';
     if (target === 'wasm' || emit === 'wasm') return '@tsclang/wasm';
     if (target === 'android') return '@tsclang/android';
+    if (target === 'ios') return '@tsclang/ios';
     return '@tsclang/desktop';
   }
 
@@ -416,6 +417,16 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   if (emit === 'exec' && (_profileTarget || _targetFlag) === 'android') {
     process.stderr.write(
       'ConfigError: --emit exec runs the artifact on the build host; android binaries need a device — use --emit binary (or so) and run via adb\n'
+    );
+    process.exit(1);
+  }
+
+  // ios simulator binaries are host-runnable macho — exec is fine there;
+  // device binaries are not (same story as android: the device tier is Xcode)
+  if (emit === 'exec' && (_profileTarget || _targetFlag) === 'ios'
+      && _buildCfg?.sdk !== 'iphonesimulator') {
+    process.stderr.write(
+      'ConfigError: --emit exec runs the artifact on the build host; device binaries need a phone — use sdk "iphonesimulator" (or --emit binary)\n'
     );
     process.exit(1);
   }
@@ -597,6 +608,28 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         }), { stdio: 'pipe', env: ccTool.env });
         if (gccResult.status === 0 && emit === 'so') {
           process.stdout.write(`Built ${stem}.so\n`);
+        }
+      } else if (targetName === 'ios') {
+        // Cross-compile through Xcode clang (#283): the Apple SDK is not
+        // redistributable, so there is no iOS bundle — xcrun resolves the
+        // compiler against the requested SDK on a macOS host. The #282 gate
+        // still applies: an explicit pin or an isolated clang bundle.
+        const sdk = _buildCfg?.sdk === 'iphoneos' ? 'iphoneos' as const : 'iphonesimulator' as const;
+        gccResult = spawnSync('xcrun', buildIosCompileArgs({
+          cPath,
+          outPath: join(outDir, stem),
+          runtimeInclude: dirname(runtimeH),
+          sdk,
+          optimize,
+          includeDirs: _profileExtras.includeDirs,
+          defines: capabilityDefines(_capabilities),
+        }), { stdio: 'pipe' });
+        if (gccResult.error) {
+          // xcrun missing = not a macOS/Xcode host: the honest platform story
+          process.stderr.write(
+            'ConfigError: --emit binary on ios requires xcrun (Xcode Command Line Tools) — iOS builds run on macOS only\n'
+          );
+          return false;
         }
       } else {
         const binPath = join(outDir, stem);

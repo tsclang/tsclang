@@ -1938,7 +1938,7 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
 | `android` | Google Android (bionic, API 24+) | — | aarch64-linux-android24 | binary (PIE) / .so | ndk-clang (изолированный NDK-бандл) | --target=aarch64-linux-android24, -fPIE -pie, -lm |
-| `ios` | Apple iOS | `arm64` | aarch64-apple-ios | .app | clang | -miphoneos-version-min=11.0 |
+| `ios` | Apple iOS (darwin; SDK сим/девайс через xcrun) | — | arm64-apple-ios16.0[-simulator] | binary (PIE) | clang через `xcrun` (macOS-only) | --sdk iphonesimulator/iphoneos, -target arm64-apple-ios16.0, -fPIE -pie |
 
 ### Web & Runtime
 
@@ -2007,6 +2007,19 @@ Full-OS платформа поверх bionic: 64 бита, heap-аллокат
 Изолированный бандл передаёт `--sysroot` явно (после репака драйвер сам его не найдёт); PATH-пиннедый `ndk-clang` находит sysroot сам — флаг не ставится.
 
 **Ограничения MVP:** `async: "none"` — async-функции дают `E303` (кросс-сборка libuv в бандл — follow-up); `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb (этап 2 — test-engine бекенд, `adb shell getprop ro.product.cpu.abi` для авто-детекта ABI).
+
+#### `ios` — Xcode clang через xcrun (#283)
+
+Full-OS платформа поверх darwin: 64 бита, heap-аллокатор, POSIX, `defaultNumber: "f64"`. Apple SDK не редистрибутируем — бандла нет, и это осознанный дизайн: компиляция идёт через `xcrun --sdk <sdk> clang` и требует macOS с Xcode Command Line Tools. Гейт #282 сохраняется: изолированный clang-бандл desktop или явный пин `builds.<n>.toolchain = "clang"`.
+
+**Компиляция:** `tsclang build input.tsc --platform ios --emit binary` — поле `builds.<n>.sdk` выбирает SDK:
+
+- `iphonesimulator` (дефолт) — `-target arm64-apple-ios16.0-simulator`: симуляторный бинарь — хостовый macho, `--emit exec` разрешён (запускается на macOS-хосте напрямую — run-тир без эмулятора);
+- `iphoneos` — `-target arm64-apple-ios16.0`: бинарь устройства; `--emit exec` даёт `ConfigError` (запуск — на телефоне через Xcode).
+
+Флаги: `-fPIE -pie`, `-std=c11`, без `-lm` (на darwin libm входит в libSystem). Процесс-таргеты iOS 16 — самый старый массово установленный base SDK.
+
+**Ограничения MVP:** `async: "none"` (`E303` — та же follow-up про libuv); intel-хосты берут тройку `x86_64-apple-ios16.0-simulator` (arm64-сим требует arm64-хост); `.app`/Gradle-обёртки — вне компилятора (как `.apk` у android).
 
 ### Embedded & IoT
 

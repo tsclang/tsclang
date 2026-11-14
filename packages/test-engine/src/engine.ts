@@ -33,6 +33,9 @@ const TARGET_BACKENDS: TargetBackendEntry[] = [
   // #283 phase 1: android cross-compiles via the ndk-clang bundle; the
   // compile+adb run backend lands in phase 2
   { target: "android", backend: null, note: "no adb device backend yet (#283 phase 2)" },
+  // #283 phase 3: ios compiles through xcrun on macOS; the ios-sim backend
+  // (host-run simulator macho) lands with the macOS CI job
+  { target: "ios", backend: null, note: "no ios-sim backend yet (#283 phase 3)" },
   { target: "dos", backend: null, note: "no DOS compiler/simulator backend" },
   { target: "genesis", backend: null, note: "no Genesis simulator" },
   { target: "nes", backend: null, note: "no NES simulator (caps profile testable on desktop gcc only)" },

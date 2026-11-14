@@ -95,6 +95,63 @@ export function buildNdkCompileArgs(o: NdkCompileOptions): string[] {
   ];
 }
 
+// ── iOS (Xcode clang cross-compilation, #283) ───────────────────────────────
+
+/** The Apple SDK is not redistributable — there is no iOS toolchain bundle.
+ * Compilation goes through `xcrun --sdk <sdk> clang` on macOS with Xcode
+ * Command Line Tools; that requirement IS the platform's install story. */
+
+/** Device triple (arm64 iPhones; iOS 16 = oldest commonly installed base). */
+export const IOS_DEVICE_TRIPLE = 'arm64-apple-ios16.0';
+
+/** Simulator triple — simulator binaries are host-runnable macho, which is
+ * what makes the ios run-tier possible without any emulator (#283 phase 3). */
+export const IOS_SIM_TRIPLE = 'arm64-apple-ios16.0-simulator';
+
+/** Same for intel hosts (arm64 sim slices need an arm64 host). */
+export const IOS_SIM_TRIPLE_X64 = 'x86_64-apple-ios16.0-simulator';
+
+/** builds.<n>.sdk values — which Apple SDK xcrun compiles against. */
+export const IOS_SDKS = ['iphonesimulator', 'iphoneos'] as const;
+export type IosSdk = typeof IOS_SDKS[number];
+
+export interface IosCompileOptions {
+  /** Input .c path. */
+  cPath: string;
+  /** Output artifact path. */
+  outPath: string;
+  /** Directory containing runtime.h (-I). */
+  runtimeInclude: string;
+  /** Which Apple SDK to compile against. */
+  sdk: IosSdk;
+  /** Override the -target triple (defaults per sdk: device/sim arm64). */
+  triple?: string;
+  /** Optimize level WITHOUT the dash ('O2', 'Os'), like the other branches. */
+  optimize?: string | null;
+  /** Extra -I dirs from the profile capabilities. */
+  includeDirs?: string[];
+  /** capabilityDefines(...) output. */
+  defines?: string[];
+}
+
+/** Arg vector for one xcrung iOS compile: spawn('xcrun', buildIosCompileArgs()).
+ * Shared by the CLI build command and the ios-sim test backend (#283 parity,
+ * same role as buildNdkCompileArgs for android). */
+export function buildIosCompileArgs(o: IosCompileOptions): string[] {
+  const triple = o.triple ?? (o.sdk === 'iphoneos' ? IOS_DEVICE_TRIPLE : IOS_SIM_TRIPLE);
+  return [
+    '--sdk', o.sdk, 'clang',
+    o.cPath, '-o', o.outPath,
+    '-I', o.runtimeInclude,
+    `-target=${triple}`,
+    '-fPIE', '-pie',
+    C_STANDARD_FLAG,
+    ...(o.optimize ? [`-${o.optimize}`] : []),
+    ...(o.includeDirs ?? []).flatMap((d) => ['-I', d]),
+    ...(o.defines ?? []),
+  ];
+}
+
 export const TSC_DEFINES = {
   EMBEDDED: 'TSC_EMBEDDED',
   WASM: 'TSC_WASM',
