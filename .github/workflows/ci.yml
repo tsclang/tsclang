@@ -1,0 +1,167 @@
+# Monorepo CI (#283 phase 0, closes the plan.md M7 gap).
+#
+# Contract with the corpus runner (AGENTS.md): NEVER run the full corpus in a
+# single invocation — it is split into phases below. Toolchain-dependent tests
+# (needs-tools / needs-unix markers, emulator- or bundle-gated suites) skip
+# themselves when the tool is absent; that is the runner's normal behavior.
+#
+# - build+typecheck: both OSes
+# - corpus: 4 phases x 2 OSes (linux also gets avr-gcc/simavr/avrdude so the
+#   AVR run-cycle cases execute for real; windows gets MinGW gcc via MSYS2 —
+#   the runner wraps every gcc call in `bash --login` itself, msys2.ts)
+# - spec suites + book suite (phased per CONTEXT.md: 00.1+00.3+00.4 / 00.5+00.6 / 00.7)
+# - test-engine self-tests
+
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # test-engine: a missing C-snapshot must fail instead of being created
+  CI: true
+
+jobs:
+  build:
+    name: build + typecheck (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+
+  corpus:
+    name: corpus ${{ matrix.phase }} (${{ matrix.os }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        phase: [lang-a, lang-b, collections, build-tooling]
+        include:
+          # Balanced by case counts (03-types is the largest section → own phase)
+          - phase: lang-a
+            sections: 02-syntax 04-ownership 05-control-flow 06-functions
+          - phase: lang-b
+            sections: 03-types
+          - phase: collections
+            sections: 07-classes 08-collections 09-errors 10-async 11-concurrency 12-modules
+          - phase: build-tooling
+            sections: 13-build 14-stdlib 15-decorators 16-tooling book
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install AVR toolchain (linux — avr-gcc + simavr run-cycle cases)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends avr-gcc avr-libc simavr avrdude
+      - name: Install MinGW gcc via MSYS2 (windows — runner wraps gcc in login-bash)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: false
+          update: false
+          pacboy: gcc:p
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm tsx packages/tests/test/runner.ts ${{ matrix.sections }}
+
+  spec:
+    name: spec suites (${{ matrix.os }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install AVR toolchain (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends avr-gcc avr-libc simavr avrdude
+      - name: Install MinGW gcc via MSYS2 (windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: false
+          update: false
+          pacboy: gcc:p
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 02-syntax suites
+        run: |
+          pnpm tsx packages/tests/test/spec/02-syntax/02-variables/run.ts
+          pnpm tsx packages/tests/test/spec/02-syntax/02-formatting/run.ts
+      - name: 03-types suite
+        run: pnpm tsx packages/tests/test/spec/03-types/cast-pairs/run.ts
+      - name: 13-build suites
+        run: |
+          pnpm tsx packages/tests/test/spec/13-build/cli/run.ts
+          pnpm tsx packages/tests/test/spec/13-build/platform/run.ts
+      - name: 00-intro book suite (phased)
+        run: |
+          pnpm tsx packages/tests/test/spec/00-intro/book/run.ts 00.1 00.3 00.4
+          pnpm tsx packages/tests/test/spec/00-intro/book/run.ts 00.5 00.6
+          pnpm tsx packages/tests/test/spec/00-intro/book/run.ts 00.7
+
+  engine:
+    name: engine self-tests (${{ matrix.os }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install AVR toolchain (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends avr-gcc avr-libc simavr avrdude
+      - name: Install MinGW gcc via MSYS2 (windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: false
+          update: false
+          pacboy: gcc:p
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm tsx packages/test-engine/test/run.ts
