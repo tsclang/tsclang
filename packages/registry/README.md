@@ -32,16 +32,19 @@ JSON-каталог (спека `13-build.md` → «Реестр»). CLI заб�
 ## Бандлы тулчейнов (#278)
 
 Эталонные платформы (`@tsclang/desktop`, `@tsclang/avr`, `@tsclang/wasm`,
-`@tsclang/android`)
+`@tsclang/android`, `@tsclang/ios`)
 поставляют тулчейны комплектом: `platform.toolchains.<name>.downloads`
 в манифесте пакета указывает на бандлы в GitHub-релизах профильных репо
 (`github.com/tsclang/platform-{desktop,avr,wasm,android}/releases/download/<тег>/…`),
 CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270). Тег = версия
 матрицы бандлов: `toolchains-v1` (gcc/avr-gcc/avrdude/emcc 0.3.0 +
 android ndk-clang 0.1.1 — полная матрица хостов), `toolchains-v2`
-(desktop clang 0.4.0).
-`@tsclang/ios` — instruction-mode: секции `toolchains` нет вообще, тулчейн
-= Xcode CLT на macOS (Apple SDK не редистрибутируем, #283).
+(desktop clang 0.4.0; + `libuv-1.53.0-mobile.tar.gz` #287 — один
+хост-независимый mobile-ассет, на который ссылаются и `@tsclang/android`
+0.2.0 (все os-arch), и `@tsclang/ios` 0.2.0 (darwin-arm64)).
+Компилятор `@tsclang/ios` — по-прежнему Xcode CLT на macOS (Apple SDK не
+редистрибутируем, #283); его бандл `libuv` нужен линковщику (`-luv` для
+`--async libuv`), а не компилятору.
 
 Матрица: `win32-x64`, `linux-x64`, `darwin-arm64` (+ `darwin-x64` у avrdude).
 `darwin-x64` (Intel-маки) у clang/avr-gcc не покрыт: LLVM не публикует
@@ -57,6 +60,16 @@ x64-macOS-бинари (desktop → системный clang из Xcode CLT, #28
   exec-биты живут в метаданных tar — виндовый tar их не создаёт,
   зато кросс-архитектурная упаковка возможна (бинари не исполняются), поэтому
   одного arm64-раннера хватает на оба darwin-таргета.
+- **Бандл из исходников (`--only libuv`, #287)** — первый бандл, который не
+  переупаковывает чужие бинари: `buildLibuvMobile()` качает официальный
+  `libuv-v1.53.0.tar.gz` + NDK r30 dmg и кросс-компилирует cmake (`Ninja`,
+  `BUILD_SHARED_LIBS=OFF`) 5 слайсов — android arm64/x86_64
+  (`ANDROID_PLATFORM=android-28` через toolchain-файл NDK; пол API 24→28 —
+  bionic объявляет `posix_spawn` только с 28, а libuv v1.53 компилирует эти
+  вызовы безусловно) и ios device/sim (только darwin-раннер: нужен Xcode).
+  Layout без `bin/`: `include/` + `lib/<triple>/libuv.a`, где `<triple>` —
+  ровно строки `--target`; плоский корень сам себе binDir
+  (findIsolatedToolchain-контракт для бандлов без бинарей).
 - **Заливка**: релизы профильных репо (`gh release upload toolchains-v2 …`),
   файлы >100MB gh грузит через API сам; ассеты лимит 2GB (поэтому
   LLVM-таргеты пакуются в `.tar.xz`, остальные — `.tar.gz`; системный tar
