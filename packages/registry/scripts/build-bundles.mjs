@@ -178,6 +178,28 @@ const BUNDLES = [
       },
     },
   },
+  {
+    toolchain: 'libuv', version: '1.53.0',
+    license: 'MIT (libuv; built from source — static uv_a cross-compiled for android arm64/x86_64 and ios device/sim slices)',
+    // #287: the FIRST from-source bundle (everything above is a repack).
+    // One archive carries ALL mobile slices — include/ + lib/<triple>/libuv.a
+    // for aarch64-linux-android24, x86_64-linux-android24,
+    // arm64-apple-ios16.0, arm64-apple-ios16.0-simulator and
+    // x86_64-apple-ios16.0-simulator — so the SAME asset backs both
+    // @tsclang/android and @tsclang/ios manifests and the global
+    // findIsolatedToolchain('libuv') lookup is never ambiguous. Built on a
+    // darwin runner: iOS slices need Xcode; the android slices cross-compile
+    // through the same NDK .dmg the ndk-clang darwin job consumes (shared
+    // SRC cache). Static libs are host-independent — every os-arch downloads
+    // entry points at this one asset.
+    buildFromSource: 'libuv-mobile',
+    targets: {
+      'darwin-arm64': {
+        source: 'https://dist.libuv.org/dist/v1.53.0/libuv-v1.53.0.tar.gz',
+        file: 'libuv-v1.53.0.tar.gz',
+      },
+    },
+  },
 ];
 
 // Make the emcc bundle consumable by findIsolatedToolchain (binDir=<root>/bin):
@@ -383,6 +405,119 @@ function extractSource(spec, work) {
   return unwrapSingleRoot(work);
 }
 
+// ── libuv from source (#287) ────────────────────────────────────────────────
+// cmake per slice, Release + BUILD_SHARED_LIBS=OFF (static uv_a), install into
+// a per-slice prefix, then assemble include/ + lib/<triple>/libuv.a. Slices:
+const LIBUV_ANDROID_SLICES = [
+  { abi: 'arm64-v8a', triple: 'aarch64-linux-android24' },
+  { abi: 'x86_64', triple: 'x86_64-linux-android24' },
+];
+const LIBUV_IOS_SLICES = [
+  // libuv's own CI recipe: CMAKE_SYSTEM_NAME=iOS + the sdk sysroot; CODE_SIGNING
+  // off, deployment 16.0 matches the compile triples in shared/toolchain.ts
+  { tag: 'device', arch: 'arm64', sysroot: 'iphoneos', triple: 'arm64-apple-ios16.0' },
+  { tag: 'sim-arm64', arch: 'arm64', sysroot: 'iphonesimulator', triple: 'arm64-apple-ios16.0-simulator' },
+  { tag: 'sim-x86_64', arch: 'x86_64', sysroot: 'iphonesimulator', triple: 'x86_64-apple-ios16.0-simulator' },
+];
+
+async function buildLibuvMobile(bundle, target, spec) {
+  if (process.platform !== 'darwin') {
+    throw new Error('the libuv bundle must be built on a darwin runner (iOS slices need Xcode)');
+  }
+  const work = join(SRC, `stage-${bundle.toolchain}-${target}`);
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+  const srcRoot = extractSource(spec, work); // libuv-v1.53.0/
+  const stage = join(work, 'bundle-root');
+  const libDir = join(stage, 'lib');
+  const prefixes = [];
+
+  // The NDK cross-compiles the android slices. Same .dmg the ndk-clang darwin
+  // job fetches (shared SRC cache, so the second download is a no-op); the
+  // mounted volume root carries the .app bundle — the NDK tree is inside.
+  await fetchSource('https://dl.google.com/android/repository/android-ndk-r30-darwin.dmg', 'android-ndk-r30-darwin.dmg');
+  const ndkStage = join(work, 'ndk');
+  mkdirSync(ndkStage, { recursive: true });
+  const ndkInner = extractSource({ file: 'android-ndk-r30-darwin.dmg' }, ndkStage);
+  const appEntry = readdirSync(ndkInner).find((f) => f.endsWith('.app'));
+  const ndkToolchainFile = appEntry
+    && join(ndkInner, appEntry, 'Contents', 'NDK', 'build', 'cmake', 'android.toolchain.cmake');
+  if (!ndkToolchainFile || !existsSync(ndkToolchainFile)) {
+    throw new Error(`NDK cmake toolchain file not found under ${ndkInner}: ${readdirSync(ndkInner).join(', ')}`);
+  }
+
+  function installSlice(buildDir, prefix, cmakeArgs) {
+    rmSync(buildDir, { recursive: true, force: true });
+    run('cmake', ['-S', srcRoot, '-B', buildDir, '-G', 'Ninja',
+      '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_SHARED_LIBS=OFF',
+      `-DCMAKE_INSTALL_PREFIX=${prefix}`, ...cmakeArgs]);
+    run('cmake', ['--build', buildDir]);
+    run('cmake', ['--install', buildDir]);
+  }
+  // Place the installed static lib under its target-triple directory — the
+  // layout the CLI/test-engine resolve against (`lib/<triple>` == the compile
+  // --target string).
+  function placeSlice(prefix, triple) {
+    const a = join(prefix, 'lib', 'libuv.a');
+    if (!existsSync(a)) {
+      const libEntries = existsSync(join(prefix, 'lib'))
+        ? readdirSync(join(prefix, 'lib')).join(', ') : 'no lib/ dir';
+      throw new Error(`libuv.a missing in ${prefix}/lib (found: ${libEntries})`);
+    }
+    mkdirSync(join(libDir, triple), { recursive: true });
+    copyFileSync(a, join(libDir, triple, 'libuv.a'));
+  }
+
+  for (const s of LIBUV_ANDROID_SLICES) {
+    const prefix = join(work, `inst-android-${s.abi}`);
+    prefixes.push(prefix);
+    process.stdout.write(`libuv: android ${s.abi} (${s.triple})\n`);
+    installSlice(join(work, `b-android-${s.abi}`), prefix, [
+      `-DCMAKE_TOOLCHAIN_FILE=${ndkToolchainFile}`,
+      `-DANDROID_ABI=${s.abi}`,
+      '-DANDROID_PLATFORM=android-24',
+    ]);
+    placeSlice(prefix, s.triple);
+  }
+  for (const s of LIBUV_IOS_SLICES) {
+    const prefix = join(work, `inst-ios-${s.tag}`);
+    prefixes.push(prefix);
+    process.stdout.write(`libuv: ios ${s.tag} (${s.triple})\n`);
+    installSlice(join(work, `b-ios-${s.tag}`), prefix, [
+      '-DCMAKE_SYSTEM_NAME=iOS',
+      `-DCMAKE_OSX_SYSROOT=${s.sysroot}`,
+      `-DCMAKE_OSX_ARCHITECTURES=${s.arch}`,
+      '-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0',
+      '-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED:STRING=NO',
+    ]);
+    placeSlice(prefix, s.triple);
+  }
+  // Headers are identical across slices — take them from the first install
+  cpSync(join(prefixes[0], 'include'), join(stage, 'include'), { recursive: true });
+
+  const notice = [
+    `TSClang toolchain bundle: ${bundle.toolchain} ${bundle.version} (mobile cross slices)`,
+    `Source: ${spec.source}`,
+    `License: ${bundle.license}`,
+    `Built: ${new Date().toISOString()} by packages/registry/scripts/build-bundles.mjs`,
+    'Built from source (cmake Release, BUILD_SHARED_LIBS=OFF) — not an upstream binary repack.',
+    'Slices: lib/<triple>/libuv.a for android arm64/x86_64 (API 24, NDK r30) and ios device/sim.',
+  ].join('\n') + '\n';
+  writeFileSync(join(stage, 'TSC_BUNDLE_NOTICE.txt'), notice, 'utf8');
+
+  // Host-independent static archive — one asset for every os-arch entry
+  const outName = `libuv-${bundle.version}-mobile.tar.gz`;
+  const outPath = join(OUT, outName);
+  mkdirSync(OUT, { recursive: true });
+  run(tarBinary(), ['-czf', outPath, '.'], { cwd: stage });
+
+  const sha256 = createHash('sha256').update(readFileSync(outPath)).digest('hex');
+  const sizeMB = Math.round(statSync(outPath).size / 1_000_000);
+  process.stdout.write(`${outName}: ${sizeMB} MB\n  sha256: ${sha256}\n`);
+  rmSync(work, { recursive: true, force: true });
+  return { outName, sha256, sizeMB };
+}
+
 function buildOne(bundle, target, spec) {
   const work = join(SRC, `stage-${bundle.toolchain}-${target}`);
   rmSync(work, { recursive: true, force: true });
@@ -467,11 +602,13 @@ if (targetFilter && !BUNDLES.some((b) => b.targets[targetFilter])) {
 const results = {};
 for (const bundle of BUNDLES) {
   if (only && bundle.toolchain !== only) continue;
-  for (const [target, spec] of Object.entries(bundle.targets)) {
+    for (const [target, spec] of Object.entries(bundle.targets)) {
     if (targetFilter && target !== targetFilter) continue;
     await fetchSource(spec.source, spec.file);
     for (const dep of spec.deps ?? []) await fetchSource(dep.url, dep.file);
-    results[`${bundle.toolchain}/${target}`] = buildOne(bundle, target, spec);
+    results[`${bundle.toolchain}/${target}`] = bundle.buildFromSource
+      ? await buildLibuvMobile(bundle, target, spec)
+      : buildOne(bundle, target, spec);
   }
 }
 process.stdout.write('\nCatalog entries (packages/platforms/*/tsc.package.json -> toolchains.downloads):\n');

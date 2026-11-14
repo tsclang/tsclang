@@ -1,0 +1,4 @@
+class P { x: i32 = 0 }
+function f(ps: P[], qs: P[]): boolean {
+    return ps == qs;
+}

@@ -1,0 +1,6 @@
+let a: string[] = ["a", "b"];
+let b: string[] = ["a", "b"];
+let c: string[] = ["a", "c"];
+console.log(a == b);
+console.log(a == c);
+console.log(a != c);

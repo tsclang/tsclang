@@ -260,15 +260,30 @@ let b = "1"
 console.log(a.toString() == b)`)).toBe("true")
   })
 
-  test("00.1.7 смешанный 1 == \"1\" — ошибка компиляции: у '==' нет коерсии (#237)", () => {
-    // Cross-type == used to pass typecheck and emit invalid C (int == String
-    // struct) — #237. Now rejected at compile time with E125; the migration
-    // is the explicit conversion shown right below in the book
-    // (a.toString() == b). run() unwraps the error bag into "[E125] …".
+  test("00.1.7 смешанный 1 == \"1\" — неявная JS-коерсия + W012 (#237)", () => {
+    // Used to pass typecheck and emit invalid C (int == String struct) — #237.
+    // Design (2026-11-15): mixed '==' coerces per ECMAScript Abstract Equality
+    // with a W012 warning (asserted in corpus cases via expected.warning);
+    // mixed '===' stays a hard E125; strict rule no-mixed-eq makes '==' an
+    // error too. run() returns stdout only, so the coercion itself is
+    // verified through the emitted C.
+    expect(run(`
+let a = 1
+let b = "1"
+console.log(a == b)`)).toBe("true")
+    expect(compile(`
+let a = 1
+let b = "1"
+let c = a == b`)).toContain("tsc_string_to_number")
+  })
+
+  test("00.1.7 смешанный a === b — ошибка E125: '===' никогда не коерсит (#237)", () => {
+    // TS2367 analog: the runtime answer of a mixed '===' is always false, so
+    // an implicit coercion would diverge from TS/JS — always a hard error.
     expect(() => run(`
 let a = 1
 let b = "1"
-console.log(a == b)`)).toThrow(Error, "[E125] cannot compare f64 and string")
+console.log(a === b)`)).toThrow(Error, "[E125]")
   })
 
   // 00.1.7:72-75 — ownership: "let s2 = s; // move". Reality (#257 finding):

@@ -1,0 +1,7 @@
+let a: f64[] = [NaN, 0.0];
+let b: f64[] = [NaN, 0.0];
+console.log(a == b);
+console.log(a != b);
+let z1: f64[] = [0.0];
+let z2: f64[] = [-0.0];
+console.log(z1 == z2);

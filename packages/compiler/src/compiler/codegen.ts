@@ -1485,6 +1485,7 @@ class Context {
   _ensureRefArrayStruct(arrName: string, et: string) { return helpers._ensureRefArrayStruct(this, arrName, et); }
   _ensureArrayStruct(arrName: string, et: string) { return helpers._ensureArrayStruct(this, arrName, et); }
   _ensureArrayFreeMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayFreeMacro(this, elemIdent, arrName, et); }
+  _ensureArrayEqFunction(arrName: string, et: string) { return helpers._ensureArrayEqFunction(this, arrName, et); }
   _ensureArrayPushMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayPushMacro(this, elemIdent, arrName, et); }
   _ensureArrayCreateMacro(elemIdent: string, arrName: string, et: string) { return helpers._ensureArrayCreateMacro(this, elemIdent, arrName, et); }
   _isOptType(elemType: string) { return helpers._isOptType(this, elemType); }

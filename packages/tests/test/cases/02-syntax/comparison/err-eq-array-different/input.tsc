@@ -1,0 +1,3 @@
+let a: i32[] = [1];
+let b: string[] = ["1"];
+let c = a == b;

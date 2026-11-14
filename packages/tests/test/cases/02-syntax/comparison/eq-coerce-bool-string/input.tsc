@@ -1,0 +1,4 @@
+let flag = true;
+console.log(flag != "true");
+console.log(flag == "1");
+console.log(false == "");

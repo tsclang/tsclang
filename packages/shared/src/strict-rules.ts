@@ -12,6 +12,7 @@ export const STRICT_RULES = [
   'no-abort',
   'no-i64-print',
   'switch-default',
+  'no-mixed-eq',
 ] as const;
 
 export type StrictRule = typeof STRICT_RULES[number];

@@ -1,0 +1,4 @@
+console.log(1 == "a");
+console.log(2 == "12px");
+console.log(true == "true");
+console.log(0 == "");

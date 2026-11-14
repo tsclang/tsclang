@@ -630,12 +630,19 @@ error[E124]: cannot initialize flag: boolean with a number literal
 
 Под `any`/`unknown` проверка пропускается; `null`-инициализация не проверяется (её правила — в §Переменные).
 
-**E125 — mixed-type equality (codegen).** Родственная проверка типов, но выполняется в codegen (`operators.ts`, рядом с E100/E105), потому что требует type inference выражений. Операнды `==`/`!=`/`===`/`!==` должны быть одной категории типов — число, boolean или строка. Любое смешение категорий — ошибка: коерсии нет, результат всегда ложен или невалиден (число ↔ строка дало бы `int == String`-структуру, число ↔ boolean полагается на C integer promotion). Приводите к одному типу явно (#237).
+**E125 — mixed-type equality (codegen).** Родственная проверка типов, но выполняется в codegen (`operators.ts`, рядом с E100/E105), потому что требует type inference выражений. Операнды `==`/`!=`/`===`/`!==` из разных скалярных категорий (число — включая enum и char, boolean, строка): `===`/`!==` — всегда ошибка (коерсия расходилась бы с TS/JS, где смешанный `===` даёт TS2367/`false`); `==`/`!=` коерсируются неявно по ECMAScript Abstract Equality с предупреждением W012, но strict-правило `no-mixed-eq` делает и их ошибкой. Decimal-типы (d8–d64) не коерсируются никогда. Явное приведение — рекомендуемый путь (#237).
 
 ```
-error[E125]: cannot compare f64 and string: '==' has no type coercion
-  = help: convert one side explicitly, e.g. n.toString() == s
-  = help: compare values of the same type
+error[E125]: cannot compare f64 and string: '===' has no type coercion
+  = help: convert both sides to the same type first (e.g. n.toString() == s)
+  = help: '===' never coerces mixed types — use '==' for JS Abstract Equality coercion
+```
+
+**E126 — equality on non-scalar operands (codegen).** Equality с операндами, для которых нет сравнения значений: скаляр против `Array`/экземпляра класса, массивы разных типов элементов, вложенные массивы (`Array<Array<…>>`), массивы ссылок на классы. Сравнение массивов примитивов/string работает (по содержимому, `tsc_array_eq_*`); `class == class` одного типа — идентичность, как в TS (#284, array-половина).
+
+```
+error[E126]: cannot compare i32 and i32[] with '==': no value equality for these types
+  = help: a scalar can never equal an array or an object instance
 ```
 
 ### Правила оформления hint
@@ -645,7 +652,7 @@ error[E125]: cannot compare f64 and string: '==' has no type coercion
 - **Без жаргона:** не «lifetime constraint violated», а «borrow still used here»
 - **Указывать строку** когда fix в другом месте: `= hint: move line 13 before line 9`
 
-### Каталог warnings (W001-W011)
+### Каталог warnings (W001-W012)
 
 | Код | Триггер | Файл |
 |-----|---------|------|
@@ -660,6 +667,7 @@ error[E125]: cannot compare f64 and string: '==' has no type coercion
 | W009 | `mut` метод на классе где ВСЕ поля readonly | `decorators.ts` |
 | W010 | `AsyncMutex.lock()` в async функции (блокирующий вызов) | `concurrency.ts` |
 | W011 | `i64`/`u64`/`f64`/`f32` на 8-bit платформе (дорого) | `vardecl.ts` |
+| W012 | смешанный `==`/`!=` скалярных категорий — неявная коерсия по JS Abstract Equality | `operators.ts` |
 ## Test Engine API (для генерации тестов и тестирования компилятора)
 
 Jest-like API для написания тестов на TypeScript. Каждый тест прогоняет TSClang > C > binary и проверяет stdout.

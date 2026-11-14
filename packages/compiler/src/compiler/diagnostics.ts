@@ -842,17 +842,44 @@ as E101 at the same phase.
     severity: 'error',
     title: 'mixed-type equality',
     message: `cannot compare {left} and {right}: '{op}' has no type coercion`,
-    help: ['convert both sides to the same type first (e.g. n.toString() == s)', 'compare values of the same type'],
+    help: ['convert both sides to the same type first (e.g. n.toString() == s)', `'===' never coerces mixed types — use '==' for JS Abstract Equality coercion`],
     body: `
-Equality operators require operands of the same type category — number,
-boolean or string. There is no coercion, so a category mix is always a bug:
-number vs string would emit invalid C (an integer compared with the String
-struct), and number vs boolean silently relies on C integer promotion.
+Equality operands must belong to the same scalar category — number (incl.
+enums and char), boolean or string. '\`===\`' / '\`!==\`' never coerce a category
+mix (TypeScript rejects it as TS2367 too — the runtime answer would always be
+false). '\`==\`' / '\`!=\`' coerce implicitly like ECMAScript Abstract Equality with
+a warning (W012), unless the strict rule \`no-mixed-eq\` is enabled, which makes
+every mixed comparison a hard error. Decimal fixed-point types (d8–d64) never
+coerce implicitly.
 
   let a = 1;
   let s = "1";
-  a == s;              // error[E125]
+  a === s;             // error[E125]
+  a == s;              // warning[W012] — coerces to true (JS semantics)
   a.toString() == s;   // ok — explicit conversion
+`,
+  },
+
+  E126: {
+    code: 'E126',
+    severity: 'error',
+    title: 'equality on non-scalar operands',
+    message: `cannot compare {left} and {right} with '{op}': no value equality for these types`,
+    help: ['compare arrays element-by-element (a.length == b.length && a[0] == b[0] && …)', 'a scalar can never equal an array or an object instance', 'for object identity compare the same-type references directly'],
+    body: `
+Equality is only defined for scalars and same-type values. TSClang arrays are
+values with element-wise content equality, but it is only generated when both
+sides are arrays of the same primitive/string element type. Everything else
+involving arrays or class instances is rejected:
+
+  1 == arr;            // error[E126] — scalar vs array
+  "x" == obj;          // error[E126] — scalar vs object instance
+  arrI32 == arrString; // error[E126] — different element types
+  nested == nested;    // error[E126] — nested arrays (future: explicit deepEq)
+  arrP == arrQ;        // error[E126] — arrays of class references (deep equality of object graphs)
+
+Class-to-class comparison of the same type stays legal (reference identity,
+like TypeScript).
 `,
   },
 
@@ -1711,6 +1738,26 @@ are used.
 
 Fix: use \`i32\` or \`u32\` if the range suffices, or use fixed-point
 decimal types (d8, d16) for fractional values.
+`,
+  },
+
+  W012: {
+    code: 'W012',
+    severity: 'warning',
+    title: 'implicit coercion in mixed-type equality',
+    message: `'{op}' implicitly coerces {left} and {right} to number (JS Abstract Equality)`,
+    help: ['convert both sides to the same type explicitly (e.g. n.toString() == s)', 'enable the no-mixed-eq strict rule to make mixed comparisons a hard error'],
+    body: `
+'\`==\`' between different scalar categories coerces both operands to number
+using ECMAScript Abstract Equality semantics: boolean -> 0/1, string ->
+JS ToNumber ("1" -> 1, "12px" -> NaN, "" -> 0, "0x1A" -> 26). The result
+matches TypeScript/JavaScript runtime behavior, but the type mix is usually
+unintended — that is why it is only a warning, and the strict rule
+\`no-mixed-eq\` turns it into error[E125].
+
+  1 == "1";    // warning[W012] — true
+  1 == "a";    // warning[W012] — false (NaN)
+  1 === "1";   // error[E125] — '===' never coerces
 `,
   },
 } satisfies Record<string, DiagnosticEntry>;

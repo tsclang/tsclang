@@ -1,0 +1,3 @@
+enum Color { Red, Green }
+console.log(Color.Red == "0");
+console.log(Color.Green == "1");

@@ -257,6 +257,31 @@ export function _ensureArrayFreeMacro(ctx: CodeGenContext, elemIdent: string, ar
     }
 }
 
+// Element-wise content equality for value arrays (#284): Rust Vec / C++ vector
+// semantics — arrays are values here, object identity does not exist. Integer
+// elements compare via memcmp; float elements need an element loop (IEEE:
+// -0.0 == 0.0, NaN != NaN); String elements compare via tsc_string_eq.
+export function _ensureArrayEqFunction(ctx: CodeGenContext, arrName: string, et: string) {
+  const elemIdent = ctx.cTypeToIdent(et);
+  const key = `eq_${elemIdent}`;
+  if (ctx._emittedHelpers.has(key)) return;
+  ctx._emittedHelpers.add(key);
+  let body;
+  if (et === 'String') {
+    body = `for (size_t _i_ = 0; _i_ < a.length; _i_++) { if (!tsc_string_eq(a.data[_i_], b.data[_i_])) return false; } return true;`;
+  } else if (et === 'float' || et === 'double') {
+    body = `for (size_t _i_ = 0; _i_ < a.length; _i_++) { if (a.data[_i_] != b.data[_i_]) return false; } return true;`;
+  } else {
+    body = `return memcmp(a.data, b.data, a.length * sizeof(${et})) == 0;`;
+  }
+  ctx.addTop(`static inline bool tsc_array_eq_${elemIdent}(${arrName} a, ${arrName} b) {`);
+  ctx.addTop(`    if (a.length != b.length) return false;`);
+  ctx.addTop(`    if (a.length == 0) return true;`);
+  ctx.addTop(`    ${body}`);
+  ctx.addTop(`}`);
+  ctx.addTop('');
+}
+
 export function _ensureArrayPushMacro(ctx: CodeGenContext, elemIdent: string, arrName: string, et: string) {
     const key = `push_${elemIdent}`;
     if (ctx._emittedHelpers.has(key)) return;

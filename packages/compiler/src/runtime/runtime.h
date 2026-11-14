@@ -1997,6 +1997,38 @@ static inline int _tsc_parse_prefixed_f64(const char *b, double *out) {
     *out = v; return 1;
 }
 
+/* JS ToNumber semantics for implicit mixed-type equality coercion (W012).
+ * Unlike the parseInt/parseFloat helpers above, this rejects partial parses:
+ * trims JS whitespace, "12px" -> NaN, "" -> 0, exact-case "Infinity" with
+ * optional sign, 0x/0X hex. Strings longer than 63 chars are never numbers. */
+static inline double tsc_string_to_number(String s) {
+    char buf[64];
+    size_t n = s.length < 63 ? s.length : 63;
+    _tsc_str_copy_to(buf, &s, 0, n);
+    buf[n] = '\0';
+    char *b = buf;
+    while (*b == ' ' || *b == '\t' || *b == '\n' || *b == '\r' || *b == '\v' || *b == '\f') b++;
+    size_t len = strlen(b);
+    while (len > 0 && (b[len-1] == ' ' || b[len-1] == '\t' || b[len-1] == '\n'
+                    || b[len-1] == '\r' || b[len-1] == '\v' || b[len-1] == '\f')) len--;
+    b[len] = '\0';
+    if (len == 0) return 0.0;                    /* "" / whitespace-only -> 0 */
+    const char *t = (*b == '+' || *b == '-') ? b + 1 : b;
+    size_t tlen = len - (size_t)(t - b);
+    if (tlen == 8 && t[0] == 'I' && strncmp(t, "Infinity", 8) == 0)
+        return (*b == '-') ? -INFINITY : INFINITY;
+    if (t[0] == 'i' || t[0] == 'I' || t[0] == 'n' || t[0] == 'N')
+        return NAN;                              /* strtod accepts "inf"/"nan"; JS ToNumber does not */
+    if (tlen > 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X')) {
+        char *he; _tsc_strtol_t v = _tsc_strtol(t, &he, 16);  /* handles sign + 0x prefix */
+        if (he == t || *he != '\0') return NAN;
+        return (*b == '-') ? -(double)v : (double)v;
+    }
+    char *de; double v = strtod(b, &de);
+    if (de == b || *de != '\0') return NAN;      /* partial parse -> NaN */
+    return v;
+}
+
 static inline int32_t tsc_i32_parse(String s) {
     char buf[64]; size_t n = s.length < 63 ? s.length : 63;
     _tsc_str_copy_to(buf, &s, 0, n); buf[n] = '\0';

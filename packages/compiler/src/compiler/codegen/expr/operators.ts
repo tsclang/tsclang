@@ -2,7 +2,7 @@ import type { Binary, Unary, Expression, TypeRef } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
 import { resolveDecimalBase } from '../types/decimal.js';
 
-// C types that participate in number↔string equality checking (E125)
+// C types in the "number" category for equality coercion checking (E125/W012)
 const EQ_NUMERIC_CTYPES = new Set([
   'int8_t', 'int16_t', 'int32_t', 'int64_t',
   'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
@@ -235,27 +235,106 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
       }
     }
 
-    // Mixed-category equality (number/boolean/string across categories) has
-    // no coercion path and would emit invalid or misleading C — reject at
-    // compile time (#237). Same-type, null-optional and typeof-narrowed
-    // comparisons return above and never reach this check.
+    // Equality semantics (#237, #284):
+    // - Array == Array (same primitive/string element type): element-wise
+    //   content comparison — arrays are values here, object identity does not
+    //   exist (Rust Vec / C++ vector semantics; deliberate divergence from TS
+    //   reference equality, same choice as tsc_string_eq for strings).
+    // - Scalar vs complex (Array, class instance), incompatible arrays,
+    //   nested/class-element arrays: E126.
+    // - Mixed scalar categories (number/boolean/string; enum counts as number):
+    //   '===' never coerces -> E125 (TS2367 analog, П2); '==' coerces per
+    //   ECMAScript Abstract Equality + W012, unless strict rule 'no-mixed-eq'
+    //   -> E125. Decimal fixed-point types never coerce implicitly.
+    // Same-type, null-optional and typeof-narrowed comparisons return above
+    // and never reach this check.
     if (node.op === '==' || node.op === '!=' || node.op === '===' || node.op === '!==') {
+      const lt = ctx.inferType(node.left);
+      const rt = ctx.inferType(node.right);
       const eqCategory = (t: string | undefined): string | null => {
         if (t === 'String' || t === 'String *') return 'string';
         if (t === 'bool') return 'boolean';
         if (t !== undefined && EQ_NUMERIC_CTYPES.has(t)) return 'number';
+        if (t !== undefined && ctx.classes.get(t)?.isEnum) return 'number'; // enum members are numbers
         return null;
       };
-      const lt = ctx.inferType(node.left);
-      const rt = ctx.inferType(node.right);
-      const lc = eqCategory(lt);
-      const rc = eqCategory(rt);
-      if (lc && rc && lc !== rc) {
-        throw ctx.errorCode('E125', node, {
+      // Array operands: content equality for comparable element types, E126 otherwise
+      const arrElemCType = (t: string | undefined): string | null => {
+        if (!t?.startsWith('Array_')) return null;
+        return ctx._arrIdentToCType(t.slice(6));
+      };
+      const le = arrElemCType(lt);
+      const re = arrElemCType(rt);
+      if (le !== null || re !== null) {
+        const comparableElem = (et: string) =>
+          EQ_NUMERIC_CTYPES.has(et) || et === 'bool' || et === 'String';
+        if (le !== null && re !== null && le === re && comparableElem(le)) {
+          ctx._ensureArrayEqFunction(lt!, le);
+          const lC = ctx.exprToC(node.left, lines, depth);
+          const rC = ctx.exprToC(node.right, lines, depth);
+          const eq = `tsc_array_eq_${ctx.cTypeToIdent(le)}(${lC}, ${rC})`;
+          return (node.op === '!=' || node.op === '!==') ? `!${eq}` : eq;
+        }
+        throw ctx.errorCode('E126', node, {
           left: ctx.ctypeToTsName(lt),
           right: ctx.ctypeToTsName(rt),
           op: node.op,
         });
+      }
+      // Scalar vs complex operand (class instance, interface, Map, Set) has no
+      // value equality — E126. Same-type complex operands (class identity) and
+      // null comparisons (`p == null`, null literal types as 'void *') stay legal.
+      const isComplexOperand = (t: string | undefined): boolean => {
+        if (!t) return false;
+        if (t.startsWith('Array_') || t.startsWith('Map_') || t.startsWith('TscMap_')
+            || t.startsWith('Set_') || t.startsWith('TscSet_')) return true;
+        const base = t.endsWith(' *') ? t.slice(0, -2) : t;
+        const cd = ctx.classes.get(base);
+        return (cd && !cd.isEnum) ? true : ctx.interfaces.has(base);
+      };
+      const lComplex = isComplexOperand(lt);
+      const rComplex = isComplexOperand(rt);
+      if ((lComplex && !rComplex && rt !== 'void *') || (rComplex && !lComplex && lt !== 'void *')) {
+        throw ctx.errorCode('E126', node, {
+          left: ctx.ctypeToTsName(lt),
+          right: ctx.ctypeToTsName(rt),
+          op: node.op,
+        });
+      }
+      const lc = eqCategory(lt);
+      const rc = eqCategory(rt);
+      if (lc && rc && lc !== rc) {
+        const DECIMAL_CTYPES = new Set(['d8_t', 'd16_t', 'd32_t', 'd64_t']);
+        if ((node.op === '===' || node.op === '!==')
+            || ctx._strictRules?.has('no-mixed-eq')
+            || DECIMAL_CTYPES.has(lt!) || DECIMAL_CTYPES.has(rt!)) {
+          throw ctx.errorCode('E125', node, {
+            left: ctx.ctypeToTsName(lt),
+            right: ctx.ctypeToTsName(rt),
+            op: node.op,
+          });
+        }
+        // Implicit coercion per ECMAScript Abstract Equality: boolean -> 0/1,
+        // string -> JS ToNumber, compare as double. Matches TS/JS runtime.
+        ctx.warnCode('W012', node, {
+          left: ctx.ctypeToTsName(lt),
+          right: ctx.ctypeToTsName(rt),
+          op: node.op,
+        });
+        const toNum = (operand: Expression, cat: string): string => {
+          if (cat === 'boolean') {
+            const c = ctx.exprToC(operand, lines, depth);
+            return `(${c} ? 1.0 : 0.0)`;
+          }
+          if (cat === 'string') {
+            const c = ctx._derefStringPtr(operand, ctx.exprToC(operand, lines, depth));
+            return `tsc_string_to_number(${c})`;
+          }
+          return `(double)(${ctx.exprToC(operand, lines, depth)})`;
+        };
+        const lN = toNum(node.left, lc);
+        const rN = toNum(node.right, rc);
+        return (node.op === '!=') ? `(${lN} != ${rN})` : `(${lN} == ${rN})`;
       }
     }
 

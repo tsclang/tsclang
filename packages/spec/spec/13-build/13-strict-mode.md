@@ -8,7 +8,7 @@
 
 ```json
 {
-  "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort"]
+  "strict": ["no-any", "no-unsafe", "no-native", "safe-math", "no-lossy-cast", "no-dynamic-alloc", "switch-default", "no-abort", "no-closures", "no-interfaces", "no-threads", "no-sort", "no-mixed-eq"]
 }
 ```
 
@@ -449,6 +449,20 @@ arr.sort();
 
 **Обоснование:** `qsort(3)` требует `int (*)(const void*, const void*)` comparator — `void*` параметры. Built-in sort использует типизированные компараторы внутри runtime — `void*` инкапсулирован.
 
+#### `no-mixed-eq` — запрет смешанных `==` между категориями типов
+
+Запрещает `==`/`!=` между операндами разных скалярных категорий (число ↔ строка, число ↔ boolean, boolean ↔ строка). Без правила такое сравнение коерсируется по JS Abstract Equality с warning `W012`; под правилом — ошибка `E125`. Смешанные `===`/`!==` — всегда `E125`, независимо от strict mode.
+
+```typescript
+// ⚠️ без правила: warning W012 + JS-коерсия; под no-mixed-eq: ❌ error E125
+console.log(n == s)
+
+// ✅ явное приведение — ok в любом режиме
+console.log(n.toString() == s)
+```
+
+**Обоснование:** неявная коерсия в сравнении — частый источник логических ошибок (`true == "true"` → `false` в JS, потому что ToNumber("true") = NaN). Safety-код обязан выражать намерение явно.
+
 ### SIL Presets
 
 IEC 61508 определяет 4 уровня SIL (Safety Integrity Level):
@@ -538,3 +552,4 @@ Strict rules проверяются **после** platform capability checks. �
 | `no-interfaces` | Interface с методами, `implements` | `(no-interfaces)` |
 | `no-threads` | `spawn {}`, `Thread.spawn` | `(no-threads)` |
 | `no-sort` | `Array.sort()` с comparator | `(no-sort)` |
+| `no-mixed-eq` | Смешанные `==`/`!=` между категориями (число/boolean/строка) без явного приведения | `E125` (иначе W012) |
