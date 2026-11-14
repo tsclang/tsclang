@@ -366,10 +366,14 @@ function extractSource(spec, work) {
     run('hdiutil', ['attach', '-readonly', '-mountpoint', mnt, '-nobrowse', join(SRC, spec.file)]);
     try {
       mkdirSync(inner, { recursive: true });
-      // dereference: the dmg ships ABSOLUTE symlinks pointing into the mount
-      // point (bin/clang -> …/dmg/…/bin/clang-21) — after detach every such
-      // link dangles, so copy the TARGETS as real files instead.
-      for (const entry of readdirSync(mnt)) cpSync(join(mnt, entry), join(inner, entry), { recursive: true, dereference: true });
+      // The dmg ships absolute symlinks into the mount point (bin/clang ->
+      // …/dmg/…/bin/clang-21) which dangle after detach, and Node cpSync
+      // ({dereference: true}) leaves such links intact (observed on the CI
+      // darwin runner). BSD `cp -L` copies the TARGETS — exactly what a
+      // self-contained bundle needs.
+      for (const entry of readdirSync(mnt)) {
+        run('cp', ['-RL', join(mnt, entry), join(inner, entry)]);
+      }
     } finally {
       run('hdiutil', ['detach', mnt, '-force']);
     }
