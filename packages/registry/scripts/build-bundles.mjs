@@ -454,6 +454,12 @@ const targetFilter = process.argv.includes('--target') ? process.argv[process.ar
 if (targetFilter && !BUNDLES.some((b) => b.targets[targetFilter])) {
   throw new Error(`unknown --target ${targetFilter}`);
 }
+// Which revision of this script a CI run executed (refs replica lag has
+// already served a stale develop to a freshly dispatched run twice).
+{
+  const git = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, stdio: 'pipe' });
+  process.stdout.write(`build-bundles.mjs @ ${git.stdout?.toString().trim() ?? '?'} (${process.platform})\n`);
+}
 const results = {};
 for (const bundle of BUNDLES) {
   if (only && bundle.toolchain !== only) continue;
