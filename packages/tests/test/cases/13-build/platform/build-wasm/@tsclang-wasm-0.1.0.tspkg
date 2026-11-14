@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "files": {
     "index.d.tsc": "declare platform {\n    target: \"wasm\"\n    allocator: \"heap\"\n    async: \"none\"\n    fpu: true\n    bits: 32\n    usize: \"u32\"\n    defaultNumber: \"f64\"\n    unaligned_access: true\n    os: false\n    posix: false\n    strtoll: false\n    toolchain: \"emcc\"\n}\n",
-    "tsc.package.json": "{\n  \"name\": \"@tsclang/wasm\",\n  \"version\": \"0.1.0\",\n  \"type\": \"platform\",\n  \"description\": \"WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX\",\n  \"platform\": {\n    \"profile\": \"wasm\",\n    \"builds\": {\n      \"wasm\": { \"profile\": \"wasm\", \"emit\": \"wasm\", \"outDir\": \"build/wasm\" }\n    }\n  }\n}\n"
+    "tsc.package.json": "{\n  \"name\": \"@tsclang/wasm\",\n  \"version\": \"0.1.0\",\n  \"type\": \"platform\",\n  \"description\": \"WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX\",\n  \"platform\": {\n    \"profile\": \"wasm\",\n    \"builds\": {\n      \"wasm\": {\n        \"profile\": \"wasm\",\n        \"emit\": \"wasm\",\n        \"outDir\": \"build/wasm\",\n        \"toolchain\": \"emcc\"\n      }\n    }\n  }\n}\n"
   }
 }

@@ -6,7 +6,7 @@
       "version": "0.1.0",
       "type": "platform",
       "description": "WebAssembly bare platform (runtime_wasm.h, emscripten): wasm32, no POSIX",
-      "location": { "url": "@tsclang-wasm-0.1.0.tspkg", "sha256": "c87a1701e1e6c6b62e76be9ca28c6357172390d7233a267b0f6d61930ae1c452" }
+      "location": { "url": "@tsclang-wasm-0.1.0.tspkg", "sha256": "9bf73630323d0905edb64011d13737e7995a7421cd43f7c2491da35e80e82c34" }
     }
   ]
 }

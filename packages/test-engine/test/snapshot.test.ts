@@ -37,8 +37,20 @@ describe("toMatchC — inline", () => {
 })
 
 describe("toMatchC — file snapshots", () => {
-  beforeEach(() => { rmSync(snapFile, { force: true }) })
-  after(() => { rmSync(snapFile, { force: true }) })
+  let prevCi: string | undefined
+  beforeEach(() => {
+    rmSync(snapFile, { force: true })
+    // These tests exercise the LOCAL mechanism (create/compare/rewrite); the
+    // no-auto-create CI gate is covered by the "CI guard" suite below, which
+    // manages process.env.CI itself. Drop CI for this suite so a CI runner
+    // exercises the same path as a laptop.
+    prevCi = process.env.CI
+    delete process.env.CI
+  })
+  after(() => {
+    rmSync(snapFile, { force: true })
+    if (prevCi !== undefined) process.env.CI = prevCi
+  })
   test("creates a missing snapshot and passes", () => {
     expect("int created = 1;").toMatchC()
     if (!existsSync(snapFile)) throw new Error("snapshot file was not created")
