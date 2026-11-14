@@ -143,7 +143,9 @@ export function buildIosCompileArgs(o: IosCompileOptions): string[] {
     '--sdk', o.sdk, 'clang',
     o.cPath, '-o', o.outPath,
     '-I', o.runtimeInclude,
-    `-target=${triple}`,
+    // Double dash: Apple clang rejects the single-dash '-target=' spelling
+    // ('unknown argument'; NDK/desktop clang accept both) — CI macos tier.
+    `--target=${triple}`,
     '-fPIE', '-pie',
     C_STANDARD_FLAG,
     ...(o.optimize ? [`-${o.optimize}`] : []),

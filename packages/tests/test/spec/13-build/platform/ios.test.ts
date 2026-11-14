@@ -50,22 +50,22 @@ describe("13-build/platform ios — встроенный профиль (#283)",
 // ── argv-контракт xcrung компиляции ──────────────────────────────────────────
 
 describe("13-build/platform ios — buildIosCompileArgs (#283)", () => {
-  test("устройство: xcrun --sdk iphoneos clang, -target arm64, PIE, без -lm (libm в libSystem)", () => {
+  test("устройство: xcrun --sdk iphoneos clang, --target arm64, PIE, без -lm (libm в libSystem)", () => {
     const argv = buildIosCompileArgs({ cPath: "out/main.c", outPath: "out/main", runtimeInclude: "rt", sdk: "iphoneos" })
     expect(JSON.stringify(argv)).toBe(JSON.stringify([
       "--sdk", "iphoneos", "clang",
       "out/main.c", "-o", "out/main",
       "-I", "rt",
-      `-target=${IOS_DEVICE_TRIPLE}`,
+      `--target=${IOS_DEVICE_TRIPLE}`,
       "-fPIE", "-pie",
       "-std=c11",
     ]))
     expect(argv.includes("-lm")).toBe(false)
   })
 
-  test("симулятор: -target arm64-apple-ios16.0-simulator (дефолт для iphonesimulator)", () => {
+  test("симулятор: --target arm64-apple-ios16.0-simulator (дефолт для iphonesimulator)", () => {
     const argv = buildIosCompileArgs({ cPath: "in.c", outPath: "out/main", runtimeInclude: "rt", sdk: "iphonesimulator" })
-    expect(argv).toContain(`-target=${IOS_SIM_TRIPLE}`)
+    expect(argv).toContain(`--target=${IOS_SIM_TRIPLE}`)
   })
 
   test("triple переопределяется для intel-хостов (x86_64-сим)", () => {
@@ -73,7 +73,7 @@ describe("13-build/platform ios — buildIosCompileArgs (#283)", () => {
       cPath: "in.c", outPath: "out/main", runtimeInclude: "rt",
       sdk: "iphonesimulator", triple: IOS_SIM_TRIPLE_X64,
     })
-    expect(argv).toContain(`-target=${IOS_SIM_TRIPLE_X64}`)
+    expect(argv).toContain(`--target=${IOS_SIM_TRIPLE_X64}`)
   })
 
   test("оптимизация и include-директории сохраняются", () => {

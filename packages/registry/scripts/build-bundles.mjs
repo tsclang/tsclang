@@ -169,9 +169,11 @@ const BUNDLES = [
       'darwin-arm64': {
         source: 'https://dl.google.com/android/repository/android-ndk-r30-darwin.dmg',
         file: 'android-ndk-r30-darwin.dmg',
-        // TODO: [registry] verify the dmg volume root name on a darwin runner
-        // at first darwin bundle build (hdiutil prints the mount point)
-        subRoot: 'AndroidNDKr30.universal/toolchains/llvm/prebuilt/darwin-x86_64',
+        // The dmg volume holds a single NDK folder with the same tree as the
+        // zips; unwrapSingleRoot strips it, so subRoot matches the other
+        // targets (verified on the first darwin CI build — the volume root
+        // is NOT named AndroidNDKr30.universal).
+        subRoot: 'toolchains/llvm/prebuilt/darwin-x86_64',
       },
     },
   },
@@ -307,6 +309,17 @@ function unwrapSingleRoot(dir) {
   return dir;
 }
 
+// Extract an arbitrary fetched archive into `dir`. Zip is readable by the
+// bsdtar shipped on windows/macos, but linux runners have GNU tar which only
+// does tar — use unzip there (preinstalled on CI images).
+function extractArchive(file, dir) {
+  if (file.endsWith('.zip') && process.platform === 'linux') {
+    run('unzip', ['-q', join(SRC, file)], { cwd: dir });
+  } else {
+    run(tarBinary(), ['-xf', join(SRC, file)], { cwd: dir });
+  }
+}
+
 // Extract a fetched source archive into `work` and return its content root.
 // .dmg (darwin NDK) can only be opened with hdiutil on a darwin host — the
 // mounted volume is copied out while attached, then detached.
@@ -326,7 +339,7 @@ function extractSource(spec, work) {
     }
     return unwrapSingleRoot(inner);
   }
-  run(tarBinary(), ['-xf', join(SRC, spec.file)], { cwd: work });
+  extractArchive(spec.file, work);
   return unwrapSingleRoot(work);
 }
 
@@ -337,12 +350,19 @@ function buildOne(bundle, target, spec) {
 
   let contentRoot = extractSource(spec, work);
   // Deep repack root (e.g. the NDK's toolchains/llvm/prebuilt/<host-tag>):
-  // the content of that folder becomes the bundle root.
+  // the content of that folder becomes the bundle root. Resolved against the
+  // UNWRAPPED root — a single top-level folder in the archive is stripped by
+  // unwrapSingleRoot first.
   if (spec.subRoot) {
-    contentRoot = join(contentRoot, ...spec.subRoot.split('/'));
-    if (!existsSync(contentRoot)) {
-      throw new Error(`subRoot '${spec.subRoot}' not found in ${spec.file} (archive layout changed?)`);
+    const sub = join(contentRoot, ...spec.subRoot.split('/'));
+    if (!existsSync(sub)) {
+      const top = readdirSync(contentRoot).slice(0, 10);
+      throw new Error(
+        `subRoot '${spec.subRoot}' not found in ${spec.file}; ` +
+        `root contains: ${top.join(', ')} (archive layout changed?)`,
+      );
     }
+    contentRoot = sub;
   }
 
   // Fold extra dependency distributions into the tree (e.g. python + node
@@ -350,7 +370,7 @@ function buildOne(bundle, target, spec) {
   for (const dep of spec.deps ?? []) {
     const depWork = join(work, `dep-${dep.file.replace(/\W+/g, '_')}`);
     mkdirSync(depWork, { recursive: true });
-    run(tarBinary(), ['-xf', join(SRC, dep.file)], { cwd: depWork });
+    extractArchive(dep.file, depWork);
     let src = unwrapSingleRoot(depWork);
     if (dep.fromSub) src = join(src, dep.fromSub);
     mkdirSync(join(contentRoot, dep.into), { recursive: true });

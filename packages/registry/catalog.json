@@ -44,6 +44,26 @@
         "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-wasm-0.3.0.tspkg",
         "sha256": "926c735af4d672327b05ff93fb05bfd359af904b6fc20824c201a51c909e95c8"
       }
+    },
+    {
+      "name": "@tsclang/android",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle (win32-x64 published, posix bundles rolling out via platform-android CI)",
+      "location": {
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.0.tspkg",
+        "sha256": "ac1f2d337a45562ce7b593747152dccacbbb815290b1e0d37fe06b9060d83ef6"
+      }
+    },
+    {
+      "name": "@tsclang/ios",
+      "version": "0.1.0",
+      "type": "platform",
+      "description": "Apple iOS platform: Xcode clang via xcrun, simulator binaries run on the macOS host; no toolchain bundle — Xcode Command Line Tools ARE the toolchain (instruction mode)",
+      "location": {
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.1.0.tspkg",
+        "sha256": "ae8116d13e7f21c169c36ba1d89b0f4a99be5f3df96eb77adb32cd1304839e75"
+      }
     }
   ]
 }

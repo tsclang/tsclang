@@ -25,16 +25,23 @@ const DIST_BIN = join(ROOT, "packages", "cli", "dist", "index.js")
 const PLATFORMS_ROOT = join(ROOT, "packages", "platforms")
 const REGISTRY_DIR = join(ROOT, "packages", "registry")
 
-// The reference platform set (#275 desktop, #276 avr + wasm): package
-// source dir in the monorepo, published archive name in
+// The reference platform set (#275 desktop, #276 avr + wasm, #283 android +
+// ios): package source dir in the monorepo, published archive name in
 // packages/registry/archives, toolchain names the builds resolve through
 // findIsolatedToolchain. Since #282 phase 4 desktop ships clang/LLVM-only
 // bundles (0.4.0, release tag toolchains-v2); avr/wasm stay on the
 // original 0.3.0 / toolchains-v1 matrix — their content did not change.
+// #283 staged rollout: android's ndk-clang publishes win32-x64 first
+// (posix bundles build in the platform-android repo CI — expectation
+// tightens to the full matrix with the next manifest bump); ios ships NO
+// toolchains at all — the Apple SDK is not redistributable, Xcode Command
+// Line Tools are the toolchain (instruction mode, darwin-x64 precedent).
 const REFERENCE_PLATFORMS = [
   { name: "@tsclang/desktop", dir: "desktop", version: "0.4.0", file: "@tsclang-desktop-0.4.0.tspkg", repo: "platform-desktop", tag: "toolchains-v2", toolchains: ["clang"] },
   { name: "@tsclang/avr", dir: "avr", version: "0.3.0", file: "@tsclang-avr-0.3.0.tspkg", repo: "platform-avr", tag: "toolchains-v1", toolchains: ["avr-gcc", "avrdude"] },
   { name: "@tsclang/wasm", dir: "wasm", version: "0.3.0", file: "@tsclang-wasm-0.3.0.tspkg", repo: "platform-wasm", tag: "toolchains-v1", toolchains: ["emcc"] },
+  { name: "@tsclang/android", dir: "android", version: "0.1.0", file: "@tsclang-android-0.1.0.tspkg", repo: "platform-android", tag: "toolchains-v1", toolchains: ["ndk-clang"], downloadsAtLeast: ["win32-x64"] },
+  { name: "@tsclang/ios", dir: "ios", version: "0.1.0", file: "@tsclang-ios-0.1.0.tspkg", repo: null, tag: null, toolchains: null },
 ] as const
 
 const tmpDirs: string[] = []
@@ -69,11 +76,18 @@ describe("13-build/platform 4.1 — эталонные пакеты в моно�
       expect(dts.includes("declare platform")).toBe(true)
     })
 
-    test(`${ref.name}: тулчейны едут комплектом — секция toolchains с бандлами нашего релиза (#278)`, () => {
+    test(`${ref.name}: тулчейны едут комплектом — секция toolchains с бандлами нашего релиза (#278), либо пакет в instruction-mode (#283)`, () => {
       const manifest = JSON.parse(readFileSync(join(PLATFORMS_ROOT, ref.dir, "tsc.package.json"), "utf8"))
-      const toolchains = manifest.platform.toolchains as Record<string, { version: string; downloads: Record<string, { url: string; sha256: string; size?: number }> }>
-      expect(JSON.stringify(Object.keys(toolchains).sort())).toBe(JSON.stringify([...ref.toolchains].sort()))
-      for (const [tcName, tc] of Object.entries(toolchains)) {
+      const toolchains = manifest.platform.toolchains as Record<string, { version: string; downloads: Record<string, { url: string; sha256: string; size?: number }> }> | undefined
+      if (ref.toolchains === null) {
+        // Instruction mode (@tsclang/ios): NO toolchain section at all — the
+        // platform section validator treats it as optional, the install story
+        // is "install Xcode Command Line Tools", not a downloadable bundle
+        expect(toolchains).toBe(undefined)
+        return
+      }
+      expect(JSON.stringify(Object.keys(toolchains ?? {}).sort())).toBe(JSON.stringify([...ref.toolchains].sort()))
+      for (const tc of Object.values(toolchains!)) {
         expect(typeof tc.version).toBe("string")
         const dl = tc.downloads["win32-x64"]
         expect(dl !== undefined).toBe(true)
@@ -85,9 +99,13 @@ describe("13-build/platform 4.1 — эталонные пакеты в моно�
         expect(/^[0-9a-f]{64}$/.test(dl.sha256)).toBe(true)
         expect(typeof dl.size === "number" && dl.size > 0).toBe(true)
         // Matrix: every toolchain covers at least win32-x64 + linux-x64
-        // (darwin-x64 is partial — Intel Macs get system/brew instructions)
+        // (darwin-x64 is partial — Intel Macs get system/brew instructions).
+        // android 0.1.0 stages win32 first — posix bundles are rolling out
+        // via the platform-android repo CI (downloadsAtLeast pins the
+        // currently published subset; tightens with the next bump).
+        const required = (ref as { downloadsAtLeast?: string[] }).downloadsAtLeast ?? ["win32-x64", "linux-x64"]
         const keys = Object.keys(tc.downloads)
-        expect(keys.includes("win32-x64") && keys.includes("linux-x64")).toBe(true)
+        expect(JSON.stringify(required.filter((k) => !keys.includes(k)))).toBe("[]")
       }
     })
   }

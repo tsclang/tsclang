@@ -6,6 +6,7 @@
 //   TSC_E2E_BUNDLES=desktop   pnpm tsx packages/tests/test/spec/13-build/platform/run.ts
 //   TSC_E2E_BUNDLES=avr
 //   TSC_E2E_BUNDLES=wasm
+//   TSC_E2E_BUNDLES=android   (win32 hosts only until the posix bundles land)
 //   TSC_E2E_BUNDLES=all
 //
 // The catalog fixture is the committed catalog.json with the .tspkg url
@@ -27,8 +28,17 @@ const REGISTRY_DIR = join(ROOT, "packages", "registry")
 
 const MODE = process.env.TSC_E2E_BUNDLES ?? ""
 const SELECTED = MODE === "all"
-  ? ["desktop", "avr", "wasm"]
+  ? ["desktop", "avr", "wasm", "android"]
   : MODE.split(",").map((s) => s.trim()).filter(Boolean)
+
+// Cases whose toolchain bundle is not published for this host os-arch are
+// not selectable at all: android 0.1.0 ships win32-x64 first (#283 staged
+// rollout — posix bundles build in the platform-android repo CI).
+const HOST_OS_ARCH = process.platform === "win32"
+  ? "win32-x64"
+  : process.platform === "darwin"
+    ? (process.arch === "x64" ? "darwin-x64" : "darwin-arm64")
+    : "linux-x64"
 
 const tmpDirs: string[] = []
 function mkTmp(): string {
@@ -74,6 +84,8 @@ interface Case {
   source: string
   buildArgs: string[]
   verify: (dir: string) => void
+  /** host os-arch the toolchain downloads cover; undefined = all hosts */
+  osArch?: string
 }
 
 const CASES: Case[] = [
@@ -105,12 +117,32 @@ const CASES: Case[] = [
       expect(existsSync(join(dir, "build", "wasm", "main.wasm"))).toBe(true)
     },
   },
+  {
+    // #283: the NDK repack — the isolated bundle must carry its own sysroot
+    // (--sysroot after the repack) and produce a PIE aarch64 ELF, not a host
+    // binary. The artifact cannot run on the build host: the run story is
+    // adb (see android-nightly.yml), here we verify the object identity.
+    platform: "android",
+    version: "0.1.0",
+    toolchains: [["ndk-clang", "30.0.16248370", "android@0.1.0/ndk-clang@30.0.16248370"]],
+    source: "function main(): void {\n    let x: i32 = 40;\n    x = x + 2;\n}\n\nmain();\n",
+    buildArgs: ["build", "--build", "android"],
+    osArch: "win32-x64",
+    verify: (dir) => {
+      const bin = join(dir, "build", "android", "main")
+      expect(existsSync(bin)).toBe(true)
+      const elf = readFileSync(bin)
+      expect([elf[0], elf[1], elf[2], elf[3]].join(",")).toBe("127,69,76,70") // \x7fELF magic
+      expect(elf[16]).toBe(3) // e_type = ET_DYN (PIE executable)
+      expect([elf[18], elf[19]].join(",")).toBe("183,0") // e_machine = EM_AARCH64 (0xB7)
+    },
+  },
 ]
 
 describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_E2E_BUNDLES, #278)", () => {
   if (!MODE) return
 
-  for (const c of CASES.filter((x) => SELECTED.includes(x.platform))) {
+  for (const c of CASES.filter((x) => SELECTED.includes(x.platform) && (x.osArch ?? HOST_OS_ARCH) === HOST_OS_ARCH)) {
     test(`${c.platform}: install качает бандлы в изолированный TSC_HOME; build идёт через них`, async () => {
       const dir = mkTmp()
       const home = mkTmp()

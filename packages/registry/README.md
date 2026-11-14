@@ -31,11 +31,16 @@ JSON-каталог (спека `13-build.md` → «Реестр»). CLI заб�
 
 ## Бандлы тулчейнов (#278)
 
-Эталонные платформы (`@tsclang/desktop`, `@tsclang/avr`, `@tsclang/wasm`)
+Эталонные платформы (`@tsclang/desktop`, `@tsclang/avr`, `@tsclang/wasm`,
+`@tsclang/android`)
 поставляют тулчейны комплектом: `platform.toolchains.<name>.downloads`
 в манифесте пакета указывает на бандлы в GitHub-релизах профильных репо
-(`github.com/tsclang/platform-{desktop,avr,wasm}/releases/download/toolchains-v2/…`),
-CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270).
+(`github.com/tsclang/platform-{desktop,avr,wasm,android}/releases/download/<тег>/…`),
+CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270). Тег = версия
+матрицы бандлов: `toolchains-v1` (gcc/avr-gcc/avrdude/emcc 0.3.0 +
+android ndk-clang 0.1.0), `toolchains-v2` (desktop clang 0.4.0).
+`@tsclang/ios` — instruction-mode: секции `toolchains` нет вообще, тулчейн
+= Xcode CLT на macOS (Apple SDK не редистрибутируем, #283).
 
 Матрица: `win32-x64`, `linux-x64`, `darwin-arm64` (+ `darwin-x64` у avrdude).
 `darwin-x64` (Intel-маки) у clang/avr-gcc не покрыт: LLVM не публикует
