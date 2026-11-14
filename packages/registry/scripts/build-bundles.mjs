@@ -19,7 +19,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { closeSync, copyFileSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -169,11 +169,12 @@ const BUNDLES = [
       'darwin-arm64': {
         source: 'https://dl.google.com/android/repository/android-ndk-r30-darwin.dmg',
         file: 'android-ndk-r30-darwin.dmg',
-        // The dmg volume holds a single NDK folder with the same tree as the
-        // zips; unwrapSingleRoot strips it, so subRoot matches the other
-        // targets (verified on the first darwin CI build — the volume root
-        // is NOT named AndroidNDKr30.universal).
-        subRoot: 'toolchains/llvm/prebuilt/darwin-x86_64',
+        // The dmg volume root holds TWO entries (AndroidNDK<rev>.app +
+        // source.properties), so unwrapSingleRoot does not fire — the subRoot
+        // starts at the app bundle. The NDK tree inside the Mac installer app
+        // lives at Contents/NDK (stable Apple layout); host tag darwin-x86_64
+        // is the historical name of the universal darwin build.
+        subRoot: 'AndroidNDK16248370.app/Contents/NDK/toolchains/llvm/prebuilt/darwin-x86_64',
       },
     },
   },
@@ -356,10 +357,18 @@ function buildOne(bundle, target, spec) {
   if (spec.subRoot) {
     const sub = join(contentRoot, ...spec.subRoot.split('/'));
     if (!existsSync(sub)) {
-      const top = readdirSync(contentRoot).slice(0, 10);
+      // List the entries of the DEEPEST existing subRoot component so the
+      // next fix needs no extra CI roundtrip to discover the layout.
+      let deepest = contentRoot;
+      for (const part of spec.subRoot.split('/')) {
+        const next = join(deepest, part);
+        if (!existsSync(next)) break;
+        deepest = next;
+      }
+      const where = relative(contentRoot, deepest) || '.';
       throw new Error(
         `subRoot '${spec.subRoot}' not found in ${spec.file}; ` +
-        `root contains: ${top.join(', ')} (archive layout changed?)`,
+        `'${where}' contains: ${readdirSync(deepest).slice(0, 10).join(', ')} (archive layout changed?)`,
       );
     }
     contentRoot = sub;
