@@ -252,7 +252,20 @@ function bundleEmcc(contentRoot, target) {
 function bundleNdk(contentRoot, target) {
   const binDir = join(contentRoot, 'bin');
   const exe = target === 'win32-x64' ? '.exe' : '';
-  copyFileSync(join(binDir, `clang${exe}`), join(binDir, `ndk-clang${exe}`));
+  // Host layouts differ: zip builds ship plain `clang`, the darwin dmg may
+  // only carry the versioned name — probe plain first, then any clang-*
+  // driver (not clang++/clang-cl). On no match, dump bin/ so the next fix
+  // needs no extra CI roundtrip.
+  let driver = `clang${exe}`;
+  if (!existsSync(join(binDir, driver))) {
+    driver = readdirSync(binDir).find(
+      (f) => f.startsWith('clang') && f.endsWith(exe) && !f.includes('++') && !f.includes('cl'),
+    ) ?? '';
+  }
+  if (!driver) {
+    throw new Error(`ndk-clang driver not found; bin/ contains: ${readdirSync(binDir).slice(0, 30).join(', ')}`);
+  }
+  copyFileSync(join(binDir, driver), join(binDir, `ndk-clang${exe}`));
   if (target !== 'win32-x64') {
     const chmod = spawnSync('chmod', ['+x', join(binDir, 'ndk-clang')]);
     if (chmod.status !== 0) {
