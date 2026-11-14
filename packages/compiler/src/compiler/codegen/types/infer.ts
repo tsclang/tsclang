@@ -492,6 +492,12 @@ export function _inferMemberCall(ctx: CodeGenContext, node: Call): string | null
         if (nsEntry2?.ctype) return nsEntry2.ctype;
       }
     }
+    // Weak<T>.upgrade() returns a nullable pointer to T (tsc_weak_upgrade);
+    // without this the generic fallback misinfers 'int32_t'
+    if (obj.kind === 'Ident' && prop === 'upgrade') {
+      const wSym = ctx.lookup(obj.name);
+      if (wSym?.isWeak) return wSym.derefType ? `${wSym.derefType} *` : (wSym.ctype ?? 'void *');
+    }
     if (obj.kind === 'Ident' && obj.name === 'Array' && (prop === 'from' || prop === 'of')) {
       const typeArg = node.typeArgs?.[0];
       if (typeArg) {

@@ -1,0 +1,4 @@
+enum Color { Red }
+let flag = true;
+let a = flag == null;
+let b = Color.Red === null;

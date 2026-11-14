@@ -1,0 +1,5 @@
+class Box { v: i32 = 1 }
+let a: Arc<Box> = new Box()
+let w: Weak<Box> = a
+console.log(w != null)
+console.log(a == null)

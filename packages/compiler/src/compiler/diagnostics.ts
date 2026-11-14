@@ -883,6 +883,27 @@ like TypeScript).
 `,
   },
 
+  E127: {
+    code: 'E127',
+    severity: 'error',
+    title: 'comparison with null on non-nullable type',
+    message: `cannot compare {type} and null with '{op}': {type} can never be null — the result is always {result}`,
+    help: ['if null is possible, declare the type optional: T | null', 'drop the check — this value is never null'],
+    body: `
+Value types in TSClang (numbers, boolean, string, enums, Array, Map, Set and
+plain class instances) are never null — comparing one with null is a constant
+(false for '==' / '===', true for '!=' / '!==') and used to emit invalid C.
+Pointer-like types (Arc, Weak, optionals) keep the usual null check:
+
+  let s = "a";
+  s == null;              // error[E127] — a string value is never null
+  let o: i32 | null = null;
+  o == null;              // ok — optional null check (has_value)
+  let w: Weak<Box> = a;
+  w != null;              // ok — pointer check
+`,
+  },
+
   // ── E2xx: Strict-mode rules ──────────────────────────────────────────────────
   E200: {
     code: 'E200',

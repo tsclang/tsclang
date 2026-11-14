@@ -251,6 +251,23 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
     if (node.op === '==' || node.op === '!=' || node.op === '===' || node.op === '!==') {
       const lt = ctx.inferType(node.left);
       const rt = ctx.inferType(node.right);
+      // Null half of #284: a null literal compared with a VALUE type is a
+      // constant (always false for '==', always true for '!=') and used to
+      // emit invalid C (tsc_string_eq(s, NULL), struct != NULL). Pointers
+      // (Arc/Weak/nullable -> 'T *' incl. 'void *'), unknown boxes and opt_
+      // types (returned earlier) keep their legal null checks.
+      const _isNullLit = (n: Expression) => n.kind === 'Literal' && n.litType === 'null';
+      if (_isNullLit(node.left) || _isNullLit(node.right)) {
+        const other = _isNullLit(node.right) ? node.left : node.right;
+        const ot = ctx.inferType(other);
+        if (ot && !ot.endsWith(' *') && ot !== 'tsc_unknown' && !ot.startsWith('opt_')) {
+          throw ctx.errorCode('E127', node, {
+            type: ctx.ctypeToTsName(ot),
+            op: node.op,
+            result: (node.op === '==' || node.op === '===') ? 'false' : 'true',
+          });
+        }
+      }
       const eqCategory = (t: string | undefined): string | null => {
         if (t === 'String' || t === 'String *') return 'string';
         if (t === 'bool') return 'boolean';

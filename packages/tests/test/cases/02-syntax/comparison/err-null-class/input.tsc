@@ -1,0 +1,4 @@
+class Point { x: i32; }
+let p = new Point();
+let a = p != null;
+let b = p == null;

@@ -645,6 +645,14 @@ error[E126]: cannot compare i32 and i32[] with '==': no value equality for these
   = help: a scalar can never equal an array or an object instance
 ```
 
+**E127 — comparison with null on non-nullable type (codegen).** Null-литерал в `==`/`!=`/`===`/`!==` с операндом value-типа (числа, `boolean`, `string`, enum, `Array`, `Map`, `Set`, plain-класс — они struct'ы/числа и не бывают null). Сравнение константно (`false` для `==`/`===`, `true` для `!=`/`!==`) и раньше эмитило невалидный C (`tsc_string_eq(s, NULL)`, `Point != NULL` для struct'а). Указатели (`Arc`/`Weak`/nullable → `T *`), optional-типы (ранний null-check) и `unknown` (runtime-бокс) — легальны (#284).
+
+```
+error[E127]: cannot compare string and null with '==': string can never be null — the result is always false
+  = help: if null is possible, declare the type optional: T | null
+  = help: drop the check — this value is never null
+```
+
 ### Правила оформления hint
 
 - **Конкретно:** `use r.clone()`, не «исправьте ошибку заимствования»
