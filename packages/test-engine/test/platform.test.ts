@@ -5,6 +5,8 @@
 import { describe, test, expect, platformMatrix } from "../src/engine.ts"
 import { buildAvrCompileArgs, buildSimavrArgs, normalizeSimavrOut } from "../src/compilers/avr-gcc.ts"
 import { buildEmccArgs } from "../src/compilers/wasm.ts"
+import { androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice } from "../src/compilers/ndk-clang.ts"
+import { iosSimTripleFor } from "../src/compilers/ios-sim.ts"
 import { DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from "@tsclang/shared"
 import { readdirSync } from "fs"
 import { resolve, dirname } from "path"
@@ -69,6 +71,56 @@ describe("wasm — buildEmccArgs", () => {
     const a = buildEmccArgs({ cPath: "in.c", jsPath: "out.js", defines: ["MY=1"], extraFlags: ["-O2"] })
     expect(args(a)).toContain("-DMY=1")
     expect(args(a)).toContain("-O2")
+  })
+})
+
+describe("ndk-clang — androidTargetFlagFor", () => {
+  test("default/unknown ABI falls back to arm64 (API level pinned)", () => {
+    expect(androidTargetFlagFor(undefined)).toBe("--target=aarch64-linux-android24")
+    expect(androidTargetFlagFor(null)).toBe("--target=aarch64-linux-android24")
+    expect(androidTargetFlagFor("armeabi-v7a")).toBe("--target=aarch64-linux-android24")
+  })
+  test("device ABI maps to its triple — emulators are x86_64", () => {
+    expect(androidTargetFlagFor("arm64-v8a")).toBe("--target=aarch64-linux-android24")
+    expect(androidTargetFlagFor("x86_64")).toBe("--target=x86_64-linux-android24")
+  })
+})
+
+describe("ndk-clang — adb run protocol", () => {
+  test("shell command echoes the exit-code marker after the binary", () => {
+    expect(buildAdbShellArgs("/data/local/tmp/tsc_1").join(" ")).toBe("shell /data/local/tmp/tsc_1; echo __TSC_EXIT:$?")
+  })
+  test("parseAdbRunOut splits program stdout from the marker", () => {
+    const ok = parseAdbRunOut("42\n__TSC_EXIT:0\n")
+    expect(ok.exitCode).toBe(0)
+    expect(ok.stdout).toBe("42")
+    const segv = parseAdbRunOut("boom\n__TSC_EXIT:139\n")
+    expect(segv.exitCode).toBe(139)
+    expect(segv.stdout).toBe("boom")
+  })
+  test("parseAdbRunOut normalizes CRLF transports and multi-line output", () => {
+    const r = parseAdbRunOut("a\r\nb\r\n__TSC_EXIT:0\r\n")
+    expect(r.exitCode).toBe(0)
+    expect(r.stdout).toBe("a\nb")
+  })
+  test("missing marker (timeout/transport drop) reports no exit code", () => {
+    expect(parseAdbRunOut("partial output").exitCode).toBe(null)
+  })
+  test("adbHasDevice accepts ready devices only, not offline/unauthorized", () => {
+    expect(adbHasDevice("List of devices attached\nemulator-5554\tdevice\n")).toBe(true)
+    expect(adbHasDevice("List of devices attached\nemulator-5554\toffline\n")).toBe(false)
+    expect(adbHasDevice("List of devices attached\n0123456789ABCDEF\tunauthorized\n")).toBe(false)
+    expect(adbHasDevice("List of devices attached\n")).toBe(false)
+  })
+})
+
+describe("ios-sim — iosSimTripleFor", () => {
+  test("arm64 hosts get the arm64 simulator triple", () => {
+    expect(iosSimTripleFor("arm64")).toBe("arm64-apple-ios16.0-simulator")
+    expect(iosSimTripleFor(undefined)).toBe("arm64-apple-ios16.0-simulator")
+  })
+  test("intel hosts fall back to the x86_64 simulator triple", () => {
+    expect(iosSimTripleFor("x64")).toBe("x86_64-apple-ios16.0-simulator")
   })
 })
 

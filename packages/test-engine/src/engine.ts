@@ -4,12 +4,12 @@ import { join, resolve, dirname, basename } from "path"
 import { fileURLToPath } from "url"
 import { compileTsc, parsePlatformDecl, capabilityDefines } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool } from "./compilers/index.js"
 import { matrix, filterValidTypes } from "./matrix.js"
 
 registerAll()
 
-export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec }
+export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool }
 export { matrix, filterValidTypes }
 
 /** Target profile → backend able to compile AND run code for that platform.
@@ -30,12 +30,12 @@ const TARGET_BACKENDS: TargetBackendEntry[] = [
   { target: "wasm", backend: "wasm" },
   { target: "wasm32", backend: "wasm" },
   { target: "arm", backend: null, note: "no arm-none-eabi backend registered" },
-  // #283 phase 1: android cross-compiles via the ndk-clang bundle; the
-  // compile+adb run backend lands in phase 2
-  { target: "android", backend: null, note: "no adb device backend yet (#283 phase 2)" },
-  // #283 phase 3: ios compiles through xcrun on macOS; the ios-sim backend
-  // (host-run simulator macho) lands with the macOS CI job
-  { target: "ios", backend: null, note: "no ios-sim backend yet (#283 phase 3)" },
+  // #283 phase 2: android run tier — ndk-clang cross-compiles, adb runs on a
+  // connected device/emulator (triple auto-detected from ro.product.cpu.abi)
+  { target: "android", backend: "ndk-clang" },
+  // #283 phase 3: ios compiles through xcrun on macOS; simulator-triple
+  // binaries are host-runnable macho, so ios-sim runs them without an emulator
+  { target: "ios", backend: "ios-sim" },
   { target: "dos", backend: null, note: "no DOS compiler/simulator backend" },
   { target: "genesis", backend: null, note: "no Genesis simulator" },
   { target: "nes", backend: null, note: "no NES simulator (caps profile testable on desktop gcc only)" },
@@ -57,7 +57,7 @@ export const platformMatrix = {
   async: ["libuv", "state_machine", "none"],
   usize: ["u16", "u32", "u64"],
   // C compilers (all registered backends)
-  compilers: ["gcc", "clang", "msvc", "avr-gcc", "wasm"],
+  compilers: ["gcc", "clang", "msvc", "avr-gcc", "wasm", "ndk-clang", "ios-sim"],
 }
 
 // Per-type literal value matrix lives in matrix.ts (single source of truth

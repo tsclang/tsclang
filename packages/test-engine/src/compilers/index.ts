@@ -3,11 +3,15 @@ import { GccLikeBackend } from "./gcc-like.js"
 import { MsvcBackend } from "./msvc.js"
 import { AvrGccBackend } from "./avr-gcc.js"
 import { WasmBackend } from "./wasm.js"
+import { NdkClangBackend } from "./ndk-clang.js"
+import { IosSimBackend } from "./ios-sim.js"
 
 export type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 export { register, getBackend, listAvailable, listAll } from "./registry.js"
 export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC, toWslPath } from "./utils.js"
 export { msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./msys2.js"
+export { androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool } from "./ndk-clang.js"
+export { iosSimTripleFor } from "./ios-sim.js"
 
 export function registerAll(): void {
   register(new GccLikeBackend("gcc"))
@@ -15,4 +19,6 @@ export function registerAll(): void {
   register(new MsvcBackend())
   register(new AvrGccBackend())
   register(new WasmBackend())
+  register(new NdkClangBackend())
+  register(new IosSimBackend())
 }

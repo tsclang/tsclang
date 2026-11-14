@@ -2006,7 +2006,9 @@ Full-OS платформа поверх bionic: 64 бита, heap-аллокат
 
 Изолированный бандл передаёт `--sysroot` явно (после репака драйвер сам его не найдёт); PATH-пиннедый `ndk-clang` находит sysroot сам — флаг не ставится.
 
-**Ограничения MVP:** `async: "none"` — async-функции дают `E303` (кросс-сборка libuv в бандл — follow-up); `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb (этап 2 — test-engine бекенд, `adb shell getprop ro.product.cpu.abi` для авто-детекта ABI).
+**Run-тир (test-engine, #283 этап 2):** бекенд `ndk-clang` зарегистрирован в `platformMatrix` (`android → ndk-clang`). Тул разрешается через env `TSC_NDK_CLANG` (путь к clang из бандла/NDK — у test-engine нет зависимости от пакетного менеджера) или из PATH; изолированный бандл дополнительно требует `TSC_NDK_SYSROOT`. Запуск — через adb: `adb push` в `/data/local/tmp/tsc_*` → `chmod 755` → `adb shell '<путь>; echo __TSC_EXIT:$?'` (adb не возвращает удалённый exit-код — он разбирается из маркера `__TSC_EXIT`) → удаление. Тройка авто-определяется по ABI устройства (`ro.product.cpu.abi`: arm64-v8a → aarch64-…, x86_64 → x86_64-… — CI-эмуляторы именно x86_64). Без устройства corpus-кейс проверяет компиляцию и скипает запуск; nightly-джоба (`android-nightly.yml`) прогоняет полный цикл на x86_64-эмуляторе (aosp-atd, API 34).
+
+**Ограничения MVP:** `async: "none"` — async-функции дают `E303` (кросс-сборка libuv в бандл — follow-up); `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb.
 
 #### `ios` — Xcode clang через xcrun (#283)
 
@@ -2018,6 +2020,8 @@ Full-OS платформа поверх darwin: 64 бита, heap-аллокат
 - `iphoneos` — `-target arm64-apple-ios16.0`: бинарь устройства; `--emit exec` даёт `ConfigError` (запуск — на телефоне через Xcode).
 
 Флаги: `-fPIE -pie`, `-std=c11`, без `-lm` (на darwin libm входит в libSystem). Процесс-таргеты iOS 16 — самый старый массово установленный base SDK.
+
+**Run-тир:** бекенд `ios-sim` в `platformMatrix` (`ios → ios-sim`, macOS-only) компилирует с симуляторной тройкой (по `process.arch`: arm64-хост → `arm64-…-simulator`, intel → `x86_64-…-simulator`) и запускает бинарь прямо на хосте — без загрузки симулятора.
 
 **Ограничения MVP:** `async: "none"` (`E303` — та же follow-up про libuv); intel-хосты берут тройку `x86_64-apple-ios16.0-simulator` (arm64-сим требует arm64-хост); `.app`/Gradle-обёртки — вне компилятора (как `.apk` у android).
 

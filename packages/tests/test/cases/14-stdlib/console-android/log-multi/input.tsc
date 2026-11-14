@@ -1,0 +1,6 @@
+let n: i32 = 7;
+let big: i64 = 9007199254740993;
+let s: string = "android";
+console.log(n);
+console.log(big);
+console.log(s);

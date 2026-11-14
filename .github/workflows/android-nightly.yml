@@ -1,0 +1,70 @@
+# Android run-tier nightly (#283 phase 2).
+#
+# The mandatory CI has no adb device, so android corpus cases stop after the
+# ndk-clang compile-check. This job boots an x86_64 emulator (aosp-atd — the
+# trimmed automated-test-device image, fastest to boot) and runs the full
+# push → shell → __TSC_EXIT cycle through the corpus runner's android branch.
+#
+# Toolchain contract (#282 parity with the PATH-pinned mode): the NDK comes
+# from sdkmanager — the same revision the @tsclang/android bundle repacks
+# (Pkg.Revision 30.0.16248370) — and TSC_NDK_CLANG points at its clang. A
+# driver inside an intact NDK tree finds its own sysroot, so TSC_NDK_SYSROOT
+# stays unset here; the isolated-bundle path (--sysroot explicit) is covered
+# by the bundle-e2e tier instead.
+
+name: android-nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: android-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
+jobs:
+  emulator-corpus:
+    name: corpus run-tier (x86_64 emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Report KVM (hosted runners expose /dev/kvm — emulator needs it)
+        run: |
+          echo "KVM: $(ls -l /dev/kvm 2>&1)"
+          kvm-ok 2>/dev/null || true
+
+      - name: Install NDK r30 via sdkmanager (same revision as the bundle)
+        uses: android-actions/setup-android@v3
+      - run: sdkmanager --install "ndk;30.0.16248370" > /dev/null
+      - name: Point the ndk-clang backend at the SDK copy
+        run: |
+          echo "TSC_NDK_CLANG=$ANDROID_HOME/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Run android corpus cases on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: aosp-atd
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 2048
+          script: |
+            set -e
+            adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
+            echo "device ABI: $(adb shell getprop ro.product.cpu.abi)"
+            "$TSC_NDK_CLANG" --version | head -1
+            pnpm tsx packages/tests/test/runner.ts 14-stdlib/console-android

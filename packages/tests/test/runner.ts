@@ -10,8 +10,8 @@ import { join, resolve, dirname, basename, extname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { compileTsc, renderDiagnostic } from '@tsclang/compiler';
-import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS } from '@tsclang/shared';
-import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs } from '@tsclang/test-engine';
+import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS, buildNdkCompileArgs } from '@tsclang/shared';
+import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, ndkClangTool } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -318,6 +318,56 @@ async function runSimavr(hexFile, mcu = DEFAULT_AVR_MCU, freq = DEFAULT_AVR_FREQ
 }
 
 // ---------------------------------------------------------------------------
+// Android NDK helpers (#283 run tier: ndk-clang cross-compile, adb run)
+// ---------------------------------------------------------------------------
+let ndkClangAvailable = null;
+async function checkNdkClang() {
+  if (ndkClangAvailable !== null) return ndkClangAvailable;
+  const r = await run(ndkClangTool(), ['--version']);
+  ndkClangAvailable = r.code === 0;
+  return ndkClangAvailable;
+}
+
+let adbAbiCache = null;
+async function adbDeviceAbi() {
+  if (adbAbiCache !== null) return adbAbiCache;
+  // adb missing entirely → ENOENT surfaces as code 1 via run()'s error handler
+  const r = await run('adb', ['shell', 'getprop', 'ro.product.cpu.abi']);
+  adbAbiCache = r.code === 0 ? r.stdout.replace(/\r?\n/g, '').trim() : '';
+  return adbAbiCache;
+}
+
+async function ndkClangCompile(cFile, outFile, abi) {
+  const args = buildNdkCompileArgs({
+    cPath: cFile,
+    outPath: outFile,
+    runtimeInclude: RUNTIME_INC,
+    // Isolated-bundle clang needs --sysroot spelled out after the repack; a
+    // PATH-installed NDK driver locates its own — same contract as build.ts
+    sysroot: process.env.TSC_NDK_SYSROOT || undefined,
+    targetFlag: androidTargetFlagFor(abi),
+  });
+  return run(ndkClangTool(), args);
+}
+
+/** Push → chmod → run with the __TSC_EXIT marker → cleanup. adb does not
+ *  forward the remote exit code, so parseAdbRunOut recovers it from stdout. */
+async function adbRun(binary, timeoutMs = 5000) {
+  const remote = `/data/local/tmp/tsc_${process.pid}_${Date.now()}`;
+  const push = await run('adb', ['push', binary, remote]);
+  if (push.code !== 0) return { code: 1, stdout: '', stderr: `adb push failed: ${push.stderr}` };
+  await run('adb', ['shell', `chmod 755 ${remote}`]);
+  const shell = await run('adb', buildAdbShellArgs(remote), { timeout: timeoutMs });
+  await run('adb', ['shell', `rm -f ${remote}`]);
+  const parsed = parseAdbRunOut(shell.stdout);
+  if (parsed.exitCode === null) {
+    return { code: 1, stdout: parsed.stdout, stderr: shell.stderr || 'no __TSC_EXIT marker in adb output' };
+  }
+  return { code: parsed.exitCode, stdout: parsed.stdout, stderr: shell.stderr };
+}
+
+
+// ---------------------------------------------------------------------------
 // Check tsclang binary exists
 // ---------------------------------------------------------------------------
 let tsclangAvailable = null;
@@ -547,6 +597,27 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning, hasNoWarning
     const expected = normalizeOut(expectedOut);
     if (actual !== expected) {
       return fail(testDir, 'run', 'stdout mismatch (AVR/simavr)', diffSummary(expected, actual));
+    }
+    return pass(testDir);
+  }
+
+  // Android run tier (#283): compile with ndk-clang always (compile-check is
+  // valuable without a device), run over adb only when one answers — the
+  // nightly emulator job exercises the full path
+  if (profTarget === 'android') {
+    if (!await checkNdkClang()) return { status: 'skip', testDir, reason: 'ndk-clang not found (set TSC_NDK_CLANG to the @tsclang/android bundle clang or put ndk-clang on PATH)' };
+    const abi = await adbDeviceAbi();
+    const androidBin = join(tmpBase, 'test_android');
+    const ndkResult = await ndkClangCompile(generatedC, androidBin, abi);
+    if (ndkResult.code !== 0) return fail(testDir, 'ndk-clang', 'C does not compile with ndk-clang', ndkResult.stderr);
+    if (!abi) return { status: 'skip', testDir, reason: 'no adb device connected (android run tier needs a device/emulator)' };
+    const adbResult = await adbRun(androidBin);
+    if (adbResult.code !== 0 && !adbResult.stdout) return fail(testDir, 'adb', `adb run exited ${adbResult.code}`, adbResult.stderr);
+    const expectedOut = await readFile(join(testDir, 'expected.out'), 'utf8');
+    const actual   = normalizeOut(adbResult.stdout);
+    const expected = normalizeOut(expectedOut);
+    if (actual !== expected) {
+      return fail(testDir, 'run', 'stdout mismatch (android/adb)', diffSummary(expected, actual));
     }
     return pass(testDir);
   }
