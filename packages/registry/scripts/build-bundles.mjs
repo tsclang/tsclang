@@ -366,7 +366,10 @@ function extractSource(spec, work) {
     run('hdiutil', ['attach', '-readonly', '-mountpoint', mnt, '-nobrowse', join(SRC, spec.file)]);
     try {
       mkdirSync(inner, { recursive: true });
-      for (const entry of readdirSync(mnt)) cpSync(join(mnt, entry), join(inner, entry), { recursive: true });
+      // dereference: the dmg ships ABSOLUTE symlinks pointing into the mount
+      // point (bin/clang -> …/dmg/…/bin/clang-21) — after detach every such
+      // link dangles, so copy the TARGETS as real files instead.
+      for (const entry of readdirSync(mnt)) cpSync(join(mnt, entry), join(inner, entry), { recursive: true, dereference: true });
     } finally {
       run('hdiutil', ['detach', mnt, '-force']);
     }
