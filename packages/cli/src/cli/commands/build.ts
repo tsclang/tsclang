@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profi
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs, buildIosCompileArgs } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs, buildIosCompileArgs, buildVtoolHostArgs } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
@@ -214,7 +214,23 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       // direct spawn on its absolute path, no shell (the host-shell "./x" vs
       // "x\" quirk never applies). One-shot propagates the program's exit code.
       const binPath = join(outDir, basename(inputFile!, extname(inputFile!)));
-      const exePath = process.platform === 'win32' && existsSync(`${binPath}.exe`) ? `${binPath}.exe` : binPath;
+      let exePath = process.platform === 'win32' && existsSync(`${binPath}.exe`) ? `${binPath}.exe` : binPath;
+      // An ios-simulator slice carries LC_BUILD_VERSION platform=IOSSIMULATOR
+      // — dyld KILLS it when exec'd from a macOS process (no output, no exit
+      // code). The run goes through a vtool-retagged COPY (platform -> macos):
+      // the code and ABI are identical on Apple Silicon, and the artifact
+      // itself stays a true simulator slice (#283).
+      if ((_profileTarget || _targetFlag) === 'ios' && _buildCfg?.sdk === 'iphonesimulator' && process.platform === 'darwin') {
+        const hostPath = `${binPath}.host`;
+        const patch = spawnSync('vtool', buildVtoolHostArgs(hostPath, exePath), { stdio: 'pipe' });
+        if (patch.status !== 0) {
+          process.stderr.write(
+            `tsclang build: vtool host-patch failed for ${exePath}: ${patch.error?.message ?? patch.stderr?.toString() ?? ''}\n`
+          );
+          process.exit(1);
+        }
+        exePath = hostPath;
+      }
       if (!watchMode) {
         const r = spawnSync(exePath, { stdio: 'inherit', env });
         if (r.error) {
@@ -421,8 +437,9 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     process.exit(1);
   }
 
-  // ios simulator binaries are host-runnable macho — exec is fine there;
-  // device binaries are not (same story as android: the device tier is Xcode)
+  // ios simulator slices run on a macOS host — through the vtool host-patch
+  // in the exec branch (dyld platform gating); device binaries do not run on
+  // the host (same story as android: the device tier is Xcode)
   if (emit === 'exec' && (_profileTarget || _targetFlag) === 'ios'
       && _buildCfg?.sdk !== 'iphonesimulator') {
     process.stderr.write(

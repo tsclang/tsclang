@@ -1,13 +1,13 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { buildIosCompileArgs, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64 } from "@tsclang/shared"
+import { buildIosCompileArgs, buildVtoolHostArgs, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64 } from "@tsclang/shared"
 import { isInPath, DEFAULT_COMPILE_TIMEOUT_MS } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 /** Simulator triple for a host arch. Pure: unit-testable without macOS.
- *  Simulator binaries are host-runnable macho — an arm64 sim slice needs an
- *  arm64 host, so intel Macs take the x86_64 triple (#283 phase 3). */
+ *  A sim slice shares the host ISA — an arm64 sim slice needs an arm64 host,
+ *  so intel Macs take the x86_64 triple (#283 phase 3). */
 export function iosSimTripleFor(hostArch: string | undefined): string {
   return hostArch === "x64" ? IOS_SIM_TRIPLE_X64 : IOS_SIM_TRIPLE
 }
@@ -59,10 +59,27 @@ export class IosSimBackend implements CompilerBackend {
     }
   }
 
-  /** A simulator-triple binary IS a host executable — no simulator boot, no
-   *  emulator: direct spawn, same as a desktop run. */
+  /** dyld refuses to exec an IOSSIMULATOR-platform macho from a macOS
+   *  process (SIGKILL, no output) — no simulator boot needed, but the run
+   *  goes through a vtool-retagged COPY (LC_BUILD_VERSION -> macos): the
+   *  code and ABI are identical on Apple Silicon, only the platform tag
+   *  differs. The artifact itself stays a true simulator slice (#283). */
   run(binaryPath: string, opts?: RunOpts): RunResult {
-    const result = spawnSync(binaryPath, opts?.args ?? [], {
+    const hostPath = `${binaryPath}.host`
+    const patch = spawnSync("vtool", buildVtoolHostArgs(hostPath, binaryPath), {
+      stdio: "pipe",
+      timeout: 30_000,
+    })
+    if (patch.status !== 0) {
+      return {
+        success: false,
+        stdout: "",
+        stderr: `vtool host-patch failed for ${binaryPath}: ${patch.error?.message ?? patch.stderr?.toString() ?? ""}`,
+        exitCode: 1,
+      }
+    }
+
+    const result = spawnSync(hostPath, opts?.args ?? [], {
       stdio: "pipe",
       timeout: opts?.timeoutMs ?? 5000,
     })

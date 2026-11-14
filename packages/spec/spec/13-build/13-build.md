@@ -2016,12 +2016,12 @@ Full-OS платформа поверх darwin: 64 бита, heap-аллокат
 
 **Компиляция:** `tsclang build input.tsc --platform ios --emit binary` — поле `builds.<n>.sdk` выбирает SDK:
 
-- `iphonesimulator` (дефолт) — `--target=arm64-apple-ios16.0-simulator`: симуляторный бинарь — хостовый macho, `--emit exec` разрешён (запускается на macOS-хосте напрямую — run-тир без эмулятора);
+- `iphonesimulator` (дефолт) — `--target=arm64-apple-ios16.0-simulator`: симуляторный бинарь; `--emit exec` разрешён — но не прямым запуском артефакта (dyld убивает IOSSIMULATOR-платформенный macho при exec из macOS-процесса — SIGKILL без вывода): запуск идёт через vtool-ретагнутую копию (см. run-тир ниже);
 - `iphoneos` — `--target=arm64-apple-ios16.0`: бинарь устройства; `--emit exec` даёт `ConfigError` (запуск — на телефоне через Xcode).
 
 Флаги: `--target=<triple>` (только двойное тире — Apple clang отвергает однотирное `-target=`, «unknown argument»; NDK/desktop-clang понимают оба — поэтому единое написание во всех ветках), `-fPIE -pie`, `-std=c11`, без `-lm` (на darwin libm входит в libSystem). Процесс-таргеты iOS 16 — самый старый массово установленный base SDK.
 
-**Run-тир:** бекенд `ios-sim` в `platformMatrix` (`ios → ios-sim`, macOS-only) компилирует с симуляторной тройкой (по `process.arch`: arm64-хост → `arm64-…-simulator`, intel → `x86_64-…-simulator`) и запускает бинарь прямо на хосте — без загрузки симулятора.
+**Run-тир:** бекенд `ios-sim` в `platformMatrix` (`ios → ios-sim`, macOS-only) компилирует с симуляторной тройкой (по `process.arch`: arm64-хост → `arm64-…-simulator`, intel → `x86_64-…-simulator`) — без загрузки симулятора. Прямой exec сим-слайса невозможен: dyld убивает macho с платформой IOSSIMULATOR, запущенный из macOS-процесса (код-сигнатура платформы в `LC_BUILD_VERSION`, ABI на Apple Silicon идентичен). Поэтому запуск идёт через vtool-ретагнутую КОПИЮ: `vtool -set-build-version macos 13.0 13.0 -replace -output <copy> <artifact>` (vtool входит в Xcode CLT) — артефакт остаётся настоящим сим-слайсом, патчится только копия; `--emit exec` CLI делает то же самое перед spawn.
 
 **Ограничения MVP:** `async: "none"` (`E303` — та же follow-up про libuv); intel-хосты берут тройку `x86_64-apple-ios16.0-simulator` (arm64-сим требует arm64-хост); `.app`/Gradle-обёртки — вне компилятора (как `.apk` у android).
 

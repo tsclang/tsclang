@@ -9,7 +9,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import { loadProfile } from "../../../../../cli/src/cli/profile-loader.js"
-import { TARGET_NAMES, buildIosCompileArgs, IOS_DEVICE_TRIPLE, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64 } from "../../../../../shared/src/index.js"
+import { TARGET_NAMES, buildIosCompileArgs, buildVtoolHostArgs, IOS_DEVICE_TRIPLE, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64 } from "../../../../../shared/src/index.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -84,6 +84,20 @@ describe("13-build/platform ios — buildIosCompileArgs (#283)", () => {
     expect(argv).toContain("-O2")
     expect(argv).toContain("-DTSX=1")
     expect(argv[argv.lastIndexOf("-I") + 1]).toBe("pkg/inc")
+  })
+})
+
+describe("13-build/platform ios — buildVtoolHostArgs (#283)", () => {
+  // dyld platform gating: an IOSSIMULATOR macho exec'd from a macOS process
+  // is SIGKILLed — the run tier patches a COPY's LC_BUILD_VERSION to macos
+  test("ретаг sim-слайса в macos-платформенный macho: патченная копия, источник не тронут", () => {
+    const argv = buildVtoolHostArgs("out/main.host", "out/main")
+    expect(JSON.stringify(argv)).toBe(JSON.stringify([
+      "-set-build-version", "macos", "13.0", "13.0",
+      "-replace",
+      "-output", "out/main.host",
+      "out/main",
+    ]))
   })
 })
 

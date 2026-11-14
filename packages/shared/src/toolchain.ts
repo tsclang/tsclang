@@ -154,6 +154,16 @@ export function buildIosCompileArgs(o: IosCompileOptions): string[] {
   ];
 }
 
+/** vtool argv that retags an ios-simulator macho slice as a macOS-platform
+ * binary (LC_BUILD_VERSION -> macos). dyld KILLS IOSSIMULATOR-platform
+ * binaries exec'd from a macOS process — while the code and ABI are
+ * identical on Apple Silicon, only the platform tag differs. The patched
+ * COPY runs natively; the artifact itself stays a true simulator slice
+ * (#283). Pure: unit-testable without macOS. */
+export function buildVtoolHostArgs(patched: string, source: string): string[] {
+  return ['-set-build-version', 'macos', '13.0', '13.0', '-replace', '-output', patched, source];
+}
+
 export const TSC_DEFINES = {
   EMBEDDED: 'TSC_EMBEDDED',
   WASM: 'TSC_WASM',
