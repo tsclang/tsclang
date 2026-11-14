@@ -348,7 +348,12 @@ async function fetchSource(url, file) {
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { stdio: 'pipe', windowsHide: true, ...opts });
   if (r.status !== 0) {
-    throw new Error(`${cmd} ${args.join(' ')} failed: ${(r.stderr ?? '').toString().trim() || `exit ${r.status}`}`);
+    // Build tools split diagnostics between streams (cmake configure →
+    // stderr, ninja/compile failures → both); show the tail of each —
+    // "exit 1" alone has cost a blind CI iteration before (#287).
+    const tail = (b) => (b ?? '').toString().trim().split('\n').slice(-40).join('\n');
+    const detail = [tail(r.stderr), tail(r.stdout)].filter(Boolean).join('\n--- stdout tail ---\n');
+    throw new Error(`${cmd} ${args.join(' ')} failed (exit ${r.status}):\n${detail || 'no output'}`);
   }
   return r;
 }
