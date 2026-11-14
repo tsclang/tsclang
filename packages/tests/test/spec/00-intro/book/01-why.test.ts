@@ -260,15 +260,16 @@ let b = "1"
 console.log(a.toString() == b)`)).toBe("true")
   })
 
-  test("00.1.7 смешанный 1 == \"1\" — invalid C, тезис «не полагайтесь» (#237)", () => {
-    // The book says cross-type == "works not like in TS — don't rely on it".
-    // In TS this prints false; TSClang generates invalid C (int == String) and
-    // the C compile step fails — known bug #237.
-    expect(run(`
+  test("00.1.7 смешанный 1 == \"1\" — ошибка компиляции: у '==' нет коерсии (#237)", () => {
+    // Cross-type == used to pass typecheck and emit invalid C (int == String
+    // struct) — #237. Now rejected at compile time with E125; the migration
+    // is the explicit conversion shown right below in the book
+    // (a.toString() == b). run() unwraps the error bag into "[E125] …".
+    expect(() => run(`
 let a = 1
 let b = "1"
-console.log(a == b)`)).toBe("false")
-  }, { xfail: "#237" })
+console.log(a == b)`)).toThrow(Error, "[E125] cannot compare f64 and string")
+  })
 
   // 00.1.7:72-75 — ownership: "let s2 = s; // move". Reality (#257 finding):
   // String assignment RETAINS (s stays usable — CONTEXT ownership table);

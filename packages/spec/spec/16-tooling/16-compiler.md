@@ -630,6 +630,14 @@ error[E124]: cannot initialize flag: boolean with a number literal
 
 Под `any`/`unknown` проверка пропускается; `null`-инициализация не проверяется (её правила — в §Переменные).
 
+**E125 — mixed-type equality (codegen).** Родственная проверка типов, но выполняется в codegen (`operators.ts`, рядом с E100/E105), потому что требует type inference выражений. Операнды `==`/`!=`/`===`/`!==` из разных категорий с участием строки (число ↔ строка, boolean ↔ строка) — ошибка: коерсии нет, сгенерированный C был бы невалиден (`int == String`-структура). Число ↔ boolean разрешено — integer promotion в C стандартен и совпадает с TS (#237).
+
+```
+error[E125]: cannot compare f64 and string: '==' has no type coercion
+  = help: convert one side explicitly, e.g. n.toString() == s
+  = help: compare values of the same type
+```
+
 ### Правила оформления hint
 
 - **Конкретно:** `use r.clone()`, не «исправьте ошибку заимствования»

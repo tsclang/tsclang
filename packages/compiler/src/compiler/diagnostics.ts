@@ -837,6 +837,25 @@ as E101 at the same phase.
 `,
   },
 
+  E125: {
+    code: 'E125',
+    severity: 'error',
+    title: 'mixed-type equality',
+    message: `cannot compare {left} and {right}: '{op}' has no type coercion`,
+    help: ['convert one side explicitly, e.g. n.toString() == s', 'compare values of the same type'],
+    body: `
+Equality operators do not coerce operands. Comparing a number or boolean
+with a string would emit invalid C (an integer compared with the String
+struct), so the mix is rejected at compile time (#237). Comparing a number
+with a boolean stays allowed: C integer promotion is well-defined there.
+
+  let a = 1;
+  let b = "1";
+  a == b;              // error[E125]
+  a.toString() == b;   // ok — explicit conversion
+`,
+  },
+
   // ── E2xx: Strict-mode rules ──────────────────────────────────────────────────
   E200: {
     code: 'E200',

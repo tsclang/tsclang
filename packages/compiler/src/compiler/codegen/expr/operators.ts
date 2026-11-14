@@ -1,6 +1,15 @@
 import type { Binary, Unary, Expression, TypeRef } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
 import { resolveDecimalBase } from '../types/decimal.js';
+
+// C types that participate in number↔string equality checking (E125)
+const EQ_NUMERIC_CTYPES = new Set([
+  'int8_t', 'int16_t', 'int32_t', 'int64_t',
+  'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+  'float', 'double', 'char', 'size_t', 'ptrdiff_t',
+  'd8_t', 'd16_t', 'd32_t', 'd64_t',
+]);
+
 // operators.ts
   // Emit a binary expression with operands widened to targetCtype to avoid overflow
 export function binaryWidened(ctx: CodeGenContext, node: Binary, targetCtype: string, lines: string[], depth: number) {
@@ -223,6 +232,32 @@ export function binaryToC(ctx: CodeGenContext, node: Binary, lines: string[], de
             return `${inner.name}.type_id ${cOp} ${tid}`;
           }
         }
+      }
+    }
+
+    // Mixed-category equality with a String operand (number↔string,
+    // boolean↔string) has no coercion path and would emit invalid C
+    // (int == String struct) — reject at compile time (#237). number↔boolean
+    // stays legal: C integer promotion is well-defined and matches TS.
+    // Same-type, null-optional and typeof-narrowed comparisons return above
+    // and never reach this check.
+    if (node.op === '==' || node.op === '!=' || node.op === '===' || node.op === '!==') {
+      const eqCategory = (t: string | undefined): string | null => {
+        if (t === 'String' || t === 'String *') return 'string';
+        if (t === 'bool') return 'boolean';
+        if (t !== undefined && EQ_NUMERIC_CTYPES.has(t)) return 'number';
+        return null;
+      };
+      const lt = ctx.inferType(node.left);
+      const rt = ctx.inferType(node.right);
+      const lc = eqCategory(lt);
+      const rc = eqCategory(rt);
+      if (lc && rc && lc !== rc && (lc === 'string' || rc === 'string')) {
+        throw ctx.errorCode('E125', node, {
+          left: ctx.ctypeToTsName(lt),
+          right: ctx.ctypeToTsName(rt),
+          op: node.op,
+        });
       }
     }
 
