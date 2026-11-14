@@ -25,7 +25,7 @@ tsclang build --build ios-device --out-dir out
 
 test -f out/main && echo "binary-ok"
 grep -qx -- '--sdk' xcrun-argv.txt && grep -qx -- 'iphoneos' xcrun-argv.txt && grep -qx -- 'clang' xcrun-argv.txt && echo "xcrun-ok"
-grep -qx -- '-target=arm64-apple-ios16.0' xcrun-argv.txt && echo "target-ok"
+grep -qx -- '--target=arm64-apple-ios16.0' xcrun-argv.txt && echo "target-ok"
 grep -qx -- '-fPIE' xcrun-argv.txt && grep -qx -- '-pie' xcrun-argv.txt && echo "pie-ok"
 grep -qx -- '-std=c11' xcrun-argv.txt && echo "std-ok"
 if grep -qx -- '-lm' xcrun-argv.txt; then echo "unexpected -lm"; exit 1; fi
