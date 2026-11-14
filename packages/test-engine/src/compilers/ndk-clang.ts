@@ -5,9 +5,10 @@ import {
   ANDROID_ABI_TRIPLES,
   ANDROID_API_LEVEL,
   ANDROID_TRIPLE,
+  TSC_DEFINES,
   buildNdkCompileArgs,
 } from "@tsclang/shared"
-import { isInPath, DEFAULT_COMPILE_TIMEOUT_MS } from "./utils.js"
+import { isInPath, DEFAULT_COMPILE_TIMEOUT_MS, libuvDirsForTriple } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 /** The ndk-clang binary: either an explicit path to the isolated bundle's
@@ -86,6 +87,22 @@ export class NdkClangBackend implements CompilerBackend {
     writeFileSync(cPath, cCode, "utf8")
 
     const includes = opts?.includes ?? []
+    const targetFlag = androidTargetFlagFor(adbDeviceAbi())
+    // #287: the scheduler define in the generated C switches libuv linking;
+    // a missing TSC_LIBUV root then fails with a clear message, not a wall
+    // of "undefined reference to uv_*"
+    let libuv: { includeDir: string; libDir: string } | undefined
+    if (cCode.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) {
+      const dirs = libuvDirsForTriple(targetFlag.slice("--target=".length))
+      if (!dirs) {
+        return {
+          success: false,
+          stderr: `libuv scheduler requested but TSC_LIBUV is unset or has no lib/${targetFlag.slice("--target=".length)}/libuv.a (#287)`,
+          exitCode: 1,
+        }
+      }
+      libuv = dirs
+    }
     const args = buildNdkCompileArgs({
       cPath,
       outPath,
@@ -93,9 +110,10 @@ export class NdkClangBackend implements CompilerBackend {
       // Only the repacked isolated bundle needs --sysroot spelled out — a
       // PATH-installed NDK driver locates its own sysroot
       sysroot: process.env["TSC_NDK_SYSROOT"] || undefined,
-      targetFlag: androidTargetFlagFor(adbDeviceAbi()),
+      targetFlag,
       includeDirs: includes.slice(1),
       defines: opts?.defines,
+      libuv,
     })
 
     const result = spawnSync(ndkClangTool(), args, {

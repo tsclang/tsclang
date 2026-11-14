@@ -10,6 +10,9 @@ export const VALID_BUILD_KEYS = new Set<string>([
   // ios SDK selector (iphonesimulator | iphoneos) — read by the ios compile
   // branch (#283); applies to user manifests and platform presets alike
   'sdk',
+  // scheduler selector for builds.<name> presets (libuv | state_machine | none,
+  // #287) — same values as the --async CLI flag; mobile libuv presets need it
+  'async',
   // post-build hook: shell command from the ROOT manifest only (see spec 13-build)
   'command',
 ]);

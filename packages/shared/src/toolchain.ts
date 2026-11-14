@@ -75,6 +75,10 @@ export interface NdkCompileOptions {
   defines?: string[];
   /** Override the --target flag (x86_64 emulator builds use the ABI map). */
   targetFlag?: string;
+  /** libuv bundle dirs for --async libuv (#287): the scheduler define in the
+   * generated .c switches linking to the cross-compiled static libuv. The lib
+   * dir must already carry the target triple segment (lib/<triple>). */
+  libuv?: { includeDir: string; libDir: string };
 }
 
 /** Arg vector for one NDK-clang compile. Shared by the CLI build command and
@@ -88,6 +92,7 @@ export function buildNdkCompileArgs(o: NdkCompileOptions): string[] {
     ...(o.sysroot ? ['--sysroot', o.sysroot] : []),
     ...(o.shared ? ['-shared', '-fPIC'] : ['-fPIE', '-pie']),
     ...ANDROID_LINK_FLAGS,
+    ...(o.libuv ? ['-I', o.libuv.includeDir, '-L', o.libuv.libDir, LIBUV_LINK_FLAG, '-ldl'] : []),
     C_STANDARD_FLAG,
     ...(o.optimize ? [`-${o.optimize}`] : []),
     ...(o.includeDirs ?? []).flatMap((d) => ['-I', d]),
@@ -132,6 +137,8 @@ export interface IosCompileOptions {
   includeDirs?: string[];
   /** capabilityDefines(...) output. */
   defines?: string[];
+  /** libuv bundle dirs for --async libuv (#287) — see NdkCompileOptions. */
+  libuv?: { includeDir: string; libDir: string };
 }
 
 /** Arg vector for one xcrung iOS compile: spawn('xcrun', buildIosCompileArgs()).
@@ -147,6 +154,8 @@ export function buildIosCompileArgs(o: IosCompileOptions): string[] {
     // ('unknown argument'; NDK/desktop clang accept both) — CI macos tier.
     `--target=${triple}`,
     '-fPIE', '-pie',
+    // no -ldl on darwin: Mach-O lazy binds everything libuv needs
+    ...(o.libuv ? ['-I', o.libuv.includeDir, '-L', o.libuv.libDir, LIBUV_LINK_FLAG] : []),
     C_STANDARD_FLAG,
     ...(o.optimize ? [`-${o.optimize}`] : []),
     ...(o.includeDirs ?? []).flatMap((d) => ['-I', d]),

@@ -1,3 +1,4 @@
+#define TSC_SCHEDULER_LIBUV
 #include "runtime.h"
 
 void _tsc_main(void) {

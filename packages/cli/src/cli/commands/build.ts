@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profi
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs, buildIosCompileArgs, buildVtoolHostArgs } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, ASYNC_MODELS, ANDROID_TARGET_FLAG, IOS_DEVICE_TRIPLE, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64, buildNdkCompileArgs, buildIosCompileArgs, buildVtoolHostArgs } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
@@ -58,7 +58,9 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const _targetFlag       = flagValue(args, '--target');
   let _defaultNumberFlag: string | undefined = flagValue(args, '--default-number');
   const _allocatorFlag    = flagValue(args, '--allocator');
-  const _asyncFlag        = flagValue(args, '--async');
+  // scheduler selector: --async flag > builds.<n>.async preset (#287) > none
+  // (busy-spin) — same precedence as every other flag/preset pair
+  let _asyncFlag: string | null = flagValue(args, '--async') ?? null;
   const _strictFlag       = flagValue(args, '--strict');
   const _ramSizeFlag      = flagValue(args, '--ram-size');
   const _stackSizeFlag    = flagValue(args, '--stack-size');
@@ -141,6 +143,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       if (buildCfg.emit && emit === 'c') emit = buildCfg.emit;
       if (buildCfg.defaultNumber && !_defaultNumberFlag) { _defaultNumberFlag = buildCfg.defaultNumber; }
       if (buildCfg.mcu && !_mcuFlag) _mcu = buildCfg.mcu;
+      // builds.<n>.async — the scheduler preset (#287); the CLI flag wins
+      if (typeof buildCfg.async === 'string' && buildCfg.async && !_asyncFlag) {
+        if (!(ASYNC_MODELS as readonly string[]).includes(buildCfg.async)) {
+          process.stderr.write(`ConfigError: unknown async value '${buildCfg.async}' in build '${_effectiveBuild}' (valid: ${ASYNC_MODELS.join(', ')})\n`);
+          process.exit(1);
+        }
+        _asyncFlag = buildCfg.async;
+      }
       if (typeof buildCfg.command === 'string' && buildCfg.command) _commandCfg = buildCfg.command;
       if (pkg.strict) _pkgStrict = _validateStrictRulesCli(pkg.strict, 'tsc.package.json');
     } catch (e) {
@@ -391,6 +401,43 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     return env;
   }
 
+  // #287: --async libuv on a mobile target links the cross-compiled STATIC
+  // libuv. Resolution: the TSC_LIBUV env root (explicit, e.g. CI) → the newest
+  // isolated 'libuv' bundle → config error with the install-or-env hint. The
+  // bundle layout is <root>/{include, lib/<triple>/libuv.a} with no bin/, and
+  // findIsolatedToolchain serves a flat root as its own bin dir — so binDir
+  // IS the bundle root. The triple segment must match the compile --target.
+  function _resolveLibuvDirs(target: string, triple: string): { includeDir: string; libDir: string } | null {
+    const envRoot = process.env.TSC_LIBUV;
+    let root: string | null = null;
+    if (envRoot) {
+      if (existsSync(join(envRoot, 'include')) && existsSync(join(envRoot, 'lib'))) {
+        root = envRoot;
+      } else {
+        // an explicitly pointed root that misses the layout is never silently
+        // skipped — the user named it, so the mismatch is the answer
+        process.stderr.write(`ConfigError: TSC_LIBUV points at '${envRoot}' but it has no include/ + lib/ layout\n`);
+        return null;
+      }
+    }
+    if (!root) {
+      const iso = findIsolatedToolchain('libuv');
+      if (iso) root = iso.binDir;
+    }
+    if (!root) {
+      process.stderr.write(`ConfigError: --async libuv on ${target} requires the libuv bundle\n`);
+      process.stderr.write(`hint: tsclang platform install ${_hintPlatform()}  (libuv ships with the platform package)\n`);
+      process.stderr.write('hint: or point at a libuv install root: TSC_LIBUV=<dir with include/ + lib/>\n');
+      return null;
+    }
+    const libDir = join(root, 'lib', triple);
+    if (!existsSync(join(libDir, 'libuv.a'))) {
+      process.stderr.write(`ConfigError: the libuv bundle at '${root}' has no lib/${triple}/libuv.a (target triple mismatch)\n`);
+      return null;
+    }
+    return { includeDir: join(root, 'include'), libDir };
+  }
+
   // --emit is validated after all sources are resolved (flag + builds.<name>.emit):
   // an unknown value must not silently fall back to emit=c
   if (!(EMIT_VALUES as readonly string[]).includes(emit)) {
@@ -613,6 +660,13 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         // GCC_LINK_FLAGS carries -lpthread which is a hard error on bionic
         const soPath = join(outDir, stem + '.so');
         const outPath = emit === 'so' ? soPath : join(outDir, stem);
+        // #287: the scheduler define switches linking to the bundled libuv
+        let libuv: { includeDir: string; libDir: string } | undefined;
+        if (c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) {
+          const dirs = _resolveLibuvDirs('android', ANDROID_TARGET_FLAG.slice('--target='.length));
+          if (!dirs) return false;
+          libuv = dirs;
+        }
         gccResult = spawnSync(ccTool.command, buildNdkCompileArgs({
           cPath,
           outPath,
@@ -622,6 +676,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
           optimize,
           includeDirs: _profileExtras.includeDirs,
           defines: capabilityDefines(_capabilities),
+          libuv,
         }), { stdio: 'pipe', env: ccTool.env });
         if (gccResult.status === 0 && emit === 'so') {
           process.stdout.write(`Built ${stem}.so\n`);
@@ -632,6 +687,16 @@ export function runBuildCommand(args: string[], rootDir: string): void {
         // compiler against the requested SDK on a macOS host. The #282 gate
         // still applies: an explicit pin or an isolated clang bundle.
         const sdk = _buildCfg?.sdk === 'iphoneos' ? 'iphoneos' as const : 'iphonesimulator' as const;
+        // #287: the sim triple follows the host arch (arm64 sim slices need an
+        // arm64 host), same as the test-engine ios-sim backend
+        let libuv: { includeDir: string; libDir: string } | undefined;
+        if (c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) {
+          const triple = sdk === 'iphoneos' ? IOS_DEVICE_TRIPLE
+            : (process.arch === 'x64' ? IOS_SIM_TRIPLE_X64 : IOS_SIM_TRIPLE);
+          const dirs = _resolveLibuvDirs('ios', triple);
+          if (!dirs) return false;
+          libuv = dirs;
+        }
         gccResult = spawnSync('xcrun', buildIosCompileArgs({
           cPath,
           outPath: join(outDir, stem),
@@ -640,6 +705,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
           optimize,
           includeDirs: _profileExtras.includeDirs,
           defines: capabilityDefines(_capabilities),
+          libuv,
         }), { stdio: 'pipe' });
         if (gccResult.error) {
           // xcrun missing = not a macOS/Xcode host: the honest platform story

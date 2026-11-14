@@ -1,6 +1,6 @@
 declare platform {
     allocator: "heap"
-    async: "none"
+    async: "libuv"
     fpu: true
     bits: 64
     usize: "u64"

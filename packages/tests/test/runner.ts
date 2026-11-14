@@ -11,7 +11,7 @@ import { tmpdir } from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { compileTsc, renderDiagnostic } from '@tsclang/compiler';
 import { PACKAGE_FILE, C_STANDARD_FLAG, GCC_WARN_FLAGS, GCC_LINK_FLAGS, DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, DEFAULT_CONSOLE_BAUD, TSC_DEFINES, RUNTIME_DIR, PROFILES_DIR, SIZE_OPTIMIZE_FLAG, WIN32_LINK_FLAGS, AVR_FLOAT_PRINTF_FLAGS, buildNdkCompileArgs } from '@tsclang/shared';
-import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, ndkClangTool } from '@tsclang/test-engine';
+import { normalizeC, toWslPath, toMsysPath, msys2Bash, bashLoginArgs, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, ndkClangTool, libuvDirsForTriple } from '@tsclang/test-engine';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -607,6 +607,13 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning, hasNoWarning
   if (profTarget === 'android') {
     if (!await checkNdkClang()) return { status: 'skip', testDir, reason: 'ndk-clang not found (set TSC_NDK_CLANG to the @tsclang/android bundle clang or put ndk-clang on PATH)' };
     const abi = await adbDeviceAbi();
+    // #287: the android profile capability is libuv, so the runner passes
+    // --async libuv — every android case then links the bundled libuv. Skip
+    // (not fail) when the bundle root is absent: the nightly job provides it
+    if (result.c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)
+        && !libuvDirsForTriple(androidTargetFlagFor(abi).slice('--target='.length))) {
+      return { status: 'skip', testDir, reason: 'libuv bundle not found (set TSC_LIBUV to a root with include/ + lib/<triple>/libuv.a)' };
+    }
     const androidBin = join(tmpBase, 'test_android');
     const ndkResult = await ndkClangCompile(generatedC, androidBin, abi);
     if (ndkResult.code !== 0) return fail(testDir, 'ndk-clang', 'C does not compile with ndk-clang', ndkResult.stderr);
@@ -699,7 +706,11 @@ async function executeShTest(testDir, kind, tmpBase) {
 
   if (testFiles.includes('needs-tools')) {
     const reqTools = (await readFile(join(testDir, 'needs-tools'), 'utf8')).trim().split(/\s+/).filter(Boolean);
-    const probeCmd = reqTools.map(t => `command -v ${t} >/dev/null`).join(' && ');
+    // `env:NAME` tokens gate on a non-empty environment variable (e.g. the
+    // libuv bundle root TSC_LIBUV) instead of a command — same skip policy
+    const probeCmd = reqTools.map(t => t.startsWith('env:')
+      ? `[ -n "\${${t.slice(4)}}" ]`
+      : `command -v ${t} >/dev/null`).join(' && ');
     const probe = await runShell(probeCmd);
     if (probe.code !== 0) {
       return { status: 'skip', testDir, reason: `needs-tools: lacks [${reqTools.join(', ')}]` };

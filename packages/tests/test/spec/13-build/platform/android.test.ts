@@ -32,7 +32,9 @@ describe("13-build/platform android — встроенный профиль (#28
     expect(caps).not.toBe(null)
     expect(caps!.toolchain).toBe("ndk-clang")
     expect(caps!.allocator).toBe("heap")
-    expect(caps!.async).toBe("none")
+    // #287: capability lifted none → libuv; the scheduler itself still comes
+    // from --async (busy-spin by default), libuv only links when requested
+    expect(caps!.async).toBe("libuv")
     expect(caps!.fpu).toBe(true)
     expect(caps!.bits).toBe(64)
     expect(caps!.usize).toBe("u64")
@@ -90,6 +92,27 @@ describe("13-build/platform android — buildNdkCompileArgs (#283)", () => {
     })
     expect(argv).toContain("--target=x86_64-linux-android24")
     expect(ANDROID_ABI_TRIPLES["arm64-v8a"]).toBe("aarch64-linux-android")
+  })
+
+  test("libuv-опции (#287): блок -I/-L/-luv/-ldl после -lm, перед -std", () => {
+    const argv = buildNdkCompileArgs({
+      cPath: "in.c", outPath: "out/main", runtimeInclude: "rt",
+      libuv: { includeDir: "uv/include", libDir: "uv/lib/aarch64-linux-android24" },
+    })
+    expect(JSON.stringify(argv)).toBe(JSON.stringify([
+      "in.c", "-o", "out/main",
+      "-I", "rt",
+      ANDROID_TARGET_FLAG,
+      "-fPIE", "-pie",
+      "-lm",
+      "-I", "uv/include",
+      "-L", "uv/lib/aarch64-linux-android24",
+      "-luv",
+      // bionic: libuv's android core needs dlopen-backed probes — libdl is a
+      // separate library even though pthreads live in libc
+      "-ldl",
+      "-std=c11",
+    ]))
   })
 })
 

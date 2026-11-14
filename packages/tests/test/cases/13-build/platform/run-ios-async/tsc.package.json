@@ -1,0 +1,7 @@
+{
+  "name": "run-ios-async",
+  "main": "main.tsc",
+  "builds": {
+    "ios-sim-async": { "profile": "ios", "emit": "binary", "toolchain": "clang", "async": "libuv" }
+  }
+}

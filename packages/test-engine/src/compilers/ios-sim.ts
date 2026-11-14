@@ -1,8 +1,8 @@
 import { spawnSync } from "child_process"
 import { writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import { buildIosCompileArgs, buildVtoolHostArgs, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64 } from "@tsclang/shared"
-import { isInPath, DEFAULT_COMPILE_TIMEOUT_MS } from "./utils.js"
+import { buildIosCompileArgs, buildVtoolHostArgs, IOS_SIM_TRIPLE, IOS_SIM_TRIPLE_X64, TSC_DEFINES } from "@tsclang/shared"
+import { isInPath, DEFAULT_COMPILE_TIMEOUT_MS, libuvDirsForTriple } from "./utils.js"
 import type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 
 /** Simulator triple for a host arch. Pure: unit-testable without macOS.
@@ -35,15 +35,31 @@ export class IosSimBackend implements CompilerBackend {
     writeFileSync(cPath, cCode, "utf8")
 
     const includes = opts?.includes ?? []
+    // #287: same scheduler-define switch as the CLI/ndk backends — the sim
+    // triple follows the host arch so the lib dir matches the link target
+    const triple = iosSimTripleFor(process.arch)
+    let libuv: { includeDir: string; libDir: string } | undefined
+    if (cCode.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) {
+      const dirs = libuvDirsForTriple(triple)
+      if (!dirs) {
+        return {
+          success: false,
+          stderr: `libuv scheduler requested but TSC_LIBUV is unset or has no lib/${triple}/libuv.a (#287)`,
+          exitCode: 1,
+        }
+      }
+      libuv = dirs
+    }
     const args = buildIosCompileArgs({
       cPath,
       outPath,
       runtimeInclude: includes[0] ?? "",
       sdk: "iphonesimulator",
-      triple: iosSimTripleFor(process.arch),
+      triple,
       optimize: opts?.optimize ? "O2" : null,
       includeDirs: includes.slice(1),
       defines: opts?.defines,
+      libuv,
     })
 
     const result = spawnSync("xcrun", args, {

@@ -894,7 +894,8 @@ TSClang-библиотека и C-wrapper различаются явным ти
 | `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"so"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"`, `"dts"` | `"c"` |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
-| `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
+| `sdk` | Apple SDK для ios-сборки (`"iphonesimulator"` / `"iphoneos"`) | `iphonesimulator` |
+| `async` | планировщик async (`"libuv"`, `"state_machine"`, `"none"`) — те же значения, что у флага `--async`; CLI-флаг перекрывает пресет (#287) | — (busy-spin по умолчанию) |
 | `stringBufferSize` | размер static buffer (байт) для string escape analysis на embedded | `64` |
 | `flash` | конфигурация прошивки (объект, см. ниже) | — |
 | `command` | shell-команда после успешной сборки (см. ниже) | — |
@@ -2008,7 +2009,7 @@ Full-OS платформа поверх bionic: 64 бита, heap-аллокат
 
 **Run-тир (test-engine, #283 этап 2):** бекенд `ndk-clang` зарегистрирован в `platformMatrix` (`android → ndk-clang`). Тул разрешается через env `TSC_NDK_CLANG` (путь к clang из бандла/NDK — у test-engine нет зависимости от пакетного менеджера) или из PATH; изолированный бандл дополнительно требует `TSC_NDK_SYSROOT`. Запуск — через adb: `adb push` в `/data/local/tmp/tsc_*` → `chmod 755` → `adb shell '<путь>; echo __TSC_EXIT:$?'` (adb не возвращает удалённый exit-код — он разбирается из маркера `__TSC_EXIT`) → удаление. Тройка авто-определяется по ABI устройства (`ro.product.cpu.abi`: arm64-v8a → aarch64-…, x86_64 → x86_64-… — CI-эмуляторы именно x86_64). Без устройства corpus-кейс проверяет компиляцию и скипает запуск; nightly-джоба (`android-nightly.yml`) прогоняет полный цикл на x86_64-эмуляторе (aosp-atd, API 34).
 
-**Ограничения MVP:** `async: "none"` — async-функции дают `E303` (кросс-сборка libuv в бандл — follow-up); `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb.
+**Ограничения MVP:** `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb. Async: capability профиля — `"libuv"` (#287), планировщик выбирается флагом `--async libuv` или пресетом `builds.<n>.async = "libuv"`; без них async-код компилируется в кооперативный busy-spin (как desktop по умолчанию). При libuv-планировщике генерируется `#define TSC_SCHEDULER_LIBUV` и линковка требует кросс-собранную статическую libuv из бандла `libuv` пакета `@tsclang/android` 0.2.0+ (layout `include/` + `lib/<triple>/libuv.a`; `-I <root>/include -L <root>/lib/<triple> -luv -ldl` — pthread в bionic уже в libc, а libdl отдельна). Резолв: env `TSC_LIBUV=<корень>` → новейший изолированный бандл `libuv` → `ConfigError` с инструкцией install-or-env (#282-паттерн). Корпус: android-кейс с libuv-планировщиком скипается без `TSC_LIBUV` (skip-политика корпуса).
 
 #### `ios` — Xcode clang через xcrun (#283)
 
@@ -2023,7 +2024,7 @@ Full-OS платформа поверх darwin: 64 бита, heap-аллокат
 
 **Run-тир:** бекенд `ios-sim` в `platformMatrix` (`ios → ios-sim`, macOS-only) компилирует с симуляторной тройкой (по `process.arch`: arm64-хост → `arm64-…-simulator`, intel → `x86_64-…-simulator`) — без загрузки симулятора. Прямой exec сим-слайса невозможен: dyld убивает macho с платформой IOSSIMULATOR, запущенный из macOS-процесса (код-сигнатура платформы в `LC_BUILD_VERSION`, ABI на Apple Silicon идентичен). Поэтому запуск идёт через vtool-ретагнутую КОПИЮ: `vtool -set-build-version macos 13.0 13.0 -replace -output <copy> <artifact>` (vtool входит в Xcode CLT) — артефакт остаётся настоящим сим-слайсом, патчится только копия; `--emit exec` CLI делает то же самое перед spawn.
 
-**Ограничения MVP:** `async: "none"` (`E303` — та же follow-up про libuv); intel-хосты берут тройку `x86_64-apple-ios16.0-simulator` (arm64-сим требует arm64-хост); `.app`/Gradle-обёртки — вне компилятора (как `.apk` у android).
+**Ограничения MVP:** intel-хосты берут тройку `x86_64-apple-ios16.0-simulator` (arm64-сим требует arm64-хост); `.app`/Gradle-обёртки — вне компилятора (как `.apk` у android). Async: capability — `"libuv"` (#287), тот же флаг/пресет-контракт, что у android; при libuv-планировщике линковка требует libuv-бандл (`@tsclang/ios` 0.2.0+: `-I <root>/include -L <root>/lib/<triple> -luv`, без `-ldl` — Mach-O лениво биндит всё нужное), тройка следует за SDK и архитектурой хоста (`arm64-apple-ios16.0` / `arm64-apple-ios16.0-simulator` / `x86_64-…-simulator`). Резолв тот же: `TSC_LIBUV` → бандл `libuv` → `ConfigError`.
 
 ### Embedded & IoT
 

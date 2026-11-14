@@ -2,14 +2,16 @@
 // honest target→backend model
 // Ref: #207 P1.6 — matrix MCU reachable from tests; wasm tested like prod;
 // unavailable targets declared, not silently absent
-import { describe, test, expect, platformMatrix } from "../src/engine.ts"
+import { after, describe, test, expect, platformMatrix } from "../src/engine.ts"
 import { buildAvrCompileArgs, buildSimavrArgs, normalizeSimavrOut } from "../src/compilers/avr-gcc.ts"
 import { buildEmccArgs } from "../src/compilers/wasm.ts"
 import { androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice } from "../src/compilers/ndk-clang.ts"
 import { iosSimTripleFor } from "../src/compilers/ios-sim.ts"
+import { libuvDirsForTriple } from "../src/compilers/utils.js"
 import { DEFAULT_AVR_MCU, DEFAULT_AVR_FREQ, TSC_DEFINES } from "@tsclang/shared"
-import { readdirSync } from "fs"
-import { resolve, dirname } from "path"
+import { readdirSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs"
+import { resolve, dirname, join } from "path"
+import { tmpdir } from "os"
 import { fileURLToPath } from "url"
 
 const args = (xs: string[]) => xs.join(" ")
@@ -83,6 +85,38 @@ describe("ndk-clang — androidTargetFlagFor", () => {
   test("device ABI maps to its triple — emulators are x86_64", () => {
     expect(androidTargetFlagFor("arm64-v8a")).toBe("--target=aarch64-linux-android24")
     expect(androidTargetFlagFor("x86_64")).toBe("--target=x86_64-linux-android24")
+  })
+})
+
+describe("libuv — libuvDirsForTriple (#287)", () => {
+  // env-sensitive helper: pin TSC_LIBUV for the suite, restore + cleanup after
+  const prev = process.env["TSC_LIBUV"]
+  const root = mkdtempSync(join(tmpdir(), "tsc-libuv-"))
+  after(() => {
+    if (prev === undefined) delete process.env["TSC_LIBUV"]
+    else process.env["TSC_LIBUV"] = prev
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  test("unset TSC_LIBUV → null", () => {
+    delete process.env["TSC_LIBUV"]
+    expect(libuvDirsForTriple("aarch64-linux-android24")).toBe(null)
+  })
+
+  test("root with include/ + lib/<triple>/libuv.a resolves both dirs", () => {
+    mkdirSync(join(root, "include"), { recursive: true })
+    mkdirSync(join(root, "lib", "aarch64-linux-android24"), { recursive: true })
+    writeFileSync(join(root, "lib", "aarch64-linux-android24", "libuv.a"), "!<arch>\n")
+    process.env["TSC_LIBUV"] = root
+    const dirs = libuvDirsForTriple("aarch64-linux-android24")
+    expect(dirs).not.toBe(null)
+    expect(dirs!.includeDir).toBe(join(root, "include"))
+    expect(dirs!.libDir).toBe(join(root, "lib", "aarch64-linux-android24"))
+  })
+
+  test("triple without the .a slice → null (layout must match --target)", () => {
+    process.env["TSC_LIBUV"] = root
+    expect(libuvDirsForTriple("x86_64-linux-android24")).toBe(null)
   })
 })
 

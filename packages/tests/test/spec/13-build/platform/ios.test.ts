@@ -32,7 +32,8 @@ describe("13-build/platform ios — встроенный профиль (#283)",
     expect(caps).not.toBe(null)
     expect(caps!.toolchain).toBe("clang")
     expect(caps!.allocator).toBe("heap")
-    expect(caps!.async).toBe("none")
+    // #287: capability lifted none → libuv (scheduler flag semantics unchanged)
+    expect(caps!.async).toBe("libuv")
     expect(caps!.fpu).toBe(true)
     expect(caps!.bits).toBe(64)
     expect(caps!.usize).toBe("u64")
@@ -84,6 +85,26 @@ describe("13-build/platform ios — buildIosCompileArgs (#283)", () => {
     expect(argv).toContain("-O2")
     expect(argv).toContain("-DTSX=1")
     expect(argv[argv.lastIndexOf("-I") + 1]).toBe("pkg/inc")
+  })
+
+  test("libuv-опции (#287): -I/-L/-luv после -pie, перед -std; без -ldl (Mach-O)", () => {
+    const argv = buildIosCompileArgs({
+      cPath: "in.c", outPath: "out/main", runtimeInclude: "rt",
+      sdk: "iphonesimulator",
+      libuv: { includeDir: "uv/include", libDir: "uv/lib/arm64-apple-ios16.0-simulator" },
+    })
+    expect(JSON.stringify(argv)).toBe(JSON.stringify([
+      "--sdk", "iphonesimulator", "clang",
+      "in.c", "-o", "out/main",
+      "-I", "rt",
+      `--target=${IOS_SIM_TRIPLE}`,
+      "-fPIE", "-pie",
+      "-I", "uv/include",
+      "-L", "uv/lib/arm64-apple-ios16.0-simulator",
+      "-luv",
+      "-std=c11",
+    ]))
+    expect(argv.includes("-ldl")).toBe(false)
   })
 })
 

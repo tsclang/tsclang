@@ -6,6 +6,20 @@ import { join } from "path"
  *  surface as a failed compile, not a stuck test run. */
 export const DEFAULT_COMPILE_TIMEOUT_MS = 30_000
 
+/** libuv bundle dirs from the TSC_LIBUV env root for a target triple (#287).
+ *  The root carries include/ + lib/<triple>/libuv.a (the cross-compiled
+ *  static bundle layout). null when the env is unset or the layout misses the
+ *  triple — callers treat null as "libuv unavailable" (skip, or a clear
+ *  config error when the scheduler define demands it). */
+export function libuvDirsForTriple(triple: string): { includeDir: string; libDir: string } | null {
+  const root = process.env["TSC_LIBUV"]
+  if (!root) return null
+  const includeDir = join(root, "include")
+  const libDir = join(root, "lib", triple)
+  if (!existsSync(includeDir) || !existsSync(join(libDir, "libuv.a"))) return null
+  return { includeDir, libDir }
+}
+
 export function isInPath(name: string): boolean {
   const cmd = process.platform === "win32" ? "where" : "which"
   const result = spawnSync(cmd, [name], { stdio: "pipe", shell: true })

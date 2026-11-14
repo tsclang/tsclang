@@ -1,0 +1,9 @@
+async function work(): Promise<i32> {
+    return 21;
+}
+
+async function main(): Promise<void> {
+    const n = await work();
+    console.log("android-async");
+    console.log(n * 2);
+}

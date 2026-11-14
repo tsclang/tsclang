@@ -1,16 +1,11 @@
-import { STRICT_RULES } from '@tsclang/shared';
+import { STRICT_RULES, VALID_BUILD_KEYS as SHARED_BUILD_KEYS } from '@tsclang/shared';
 
 export const VALID_STRICT_RULES = new Set<string>(STRICT_RULES);
 
-export const VALID_BUILD_KEYS = new Set<string>([
-  'target', 'mcu', 'toolchain', 'toolchainFile', 'arch',
-  'emit', 'linkerScript', 'frequency', 'freq', 'allocator', 'debug',
-  // keys that build.ts reads from builds.<name> (#239): the validator must not
-  // reject manifests the build command itself honors
-  'profile', 'optimize', 'outDir', 'defaultNumber', 'flash', 'main',
-  // post-build hook: shell command from the ROOT manifest only (see spec 13-build)
-  'command',
-]);
+// Single source: the shared VALID_BUILD_KEYS (project manifests and platform
+// package `platform.builds` presets validate against the same set — the sdk
+// key had drifted between the two copies before this re-export)
+export const VALID_BUILD_KEYS = SHARED_BUILD_KEYS;
 
 export function validateStrictRules(rules: unknown, source: string): string | null {
   if (!Array.isArray(rules)) {
