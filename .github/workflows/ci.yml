@@ -189,5 +189,13 @@ jobs:
           xcrun --version
           xcrun --sdk iphonesimulator --find clang
           xcrun --sdk iphoneos --find clang
-      - name: ios corpus — real compile of both triples + host run of the sim binary
-        run: pnpm tsx packages/tests/test/runner.ts 13-build/platform/run-ios 13-build/platform/build-ios
+      - name: Fetch the libuv mobile bundle (async scheduler, #287)
+        run: |
+          mkdir -p "$RUNNER_TEMP/libuv-root"
+          curl -fsSL -o "$RUNNER_TEMP/libuv-mobile.tar.gz" \
+            https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz
+          tar -xzf "$RUNNER_TEMP/libuv-mobile.tar.gz" -C "$RUNNER_TEMP/libuv-root"
+          ls "$RUNNER_TEMP/libuv-root/lib"
+          echo "TSC_LIBUV=$RUNNER_TEMP/libuv-root" >> "$GITHUB_ENV"
+      - name: ios corpus — real compile of both triples + host run of the sim binary (incl. libuv async, #287)
+        run: pnpm tsx packages/tests/test/runner.ts 13-build/platform/run-ios 13-build/platform/build-ios 13-build/platform/run-ios-async

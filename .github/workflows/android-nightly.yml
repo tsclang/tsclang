@@ -10,7 +10,9 @@
 # (Pkg.Revision 30.0.16248370) — and TSC_NDK_CLANG points at its clang. A
 # driver inside an intact NDK tree finds its own sysroot, so TSC_NDK_SYSROOT
 # stays unset here; the isolated-bundle path (--sysroot explicit) is covered
-# by the bundle-e2e tier instead.
+# by the bundle-e2e tier instead. Since #287 the async corpus case
+# (10-async/async-main/android-main) links the libuv scheduler — the mobile
+# bundle from toolchains-v2 unpacks into TSC_LIBUV.
 
 name: android-nightly
 
@@ -51,6 +53,15 @@ jobs:
         run: |
           echo "TSC_NDK_CLANG=$ANDROID_HOME/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" >> "$GITHUB_ENV"
 
+      - name: Fetch the libuv mobile bundle (async scheduler, #287)
+        run: |
+          mkdir -p "$RUNNER_TEMP/libuv-root"
+          curl -fsSL -o "$RUNNER_TEMP/libuv-mobile.tar.gz" \
+            https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz
+          tar -xzf "$RUNNER_TEMP/libuv-mobile.tar.gz" -C "$RUNNER_TEMP/libuv-root"
+          ls "$RUNNER_TEMP/libuv-root/lib"
+          echo "TSC_LIBUV=$RUNNER_TEMP/libuv-root" >> "$GITHUB_ENV"
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
@@ -67,4 +78,4 @@ jobs:
             adb wait-for-device shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
             echo "device ABI: $(adb shell getprop ro.product.cpu.abi)"
             "$TSC_NDK_CLANG" --version | head -1
-            pnpm tsx packages/tests/test/runner.ts 14-stdlib/console-android
+            pnpm tsx packages/tests/test/runner.ts 14-stdlib/console-android 10-async/async-main/android-main
