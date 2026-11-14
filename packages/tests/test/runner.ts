@@ -337,7 +337,7 @@ async function adbDeviceAbi() {
   return adbAbiCache;
 }
 
-async function ndkClangCompile(cFile, outFile, abi) {
+async function ndkClangCompile(cFile, outFile, abi, libuv) {
   const args = buildNdkCompileArgs({
     cPath: cFile,
     outPath: outFile,
@@ -346,6 +346,8 @@ async function ndkClangCompile(cFile, outFile, abi) {
     // PATH-installed NDK driver locates its own — same contract as build.ts
     sysroot: process.env.TSC_NDK_SYSROOT || undefined,
     targetFlag: androidTargetFlagFor(abi),
+    // #287: -I/-L/-luv/-ldl when the generated C selects the libuv scheduler
+    libuv,
   });
   return run(ndkClangTool(), args);
 }
@@ -610,12 +612,15 @@ async function executeTscTest(testDir, kind, tmpBase, { hasWarning, hasNoWarning
     // #287: the android profile capability is libuv, so the runner passes
     // --async libuv — every android case then links the bundled libuv. Skip
     // (not fail) when the bundle root is absent: the nightly job provides it
-    if (result.c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)
-        && !libuvDirsForTriple(androidTargetFlagFor(abi).slice('--target='.length))) {
-      return { status: 'skip', testDir, reason: 'libuv bundle not found (set TSC_LIBUV to a root with include/ + lib/<triple>/libuv.a)' };
+    let libuv;
+    if (result.c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`)) {
+      libuv = libuvDirsForTriple(androidTargetFlagFor(abi).slice('--target='.length));
+      if (!libuv) {
+        return { status: 'skip', testDir, reason: 'libuv bundle not found (set TSC_LIBUV to a root with include/ + lib/<triple>/libuv.a)' };
+      }
     }
     const androidBin = join(tmpBase, 'test_android');
-    const ndkResult = await ndkClangCompile(generatedC, androidBin, abi);
+    const ndkResult = await ndkClangCompile(generatedC, androidBin, abi, libuv);
     if (ndkResult.code !== 0) return fail(testDir, 'ndk-clang', 'C does not compile with ndk-clang', ndkResult.stderr);
     if (!abi) return { status: 'skip', testDir, reason: 'no adb device connected (android run tier needs a device/emulator)' };
     const adbResult = await adbRun(androidBin);

@@ -6,7 +6,8 @@
 //   TSC_E2E_BUNDLES=desktop   pnpm tsx packages/tests/test/spec/13-build/platform/run.ts
 //   TSC_E2E_BUNDLES=avr
 //   TSC_E2E_BUNDLES=wasm
-//   TSC_E2E_BUNDLES=android   (win32 hosts only until the posix bundles land)
+//   TSC_E2E_BUNDLES=android   (full host matrix since 0.1.1; 0.2.0 also
+//                               downloads libuv and links -luv through it)
 //   TSC_E2E_BUNDLES=all
 //
 // The catalog fixture is the committed catalog.json with the .tspkg url
@@ -31,9 +32,9 @@ const SELECTED = MODE === "all"
   ? ["desktop", "avr", "wasm", "android"]
   : MODE.split(",").map((s) => s.trim()).filter(Boolean)
 
-// Cases whose toolchain bundle is not published for this host os-arch are
-// not selectable at all: android 0.1.0 ships win32-x64 first (#283 staged
-// rollout — posix bundles build in the platform-android repo CI).
+// A case whose toolchain bundle is not published for this host os-arch can
+// mark itself osArch-gated (unused today: every current bundle covers its
+// selectable hosts — android went full-matrix in 0.1.1).
 const HOST_OS_ARCH = process.platform === "win32"
   ? "win32-x64"
   : process.platform === "darwin"
@@ -122,12 +123,17 @@ const CASES: Case[] = [
     // (--sysroot after the repack) and produce a PIE aarch64 ELF, not a host
     // binary. The artifact cannot run on the build host: the run story is
     // adb (see android-nightly.yml), here we verify the object identity.
+    // #287: 0.2.0 installs a SECOND bundle — libuv (from-source mobile
+    // slices) — and the android-async preset links through it (-luv from
+    // the isolated libuv@1.53.0, no PATH involvement).
     platform: "android",
-    version: "0.1.0",
-    toolchains: [["ndk-clang", "30.0.16248370", "android@0.1.0/ndk-clang@30.0.16248370"]],
+    version: "0.2.0",
+    toolchains: [
+      ["ndk-clang", "30.0.16248370", "android@0.2.0/ndk-clang@30.0.16248370"],
+      ["libuv", "1.53.0", "android@0.2.0/libuv@1.53.0"],
+    ],
     source: "function main(): void {\n    let x: i32 = 40;\n    x = x + 2;\n}\n\nmain();\n",
     buildArgs: ["build", "--build", "android"],
-    osArch: "win32-x64",
     verify: (dir) => {
       const bin = join(dir, "build", "android", "main")
       expect(existsSync(bin)).toBe(true)
@@ -185,6 +191,16 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
       for (const [name, version, rel] of c.toolchains) {
         const tcDir = join(home, ".tsclang", "platforms", ...rel.split("/"))
         expect(existsSync(tcDir)).toBe(true)
+        if (name === "libuv") {
+          // libuv is the first bundle with no binaries at all: flat include/
+          // + lib/<triple>/ layout — the root IS the binDir (the
+          // findIsolatedToolchain contract for bin-less bundles). The static
+          // archive must be a real `ar` member-carrying object.
+          expect(existsSync(join(tcDir, "include", "uv.h"))).toBe(true)
+          const a = readFileSync(join(tcDir, "lib", "aarch64-linux-android28", "libuv.a"))
+          expect(a.subarray(0, 8).toString()).toBe("!<arch>\n")
+          continue
+        }
         // The layout contract findIsolatedToolchain relies on: bin/ at the
         // root (or a flat root) with the tool inside.
         const bin = existsSync(join(tcDir, "bin")) ? join(tcDir, "bin") : tcDir
@@ -195,6 +211,22 @@ describe("13-build/platform бандлы тулчейнов — opt-in e2e (TSC_
       expect(build.code).toBe(0)
       c.verify(dir)
       if (c.platform === "desktop") expect(build.stdout).toContain("hello isolated clang")
+
+      // #287: the android-async preset — async source + libuv scheduler.
+      // The CLI must resolve -luv from the ISOLATED libuv bundle (define
+      // scan → findIsolatedToolchain('libuv') → lib/<triple>) and produce
+      // the same aarch64 PIE identity as the non-async build.
+      if (c.platform === "android") {
+        writeFileSync(join(dir, "main.tsc"), 'async function work(): number {\n    return 40;\n}\n\nasync function main(): void {\n    const n: number = await work();\n    console.log(n + 2);\n}\n\nmain();\n', "utf8")
+        const asyncBuild = await runCli(["build", "--build", "android-async"], { cwd: dir, env })
+        expect(asyncBuild.code).toBe(0)
+        const bin = join(dir, "build", "android-async", "main")
+        expect(existsSync(bin)).toBe(true)
+        const elf = readFileSync(bin)
+        expect([elf[0], elf[1], elf[2], elf[3]].join(",")).toBe("127,69,76,70")
+        expect(elf[16]).toBe(3) // ET_DYN (PIE)
+        expect([elf[18], elf[19]].join(",")).toBe("183,0") // EM_AARCH64
+      }
     })
   }
 })

@@ -31,17 +31,26 @@ const REGISTRY_DIR = join(ROOT, "packages", "registry")
 // findIsolatedToolchain. Since #282 phase 4 desktop ships clang/LLVM-only
 // bundles (0.4.0, release tag toolchains-v2); avr/wasm stay on the
 // original 0.3.0 / toolchains-v1 matrix — their content did not change.
-// #283 staged rollout DONE: android 0.1.1 ships the full host matrix
-// (win32-x64/linux-x64/darwin-arm64 — posix bundles built in the
-// platform-android repo CI, dmg symlinks dereferenced via cp -L); ios ships
-// NO toolchains at all — the Apple SDK is not redistributable, Xcode Command
-// Line Tools are the toolchain (instruction mode, darwin-x64 precedent).
+// #283 staged rollout DONE: android ships the full ndk-clang host matrix
+// (posix bundles built in the platform-android repo CI, dmg symlinks
+// dereferenced via cp -L). #287: android 0.2.0 + ios 0.2.0 add the libuv
+// mobile bundle (built from source in the platform-android repo CI, release
+// toolchains-v2) — ONE host-independent asset for both platforms; the ios
+// libuv download covers darwin-arm64 only (iOS builds run on macOS).
 const REFERENCE_PLATFORMS = [
-  { name: "@tsclang/desktop", dir: "desktop", version: "0.4.0", file: "@tsclang-desktop-0.4.0.tspkg", repo: "platform-desktop", tag: "toolchains-v2", toolchains: ["clang"] },
-  { name: "@tsclang/avr", dir: "avr", version: "0.3.0", file: "@tsclang-avr-0.3.0.tspkg", repo: "platform-avr", tag: "toolchains-v1", toolchains: ["avr-gcc", "avrdude"] },
-  { name: "@tsclang/wasm", dir: "wasm", version: "0.3.0", file: "@tsclang-wasm-0.3.0.tspkg", repo: "platform-wasm", tag: "toolchains-v1", toolchains: ["emcc"] },
-  { name: "@tsclang/android", dir: "android", version: "0.1.1", file: "@tsclang-android-0.1.1.tspkg", repo: "platform-android", tag: "toolchains-v1", toolchains: ["ndk-clang"], downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
-  { name: "@tsclang/ios", dir: "ios", version: "0.1.0", file: "@tsclang-ios-0.1.0.tspkg", repo: null, tag: null, toolchains: null },
+  { name: "@tsclang/desktop", dir: "desktop", version: "0.4.0", file: "@tsclang-desktop-0.4.0.tspkg",
+    toolchains: [{ name: "clang", repo: "platform-desktop", tag: "toolchains-v2" }] },
+  { name: "@tsclang/avr", dir: "avr", version: "0.3.0", file: "@tsclang-avr-0.3.0.tspkg",
+    toolchains: [{ name: "avr-gcc", repo: "platform-avr", tag: "toolchains-v1" }, { name: "avrdude", repo: "platform-avr", tag: "toolchains-v1" }] },
+  { name: "@tsclang/wasm", dir: "wasm", version: "0.3.0", file: "@tsclang-wasm-0.3.0.tspkg",
+    toolchains: [{ name: "emcc", repo: "platform-wasm", tag: "toolchains-v1" }] },
+  { name: "@tsclang/android", dir: "android", version: "0.2.0", file: "@tsclang-android-0.2.0.tspkg",
+    toolchains: [
+      { name: "ndk-clang", repo: "platform-android", tag: "toolchains-v1", downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
+      { name: "libuv", repo: "platform-android", tag: "toolchains-v2", downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
+    ] },
+  { name: "@tsclang/ios", dir: "ios", version: "0.2.0", file: "@tsclang-ios-0.2.0.tspkg",
+    toolchains: [{ name: "libuv", repo: "platform-android", tag: "toolchains-v2", downloadsAtLeast: ["darwin-arm64"] }] },
 ] as const
 
 const tmpDirs: string[] = []
@@ -80,29 +89,34 @@ describe("13-build/platform 4.1 — эталонные пакеты в моно�
       const manifest = JSON.parse(readFileSync(join(PLATFORMS_ROOT, ref.dir, "tsc.package.json"), "utf8"))
       const toolchains = manifest.platform.toolchains as Record<string, { version: string; downloads: Record<string, { url: string; sha256: string; size?: number }> }> | undefined
       if (ref.toolchains === null) {
-        // Instruction mode (@tsclang/ios): NO toolchain section at all — the
-        // platform section validator treats it as optional, the install story
-        // is "install Xcode Command Line Tools", not a downloadable bundle
+        // Instruction mode: NO toolchain section at all — the platform
+        // section validator treats it as optional, the install story is a
+        // manual instruction, not a downloadable bundle
         expect(toolchains).toBe(undefined)
         return
       }
-      expect(JSON.stringify(Object.keys(toolchains ?? {}).sort())).toBe(JSON.stringify([...ref.toolchains].sort()))
-      for (const tc of Object.values(toolchains!)) {
+      expect(JSON.stringify(Object.keys(toolchains ?? {}).sort())).toBe(JSON.stringify(ref.toolchains.map((t) => t.name).sort()))
+      for (const tcRef of ref.toolchains) {
+        const tc = toolchains![tcRef.name]
         expect(typeof tc.version).toBe("string")
-        const dl = tc.downloads["win32-x64"]
-        expect(dl !== undefined).toBe(true)
         // Bundles are hosted on OUR platform repos' GitHub releases — never
         // direct upstream links (sha256 contract: upstream re-uploads must
-        // not break users).
-        expect(dl.url.startsWith(`https://github.com/tsclang/${ref.repo}/releases/download/${ref.tag}/`)).toBe(true)
-        expect(dl.url.endsWith(".tar.gz")).toBe(true)
-        expect(/^[0-9a-f]{64}$/.test(dl.sha256)).toBe(true)
-        expect(typeof dl.size === "number" && dl.size > 0).toBe(true)
+        // not break users). Per-toolchain repo/tag: #287 put libuv on
+        // toolchains-v2 while ndk-clang stays pinned on toolchains-v1.
+        for (const dl of Object.values(tc.downloads)) {
+          expect(dl.url.startsWith(`https://github.com/tsclang/${tcRef.repo}/releases/download/${tcRef.tag}/`)).toBe(true)
+          // .tar.xz is fine too — desktop's posix clang bundles ship as xz
+          // (the old win32-only check never looked at them)
+          expect(/\.(tar\.gz|tar\.xz)$/.test(dl.url)).toBe(true)
+          expect(/^[0-9a-f]{64}$/.test(dl.sha256)).toBe(true)
+          expect(typeof dl.size === "number" && dl.size > 0).toBe(true)
+        }
         // Matrix: every toolchain covers at least win32-x64 + linux-x64
         // (darwin-x64 is partial — Intel Macs get system/brew instructions).
-        // android 0.1.1 pins the FULL matrix (posix bundles landed in the
-        // platform-android repo CI; downloadsAtLeast enforces it from now on).
-        const required = (ref as { downloadsAtLeast?: string[] }).downloadsAtLeast ?? ["win32-x64", "linux-x64"]
+        // android pins the FULL matrix; ios libuv is darwin-arm64-only (iOS
+        // builds run on macOS — the asset itself is host-independent, other
+        // hosts just never compile for iOS).
+        const required = tcRef.downloadsAtLeast ?? ["win32-x64", "linux-x64"]
         const keys = Object.keys(tc.downloads)
         expect(JSON.stringify(required.filter((k) => !keys.includes(k)))).toBe("[]")
       }

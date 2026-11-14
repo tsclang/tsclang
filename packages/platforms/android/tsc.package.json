@@ -1,8 +1,8 @@
 {
   "name": "@tsclang/android",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "platform",
-  "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle",
+  "description": "Android platform (bionic, API 28+ since #287 — libuv posix_spawn floor): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle; libuv 1.53.0 static bundle unlocks async (--async libuv, #287)",
   "platform": {
     "profile": "android",
     "toolchains": {
@@ -25,11 +25,32 @@
             "size": 1617
           }
         }
+      },
+      "libuv": {
+        "version": "1.53.0",
+        "downloads": {
+          "win32-x64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz",
+            "sha256": "2597ad858657e2e42ceb95a512a399d4dc2f33579b81fbb2e039c737817ba931",
+            "size": 1
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz",
+            "sha256": "2597ad858657e2e42ceb95a512a399d4dc2f33579b81fbb2e039c737817ba931",
+            "size": 1
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz",
+            "sha256": "2597ad858657e2e42ceb95a512a399d4dc2f33579b81fbb2e039c737817ba931",
+            "size": 1
+          }
+        }
       }
     },
     "builds": {
       "android": { "profile": "android", "emit": "binary", "outDir": "build/android" },
-      "android-so": { "profile": "android", "emit": "so", "outDir": "build/android" }
+      "android-so": { "profile": "android", "emit": "so", "outDir": "build/android" },
+      "android-async": { "profile": "android", "emit": "binary", "async": "libuv", "outDir": "build/android-async" }
     },
     "scripts": {
       "start": "tsclang build --build android"

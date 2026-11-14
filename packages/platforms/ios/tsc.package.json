@@ -1,13 +1,26 @@
 {
   "name": "@tsclang/ios",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "platform",
-  "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). No toolchain bundle — the Apple SDK is not redistributable, Xcode Command Line Tools ARE the toolchain (instruction mode, darwin-x64 clang precedent)",
+  "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). libuv 1.53.0 static bundle unlocks async (--async libuv, #287); the Apple SDK itself is not redistributable — Xcode Command Line Tools ARE the compiler toolchain (darwin-x64 clang precedent)",
   "platform": {
     "profile": "ios",
+    "toolchains": {
+      "libuv": {
+        "version": "1.53.0",
+        "downloads": {
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v2/libuv-1.53.0-mobile.tar.gz",
+            "sha256": "2597ad858657e2e42ceb95a512a399d4dc2f33579b81fbb2e039c737817ba931",
+            "size": 1
+          }
+        }
+      }
+    },
     "builds": {
       "ios-sim": { "profile": "ios", "emit": "binary", "toolchain": "clang", "outDir": "build/ios-sim" },
-      "ios-device": { "profile": "ios", "sdk": "iphoneos", "emit": "binary", "toolchain": "clang", "outDir": "build/ios-device" }
+      "ios-device": { "profile": "ios", "sdk": "iphoneos", "emit": "binary", "toolchain": "clang", "outDir": "build/ios-device" },
+      "ios-sim-async": { "profile": "ios", "emit": "binary", "toolchain": "clang", "async": "libuv", "outDir": "build/ios-sim-async" }
     },
     "scripts": {
       "start": "tsclang build --build ios-sim"

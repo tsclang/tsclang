@@ -47,12 +47,12 @@
     },
     {
       "name": "@tsclang/android",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "type": "platform",
-      "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle",
+      "description": "Android platform (bionic, API 28+ since #287 — libuv posix_spawn floor): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle; libuv 1.53.0 static bundle unlocks async (--async libuv, #287)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.1.tspkg",
-        "sha256": "cd388415674d6c822cfb23351b3a1a6220a670240ae0b6371347116c3e82c723"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.2.0.tspkg",
+        "sha256": "9ff5450495dee505015b8ca82556901764b6a1c1c6f7eed65a5a2ad463d1854b"
       },
       "versions": {
         "0.1.0": {
@@ -66,17 +66,37 @@
             "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.1.tspkg",
             "sha256": "cd388415674d6c822cfb23351b3a1a6220a670240ae0b6371347116c3e82c723"
           }
+        },
+        "0.2.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.2.0.tspkg",
+            "sha256": "9ff5450495dee505015b8ca82556901764b6a1c1c6f7eed65a5a2ad463d1854b"
+          }
         }
       }
     },
     {
       "name": "@tsclang/ios",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "type": "platform",
-      "description": "Apple iOS platform: Xcode clang via xcrun, simulator binaries run on the macOS host; no toolchain bundle — Xcode Command Line Tools ARE the toolchain (instruction mode)",
+      "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). libuv 1.53.0 static bundle unlocks async (--async libuv, #287); the Apple SDK itself is not redistributable — Xcode Command Line Tools ARE the compiler toolchain (darwin-x64 clang precedent)",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.1.0.tspkg",
-        "sha256": "ae8116d13e7f21c169c36ba1d89b0f4a99be5f3df96eb77adb32cd1304839e75"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.0.tspkg",
+        "sha256": "ddcabed84460c3cd8e86783205870fb006796898c4cd835dc6711126542645a6"
+      },
+      "versions": {
+        "0.1.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.1.0.tspkg",
+            "sha256": "ae8116d13e7f21c169c36ba1d89b0f4a99be5f3df96eb77adb32cd1304839e75"
+          }
+        },
+        "0.2.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-ios-0.2.0.tspkg",
+            "sha256": "ddcabed84460c3cd8e86783205870fb006796898c4cd835dc6711126542645a6"
+          }
+        }
       }
     }
   ]
