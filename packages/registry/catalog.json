@@ -47,12 +47,26 @@
     },
     {
       "name": "@tsclang/android",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "platform",
-      "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle (win32-x64 published, posix bundles rolling out via platform-android CI)",
+      "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle",
       "location": {
-        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.0.tspkg",
-        "sha256": "ac1f2d337a45562ce7b593747152dccacbbb815290b1e0d37fe06b9060d83ef6"
+        "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.1.tspkg",
+        "sha256": "cd388415674d6c822cfb23351b3a1a6220a670240ae0b6371347116c3e82c723"
+      },
+      "versions": {
+        "0.1.0": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.0.tspkg",
+            "sha256": "ac1f2d337a45562ce7b593747152dccacbbb815290b1e0d37fe06b9060d83ef6"
+          }
+        },
+        "0.1.1": {
+          "location": {
+            "url": "https://raw.githubusercontent.com/tsclang/tsclang/develop/packages/registry/archives/@tsclang-android-0.1.1.tspkg",
+            "sha256": "cd388415674d6c822cfb23351b3a1a6220a670240ae0b6371347116c3e82c723"
+          }
+        }
       }
     },
     {

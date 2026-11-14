@@ -1,6 +1,6 @@
 {
   "name": "@tsclang/android",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "platform",
   "description": "Android platform (bionic, API 24+): NDK clang cross-compile — PIE binary and .so; ndk-clang ships as a repacked official NDK bundle",
   "platform": {
@@ -13,6 +13,16 @@
             "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v1/ndk-clang-30.0.16248370-win32-x64.tar.gz",
             "sha256": "b14a3b04b5e83a74a748646cbb48a51ed39136503f7dc56a1d2729a21499d999",
             "size": 722
+          },
+          "linux-x64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v1/ndk-clang-30.0.16248370-linux-x64.tar.gz",
+            "sha256": "977cae2164adca78b9e435d72265c021620c106b2761bd5b4e424e14624f922e",
+            "size": 753
+          },
+          "darwin-arm64": {
+            "url": "https://github.com/tsclang/platform-android/releases/download/toolchains-v1/ndk-clang-30.0.16248370-darwin-arm64.tar.gz",
+            "sha256": "563965de627d3ee4c2d84ac51d08a436950e12971574caeb86fff55ad6bf33e0",
+            "size": 1617
           }
         }
       }

@@ -38,7 +38,8 @@ JSON-каталог (спека `13-build.md` → «Реестр»). CLI заб�
 (`github.com/tsclang/platform-{desktop,avr,wasm,android}/releases/download/<тег>/…`),
 CLI качает их по sha256 в `~/.tsclang/platforms/…` (#270). Тег = версия
 матрицы бандлов: `toolchains-v1` (gcc/avr-gcc/avrdude/emcc 0.3.0 +
-android ndk-clang 0.1.0), `toolchains-v2` (desktop clang 0.4.0).
+android ndk-clang 0.1.1 — полная матрица хостов), `toolchains-v2`
+(desktop clang 0.4.0).
 `@tsclang/ios` — instruction-mode: секции `toolchains` нет вообще, тулчейн
 = Xcode CLT на macOS (Apple SDK не редистрибутируем, #283).
 
@@ -60,6 +61,12 @@ x64-macOS-бинари (desktop → системный clang из Xcode CLT, #28
   файлы >100MB gh грузит через API сам; ассеты лимит 2GB (поэтому
   LLVM-таргеты пакуются в `.tar.xz`, остальные — `.tar.gz`; системный tar
   читает оба по суффиксу).
+- **darwin NDK — `.dmg` готчи (#283)**: том монтируется `hdiutil attach` и
+  копируется `cp -RL`. Симлинки внутри dmg (`bin/clang` → `…/bin/clang-21`
+  и т.п.) АБСОЛЮТНЫЕ — указывают в точку монтирования, после `detach` они
+  бы повисли. Node `cpSync({dereference:true})` такие ссылки НЕ
+  разворачивает (проверено на CI darwin), BSD `cp -L` копирует цели как
+  реальные файлы — бандл самодостаточен.
 - **Обновление версии тулчейна**: поднять версии в `BUNDLES` скрипта,
   пересобрать, залить новым тегом (`toolchains-v2`, …), обновить
   `toolchains.downloads` в манифестах платформ и переопубликовать `.tspkg`.

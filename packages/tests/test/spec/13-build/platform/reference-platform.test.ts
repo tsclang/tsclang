@@ -31,16 +31,16 @@ const REGISTRY_DIR = join(ROOT, "packages", "registry")
 // findIsolatedToolchain. Since #282 phase 4 desktop ships clang/LLVM-only
 // bundles (0.4.0, release tag toolchains-v2); avr/wasm stay on the
 // original 0.3.0 / toolchains-v1 matrix — their content did not change.
-// #283 staged rollout: android's ndk-clang publishes win32-x64 first
-// (posix bundles build in the platform-android repo CI — expectation
-// tightens to the full matrix with the next manifest bump); ios ships NO
-// toolchains at all — the Apple SDK is not redistributable, Xcode Command
+// #283 staged rollout DONE: android 0.1.1 ships the full host matrix
+// (win32-x64/linux-x64/darwin-arm64 — posix bundles built in the
+// platform-android repo CI, dmg symlinks dereferenced via cp -L); ios ships
+// NO toolchains at all — the Apple SDK is not redistributable, Xcode Command
 // Line Tools are the toolchain (instruction mode, darwin-x64 precedent).
 const REFERENCE_PLATFORMS = [
   { name: "@tsclang/desktop", dir: "desktop", version: "0.4.0", file: "@tsclang-desktop-0.4.0.tspkg", repo: "platform-desktop", tag: "toolchains-v2", toolchains: ["clang"] },
   { name: "@tsclang/avr", dir: "avr", version: "0.3.0", file: "@tsclang-avr-0.3.0.tspkg", repo: "platform-avr", tag: "toolchains-v1", toolchains: ["avr-gcc", "avrdude"] },
   { name: "@tsclang/wasm", dir: "wasm", version: "0.3.0", file: "@tsclang-wasm-0.3.0.tspkg", repo: "platform-wasm", tag: "toolchains-v1", toolchains: ["emcc"] },
-  { name: "@tsclang/android", dir: "android", version: "0.1.0", file: "@tsclang-android-0.1.0.tspkg", repo: "platform-android", tag: "toolchains-v1", toolchains: ["ndk-clang"], downloadsAtLeast: ["win32-x64"] },
+  { name: "@tsclang/android", dir: "android", version: "0.1.1", file: "@tsclang-android-0.1.1.tspkg", repo: "platform-android", tag: "toolchains-v1", toolchains: ["ndk-clang"], downloadsAtLeast: ["win32-x64", "linux-x64", "darwin-arm64"] },
   { name: "@tsclang/ios", dir: "ios", version: "0.1.0", file: "@tsclang-ios-0.1.0.tspkg", repo: null, tag: null, toolchains: null },
 ] as const
 
@@ -100,9 +100,8 @@ describe("13-build/platform 4.1 — эталонные пакеты в моно�
         expect(typeof dl.size === "number" && dl.size > 0).toBe(true)
         // Matrix: every toolchain covers at least win32-x64 + linux-x64
         // (darwin-x64 is partial — Intel Macs get system/brew instructions).
-        // android 0.1.0 stages win32 first — posix bundles are rolling out
-        // via the platform-android repo CI (downloadsAtLeast pins the
-        // currently published subset; tightens with the next bump).
+        // android 0.1.1 pins the FULL matrix (posix bundles landed in the
+        // platform-android repo CI; downloadsAtLeast enforces it from now on).
         const required = (ref as { downloadsAtLeast?: string[] }).downloadsAtLeast ?? ["win32-x64", "linux-x64"]
         const keys = Object.keys(tc.downloads)
         expect(JSON.stringify(required.filter((k) => !keys.includes(k)))).toBe("[]")
