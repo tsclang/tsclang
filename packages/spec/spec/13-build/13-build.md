@@ -1938,7 +1938,7 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
-| `android` | Google Android (bionic, API 24+) | — | aarch64-linux-android24 | binary (PIE) / .so | ndk-clang (изолированный NDK-бандл) | --target=aarch64-linux-android24, -fPIE -pie, -lm |
+| `android` | Google Android (bionic, API 28+) | — | aarch64-linux-android28 | binary (PIE) / .so | ndk-clang (изолированный NDK-бандл), libuv (async, #287) | --target=aarch64-linux-android28, -fPIE -pie, -lm |
 | `ios` | Apple iOS (darwin; SDK сим/девайс через xcrun) | — | arm64-apple-ios16.0[-simulator] | binary (PIE) | clang через `xcrun` (macOS-only) | --sdk iphonesimulator/iphoneos, --target=arm64-apple-ios16.0, -fPIE -pie |
 
 ### Web & Runtime
@@ -1998,7 +1998,7 @@ Full-OS платформа поверх bionic: 64 бита, heap-аллокат
 
 **Компиляция:** `tsclang build input.tsc --platform android --emit binary` (или `--emit so`)
 
-Таргет-тройка пинновая — `aarch64-linux-android24` (arm64-v8a; для эмуляторов x86_64 — `x86_64-linux-android24` через собственную тройку в бекенде). API 24 — минимальный уровень с полным C11 в bionic; pthread живёт в libc, поэтому:
+Таргет-тройка пинновая — `aarch64-linux-android28` (arm64-v8a; для эмуляторов x86_64 — `x86_64-linux-android28` через собственную тройку в бекенде). API 28 — минимальный уровень, на котором bionic объявляет `posix_spawn`, которую libuv v1.53 компилирует безусловно (собственный CI libuv собирает android на android-30); C11-библиотека и pthread-в-libc появились раньше (API 24). Пол (`24 → 28`, #287) — цена снятия E303: libuv-бандл 0.2.0 не линкуется против android-24-сискорута (необъявленные символы). pthread живёт в libc, поэтому:
 
 - `-fPIE -pie` — исполняемый файл (запуск на устройстве через `adb push` + `adb shell`);
 - `-shared -fPIC` — `--emit so`: библиотечная ступень binary-ранга, `<stem>.so` для JNI-обёртки в Android Studio (сборка `.apk` — зона Gradle, компилятор даёт binary/.so);

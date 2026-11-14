@@ -4,12 +4,12 @@ import { join, resolve, dirname, basename } from "path"
 import { fileURLToPath } from "url"
 import { compileTsc, parsePlatformDecl, capabilityDefines } from "@tsclang/compiler"
 import { RUNTIME_DIR, PROFILES_DIR } from "@tsclang/shared"
-import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool } from "./compilers/index.js"
+import { registerAll, getBackend, getDefaultCompiler, normalizeC, toWslPath, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool, libuvDirsForTriple } from "./compilers/index.js"
 import { matrix, filterValidTypes } from "./matrix.js"
 
 registerAll()
 
-export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool }
+export { normalizeC, toWslPath, getBackend, getDefaultCompiler, listAvailable, msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec, androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool, libuvDirsForTriple }
 export { matrix, filterValidTypes }
 
 /** Target profile → backend able to compile AND run code for that platform.

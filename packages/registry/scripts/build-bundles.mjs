@@ -183,7 +183,7 @@ const BUNDLES = [
     license: 'MIT (libuv; built from source — static uv_a cross-compiled for android arm64/x86_64 and ios device/sim slices)',
     // #287: the FIRST from-source bundle (everything above is a repack).
     // One archive carries ALL mobile slices — include/ + lib/<triple>/libuv.a
-    // for aarch64-linux-android24, x86_64-linux-android24,
+    // for aarch64-linux-android28, x86_64-linux-android28,
     // arm64-apple-ios16.0, arm64-apple-ios16.0-simulator and
     // x86_64-apple-ios16.0-simulator — so the SAME asset backs both
     // @tsclang/android and @tsclang/ios manifests and the global
@@ -414,8 +414,8 @@ function extractSource(spec, work) {
 // cmake per slice, Release + BUILD_SHARED_LIBS=OFF (static uv_a), install into
 // a per-slice prefix, then assemble include/ + lib/<triple>/libuv.a. Slices:
 const LIBUV_ANDROID_SLICES = [
-  { abi: 'arm64-v8a', triple: 'aarch64-linux-android24' },
-  { abi: 'x86_64', triple: 'x86_64-linux-android24' },
+  { abi: 'arm64-v8a', triple: 'aarch64-linux-android28' },
+  { abi: 'x86_64', triple: 'x86_64-linux-android28' },
 ];
 const LIBUV_IOS_SLICES = [
   // libuv's own CI recipe: CMAKE_SYSTEM_NAME=iOS + the sdk sysroot; CODE_SIGNING
@@ -480,7 +480,7 @@ async function buildLibuvMobile(bundle, target, spec) {
     installSlice(join(work, `b-android-${s.abi}`), prefix, [
       `-DCMAKE_TOOLCHAIN_FILE=${ndkToolchainFile}`,
       `-DANDROID_ABI=${s.abi}`,
-      '-DANDROID_PLATFORM=android-24',
+      '-DANDROID_PLATFORM=android-28', // bionic declares posix_spawn from API 28 (libuv needs it)
     ]);
     placeSlice(prefix, s.triple);
   }
@@ -506,7 +506,7 @@ async function buildLibuvMobile(bundle, target, spec) {
     `License: ${bundle.license}`,
     `Built: ${new Date().toISOString()} by packages/registry/scripts/build-bundles.mjs`,
     'Built from source (cmake Release, BUILD_SHARED_LIBS=OFF) — not an upstream binary repack.',
-    'Slices: lib/<triple>/libuv.a for android arm64/x86_64 (API 24, NDK r30) and ios device/sim.',
+    'Slices: lib/<triple>/libuv.a for android arm64/x86_64 (API 28, NDK r30) and ios device/sim.',
   ].join('\n') + '\n';
   writeFileSync(join(stage, 'TSC_BUNDLE_NOTICE.txt'), notice, 'utf8');
 

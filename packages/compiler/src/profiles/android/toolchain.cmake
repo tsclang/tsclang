@@ -19,8 +19,9 @@ if(EXISTS "${_tsc_ndk_bindir}/../sysroot")
 endif()
 
 # bionic: pthreads are in libc (-lpthread is a hard error since NDK r18);
-# executables are PIE (required for API 24+)
-set(ANDROID_TARGET_FLAG "--target=aarch64-linux-android24")
+# executables are PIE. API 28 floor (#287): libuv v1.53 needs posix_spawn
+# declarations that bionic ships only from API 28.
+set(ANDROID_TARGET_FLAG "--target=aarch64-linux-android28")
 set(CMAKE_C_FLAGS "${ANDROID_TARGET_FLAG} -std=c11" CACHE STRING "" FORCE)
 set(CMAKE_EXE_LINKER_FLAGS "${ANDROID_TARGET_FLAG} -fPIE -pie -lm" CACHE STRING "" FORCE)
 

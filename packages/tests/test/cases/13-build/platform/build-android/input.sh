@@ -23,7 +23,7 @@ export PATH
 tsclang build --build android --out-dir out
 
 test -f out/main && echo "binary-ok"
-grep -qx -- '--target=aarch64-linux-android24' ndk-argv.txt && echo "target-ok"
+grep -qx -- '--target=aarch64-linux-android28' ndk-argv.txt && echo "target-ok"
 grep -qx -- '-fPIE' ndk-argv.txt && grep -qx -- '-pie' ndk-argv.txt && echo "pie-ok"
 grep -qx -- '-lm' ndk-argv.txt && echo "lm-ok"
 grep -qx -- '-std=c11' ndk-argv.txt && echo "std-ok"

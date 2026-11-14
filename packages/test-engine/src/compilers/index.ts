@@ -8,7 +8,7 @@ import { IosSimBackend } from "./ios-sim.js"
 
 export type { CompilerBackend, CompileOpts, CompileResult, RunOpts, RunResult } from "./interface.js"
 export { register, getBackend, listAvailable, listAll } from "./registry.js"
-export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC, toWslPath } from "./utils.js"
+export { getDefaultCompiler, isInPath, isInWsl, findMsVC, normalizeC, toWslPath, libuvDirsForTriple } from "./utils.js"
 export { msys2Bash, toMsysPath, shQuote, bashLoginArgs, bashExec } from "./msys2.js"
 export { androidTargetFlagFor, buildAdbShellArgs, parseAdbRunOut, adbHasDevice, ndkClangTool } from "./ndk-clang.js"
 export { iosSimTripleFor } from "./ios-sim.js"

@@ -78,13 +78,13 @@ describe("wasm — buildEmccArgs", () => {
 
 describe("ndk-clang — androidTargetFlagFor", () => {
   test("default/unknown ABI falls back to arm64 (API level pinned)", () => {
-    expect(androidTargetFlagFor(undefined)).toBe("--target=aarch64-linux-android24")
-    expect(androidTargetFlagFor(null)).toBe("--target=aarch64-linux-android24")
-    expect(androidTargetFlagFor("armeabi-v7a")).toBe("--target=aarch64-linux-android24")
+    expect(androidTargetFlagFor(undefined)).toBe("--target=aarch64-linux-android28")
+    expect(androidTargetFlagFor(null)).toBe("--target=aarch64-linux-android28")
+    expect(androidTargetFlagFor("armeabi-v7a")).toBe("--target=aarch64-linux-android28")
   })
   test("device ABI maps to its triple — emulators are x86_64", () => {
-    expect(androidTargetFlagFor("arm64-v8a")).toBe("--target=aarch64-linux-android24")
-    expect(androidTargetFlagFor("x86_64")).toBe("--target=x86_64-linux-android24")
+    expect(androidTargetFlagFor("arm64-v8a")).toBe("--target=aarch64-linux-android28")
+    expect(androidTargetFlagFor("x86_64")).toBe("--target=x86_64-linux-android28")
   })
 })
 
@@ -100,23 +100,23 @@ describe("libuv — libuvDirsForTriple (#287)", () => {
 
   test("unset TSC_LIBUV → null", () => {
     delete process.env["TSC_LIBUV"]
-    expect(libuvDirsForTriple("aarch64-linux-android24")).toBe(null)
+    expect(libuvDirsForTriple("aarch64-linux-android28")).toBe(null)
   })
 
   test("root with include/ + lib/<triple>/libuv.a resolves both dirs", () => {
     mkdirSync(join(root, "include"), { recursive: true })
-    mkdirSync(join(root, "lib", "aarch64-linux-android24"), { recursive: true })
-    writeFileSync(join(root, "lib", "aarch64-linux-android24", "libuv.a"), "!<arch>\n")
+    mkdirSync(join(root, "lib", "aarch64-linux-android28"), { recursive: true })
+    writeFileSync(join(root, "lib", "aarch64-linux-android28", "libuv.a"), "!<arch>\n")
     process.env["TSC_LIBUV"] = root
-    const dirs = libuvDirsForTriple("aarch64-linux-android24")
+    const dirs = libuvDirsForTriple("aarch64-linux-android28")
     expect(dirs).not.toBe(null)
     expect(dirs!.includeDir).toBe(join(root, "include"))
-    expect(dirs!.libDir).toBe(join(root, "lib", "aarch64-linux-android24"))
+    expect(dirs!.libDir).toBe(join(root, "lib", "aarch64-linux-android28"))
   })
 
   test("triple without the .a slice → null (layout must match --target)", () => {
     process.env["TSC_LIBUV"] = root
-    expect(libuvDirsForTriple("x86_64-linux-android24")).toBe(null)
+    expect(libuvDirsForTriple("x86_64-linux-android28")).toBe(null)
   })
 })
 

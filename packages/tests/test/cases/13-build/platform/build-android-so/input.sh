@@ -19,7 +19,7 @@ export PATH
 tsclang build --build android-so --out-dir out
 
 test -f out/main.so && echo "so-ok"
-grep -qx -- '--target=aarch64-linux-android24' ndk-argv.txt && echo "target-ok"
+grep -qx -- '--target=aarch64-linux-android28' ndk-argv.txt && echo "target-ok"
 grep -qx -- '-shared' ndk-argv.txt && grep -qx -- '-fPIC' ndk-argv.txt && echo "shared-ok"
 grep -qx -- '-lm' ndk-argv.txt && echo "lm-ok"
 if grep -qx -- '-pie' ndk-argv.txt || grep -qx -- '-fPIE' ndk-argv.txt; then

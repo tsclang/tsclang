@@ -9,7 +9,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { after, describe, expect, test } from "@tsclang/test-engine"
 import { loadProfile } from "../../../../../cli/src/cli/profile-loader.js"
-import { TARGET_NAMES, EMIT_VALUES, buildNdkCompileArgs, ANDROID_TARGET_FLAG, ANDROID_ABI_TRIPLES } from "../../../../../shared/src/index.js"
+import { TARGET_NAMES, EMIT_VALUES, buildNdkCompileArgs, ANDROID_TARGET_FLAG, ANDROID_ABI_TRIPLES, ANDROID_API_LEVEL } from "../../../../../shared/src/index.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(here, "..", "..", "..", "..", "..", "..")
@@ -53,7 +53,7 @@ describe("13-build/platform android — встроенный профиль (#28
 // ── argv-контракт NDK-компиляции ─────────────────────────────────────────────
 
 describe("13-build/platform android — buildNdkCompileArgs (#283)", () => {
-  test("исполняемый файл: PIE, -lm, -std=c11 — и никогда -lpthread (bionic: pthread в libc с API 24)", () => {
+  test("исполняемый файл: PIE, -lm, -std=c11 — и никогда -lpthread (bionic: pthread в libc)", () => {
     const argv = buildNdkCompileArgs({ cPath: "out/main.c", outPath: "out/main", runtimeInclude: "rt" })
     expect(JSON.stringify(argv)).toBe(JSON.stringify([
       "out/main.c", "-o", "out/main",
@@ -88,16 +88,16 @@ describe("13-build/platform android — buildNdkCompileArgs (#283)", () => {
   test("targetFlag переопределяется для эмуляторов (x86_64) — карта ABI→triple", () => {
     const argv = buildNdkCompileArgs({
       cPath: "in.c", outPath: "out/main", runtimeInclude: "rt",
-      targetFlag: `--target=${ANDROID_ABI_TRIPLES["x86_64"]}24`,
+      targetFlag: `--target=${ANDROID_ABI_TRIPLES["x86_64"]}${ANDROID_API_LEVEL}`,
     })
-    expect(argv).toContain("--target=x86_64-linux-android24")
+    expect(argv).toContain("--target=x86_64-linux-android28")
     expect(ANDROID_ABI_TRIPLES["arm64-v8a"]).toBe("aarch64-linux-android")
   })
 
   test("libuv-опции (#287): блок -I/-L/-luv/-ldl после -lm, перед -std", () => {
     const argv = buildNdkCompileArgs({
       cPath: "in.c", outPath: "out/main", runtimeInclude: "rt",
-      libuv: { includeDir: "uv/include", libDir: "uv/lib/aarch64-linux-android24" },
+      libuv: { includeDir: "uv/include", libDir: "uv/lib/aarch64-linux-android28" },
     })
     expect(JSON.stringify(argv)).toBe(JSON.stringify([
       "in.c", "-o", "out/main",
@@ -106,7 +106,7 @@ describe("13-build/platform android — buildNdkCompileArgs (#283)", () => {
       "-fPIE", "-pie",
       "-lm",
       "-I", "uv/include",
-      "-L", "uv/lib/aarch64-linux-android24",
+      "-L", "uv/lib/aarch64-linux-android28",
       "-luv",
       // bionic: libuv's android core needs dlopen-backed probes — libdl is a
       // separate library even though pthreads live in libc

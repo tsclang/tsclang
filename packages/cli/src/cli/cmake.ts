@@ -1,5 +1,5 @@
 import { join, dirname } from 'path';
-import { C_STANDARD } from '@tsclang/shared';
+import { ANDROID_TARGET_FLAG, C_STANDARD } from '@tsclang/shared';
 
 export interface ProjectCmakeOptions {
   projectName: string;
@@ -45,8 +45,8 @@ export function generateProjectCmake(opts: ProjectCmakeOptions): string {
     // sysroot of the isolated bundle is stated when known (a PATH-pinned
     // ndk-clang locates its own). PIE like the CLI binary branch.
     lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
-    lines.push('add_compile_options(--target=aarch64-linux-android24)');
-    lines.push('add_link_options(--target=aarch64-linux-android24 -fPIE -pie -lm)');
+    lines.push(`add_compile_options(${ANDROID_TARGET_FLAG})`);
+    lines.push(`add_link_options(${ANDROID_TARGET_FLAG} -fPIE -pie -lm)`);
     if (sysroot) {
       lines.push(`set(CMAKE_SYSROOT ${cmakePath(sysroot)})`);
     }

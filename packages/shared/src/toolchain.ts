@@ -34,12 +34,14 @@ export const DEFAULT_CONSOLE_BAUD = 9600;
 
 // ── Android (NDK clang cross-compilation, #283) ────────────────────────────
 
-/** Default Android target: arm64 devices. API 24+ gives the full C11 bionic
- * library (strtoll, timespec_get) with pthreads already in libc. */
+/** Default Android target: arm64 devices. API 28 floor (#287): bionic
+ * declares posix_spawn only from API 28 and libuv v1.53 compiles those
+ * calls in unconditionally (its own CI builds android at android-30);
+ * C11 bionic (strtoll, timespec_get) + pthreads-in-libc arrived at 24. */
 export const ANDROID_TRIPLE = 'aarch64-linux-android';
 
 /** Minimum bionic API level the runtime targets. */
-export const ANDROID_API_LEVEL = 24;
+export const ANDROID_API_LEVEL = 28;
 
 /** The single --target flag every NDK-clang invocation carries. */
 export const ANDROID_TARGET_FLAG = `--target=${ANDROID_TRIPLE}${ANDROID_API_LEVEL}`;
