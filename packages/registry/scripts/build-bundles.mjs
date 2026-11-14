@@ -269,7 +269,22 @@ function bundleNdk(contentRoot, target) {
     });
     throw new Error(`ndk-clang driver not found; bin/ c-entries: ${cEntries.join(', ') || '(none)'}`);
   }
-  copyFileSync(join(binDir, driver), join(binDir, `ndk-clang${exe}`));
+  try {
+    copyFileSync(join(binDir, driver), join(binDir, `ndk-clang${exe}`));
+  } catch (e) {
+    // existsSync passed but the copy failed — dump what `driver` really is
+    // (symlink target, file type) and the non-wrapper bin/ entries, so the
+    // next fix needs no extra CI roundtrip.
+    const st = lstatSync(join(binDir, driver));
+    const what = st.isSymbolicLink()
+      ? `symlink -> ${readlinkSync(join(binDir, driver))}`
+      : `type=${(st.mode & 0o170000).toString(8)} size=${st.size}`;
+    const nonWrapper = entries.filter((f) => !/\d+-clang\+?$/.test(f));
+    throw new Error(
+      `copyFileSync(${driver}) failed: ${e.code} (${e.message}); lstat: ${what}; ` +
+      `non-wrapper bin/ entries: ${nonWrapper.slice(0, 25).join(', ')}`,
+    );
+  }
   if (target !== 'win32-x64') {
     const chmod = spawnSync('chmod', ['+x', join(binDir, 'ndk-clang')]);
     if (chmod.status !== 0) {
