@@ -2,7 +2,7 @@
 // 00.2.1; `required: false` tools render as informational (`[~]`) and never
 // affect the doctor exit code.
 
-export type ToolProfile = 'desktop' | 'embedded' | 'wasm';
+export type ToolProfile = 'desktop' | 'embedded' | 'wasm' | 'android';
 
 export interface RecommendedTool {
   name: string;
@@ -49,6 +49,16 @@ export const RECOMMENDED_TOOLS: Record<ToolProfile, RecommendedTool[]> = {
       installWin: 'emsdk: https://emscripten.org - emsdk install latest', installUnix: 'emsdk: https://emscripten.org - emsdk install latest',
     },
   ],
+  android: [
+    {
+      name: 'ndk-clang', required: true, purpose: 'android cross-compile (--emit binary/so)',
+      installWin: 'tsclang platform install @tsclang/android', installUnix: 'tsclang platform install @tsclang/android',
+    },
+    {
+      name: 'adb', required: false, purpose: 'run artifacts on a device/emulator',
+      installWin: 'Android SDK platform-tools', installUnix: 'apt install adb (or Android SDK platform-tools)',
+    },
+  ],
 };
 
 /**
@@ -63,6 +73,7 @@ export function profileFromBuilds(pkg: { builds?: unknown }): ToolProfile {
     if (!cfg || typeof cfg !== 'object') continue;
     if (cfg.emit === 'flash' || cfg.emit === 'hex' || cfg.profile === 'avr' || cfg.mcu) return 'embedded';
     if (cfg.emit === 'wasm') return 'wasm';
+    if (cfg.profile === 'android' || cfg.target === 'android' || cfg.emit === 'so') return 'android';
   }
   return 'desktop';
 }

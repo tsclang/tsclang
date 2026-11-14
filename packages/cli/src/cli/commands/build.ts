@@ -7,7 +7,7 @@ import { loadProfile, listAvailableProfiles, findPackageProfile } from '../profi
 import type { Capabilities } from '../profile-loader.js';
 import { generateBuildCmake, generateProjectCmake } from '../cmake.js';
 import { checkLockStale, findIsolatedToolchain, parseToolchainSpec, resolveProfileExtras, resolveToolchain, toolchainInstructions } from '@tsclang/pm';
-import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES } from '@tsclang/shared';
+import { OPTIMIZE_LEVELS, PACKAGE_FILE, NUMBER_TYPES, C_STANDARD_FLAG, GCC_LINK_FLAGS, RUNTIME_HEADER, RUNTIME_WASM_HEADER, RUNTIME_WASM_LIB, DEFAULT_AVR_MCU, TSC_DEFINES, DEFAULT_TARGET, RUNTIME_DIR, PROFILES_DIR, DEFAULT_OPTIMIZE_FLAG, SIZE_OPTIMIZE_FLAG, LIBUV_LINK_FLAG, EMIT_VALUES, buildNdkCompileArgs } from '@tsclang/shared';
 import { validateStrictRules } from '../config-validator.js';
 import { missingInput, checkInput, reportErrors } from '../helpers.js';
 import { buildAvrdudeArgs, type FlashConfig } from '../flash.js';
@@ -310,7 +310,9 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     const fromCaps = _capabilities?.toolchain;
     if (typeof fromCaps === 'string' && fromCaps) return { name: parseToolchainSpec(fromCaps).name, explicit: false };
     const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
-    return { name: target === 'avr' ? 'avr-gcc' : 'clang', explicit: false };
+    if (target === 'avr') return { name: 'avr-gcc', explicit: false };
+    if (target === 'android') return { name: 'ndk-clang', explicit: false };
+    return { name: 'clang', explicit: false };
   }
   const _tcRef = _toolchainSpec();
   function _toolchainSpecName(): string {
@@ -321,7 +323,8 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   function _hintPlatform(): string {
     const target = String(_profileTarget || _targetFlag || _buildCfg?.target || DEFAULT_TARGET);
     if (target === 'avr') return '@tsclang/avr';
-    if (target === 'wasm') return '@tsclang/wasm';
+    if (target === 'wasm' || emit === 'wasm') return '@tsclang/wasm';
+    if (target === 'android') return '@tsclang/android';
     return '@tsclang/desktop';
   }
 
@@ -330,7 +333,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
   const _toolBinDirs = new Set<string>();
   let _lastCPath: string | null = null;
 
-  interface ResolvedTool { command: string; env?: NodeJS.ProcessEnv }
+  interface ResolvedTool { command: string; env?: NodeJS.ProcessEnv; sysroot?: string }
 
   function _resolveTool(name: string, configError: string): ResolvedTool | null {
     const version = _toolchainPin.name === name ? _toolchainPin.version : undefined;
@@ -351,10 +354,14 @@ export function runBuildCommand(args: string[], rootDir: string): void {
     }
     if (r.kind === 'path') return { command: name };
     _toolBinDirs.add(r.binDir);
+    // The NDK bundle ships sysroot/ next to bin/; the android compile flags
+    // need it explicitly (a PATH-pinned clang finds its own sysroot instead)
+    const sysroot = join(dirname(r.binDir), 'sysroot');
+    const hasSysroot = existsSync(sysroot) ? sysroot : undefined;
     // absolute path + PATH prepend: toolchain drivers call their own
     // assemblers/linkers by name (avr-gcc → avr-as), so the bin dir must
     // stay reachable even when the binary is spawned by absolute path
-    return { command: join(r.binDir, name), env: _withToolsOnPath({ ...process.env }, [r.binDir]) };
+    return { command: join(r.binDir, name), env: _withToolsOnPath({ ...process.env }, [r.binDir]), sysroot: hasSysroot };
   }
 
   // Prepend tool bin dirs to PATH. The variable may arrive as either `PATH`
@@ -391,6 +398,26 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       );
       process.exit(1);
     }
+  }
+
+  // --emit so is the android library artifact (.so for JNI/Gradle apps)
+  if (emit === 'so') {
+    const targetName = _profileTarget || _targetFlag;
+    if (targetName !== 'android') {
+      process.stderr.write(
+        `ConfigError: --emit so requires the android target; current target is ${targetName || DEFAULT_TARGET}\n`
+      );
+      process.exit(1);
+    }
+  }
+
+  // android binaries do not run on the build host — exec (spawn the artifact
+  // here) cannot work; the device tier (adb) is the android "run" story
+  if (emit === 'exec' && (_profileTarget || _targetFlag) === 'android') {
+    process.stderr.write(
+      'ConfigError: --emit exec runs the artifact on the build host; android binaries need a device — use --emit binary (or so) and run via adb\n'
+    );
+    process.exit(1);
   }
 
   if (emit === 'flash') {
@@ -447,6 +474,12 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       process.stderr.write('hint: tsclang platform install <platform>  (the toolchain ships with the platform package)\n');
       process.exit(1);
     }
+    // android: the NDK bundle sysroot must be stated explicitly (bin/../sysroot)
+    let sysroot: string | undefined;
+    if (target === 'android' && isolated) {
+      const sr = join(dirname(isolated.binDir), 'sysroot').replace(/\\/g, '/');
+      if (existsSync(sr)) sysroot = sr;
+    }
     const projectName = (typeof _pkg?.name === 'string' && _pkg.name ? _pkg.name : stem)
       .replace(/^@[^/]+\//, '').replace(/[^a-zA-Z0-9_-]/g, '_');
     mkdirSync(outDir, { recursive: true });
@@ -454,6 +487,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       projectName, target, mcu: _mcu, toolchain, optimize, mainFile: `${stem}.c`,
       toolchainFile: _profileExtras.toolchainFile,
       includeDirs: _profileExtras.includeDirs,
+      sysroot,
     }), 'utf8');
     process.stdout.write(`Built ${join(outDir, 'CMakeLists.txt')}\n`);
     _runCommand();
@@ -533,7 +567,7 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       }
     }
 
-    if (emit === 'binary' || emit === 'exec') {
+    if (emit === 'binary' || emit === 'exec' || emit === 'so') {
       // #241 + #271 + #282: a missing toolchain is a config error, not a
       // "cc failed:" with empty diagnostics. The compiler name is the unified
       // toolchain reference (builds.<n>.toolchain → profile capability →
@@ -543,20 +577,43 @@ export function runBuildCommand(args: string[], rootDir: string): void {
       const ccTool = _resolveTool(ccName, `ConfigError: --emit binary requires ${ccName} in PATH`);
       if (!ccTool) return false;
       const runtimeH = join(ROOT, RUNTIME_DIR, RUNTIME_HEADER);
-      const binPath = join(outDir, stem);
-      const gccOptimize = optimize ? [`-${optimize}`] : [];
-      const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
-      const gcc = spawnSync(ccTool.command, [
-        cPath, '-o', binPath,
-        '-I', dirname(runtimeH),
-        ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
-        ...gccOptimize,
-        ...(useLibuv ? [LIBUV_LINK_FLAG] : []),
-        ..._profileExtras.includeDirs.flatMap((d) => ['-I', d]),
-        ...capabilityDefines(_capabilities),
-      ], { stdio: 'pipe', env: ccTool.env });
-      if (gcc.status !== 0) {
-        const gccStderr = gcc.stderr?.toString() || '';
+      const targetName = String(_profileTarget || _targetFlag || DEFAULT_TARGET);
+      let gccResult: ReturnType<typeof spawnSync>;
+      if (targetName === 'android') {
+        // Cross-compile through the NDK clang bundle (#283): --target triple,
+        // explicit sysroot (the repacked bundle layout), bionic link flags —
+        // GCC_LINK_FLAGS carries -lpthread which is a hard error on bionic
+        const soPath = join(outDir, stem + '.so');
+        const outPath = emit === 'so' ? soPath : join(outDir, stem);
+        gccResult = spawnSync(ccTool.command, buildNdkCompileArgs({
+          cPath,
+          outPath,
+          runtimeInclude: dirname(runtimeH),
+          sysroot: ccTool.sysroot,
+          shared: emit === 'so',
+          optimize,
+          includeDirs: _profileExtras.includeDirs,
+          defines: capabilityDefines(_capabilities),
+        }), { stdio: 'pipe', env: ccTool.env });
+        if (gccResult.status === 0 && emit === 'so') {
+          process.stdout.write(`Built ${stem}.so\n`);
+        }
+      } else {
+        const binPath = join(outDir, stem);
+        const gccOptimize = optimize ? [`-${optimize}`] : [];
+        const useLibuv = c.includes(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
+        gccResult = spawnSync(ccTool.command, [
+          cPath, '-o', binPath,
+          '-I', dirname(runtimeH),
+          ...GCC_LINK_FLAGS, C_STANDARD_FLAG,
+          ...gccOptimize,
+          ...(useLibuv ? [LIBUV_LINK_FLAG] : []),
+          ..._profileExtras.includeDirs.flatMap((d) => ['-I', d]),
+          ...capabilityDefines(_capabilities),
+        ], { stdio: 'pipe', env: ccTool.env });
+      }
+      if (gccResult.status !== 0) {
+        const gccStderr = gccResult.stderr?.toString() || '';
         process.stderr.write(`tsclang: ${ccName} failed:\n${gccStderr}\n`);
         if (!gccStderr.trim()) {
           // a Windows gcc copied out of its MSYS2 environment dies before printing

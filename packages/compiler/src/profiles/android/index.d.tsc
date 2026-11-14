@@ -1,0 +1,13 @@
+declare platform {
+    allocator: "heap"
+    async: "none"
+    fpu: true
+    bits: 64
+    usize: "u64"
+    defaultNumber: "f64"
+    unaligned_access: true
+    os: true
+    posix: true
+    strtoll: true
+    toolchain: "ndk-clang"
+}

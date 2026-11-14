@@ -1,0 +1,6 @@
+function main(): void {
+    const s = String(1) + " android";
+    console.log(s);
+}
+
+main();

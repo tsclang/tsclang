@@ -13,6 +13,9 @@ export interface ProjectCmakeOptions {
   toolchainFile?: string;
   /** Profile capability `include` — extra header dirs (#271). */
   includeDirs?: string[];
+  /** Android NDK bundle sysroot (bin/../sysroot) — the cross compile needs
+   * it stated explicitly; only set when the isolated bundle provides one. */
+  sysroot?: string;
 }
 
 // quoted cmake path literal with forward slashes — identical output on every
@@ -20,7 +23,7 @@ export interface ProjectCmakeOptions {
 const cmakePath = (p: string): string => JSON.stringify(p.replace(/\\/g, '/'));
 
 export function generateProjectCmake(opts: ProjectCmakeOptions): string {
-  const { projectName, target, mcu, toolchain, optimize, mainFile, toolchainFile, includeDirs } = opts;
+  const { projectName, target, mcu, toolchain, optimize, mainFile, toolchainFile, includeDirs, sysroot } = opts;
   const lines: string[] = [
     'cmake_minimum_required(VERSION 3.16)',
   ];
@@ -34,6 +37,21 @@ export function generateProjectCmake(opts: ProjectCmakeOptions): string {
       lines.push('add_compile_options(-mmcu=${MCU})');
       lines.push('add_link_options(-mmcu=${MCU})');
     }
+    if (optimize) lines.push(`add_compile_options(-${optimize})`);
+    if (includeDirs?.length) lines.push(`include_directories(${includeDirs.map(cmakePath).join(' ')})`);
+    lines.push(`add_executable(${projectName} ${mainFile})`);
+  } else if (target === 'android') {
+    // NDK clang cross build (#283): explicit compiler + --target triple; the
+    // sysroot of the isolated bundle is stated when known (a PATH-pinned
+    // ndk-clang locates its own). PIE like the CLI binary branch.
+    lines.push(`set(CMAKE_C_COMPILER ${toolchain})`);
+    lines.push('add_compile_options(--target=aarch64-linux-android24)');
+    lines.push('add_link_options(--target=aarch64-linux-android24 -fPIE -pie -lm)');
+    if (sysroot) {
+      lines.push(`set(CMAKE_SYSROOT ${cmakePath(sysroot)})`);
+    }
+    lines.push(`set(CMAKE_C_STANDARD ${C_STANDARD})`);
+    lines.push('set(CMAKE_C_STANDARD_REQUIRED ON)');
     if (optimize) lines.push(`add_compile_options(-${optimize})`);
     if (includeDirs?.length) lines.push(`include_directories(${includeDirs.map(cmakePath).join(' ')})`);
     lines.push(`add_executable(${projectName} ${mainFile})`);

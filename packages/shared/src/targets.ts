@@ -1,5 +1,6 @@
 export const TARGET_NAMES = [
   'desktop',
+  'android',
   'avr',
   'arm',
   'nes',

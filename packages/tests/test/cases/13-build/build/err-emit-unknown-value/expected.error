@@ -1,1 +1,1 @@
-ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake, dts)
+ConfigError: unknown emit value 'foo' (valid: c, binary, exec, so, hex, flash, wasm, cmake, dts)

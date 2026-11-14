@@ -30,6 +30,9 @@ const TARGET_BACKENDS: TargetBackendEntry[] = [
   { target: "wasm", backend: "wasm" },
   { target: "wasm32", backend: "wasm" },
   { target: "arm", backend: null, note: "no arm-none-eabi backend registered" },
+  // #283 phase 1: android cross-compiles via the ndk-clang bundle; the
+  // compile+adb run backend lands in phase 2
+  { target: "android", backend: null, note: "no adb device backend yet (#283 phase 2)" },
   { target: "dos", backend: null, note: "no DOS compiler/simulator backend" },
   { target: "genesis", backend: null, note: "no Genesis simulator" },
   { target: "nes", backend: null, note: "no NES simulator (caps profile testable on desktop gcc only)" },

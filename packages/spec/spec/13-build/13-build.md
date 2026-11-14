@@ -891,7 +891,7 @@ TSClang-библиотека и C-wrapper различаются явным ти
 | `optimize` | Уровень оптимизации (`"O0"`, `"O1"`, `"O2"`, `"O3"`, `"Os"`) | `O0` |
 | `defaultNumber` | Тип для `number` (`"f64"`, `"f32"`, `"i32"`) | `f64` |
 | `binaryMode` | `"normal"` / `"small"` (type erasure) | `"normal"` |
-| `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"`, `"dts"` | `"c"` |
+| `emit` | тип вывода: `"c"`, `"binary"`, `"exec"`, `"so"`, `"hex"`, `"flash"`, `"wasm"`, `"cmake"`, `"dts"` | `"c"` |
 | `outDir` | директория вывода | `./build/<name>` |
 | `main` | entry point файл (override верхнего уровня) | наследует |
 | `runtime` | async runtime: `"libuv"`, `"io_uring"`, `"embedded"` | `"libuv"` для desktop, `"embedded"` для embedded |
@@ -1367,7 +1367,7 @@ hint: tsclang platform install <platform>  (the toolchain ships with the platfor
 
 Изолированный тулчейн спавнится по абсолютному пути с prepended bin-dir в PATH (драйверы вызывают свои ассемблеры/линкеры по имени: `avr-gcc` → `avr-as`). В `--emit cmake` в `set(CMAKE_C_COMPILER ...)` всегда подставляется заявленный компилятор (posix-слэши) — CMakeLists честно называет тулчейн и не наследует то, что найдёт системный cmake; пин без кеша и без совпавшей версии PATH — ошибка с тем же хинтом.
 
-**Голый tsclang — транслятор, не компилятор (#282).** Компилирующие `emit` (`binary`/`exec`/`hex`/`flash`/`wasm`) без пина `builds.<n>.toolchain` знают про тулчейн ровно одно: изолированный кеш платформы. Профильная capability `toolchain` (встроенная или из пакета платформы) задаёт ИМЯ, но не разрешает PATH — она не рукописная. PATH не найден в кеше — громкий отказ с инструкцией install-or-pin, а не тихая сборка тем, что подвернулось в системе:
+**Голый tsclang — транслятор, не компилятор (#282).** Компилирующие `emit` (`binary`/`exec`/`so`/`hex`/`flash`/`wasm`) без пина `builds.<n>.toolchain` знают про тулчейн ровно одно: изолированный кеш платформы. Профильная capability `toolchain` (встроенная или из пакета платформы) задаёт ИМЯ, но не разрешает PATH — она не рукописная. PATH не найден в кеше — громкий отказ с инструкцией install-or-pin, а не тихая сборка тем, что подвернулось в системе:
 
 ```
 ConfigError: --emit hex requires a toolchain 'avr-gcc' — none is configured
@@ -1937,7 +1937,7 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 
 | Платформа | Описание | Fallback | LLVM/GCC Triple | Выходной файл | Toolchain | Флаги |
 |-----------|----------|----------|-----------------|---------------|-----------|-------|
-| `android` | Google Android | `arm64` | aarch64-linux-android | .so / .apk | ndk (clang) | -shared |
+| `android` | Google Android (bionic, API 24+) | — | aarch64-linux-android24 | binary (PIE) / .so | ndk-clang (изолированный NDK-бандл) | --target=aarch64-linux-android24, -fPIE -pie, -lm |
 | `ios` | Apple iOS | `arm64` | aarch64-apple-ios | .app | clang | -miphoneos-version-min=11.0 |
 
 ### Web & Runtime
@@ -1990,6 +1990,23 @@ import { intdos } from "@dos/int21h"                // MS-DOS системные
 **Компиляция:** `tsclang build input.tsc --target wasm32 --emit wasm`
 
 **Доступно:** async (libuv через emscripten), stdio, файловая система (MEMFS/NODEFS), потоки (pthreads через Web Workers), сеть (WebSocket/HTTP fetch).
+
+#### `android` — NDK-кросс-компиляция (#283)
+
+Full-OS платформа поверх bionic: 64 бита, heap-аллокатор, POSIX, `defaultNumber: "f64"`. Тулчейн — `ndk-clang`, изолированный бандл (репак официального NDK: clang+lld+sysroot) из пакета `@tsclang/android`; по контракту #282 PATH используется только при явном пине `builds.<n>.toolchain = "ndk-clang"`. Бандл назван `ndk-clang`, а не `clang`: изолированные бандлы ищутся глобально по всем платформам, и «взять новейший clang» не должен молча выбирать между desktop-LLVM и NDK.
+
+**Компиляция:** `tsclang build input.tsc --platform android --emit binary` (или `--emit so`)
+
+Таргет-тройка пинновая — `aarch64-linux-android24` (arm64-v8a; для эмуляторов x86_64 — `x86_64-linux-android24` через собственную тройку в бекенде). API 24 — минимальный уровень с полным C11 в bionic; pthread живёт в libc, поэтому:
+
+- `-fPIE -pie` — исполняемый файл (запуск на устройстве через `adb push` + `adb shell`);
+- `-shared -fPIC` — `--emit so`: библиотечная ступень binary-ранга, `<stem>.so` для JNI-обёртки в Android Studio (сборка `.apk` — зона Gradle, компилятор даёт binary/.so);
+- `-lm` — математика в отдельной библиотеке;
+- `-lpthread` — никогда: на bionic это жёсткая ошибка линковки.
+
+Изолированный бандл передаёт `--sysroot` явно (после репака драйвер сам его не найдёт); PATH-пиннедый `ndk-clang` находит sysroot сам — флаг не ставится.
+
+**Ограничения MVP:** `async: "none"` — async-функции дают `E303` (кросс-сборка libuv в бандл — follow-up); `--emit exec` запрещён (`ConfigError`): android-бинарь не запускается на хосте, «run»-история платформы — это adb (этап 2 — test-engine бекенд, `adb shell getprop ro.product.cpu.abi` для авто-детекта ABI).
 
 ### Embedded & IoT
 
@@ -2423,12 +2440,12 @@ tsclang build --emit cmake    # только CMakeLists.txt (без компил
 ```
 
 Значение `--emit` валидируется (после разрешения флага и `builds.<name>.emit`): неизвестное
-значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, exec, hex, flash, wasm, cmake, dts)`,
+значение — ошибка `ConfigError: unknown emit value 'foo' (valid: c, binary, exec, so, hex, flash, wasm, cmake, dts)`,
 exit 1 (никогда не «молча как c»).
 
 Ось `--emit` — лестница пайплайна: каждое значение включает предыдущую ступень desktop-цепочки
 и добавляет одну. Desktop: `c` → `binary` → `exec` (запуск собранного артефакта). Embedded:
-`c` → `hex` → `flash` (прошивка). `wasm` — свой конец цепочки; `cmake` — альтернативный выход
+`c` → `hex` → `flash` (прошивка). `so` — библиотечная ступень `binary` (android `.so` для JNI/Gradle). `wasm` — свой конец цепочки; `cmake` — альтернативный выход
 со ступени C (только CMakeLists.txt, без компиляции); `dts` — декларационный выход без кодогена:
 `.d.tsc` для потребителей TSClang-библиотеки (тот же эмиттер, что у `tsclang emit-dts`, но с
 поддержкой `outDir`). Симметрия: `exec`:binary = `flash`:hex —
@@ -2439,7 +2456,7 @@ exit 1 (никогда не «молча как c»).
 программы — часть команды: `--emit binary --command "./out/hello --port 8080"`.
 
 Внешние тулзы проверяются до запуска (pre-check `--version`): `--emit binary`/`exec` — clang
-(дефолт desktop-таргета; ссылочная платформа `@tsclang/desktop` — LLVM/Clang, #282); `--emit hex`/`flash` —
+(дефолт desktop-таргета; ссылочная платформа `@tsclang/desktop` — LLVM/Clang, #282); android-таргет — `ndk-clang` (тот же компилирующий ранг плюс `--emit so`); `--emit hex`/`flash` —
 avr-gcc и avr-objcopy; `flash` дополнительно — avrdude; `--emit wasm` — emcc. Резолв тулчейна:
 изолированный кеш платформы — всегда; PATH — только при явном пине `builds.<n>.toolchain`.
 Отсутствие без пина — `ConfigError: --emit <value> requires a toolchain '<name>' — none is configured`

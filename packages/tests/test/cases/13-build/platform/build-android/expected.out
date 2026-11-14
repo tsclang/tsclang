@@ -1,0 +1,6 @@
+binary-ok
+target-ok
+pie-ok
+lm-ok
+std-ok
+no-pthread-ok
