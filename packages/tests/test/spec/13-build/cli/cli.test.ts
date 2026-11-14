@@ -362,7 +362,7 @@ describe("13-build/cli — build: заявленный результат и о�
       // explicit toolchain pin: bare PATH rides are gone (#282)
       writeFileSync(join(dir, "tsc.package.json"), JSON.stringify({
         name: "app", version: "0.1.0", type: "executable", main: "hello.tsc",
-        builds: { "avr-hex": { target: "avr", emit: "hex", toolchain: "avr-gcc" } },
+        builds: { "avr-hex": { profile: "avr", emit: "hex", toolchain: "avr-gcc" } },
       }))
       const r = await runCli(["build", "--build", "avr-hex", "--out-dir", "out"], { cwd: dir, timeoutMs: 120000 })
       expect(r.code).toBe(0)

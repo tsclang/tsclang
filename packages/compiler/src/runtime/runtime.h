@@ -1,9 +1,11 @@
 #pragma once
 
-// Enable POSIX functions (clock_gettime, CLOCK_MONOTONIC, etc.) on Linux
+// POSIX.1-2008 base: clock_gettime/CLOCK_MONOTONIC (1993+), getaddrinfo and
+// struct addrinfo for std/net + std/ws (200112+). glibc hides those under
+// strict -std=c11 unless the level is stated; mingw declares them anyway.
 #ifndef _WIN32
 #ifndef __AVR__
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #endif
 #endif
 
@@ -40,10 +42,12 @@
 
 #pragma once
 
-// Enable POSIX functions (clock_gettime, CLOCK_MONOTONIC, etc.) on Linux
+// POSIX.1-2008 base: clock_gettime/CLOCK_MONOTONIC (1993+), getaddrinfo and
+// struct addrinfo for std/net + std/ws (200112+). glibc hides those under
+// strict -std=c11 unless the level is stated; mingw declares them anyway.
 #ifndef _WIN32
 #ifndef __AVR__
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #endif
 #endif
 
@@ -3698,8 +3702,13 @@ static inline void tsc_thread_join(tsc_thread_t t) {
     pthread_join(t, NULL);
 }
 static inline bool tsc_thread_done(tsc_thread_t t) {
-    /* Non-blocking join attempt РІР‚вЂќ not portable but works on Linux */
-#if defined(__linux__)
+    /* Non-blocking join attempt — a glibc extension (musl has none: fall
+     * back to "not done"). The prototype is re-declared because _POSIX_C_SOURCE
+     * hides it in strict -std=c11, leaving an implicit-declaration warning. */
+#if defined(__GLIBC__)
+#ifndef __USE_GNU
+    extern int pthread_tryjoin_np(pthread_t, void **);
+#endif
     return pthread_tryjoin_np(t, NULL) == 0;
 #else
     (void)t; return false;
