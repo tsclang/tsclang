@@ -143,6 +143,38 @@ const BUNDLES = [
       },
     },
   },
+  {
+    toolchain: 'ndk-clang', version: '30.0.16248370', // Pkg.Revision from source.properties
+    license: 'Apache-2.0 WITH LLVM-exception (Android NDK: LLVM/Clang + lld + bionic sysroot)',
+    postInstall: bundleNdk,
+    // The Android NDK (repack, #283): only the LLVM toolchain of the NDK is
+    // needed — toolchains/llvm/prebuilt/<host-tag>/ (bin/ + sysroot/) becomes
+    // the bundle root via subRoot. The bundle is named ndk-clang, NOT clang:
+    // findIsolatedToolchain searches bundles globally across platforms and a
+    // version-less lookup picks the newest — an NDK "clang" would shadow (or
+    // be shadowed by) the desktop clang bundle. darwin ships a single
+    // universal build under the darwin-x86_64 host tag; its archive is a
+    // .dmg (hdiutil, darwin runners only).
+    targets: {
+      'win32-x64': {
+        source: 'https://dl.google.com/android/repository/android-ndk-r30-windows.zip',
+        file: 'android-ndk-r30-windows.zip',
+        subRoot: 'toolchains/llvm/prebuilt/windows-x86_64',
+      },
+      'linux-x64': {
+        source: 'https://dl.google.com/android/repository/android-ndk-r30-linux.zip',
+        file: 'android-ndk-r30-linux.zip',
+        subRoot: 'toolchains/llvm/prebuilt/linux-x86_64',
+      },
+      'darwin-arm64': {
+        source: 'https://dl.google.com/android/repository/android-ndk-r30-darwin.dmg',
+        file: 'android-ndk-r30-darwin.dmg',
+        // TODO: [registry] verify the dmg volume root name on a darwin runner
+        // at first darwin bundle build (hdiutil prints the mount point)
+        subRoot: 'AndroidNDKr30.universal/toolchains/llvm/prebuilt/darwin-x86_64',
+      },
+    },
+  },
 ];
 
 // Make the emcc bundle consumable by findIsolatedToolchain (binDir=<root>/bin):
@@ -210,6 +242,22 @@ function bundleEmcc(contentRoot, target) {
   }
 }
 
+// The NDK LLVM toolchain serves the `ndk-clang` toolchain name: the driver is
+// the upstream clang binary copied under the bundle name (the copy keeps
+// driver mode — its name contains "clang", so target detection is unchanged).
+// The rest of bin/ stays as upstream ships it (lld, llvm-ar, target wrappers).
+function bundleNdk(contentRoot, target) {
+  const binDir = join(contentRoot, 'bin');
+  const exe = target === 'win32-x64' ? '.exe' : '';
+  copyFileSync(join(binDir, `clang${exe}`), join(binDir, `ndk-clang${exe}`));
+  if (target !== 'win32-x64') {
+    const chmod = spawnSync('chmod', ['+x', join(binDir, 'ndk-clang')]);
+    if (chmod.status !== 0) {
+      throw new Error('chmod +x bin/ndk-clang failed (posix bundles must be built on a posix host)');
+    }
+  }
+}
+
 async function fetchSource(url, file) {
   const path = join(SRC, file);
   if (existsSync(path) && statSync(path).size > 10_000) return path;
@@ -259,13 +307,43 @@ function unwrapSingleRoot(dir) {
   return dir;
 }
 
+// Extract a fetched source archive into `work` and return its content root.
+// .dmg (darwin NDK) can only be opened with hdiutil on a darwin host — the
+// mounted volume is copied out while attached, then detached.
+function extractSource(spec, work) {
+  if (spec.file.endsWith('.dmg')) {
+    if (process.platform !== 'darwin') {
+      throw new Error(`${spec.file}: darwin .dmg bundles must be built on a darwin host`);
+    }
+    const mnt = join(work, 'dmg');
+    const inner = join(work, 'dmg-content');
+    run('hdiutil', ['attach', '-readonly', '-mountpoint', mnt, '-nobrowse', join(SRC, spec.file)]);
+    try {
+      mkdirSync(inner, { recursive: true });
+      for (const entry of readdirSync(mnt)) cpSync(join(mnt, entry), join(inner, entry), { recursive: true });
+    } finally {
+      run('hdiutil', ['detach', mnt, '-force']);
+    }
+    return unwrapSingleRoot(inner);
+  }
+  run(tarBinary(), ['-xf', join(SRC, spec.file)], { cwd: work });
+  return unwrapSingleRoot(work);
+}
+
 function buildOne(bundle, target, spec) {
   const work = join(SRC, `stage-${bundle.toolchain}-${target}`);
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
 
-  run(tarBinary(), ['-xf', join(SRC, spec.file)], { cwd: work });
-  const contentRoot = unwrapSingleRoot(work);
+  let contentRoot = extractSource(spec, work);
+  // Deep repack root (e.g. the NDK's toolchains/llvm/prebuilt/<host-tag>):
+  // the content of that folder becomes the bundle root.
+  if (spec.subRoot) {
+    contentRoot = join(contentRoot, ...spec.subRoot.split('/'));
+    if (!existsSync(contentRoot)) {
+      throw new Error(`subRoot '${spec.subRoot}' not found in ${spec.file} (archive layout changed?)`);
+    }
+  }
 
   // Fold extra dependency distributions into the tree (e.g. python + node
   // for the emcc bundle).
