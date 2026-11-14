@@ -1,0 +1,8 @@
+{
+  "name": "run-ios",
+  "main": "main.tsc",
+  "builds": {
+    "ios-sim": { "profile": "ios", "emit": "binary", "toolchain": "clang" },
+    "ios-device": { "profile": "ios", "sdk": "iphoneos", "emit": "binary", "toolchain": "clang" }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@tsclang/ios",
+  "version": "0.1.0",
+  "type": "platform",
+  "description": "Apple iOS platform: Xcode clang via xcrun (macOS-only; simulator binaries run on the host). No toolchain bundle — the Apple SDK is not redistributable, Xcode Command Line Tools ARE the toolchain (instruction mode, darwin-x64 clang precedent)",
+  "platform": {
+    "profile": "ios",
+    "builds": {
+      "ios-sim": { "profile": "ios", "emit": "binary", "toolchain": "clang", "outDir": "build/ios-sim" },
+      "ios-device": { "profile": "ios", "sdk": "iphoneos", "emit": "binary", "toolchain": "clang", "outDir": "build/ios-device" }
+    },
+    "scripts": {
+      "start": "tsclang build --build ios-sim"
+    }
+  }
+}

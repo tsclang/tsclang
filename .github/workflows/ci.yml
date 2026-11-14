@@ -5,12 +5,16 @@
 # (needs-tools / needs-unix markers, emulator- or bundle-gated suites) skip
 # themselves when the tool is absent; that is the runner's normal behavior.
 #
-# - build+typecheck: both OSes
+# - build+typecheck: ubuntu/windows + macos (phase 3: darwin is a first-class
+#   desktop host)
 # - corpus: 4 phases x 2 OSes (linux also gets avr-gcc/simavr/avrdude so the
 #   AVR run-cycle cases execute for real; windows gets MinGW gcc via MSYS2 —
 #   the runner wraps every gcc call in `bash --login` itself, msys2.ts)
 # - spec suites + book suite (phased per CONTEXT.md: 00.1+00.3+00.4 / 00.5+00.6 / 00.7)
 # - test-engine self-tests
+# - macos-ios (#283 phase 3): focused job — real xcrun compiles of both iOS
+#   triples and a host run of the simulator binary (run-ios corpus case; the
+#   full corpus does not run on macos — gcc-vs-clang drift is out of scope)
 
 name: CI
 
@@ -34,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -165,3 +169,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm tsx packages/test-engine/test/run.ts
+
+  macos-ios:
+    name: ios xcrun tier (macos)
+    needs: build
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Xcode CLT sanity (the iOS "toolchain bundle")
+        run: |
+          xcrun --version
+          xcrun --sdk iphonesimulator --find clang
+          xcrun --sdk iphoneos --find clang
+      - name: ios corpus — real compile of both triples + host run of the sim binary
+        run: pnpm tsx packages/tests/test/runner.ts 13-build/platform/run-ios 13-build/platform/build-ios

@@ -2012,7 +2012,7 @@ Full-OS платформа поверх bionic: 64 бита, heap-аллокат
 
 #### `ios` — Xcode clang через xcrun (#283)
 
-Full-OS платформа поверх darwin: 64 бита, heap-аллокатор, POSIX, `defaultNumber: "f64"`. Apple SDK не редистрибутируем — бандла нет, и это осознанный дизайн: компиляция идёт через `xcrun --sdk <sdk> clang` и требует macOS с Xcode Command Line Tools. Гейт #282 сохраняется: изолированный clang-бандл desktop или явный пин `builds.<n>.toolchain = "clang"`.
+Full-OS платформа поверх darwin: 64 бита, heap-аллокатор, POSIX, `defaultNumber: "f64"`. Apple SDK не редистрибутируем — бандла нет, и это осознанный дизайн: компиляция идёт через `xcrun --sdk <sdk> clang` и требует macOS с Xcode Command Line Tools. Гейт #282 сохраняется: изолированный clang-бандл desktop или явный пин `builds.<n>.toolchain = "clang"`. Пакет `@tsclang/ios` ставит профиль и пресеты сборок (`ios-sim` / `ios-device`) без тулчейн-секции вовсе — секция `toolchains` у пакета платформы опциональна; «поставьте Xcode Command Line Tools» и есть его install-история (инструкция вместо бандла, прецедент darwin-x64).
 
 **Компиляция:** `tsclang build input.tsc --platform ios --emit binary` — поле `builds.<n>.sdk` выбирает SDK:
 
