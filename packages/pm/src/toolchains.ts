@@ -382,6 +382,11 @@ export interface ProfileExtras {
   toolchainFile?: string;
 }
 
+/** Windows absolute forms (drive `C:\x`, UNC `\\server\x`) — a platform
+ * package authored on Windows must keep them absolute on every host OS;
+ * posix isAbsolute() alone does not recognize them. */
+const WINDOWS_ABS_PATH = /^[A-Za-z]:[\\/]/;
+
 /** Resolve profile capability paths (`toolchainFile`, `include`) against the
  * directory the profile came from — a platform package ships them next to
  * index.d.tsc. Absolute paths pass through. */
@@ -389,7 +394,8 @@ export function resolveProfileExtras(
   caps: { toolchainFile?: string; include?: string | string[] },
   profileDir: string,
 ): ProfileExtras {
-  const resolvePath = (p: string): string => (isAbsolute(p) ? p : join(profileDir, p));
+  const resolvePath = (p: string): string =>
+    WINDOWS_ABS_PATH.test(p) || p.startsWith('\\\\') || isAbsolute(p) ? p : join(profileDir, p);
   const includeDirs: string[] = [];
   if (typeof caps.include === 'string') includeDirs.push(resolvePath(caps.include));
   else if (Array.isArray(caps.include)) {
