@@ -1,11 +1,12 @@
 // Book coverage: packages/spec/book/00-intro/00.3-arch/ (7 chapters).
-// 00.3.1 pipeline order + CLI artifacts → 07-cli.test.ts (build behavior).
+// 00.3.1 CLI artifacts → the 13-build/cli dictionary suite (build behavior);
+// the 00.3.1 pipeline-order theses are not covered anywhere yet.
 // The `codegen()` signature thesis (00.3.5:79) is internal API — not tested.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { describe, expect, test, compile } from "@tsclang/test-engine"
+import { describe, expect, test, compile, run } from "@tsclang/test-engine"
 import { lex, parse, KEYWORDS } from "@tsclang/compiler"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -133,6 +134,22 @@ console.log(b)`)).toBeTruthy()
 let a: i32 = 42;
 let c: u8 = a;
 console.log(c)`)).toThrow()
+  })
+
+  // 00.3.4:27-37 — ownership fragment (fixed per #257, 2026-11-15): string
+  // assignment retains (immutable + ARC, s stays alive), class assignment
+  // moves — use-after-move is the typecheck error the fragment promises.
+  test("00.3.4 ownership: string retain, класс move — use-after-move ошибка", () => {
+    expect(run(`
+class Box { v: i32 = 1 }
+let s = "hello"
+let s2 = s
+console.log(s)`)).toBe("hello")
+    expect(() => run(`
+class Box { v: i32 = 1 }
+let a = new Box()
+let b = a
+console.log(a.v)`)).toThrow(Error, "use of moved value")
   })
 
   // 00.3.5:56-73 — the type mapping table, row by row

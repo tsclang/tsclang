@@ -721,12 +721,12 @@ describe("13-build/cli — run named scripts", () => {
   })
 })
 
-// === debug (00.7.3-debug; живёт после удаления run — #238) ===
+// === debug (00.7.4-debug; бинарный запуск — ниже, "build ... --emit binary --command") ===
 
-describe("13-build/cli — debug (00.7.3-debug)", () => {
-  // run удалён (заменён `build --emit binary --command`); покрытие запуска бинаря —
-  // в "build: заявленный результат и опции" (--emit binary --command)
-  test("debug --help — exit 0 (команда живёт после удаления run)", async () => {
+describe("13-build/cli — debug (00.7.4-debug)", () => {
+  // run жив (00.7.3-run, describe "run named scripts" выше в этом файле);
+  // покрытие запуска бинаря — в "build: заявленный результат и опции"
+  test("debug --help — exit 0", async () => {
     const r = await runCli(["debug", "--help"])
     expect(r.code).toBe(0)
     expect(r.stdout.length > 0).toBeTruthy()
@@ -930,9 +930,9 @@ describe("13-build/cli — emit dts + builds.<n>.main (#252)", () => {
   })
 })
 
-// === lint / format / explain / emit-dts / validate-config / packages (00.7.6-00.7.14) ===
+// === lint / format / explain / emit-dts / validate-config / packages (00.7.7-00.7.15) ===
 
-describe("13-build/cli — lint (00.7.7)", () => {
+describe("13-build/cli — lint (00.7.8)", () => {
   test("lint файл с no-unreachable — ненулевой exit, LintError в выводе", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "bad.tsc"), 'function f(): void { return; console.log("x"); }\n')
@@ -941,14 +941,14 @@ describe("13-build/cli — lint (00.7.7)", () => {
     expect(out(r)).toContain("no-unreachable")
   })
 
-  test("lint --rule=prefer-const — фильтр по одному правилу (00.7.7:30)", async () => {
+  test("lint --rule=prefer-const — фильтр по одному правилу (00.7.8:33)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     const r = await runCli(["lint", "letty.tsc", "--rule=prefer-const"], { cwd: dir })
     expect(out(r)).toContain("prefer-const")
   })
 
-  test("lint --fix переписывает let → const (00.7.7:29)", async () => {
+  test("lint --fix переписывает let → const (00.7.8:31)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "letty.tsc"), "let x = 1;\nconsole.log(x);\n")
     await runCli(["lint", "letty.tsc", "--fix"], { cwd: dir })
@@ -1012,7 +1012,7 @@ describe("13-build/cli — lint --format: форматтер как опция �
   })
 })
 
-describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.7.6)", () => {
+describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.7.7)", () => {
   test("explain E012 — объяснение кода ошибки (00.7.9)", async () => {
     const r = await runCli(["explain", "E012"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
@@ -1027,7 +1027,7 @@ describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.
     expect(existsSync(join(dir, "hello.d.tsc"))).toBe(true)
   })
 
-  test("validate-config tsc.package.json — exit 0 (00.7.6)", async () => {
+  test("validate-config tsc.package.json — exit 0 (00.7.7)", async () => {
     const dir = mkTmp()
     writeFileSync(join(dir, "tsc.package.json"), PKG_JSON)
     const r = await runCli(["validate-config", "tsc.package.json"], { cwd: dir })
@@ -1035,8 +1035,8 @@ describe("13-build/cli — explain/emit-dts/validate-config (00.7.9-00.7.10, 00.
   })
 })
 
-describe("13-build/cli — install/update/search/publish (00.2.4:39-46, 00.7.11-00.7.14)", () => {
-  test("search regex — exit 0, непустой вывод (00.7.13)", async () => {
+describe("13-build/cli — install/update/search/publish (00.2.4:39-46, 00.7.11-00.7.15)", () => {
+  test("search regex — exit 0, непустой вывод (00.7.14)", async () => {
     const r = await runCli(["search", "regex"], { cwd: mkTmp() })
     expect(r.code).toBe(0)
     expect(r.stdout.length > 0).toBeTruthy()

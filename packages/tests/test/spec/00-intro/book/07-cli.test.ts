@@ -1,4 +1,4 @@
-// Book coverage: packages/spec/book/00-intro/00.7-cli-overview/ (16 chapters).
+// Book coverage: packages/spec/book/00-intro/00.7-cli-overview/ (18 chapters).
 // Most of 00.7 is probed command-by-command by the 13-build/cli dictionary
 // suite (help/build/run/debug/lint/explain/install/update/remove/lsp...).
 // This file covers the GAPS that suite and the corpus leave open:

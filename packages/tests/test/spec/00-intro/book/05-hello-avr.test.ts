@@ -1,5 +1,6 @@
 // Book coverage: packages/spec/book/00-intro/00.5-hello-avr/ (5 chapters).
-// 00.5.5 (flashing avrdude) is hardware-only — nothing to test in CI.
+// 00.5.5 (flashing avrdude) needs hardware; the avrdude invocation itself
+// is covered in CI by the corpus case 13-build/build/flash-avrdude-mock.
 
 import { readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
@@ -104,12 +105,11 @@ let a: Arc<Box> = new Arc<Box>(new Box())
     expect(c).not.toContain("%f")
   })
 
-  // 00.5.4:31-41 — the book shows a `native { ... }` block. Reality (#257):
-  // the implementation has no brace-form native blocks — the syntax is the
-  // template literal `native \`...\`` (as used in 00.1.6/00.1.7). The book
-  // example below throws; the equivalent template-literal form is covered by
-  // the next test.
-  test("00.5.4 native { } блок из книги — синтаксис не существует (реальный: native `...`)", () => {
+  // 00.5.4:29 explicitly documents that brace-form native blocks do not
+  // exist — the syntax is the template literal `native \`...\`` (as used in
+  // 00.1.6/00.1.7). Regression guard: the brace form must keep failing to
+  // compile. The template-literal form is covered by the next test.
+  test("00.5.4 native { } блок — синтаксис не существует (реальный: native `...`)", () => {
     expect(() => compile(`
 @inline
 function uart_print(s: string): void {

@@ -11,7 +11,7 @@ describe("00-intro/book — 00.4 hello desktop (00.4.1–00.4.7)", () => {
     expect(run('console.log("Hello, World!");')).toBe("Hello, World!")
   })
 
-  // 00.4.1:17-23 — the exact C skeleton the book shows
+  // 00.4.1:17-23 skeleton + the printf line from 00.4.3:11-19
   test("00.4.1 C-скелет: include + int main(void) + TSC_INIT + printf + return 0", () => {
     const c = compile('console.log("Hello, World!");')
     for (const line of [

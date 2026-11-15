@@ -38,7 +38,7 @@
       "result": ".c file (+ CMakeLists.txt when --emit c) or binary (when --emit binary)",
       "resultProvenance": "00.2.4-quick-start.md:37",
       "options": [
-        { "name": "--emit", "takesValue": true, "values": ["c", "binary", "exec", "hex", "flash", "wasm", "cmake", "dts"], "default": "c", "provenance": "00.7.2-build.md:27" },
+        { "name": "--emit", "takesValue": true, "values": ["c", "binary", "exec", "so", "hex", "flash", "wasm", "cmake", "dts"], "default": "c", "provenance": "00.7.2-build.md:27" },
         { "name": "--out-dir", "takesValue": true, "default": ".", "provenance": "00.7.2-build.md:26" },
         { "name": "--command", "takesValue": true, "description": "run shell command after successful build (overrides builds.<name>.command); host shell, env TSC_OUT_DIR", "provenance": "00.7.2-build.md:40" },
         { "name": "--target", "takesValue": true, "description": "desktop, avr, nes, wasm, ...", "default": "desktop", "provenance": "00.7.2-build.md:27" },

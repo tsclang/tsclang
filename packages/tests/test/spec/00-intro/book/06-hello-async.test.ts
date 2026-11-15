@@ -66,14 +66,12 @@ async function main(): Promise<void> {
     expect(run('async function main(): void {\n    console.log("boot");\n}')).toBe("boot")
   })
 
-  // 00.6.4:24 presents `int _result` as the AVR state-struct difference.
-  // Reality (#257): `_result` follows the *return type*, not the target —
+  // 00.6.4:24,45 — `_result` follows the *return type*, not the target:
   // `main(): void` adds `int _result` on desktop as well, and `Promise<void>`
-  // omits it on both targets. The book compares an avr-void struct against a
-  // desktop-Promise<void> struct (00.6.1), hence the apparent difference.
-  // Also reality vs the book sample: on avr async is opt-in (profile default
-  // async:"none" → E303), and under the static allocator every async function
-  // must be @static (E301) — the compiling avr form is `@static async`.
+  // omits it on both targets (the book states this explicitly at :45). Also
+  // the avr reality: async is opt-in there (profile default async:"none" →
+  // E303) and under the static allocator every async function must be
+  // @static (E301) — the compiling avr form is `@static async`.
   test("00.6.4 int _result следует из типа возврата void, а не из таргета avr", () => {
     expect(() => compile('async function main(): void {\n    console.log("boot");\n}', { target: "avr" })).toThrow()
     expect(() => compile('async function main(): void {\n    console.log("boot");\n}', { target: "avr", async: "sm" })).toThrow()

@@ -108,11 +108,11 @@ console.log(new P().x)`)).toBe("1")
   })
 
   test("00.1.4:64 mut-параметр — НЕ поддерживается: явная ошибка (канонично Mut<T>)", () => {
-    // The book table row "Mutable parameter | `mut` … (как в TS)" claims a
-    // `mut x: T` parameter modifier. Reality: it never existed — `mut` parsed
-    // as a parameter NAME and produced invalid C (`void *mut`). Per spec
-    // 04-borrow the canonical spelling is `x: Mut<T>`, so the parser now
-    // rejects the modifier with an explicit error instead of a silent bug.
+    // The book table used to claim a `mut x: T` parameter modifier "(как в
+    // TS)" — it never existed: `mut` parsed as a parameter NAME and produced
+    // invalid C (`void *mut`). Per spec 04-borrow the canonical spelling is
+    // `x: Mut<T>`; the parser rejects the modifier with an explicit error,
+    // and the book row (fixed per #257, 2026-11-15) says exactly that.
     expect(() => run(`
 function f(mut x: i32): void { x = x + 1 }
 console.log(f(1))`)).toThrow(Error, '"mut" parameter modifier is not supported')
@@ -248,8 +248,9 @@ console.log(m.get("a"))`)).toBe("1")
     expect(() => compile('try { throw new Error("boom") } catch (e) { console.log("caught") }')).toThrow()
   })
 
-  // 00.1.7:42-58 — == is ===: no coercion; explicit cast needed for mixed types
-  test("00.1.7 == и === идентичны; однотипное сравнение переносится как есть", () => {
+  // 00.1.7:42-58 — same-type == and === are identical; mixed == coerces
+  // like JS Abstract Equality (+W012 warning), mixed === is E125 (#237)
+  test("00.1.7 однотипное == и === переносятся как есть", () => {
     expect(run("console.log(1 == 1)\nconsole.log(1 === 1)")).toBe("true\ntrue")
   })
 
@@ -286,10 +287,11 @@ let b = "1"
 console.log(a === b)`)).toThrow(Error, "[E125]")
   })
 
-  // 00.1.7:72-75 — ownership: "let s2 = s; // move". Reality (#257 finding):
-  // String assignment RETAINS (s stays usable — CONTEXT ownership table);
-  // move semantics applies to classes/arrays. The book example as printed
-  // actually works, which is friendlier than the book claims.
+  // 00.1.7:79-95 — ownership: assignment semantics by type. String = ARC
+  // retain (s stays usable — CONTEXT ownership table); classes/arrays =
+  // move, use-after-move = E002. The book used to comment the string sample
+  // "// move" (#257 finding); fixed 2026-11-15 — both samples below are now
+  // literal book lines (00.1.7:88-94).
   test("00.1.7 string-присваивание: s остаётся живым (retain, не move)", () => {
     expect(run(`
 let s = "hello";
@@ -297,15 +299,15 @@ let s2 = s;
 console.log(s);`)).toBe("hello")
   })
 
-  test("00.1.7 move для классов: использование после присваивания — ошибка компиляции", () => {
-    expect(() => compile(`
+  test("00.1.7 move для классов: использование после присваивания — ошибка E002", () => {
+    expect(() => run(`
 class Box { v: i32 = 1 }
 let a = new Box()
 let b = a
-console.log(a.v)`)).toThrow()
+console.log(a.v)`)).toThrow(Error, "use of moved value")
   })
 
-  // 00.1.7:88-93 — typed throws
+  // 00.1.7:97-113 — typed throws
   test("00.1.7 throws IOError: сигнатура, вызов под try, перехват по типу", () => {
     expect(run(`
 class IOError {}
@@ -321,7 +323,7 @@ try {
   })
 
   test("00.1.7/00.3.4 throws без try: компилятор НЕ требует try (книга 00.3.4 обещает ошибку)", () => {
-    // 00.3.4:36-40 claims `let content = readFile("test.txt")` is a compile
+    // 00.3.4:41-47 claims `let content = readFile("test.txt")` is a compile
     // error ("нужен try или ?"). Reality: it compiles; an actually-thrown
     // error surfaces as a runtime abort (exit 1). Finding reported in #257.
     expect(() => run(`
@@ -330,7 +332,7 @@ function rf(p: string): string throws IOError { throw new IOError() }
 console.log(rf("x"))`)).toThrow()
   })
 
-  // 00.1.7:99 — ES modules: named exports only
+  // 00.1.7:115-119 — ES modules: named exports only
   test("00.1.7 export default запрещён", () => {
     expect(() => compile("export default function f(): void {}")).toThrow()
   })
@@ -339,13 +341,13 @@ console.log(rf("x"))`)).toThrow()
     expect(compile("export function f(): void {}")).toBeTruthy()
   })
 
-  // 00.1.7:107-110 — inline C
+  // 00.1.7:121-131 — inline C
   test("00.1.7 inline C: native-блок с printf попадает в C-вывод", () => {
     const c = compile('native `\n    printf("Direct C code!\\n");\n`')
     expect(c).toContain('printf("Direct C code!\\n");')
   })
 
-  // 00.1.7:119-125 — @isr interrupt handler
+  // 00.1.7:133-145 — @isr interrupt handler
   test("00.1.7 @isr(\"TIMER1_COMPA\") — обработчик прерывания компилируется", () => {
     expect(compile(`
 let counter: i32 = 0
@@ -356,12 +358,12 @@ function onTick(): void {
 console.log(counter)`)).toBeTruthy()
   })
 
-  // 00.1.7:134 — var stays as a let-alias
+  // 00.1.7:154 — var stays as a let-alias
   test("00.1.7 var — alias для let", () => {
     expect(run("var x = 1\nconsole.log(x)")).toBe("1")
   })
 
-  // 00.1.7:142-148 — migration: simple TS code works as-is
+  // 00.1.7:160-168 — migration: simple TS code works as-is
   test("00.1.7 миграция: add(a: number, b: number) работает как есть → 5", () => {
     expect(run(`
 function add(a: number, b: number): number {
@@ -370,7 +372,7 @@ function add(a: number, b: number): number {
 console.log(add(2, 3));`)).toBe("5")
   })
 
-  // 00.1.7:154-188 — migration with edits: Ref<Config>, throws, template literal
+  // 00.1.7:170-208 — migration with edits: Ref<Config>, throws, template literal
   test("00.1.7 миграция Config: Ref<T> + throws Error + шаблон → localhost:8080", () => {
     expect(run(`
 class Config {
