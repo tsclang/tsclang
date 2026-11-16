@@ -60,12 +60,12 @@ function _collectFreeNames(body: unknown, paramNames: string[], out: Set<string>
   walk(body, new Set());
 }
 
-interface CellInfo { ctype: string; varKind: 'let' | 'const' | 'var'; fromParam: boolean; }
+interface CellInfo { ctype: string; varKind: 'let' | 'const' | 'var'; fromParam: boolean; fromLoop?: boolean; }
 
 // Ctypes eligible for a shared cell driven by an ARROW capture: primitives and
 // String. Classes/arrays keep pointer capture in the arrow env (already
 // TS-true mutation visibility) — no cell needed for them.
-const _CELLABLE = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t',
+export const _CELLABLE = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t',
   'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
   'float', 'double', 'bool', 'char', 'size_t', 'ptrdiff_t', 'String']);
 
@@ -73,7 +73,7 @@ const _CELLABLE = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t',
 // block subtree (except nested FuncDecl bodies — their own block pre-scan
 // runs when the deferred body is built). Binding-aware: names shadowed inside
 // an arrow body or bound as its params are not reported.
-function _collectArrowCaptures(block: Block, fnNames: Set<string>, out: Set<string>): void {
+export function _collectArrowCaptures(block: Block, fnNames: Set<string>, out: Set<string>): void {
   const visit = (n: unknown, inArrow: boolean): void => {
     if (!n || typeof n !== 'object') return;
     if (Array.isArray(n)) { for (const x of n) visit(x, inArrow); return; }
@@ -94,6 +94,10 @@ function _collectArrowCaptures(block: Block, fnNames: Set<string>, out: Set<stri
 }
 
 export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: string[], depth: number): (() => void) | null {
+  // #295 v2c-2: loop vars flagged by the For visitor become per-iteration
+  // cells. Consume unconditionally so a stray map never leaks past this block.
+  const loopCells = ctx._pendingLoopCells;
+  ctx._pendingLoopCells = null;
   const fns = block.body.filter((s: Stmt) => s.kind === 'FuncDecl') as FuncDecl[];
   if (fns.length > 0 && ctx._buildingClosureBody) {
     throw ctx.errorCode('E020', fns[0], { detail: 'nested function declarations inside closures are not supported yet (planned for shared-cell closures)' });
@@ -174,6 +178,13 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
   for (const nm of arrowCaptured) {
     if (allFnNames.has(nm) || activeSaved?.fields.has(nm) || newCells.has(nm)) continue;
     if (ctx.lookup(nm)?._cellVar) continue; // already a cell from an outer block
+    // #295 v2c-2: loop binding — per-iteration cell (copy-in from the C loop
+    // local at block entry; copy-out on the cleanup path for C-style `for`).
+    if (loopCells?.has(nm)) {
+      const lc = loopCells.get(nm)!;
+      if (_CELLABLE.has(lc.ctype)) newCells.set(nm, { ctype: lc.ctype, varKind: 'let', fromParam: true, fromLoop: lc.copyOut });
+      continue;
+    }
     if (blockLocals.has(nm)) {
       const vd = blockLocals.get(nm)!;
       let ct: string | null = null;
@@ -228,6 +239,12 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
       if (cell.fromParam) lines.push(`${I}env->${nm} = ${nm};`);
     }
     ctx._registerCleanup(`tsc_env_release(env)`);
+    // Loop cells copy out AFTER the body (LIFO cleanup emission puts these
+    // lines before the release above): body mutations reach the C loop local
+    // before the header update/test — TS per-iteration semantics.
+    for (const [nm, cell] of newCells) {
+      if (cell.fromLoop) ctx._registerCleanup(`${nm} = env->${nm}`);
+    }
   }
 
   // The env this block's nested fns (and their bodies) capture through.

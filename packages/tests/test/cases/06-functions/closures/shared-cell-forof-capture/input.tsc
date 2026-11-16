@@ -1,0 +1,12 @@
+function main(): void {
+  const items: Array<i32> = [10, 20];
+  let a: () => i32 = (): i32 => -1;
+  let b: () => i32 = (): i32 => -1;
+  let first: boolean = true;
+  for (const x of items) {
+    const f: () => i32 = (): i32 => x;
+    if (first) { a = f; first = false; } else { b = f; }
+  }
+  console.log(a());
+  console.log(b());
+}

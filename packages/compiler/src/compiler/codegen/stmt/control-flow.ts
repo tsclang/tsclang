@@ -2,6 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { Expression, SymbolInfo, Stmt, Switch, Block } from '@tsclang/ast';
 import type { ThrowsCtx } from '../top-level/decorators.js';
 import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
+import { _CELLABLE, _collectArrowCaptures } from '../misc/nested-fns.js';
 export function _emitRetainIfNeeded(ctx: CodeGenContext, valC: string, valNode: Expression, p: (s: string) => void) {
     if (valNode.kind === 'Ident') {
       const sym = ctx.lookup(valNode.name);
@@ -535,6 +536,27 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             initC = ctx.exprToC(node.init.expr, lines, depth);
           }
         }
+        // #295 v2c-2: `for (let i ...)` whose body arrows capture `i` gets
+        // per-iteration cells — the body block's pre-scan consumes this map
+        // and builds one env per iteration (copy-in at entry, copy-out on the
+        // cleanup path, release unless escaping closures retain it). `var`
+        // stays single-binding (TS) — no cells.
+        const _loopVarNames = new Set<string>();
+        if (node.init?.kind === 'VarDecl' && node.init.name && node.init.varKind !== 'var') _loopVarNames.add(node.init.name);
+        else if (node.init?.kind === 'VarDecls') {
+          for (const d of node.init.decls) if (d.kind === 'VarDecl' && d.name && d.varKind !== 'var') _loopVarNames.add(d.name);
+        }
+        if (_loopVarNames.size > 0 && !ctx._buildingClosureBody && node.body?.kind === 'Block') {
+          const _captured = new Set<string>();
+          _collectArrowCaptures(node.body, new Set(), _captured);
+          const _cells = new Map<string, { ctype: string; copyOut: boolean }>();
+          for (const nm of _captured) {
+            if (!_loopVarNames.has(nm)) continue;
+            const sym = ctx.lookup(nm);
+            if (sym && !sym._cellVar && sym.ctype && _CELLABLE.has(sym.ctype)) _cells.set(nm, { ctype: sym.ctype, copyOut: true });
+          }
+          if (_cells.size > 0) ctx._pendingLoopCells = _cells;
+        }
         if (ctx._inMathTry) {
           p(`for (${initC};;) {`);
           ctx._pushLoopCleanups();
@@ -547,6 +569,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             lines.push(`${IS}if (!(${testC})) break;`);
           }
           ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+          ctx._pendingLoopCells = null;
           if (node.update) {
             const updLines: string[] = [];
             const updC = ctx.exprToC(node.update, updLines, depth + 1);
@@ -567,6 +590,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           ctx._pushLoopCleanups();
           ctx._loopDepth++;
           ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+          ctx._pendingLoopCells = null;
           ctx._loopDepth--;
           ctx._emitLoopBodyCleanups(lines, ' '.repeat(ctx.indent * (depth + 1)));
           ctx._popLoopCleanups();
@@ -867,9 +891,20 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
                 ctx.define(_bindName, { ctype: _elemC, varKind: node.varKind });
               }
             }
+            // #295 v2c-2: captured simple binding — per-iteration cell (no copy-out).
+            if (_bindName && !_isComplex && node.varKind !== 'var'
+                && !ctx._buildingClosureBody && node.body?.kind === 'Block'
+                && _CELLABLE.has(_elemC) && !ctx.lookup(_bindName)?._cellVar) {
+              const _cap = new Set<string>();
+              _collectArrowCaptures(node.body, new Set(), _cap);
+              if (_cap.has(_bindName)) {
+                ctx._pendingLoopCells = new Map([[_bindName, { ctype: _elemC, copyOut: false }]]);
+              }
+            }
             ctx._pushLoopCleanups();
             ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+            ctx._pendingLoopCells = null;
             ctx._loopDepth--;
             ctx._emitLoopBodyCleanups(lines, II);
             ctx._popLoopCleanups();
@@ -913,9 +948,23 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             ctx.define(elem.name!, { ctype: 'int32_t', varKind: node.varKind });
           }
         }
+        // #295 v2c-2: captured simple binding — per-iteration shared cell, no
+        // copy-out (the per-iteration C local dies at iteration end; TS
+        // discards the binding too). Complex elems are pointer bindings —
+        // already TS-true. `var` stays single-binding — no cells.
+        if (bindName && !_isComplexType && node.varKind !== 'var'
+            && !ctx._buildingClosureBody && node.body?.kind === 'Block'
+            && _CELLABLE.has(elemType) && !ctx.lookup(bindName)?._cellVar) {
+          const _cap = new Set<string>();
+          _collectArrowCaptures(node.body, new Set(), _cap);
+          if (_cap.has(bindName)) {
+            ctx._pendingLoopCells = new Map([[bindName, { ctype: elemType, copyOut: false }]]);
+          }
+        }
         ctx._pushLoopCleanups();
         ctx._loopDepth++;
         ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+        ctx._pendingLoopCells = null;
         ctx._loopDepth--;
         ctx._emitLoopBodyCleanups(lines, II);
         ctx._popLoopCleanups();

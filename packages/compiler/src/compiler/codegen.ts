@@ -537,6 +537,11 @@ class Context {
   _activeEnv!: import('./codegen/misc/nested-fns.js').ActiveEnv | null;
   _fnBodyParamsForCells!: Param[] | null;
   _buildingClosureBody!: boolean;
+  // #295 v2c-2: `for`/`for-of` bindings captured by arrows in the body become
+  // per-iteration cells (fresh env each iteration; copy-in at entry, copy-out
+  // on the cleanup path for C-style `for` only). The loop visitor sets this
+  // map right before visiting the body; the body block's pre-scan consumes it.
+  _pendingLoopCells!: Map<string, { ctype: string; copyOut: boolean }> | null;
 
   // Function-visit state
   _curFuncName!: string | null;
@@ -736,6 +741,7 @@ class Context {
     this._activeEnv = null;
     this._fnBodyParamsForCells = null;
     this._buildingClosureBody = false;
+    this._pendingLoopCells = null;
     this._prototypedFuncs = new Set();
     this._processedVarDecls = new Set();
     this._deferredStaticInits = new Map();

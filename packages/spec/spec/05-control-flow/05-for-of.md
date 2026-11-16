@@ -78,3 +78,19 @@ for (let i = 0; i < nums.length; i++) {
 }
 ```
 
+
+## Замыкания и loop-переменные (#295 v2c-2)
+
+`for (let/const x of ...)` создаёт **per-iteration binding** — как в TS. Стрелка в теле, захватывающая `x`, делит ячейку итерации: мутация `x` в теле видна стрелке той же итерации; замыкания, пережившие разные итерации, держат **разные** значения.
+
+```typescript
+const items: Array<i32> = [10, 20];
+let total: i32 = 0;
+for (let x of items) {
+  const f = (): i32 => x;
+  x = x + 1;          // пишет в ячейку итерации
+  total = total + f();  // 11, 21 — как в TS
+}
+```
+
+Механика: тело цикла получает свежий env на каждую итерацию (`env->x = x` copy-in на входе, release на cleanup итерации; escaping-замыкания удерживают retain). Copy-out нет — binding итерации умирает вместе с ней, как в TS. `for (var x ...)` — одно binding на весь цикл (ячейки не создаются). Complex-элементы (class/array) итерируются указателем — мутации видны без ячеек. Специальные итерируемые (`set`, `entries()`, `codePoints()` и др.) — snapshot-захват (граница стадии, [06-closures.md D2](../06-functions/06-closures.md)).

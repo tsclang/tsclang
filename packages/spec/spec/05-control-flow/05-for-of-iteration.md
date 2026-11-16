@@ -6,7 +6,7 @@
 >
 > **Связь со spread:** for-of использует **borrow** (pointer) для complex-типов — zero-cost итерация без создания новых данных. Spread/destructuring (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md)) использует **copy** (struct copy + retain) — создание нового контейнера. Разные операции = разная семантика. Это осознанный дизайн, не противоречие.
 >
-> **Связь с closures:** итераторы (`iter()`) возвращают closure — capture model определена в [06-closures.md](../06-functions/06-closures.md). Complex types (Node, LinkedList) захватываются по reference (pointer).
+> **Связь с closures:** итераторы (`iter()`) возвращают closure — capture model определена в [06-closures.md](../06-functions/06-closures.md). Complex types (Node, LinkedList) захватываются по reference (pointer). Захват самого binding'а цикла (`for (const x of ...)`) — per-iteration shared cell (#295 v2c-2): см. [05-for-of.md](05-for-of.md).
 
 ---
 

@@ -46,6 +46,8 @@ function main(): void {
 }
 ```
 
+**Циклы (#295 v2c-2):** `for (let i...)` / `for (let/const x of ...)` с захватом body-стрелками — per-iteration cells (свежий env на итерацию: copy-in на входе, copy-out для C-style `for` на cleanup-пути, release если замыкания не удержали). Мутация в теле видна same-iteration стрелкам; замыкания разных итераций держат разные значения — семантика TS, см. [05-for-of.md](../05-control-flow/05-for-of.md). `var`-loop — одно binding, ячеек нет. Специальные итерируемые for-of (`set`, `entries()`, `codePoints()`…) — snapshot.
+
 **Snapshot-границы** (захват копией, как до v2c; документированное отклонение от TS):
 
 | Позиция стрелки/переменной | Capture | Причина |
@@ -769,6 +771,10 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 | `shared-cell-arrow` | Arrow в функции читает захваченный примитив через общую ячейку (v2c) |
 | `shared-cell-arrow-mutate` | Мутация захваченного примитива из arrow видна снаружи |
 | `shared-cell-arrow-factory` | Фабрика: arrow + `_outer` retain, вызовы после выхода из функции |
+| `shared-cell-for-capture` | `for (let i...)`: escaping-стрелки держат значения своих итераций (0,1) |
+| `shared-cell-for-mutate` | Мутация `i` в теле видна same-iteration стрелке + copy-out в header (v2c-2) |
+| `shared-cell-forof-capture` | `for (const x of ...)`: escaping-стрелки держат значения итераций (10,20) |
+| `shared-cell-forof-mutate` | `for (let x of ...)`: мутация `x` в теле видна same-iteration стрелке (v2c-2) |
 | `err-capture-move-use` | `[x]` без type = compile error |
 | `nested-fn/*` (13 кейсов) | Именованные вложенные функции — раздел 10: shared-cell capture, рекурсия, мутуальная рекурсия, фабрика, границы E020 |
 
@@ -837,7 +843,7 @@ tsc_closure makeCounter(void) {
 | Именованная function внутри тела arrow-замыкания | `error[E020]: invalid closure capture: nested function declarations inside closures are not supported yet (planned for shared-cell closures)` |
 | Дублирующиеся имена nested-функций в блоке | `error[E123]` |
 
-Глобальные имена (scope 0) захватываются прямой ссылкой без ячеек. Статус v2c: arrow-захват в pre-scan'имых блоках переведён на общие ячейки (same-block locals + параметры enclosing-функции, cellable-типы); первые два ограничения (захват из внешнего блока, захват без аннотации) остаются E020 до стадии общего env-chain.
+Глобальные имена (scope 0) захватываются прямой ссылкой без ячеек. Статус v2c: arrow-захват в pre-scan'имых блоках переведён на общие ячейки (same-block locals + параметры enclosing-функции + loop-binding'и `for`/`for-of` с per-iteration env, v2c-2); первые два ограничения (захват из внешнего блока, захват без аннотации) остаются E020 до стадии общего env-chain.
 
 ### 10.4 Тесты
 
