@@ -1,10 +1,9 @@
 #include "runtime.h"
 
-typedef struct { double a; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; double a; } _closure_0_env;
 
 static void _closure_0_destroy(void *_env) {
     _closure_0_env *env = (_closure_0_env *)_env;
-    free(env);
 }
 
 static int32_t _closure_0_fn(_closure_0_env *env) {
@@ -17,10 +16,10 @@ int main(void) {
     {
         double a = 10.0;
         _closure_0_env *f_env = tsc_malloc(sizeof(_closure_0_env));
-        *f_env = (_closure_0_env){.a = a};
+        *f_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .a = a};
         tsc_closure f = {.env = f_env, .fn = (void*)_closure_0_fn};
         result = ((int32_t (*)(void *))f.fn)(f.env);
-        _closure_0_destroy(f_env);
+        tsc_env_release(f_env);
     }
     printf("%s\n", tsc_dtoa((double)(result)));
     return 0;

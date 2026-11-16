@@ -437,6 +437,11 @@ export function _inferCall(ctx: CodeGenContext, node: Call): string {
       const r = ctx._inferMemberCall(node);
       if (r !== null) return r;
     }
+    // Array-of-closures call: fns[i]() → element closure return type
+    if (node.callee.kind === 'Index' && node.callee.object?.kind === 'Ident') {
+      const arrSym = ctx.lookup(node.callee.object.name);
+      if (arrSym?._arrElemClosureRet) return arrSym._arrElemClosureRet;
+    }
     if (node.callee.kind === 'Member' && node.callee.prop === 'next') {
       const genObj = node.callee.object;
       const genSym = genObj.kind === 'Ident' ? ctx.lookup(genObj.name) : null;
@@ -473,9 +478,12 @@ export function _inferCall(ctx: CodeGenContext, node: Call): string {
       if (n2 === 'parseFloat' || n2 === 'tryParseFloat' || n2 === 'Number') return 'opt_f64';
       if (n2 === 'String') return 'String';
       const sym = ctx.lookup(n2);
-      // A closure var (with or without the funcName shortcut) always calls
-      // through `.fn` — the result type is the closure's return type
-      if (sym?.ctype === 'tsc_closure' && sym.closureRetType) return sym.closureRetType;
+      // A closure var always calls through .fn — the result type is the
+      // closure's return type. A plain-fn wrapper (const g: F = inc) calls
+      // through funcName — same result type. But a factory function whose
+      // RETURN type is TypeFunc also has ctype 'tsc_closure'; calling it
+      // yields the closure itself, so exclude funcName-without-funcPtr.
+      if (sym?.ctype === 'tsc_closure' && sym.closureRetType && (sym.funcPtr || !sym.funcName)) return sym.closureRetType;
       if (sym) return sym.ctype ?? 'int32_t';
     }
     return 'int32_t';

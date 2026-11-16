@@ -1,0 +1,6 @@
+// [R] Plain function passed where a closure type is expected: wrapped as
+// {.env = NULL, .fn = f}; the forwarded NULL env is ignored by the callee.
+// Green guard: the env-forwarding fix (#290) must not break plain functions.
+function inc(x: number): number { return x + 1; }
+function apply(f: (x: number) => number, v: number): number { return f(v); }
+console.log(apply(inc, 41));

@@ -531,7 +531,7 @@ export function emitFuncBody(ctx: CodeGenContext, funcName: string, body: Block 
         ctx.define(p.name, { ctype: _ct, isPointer: _ct.endsWith('*'), isRefParam: _isRef,
                               ...(_isMut ? { isMutParam: true } : {}),
                               ...(_isArc ? { isArc: true, derefType: _derefType } : {}),
-                              ...(_isFuncParam ? { funcPtr: true, closureRetType: _funcRet, closureParamTypes: _funcParams } : {}),
+                              ...(_isFuncParam ? { closureRetType: _funcRet, closureParamTypes: _funcParams } : {}),
                               ...(_derefType && !_isArc ? { derefType: _derefType } : {}) });
       }
     }

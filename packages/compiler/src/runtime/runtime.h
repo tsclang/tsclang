@@ -421,15 +421,124 @@ static inline char *_tsc_str_malloc(size_t sz) {
 }
 
 /* -------------------------------------------------------------------------
- * tsc_closure РІР‚вЂќ universal fat pointer for function values
+ * tsc_closure — universal fat pointer for function values
  * All () => T parameters and variables use this type.
- * Plain functions: .env = NULL, .fn = (void*)funcName
- * Closures with captures: .env = &envVar, .fn = (void*)closureFn
+ * Env-forwarding convention: every .fn has signature ret(void *env, params...)
+ * Plain functions: .env = NULL, .fn = (void*)fnAdapter (compiler-generated)
+ * Closures with captures: .env = heap env struct, .fn = (void*)closureFn
  * ------------------------------------------------------------------------- */
 typedef struct {
     void *env;
     void (*fn)(void);
 } tsc_closure;
+
+/* -------------------------------------------------------------------------
+ * Closure env ARC — every compiler-generated env struct starts with this
+ * header. Copies of a closure retain the env; scope exit releases it.
+ * At refcount 0 the per-closure destroy fn drops the captured values and
+ * the env block itself is freed here.
+ * ------------------------------------------------------------------------- */
+typedef struct tsc_env_hdr {
+    int _refcount;
+    void (*_destroy)(void *);
+} tsc_env_hdr;
+
+static inline void tsc_env_retain(void *env) {
+    if (env) ((tsc_env_hdr *)env)->_refcount++;
+}
+
+/* -------------------------------------------------------------------------
+ * Env storage. Desktop profiles: heap through the fail-fast wrappers.
+ * TSC_EMBEDDED: static free-list pool over a fixed byte array — NOT a ring
+ * buffer (freed blocks are reused, live blocks are never overwritten).
+ * Codegen emits an #ifndef-wrapped default sized to the program's closures;
+ * -DTSC_ENV_POOL_SIZE=<bytes> overrides it. Exhaustion is a loud panic.
+ * Single-threaded contract (same as the rest of the runtime).
+ * ------------------------------------------------------------------------- */
+#ifdef TSC_EMBEDDED
+#ifndef TSC_ENV_POOL_SIZE
+#define TSC_ENV_POOL_SIZE 256
+#endif
+typedef struct _tsc_env_blk {
+    size_t _size;                 /* payload bytes; valid while live and free */
+    struct _tsc_env_blk *_next;   /* free-list link; valid only while free */
+} _tsc_env_blk;
+/* every block is a multiple of this, so block starts stay aligned */
+#define _TSC_ENV_ALIGN ((size_t)sizeof(_tsc_env_blk))
+static union {
+    unsigned char _bytes[TSC_ENV_POOL_SIZE];
+    _tsc_env_blk _blk;
+    unsigned long _ul;
+} _tsc_env_pool_u;
+static _tsc_env_blk *_tsc_env_free_head = NULL;
+static int _tsc_env_pool_ready = 0;
+static size_t _tsc_env_pool_used = 0;
+
+static void _tsc_env_pool_init(void) {
+    size_t usable = ((size_t)TSC_ENV_POOL_SIZE / _TSC_ENV_ALIGN) * _TSC_ENV_ALIGN;
+    _tsc_env_blk *b = (_tsc_env_blk *)_tsc_env_pool_u._bytes;
+    b->_size = usable - sizeof(_tsc_env_blk);
+    b->_next = NULL;
+    _tsc_env_free_head = b;
+    _tsc_env_pool_ready = 1;
+}
+
+static void *tsc_env_alloc(size_t sz) {
+    if (!_tsc_env_pool_ready) _tsc_env_pool_init();
+    size_t need = (sz + _TSC_ENV_ALIGN - 1) / _TSC_ENV_ALIGN * _TSC_ENV_ALIGN;
+    _tsc_env_blk *prev = NULL;
+    for (_tsc_env_blk *b = _tsc_env_free_head; b; prev = b, b = b->_next) {
+        if (b->_size < need) continue;
+        /* split when the remainder can host a header + one aligned unit */
+        if (b->_size >= need + sizeof(_tsc_env_blk) + _TSC_ENV_ALIGN) {
+            _tsc_env_blk *rest = (_tsc_env_blk *)((unsigned char *)(b + 1) + need);
+            rest->_size = b->_size - need - sizeof(_tsc_env_blk);
+            rest->_next = b->_next;   /* keep the free list address-ordered */
+            b->_next = rest;
+            b->_size = need;
+        }
+        if (prev) prev->_next = b->_next; else _tsc_env_free_head = b->_next;
+        _tsc_env_pool_used += b->_size;
+        return (void *)(b + 1);
+    }
+    fprintf(stderr, "panic[E403]: env pool exhausted: need %lu bytes, %lu in use, pool %lu bytes; raise TSC_ENV_POOL_SIZE\n",
+            (unsigned long)sz, (unsigned long)_tsc_env_pool_used, (unsigned long)TSC_ENV_POOL_SIZE);
+    abort();
+    return NULL;
+}
+
+static void tsc_env_dealloc(void *p) {
+    if (!p) return;
+    _tsc_env_blk *b = (_tsc_env_blk *)p - 1;
+    _tsc_env_pool_used -= b->_size;
+    /* address-ordered insert + coalesce with neighbours */
+    _tsc_env_blk *prev = NULL;
+    _tsc_env_blk *cur = _tsc_env_free_head;
+    while (cur && (uintptr_t)cur < (uintptr_t)b) { prev = cur; cur = cur->_next; }
+    b->_next = cur;
+    if (prev) prev->_next = b; else _tsc_env_free_head = b;
+    if (cur && (_tsc_env_blk *)((unsigned char *)b + sizeof(_tsc_env_blk) + b->_size) == cur) {
+        b->_size += sizeof(_tsc_env_blk) + cur->_size;
+        b->_next = cur->_next;
+    }
+    if (prev && (_tsc_env_blk *)((unsigned char *)prev + sizeof(_tsc_env_blk) + prev->_size) == b) {
+        prev->_size += sizeof(_tsc_env_blk) + b->_size;
+        prev->_next = b->_next;
+    }
+}
+#else
+#define tsc_env_alloc(sz) _tsc_xmalloc(sz)
+#define tsc_env_dealloc(p) free(p)
+#endif
+
+static inline void tsc_env_release(void *env) {
+    if (!env) return;
+    tsc_env_hdr *h = (tsc_env_hdr *)env;
+    if (--h->_refcount == 0) {
+        h->_destroy(env);
+        tsc_env_dealloc(h);
+    }
+}
 
 /* -------------------------------------------------------------------------
  * Error (stub РІР‚вЂќ proper heap allocation added in Phase 3)

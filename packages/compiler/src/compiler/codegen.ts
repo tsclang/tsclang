@@ -380,6 +380,8 @@ class Context {
   tempCount!: number;
   loopCount!: number;
   indent!: number;
+  // Plain-function → env-convention adapter cache (funcName → adapter C name)
+  _fnAdapters!: Map<string, string>;
 
   // Scope & borrow tracking
   _scopeMgr!: ScopeManager;
@@ -601,6 +603,8 @@ class Context {
   _noOptEmit!: boolean;
   _postStmtCleanups!: string[];
   _panicHelpers!: Set<string>;
+  // Sum of distinct env struct size estimates (static env pool default sizing)
+  _envPoolBytes!: number;
 
   // Std module import flags (set when import is processed)
   _stdIoImported!: boolean;
@@ -631,6 +635,8 @@ class Context {
     this.tempCount = 0;
     this.loopCount = 0;
     this.indent = 4;
+    this._fnAdapters = new Map();
+    this._envPoolBytes = 0;
 
     // Symbol table: delegated to ScopeManager
     this._scopeMgr = new ScopeManager();
@@ -1054,7 +1060,7 @@ class Context {
     if (this._usesGotoCleanup && this._throwsOwnedVars.includes(stmt)) return;
     if (this._usesGotoCleanup && this._gotoCleanupPreDecls) {
       for (const vname of this._gotoCleanupPreDecls.keys()) {
-        if (stmt.includes(`&${vname})`) || stmt.includes(`(${vname})`) || stmt.includes(`(${vname}_env)`)) {
+        if (stmt.includes(`&${vname})`) || stmt.includes(`(${vname})`) || stmt.includes(`(${vname}_env)`) || stmt.includes(`(${vname}.env)`)) {
           if (!this._throwsOwnedVars.includes(stmt)) {
             this._throwsOwnedVars.push(stmt);
           }
@@ -1185,7 +1191,7 @@ class Context {
 
   _suppressCleanupFor(varName: string) {
     const matchers = [
-      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
+      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`, `(${varName}.env)`,
     ];
     const matches = (s: string) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
@@ -1223,7 +1229,7 @@ class Context {
 
   _hasCleanupFor(varName: string) {
     const matchers = [
-      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`,
+      `&${varName})`, `(${varName})`, `(${varName},`, `(${varName}_env)`, `(${varName}.env)`,
     ];
     const matches = (s: string) => matchers.some(m => s.includes(m));
     for (let b = this._blockCleanupStack.length - 1; b >= 1; b--) {
@@ -1367,6 +1373,7 @@ class Context {
       _pushSection(this.typedefs, parts);
       _pushSection(this.lambdaLines, parts);
       _pushSection(this.topLevel, parts);
+      _pushSection(this._output.lateLines, parts);
       // Emit __init function for runtime initializations
       if (this._libInitStmts.length > 0 || this._depInitFns.length > 0) {
         const _fnName = `${this._modulePrefix ?? ''}__init`;
@@ -1392,11 +1399,22 @@ class Context {
       _mainPanicMsg = this._panicMsgExpr('_unwrap_main', this._explicitMainErrTypes ?? []);
     }
     if (this._asyncName === 'libuv') parts.push(`#define ${TSC_DEFINES.SCHEDULER_LIBUV}`);
+    // Static env pool default, sized to this program's closures (2× slack over
+    // the distinct-env estimate, floor 64). User -DTSC_ENV_POOL_SIZE wins via
+    // the #ifndef guard. Only for static-allocator targets on the stock
+    // runtime.h (custom runtimeHeader / wasm ship their own runtime).
+    if (this._envPoolBytes > 0 && this._optsAllocator === 'static'
+        && !this._capabilities?.runtimeHeader && this._optsTarget !== WASM_TARGET) {
+      parts.push(`#ifndef TSC_ENV_POOL_SIZE`);
+      parts.push(`#define TSC_ENV_POOL_SIZE ${Math.max(64, this._envPoolBytes * 2)}`);
+      parts.push(`#endif`);
+    }
     parts.push(...[...this.includes].sort());
     parts.push('');
     _pushSection(this.typedefs, parts);
     _pushSection(this.lambdaLines, parts);
     _pushSection(this.topLevel, parts);
+    _pushSection(this._output.lateLines, parts);
 
     {
       const mainSig = this._useArgcArgv ? 'int main(int argc, char **argv)' : 'int main(void)';
@@ -1470,6 +1488,7 @@ class Context {
 
   addTop(line: string) { this._output.addTop(line); }
   addLambda(line: string) { this._output.addLambda(line); }
+  addLate(line: string) { this._output.addLate(line); }
 
   // Delegating methods: types/helpers → functional
   _cTypeBytes(ct: string) { return helpers._cTypeBytes(this, ct); }
@@ -1560,6 +1579,11 @@ class Context {
   _templateToC(node: TemplateLit, lines: string[], depth: number) { return miscFns._templateToC(this, node, lines, depth); }
   _findFreeVars(body: Expression | Block | null, paramNames: string[], selfName: string | null) { return miscFns._findFreeVars(this, body, paramNames, selfName); }
   hoistClosure(arrowNode: Arrow | FuncExpr, varName: string | null) { return miscFns.hoistClosure(this, arrowNode, varName); }
+  plainFnToClosure(sym: SymbolInfo) { return miscFns.plainFnToClosure(this, sym); }
+  envFnToPlainAdapter(fnName: string, ret: string, paramCts: string[]) { return miscFns.envFnToPlainAdapter(this, fnName, ret, paramCts); }
+  // Env allocation fn: static free-list pool on allocator:"static" targets
+  // (TSC_EMBEDDED runtime branch), fail-fast heap wrappers elsewhere.
+  _envAlloc(): string { return this._optsAllocator === 'static' ? 'tsc_env_alloc' : 'tsc_malloc'; }
   _emitIterableImpl(className: string, iterMethod: IterMethod, elemCType: string) { return miscFns._emitIterableImpl(this, className, iterMethod, elemCType); }
   _emitPromiseTypedef(promiseType: string, innerType: string) { return miscFns._emitPromiseTypedef(this, promiseType, innerType); }
   _emitSpawnBlock(varName: string | null, body: Stmt | Expression, throwsTypes: TypeAnn[] | null, lines: string[], depth: number) { return miscFns._emitSpawnBlock(this, varName, body, throwsTypes, lines, depth); }

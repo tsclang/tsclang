@@ -1,0 +1,19 @@
+// [R] Returning a borrowed closure parameter: the return retains the env for
+// the caller while the original owner keeps its own ref (#290, ARC env).
+function delegate(f: () => number): () => number {
+    return f;                // f is borrowed — the env is retained on return
+}
+
+let g: () => number;
+{
+    let base = 7;
+    const orig = (): number => { base = base + 1; return base; };
+    g = delegate(orig);      // g and orig share the env, refcount 2
+    orig();                  // 8
+}                            // orig released: the env must stay alive for g
+
+// Heap churn: reuse the chunk a non-ARC compiler would free at block exit.
+let sink: number[] = [];
+for (let i = 0; i < 100; i++) { sink.push(i); }
+
+console.log(g());            // 9

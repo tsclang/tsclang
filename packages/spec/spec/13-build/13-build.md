@@ -183,7 +183,7 @@ declare const SQLITE_DONE: i32 = 101;
 | `declare function` | функции с телом `{ ... }` |
 | `declare const` | `let` / `const` с инициализацией |
 | `declare opaque type` | классы с методами |
-| `declare link` | `native {}` блоки |
+| `declare link` | `` native `...` `` блоки |
 | `declare type` | обычный код |
 
 ```typescript

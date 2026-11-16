@@ -653,12 +653,13 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
       case 'Arrow': {
         const closure = ctx.hoistClosure(node, '_lambda');
         if (closure) {
+          for (const pl of closure.preLines ?? []) lines.push(`${' '.repeat(ctx.indent * depth)}${pl}`);
           if (closure.retainLines?.length) {
           const I = ' '.repeat(ctx.indent * depth);
           for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
         }
         const envLocal = `_lambda_env_${ctx.closureCount - 1}`;
-        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envLocal} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envLocal} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
         lines.push(`${' '.repeat(ctx.indent * depth)}*${envLocal} = (${closure.envName})${closure.envInit};`);
         return `(tsc_closure){.env = ${envLocal}, .fn = (void*)${closure.fnName}}`;
         }

@@ -1,0 +1,11 @@
+// [R] Reassigning a closure variable releases the old env and takes ownership
+// of the new one (#290, ARC env).
+function makeCounter(start: number): () => number {
+    let n = start;
+    return (): number => { n = n + 1; return n; };
+}
+
+let f: () => number = makeCounter(10);
+f();                        // 11 — old env state
+f = makeCounter(20);        // old env released here, f owns the new one
+console.log(f());           // 21

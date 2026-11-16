@@ -130,17 +130,21 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
       }
       const closure = ctx.hoistClosure(callee, `_iife_${ctx.closureCount ?? 0}`);
       if (closure) {
+        for (const pl of closure.preLines ?? []) lines.push(`${' '.repeat(ctx.indent * depth)}${pl}`);
         const argsC = ctx.argsToC(args, lines, depth);
       const paramTypes = args.map((a: { expr: Expression }) => ctx.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
         const envName = `_iife_env_${ctx.closureCount - 1}`;
-        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envName} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envName} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
         lines.push(`${' '.repeat(ctx.indent * depth)}*${envName} = (${closure.envName})${closure.envInit};`);
+        // ARC env: the IIFE consumes its closure within this statement —
+        // release the env when the statement completes
+        ctx._pushPostStmtCleanup(`tsc_env_release(${envName})`);
         return `((${closure.ret} (*)(${sigArgs}))${closure.fnName})(${envName}${argsC ? ', ' + argsC : ''})`;
       }
       const fnName = ctx.hoistArrow(callee, 'void', '_iife');
       const argsC = ctx.argsToC(args, lines, depth);
-      return `${fnName}(${argsC})`;
+      return `${fnName}(((void *)0)${argsC ? ', ' + argsC : ''})`;
     }
 
     // Plain function call вЂ” look up mangled name in scope
@@ -194,23 +198,23 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
       if (sym.isClosure) {
         return `${sym._closureFnName}(env${argsC ? ', ' + argsC : ''})`;
       }
-      return `${sym._closureFnName}(${argsC})`;
+      // Non-capturing recursive lambda: same env-forwarding signature, the
+      // lambda's own `_env` parameter is in scope here
+      return `${sym._closureFnName}(_env${argsC ? ', ' + argsC : ''})`;
     }
 
-    // tsc_closure call: closure variable or func-ptr variable (not a regular function)
+    // tsc_closure call: closure variable or func-ptr variable (not a regular function).
+    // Env-forwarding convention: every fn stored in tsc_closure.fn takes
+    // `void *env` first — capturing closures get their env, adapters of plain
+    // functions and non-capturing lambdas ignore it.
     if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
       const argsC = ctx.argsToC(args, lines, depth);
       const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
       const retType = sym.closureRetType ?? ctx.inferType(node) ?? 'void';
-      if (sym.isClosure || !sym.funcPtr) {
-        ctx._releaseQuarantineBy(callee.name);
-        const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
-        const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
-        return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
-      }
       ctx._releaseQuarantineBy(callee.name);
-      const sigArgs = paramTypes.join(', ') || 'void';
-      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${argsC})`;
+      const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
+      const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
+      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
     }
 
     // tsc_closure call from expression (e.g. arr[0](args))
@@ -226,8 +230,9 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           if (arrSym?._arrElemClosureRet) retType = arrSym._arrElemClosureRet;
         }
         if (!paramTypes) paramTypes = (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
-        const sigArgs = paramTypes.join(', ') || 'void';
-        return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${argsC})`;
+        const sigArgs = ['void *', ...paramTypes].join(', ');
+        const callArgs = argsC ? `${calleeC}.env, ${argsC}` : `${calleeC}.env`;
+        return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${callArgs})`;
       }
     }
 
@@ -465,7 +470,7 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
             return a.expr.name;
           }
           if (argSym?.funcName) {
-            return `(tsc_closure){.env = NULL, .fn = (void*)${argSym.funcName}}`;
+            return ctx.plainFnToClosure(argSym) ?? `(tsc_closure){.env = NULL, .fn = (void*)${argSym.funcName}}`;
           }
         }
         if (paramType === 'tsc_closure' && a.expr.kind === 'Arrow') {
@@ -474,11 +479,12 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           }
           const closure = ctx.hoistClosure(a.expr, `_cb_${ctx.closureCount ?? 0}`);
           if (closure) {
+            for (const pl of closure.preLines ?? []) lines.push(`${' '.repeat(ctx.indent * depth)}${pl}`);
             if (closure.retainLines?.length) {
               const I = ' '.repeat(ctx.indent * depth);
               for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
             }
-            lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *_cb_env_${ctx.closureCount - 1} = tsc_malloc(sizeof(${closure.envName}));`);
+            lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *_cb_env_${ctx.closureCount - 1} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
             lines.push(`${' '.repeat(ctx.indent * depth)}*_cb_env_${ctx.closureCount - 1} = (${closure.envName})${closure.envInit};`);
             return `(tsc_closure){.env = _cb_env_${ctx.closureCount - 1}, .fn = (void*)${closure.fnName}}`;
           }

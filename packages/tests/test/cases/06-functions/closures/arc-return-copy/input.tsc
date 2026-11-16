@@ -1,0 +1,16 @@
+// [R] Returning a copy while the original is released at function exit: both
+// refs must keep the env alive for the caller (#290, ARC env).
+function makePair(): () => number {
+    let x = 5;
+    const a = (): number => { x = x + 1; return x; };
+    const b = a;             // copy: env refcount 2
+    return b;                // move b's ref to the caller
+}                            // a released here: refcount 1 — env must survive
+
+const g = makePair();
+
+// Heap churn: reuse the chunk a non-ARC compiler would free in makePair.
+let sink: number[] = [];
+for (let i = 0; i < 100; i++) { sink.push(i); }
+
+console.log(g());            // 6

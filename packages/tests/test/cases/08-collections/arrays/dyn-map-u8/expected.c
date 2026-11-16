@@ -2,8 +2,12 @@
 
 typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
-static double _lambda_0_f64(uint8_t x) {
+static double _lambda_0_f64(void *_env, uint8_t x) {
     return x * 2;
+}
+
+static double _lambda_0_f64_adapter(uint8_t _p0) {
+    return _lambda_0_f64(((void *)0), _p0);
 }
 
 #ifndef tsc_array_map_u8_f64
@@ -19,7 +23,7 @@ int main(void) {
     TSC_INIT();
     uint8_t _lit_0[] = {1, 2, 3, 4, 5};
     Array_u8 arr = {.data = _lit_0, .length = 5, .capacity = 5};
-    Array_f64 doubled = tsc_array_map_u8_f64(arr, _lambda_0_f64);
+    Array_f64 doubled = tsc_array_map_u8_f64(arr, _lambda_0_f64_adapter);
     printf("%s\n", tsc_dtoa((double)(doubled.data[0])));
     printf("%s\n", tsc_dtoa((double)(doubled.data[4])));
     tsc_array_free_f64(&doubled);

@@ -152,7 +152,7 @@ usize: "u64", unaligned_access: true, os: true, posix: true, strtoll: true
 | Capability | Решение компилятора |
 |-----------|-------------------|
 | `fpu: false` | Запрещает `f32`/`f64` TypeRef и float-литералы (с точкой или экспонентой). `defaultNumber` должен быть integer или decimal (`d8`/`d16`/`d32`/`d64`). |
-| `allocator: "static"` | `new` только с compile-time capacity → BSS. `Arc<T>`, `Weak<T>` → compile error |
+| `allocator: "static"` | `new` только с compile-time capacity → BSS. `Arc<T>`, `Weak<T>` → compile error. Env замыканий — из static free-list pool (`TSC_ENV_POOL_SIZE`, см. [06-closures.md](../06-functions/06-closures.md) §6.2) |
 | `allocator: "heap"` | Все виды `new`, `Arc<T>`, `Weak<T>` разрешены |
 | `allocator: "heap"` + `heap_size` | Как heap, но compile-time проверка BSS + heap_size + stack ≤ ram_size |
 | `async: "none"` | Запрещает `async function` |

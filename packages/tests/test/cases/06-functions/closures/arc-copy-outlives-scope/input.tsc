@@ -1,0 +1,17 @@
+// [R] A closure copy keeps the env alive after the original's scope ends:
+// copies retain the env, scope exit releases it (#290, ARC env).
+let n = 100;
+
+let kept: () => number;
+{
+    const c = (): number => { n = n + 1; return n; };
+    c();                    // 101 — state lives in the env
+    kept = c;               // copy: env refcount goes to 2
+}                           // block exit: refcount back to 1 — env stays alive
+
+// Heap churn: make malloc reuse the chunk a non-ARC compiler frees at the
+// block exit above. With a freed env, kept() below reads corrupted state.
+let sink: number[] = [];
+for (let i = 0; i < 100; i++) { sink.push(i); }
+
+console.log(kept());        // 102

@@ -7,6 +7,9 @@ export class OutputBuffer {
   topLevel: string[];
   mainStmts: string[];
   lambdaLines: string[];
+  // Emitted after topLevel (after all user functions): bodies of helpers that
+  // call user functions by name (plain-fn env adapters)
+  lateLines: string[];
   _inTypedefBlock: boolean;
   _lastAddedToTypedefs: boolean;
 
@@ -16,6 +19,7 @@ export class OutputBuffer {
     this.topLevel = [];
     this.mainStmts = [];
     this.lambdaLines = [];
+    this.lateLines = [];
     this._inTypedefBlock = false;
     this._lastAddedToTypedefs = false;
   }
@@ -41,5 +45,9 @@ export class OutputBuffer {
 
   addLambda(line: string): void {
     this.lambdaLines.push(line);
+  }
+
+  addLate(line: string): void {
+    this.lateLines.push(line);
   }
 }

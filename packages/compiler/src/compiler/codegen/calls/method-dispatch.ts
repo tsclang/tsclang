@@ -905,6 +905,7 @@ export function _extractCallbackFn(ctx: CodeGenContext, arg: Argument, lines: st
       }
       const closure = ctx.hoistClosure(expr, `_cb_${ctx.closureCount ?? 0}`);
       if (closure) {
+        for (const pl of closure.preLines ?? []) lines.push(`${' '.repeat(ctx.indent * depth)}${pl}`);
         if (closure.retainLines?.length) {
           const I = ' '.repeat(ctx.indent * depth);
           for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
@@ -913,7 +914,7 @@ export function _extractCallbackFn(ctx: CodeGenContext, arg: Argument, lines: st
         const envLocal = `_cb_env_${envIdx}`;
         const envGlobal = `_tsc_cb_env_${envIdx}`;
         ctx.addLambda(`static ${closure.envName} *${envGlobal};`);
-        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envLocal} = tsc_malloc(sizeof(${closure.envName}));`);
+        lines.push(`${' '.repeat(ctx.indent * depth)}${closure.envName} *${envLocal} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
         lines.push(`${' '.repeat(ctx.indent * depth)}*${envLocal} = (${closure.envName})${closure.envInit};`);
         lines.push(`${' '.repeat(ctx.indent * depth)}${envGlobal} = ${envLocal};`);
         const hint = ctx._lambdaParamHint ?? [];
@@ -937,11 +938,55 @@ export function _extractCallbackFn(ctx: CodeGenContext, arg: Argument, lines: st
       }
       const fnName = ctx.hoistArrow(expr, 'void', '_cb');
       ctx._lastCbRetType = ctx.inferArrowReturn(expr);
-      return fnName;
+      // The hoisted lambda uses the env-forwarding signature; wrap it in a
+      // plain-convention adapter for inline calls and C-API callbacks.
+      // Mirror hoistArrow's signature: arrow params, completed from hint
+      const hint = ctx._lambdaParamHint ?? [];
+      const nParams = Math.max((expr.params ?? []).length, hint.length);
+      const paramsC = nParams === 0 ? 'void'
+        : Array.from({ length: nParams }, (_: unknown, i: number) => {
+            const ct = expr.params?.[i]?.typeAnn ? ctx.resolveType(expr.params[i].typeAnn) : (hint[i] ?? 'void *');
+            return `${ct} _p${i}`;
+          }).join(', ');
+      const argsC = Array.from({ length: nParams }, (_: unknown, i: number) => `_p${i}`).join(', ');
+      const adapterName = `${fnName}_adapter`;
+      ctx.addLambda(`static ${ctx._lastCbRetType} ${adapterName}(${paramsC}) {`);
+      if (ctx._lastCbRetType === 'void') {
+        ctx.addLambda(`    ${fnName}(((void *)0)${argsC ? ', ' + argsC : ''});`);
+      } else {
+        ctx.addLambda(`    return ${fnName}(((void *)0)${argsC ? ', ' + argsC : ''});`);
+      }
+      ctx.addLambda('}');
+      ctx.addLambda('');
+      return adapterName;
     }
     if (expr.kind === 'Ident') {
       const sym = ctx.lookup(expr.name);
-      if (sym?._closureFnName) { ctx._lastCbRetType = sym.closureRetType; return sym._closureFnName; }
+      if (sym?._closureFnName) {
+        // Closure variable: call through its value (env-forwarding) inside a
+        // plain-convention adapter; the value is staged via a static global
+        ctx._lastCbRetType = sym.closureRetType ?? 'void';
+        const valGlobal = `_tsc_cb_val_${ctx.tempCount++}`;
+        const paramCts: string[] = sym.closureParamTypes ?? [];
+        const sigC = ['void *', ...paramCts].join(', ');
+        const paramsC2 = paramCts.length > 0
+          ? paramCts.map((ct: string, i: number) => `${ct} _p${i}`).join(', ')
+          : 'void';
+        const argsC2 = paramCts.map((_ct: string, i: number) => `_p${i}`).join(', ');
+        ctx.addLambda(`static tsc_closure ${valGlobal};`);
+        lines.push(`${' '.repeat(ctx.indent * depth)}${valGlobal} = ${expr.name};`);
+        const adapterName2 = `${valGlobal}_adapter`;
+        ctx.addLambda(`static ${ctx._lastCbRetType} ${adapterName2}(${paramsC2}) {`);
+        const callC = `((${ctx._lastCbRetType} (*)(${sigC}))${valGlobal}.fn)(${valGlobal}.env${argsC2 ? ', ' + argsC2 : ''})`;
+        if (ctx._lastCbRetType === 'void') {
+          ctx.addLambda(`    ${callC};`);
+        } else {
+          ctx.addLambda(`    return ${callC};`);
+        }
+        ctx.addLambda('}');
+        ctx.addLambda('');
+        return adapterName2;
+      }
       if (sym?.funcName) { ctx._lastCbRetType = sym.ctype!; return sym.funcName; }
     }
 

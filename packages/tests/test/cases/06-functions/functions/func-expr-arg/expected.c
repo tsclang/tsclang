@@ -1,11 +1,11 @@
 #include "runtime.h"
 
-static int32_t _lambda_0_i32(void) {
+static int32_t _lambda_0_i32(void *_env) {
     return 99;
 }
 
 int32_t apply_fn_i32(tsc_closure fn) {
-    return ((int32_t (*)(void))fn.fn)();
+    return ((int32_t (*)(void *))fn.fn)(fn.env);
 }
 
 int main(void) {

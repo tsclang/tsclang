@@ -1,0 +1,8 @@
+// [R] Closure passed as a callback parameter: the call must forward .env.
+// The callee cannot know whether the caller passed a capturing closure or a
+// plain function, so tsc_closure calls always pass env first (plain functions
+// hold env = NULL and ignore it). Guard for the env-less parameter call (#290).
+function twice(f: () => number): number { return f() + f(); }
+let n = 10;
+console.log(twice(() => { n = n + 1; return n }));
+console.log(n);

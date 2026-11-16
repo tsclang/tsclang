@@ -1,7 +1,11 @@
 #include "runtime.h"
 
-static void _lambda_0_void(uint8_t x) {
+static void _lambda_0_void(void *_env, uint8_t x) {
     printf("%u\n", (unsigned)x);
+}
+
+static void _lambda_0_void_adapter(uint8_t _p0) {
+    _lambda_0_void(((void *)0), _p0);
 }
 
 #ifndef tsc_array_foreach_u8
@@ -15,6 +19,6 @@ int main(void) {
     TSC_INIT();
     uint8_t _lit_0[] = {10, 20, 30};
     Array_u8 arr = {.data = _lit_0, .length = 3, .capacity = 3};
-    tsc_array_foreach_u8(arr, _lambda_0_void);
+    tsc_array_foreach_u8(arr, _lambda_0_void_adapter);
     return 0;
 }

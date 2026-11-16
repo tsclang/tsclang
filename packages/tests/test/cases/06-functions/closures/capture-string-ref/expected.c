@@ -1,11 +1,10 @@
 #include "runtime.h"
 
-typedef struct { String prefix; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; String prefix; } _closure_0_env;
 
 static void _closure_0_destroy(void *_env) {
     _closure_0_env *env = (_closure_0_env *)_env;
     tsc_string_release(env->prefix);
-    free(env);
 }
 
 static String _closure_0_fn(_closure_0_env *env, String name) {
@@ -17,10 +16,10 @@ int main(void) {
     const String prefix = STR_LIT("Hello");
     tsc_string_retain(prefix);
     _closure_0_env *greet_env = tsc_malloc(sizeof(_closure_0_env));
-    *greet_env = (_closure_0_env){.prefix = prefix};
+    *greet_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .prefix = prefix};
     tsc_closure greet = {.env = greet_env, .fn = (void*)_closure_0_fn};
     printf("%s\n", ((String (*)(void *, String))greet.fn)(greet.env, STR_LIT("World")).data);
-    _closure_0_destroy(greet_env);
+    tsc_env_release(greet_env);
     tsc_string_release(prefix);
     return 0;
 }

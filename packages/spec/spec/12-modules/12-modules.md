@@ -544,7 +544,7 @@ warning: native block — C code inserted verbatim, memory management is manual
 
 **Это escape hatch, не стандартный инструмент.** Для всего что можно выразить через `declare function` — используй `.d.tsc`.
 
-### Callbacks и closures в `native {}`
+### Callbacks и closures в `` native `...` ``
 
 C-библиотеки ожидают функцию-указатель. TSClang closure — это struct с captures + function pointer. Их нельзя совместить напрямую.
 
@@ -567,66 +567,21 @@ declare function uv_timer_start(
 ```typescript
 uv_timer_start(timer, (h) => tick(), 1000, 0)         // ✅ нет captures
 uv_timer_start(timer, [ctx](h) => process(ctx), ...)  // ❌ ошибка: FnPtr не поддерживает captures
-                                                        //    hint: используй native {} для closure bridging
+                                                        //    hint: используй native `...` для closure bridging
 ```
 
-**Для capturing closures — `native {}`** с хелперами компилятора:
+**Для capturing closures — компиляторные adapter'ы.** Env замыкания выделяется через `tsc_malloc` (heap, переживает scope — см. [06-closures.md](../06-functions/06-closures.md)). Когда TSClang-замыкание передаётся в C-API со «старой» конвенцией (`void (*)(void)`, `(result) => void` в libuv-таймерах, `fs.watch`, `ws.onMessage`), компилятор сам генерирует статический adapter + staging-глобал для env:
 
-Компилятор предоставляет набор C-макросов для boxing/unboxing closures внутри `native {}` блоков. Эти макросы доступны автоматически — без `#include`.
-
-| Макрос | Описание |
-|--------|----------|
-| `TSC_CLOSURE_BOX(closure_var)` | Аллоцировать captures на heap, вернуть `void*` |
-| `TSC_CLOSURE_CALL(ptr)` | Вызвать boxed closure по `void*` |
-| `TSC_CLOSURE_FREE(ptr)` | Освободить boxed closure |
-| `TSC_CLOSURE_FN(ptr)` | Получить function pointer из boxed closure (thunk) |
-
-Пример — `(cb, userdata)` паттерн:
-
-```typescript
-// .d.tsc — объявляем честно как (cb, void*)
-declare function lib_on_event(
-    cb:   FnPtr<(result: i32, ctx: void*) => void>,
-    data: void*
-): void
-
-// usage в wrapper-пакете:
-function onEvent(handler: (result: i32) => void): void {
-    native `
-        void* _boxed = TSC_CLOSURE_BOX(${handler});
-        lib_on_event(TSC_CLOSURE_FN(_boxed), _boxed);
-        // lib сам вызовет TSC_CLOSURE_CALL(_boxed) / TSC_CLOSURE_FREE(_boxed)
-    `
+```c
+// setTimeout(cb, ms) — компилятор генерирует:
+static _closure_0_env *_tsc_cb_env_0;                  // staging
+static void _closure_0_adapter(void) {                  // старая конвенция
+    _closure_0_fn(_tsc_cb_env_0);                       // env-forwarding вызов
 }
+tsc_set_timeout(_closure_0_adapter, 100);
 ```
 
-Пример — libuv `handle->data` паттерн:
-
-```typescript
-// std/timer.tsc (внутри stdlib)
-function _startTimer(cb: () => void, ms: u64): void {
-    native `
-        uv_timer_t* _t = (uv_timer_t*)malloc(sizeof(uv_timer_t));
-        uv_timer_init(tsc_uv_loop(), _t);
-        _t->data = TSC_CLOSURE_BOX(${cb});
-        uv_timer_start(_t, _tsc_timer_thunk, ${ms}, 0);
-    `
-}
-
-// thunk объявлен в рантайм-хедере:
-// static void _tsc_timer_thunk(uv_timer_t* h) {
-//     TSC_CLOSURE_CALL(h->data);
-//     TSC_CLOSURE_FREE(h->data);
-//     uv_close((uv_handle_t*)h, free);
-// }
-```
-
-**Правила lifetime для boxed closures:**
-
-- `TSC_CLOSURE_BOX` аллоцирует на heap и перемещает captures — исходная переменная closure после этого invalid
-- `TSC_CLOSURE_FREE` должен быть вызван ровно один раз — двойной вызов UB
-- Borrow checker не отслеживает boxed closure — ответственность на авторе `native {}` блока
-- На платформах с `heap: false` — `TSC_CLOSURE_BOX` вызывает compile error
+> **Не реализовано:** макросы `TSC_CLOSURE_BOX` / `TSC_CLOSURE_CALL` / `TSC_CLOSURE_FREE` / `TSC_CLOSURE_FN` для ручного boxing замыканий внутри `` native `...` `` блоков — запланированы (issue #290). Сегодня для C-interop с состоянием используйте компиляторные adapter'ы (setTimeout и т.п.) или `FnPtr<T>` без captures. Env замыканий — ARC-значения (`tsc_env_retain`/`tsc_env_release`, см. [06-closures.md](../06-functions/06-closures.md)).
 
 **Embedded:** на `heap: false` платформах `FnPtr<T>` без captures — единственный способ передать callback в C. Для ISR используется `@isr`, не `FnPtr<T>`.
 

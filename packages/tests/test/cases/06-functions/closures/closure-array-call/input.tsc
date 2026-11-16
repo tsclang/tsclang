@@ -1,0 +1,10 @@
+// [R] Calling a closure stored in an array element: the expression call path
+// must forward .env just like the variable call path does (#290).
+function makeCounter(): () => number {
+    let count = 0;
+    return (): number => { count = count + 1; return count; };
+}
+const fns: (() => number)[] = [makeCounter(), makeCounter()];
+console.log(fns[0]());
+console.log(fns[0]());
+console.log(fns[1]());

@@ -67,7 +67,7 @@ Safe temp pattern предотвращает use-after-free при `obj.name = o
 | `b += "suffix"` | Eval concat → `tsc_string_release(b)` → assign. Старая строка освобождается |
 | Конец `main()` | Cleanup release для всех строк через `_mainCleanup` |
 | Класс с string-полями | Автогенерированный `ClassName_free()` — release каждого string-поля |
-| Замыкание с string capture | Destroy fn делает `tsc_string_release` для каждого захваченного string + `free(env)` (для boxed варианта) |
+| Замыкание с string capture | Env = ARC-значение (`tsc_env_hdr`): `tsc_env_release` при refcount→0 вызывает destroy fn — `tsc_string_release` для каждого захваченного string + dealloc env
 
 **Литералы** (`"hello"`, `capacity=0`): `tsc_string_release` — no-op (`_refcount == NULL`), очистка = zero cost.
 
@@ -148,20 +148,21 @@ const fn = (): string => greeting;
 ```
 
 ```c
-typedef struct { String greeting; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; String greeting; } _closure_0_env;
 
 static void _closure_0_destroy(void *_env) {
     _closure_0_env *env = (_closure_0_env *)_env;
     tsc_string_release(env->greeting);
-    free(env);
 }
 
 // создание:
 tsc_string_retain(greeting);
-_closure_0 fn = {.env = {.greeting = greeting}, .fn = _closure_0_fn};
+_closure_0_env *fn_env = tsc_malloc(sizeof(_closure_0_env));
+*fn_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .greeting = greeting};
+tsc_closure fn = {.env = fn_env, .fn = (void*)_closure_0_fn};
 ```
 
-Для boxed варианта (`TSC_CLOSURE_BOX`): env копируется на heap через `malloc`, destroy fn вызывается при `TSC_CLOSURE_FREE`. Для stack-варианта: env struct на стеке, destroy fn не вызывается (cleanup = сдвиг стека, но string поля нужно release вручную — компилятор генерирует cleanup).
+Env выделяется через `tsc_malloc` (переживает scope создания — см. [06-closures.md](../06-functions/06-closures.md)) и является ARC-значением: копии замыкания — `tsc_env_retain`, scope-exit — `tsc_env_release`; refcount→0 → destroy fn (release string-полей) + dealloc (#290).
 
 ### Desktop vs Embedded
 

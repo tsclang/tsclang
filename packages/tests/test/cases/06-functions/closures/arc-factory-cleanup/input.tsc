@@ -1,0 +1,10 @@
+// [R] Closure values returned from factories are owned by their variable and
+// released at scope exit — no env leak per call (#290, ARC env).
+function makeAdder(n: number): (x: number) => number {
+    return (x: number): number => x + n;
+}
+
+const add5 = makeAdder(5);   // env owned by add5, released when scope ends
+const add10 = makeAdder(10);
+console.log(add5(3));        // 8
+console.log(add10(3));       // 13

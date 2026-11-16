@@ -1,5 +1,5 @@
 import type { CodeGenContext } from '../../codegen.js';
-import type { TemplateLit, Arrow, FuncExpr, Expression, Param, TypeAnn, Block } from '@tsclang/ast';
+import type { TemplateLit, Arrow, FuncExpr, Expression, Param, TypeAnn, Block, SymbolInfo } from '@tsclang/ast';
 
 interface TemplatePart { kind: string; value?: string; src?: string; }
 interface CompiledStrPart { kind: 'str'; value: string; }
@@ -193,6 +193,23 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
     }
     if (captured.size === 0) return null;
 
+    // Materialize deferred anon structs captured by this closure: envInit takes
+    // the address of the variable (`&name`), so the C declaration must be
+    // emitted before the env allocation at the closure creation site.
+    const preLines: string[] = [];
+    for (const [nm, sym] of captured) {
+      if (!sym.deferredAnon || !ctx._deferredAnons?.has(nm)) continue;
+      const { fields, init: _init } = ctx._deferredAnons.get(nm)!;
+      const ctype = sym.ctype!;
+      const fieldDecls = fields.map((f: { name: string; _ctype: string }) => `${f._ctype} ${f.name};`).join(' ');
+      ctx.addTop(`typedef struct { ${fieldDecls} } ${ctype};`);
+      ctx.addTop('');
+      const initParts = ((_init as unknown as { props?: { key: string; value: Expression }[] } | null)?.props ?? []).map((pr: { key: string; value: Expression }) => `.${pr.key} = ${ctx.exprToC(pr.value, preLines, 0)}`);
+      preLines.push(`${ctype} ${nm} = { ${initParts.join(', ')} };`);
+      sym.deferredAnon = false;
+      ctx._deferredAnons.delete(nm);
+    }
+
     if (ctx._inReturnContext) {
       for (const [nm, sym] of captured) {
         const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
@@ -205,7 +222,11 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       }
     }
 
-    if (ctx._inReturnContext && ctx._curFuncName) {
+    // Mark the enclosing function as producing a closure value: consulted at
+    // call sites to type the result var as a real closure (vs a plain fn
+    // pointer with env = NULL). Any capturing closure created inside counts —
+    // the flag is only read where the call result is closure-typed.
+    if (ctx._curFuncName) {
       const fnSym = ctx.lookup(ctx._curFuncName);
       if (fnSym) fnSym._returnsCapturingClosure = true;
     }
@@ -242,6 +263,17 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       }
     }
     const hasStringCapture = capturedStringFields.length > 0;
+    // Env structs start with the ARC header: copies of the closure retain the
+    // env, scope exit releases it, refcount 0 runs the destroy fn (the env
+    // block itself is freed by tsc_env_release, not by the destroy fn).
+    envFields.unshift('tsc_env_hdr _hdr;');
+    // Feed the static env pool default estimate (only consulted on
+    // allocator:"static" targets): ARC header + captured fields + slack.
+    if (captured.size > 0) {
+      let est = ctx._ptrBytes() * 2;  // tsc_env_hdr: refcount + destroy fn
+      for (const [, sym] of captured) est += ctx._stackSizeOf(sym.ctype ?? 'void *');
+      ctx._envPoolBytes = (ctx._envPoolBytes ?? 0) + est + 8;
+    }
     ctx.addLambda(`typedef struct { ${envFields.join(' ')} } ${envName};`);
     ctx.addLambda('');
 
@@ -252,7 +284,6 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       for (const nm of capturedStringFields) {
         ctx.addLambda(`    tsc_string_release(env->${nm});`);
       }
-      ctx.addLambda('    free(env);');
       ctx.addLambda('}');
       ctx.addLambda('');
     }
@@ -318,7 +349,7 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       const src = sym?._closureEnvVar ? `env->${nm}` : nm;
       retainLines.push(`tsc_string_retain(${src});`);
     }
-    const envInit = '{' + [...captured.entries()].map(([nm, sym]) => {
+    const envInit = '{._hdr = {._refcount = 1, ._destroy = ' + destroyFnName + '}, ' + [...captured.entries()].map(([nm, sym]) => {
       const src = sym._closureEnvVar ? `env->${nm}` : nm;
       const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
@@ -337,7 +368,52 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       : null;
 
     return { closureName, fnName, envInit, ret, ctype: 'tsc_closure', capturedVars: captured,
-             retainLines, hasStringCapture, destroyFnName, capturedStringFields, envName, captureModes };
+             retainLines, preLines, hasStringCapture, destroyFnName, capturedStringFields, envName, captureModes };
+}
+
+// Wrap a plain function into a tsc_closure value under the env-forwarding
+// call convention: every fn stored in tsc_closure.fn takes `void *env` as
+// its first parameter, so a plain function needs a small static adapter.
+export function plainFnToClosure(ctx: CodeGenContext, sym: SymbolInfo): string | null {
+    const funcName = sym.funcName;
+    if (!funcName) return null;
+    const cached = ctx._fnAdapters.get(funcName);
+    if (cached) return `(tsc_closure){.env = NULL, .fn = (void*)${cached}}`;
+    const ret = sym.ctype ?? 'void';
+    const paramCts = (sym.params ?? []).map((p: Param) => (p as { typeAnn?: TypeAnn }).typeAnn ? ctx.resolveType((p as { typeAnn: TypeAnn }).typeAnn) : 'int32_t');
+    const adName = `_fn_adapter_${ctx._fnAdapters.size}_${funcName}`;
+    const paramsC = paramCts.map((ct: string, i: number) => `${ct} _a${i}`).join(', ');
+    const argsC = paramCts.map((_ct: string, i: number) => `_a${i}`).join(', ');
+    // Prototype early (usable from user functions), body after all user
+    // functions — the wrapped function is defined in topLevel
+    ctx.addLambda(`static ${ret} ${adName}(void *_env${paramsC ? ', ' + paramsC : ''});`);
+    ctx.addLate(`static ${ret} ${adName}(void *_env${paramsC ? ', ' + paramsC : ''}) {`);
+    if (ret === 'void') {
+        ctx.addLate(`    ${funcName}(${argsC});`);
+    } else {
+        ctx.addLate(`    return ${funcName}(${argsC});`);
+    }
+    ctx.addLate('}');
+    ctx.addLate('');
+    ctx._fnAdapters.set(funcName, adName);
+    return `(tsc_closure){.env = NULL, .fn = (void*)${adName}}`;
+}
+
+// Wrap an env-signature function (hoisted lambda / closure fn) into a
+// plain-convention adapter for C-API callbacks (runtime keeps void(*)(T) etc.)
+export function envFnToPlainAdapter(ctx: CodeGenContext, fnName: string, ret: string, paramCts: string[]): string {
+    const adName = `${fnName}_adapter`;
+    const paramsC = paramCts.map((ct: string, i: number) => `${ct} _p${i}`).join(', ');
+    const argsC = paramCts.map((_ct: string, i: number) => `_p${i}`).join(', ');
+    ctx.addLambda(`static ${ret} ${adName}(${paramsC || 'void'}) {`);
+    if (ret === 'void') {
+        ctx.addLambda(`    ${fnName}(((void *)0)${argsC ? ', ' + argsC : ''});`);
+    } else {
+        ctx.addLambda(`    return ${fnName}(((void *)0)${argsC ? ', ' + argsC : ''});`);
+    }
+    ctx.addLambda('}');
+    ctx.addLambda('');
+    return adName;
 }
 
   // Special codegen for iter() method of Iterable<T> class.

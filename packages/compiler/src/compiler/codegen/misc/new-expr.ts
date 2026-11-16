@@ -294,7 +294,9 @@ export function hoistArrow(ctx: CodeGenContext, node: Arrow | FuncExpr, retType:
     }
     ctx.popScope();
     ctx._inHoistedLambda = false;
-    ctx.addLambda(`static ${ret} ${name}(${paramStrs.join(', ') || 'void'}) {`);
+    // Env-forwarding call convention: every callable stored in tsc_closure.fn
+    // (capturing or not) takes `void *env` as its first parameter
+    ctx.addLambda(`static ${ret} ${name}(${['void *_env', ...paramStrs].join(', ')}) {`);
     for (const l of lines) ctx.addLambda('    ' + l);
     ctx.addLambda('}');
     ctx.addLambda('');

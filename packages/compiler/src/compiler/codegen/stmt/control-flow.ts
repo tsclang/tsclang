@@ -13,6 +13,12 @@ export function _emitRetainIfNeeded(ctx: CodeGenContext, valC: string, valNode: 
     if (ctx.inferType(valNode) === 'String' && ['Ident', 'Member', 'Index'].includes(valNode.kind)) {
       p(`tsc_string_retain(${valC});`);
     }
+    if (ctx.inferType(valNode) === 'tsc_closure' && ['Ident', 'Member', 'Index'].includes(valNode.kind)) {
+      // ARC env: returning a borrowed closure (param, field, array element) —
+      // the caller needs its own env ref. Owned locals never reach here:
+      // their scope cleanup is suppressed and the ref moves to the caller.
+      p(`tsc_env_retain((${valC}).env);`);
+    }
 }
 
 export function _wrapErrForCaller(ctx: CodeGenContext, throwsCtx: ThrowsCtx, errExpr: string, calleeSym: SymbolInfo | null) {
@@ -140,6 +146,15 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             throw ctx.errorCode('E017', null, { detail: `mutable borrow to local variable '${node.value.name}'` });
           }
         }
+        // ARC env: returning a closure var marks the fn for call sites —
+        // `const f = thisFn()` then owns the result (env release at scope exit)
+        if (node.value?.kind === 'Ident' && ctx._curFuncName) {
+          const rvSym = ctx.lookup(node.value.name);
+          if (rvSym?.isClosure) {
+            const fs = ctx.lookup(ctx._curFuncName);
+            if (fs) fs._returnsCapturingClosure = true;
+          }
+        }
         // Unknown return: auto-wrap primitive in tsc_unknown_from_XXX
         const _isUnknownReturn = ctx.currentFuncReturnType === 'tsc_unknown';
         const _wrapUnknownReturn = (valC: string, valNode: Expression) => {
@@ -217,12 +232,14 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           if (retIsOwnedIdent && node.value.kind === 'Ident') {
             ctx._suppressCleanupFor(node.value.name);
             ctx._markPoolVarMoved(node.value);
+            // Remaining scope cleanups must run BEFORE the return — after it
+            // they would be dead code and the owned values would leak
+            ctx._emitFuncCleanup(lines, I);
             if (ctx._throwsCtx) {
               p(`return (${ctx._throwsCtx.resultType}){.ok = true, .value = ${retC}};`);
             } else {
               p(`return ${retC};`);
             }
-            ctx._emitFuncCleanup(lines, I);
           } else {
             ctx._emitRetainIfNeeded(retC, node.value, p);
             ctx._markPoolVarMoved(node.value);
@@ -266,7 +283,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               if (ctx.currentFuncReturnType === 'tsc_closure' && node.value.kind === 'Ident') {
                 const retSym = ctx.lookup(node.value.name);
                 if (retSym?.funcName && !retSym.funcPtr) {
-                  c = `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
+                  c = ctx.plainFnToClosure(retSym) ?? `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
                 }
               }
               if (!_isUnknownReturn) ctx._emitRetainIfNeeded(c, node.value, p);

@@ -385,10 +385,11 @@ export function _dispatchStdWs(ctx: CodeGenContext, node: Call, lines: string[],
         const _wsHoistCb = (paramTypes: string[] | undefined): string => {
           const cbArg = args[0]?.expr;
           if (cbArg?.kind === 'Arrow') {
-            ctx._lambdaParamHint = paramTypes ?? (cbArg.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'String');
+            const hint = paramTypes ?? (cbArg.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'String');
+            ctx._lambdaParamHint = hint;
             const cbName = ctx.hoistArrow(cbArg, 'void');
             ctx._lambdaParamHint = null;
-            return cbName;
+            return ctx.envFnToPlainAdapter(cbName, 'void', hint);
           }
           return cbArg ? ctx.exprToC(cbArg, lines, depth) : 'NULL';
         };
@@ -549,9 +550,11 @@ export function _dispatchStdFs(ctx: CodeGenContext, node: Call, lines: string[],
           const cbArg = args[1]?.expr;
           let cbName;
           if (cbArg?.kind === 'Arrow') {
-            ctx._lambdaParamHint = (cbArg.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'String');
-            cbName = ctx.hoistArrow(cbArg, 'void');
+            const hint = (cbArg.params ?? []).map((p: Param) => p.typeAnn ? ctx.resolveType(p.typeAnn) : 'String');
+            ctx._lambdaParamHint = hint;
+            const fnName = ctx.hoistArrow(cbArg, 'void');
             ctx._lambdaParamHint = null;
+            cbName = ctx.envFnToPlainAdapter(fnName, 'void', hint);
           } else {
             cbName = cbArg ? ctx.exprToC(cbArg, lines, depth) : 'NULL';
           }
@@ -862,7 +865,9 @@ export function _dispatchStdSet(ctx: CodeGenContext, node: Call, lines: string[]
           ctx._lambdaParamHint = [_sElemCType];
           const cbName = ctx.hoistArrow(cbArg, 'void');
           ctx._lambdaParamHint = null;
-          return `tsc_set_for_each_${_sSfx}(&${_sName}, ${cbName})`;
+          // Hoisted lambda uses the env-forwarding signature; wrap it in a
+          // plain-convention adapter for the C-API macro (void (*)(T))
+          return `tsc_set_for_each_${_sSfx}(&${_sName}, ${ctx.envFnToPlainAdapter(cbName, 'void', [_sElemCType])})`;
         }
         if (_sProp === 'values' || _sProp === 'keys') {
           const _sElemCType = _setSym._setElemCType ?? 'int32_t';

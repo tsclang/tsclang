@@ -1159,15 +1159,16 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             ctx.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = ctx.hoistClosure(init, name);
             if (closure) {
+              for (const pl of closure.preLines ?? []) p(pl);
               if (closure.retainLines?.length) {
                 for (const rl of closure.retainLines) p(rl);
               }
-              p(`${closure.envName} *${name}_env = tsc_malloc(sizeof(${closure.envName}));`);
+              p(`${closure.envName} *${name}_env = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
               p(`*${name}_env = (${closure.envName})${closure.envInit};`);
               p(`tsc_closure ${name} = {.env = ${name}_env, .fn = (void*)${closure.fnName}};`);
               ctx.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _closureParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
                                   closureDestroyFn: closure.destroyFnName });
-              ctx._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
+              ctx._registerCleanup(`tsc_env_release(${name}_env)`);
               return;
             }
             // Non-capturing: update pre-declared symbol for lambda path
@@ -1186,7 +1187,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           } else {
             const initSym = init?.kind === 'Ident' ? ctx.lookup(init.name) : null;
             if (initSym?.funcName) {
-              initC = `(tsc_closure){.env = NULL, .fn = (void*)${initSym.funcName}}`;
+              initC = ctx.plainFnToClosure(initSym) ?? `(tsc_closure){.env = NULL, .fn = (void*)${initSym.funcName}}`;
               p(`tsc_closure ${name} = ${initC};`);
               ctx.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, closureRetType: initSym.ctype, closureParamTypes: _closureParamCtypes, funcName: initSym.funcName });
               return;
@@ -1195,6 +1196,14 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             }
           }
           p(`tsc_closure ${name} = ${initC};`);
+          // ARC env: the var owns its closure value — a copy from another
+          // closure var retains the env, scope exit releases it (no-op when
+          // env is NULL: plain fns and non-capturing lambdas).
+          if (init?.kind === 'Ident') {
+            const _cpSrcSym = ctx.lookup(init.name);
+            if (_cpSrcSym?.ctype === 'tsc_closure') p(`tsc_env_retain(${name}.env);`);
+          }
+          ctx._registerCleanup(`tsc_env_release(${name}.env)`);
           const _closureRetFromAnn = typeAnn.ret ? ctx.resolveType(typeAnn.ret) : 'void';
           let _initIsClosure = false;
           if (init?.kind === 'Call' && init.callee.kind === 'Ident') {
@@ -1212,16 +1221,33 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           const _arrElemClosureRet = typeAnn.element.ret ? ctx.resolveType(typeAnn.element.ret) : undefined;
           ctx.addTop(`typedef struct { tsc_closure *data; size_t length; size_t capacity; } ${arrCtype};`);
           if (init?.kind === 'ArrayLit') {
+            const elemBorrowed: boolean[] = [];
             const elems = init.elems.map((e: { expr: Expression }) => {
               if (e.expr?.kind === 'Ident') {
                 const s = ctx.lookup(e.expr.name);
-                return s?.funcName ?? e.expr.name;
+                // Plain function name → env-convention adapter; closure variable is already tsc_closure
+                if (s?.funcName) { elemBorrowed.push(false); return ctx.plainFnToClosure(s) ?? `(tsc_closure){.env = NULL, .fn = (void*)${s.funcName}}`; }
+                // Closure variable: the array element is a copy — the env is
+                // borrowed from the source var and retained below (ARC env)
+                elemBorrowed.push(s?.ctype === 'tsc_closure');
+                return ctx.exprToC(e.expr, lines, depth);
               }
-              return ctx.exprToC(e.expr, lines, depth);
+              const c = ctx.exprToC(e.expr, lines, depth);
+              elemBorrowed.push(false);
+              // Calls returning tsc_closure and inline arrows already produce a
+              // tsc_closure value — wrapping them again is invalid C
+              if (ctx.inferType(e.expr) === 'tsc_closure' || c.startsWith('(tsc_closure)')) return c;
+              return `(tsc_closure){.env = NULL, .fn = (void*)${c}}`;
             });
             const litName = `_${name}_lit`;
-            p(`tsc_closure ${litName}[] = {${elems.map((e: string) => `(tsc_closure){.env = NULL, .fn = (void*)${e}}`).join(', ')}};`);
+            p(`tsc_closure ${litName}[] = {${elems.join(', ')}};`);
             p(`${qualifier}${arrCtype} ${name} = {.data = ${litName}, .length = ${elems.length}, .capacity = ${elems.length}};`);
+            // ARC env: the array owns its elements — retain the ones copied
+            // from closure vars, release everything at scope exit
+            for (let ei = 0; ei < elemBorrowed.length; ei++) {
+              if (elemBorrowed[ei]) p(`tsc_env_retain(${name}.data[${ei}].env);`);
+            }
+            ctx._registerCleanup(`for (size_t _ci = 0; _ci < ${name}.length; _ci++) tsc_env_release(${name}.data[_ci].env)`);
             ctx.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', arraySize: elems.length, varKind, _arrElemClosureParams, _arrElemClosureRet });
             return;
           }
@@ -1242,15 +1268,16 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             ctx.define(name, { ctype: 'tsc_closure', isClosure: true, _isRecursiveSelf: true, _closureFnName: _predFnName, varKind });
             const closure = ctx.hoistClosure(init, name);
             if (closure) {
+              for (const pl of closure.preLines ?? []) p(pl);
               if (closure.retainLines?.length) {
                 for (const rl of closure.retainLines) p(rl);
               }
-              p(`${closure.envName} *${name}_env = tsc_malloc(sizeof(${closure.envName}));`);
+              p(`${closure.envName} *${name}_env = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
               p(`*${name}_env = (${closure.envName})${closure.envInit};`);
               p(`tsc_closure ${name} = {.env = ${name}_env, .fn = (void*)${closure.fnName}};`);
               ctx.define(name, { ctype: 'tsc_closure', isClosure: true, closureRetType: closure.ret, closureParamTypes: _arrowParamCtypes, varKind, _closureEnvName: `${name}_env`, _closureFnName: closure.fnName,
                                   closureDestroyFn: closure.destroyFnName });
-              ctx._registerCleanup(`${closure.destroyFnName}(${name}_env)`);
+              ctx._registerCleanup(`tsc_env_release(${name}_env)`);
               return;
             }
             // Non-capturing: update pre-declared symbol for lambda path
@@ -1272,7 +1299,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               if (ctx._strictRules?.has('no-closures')) {
                 throw ctx.errorCode('E200', node);
               }
-              p(`tsc_closure ${name} = {.env = NULL, .fn = (void*)${sym.funcName}};`);
+              p(`tsc_closure ${name} = ${ctx.plainFnToClosure(sym) ?? `{.env = NULL, .fn = (void*)${sym.funcName}}`};`);
               ctx.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind, funcName: sym.funcName, closureRetType: sym.ctype,
                                   ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } :
                                     sym.params ? { closureParamTypes: sym.params.map((pp: { typeAnn?: TypeAnn }) => pp.typeAnn ? ctx.resolveType(pp.typeAnn) : 'void *') } : {}) });
@@ -1282,6 +1309,9 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
                 throw ctx.errorCode('E200', node);
               }
               p(`${ctx.varDecl(qualifier, 'tsc_closure', name)} = ${init.name};`);
+              // ARC env: a copy shares the env — retain it, release at scope exit
+              p(`tsc_env_retain(${name}.env);`);
+              ctx._registerCleanup(`tsc_env_release(${name}.env)`);
               ctx.define(name, { ctype: 'tsc_closure', funcPtr: true, varKind,
                                   closureRetType: sym.closureRetType,
                                   ...(sym.closureParamTypes ? { closureParamTypes: sym.closureParamTypes } : {}),
@@ -1335,6 +1365,15 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             if (ctype === 'String') {
               ctx._registerCleanup(`tsc_string_release(${name})`);
             }
+            if (ctype === 'tsc_closure') {
+              // ARC env: fallthrough closure init (Member/Index/conditional) —
+              // own the value, release at scope exit
+              if (init?.kind === 'Ident') {
+                const _gSrcSym = ctx.lookup(init.name);
+                if (_gSrcSym?.ctype === 'tsc_closure') p(`tsc_env_retain(${name}.env);`);
+              }
+              ctx._registerCleanup(`tsc_env_release(${name}.env)`);
+            }
           } else if (init.kind === 'ObjLit' && enumDef2?.isPartial) {
             // Partial<T> ObjLit: expand { name: "Alice" } С‚Р–Рў { .has_name = true, .name = ..., .has_age = false }
             const provided = new Map();
@@ -1363,6 +1402,9 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             if (!typeAnn && callSym?.returnType?.kind === 'TypeFunc') {
               const initC = ctx.exprToC(init, lines, depth);
               p(`${ctx.typeDecl(callSym.returnType, name)} = ${initC};`);
+              // ARC env: the factory result's ref moves into the var; the var
+              // releases the env at scope exit
+              ctx._registerCleanup(`tsc_env_release(${name}.env)`);
               const _retFuncParams = callSym.returnType.params ? callSym.returnType.params.map((pt: TypeAnn) => ctx.resolveType(pt)) : undefined;
               const _returnsClosure = !!callSym._returnsCapturingClosure;
               ctx.define(name, { ctype: 'tsc_closure', ...(_returnsClosure ? { isClosure: true } : { funcPtr: true }), varKind, ...(callSym.closureRetType ? { closureRetType: callSym.closureRetType } : {}), ...(_retFuncParams ? { closureParamTypes: _retFuncParams } : {}) });
@@ -1668,6 +1710,15 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
               }
               if (ctype === 'String') {
                 ctx._registerCleanup(`tsc_string_release(${name})`);
+              }
+              if (ctype === 'tsc_closure') {
+                // ARC env: fallthrough closure init — own the value, release
+                // at scope exit (retain when copied from another closure var)
+                if (init?.kind === 'Ident') {
+                  const _gSrcSym2 = ctx.lookup(init.name);
+                  if (_gSrcSym2?.ctype === 'tsc_closure') p(`tsc_env_retain(${name}.env);`);
+                }
+                ctx._registerCleanup(`tsc_env_release(${name}.env)`);
               }
               if (ctype?.startsWith('Array_') && HEAP_ARRAY_KEYWORDS.some((k: string) => initC.includes(k))) {
                 const elemIdent = ctype.slice(6);

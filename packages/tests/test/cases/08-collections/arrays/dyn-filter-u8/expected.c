@@ -1,7 +1,11 @@
 #include "runtime.h"
 
-static bool _lambda_0_bool(uint8_t x) {
+static bool _lambda_0_bool(void *_env, uint8_t x) {
     return fmod(x, 2) == 0;
+}
+
+static bool _lambda_0_bool_adapter(uint8_t _p0) {
+    return _lambda_0_bool(((void *)0), _p0);
 }
 
 #ifndef tsc_array_filter_u8
@@ -25,7 +29,7 @@ int main(void) {
     TSC_INIT();
     uint8_t _lit_0[] = {1, 2, 3, 4, 5};
     Array_u8 arr = {.data = _lit_0, .length = 5, .capacity = 5};
-    Array_u8 evens = tsc_array_filter_u8(arr, _lambda_0_bool);
+    Array_u8 evens = tsc_array_filter_u8(arr, _lambda_0_bool_adapter);
     printf("%zu\n", evens.length);
     printf("%u\n", (unsigned)evens.data[0]);
     tsc_array_free_u8(&evens);

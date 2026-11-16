@@ -1,7 +1,11 @@
 #include "runtime.h"
 
-static void _lambda_0_void(void) {
+static void _lambda_0_void(void *_env) {
     printf("done\n");
+}
+
+static void _lambda_0_void_adapter(void) {
+    _lambda_0_void(((void *)0));
 }
 
 typedef struct { bool _done; int32_t _result; bool _ok; int32_t _error; } Promise_i32;
@@ -9,7 +13,7 @@ typedef struct { bool _done; int32_t _result; bool _ok; int32_t _error; } Promis
 int main(void) {
     TSC_INIT();
     const Promise_i32 p = { ._done = true, ._result = 42, ._ok = true };
-    _lambda_0_void();
+    _lambda_0_void_adapter();
     const Promise_i32 p2 = p;
     printf("%d\n", p2._result);
     return 0;

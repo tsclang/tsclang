@@ -8,7 +8,7 @@
 >
 > **Связь с for-of/spread:** for-of (см. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md)) использует **borrow** (pointer) для complex-типов. Spread/destructuring (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md)) использует **copy**. Closure capture = **reference** (pointer) для class/array — mutations видны снаружи, TS-совместимое поведение.
 >
-> **Обоснование:** П1 (кроссплатформенность) — stack-allocated env, pointer capture = C-compatible, работает на embedded без heap. П2 (TS compat) — class/array = reference как в TS. П3 (better than all) — проще Rust (нет Fn/FnMut/FnOnce), безопаснее C (нет dangling для same-scope), нет скрытого GC как TS.
+> **Обоснование:** П1 (кроссплатформенность) — env выделяется через `tsc_malloc` (профиль-зависимый аллокатор: heap на desktop, статический пул на embedded — #290), pointer capture = C-compatible. П2 (TS compat) — class/array = reference как в TS. П3 (better than all) — проще Rust (нет Fn/FnMut/FnOnce), безопаснее C (env переживает scope создания), нет скрытого GC как TS.
 >
 > Опирается на: [04-primitives.md](../04-ownership/04-primitives.md) (владение), [04-ownership.md](../04-ownership/04-ownership.md) (модель памяти).
 
@@ -29,7 +29,7 @@
 **Альтернативы отклонены:**
 - Всё по значению (copy + move) — ломает closure semantics (source dead, нельзя использовать arr после capture)
 - Всё по ссылке — примитивы по ссылке бессмысленны и добавляют overhead
-- Heap-allocate env — нарушает П1 (embedded без heap)
+- GC для env — нарушает П1 (embedded) и П3 (нет скрытого GC)
 
 **Статус: ✅ Решено. Реализовано.**
 
@@ -85,24 +85,23 @@ const fn = [arr](): void => { ... };                             // Error: requi
 - П2 (TS compat) — в TS нет move-замыканий. Концепция чуждая для TS-разработчика.
 - Нет реальных use cases — в практике TS/JS closures всегда shared mutable state.
 - Ownership transfer в closure = концепция из Rust (`move ||`), не из TS.
-- Escaping scope (единственный сценарий для move) — UB в любом случае (env на стеке).
 
 **Статус: ✅ Решено. Убрано из компилятора.**
 
-### D7: Escaping scope — документированное ограничение
+### D7: Escaping scope — heap env + ARC env
 
-**Решение:** closure — стековая. Env struct выделяется на стеке. Если closure переживает scope захваченных переменных — UB (dangling pointer).
+**Решение:** env struct выделяется через `tsc_malloc` и переживает scope создания — фабрики (`makeCounter`) и возврат замыканий из функций работают корректно.
 
-**Compile error для ref/mut capture:** если closure с явным `[x: Ref<T>]` или `[x: Mut<T>]` захватом возвращается из функции — компилятор выдаёт ошибку. Value capture (примитивы по значению, String через retain) разрешён.
+**Compile error для ref/mut capture:** если closure с явным `[x: Ref<T>]` или `[x: Mut<T>]` захватом возвращается из функции — компилятор выдаёт E020: захваченный стек-кадр умер бы раньше замыкания. Value capture (примитивы по значению, String через retain) разрешён.
 
-Общее ограничение (env на стеке) остаётся документированным — полный escape analysis не реализован.
+**ARC env (#290, реализовано):** замыкание = ARC-значение. Каждый compiler-generated env struct начинается с заголовка `tsc_env_hdr { int _refcount; void (*_destroy)(void *); }`. Создание — refcount 1; копирование из Ident (`const g = f`) — `tsc_env_retain`; результат фабричного вызова (`const f = makeCounter()`) — move без retain; пере-присваивание — release старого env (после записи нового + retain при копировании из Ident); scope-exit — `tsc_env_release`. Refcount → 0: destroy (release захваченных строк) + dealloc. Параметры-замыкания — строгий borrow (без retain/release). Escape через копию и пере-присваивание безопасны.
 
 Альтернативы отклонены:
-- Heap-allocate env — нарушает П1 (embedded без heap). Возможно в будущем как опция для desktop.
+- Stack-allocated env — dangling pointer для фабрик, ломает базовые TS-паттерны.
 - Borrow checker (как Rust) — слишком сложно, нарушает П2 (TS compat).
-- Compile-time escape analysis — частично реализован (ref/mut capture в return context).
+- GC — нарушает П1 (embedded).
 
-**Статус: ✅ Решено. Ref/mut capture в escaping closure — compile error. Общее ограничение документировано.**
+**Статус: ✅ E020 реализован. Heap env реализован. ARC env реализован (#290, фаза 2). Embedded static pool реализован (#290, фаза 3).**
 
 ---
 
@@ -118,13 +117,34 @@ const fn = [arr](): void => { ... };                             // Error: requi
 | Array (`Array<T>`) | Reference (pointer) | `Array_i32 *arr;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
 | `Ref<T>` (explicit) | Const pointer | `const User *u;` | ✅ Да | ✅ | Нет |
 | `Mut<T>` (explicit) | Mutable pointer | `User *m;` | ✅ Да | ✅ | Нет |
+| Object literal (`{n:1}`, без аннотации) | Reference (pointer) | `_anon_N *o;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
 
 ### Ключевые свойства
 
 1. **Source всегда жив.** Нет E002 для implicit capture. Переменная доступна после создания closure.
 2. **Env не владеет class/array.** Env содержит pointer, не copy. Source владеет данными → source cleanup освобождает ресурсы.
-3. **Env владеет string copies.** Env содержит retained copy → env cleanup делает release.
-4. **Stack-allocated env.** Env struct живёт на стеке, в том же scope что closure.
+3. **Env владеет string copies.** Env содержит retained copy → destroy fn делает release при обнулении refcount env.
+4. **Heap-allocated env.** Env struct выделяется через `tsc_malloc` (профиль-зависимый аллокатор) и переживает scope создания — возврат замыкания из функции безопасен.
+5. **Env = ARC-значение.** Заголовок `tsc_env_hdr` (refcount + destroy fn); копирование binding'а — retain, scope-exit/reassign — release. Несколько копий одного замыкания безопасны.
+
+### Конвенция вызова: env-forwarding
+
+Любой указатель, хранящийся в `tsc_closure.fn`, имеет сигнатуру `ret fn(void *env, params...)` — вызов всегда передаёт `.env` первым аргументом (конвенция в стиле qsort):
+
+```c
+// захватывающее замыкание: env — указатель на env-структуру
+static double _closure_0_fn(_closure_0_env *env) { return env->n; }
+
+// не-захватывающая лямбда: тот же прототип, env игнорируется
+static double _lambda_0_f64(void *_env, double x) { return x * 2; }
+
+// вызов — всегда с env
+((double (*)(void *))f.fn)(f.env);
+```
+
+Plain-функция, попавшая в `tsc_closure` (`apply(inc, 41)`, `const g = inc`, `[square]`), оборачивается компилятором в статический adapter той же конвенции: прототип эмитится в lambda-секции, тело — в late-секции после всех пользовательских функций.
+
+Внешние C-API рантайма (libuv-таймеры, `fs.watch`, `ws.onMessage`, array-хелперы) остаются на своей исходной конвенции без env — компилятор оборачивает env-лямбды в `_adapter`-функции старой сигнатуры.
 
 ---
 
@@ -141,7 +161,7 @@ console.log(x);      // 99 — source жив, изменение видно
 ```
 
 ```c
-typedef struct { double x; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; double x; } _closure_0_env;
 
 static double _closure_0_fn(_closure_0_env *env) {
     return env->x + 1;
@@ -149,11 +169,13 @@ static double _closure_0_fn(_closure_0_env *env) {
 
 // main:
 double x = 42.0;
-_closure_0_env fn_env = {.x = x};           // copy
-tsc_closure fn = {.env = &fn_env, .fn = ...};
+_closure_0_env *fn_env = tsc_malloc(sizeof(_closure_0_env));
+*fn_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .x = x};  // copy
+tsc_closure fn = {.env = fn_env, .fn = (void*)_closure_0_fn};
 x = 99.0;
 printf("%g\n", ((double (*)(void *))fn.fn)(fn.env));  // 43
 printf("%g\n", (double)(x));                             // 99
+// cleanup: tsc_env_release(fn_env);
 ```
 
 **Пояснение:** `x` скопирован в env при создании closure. Изменение `x = 99` не влияет на `env->x`. Source `x` жив и доступен. В TS результат был бы `100` (reference capture).
@@ -169,12 +191,11 @@ console.log(greet("World"));   // Hello, World
 ```
 
 ```c
-typedef struct { String prefix; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; String prefix; } _closure_0_env;
 
 static void _closure_0_destroy(void *_env) {
     _closure_0_env *env = (_closure_0_env *)_env;
     tsc_string_release(env->prefix);
-    free(env);
 }
 
 static String _closure_0_fn(_closure_0_env *env, String name) {
@@ -184,13 +205,14 @@ static String _closure_0_fn(_closure_0_env *env, String name) {
 // main:
 const String prefix = STR_LIT("Hello");
 tsc_string_retain(prefix);                          // retain
-_closure_0_env greet_env = {.prefix = prefix};      // ARC copy
-tsc_closure greet = {.env = &greet_env, .fn = ...};
-// cleanup: tsc_string_release(greet_env.prefix);
+_closure_0_env *greet_env = tsc_malloc(sizeof(_closure_0_env));
+*greet_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .prefix = prefix};  // ARC copy
+tsc_closure greet = {.env = greet_env, .fn = (void*)_closure_0_fn};
+// cleanup: tsc_env_release(greet_env);   // refcount→0 → destroy → tsc_string_release(prefix-копия) + dealloc
 // cleanup: tsc_string_release(prefix);
 ```
 
-**Пояснение:** string захватывается как ARC copy (`tsc_string_retain`). Source жив. Env cleanup делает `tsc_string_release` для captured string. Destroy function генерируется только при наличии string captures.
+**Пояснение:** string захватывается как ARC copy (`tsc_string_retain`). Source жив. `tsc_env_release` при refcount→0 вызывает destroy fn (release захваченных строк) и освобождает env. Destroy fn генерируется всегда (указана в `_hdr._destroy`); release строк внутри — только при наличии string captures.
 
 ### 3.3 Массив — reference, mutations visible
 
@@ -342,12 +364,13 @@ static double _closure_0_fn(_closure_0_env *env) {
 }
 
 tsc_closure makeAdder_f64(double n) {
-    _closure_0_env _lambda_env_0 = {.n = n};          // copy (примитив)
-    return (tsc_closure){.env = &_lambda_env_0, .fn = ...};
+    _closure_0_env *_lambda_env_0 = tsc_malloc(sizeof(_closure_0_env));
+    *_lambda_env_0 = (_closure_0_env){.n = n};        // copy (примитив)
+    return (tsc_closure){.env = _lambda_env_0, .fn = (void*)_closure_0_fn};
 }
 ```
 
-**Пояснение:** Closure возвращается из функции. Параметр `n` — примитив, захватывается как copy. Примечание: env struct `_lambda_env_0` — локальная переменная в `makeAdder_f64`, возвращается `tsc_closure` с dangling `.env`. Это работает на практике (caller обычно использует closure немедленно), но формально — escaping scope (см. D7).
+**Пояснение:** Closure возвращается из функции. Параметр `n` — примитив, захватывается как copy. Env выделяется через `tsc_malloc` — замыкание безопасно переживает возврат (см. D7).
 
 ### 3.8 Multi-capture (несколько переменных)
 
@@ -362,7 +385,8 @@ console.log(fn());   // 13
 typedef struct { double x; Array_f64 *arr; } _closure_0_env;
 
 // main:
-_closure_0_env fn_env = {.x = x, .arr = &arr};       // x = copy, arr = pointer
+_closure_0_env *fn_env = tsc_malloc(sizeof(_closure_0_env));
+*fn_env = (_closure_0_env){.x = x, .arr = &arr};      // x = copy, arr = pointer
 ```
 
 **Пояснение:** Env struct содержит все захваченные переменные. Каждая — по своим правилам: `x` (примитив) = copy, `arr` (array) = pointer.
@@ -442,7 +466,7 @@ const fn = [arr: Array<i32>](): i32 => arr.length;
 // Error: requires a type annotation: Ref<T> or Mut<T>
 ```
 
-**Rationale (D6):** Move capture был концепцией из Rust (`move ||`). В TS нет аналога. Реальных use cases не найдено. Escaping scope (единственный сценарий) — UB в любом случае (env на стеке). Убрано для простоты и П2-совместимости.
+**Rationale (D6):** Move capture был концепцией из Rust (`move ||`). В TS нет аналога. Реальных use cases не найдено. Убрано для простоты и П2-совместимости.
 
 ---
 
@@ -529,35 +553,51 @@ return env->arr->length;
 
 **Ключевое правило:** source владеет данными. Env содержит pointer — cleanup не нужен. Env cleanup делается только для string (retained copy).
 
-Destroy function генерируется только при `hasStringCapture`:
+Destroy function генерируется всегда (её адрес хранится в `_hdr._destroy`); внутри — release строк для string captures. Dealloc выполняет `tsc_env_release`, не destroy:
 ```c
 static void _closure_0_destroy(void *_env) {
     _closure_0_env *env = (_closure_0_env *)_env;
     tsc_string_release(env->s);
-    free(env);
 }
+// tsc_env_release(env): --_refcount == 0 → _destroy(env) + tsc_free(env)
 ```
 
-> **Примечание:** destroy function генерируется компилятором, но для stack-allocated closures (default) **не вызывается** — cleanup через `_registerCleanup` в scope. `free(env)` актуален только для boxed/heap-allocated closures (C interop).
+> **Примечание:** cleanup регистрируется через `_registerCleanup` и вызывается на выходе из scope, где создан closure: `tsc_env_release(env_var)` — refcount→0 → destroy (release строк) + dealloc.
 
 ---
 
 ## 6. Ограничения и UB
 
-### 6.1 Escaping scope — env на стеке = dangling
+### 6.1 ARC env — правила retain/release (#290, реализовано)
 
-**Проблема:** env struct выделяется на стеке. Если closure переживает scope — env pointer dangling.
+Env выделяется на heap, переживает scope создания и живёт, пока refcount > 0. Правила:
+
+| Ситуация | Генерация |
+|----------|-----------|
+| Создание замыкания (arrow literal → binding) | `tsc_malloc` + init с `._refcount = 1`; cleanup scope: `tsc_env_release` |
+| Копирование из Ident (`const g = f`) | `tsc_env_retain(g.env)`; cleanup своего binding'а: release |
+| Результат фабричного вызова (`const f = make()`) | move: без retain (refcount уже учтён); cleanup: release |
+| Пере-присваивание (`f = g` / `f = make()`) | сохранить старый env → записать новый (+ retain если RHS — Ident) → mirror `f_env = f.env` → `tsc_env_release(old)` |
+| Параметр-замыкание | строгий borrow: без retain у caller'а, без release у callee (владение остаётся у caller'а) |
+| `return f` (owned Ident) | move: cleanup подавляется, env уезжает с возвращаемым значением |
+| `return g` (param / заимствованное) | borrow: `tsc_env_retain` перед возвратом |
+| Элемент array literal (`[f, make()]`) | Ident-элемент — retain; call-элемент — move; cleanup массива: release по элементам |
 
 ```typescript
-let fn: () => number;
+let fn: () => number = null;
 {
-    let arr: number[] = [1, 2, 3];
-    fn = (): number => arr.length;    // env = {.arr = &arr} на стеке
-}                                   // arr и fn_env мёртвы
-fn();                               // UB: fn.env → мёртвый стек
+    const n: number = 1;
+    const c = (): number => n + 1;
+    fn = c;        // copy: retain → refcount 2
+}                 // scope-exit: release c → refcount 1
+console.log(fn());   // 2 — безопасно, env жив
 ```
 
-**Это UB при любом capture model** — даже value capture: env struct сам на стеке, `fn.env` dangling.
+```c
+// refcount trace: create 1 → copy retain 2 → block release 1 → main release 0 → destroy + dealloc
+```
+
+**Остаточные keep-alive утечки (осознанное ограничение):** env не освобождается (но и не dangling — leaks only, не UB) для: staged env компиляторных callback-adapter'ов (`_tsc_cb_env_N` в promise.then/catch/finally, таймерах setTimeout/setInterval), временных замыканий в argument position и отброшенных результатов фабричных вызовов. Причина: adapter'ы асинхронных C-API вызываются после смерти statement — release на post-stmt дал бы use-after-free. Плановое решение — интеграция с lifecycle промисов/таймеров.
 
 **Compile error для ref/mut capture в escaping closure:** если closure с `[x: Ref<T>]` или `[x: Mut<T>]` захватом возвращается из функции — компилятор блокирует:
 
@@ -570,13 +610,21 @@ function bad(): () => i32 {
 
 Value captures (примитивы, String через retain) разрешены в escaping closures.
 
-**Mitigation:** 99% использований — same-scope (closure создаётся и используется в одном блоке). Escaping — rare edge case.
+### 6.2 Heap env и embedded static pool (#290, фаза 3 — реализовано)
 
-### 6.2 Почему нет heap-allocate
+**П1 (cross-platform):** embedded платформы без heap получают **static env pool** — free-list поверх статического байтового массива в `runtime.h` (ветка `#ifdef TSC_EMBEDDED`). Это НЕ кольцевой буфер (как строковый): освобождённые блоки переиспользуются, живые никогда не затираются.
 
-**П1 (cross-platform):** embedded платформы (AVR) — нет heap. `malloc` недоступен. Heap-allocate env нарушит П1.
+| Аспект | Поведение |
+|--------|-----------|
+| Аллокация env | `tsc_env_alloc(sizeof(env))` на `allocator: "static"`; `tsc_malloc` на `allocator: "heap"` (desktop, avr-heap) |
+| Дефолтный размер пула | Кодген суммирует оценки всех env-структур программы (заголовок ARC + поля + slack) и эмитит `#ifndef TSC_ENV_POOL_SIZE / #define TSC_ENV_POOL_SIZE <2×суммы, min 64> / #endif` перед `#include` |
+| Оверрайд пользователя | `-DTSC_ENV_POOL_SIZE=<байты>` при компиляции C (побеждает через `#ifndef`) |
+| Алгоритм | First-fit free-list со сплитом крупных блоков и коалесценгом соседних при освобождении |
+| Исчерпание | Паника `panic[E403]: env pool exhausted: need N bytes, M in use, pool K bytes; raise TSC_ENV_POOL_SIZE` + abort — не тихая порча |
+| `tsc_env_release` → dealloc | refcount 0 → destroy fn → `tsc_env_dealloc` (пул на embedded, `free` на heap) |
+| Потоки | Контракт однопоточный (как весь runtime); ISR-безопасность не гарантируется |
 
-**Возможное будущее:** heap-allocate env как опция для desktop target (`--heap-closures`). Но не по умолчанию.
+Дефолтный размер рассчитан на типичную нагрузку (замыкания, живущие одновременно); фабрика в цикле, создающая много живых env одновременно, может исчерпать пул — паника назовёт точные числа, размер увеличивается `-D`-флагом без изменения кода.
 
 ### 6.3 Почему нет move capture
 
@@ -584,7 +632,7 @@ Value captures (примитивы, String через retain) разрешены
 
 **Практика:** реальных use cases для move capture не найдено. Основной сценарий — shared mutable state (reference capture). Ownership transfer в closure — концепция из Rust, не из TS.
 
-**Escaping scope** (единственный сценарий где move имеет смысл) — UB в любом случае (env на стеке). Move не решает проблему.
+**Escaping scope** (единственный сценарий где move имеет смысл) решается heap-env + ARC (#290); move не нужен.
 
 ---
 
@@ -638,12 +686,12 @@ console.log(arr[0]);   // 9 в обоих случаях
 
 **Это главное достижение:** для class/array поведение идентично TS. Mutations visible, source жив.
 
-### 7.4 Нет GC → стековые замыкания
+### 7.4 Нет GC → ARC-замыкания
 
 TS: closures могут переживать scope (GC держит данные живыми).
-TSClang: closures стековые. Escaping = UB.
+TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкание переживает scope, копии/пере-присваивания безопасны (retain/release), детерминированный dealloc без GC.
 
-**Trade-off:** ограниченная функциональность, но П1 (embedded без heap).
+**Trade-off:** +8 байт на env (refcount + destroy fn) и явные retain/release в выводе; взамен П1 (embedded — пул вместо GC) и предсказуемость.
 
 ---
 
@@ -651,9 +699,9 @@ TSClang: closures стековые. Escaping = UB.
 
 ### П1: Кроссплатформенность (desktop + embedded)
 
-- Stack-allocated env — работает на AVR (нет heap)
+- Env через профиль-зависимый аллокатор: `tsc_malloc` на heap-профилях, static free-list pool (`TSC_ENV_POOL_SIZE`) на `allocator: "static"` (#290 фаза 3)
 - Pointer capture — C-compatible, zero-cost
-- No `malloc`/`free` для env
+- ARC env (refcount в заголовке) — без GC, детерминированный dealloc
 - string retain — no-op на embedded (single-ownership)
 
 ### П2: Максимальная совместимость с TS
@@ -694,37 +742,47 @@ TSClang: closures стековые. Escaping = UB.
 | `closure-return-from-fn` | Closure + несколько captures (примитивы) |
 | `closure-pass-to-fn` | Передача closure как аргумент |
 | `c-output` | Фрагмент C-output для closure |
+| `arc-copy-outlives-scope` | Копия замыкания переживает scope (retain + churn — нет UB) |
+| `arc-reassign-release` | Пере-присваивание освобождает старый env |
+| `arc-return-copy` | Цепочка копий + return (move) без утечек/UB |
+| `arc-param-return` | Возврат param-замыкания (borrow + retain) |
+| `arc-factory-cleanup` | Фабрика: env освобождается после release результата |
+| `arc-array-elems` | Замыкания в array literal: retain Ident / move call |
+| `env-pool-avr` | Static env pool на AVR (avr-gcc + simavr): цикл create/retain/release, переиспользование блоков без исчерпания |
 | `err-capture-move-use` | `[x]` без type = compile error |
 
 ---
 
 ## 11. Trampoline adapter для capturing callbacks
 
-Runtime-макросы (например, `Array.map`, `Array.filter`, `Array.forEach`) ожидают callback вида `void (*fn)(elem)` — без env-параметра. Когда callback является capturing closure (env struct ≠ пустой), компилятор генерирует **trampoline adapter**:
+Runtime-макросы (например, `Array.map`, `Array.filter`, `Array.forEach`, `Set.forEach`) ожидают callback вида `void (*fn)(elem)` — без env-параметра. Когда callback является capturing closure (env struct ≠ пустой), компилятор генерирует **trampoline adapter**:
 
 ```c
-// capturing closure: env содержит captured variable
+// capturing closure: env содержит captured variable (+ ARC-заголовок)
 typedef struct {
+    tsc_env_hdr _hdr;
     String prefix;
 } _closure_0_env;
 
-static _closure_0_env* _tramp_env_0;  // file-scope static env pointer
+static _closure_0_env *_tsc_cb_env_0;  // file-scope staging global
 
-static String _tramp_adapter_0(String elem) {
-    return _closure_0_fn(_tramp_env_0, elem);  // делегирует к реальной closure fn
+static String _closure_0_adapter(String elem) {
+    return _closure_0_fn(_tsc_cb_env_0, elem);  // env-forwarding вызов
 }
 
 // использование в макросе:
 tsc_string_retain(prefix);
-_closure_0_env _env = { .prefix = prefix };
-_tramp_env_0 = &_env;
-Array_String result = Array_String_map(arr, _tramp_adapter_0);
+_closure_0_env *_cb_env_0 = tsc_malloc(sizeof(_closure_0_env));
+*_cb_env_0 = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .prefix = prefix};
+_tsc_cb_env_0 = _cb_env_0;
+Array_String result = tsc_array_map_String(arr, _closure_0_adapter);
 ```
 
 **Ограничения:**
 - File-scope static pointer — **не реентрантно**. Вложенные capturing callbacks не поддерживаются.
 - Приемлемо для TSClang: JS однопоточный, macros синхронные, вложенные capturing callbacks — редкий паттерн.
-- Если captures = 0 (bare function), adapter не генерируется — передаётся напрямую.
+- Если captures = 0 (bare lambda), adapter вызывает лямбду с `NULL` env; передаётся adapter всегда (конвенция env-forwarding).
+- Staged env (`_tsc_cb_env_0`) не release'ится после statement — keep-alive до конца программы (см. 6.1): асинхронные adapter'ы вызываются после смерти statement, release дал бы use-after-free.
 
 ### Тип замыкания с Mut-захватом
 

@@ -1,0 +1,13 @@
+// [R] An array of closures owns its elements: copies are retained, factory
+// results moved in, and the whole array released at scope exit (#290, ARC env).
+function makeCounter(start: number): () => number {
+    let n = start;
+    return (): number => { n = n + 1; return n; };
+}
+
+const first = makeCounter(1);
+const fns: (() => number)[] = [first, makeCounter(10)];
+fns[0]();                    // 2 (first's env, shared with the array)
+console.log(fns[0]());       // 3
+console.log(fns[1]());       // 11
+console.log(first());        // 4 — same env as fns[0]

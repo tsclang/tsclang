@@ -475,5 +475,27 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       }
     }
 
+    // ARC env: closure reassignment — the old env is released after the RHS
+    // has been consumed; a borrowed RHS (another closure var) is retained so
+    // both owners hold their own ref. Factory calls and inline arrows carry
+    // their own ref already (move). The mirror env local stays in sync so the
+    // scope-exit cleanup releases the current env.
+    if (node.op === '=' && node.left.kind === 'Ident') {
+      const asnSym = ctx.lookup(node.left.name);
+      if (asnSym?.ctype === 'tsc_closure') {
+        if (node.right?.kind === 'Ident' && node.right.name === node.left.name) return null; // self-assign no-op
+        const rightSym = node.right?.kind === 'Ident' ? ctx.lookup(node.right.name) : null;
+        const rightIsBorrowed = !!rightSym && rightSym.ctype === 'tsc_closure' && !rightSym.funcName;
+        const tmpOld = `_old_env_${ctx.tempCount++}`;
+        const I = ' '.repeat(ctx.indent * depth);
+        lines.push(`${I}{ void *${tmpOld} = ${node.left.name}.env;`);
+        lines.push(`${I}  ${node.left.name} = ${r};`);
+        if (rightIsBorrowed) lines.push(`${I}  tsc_env_retain(${node.left.name}.env);`);
+        if (asnSym._closureEnvName) lines.push(`${I}  ${asnSym._closureEnvName} = ${node.left.name}.env;`);
+        lines.push(`${I}  tsc_env_release(${tmpOld}); }`);
+        return null;
+      }
+    }
+
     return `${l} ${node.op} ${r}`;
 }

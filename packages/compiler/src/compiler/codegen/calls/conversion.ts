@@ -68,11 +68,31 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
       let fn;
       const cbExpr = args[0]?.expr;
       if (cbExpr?.kind === 'Arrow') {
+        const I = ' '.repeat(ctx.indent * depth);
         const closure = ctx.hoistClosure(cbExpr, `_cb_${ctx.closureCount ?? 0}`);
         if (closure) {
-          fn = closure.fnName;
+          for (const pl of closure.preLines ?? []) lines.push(`${I}${pl}`);
+          if (closure.retainLines?.length) {
+            for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+          }
+          const envIdx = ctx.closureCount - 1;
+          const envLocal = `_cb_env_${envIdx}`;
+          const envGlobal = `_tsc_cb_env_${envIdx}`;
+          ctx.addLambda(`static ${closure.envName} *${envGlobal};`);
+          lines.push(`${I}${closure.envName} *${envLocal} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
+          lines.push(`${I}*${envLocal} = (${closure.envName})${closure.envInit};`);
+          lines.push(`${I}${envGlobal} = ${envLocal};`);
+          const adapterName = `${closure.closureName}_adapter`;
+          ctx.addLambda(`static void ${adapterName}(void) { ${closure.fnName}(${envGlobal}); }`);
+          ctx.addLambda('');
+          fn = adapterName;
         } else {
-          fn = ctx.hoistArrow(cbExpr, 'void', '_cb');
+          const fnName = ctx.hoistArrow(cbExpr, 'void', '_cb');
+          // Wrap the env-signature lambda into the plain void(void) convention
+          const adapterName = `${fnName}_adapter`;
+          ctx.addLambda(`static void ${adapterName}(void) { ${fnName}(((void *)0)); }`);
+          ctx.addLambda('');
+          fn = adapterName;
         }
       } else {
         fn = ctx.exprToC(args[0].expr, lines, depth);
@@ -115,11 +135,31 @@ export function _dispatchConversion(ctx: CodeGenContext, node: Call, lines: stri
       let fn;
       const lambdaArg2 = args[0]?.expr;
       if (lambdaArg2?.kind === 'Arrow') {
+        const I = ' '.repeat(ctx.indent * depth);
         const closure = ctx.hoistClosure(lambdaArg2, `_cb_${ctx.closureCount ?? 0}`);
         if (closure) {
-          fn = closure.fnName;
+          for (const pl of closure.preLines ?? []) lines.push(`${I}${pl}`);
+          if (closure.retainLines?.length) {
+            for (const rl of closure.retainLines) lines.push(`${I}${rl}`);
+          }
+          const envIdx = ctx.closureCount - 1;
+          const envLocal = `_cb_env_${envIdx}`;
+          const envGlobal = `_tsc_cb_env_${envIdx}`;
+          ctx.addLambda(`static ${closure.envName} *${envGlobal};`);
+          lines.push(`${I}${closure.envName} *${envLocal} = ${ctx._envAlloc()}(sizeof(${closure.envName}));`);
+          lines.push(`${I}*${envLocal} = (${closure.envName})${closure.envInit};`);
+          lines.push(`${I}${envGlobal} = ${envLocal};`);
+          const adapterName = `${closure.closureName}_adapter`;
+          ctx.addLambda(`static void ${adapterName}(void) { ${closure.fnName}(${envGlobal}); }`);
+          ctx.addLambda('');
+          fn = adapterName;
         } else {
-          fn = ctx.hoistArrow(lambdaArg2, 'void', '_cb');
+          const fnName = ctx.hoistArrow(lambdaArg2, 'void', '_cb');
+          // Wrap the env-signature lambda into the plain void(void) convention
+          const adapterName = `${fnName}_adapter`;
+          ctx.addLambda(`static void ${adapterName}(void) { ${fnName}(((void *)0)); }`);
+          ctx.addLambda('');
+          fn = adapterName;
         }
       } else {
         fn = ctx.exprToC(args[0].expr, lines, depth);
