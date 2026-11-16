@@ -39,6 +39,8 @@
 
 Отличие от TS (где `let x = 1; const fn = () => x; x = 2; fn()` → `2`). В TSClang → `1` (snapshot).
 
+> **#295 v2b:** это поведение **arrow-замыканий**. Именованные вложенные `function`-декларации (см. раздел 10) используют другую модель — **shared cell**: захваченный примитив живёт в env-ячейке, и enclosing-блок, и вложенная функция читают/пишут одну ячейку — мутации видны с обеих сторон, как в TS. В стадии v2c стрелки планируется перевести на ту же модель, после чего расхождение D2 уходит.
+
 **Диагностика W013 (#294):** расхождение с TS молчаливым не остаётся — когда привязка используется после захвата так, что расхождение наблюдаемо (какая-то лямбда мутировала снапшот, либо внешняя запись при reader-захвате), компилятор выдаёт `warning[W013]` с рекомендацией обернуть значение в class/array box. Фабричный паттерн (`makeCounter`), box через class и shadowing не триггерят. Детали анализа и границы стадии — каталог warnings в [16-compiler.md](../16-tooling/16-compiler.md).
 
 Обоснование: примитивы — маленькие значения, copy дешевле чем pointer + dereference. Нет алиасинга. Безопасно на всех платформах.
@@ -752,6 +754,92 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 | `arc-array-elems` | Замыкания в array literal: retain Ident / move call |
 | `env-pool-avr` | Static env pool на AVR (avr-gcc + simavr): цикл create/retain/release, переиспользование блоков без исчерпания |
 | `err-capture-move-use` | `[x]` без type = compile error |
+| `nested-fn/*` (13 кейсов) | Именованные вложенные функции — раздел 10: shared-cell capture, рекурсия, мутуальная рекурсия, фабрика, границы E020 |
+
+---
+
+## 10. Именованные вложенные функции — shared-cell env (#295, стадия v2b)
+
+`function`-декларация, вложенная непосредственно в тело другой функции (не на top level), — hoisted замыкание с **shared-cell** захватом. Модель отличается от arrow-замыканий (D1–D4): примитивы не копируются в snapshot, а живут в общей ячейке env.
+
+### 10.1 Семантика
+
+```typescript
+function makeCounter(): () => i32 {
+  let count: i32 = 0;                      // cell: живёт В env
+  function inc(): i32 { count = count + 1; return count; }
+  return inc;                               // замыкание уезжает, cell живёт в heap-env
+}
+const c = makeCounter();
+console.log(c());   // 1
+console.log(c());   // 2
+```
+
+Правила:
+
+1. **Hoisting внутри блока.** Вложенная функция видна с начала блока — вызов до декларации работает (`hoisted-call`). Порядок объявлений свободен, как в TS.
+2. **Shared cell.** Каждая захваченная переменная (прямой `let`/`const`-ребёнок блока ИЛИ параметр enclosing-функции, если блок — тело функции) получает ячейку в env. Enclosing-блок и все вложенные функции читают/пишут **одну** ячейку: `count = 10` после декларации видна внутри (`capture-after-write`), мутация изнутри видна снаружи при последующих вызовах. Это TS-истинное поведение — расхождение D2/W013 сюда не применяется.
+3. **Один env на блок.** Если хоть одной вложенной функции нужны ячейки — блок получает один env-структур (`tsc_malloc`, refcount 1, ARC-заголовок), все вложенные функции блока принимают её первым параметром. Ячейки без потребности env не создаётся — функции получают `void *_env`.
+4. **String-ячейки** — value в env; destroy fn env делает `tsc_string_release` по всем строковым ячейкам. Переприсваивание строковой ячейки (`msg = "ok"`) безопасно: старое значение отпускается обычным путём присваивания, финальный release — destroy fn.
+5. **ARC lifecycle.** Env живёт до конца блока (release на cleanup блока), либо уезжает с возвращённым замыканием (`return inc` → retain, caller владеет). Копии binding'ов — retain по общим правилам 6.1.
+6. **Рекурсия и мутуальная рекурсия.** Тело функции реконструирует локальные binding'и siblings/себя (`tsc_closure fact = {.env=..., .fn=...}` в топе тела); для перекрёстных ссылок компилятор эмитит forward-прототипы всех nested-функций блока.
+
+### 10.2 C-конвенция
+
+```c
+typedef struct { tsc_env_hdr _hdr; int32_t count; } _nested_0_env;
+
+static void _nested_0_env_destroy(void *_env) { /* release string cells */ }
+
+static int32_t _nested_1_inc(_nested_0_env *env) {
+    env->count = env->count + 1;
+    return env->count;
+}
+
+tsc_closure makeCounter(void) {
+    _nested_0_env *env = tsc_malloc(sizeof(_nested_0_env));
+    *env = (_nested_0_env){._hdr = {._refcount = 1, ._destroy = _nested_0_env_destroy}};
+    tsc_closure inc = {.env = env, .fn = (void*)_nested_1_inc};
+    env->count = 0;                    // let count: i32 = 0 → запись в ячейку
+    tsc_env_retain((inc).env);         // return inc: caller владеет
+    tsc_closure _ret_0 = inc;
+    tsc_env_release(env);              // release локальной ссылки блока
+    return _ret_0;
+}
+```
+
+- Декларация `let count` в блоке компилируется в `env->count = <init>` (хранение — в ячейке, не в C-локали).
+- Блок без ячеек: функции блока получают `void *_env` (конвенция env-forwarding едина для всего, что хранится в `tsc_closure.fn`).
+- Имена: `_nested_<N>_<fnName>` (N — счётчик замыканий модуля), env-тип `_nested_<M>_env`.
+
+### 10.3 Границы стадии (E020)
+
+| Конструкция | Ошибка |
+|-------------|--------|
+| Захват переменной из внешнего блока (не непосредственный родитель — тело функции с nested fn) | `error[E020]: invalid closure capture: nested function 'f' captures 'x' declared in an outer block` |
+| Захват переменной без type-аннотации и без literal-инициализации | `error[E020]: invalid closure capture: captured variable 'x' needs a type annotation ...` |
+| Именованная function внутри тела arrow-замыкания | `error[E020]: invalid closure capture: nested function declarations inside closures are not supported yet (planned for shared-cell closures)` |
+| Дублирующиеся имена nested-функций в блоке | `error[E123]` |
+
+Глобальные имена (scope 0) захватываются прямой ссылкой без ячеек. Стадия v2c снимает первые два ограничения (общий env-chain) и переводит arrow-захват на те же ячейки.
+
+### 10.4 Тесты
+
+| Кейс | Проверяет |
+|------|-----------|
+| `nested-fn/basic` | Вложенная fn без захвата, вызов из блока |
+| `nested-fn/capture-read` | Чтение cell внутри fn |
+| `nested-fn/counter` | Фабрика makeCounter — мутация cell через вызовы |
+| `nested-fn/hoisted-call` | Вызов до декларации (hoisting) |
+| `nested-fn/recursion` | Саморекурсия (реконструкция собственного binding'а) |
+| `nested-fn/mutual` | Мутуальная рекурсия + forward-прототипы |
+| `nested-fn/callback` | Передача nested fn как аргумента higher-order функции |
+| `nested-fn/param-capture` | Захват параметра enclosing-функции |
+| `nested-fn/capture-after-write` | Запись в cell после декларации видна fn |
+| `nested-fn/string-cell` | String-ячейка: destroy fn, переприсваивание |
+| `nested-fn/err-in-closure` | E020: nested fn внутри arrow |
+| `nested-fn/err-outer-capture` | E020: захват из внешнего блока |
+| `nested-fn/err-untyped-capture` | E020: захват без аннотации |
 
 ---
 

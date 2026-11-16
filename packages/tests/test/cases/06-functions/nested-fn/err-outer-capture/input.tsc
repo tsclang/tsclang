@@ -1,0 +1,8 @@
+function main(): void {
+  let y: i32 = 5;
+  if (true) {
+    function g(): i32 { return y; }
+    console.log(g());
+  }
+}
+main();

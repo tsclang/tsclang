@@ -325,16 +325,24 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       ctx.define(p.name, symInfo);
     }
     const bodyLines: string[] = [];
-    if (arrowNode.body.kind === 'Block') {
-      ctx.visitBlock(arrowNode.body, bodyLines, 0);
-    } else {
-      const c = ctx.exprToC(arrowNode.body, bodyLines, 0);
-      if (ret === 'void') {
-        bodyLines.push(`${c};`);
+    // #295 v2b boundary: nested named functions inside closures are not
+    // supported yet — the pre-scan throws E020 instead of silently miscompiling.
+    const _prevBuildingClosure = ctx._buildingClosureBody;
+    ctx._buildingClosureBody = true;
+    try {
+      if (arrowNode.body.kind === 'Block') {
+        ctx.visitBlock(arrowNode.body, bodyLines, 0);
       } else {
-        const bodySym = arrowNode.body.kind === 'Ident' ? ctx.lookup(arrowNode.body.name) : null;
-        bodyLines.push(`return ${ctx._derefStrPtr(bodySym, c)};`);
+        const c = ctx.exprToC(arrowNode.body, bodyLines, 0);
+        if (ret === 'void') {
+          bodyLines.push(`${c};`);
+        } else {
+          const bodySym = arrowNode.body.kind === 'Ident' ? ctx.lookup(arrowNode.body.name) : null;
+          bodyLines.push(`return ${ctx._derefStrPtr(bodySym, c)};`);
+        }
       }
+    } finally {
+      ctx._buildingClosureBody = _prevBuildingClosure;
     }
     ctx.popScope();
 

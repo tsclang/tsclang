@@ -282,7 +282,15 @@ export function hoistArrow(ctx: CodeGenContext, node: Arrow | FuncExpr, retType:
       ctx.define(p.name, symInfo);
     }
     if (node.body.kind === 'Block') {
-      ctx.visitBlock(node.body, lines, 0);
+      // #295 v2b boundary: nested named functions inside closures — the
+      // pre-scan throws E020 (shared-cell closures arrive in v2c).
+      const _prevBuildingClosure = ctx._buildingClosureBody;
+      ctx._buildingClosureBody = true;
+      try {
+        ctx.visitBlock(node.body, lines, 0);
+      } finally {
+        ctx._buildingClosureBody = _prevBuildingClosure;
+      }
     } else {
       const c = ctx.exprToC(node.body, lines, 0);
       if (ret === 'void') {

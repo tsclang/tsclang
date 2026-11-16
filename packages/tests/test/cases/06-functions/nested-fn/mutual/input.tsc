@@ -1,0 +1,5 @@
+function main(): void {
+  function ping(n: i32): string { return n === 0 ? "done" : pong(n - 1); }
+  function pong(n: i32): string { return ping(n); }
+  console.log(ping(2));
+}

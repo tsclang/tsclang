@@ -1,0 +1,8 @@
+function makeCounter(): () => i32 {
+  let count: i32 = 0;
+  function inc(): i32 { count = count + 1; return count; }
+  return inc;
+}
+const c = makeCounter();
+console.log(c());
+console.log(c());

@@ -1,0 +1,7 @@
+function main(): void {
+  let msg: string = "hi";
+  function get(): string { return msg; }
+  console.log(get());
+  msg = "ok";
+  console.log(get());
+}

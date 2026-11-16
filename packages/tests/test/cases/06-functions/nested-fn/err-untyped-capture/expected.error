@@ -1,0 +1,1 @@
+error[E020]: invalid closure capture: captured variable 'y' needs a type annotation to be captured by a nested function

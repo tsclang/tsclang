@@ -1,0 +1,5 @@
+function main(): void {
+  let base: i32 = 10;
+  function addBase(x: i32): i32 { return x + base; }
+  console.log(addBase(5));
+}

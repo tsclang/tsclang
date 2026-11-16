@@ -1,0 +1,1 @@
+error[E020]: invalid closure capture: nested function 'g' captures 'y' declared in an outer block — only same-block variables and function parameters can be captured

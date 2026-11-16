@@ -1,0 +1,5 @@
+const f = (): i32 => {
+  function inner(x: i32): i32 { return x * 2; }
+  return inner(21);
+};
+console.log(f());

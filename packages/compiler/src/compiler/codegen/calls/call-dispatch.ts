@@ -2,6 +2,22 @@ import type { CodeGenContext } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Expression, Call, Argument, SymbolInfo, Param, TypeRef } from '@tsclang/ast';
 import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
+
+// True when the expression contains a Call anywhere — such a callee has side
+// effects (e.g. a factory allocating a closure env) and must be evaluated once.
+function _containsCall(node: unknown): boolean {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(_containsCall);
+  const n = node as Record<string, unknown>;
+  if (n.kind === 'Call') return true;
+  for (const k of Object.keys(n)) {
+    if (k === 'kind') continue;
+    const c = n[k];
+    if (c && typeof c === 'object' && _containsCall(c)) return true;
+  }
+  return false;
+}
+
 export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth: number): string {
     const { callee, args } = node;
 
@@ -247,8 +263,19 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
         }
         if (!paramTypes) paramTypes = (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
         const sigArgs = ['void *', ...paramTypes].join(', ');
-        const callArgs = argsC ? `${calleeC}.env, ${argsC}` : `${calleeC}.env`;
-        return `((${retType} (*)(${sigArgs}))${calleeC}.fn)(${callArgs})`;
+        // #295: a callee that itself contains a call (e.g. makeAdder(7)) must be
+        // evaluated once — inlining calleeC into both `.fn` and `.env` would run
+        // it twice (doubling side effects and leaking the extra env).
+        let cloRef = calleeC;
+        if (_containsCall(callee)) {
+          const I = ' '.repeat(ctx.indent * depth);
+          const tmp = `_clo_${ctx.tempCount++}`;
+          lines.push(`${I}tsc_closure ${tmp} = ${calleeC};`);
+          ctx._pushPostStmtCleanup(`${I}tsc_env_release(${tmp}.env);`);
+          cloRef = tmp;
+        }
+        const callArgs = argsC ? `${cloRef}.env, ${argsC}` : `${cloRef}.env`;
+        return `((${retType} (*)(${sigArgs}))${cloRef}.fn)(${callArgs})`;
       }
     }
 

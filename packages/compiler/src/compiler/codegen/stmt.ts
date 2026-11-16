@@ -16,6 +16,9 @@ export function visitBlock(ctx: CodeGenContext, block: Block, lines: string[], d
     ctx._poolVarStack.push(blockPoolVars);
     ctx._heapVarStack.push(blockHeapVars);
     const _heapMovedSnapshot = ctx._snapshotHeapMoved();
+    // #295 v2b: nested named functions — hoisted closure bindings + shared-cell
+    // env emitted at scope entry; fn bodies build deferred (cleanup isolation).
+    const _nestedFnBodies = ctx._preScanNestedFns(block, lines, depth);
     for (const s of block.body) visitStmt(ctx, s, lines, depth);
     ctx._restoreHeapMoved(_heapMovedSnapshot);
     const I = ' '.repeat(ctx.indent * depth);
@@ -49,6 +52,9 @@ export function visitBlock(ctx: CodeGenContext, block: Block, lines: string[], d
     ctx._poolVarStack.pop();
     ctx._heapVarStack.pop();
     ctx.popScope();
+    // #295 v2b: nested-fn bodies build after this block's frames are gone so
+    // their Returns can't flush (and consume) the enclosing block's cleanups.
+    if (_nestedFnBodies) _nestedFnBodies();
 }
 
 export function visitStmtInMain(ctx: CodeGenContext, node: Stmt) {
@@ -92,6 +98,9 @@ export function visitStmt(ctx: CodeGenContext, node: Stmt, lines: string[], dept
       case 'Spawn':
       case 'Noop':
         ctx._visitControlFlow(node, lines, depth); break;
+      case 'FuncDecl':
+        // Nested named function — fully emitted by the block pre-scan (#295 v2b).
+        break;
       default:
         throw ctx.errorCode('E417', node, { detail: `internal: unhandled statement kind '${node.kind}'` });
     }

@@ -20,6 +20,21 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
     ctx._currentNode = node;
     const I = ' '.repeat(ctx.indent * depth);
     const p = (s: string) => lines.push(I + s);
+    // #295 v2b shared cell: the declaration's storage lives in a nested-fn env
+    // (symbol was pre-defined with `_cellVar` at block entry). The statement
+    // becomes a plain assignment into the cell; the env destroy fn owns the
+    // value's cleanup, so no local cleanup is registered here.
+    const _curScope = ctx.scopes[ctx.scopes.length - 1];
+    const _cellSym = node.name ? _curScope.get(node.name) : null;
+    if (_cellSym?._cellVar) {
+      if (!node.init) return; // env cells are zero-initialized at allocation
+      const _prevET = ctx._expectedType;
+      ctx._expectedType = _cellSym.ctype ?? null;
+      const initC = ctx.exprToC(node.init, lines, depth);
+      ctx._expectedType = _prevET;
+      p(`env->${node.name} = ${initC};`);
+      return;
+    }
     // Apply class field defaults right after a raw tsc_arc_alloc. tsc_arc_alloc
     // calloc()s, so fields without an initializer are already zeroed — only
     // fields WITH a default need an explicit assignment.

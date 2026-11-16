@@ -1,0 +1,1 @@
+error[E020]: invalid closure capture: nested function declarations inside closures are not supported yet (planned for shared-cell closures)

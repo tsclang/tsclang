@@ -1,0 +1,5 @@
+function makeAdder(n: i32): () => i32 {
+  function get(): i32 { return n; }
+  return get;
+}
+console.log(makeAdder(7)());

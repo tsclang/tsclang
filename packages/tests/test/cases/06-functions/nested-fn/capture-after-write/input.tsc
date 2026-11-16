@@ -1,0 +1,6 @@
+function main(): void {
+  let base: i32 = 0;
+  function get(): i32 { return base; }
+  base = 10;
+  console.log(get());
+}

@@ -1,0 +1,7 @@
+function makeVal(): i32 { return 3; }
+function main(): void {
+  let y = makeVal();
+  function g(): i32 { return y; }
+  console.log(g());
+}
+main();

@@ -1,0 +1,5 @@
+function apply(f: (x: i32) => i32, v: i32): i32 { return f(v); }
+function main(): void {
+  function twice(x: i32): i32 { return x * 2; }
+  console.log(apply(twice, 21));
+}

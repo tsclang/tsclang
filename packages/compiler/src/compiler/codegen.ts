@@ -531,6 +531,13 @@ class Context {
   _processedVarDecls!: Set<Stmt>; // Phase A.0-promoted VarDecls (wrapper + unwrapped)
   _deferredStaticInits!: Map<Stmt, string>; // split-init assignment → flushed at source position
 
+  // Nested named functions (#295 v2b): shared-cell env active for the block
+  // being code-generated, fn-body params eligible as cells, and the
+  // inside-a-closure boundary guard.
+  _activeEnv!: import('./codegen/misc/nested-fns.js').ActiveEnv | null;
+  _fnBodyParamsForCells!: Param[] | null;
+  _buildingClosureBody!: boolean;
+
   // Function-visit state
   _curFuncName!: string | null;
   _throwsCtx!: ThrowsCtx | null;
@@ -726,6 +733,9 @@ class Context {
     this._processedTopLevel = new Set();
     this._inFlightFuncs = new Set();
     this._funcBuildStack = [];
+    this._activeEnv = null;
+    this._fnBodyParamsForCells = null;
+    this._buildingClosureBody = false;
     this._prototypedFuncs = new Set();
     this._processedVarDecls = new Set();
     this._deferredStaticInits = new Map();
@@ -1629,7 +1639,12 @@ class Context {
   assignToC(node: Assign, lines: string[], depth: number) { return exprFns.assignToC(this, node, lines, depth); }
 
   // Delegating methods: stmtFns
-  visitBlock(block: Block, lines: string[], depth: number) { return stmtFns.visitBlock(this, block, lines, depth); }
+  visitBlock(block: Block, lines: string[], depth: number) {
+    const _savedActiveEnv = this._activeEnv;
+    stmtFns.visitBlock(this, block, lines, depth);
+    this._activeEnv = _savedActiveEnv;
+  }
+  _preScanNestedFns(block: Block, lines: string[], depth: number): (() => void) | null { return miscFns.preScanNestedFns(this, block, lines, depth); }
   visitStmtInMain(node: Stmt) { return stmtFns.visitStmtInMain(this, node); }
   visitStmt(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmt(this, node, lines, depth); }
   visitStmtOrBlock(node: Stmt, lines: string[], depth: number) { return stmtFns.visitStmtOrBlock(this, node, lines, depth); }

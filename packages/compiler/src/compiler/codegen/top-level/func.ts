@@ -605,7 +605,12 @@ export function emitFuncBody(ctx: CodeGenContext, funcName: string, body: Block 
       }
     }
 
+    // #295 v2b: mark this block as the fn body — its params are eligible
+    // capture cells for nested named functions (visitBlock pre-scan).
+    const _savedFnBodyParams = ctx._fnBodyParamsForCells;
+    ctx._fnBodyParamsForCells = params;
     ctx.visitBlock(body!, lines, 0);
+    ctx._fnBodyParamsForCells = _savedFnBodyParams;
 
     if (ctx._usesGotoCleanup) {
       if (throwsCtx?.isVoid) {
