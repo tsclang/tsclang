@@ -813,9 +813,11 @@ class Context {
   // Backward-compatible accessors — subdirectory code accesses output buffers directly.
   get includes()   { return this._output.includes; }
   get typedefs()   { return this._output.typedefs; }
+  get fwdDecls()   { return this._output.fwdDecls; }
   get topLevel()   { return this._output.topLevel; }
   get mainStmts()  { return this._output.mainStmts; }
   get lambdaLines() { return this._output.lambdaLines; }
+  addFwd(line: string) { this._output.addFwd(line); }
   // Allow subdirectory code to manipulate addTop routing state
   get _lastAddedToTypedefs() { return this._output._lastAddedToTypedefs; }
   set _lastAddedToTypedefs(v) { this._output._lastAddedToTypedefs = v; }
@@ -1400,10 +1402,36 @@ class Context {
       parts.push('');
     };
 
-    // Library mode: emit typedefs + lambdas + topLevel + __init (no includes, no main)
+    // #298 s1: keep a forward declaration only when pre-topLevel code (typedefs
+    // + lambda sections — closure bodies, reactive/static env captures) actually
+    // references the global; otherwise the topLevel definition suffices and the
+    // C layout stays byte-identical for programs without capturing closures.
+    // Env/class struct blocks are stripped first: a struct FIELD named like the
+    // global (e.g. `int32_t x;` inside a spawn env) is not a reference.
+    const _scanPreTop: string[] = [];
+    let _inStructBlock = false;
+    for (const l of [...this.typedefs, ...this.lambdaLines]) {
+      if (_inStructBlock) {
+        if (l.startsWith('}')) _inStructBlock = false;
+        continue;
+      }
+      if (/^typedef struct/.test(l) && !l.includes('}')) { _inStructBlock = true; continue; }
+      _scanPreTop.push(l.replace(/typedef struct \{[^}]*\}/, ''));
+    }
+    const _fwdNeeded = (line: string): boolean => {
+      const m = line.match(/^static\s+(?:const\s+)?(.+?)\s([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?;$/);
+      if (!m) return true;
+      const name = m[2];
+      const re = new RegExp(`\\b${name}\\b`);
+      return _scanPreTop.some((l) => re.test(l));
+    };
+    const fwdKept = this.fwdDecls.filter(_fwdNeeded);
+
+    // Library mode: emit typedefs + fwd decls + lambdas + topLevel + __init (no includes, no main)
     if (this._libraryMode) {
       const parts: string[] = [];
       _pushSection(this.typedefs, parts);
+      _pushSection(fwdKept, parts);
       _pushSection(this.lambdaLines, parts);
       _pushSection(this.topLevel, parts);
       _pushSection(this._output.lateLines, parts);
@@ -1424,7 +1452,7 @@ class Context {
       return parts.length ? parts.join('\n') + '\n' : '';
     }
 
-    // Full emit: includes → typedefs → lambdas → topLevel → main
+    // Full emit: includes → typedefs → fwd decls → lambdas → topLevel → main
     const parts: string[] = [];
     // Pre-generate main's panic message expression (may addTop helper functions)
     let _mainPanicMsg: string | null = null;
@@ -1445,6 +1473,7 @@ class Context {
     parts.push(...[...this.includes].sort());
     parts.push('');
     _pushSection(this.typedefs, parts);
+    _pushSection(fwdKept, parts);
     _pushSection(this.lambdaLines, parts);
     _pushSection(this.topLevel, parts);
     _pushSection(this._output.lateLines, parts);

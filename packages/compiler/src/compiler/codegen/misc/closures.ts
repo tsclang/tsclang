@@ -131,7 +131,10 @@ export function _findFreeVars(ctx: CodeGenContext, body: Expression | Block | nu
         if (selfName && nm === selfName) return;
         if (!params.has(nm) && !localDefs.has(nm) && !builtins.has(nm) && !seen.has(nm)) {
           const sym = ctx.lookup(nm);
-          if (sym) { seen.add(nm); captured.set(nm, sym); }
+          // #298 s1: promoted static globals are NOT captured — the closure
+          // body references the file-scope global directly (TS module-scope
+          // semantics: one shared cell, no snapshot copy in the env).
+          if (sym && !sym._promotedGlobal) { seen.add(nm); captured.set(nm, sym); }
         }
         return;
       }

@@ -19,6 +19,9 @@ export interface SymbolInfo {
 
   // Ownership
   isArc?: boolean;
+  // #298 s1: top-level var promoted to a file-scope static global — closures
+  // reference it directly (no env snapshot capture)
+  _promotedGlobal?: boolean;
   isWeak?: boolean;
   isClosure?: boolean;
   isStruct?: boolean;

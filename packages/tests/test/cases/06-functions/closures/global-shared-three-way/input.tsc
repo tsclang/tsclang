@@ -1,0 +1,7 @@
+let a = 1;
+function bump(): void { a = a + 100; }
+const f = (): number => { a = a + 1; return a; };
+console.log(f());
+console.log(f());
+bump();
+console.log(a);

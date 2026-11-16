@@ -147,24 +147,26 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
         }
         if (staticDec && node.typeAnn?.kind === 'TypeFixedArray') {
           const et = ctx.resolveType(node.typeAnn.element);
-          const size = node.typeAnn.size;
-          if (ctx._ramSize != null) {
-            const bytes = size * ctx._cTypeBytes(et);
-            ctx._bssUsage = (ctx._bssUsage ?? 0) + bytes;
-            if (ctx._bssUsage > ctx._ramSize) {
-              throw ctx.errorCode('E305', null, { detail: `Static BSS usage (${ctx._bssUsage} bytes) exceeds ram_size (${ctx._ramSize} bytes)` });
+            const size = node.typeAnn.size;
+            if (ctx._ramSize != null) {
+              const bytes = size * ctx._cTypeBytes(et);
+              ctx._bssUsage = (ctx._bssUsage ?? 0) + bytes;
+              if (ctx._bssUsage > ctx._ramSize) {
+                throw ctx.errorCode('E305', null, { detail: `Static BSS usage (${ctx._bssUsage} bytes) exceeds ram_size (${ctx._ramSize} bytes)` });
+              }
             }
-          }
-          const initLines: string[] = [];
-          ctx.visitStmt(node, initLines, 0);
-          // Rewrite the emitted line to be static
-          for (const line of initLines) {
-            const trimmed = line.trim();
-            if (trimmed) ctx.topLevel.push('static ' + trimmed);
-          }
-          ctx.topLevel.push('');
-          ctx.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size });
-          break;
+            const initLines: string[] = [];
+            ctx.visitStmt(node, initLines, 0);
+            // Rewrite the emitted line to be static
+            for (const line of initLines) {
+              const trimmed = line.trim();
+              if (trimmed) ctx.topLevel.push('static ' + trimmed);
+            }
+            ctx.topLevel.push('');
+            // #298 s1: promoted static global — closures reference it directly
+            ctx.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size, _promotedGlobal: true });
+            ctx.addFwd(`static ${node.varKind === 'const' ? 'const ' : ''}${et} ${node.name}[${size}];`);
+            break;
         }
         if (staticDec && node.init?.kind === 'New' && node.init.name === 'Map') {
           const capArg = node.init.args?.[0];
@@ -190,7 +192,9 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             }
             ctx.topLevel.push(`static ${smType} ${node.name} = {.capacity = ${capC}};`);
             ctx.topLevel.push('');
-            ctx.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}` });
+            // #298 s1: promoted static global — closures reference it directly
+            ctx.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}`, _promotedGlobal: true });
+            ctx.addFwd(`static ${node.varKind === 'const' ? 'const ' : ''}${smType} ${node.name};`);
             break;
           }
         }
@@ -262,6 +266,20 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
               _sym._cAlias = _cName;
               ctx.define(_origName, _sym);
             }
+          }
+          // #298 s1: mark the promoted symbol so arrow closure envs reference
+          // the static global directly instead of snapshotting a copy. Emit a
+          // tentative forward declaration (before the lambda section) — closure
+          // fn bodies are compiled before the topLevel globals section.
+          // const-qualified symbols need a matching const in the tentative
+          // declaration, or the later `static const` definition conflicts.
+          const _psym = ctx.lookup(_origName);
+          if (_psym) {
+            _psym._promotedGlobal = true;
+            const _cname = ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName;
+            const _qual = _psym.varKind === 'const' ? 'const ' : '';
+            const _ct = _psym.ctype ?? 'int32_t';
+            ctx.addFwd(`static ${_qual}${_ct} ${_cname}${_psym.isFixedArray ? `[${_psym.arraySize}]` : ''};`);
           }
         } else {
           // Runtime-init variable → stays inside main()

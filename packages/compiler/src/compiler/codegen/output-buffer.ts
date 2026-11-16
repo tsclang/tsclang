@@ -4,6 +4,10 @@
 export class OutputBuffer {
   includes: Set<string>;
   typedefs: string[];
+  // #298 s1: tentative forward declarations of promoted static globals —
+  // emitted between typedefs and lambdas so closure bodies (compiled before
+  // the topLevel globals section) can reference the globals directly
+  fwdDecls: string[];
   topLevel: string[];
   mainStmts: string[];
   lambdaLines: string[];
@@ -16,12 +20,17 @@ export class OutputBuffer {
   constructor(initialInclude?: string) {
     this.includes = new Set(initialInclude ? [initialInclude] : []);
     this.typedefs = [];
+    this.fwdDecls = [];
     this.topLevel = [];
     this.mainStmts = [];
     this.lambdaLines = [];
     this.lateLines = [];
     this._inTypedefBlock = false;
     this._lastAddedToTypedefs = false;
+  }
+
+  addFwd(line: string): void {
+    if (!this.fwdDecls.includes(line)) this.fwdDecls.push(line);
   }
 
   addTop(line: string): void {

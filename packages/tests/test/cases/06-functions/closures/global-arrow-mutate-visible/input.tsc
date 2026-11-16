@@ -1,0 +1,7 @@
+let counter: i32 = 0;
+function read(): i32 { return counter; }
+const inc = (): void => { counter = counter + 1; };
+inc();
+inc();
+inc();
+console.log(read());

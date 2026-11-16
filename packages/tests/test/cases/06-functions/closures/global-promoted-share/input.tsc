@@ -1,7 +1,7 @@
 // [R] A top-level primitive referenced by a top-level function is promoted to a
-// static global (func-ref scan): bump() shares the cell, but a plain arrow
-// STILL env-captures a snapshot copy of it — the divergence with TS persists,
-// so W013 fires (TS would print 1 2; TSClang prints 1 1).
+// static global (func-ref scan), and a plain arrow over the SAME global
+// references it directly (#298 s1): bump() and f() share one cell — TS-true
+// (prints 1 2, matching TypeScript module-scope semantics).
 let counter = 0;
 function bump(): void { counter = counter + 1; }
 const f = (): number => { counter = counter + 1; return counter; };

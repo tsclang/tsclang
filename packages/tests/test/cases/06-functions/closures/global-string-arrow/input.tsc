@@ -1,0 +1,6 @@
+let name: string = "aaa";
+function setName(): void { name = "bbb"; }
+const get = (): string => name;
+console.log(get());
+setName();
+console.log(get());
