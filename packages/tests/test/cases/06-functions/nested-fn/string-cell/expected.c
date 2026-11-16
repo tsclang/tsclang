@@ -18,7 +18,7 @@ void _tsc_main(void) {
     tsc_closure get = {.env = env, .fn = (void*)_nested_1_get};
     env->msg = STR_LIT("hi");
     printf("%s\n", ((String (*)(void *))get.fn)(get.env).data);
-    env->msg = STR_LIT("ok");
+    { String _tsc_tmp = STR_LIT("ok"); tsc_string_release(env->msg); env->msg = _tsc_tmp; }
     printf("%s\n", ((String (*)(void *))get.fn)(get.env).data);
     tsc_env_release(env);
 }

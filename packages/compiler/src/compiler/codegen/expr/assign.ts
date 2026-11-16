@@ -297,6 +297,22 @@ export function assignToC(ctx: CodeGenContext, node: Assign, lines: string[], de
       return null;
     }
 
+    // Plain `=` for String (owning reassign): evaluate the RHS into a temp,
+    // release the old value, then move the temp in. A borrowed RHS (another
+    // slot's value: Ident/Member/Index/Conditional) is retained first so both
+    // owners hold their own ref — mirrors let-copy semantics; a fresh RHS
+    // (literal/concat/call result) is already owned, no retain needed.
+    if (node.op === '=' && leftType === 'String' && node.left.kind === 'Ident') {
+      const rhsIsBorrow = node.right?.kind === 'Ident' || node.right?.kind === 'Member'
+        || node.right?.kind === 'Index' || node.right?.kind === 'Ternary';
+      if (rhsIsBorrow && node.right?.kind === 'Ident' && node.right.name === node.left.name) {
+        return null; // self-assign no-op
+      }
+      const I = ' '.repeat(ctx.indent * depth);
+      lines.push(`${I}{ String _tsc_tmp = ${r}; ${rhsIsBorrow ? 'tsc_string_retain(_tsc_tmp); ' : ''}tsc_string_release(${l}); ${l} = _tsc_tmp; }`);
+      return null;
+    }
+
     // String property/array assign: safe temp pattern to avoid a.p = a.p destroying before retain
     if (node.op === '=' && leftType === 'String' &&
         (node.left.kind === 'Member' || node.left.kind === 'Index')) {

@@ -1,0 +1,4 @@
+let g: string = "aaa";
+function bump(): void { g = "x" + "y"; }
+bump();
+console.log(g);
