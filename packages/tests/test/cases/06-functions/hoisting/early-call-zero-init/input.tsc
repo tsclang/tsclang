@@ -1,0 +1,4 @@
+console.log(readEarly());
+function readEarly(): number { return late + 1; }
+function initLate(): number { return 41; }
+let late = initLate();

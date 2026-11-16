@@ -232,7 +232,12 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             // Generate init expression and collect runtime assignment
             const _initC = ctx.exprToC(_savedInit, [], 0);
             _splitInit = `${ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName} = ${_initC};`;
-            if (ctx._libraryMode) {
+            if (ctx._processedVarDecls?.has(node)) {
+              // Phase A.0 pre-emission (#295 v2a): the assignment runs at the
+              // node's source position, not at promotion time — a hoisted use
+              // before the declaration line observes the zero-init value.
+              ctx._deferredStaticInits.set(node, _splitInit);
+            } else if (ctx._libraryMode) {
               ctx._libInitStmts.push(_splitInit);
             } else {
               ctx.mainStmts.push(_splitInit);

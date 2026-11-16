@@ -402,6 +402,19 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Shared with semantics.ts (W013) — see func-ref-vars.ts for the rules.
     ctx._funcRefVars = collectFuncRefVars(ast);
 
+    // Hoisting (#295 v2a): index not-yet-processed top-level functions by
+    // name. Built before ANY emission phase can run exprToC (Phase A.0 static
+    // splits may reference later functions) so forward pulls always resolve.
+    ctx._pendingFuncs = new Map();
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if ((n?.kind === 'FuncDecl' || n?.kind === 'FuncOverload') && n.name) {
+        const group = ctx._pendingFuncs.get(n.name) ?? [];
+        group.push(node);
+        ctx._pendingFuncs.set(n.name, group);
+      }
+    }
+
     // Pre-scan: register function signatures referenced by ReturnType<typeof fn> / Parameters<typeof fn>
     //   TypeAliases in Phase A need these symbols. Only register functions actually referenced
     //   by utility-type TypeAliases to avoid interfering with normal function codegen.
@@ -478,11 +491,17 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Phase A.0: Process funcRef VarDecls that decorator wrappers may reference.
     //   These static globals must be emitted before class methods (C: declaration before use).
     //   Only process VarDecls in _funcRefVars — others stay in source order (Phase B).
+    //   Runtime split-init assignments are DEFERRED to the node's source position
+    //   (hoisting #295 v2a: a use before the declaration line must observe the
+    //   zero-init value, not an early assignment).
     const _processedVarDecls = new Set<unknown>();
+    ctx._processedVarDecls = _processedVarDecls as Set<Stmt>;
+    ctx._deferredStaticInits = new Map();
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
       if (n?.kind === 'VarDecl' && n.name && ctx._funcRefVars?.has(n.name)) {
         _processedVarDecls.add(node);
+        if (n !== node) _processedVarDecls.add(n); // dispatch sees the unwrapped decl
         try {
           ctx.visitTopLevel(node);
         } catch (e) {
@@ -542,10 +561,25 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       for (const node of ast.body) _scanMono(node);
     }
 
-    // Phase B: Process functions, imports, and everything else
+    // Phase B: Process functions, imports, and everything else.
+    // Hoisting support (#295 v2a): forward references pull pending functions
+    // on demand (ctx.tryPullPendingFunc); the main loop skips what a pull
+    // already emitted. (_pendingFuncs is built before Phase A.0.)
     for (const node of ast.body) {
       if (_isTypeDecl(node)) continue;
-      if (_processedVarDecls.has(node)) continue;
+      if (_processedVarDecls.has(node)) {
+        // Hoisting (#295 v2a): flush the deferred runtime init of a static
+        // global at its source position (Phase A.0 emitted only the zero-init).
+        const _n2 = (node.kind === 'Export' ? node.decl : node) as Stmt | undefined;
+        const _deferred = _n2 ? ctx._deferredStaticInits.get(_n2) : undefined;
+        if (_deferred !== undefined) {
+          ctx._deferredStaticInits.delete(_n2!);
+          (ctx._libraryMode ? ctx._libInitStmts : ctx.mainStmts).push(_deferred);
+        }
+        continue;
+      }
+      if (ctx._processedTopLevel.has(node)) continue;
+      ctx._processedTopLevel.add(node);
       try {
         ctx.visitTopLevel(node);
       } catch (e) {

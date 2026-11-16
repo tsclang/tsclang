@@ -1,0 +1,2 @@
+console.log(f());
+const f = (): number => 1;

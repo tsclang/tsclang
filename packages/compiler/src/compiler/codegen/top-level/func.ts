@@ -86,6 +86,64 @@ export function visitGlobalVar(ctx: CodeGenContext, node: VarDecl) {
   // ----------------------------------------------------------------
   // Functions
   // ----------------------------------------------------------------
+
+/**
+ * Build C parameter strings for a function signature. Single implementation
+ * shared by definition emission (visitFuncDecl) and forward prototypes
+ * (ensureFuncPrototype) so the two can never drift apart (#295 v2a).
+ */
+export function buildParamStrs(ctx: CodeGenContext, params: Param[]): { strs: string[]; hasScalarRest: boolean } {
+    const hasScalarRest = params.some((p: Param) => {
+      if (!p.rest) return false;
+      const et2 = p.typeAnn?.kind === 'TypeArray' ? ctx.resolveType(p.typeAnn.element) : (p.typeAnn ? ctx.resolveType(p.typeAnn) : null);
+      return et2 === 'Scalar';
+    });
+
+    const strs = params.map((p: Param) => {
+      if (p.rest) {
+        // ...args: T[] → T *args, int32_t args_count (unwrap the array type)
+        let et = 'int32_t';
+        if (p.typeAnn) {
+          // Unwrap element type without emitting Array struct typedef
+          if (p.typeAnn.kind === 'TypeArray') et = ctx.resolveType(p.typeAnn.element);
+          else et = ctx.resolveType(p.typeAnn);
+        }
+        if (et === 'Scalar') return '...';  // C variadic
+        return `${et} *${p.name}, int32_t ${p.name}_count`;
+      }
+      if (p.destructArr) {
+        // [a, b]: T[] → T *_arr  (destructured in body)
+        let et = 'int32_t';
+        if (p.typeAnn?.kind === 'TypeArray') et = ctx.resolveType(p.typeAnn.element);
+        else if (p.typeAnn) et = ctx.resolveType(p.typeAnn);
+        return `${et} *_arr`;
+      }
+      if (p.typeAnn?.kind === 'TypeFunc') return ctx.typeDecl(p.typeAnn, p.name);
+      // For Scalar-variadic functions: string params → const char * (C format string convention)
+      if (hasScalarRest && p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'string') {
+        return `const char *${p.name}`;
+      }
+      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *';
+      return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
+    });
+    return { strs, hasScalarRest };
+}
+
+/**
+ * Emit a forward prototype for a function whose C definition is not in the
+ * output yet (mutual recursion: the callee is an ancestor in the emission
+ * stack). Idempotent per C name (#295 v2a).
+ */
+export function ensureFuncPrototype(ctx: CodeGenContext, sym: { ctype?: string; params?: Param[]; _isNever?: boolean }, funcName: string): void {
+    if (ctx._prototypedFuncs.has(funcName)) return;
+    ctx._prototypedFuncs.add(funcName);
+    const { strs } = buildParamStrs(ctx, sym.params ?? []);
+    const ret = sym.ctype ?? 'int32_t';
+    const neverPrefix = sym._isNever ? '_Noreturn ' : '';
+    const retSep = ret.endsWith('*') ? '' : ' ';
+    ctx.addTop(`${neverPrefix}${ret}${retSep}${funcName}(${strs.join(', ') || 'void'});`);
+}
+
 export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = false, isExported = false) {
     if (!node.body) return; // overload signature
     const { name, params, returnType, body, generator, decorators, typeParams } = node;
@@ -175,14 +233,14 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
     if (pendingSigs?.length) {
       ctx._pendingOverloads.delete(name);
       const implRetType = returnType ? ctx.resolveType(returnType) : 'void';
-      const allOverloads: { funcName: string; params: Param[] }[] = [];
+      const allOverloads: { funcName: string; params: Param[]; retCtype?: string; returnType?: TypeAnn | null }[] = [];
       for (const sig of pendingSigs) {
         // Build a synthetic node with this signature's params but the implementation's body
         const sigSuffix = mangleParams(sig.params, ctx._defaultNumber);
         const sigCname = `${name}${sigSuffix}`;
         const synth = { ...node, params: sig.params, _monoName: sigCname };
         ctx.visitFuncDecl(synth, isTopLevel);
-        allOverloads.push({ funcName: sigCname, params: sig.params });
+        allOverloads.push({ funcName: sigCname, params: sig.params, retCtype: sig.returnType ? ctx.resolveType(sig.returnType) : implRetType, returnType: sig.returnType ?? returnType });
       }
       // Register all overloads in scope for call-site dispatch
       if (name) {
@@ -351,39 +409,7 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
       }
     }
 
-    const hasScalarRest = params.some((p: Param) => {
-      if (!p.rest) return false;
-      const et2 = p.typeAnn?.kind === 'TypeArray' ? ctx.resolveType(p.typeAnn.element) : (p.typeAnn ? ctx.resolveType(p.typeAnn) : null);
-      return et2 === 'Scalar';
-    });
-
-    const paramStrs = params.map((p: Param) => {
-      if (p.rest) {
-        // ...args: T[] → T *args, int32_t args_count (unwrap the array type)
-        let et = 'int32_t';
-        if (p.typeAnn) {
-          // Unwrap element type without emitting Array struct typedef
-          if (p.typeAnn.kind === 'TypeArray') et = ctx.resolveType(p.typeAnn.element);
-          else et = ctx.resolveType(p.typeAnn);
-        }
-        if (et === 'Scalar') return '...';  // C variadic
-        return `${et} *${p.name}, int32_t ${p.name}_count`;
-      }
-      if (p.destructArr) {
-        // [a, b]: T[] → T *_arr  (destructured in body)
-        let et = 'int32_t';
-        if (p.typeAnn?.kind === 'TypeArray') et = ctx.resolveType(p.typeAnn.element);
-        else if (p.typeAnn) et = ctx.resolveType(p.typeAnn);
-        return `${et} *_arr`;
-      }
-      if (p.typeAnn?.kind === 'TypeFunc') return ctx.typeDecl(p.typeAnn, p.name);
-      // For Scalar-variadic functions: string params → const char * (C format string convention)
-      if (hasScalarRest && p.typeAnn?.kind === 'TypeRef' && p.typeAnn.name === 'string') {
-        return `const char *${p.name}`;
-      }
-      const ct = p.typeAnn ? ctx.resolveType(p.typeAnn) : 'void *';
-      return ct.endsWith(' *') ? `${ct}${p.name}` : `${ct} ${p.name}`;
-    });
+    const { strs: paramStrs, hasScalarRest } = buildParamStrs(ctx, params);
 
     // Define before body for recursion support.
     // For overloads: store all variants keyed by param count, and keep the first definition
@@ -393,10 +419,10 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
       if (existing && existing.funcName !== cname) {
         // This is an overload: add to the overloads map
         if (!existing.overloads) existing.overloads = [];
-        existing.overloads.push({ funcName: cname, params });
+        existing.overloads.push({ funcName: cname, params, retCtype: retType, returnType });
         // Also add the first definition as overload if not already done
         if (!existing._overloadsInitialized) {
-          existing.overloads.unshift({ funcName: existing.funcName, params: existing.params });
+          existing.overloads.unshift({ funcName: existing.funcName, params: existing.params, retCtype: existing.ctype, returnType: existing.returnType });
           existing._overloadsInitialized = true;
         }
       } else {
@@ -409,13 +435,25 @@ export function visitFuncDecl(ctx: CodeGenContext, node: FuncDecl, isTopLevel = 
           _resultErrTypes: throwsCtx.throwsNames,
         } : {};
         const _closureRet = returnType?.kind === 'TypeFunc' ? (returnType.ret ? ctx.resolveType(returnType.ret) : 'void') : undefined;
-        ctx.define(name, { ctype: retType, funcName: cname, params, returnType, _isScalarVariadic: hasScalarRest || undefined, ...(_closureRet ? { closureRetType: _closureRet } : {}), ...symExtra });
+        ctx.define(name, { ctype: retType, funcName: cname, params, returnType, _isScalarVariadic: hasScalarRest || undefined, _isNever: isNever || undefined, ...(_closureRet ? { closureRetType: _closureRet } : {}), ...symExtra });
       }
     }
 
     const prevFuncName = ctx._curFuncName;
     ctx._curFuncName = name;
-    const lines = ctx.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx, isNever);
+    // Cycle detection (#295 v2a): while in-flight, a call to this C name means
+    // its definition isn't in the output yet (mutual recursion) — the call
+    // site emits a forward prototype via ensureFuncPrototype. A SELF-call is
+    // exempt: the definition's own header will declare the name before use.
+    ctx._inFlightFuncs.add(cname);
+    ctx._funcBuildStack.push(cname);
+    let lines: string[];
+    try {
+      lines = ctx.emitFuncBody(name, body, params, retType, null, false, false, throwsCtx, isNever);
+    } finally {
+      ctx._funcBuildStack.pop();
+      ctx._inFlightFuncs.delete(cname);
+    }
     ctx._curFuncName = prevFuncName;
     // Track whether this function heap-allocates String return values
     if (retType === 'String') {

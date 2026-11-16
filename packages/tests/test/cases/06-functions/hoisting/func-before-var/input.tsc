@@ -1,0 +1,3 @@
+function readConfig(): number { return limit + 1; }
+let limit = 41;
+console.log(readConfig());

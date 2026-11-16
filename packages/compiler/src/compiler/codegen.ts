@@ -520,6 +520,16 @@ class Context {
   _emittedTasksTypedefs!: boolean;
   _allStructNames!: Set<string>;
   _forwardDeclared!: Set<string>;
+  // Lazy function emission (#295 v2a): top-level functions not yet processed,
+  // keyed by name. A forward call pulls the declaration on demand so its C
+  // definition lands before the caller's (which is addTop'ed after its body).
+  _pendingFuncs!: Map<string, Stmt[]>;
+  _processedTopLevel!: Set<Stmt>;
+  _inFlightFuncs!: Set<string>;   // C names whose definition is being emitted (cycle detection)
+  _funcBuildStack!: string[];     // same names as a stack: last = body being built right now
+  _prototypedFuncs!: Set<string>; // C names already forward-declared in output
+  _processedVarDecls!: Set<Stmt>; // Phase A.0-promoted VarDecls (wrapper + unwrapped)
+  _deferredStaticInits!: Map<Stmt, string>; // split-init assignment → flushed at source position
 
   // Function-visit state
   _curFuncName!: string | null;
@@ -712,6 +722,13 @@ class Context {
     this._genericClasses = new Map();
     this._genericFuncs = new Map();
     this._pendingOverloads = new Map();
+    this._pendingFuncs = new Map();
+    this._processedTopLevel = new Set();
+    this._inFlightFuncs = new Set();
+    this._funcBuildStack = [];
+    this._prototypedFuncs = new Set();
+    this._processedVarDecls = new Set();
+    this._deferredStaticInits = new Map();
     this._declaredModules = new Map();
     this._extensions = new Map();
     this._typeAliases = new Map();
@@ -1730,6 +1747,43 @@ class Context {
   _emitDecoratedStandaloneFunc(node: FuncDecl, decs: Decorator[]) { return topLevelFns._emitDecoratedStandaloneFunc(this, node, decs); }
   emitMethod(className: string, m: Parameters<typeof topLevelFns.emitMethod>[2], isStatic: boolean, explicitImplements: TypeRef[] = []) { return topLevelFns.emitMethod(this, className, m, isStatic, explicitImplements); }
   visitTopLevel(node: Stmt) { return topLevelFns.visitTopLevel(this, node); }
+  ensureFuncPrototype(sym: Parameters<typeof topLevelFns.ensureFuncPrototype>[1], funcName: string) { return topLevelFns.ensureFuncPrototype(this, sym, funcName); }
+  /**
+   * Forward-reference resolution (#295 v2a): if `name` is a top-level function
+   * not yet processed, emit it right now (its C definition addTop's before the
+   * current caller, whose own definition is pushed after its body is built).
+   * Returns true if the name now resolves (scope symbol or generic template).
+   */
+  tryPullPendingFunc(name: string): boolean {
+    if (!this._pendingFuncs) return false;
+    const group = this._pendingFuncs.get(name);
+    if (!group) return false;
+    this._pendingFuncs.delete(name);
+    // A pull can fire while a nested body build is in progress (deeper scope
+    // stack). Top-level function definitions must land in the global scope —
+    // emit with the transient scopes detached, then restore.
+    const savedScopes = this.scopes.splice(1);
+    try {
+      // Overload signatures first: visitFuncDecl reads _pendingOverloads when
+      // emitting the implementation.
+      const kindOf = (node: Stmt): string => (node.kind === 'Export' ? (node.decl as Stmt | undefined)?.kind ?? '' : node.kind);
+      for (const node of group) {
+        if (kindOf(node) === 'FuncOverload') {
+          this._processedTopLevel.add(node);
+          this.visitTopLevel(node);
+        }
+      }
+      for (const node of group) {
+        if (kindOf(node) !== 'FuncOverload') {
+          this._processedTopLevel.add(node);
+          this.visitTopLevel(node);
+        }
+      }
+    } finally {
+      this.scopes.push(...savedScopes);
+    }
+    return !!this.lookup(name) || this._genericFuncs.has(name);
+  }
   visitDeclareModule(node: DeclareModule) { return topLevelFns.visitDeclareModule(this, node); }
   visitDeclareConst(node: DeclareConst) { return topLevelFns.visitDeclareConst(this, node); }
   visitDeclareFunction(node: DeclareFunction) { return topLevelFns.visitDeclareFunction(this, node); }

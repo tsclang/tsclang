@@ -1,0 +1,3 @@
+console.log(main());
+function main(): number { return helper() + 1; }
+function helper(): number { return 41; }

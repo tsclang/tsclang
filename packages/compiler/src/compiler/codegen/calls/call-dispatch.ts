@@ -118,6 +118,12 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
       ctx._checkNoBareThrows(a.expr ?? a);
     }
 
+    // Hoisting (#295 v2a): forward call to a not-yet-processed top-level
+    // function → emit it on demand before resolving the call.
+    if (callee.kind === 'Ident' && !ctx.lookup(callee.name)) {
+      ctx.tryPullPendingFunc(callee.name);
+    }
+
     // Generic function call: monomorphize
     if (callee.kind === 'Ident' && ctx._genericFuncs?.has(callee.name)) {
       return ctx.callGeneric(callee.name, node.typeArgs ?? [], args, lines, depth);
@@ -175,8 +181,9 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           match = sym.overloads[sym.overloads.length - 1]; // fallback to last
         }
         calleeC = match.funcName;
-        // Use matched params for rest/default filling below
-        sym = { ...sym, funcName: calleeC, params: match.params };
+        // Use matched params for rest/default filling below; retCtype keeps
+        // prototype/inference paths on the chosen variant, not the first one
+        sym = { ...sym, funcName: calleeC, params: match.params, ...(match.retCtype ? { ctype: match.retCtype } : {}) };
       } else {
         // funcPtr variables hold the name directly; functions use their mangled name
         calleeC = (sym?.funcName && !sym.funcPtr) ? sym.funcName : callee.name;
@@ -189,6 +196,15 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
       }
     } else {
       calleeC = ctx.exprToC(callee, lines, depth);
+    }
+
+    // Cycle (#295 v2a): callee's C definition isn't in the output yet (it is
+    // an ancestor in the emission stack — mutual recursion). Emit a forward
+    // prototype; it lands before this caller's definition. A self-call is
+    // exempt: the caller's own definition header already declares the name.
+    if (callee.kind === 'Ident' && sym?.funcName && ctx._funcBuildStack.length > 0
+        && ctx._inFlightFuncs.has(calleeC) && calleeC !== ctx._funcBuildStack[ctx._funcBuildStack.length - 1]) {
+      ctx.ensureFuncPrototype(sym, calleeC);
     }
 
     // Recursive self-call: direct static call (no function pointer indirection)

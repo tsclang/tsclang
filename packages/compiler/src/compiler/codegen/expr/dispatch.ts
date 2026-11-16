@@ -44,8 +44,13 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             return `${node.name}.value`;
           }
         }
-        // Function reference (not a func-ptr variable): use mangled name
-        const sym = ctx.lookup(node.name);
+        // Function reference (not a func-ptr variable): use mangled name.
+        // Hoisting (#295 v2a): function-as-value forward reference — pull the
+        // declaration on demand so funcName resolves.
+        let sym = ctx.lookup(node.name);
+        if (!sym && ctx._pendingFuncs?.size > 0 && ctx.tryPullPendingFunc(node.name)) {
+          sym = ctx.lookup(node.name);
+        }
         ctx._checkMoved(sym, node, node.name);
         if (sym?._mutQuarantined) {
           throw ctx.errorCode('E011', node, { name: node.name });

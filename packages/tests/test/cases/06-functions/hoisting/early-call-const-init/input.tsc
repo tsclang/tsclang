@@ -1,0 +1,5 @@
+// Constant-initialized promoted global is compile-time initialized:
+// readable even before its declaration line (TS: ReferenceError, documented divergence).
+console.log(readEarly());
+function readEarly(): number { return late + 1; }
+let late = 41;

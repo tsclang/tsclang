@@ -74,6 +74,7 @@ interface DeclEntry {
   line: number;
   col: number;
   hoisted: boolean;   // functions, `var`, imports — usable before their position
+  pre?: boolean;      // pre-scan entry: silently re-declared when the walk reaches the statement
   prim?: boolean;     // W013: value-captured primitive (number/bool/char/int)
 }
 
@@ -144,6 +145,7 @@ class SemanticChecker {
     // W013: top-level effect/computed/batch arrows reference promoted static
     // globals directly (shared cell, like TS) — exempt from snapshot analysis.
     this.reactiveArrows = collectReactiveArrows(ast);
+    this.preDeclareStmts(ast.body);
     for (const s of ast.body ?? []) this.stmt(s);
   }
 
@@ -228,7 +230,7 @@ class SemanticChecker {
     this.scope = this.scope.parent ?? this.root;
   }
 
-  private declare(name: string, kind: string, node: Pos, hoisted = false, hoistFnScope = false, prim = false): void {
+  private declare(name: string, kind: string, node: Pos, hoisted = false, hoistFnScope = false, prim = false, fromPre = false): void {
     if (!name || name === '*') return;
     let target = this.scope;
     if (hoistFnScope) {
@@ -236,11 +238,61 @@ class SemanticChecker {
       while (!target.isFunction && target.parent) target = target.parent;
     }
     const existing = target.vars.get(name);
-    if (existing && !this.isLegalRedeclare(existing.kind, kind)) {
+    if (fromPre) {
+      // Hoisting pre-scan: first binding wins, silently. Conflicts (real
+      // duplicates) are reported when the walk re-declares at statement position.
+      if (existing) return;
+      target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted, prim, pre: true });
+      return;
+    }
+    if (existing && !existing.pre && !this.isLegalRedeclare(existing.kind, kind)) {
       this.error('E123', node, { name });
       return; // first binding wins — avoid cascading E123 on the same name
     }
     target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted, prim });
+  }
+
+  /**
+   * Hoisting pre-scan (#295 v2a): declare direct-child bindings of a statement
+   * list before the walk enters it, mirroring TS hoisting —
+   * - functions/classes/enums/imports: hoisted (usable before their position)
+   * - let/const: NOT hoisted (TDZ still applies via the position check in
+   *   resolveIdent), but visible to nested function bodies (deferred execution)
+   * Straight-line code keeps declare-before-use; only forward references from
+   * deferred contexts (function bodies) and hoisted kinds become legal.
+   */
+  private preDeclareStmts(list: Stmt[] | null | undefined): void {
+    for (const raw of list ?? []) {
+      const s = (raw?.kind === 'Export' ? raw.decl : raw) as Stmt | null | undefined;
+      if (!s) continue;
+      switch (s.kind) {
+        case 'FuncDecl':
+          this.declare(s.name, 'FuncDecl', s, true, false, false, true);
+          continue;
+        case 'FuncOverload':
+          this.declare(s.name, 'FuncOverload', s, true, false, false, true);
+          continue;
+        case 'ClassDecl': case 'Enum': case 'DeclareConst': case 'DeclareFunction':
+          this.declare(s.name, s.kind, s, true, false, false, true);
+          continue;
+        case 'Import': case 'ExportFrom':
+          for (const n of s.names ?? []) this.declare(importLocalName(n), 'import', s, true, false, false, true);
+          continue;
+        case 'VarDecl':
+          this.declare(s.name, s.varKind, s, s.varKind === 'var', s.varKind === 'var',
+            this.primOfAnn(s.typeAnn) || this.primOfInit(s.init), true);
+          continue;
+        case 'VarDecls':
+          for (const d of s.decls ?? []) {
+            if (d.kind !== 'VarDecl') continue;
+            this.declare(d.name, d.varKind, d, d.varKind === 'var', d.varKind === 'var',
+              this.primOfAnn(d.typeAnn) || this.primOfInit(d.init), true);
+          }
+          continue;
+        default:
+          continue; // nested blocks (if/for/…): not hoisted — stage boundary
+      }
+    }
   }
 
   private isLegalRedeclare(oldKind: string, newKind: string): boolean {
@@ -496,7 +548,7 @@ class SemanticChecker {
         this.declareParams(s.params);
         this.type(s.returnType);
         for (const x of s.throwsTypes ?? []) this.type(x);
-        if (s.body) this.stmts(s.body.body);
+        if (s.body) { this.preDeclareStmts(s.body.body); this.stmts(s.body.body); }
         this.popScope();
         this.typeParams = savedTp;
         return;
@@ -511,7 +563,7 @@ class SemanticChecker {
         this.type(s.thisType);
         this.declareParams(s.params);
         this.type(s.returnType);
-        this.stmts(s.body?.body);
+        if (s.body) { this.preDeclareStmts(s.body.body); this.stmts(s.body.body); }
         this.popScope();
         return;
       }
@@ -683,7 +735,7 @@ class SemanticChecker {
       this.declareParams(m.params);
       this.type(m.returnType);
       for (const x of m.throwsTypes ?? []) this.type(x);
-      if (m.body) this.stmts(m.body.body);
+      if (m.body) { this.preDeclareStmts(m.body.body); this.stmts(m.body.body); }
       this.popScope();
       this.typeParams = savedTp;
       return;
@@ -746,6 +798,7 @@ class SemanticChecker {
     if (!body) return;
     if (body.kind === 'Block') {
       this.pushScope(false);
+      this.preDeclareStmts(body.body);
       this.stmts(body.body);
       this.popScope();
     } else {

@@ -614,7 +614,7 @@ error[E124]: cannot initialize flag: boolean with a number literal
 
 **E121 — unknown type name.** Имя в type-аннотации не является builtin-типом, обёрткой (Arc/Ref/Mut/Array/Map/…), type-параметром, типом этого файла или импортом. Utility-типы TS (Record, Pick, Omit, Awaited, ReturnType, …) — builtin.
 
-**E122 — undeclared identifier.** Имя в value-позиции не объявлено ни в одном видимом скоупе (переменная, параметр, функция, класс, enum, импорт, language builtin). Использование `let`/`const` до строки объявления (TDZ) — та же E122; `var` хойстится в функциональный скоуп. Внутри вложенной функции обращение к переменной, объявленной позже в внешнем скоупе, разрешено (отложенное исполнение).
+**E122 — undeclared identifier.** Имя в value-позиции не объявлено ни в одном видимом скоупе (переменная, параметр, функция, класс, enum, импорт, language builtin). Использование `let`/`const` до строки объявления (TDZ) — та же E122. Хойстятся pre-scan'ом и видны до строки объявления: `function` (включая overload-наборы), `class`, `enum`, `declare const`/`declare function`, импорты и `var` (в функциональный скоуп) — см. [06-functions.md](../06-functions/06-functions.md#hoisting-и-порядок-объявлений). Внутри вложенной функции обращение к переменной, объявленной позже в внешнем скоупе, разрешено (отложенное исполнение). Задокументированные дивергенции раннего чтения промотируемых глобалей (const-init виден значением, non-const-init — zero-init) — там же.
 
 **E123 — duplicate declaration.** Два биндинга с одним именем в одном скоупе. Как в TypeScript, легальны: набор overload-сигнатур (bodyless `function` + одна реализация) и interface/interface, interface/class merging. Всё остальное — ошибка. Первое объявление выигрывает — каскада нет.
 

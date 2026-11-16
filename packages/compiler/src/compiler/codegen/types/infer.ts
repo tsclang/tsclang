@@ -1,5 +1,5 @@
 import type { CodeGenContext } from '../../codegen.js';
-import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident, MethodSig } from '@tsclang/ast';
+import type { Expression, Call, TypeAnn, Arrow, Member, TypeRef, Ident, MethodSig, Param, Argument } from '@tsclang/ast';
 import { inferLiteralCType, PRIMITIVE_MAP } from '../../types.js';
 
 interface RtField { name?: string; label?: string; typeAnn?: TypeAnn; ctype?: string; _ctype?: string; }
@@ -477,13 +477,41 @@ export function _inferCall(ctx: CodeGenContext, node: Call): string {
       if (n2 === 'parseInt' || n2 === 'tryParseInt') return 'opt_i32';
       if (n2 === 'parseFloat' || n2 === 'tryParseFloat' || n2 === 'Number') return 'opt_f64';
       if (n2 === 'String') return 'String';
-      const sym = ctx.lookup(n2);
+      const sym0 = ctx.lookup(n2);
+      // Hoisting (#295 v2a): forward call — pull the declaration on demand
+      // before inferring, so the arg type is right even when exprToC hasn't
+      // run yet (e.g. console.log arg typing).
+      const sym = sym0 ?? (ctx.tryPullPendingFunc(n2) ? ctx.lookup(n2) : null);
       // A closure var always calls through .fn — the result type is the
       // closure's return type. A plain-fn wrapper (const g: F = inc) calls
       // through funcName — same result type. But a factory function whose
       // RETURN type is TypeFunc also has ctype 'tsc_closure'; calling it
       // yields the closure itself, so exclude funcName-without-funcPtr.
       if (sym?.ctype === 'tsc_closure' && sym.closureRetType && (sym.funcPtr || !sym.funcName)) return sym.closureRetType;
+      // Overload set: infer from the variant the call actually resolves to
+      // (arg count, then arg types) — must mirror callToC's matching.
+      if (sym?.overloads?.length) {
+        const args = (node.args ?? []) as Argument[];
+        const argCount = args.filter((a: { spread?: boolean }) => !a.spread).length;
+        const countMatches = sym.overloads.filter((o: { params: Param[] }) => o.params.filter((p: Param) => !p.rest).length === argCount);
+        let match: { retCtype?: string } | undefined;
+        if (countMatches.length === 1) {
+          match = countMatches[0];
+        } else if (countMatches.length > 1) {
+          match = countMatches.find((o: { params: Param[] }) =>
+            args.every((a: { expr: Expression }, i: number) => {
+              const p = o.params[i];
+              if (!p?.typeAnn) return true;
+              const expectedCtype = ctx.resolveType(p.typeAnn);
+              const actualCtype = ctx.inferType(a.expr);
+              return expectedCtype === actualCtype || expectedCtype.includes(actualCtype) || actualCtype.includes(expectedCtype);
+            })
+          ) ?? countMatches[0];
+        } else {
+          match = sym.overloads[sym.overloads.length - 1];
+        }
+        if (match?.retCtype) return match.retCtype;
+      }
       if (sym) return sym.ctype ?? 'int32_t';
     }
     return 'int32_t';
