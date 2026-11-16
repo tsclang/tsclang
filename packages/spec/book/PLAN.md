@@ -484,7 +484,7 @@ pnpm tsx test/runner.ts book
 | 18.2 | Export | named exports, no default, re-exports |
 | 18.3 | Import | named imports, namespace imports, import type |
 | 18.4 | @platform | условная компиляция, правила, примеры, несколько платформ |
-| 18.5 | Inline C | native {}, callback, closures в native |
+| 18.5 | Inline C | `` native `...` ``, callback, closures в native |
 | 18.6 | unsafe {} | отключение проверок, когда нужен, опасности |
 | 18.7 | .d.tsc файлы | C interop, header bindings, declare syntax |
 | 18.8 | Declaration merging | расширение типов без замены |

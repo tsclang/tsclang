@@ -1258,7 +1258,7 @@
 - 18.4.4-platform-multiple.md — Несколько платформ
 
 ### 18.5 Inline C
-- 18.5.1-native-syntax.md — native { } блоки
+- 18.5.1-native-syntax.md — `` native `...` `` блоки
 - 18.5.2-native-callbacks.md — Callbacks в native
 - 18.5.3-native-closures.md — Closures в native
 

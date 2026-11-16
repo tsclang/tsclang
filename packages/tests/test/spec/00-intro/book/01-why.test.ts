@@ -62,7 +62,7 @@ console.log(b)
 console.log(c)`)).toBe("10\n255\n3.14")
   })
 
-  // 00.1.4:58-66 — new-concepts table: Ref<T> / Mut<T> / Arc<T> / Weak<T> / readonly / mut
+  // 00.1.4:58-65 — new-concepts table: Ref<T> / Mut<T> / Arc<T> / Weak<T> / readonly
   test("00.1.4 таблица концепций: Ref<T> — immutable borrow, объект жив после вызова", () => {
     expect(run(`
 class Box { v: i32 = 7 }
@@ -107,12 +107,14 @@ class P { readonly x: i32 = 1 }
 console.log(new P().x)`)).toBe("1")
   })
 
-  test("00.1.4:64 mut-параметр — НЕ поддерживается: явная ошибка (канонично Mut<T>)", () => {
-    // The book table used to claim a `mut x: T` parameter modifier "(как в
-    // TS)" — it never existed: `mut` parsed as a parameter NAME and produced
-    // invalid C (`void *mut`). Per spec 04-borrow the canonical spelling is
-    // `x: Mut<T>`; the parser rejects the modifier with an explicit error,
-    // and the book row (fixed per #257, 2026-11-15) says exactly that.
+  test("mut-параметр — НЕ поддерживается: явная ошибка (канонично Mut<T>)", () => {
+    // The book table used to have a "Mutable parameter" row claiming a
+    // `mut x: T` modifier — it never existed: `mut` parsed as a parameter
+    // NAME and produced invalid C (`void *mut`). The row was removed from
+    // the book (2026-11-15, #257): local rebinding needs no keyword (params
+    // are let-like), and borrowing the caller's memory is the "Mutable
+    // borrow" row (`Mut<T>`). This test stays as a regression guard for the
+    // explicit parser rejection (same pattern as the Shared<T> test below).
     expect(() => run(`
 function f(mut x: i32): void { x = x + 1 }
 console.log(f(1))`)).toThrow(Error, '"mut" parameter modifier is not supported')

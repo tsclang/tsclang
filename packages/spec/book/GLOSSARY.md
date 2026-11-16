@@ -40,7 +40,7 @@
 ## F
 
 ### FFI (Foreign Function Interface)
-Интерфейс вызова функций из другого языка. В TSClang — C interop через `native {}`, `.d.tsc` файлы, `declare function`.
+Интерфейс вызова функций из другого языка. В TSClang — C interop через `` native `...` ``, `.d.tsc` файлы, `declare function`.
 
 ### Flash (на AVR)
 Постоянная память (энергонезависимая) на микроконтроллере. На ATmega328p — 32KB. Здесь хранится программа и строковые литералы (через PROGMEM). В отличие от SRAM — flash только для чтения во время выполнения.
