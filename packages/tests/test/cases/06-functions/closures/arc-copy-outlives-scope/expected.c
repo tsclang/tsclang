@@ -2,13 +2,13 @@
 
 typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 
-typedef struct { tsc_env_hdr _hdr; double n; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; double n; } _closure_1_env;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static void _closure_1_destroy(void *_env) {
+    _closure_1_env *env = (_closure_1_env *)_env;
 }
 
-static double _closure_0_fn(_closure_0_env *env) {
+static double _closure_1_fn(_closure_1_env *env) {
     env->n = env->n + 1;
     return env->n;
 }
@@ -18,9 +18,9 @@ int main(void) {
     double n = 100.0;
     tsc_closure kept = (tsc_closure){0};
     {
-        _closure_0_env *c_env = tsc_malloc(sizeof(_closure_0_env));
-        *c_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .n = n};
-        tsc_closure c = {.env = c_env, .fn = (void*)_closure_0_fn};
+        _closure_1_env *c_env = tsc_malloc(sizeof(_closure_1_env));
+        *c_env = (_closure_1_env){._hdr = {._refcount = 1, ._destroy = _closure_1_destroy}, .n = n};
+        tsc_closure c = {.env = c_env, .fn = (void*)_closure_1_fn};
         ((double (*)(void *))c.fn)(c.env);
         { void *_old_env_0 = kept.env;
           kept = c;

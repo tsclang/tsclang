@@ -62,12 +62,47 @@ function _collectFreeNames(body: unknown, paramNames: string[], out: Set<string>
 
 interface CellInfo { ctype: string; varKind: 'let' | 'const' | 'var'; fromParam: boolean; }
 
+// Ctypes eligible for a shared cell driven by an ARROW capture: primitives and
+// String. Classes/arrays keep pointer capture in the arrow env (already
+// TS-true mutation visibility) — no cell needed for them.
+const _CELLABLE = new Set(['int8_t', 'int16_t', 'int32_t', 'int64_t',
+  'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+  'float', 'double', 'bool', 'char', 'size_t', 'ptrdiff_t', 'String']);
+
+// #295 v2c: collect free names captured by arrows/FuncExprs anywhere in the
+// block subtree (except nested FuncDecl bodies — their own block pre-scan
+// runs when the deferred body is built). Binding-aware: names shadowed inside
+// an arrow body or bound as its params are not reported.
+function _collectArrowCaptures(block: Block, fnNames: Set<string>, out: Set<string>): void {
+  const visit = (n: unknown, inArrow: boolean): void => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { for (const x of n) visit(x, inArrow); return; }
+    const nd = n as Record<string, unknown>;
+    if (nd.kind === 'FuncDecl') return; // own pre-scan handles this subtree
+    if ((nd.kind === 'Arrow' || nd.kind === 'FuncExpr') && !((nd.captures as unknown[] | undefined)?.length)) {
+      const free = new Set<string>();
+      _collectFreeNames(nd.body, ((nd.params as { name?: string }[] | null) ?? []).map((p) => p.name!), free);
+      for (const nm of free) if (!fnNames.has(nm)) out.add(nm);
+    }
+    for (const key of Object.keys(nd)) {
+      if (key === 'kind') continue;
+      const child = nd[key];
+      if (child && typeof child === 'object') visit(child, inArrow);
+    }
+  };
+  visit(block.body, false);
+}
+
 export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: string[], depth: number): (() => void) | null {
   const fns = block.body.filter((s: Stmt) => s.kind === 'FuncDecl') as FuncDecl[];
-  if (fns.length === 0) return null;
-  if (ctx._buildingClosureBody) {
+  if (fns.length > 0 && ctx._buildingClosureBody) {
     throw ctx.errorCode('E020', fns[0], { detail: 'nested function declarations inside closures are not supported yet (planned for shared-cell closures)' });
   }
+  // #295 v2c: arrows with implicit captures flip to shared cells. Inside
+  // closure bodies the block env is not lexically reachable — keep snapshots.
+  const arrowCaptured = new Set<string>();
+  if (!ctx._buildingClosureBody) _collectArrowCaptures(block, new Set(fns.map((f: FuncDecl) => f.name)), arrowCaptured);
+  if (fns.length === 0 && arrowCaptured.size === 0) return null;
   const I = ' '.repeat(ctx.indent * depth);
 
   // Duplicate names: two `function f` in one block is not a legal overload set here.
@@ -132,6 +167,31 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
     }
   }
 
+  // #295 v2c: arrow-driven cells — captured same-block locals and fn params
+  // flip to shared cells (TS-true). Everything else (outer blocks, untyped
+  // non-literal inits, complex types, globals) keeps the pre-v2c arrow
+  // behavior — arrows worked before, so no new errors here.
+  for (const nm of arrowCaptured) {
+    if (allFnNames.has(nm) || activeSaved?.fields.has(nm) || newCells.has(nm)) continue;
+    if (ctx.lookup(nm)?._cellVar) continue; // already a cell from an outer block
+    if (blockLocals.has(nm)) {
+      const vd = blockLocals.get(nm)!;
+      let ct: string | null = null;
+      if (vd.typeAnn) ct = ctx.resolveType(vd.typeAnn);
+      else if (vd.init?.kind === 'Literal') ct = ctx.inferType(vd.init);
+      if (!ct || !_CELLABLE.has(ct)) continue;
+      newCells.set(nm, { ctype: ct, varKind: vd.varKind ?? 'let', fromParam: false });
+      continue;
+    }
+    if (isFnBodyBlock && paramNames.has(nm)) {
+      const p = fnParams!.find((q: Param) => q.name === nm)!;
+      if (!p.typeAnn) continue;
+      const ct = ctx.resolveType(p.typeAnn);
+      if (!_CELLABLE.has(ct)) continue;
+      newCells.set(nm, { ctype: ct, varKind: 'let', fromParam: true });
+    }
+  }
+
   // Env: allocated iff any nested fn needs new cells. All fns of the block
   // share one env (uniform binding/reconstruction shape below).
   const n = ctx.closureCount++;
@@ -162,7 +222,7 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
     // Scope-entry allocation. The compound literal zero-fills cells — a
     // hoisted call before the declaration line reads zero (documented TDZ
     // divergence, same policy as promoted globals).
-    lines.push(`${I}${envName} *env = tsc_malloc(sizeof(${envName}));`);
+    lines.push(`${I}${envName} *env = ${ctx._envAlloc()}(sizeof(${envName}));`);
     lines.push(`${I}*env = (${envName}){._hdr = {._refcount = 1, ._destroy = ${destroyFn}}};`);
     for (const [nm, cell] of newCells) {
       if (cell.fromParam) lines.push(`${I}env->${nm} = ${nm};`);

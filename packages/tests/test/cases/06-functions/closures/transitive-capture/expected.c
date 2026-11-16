@@ -1,19 +1,32 @@
 #include "runtime.h"
 
-typedef struct { tsc_env_hdr _hdr; int32_t n; } _closure_0_env;
+typedef struct { tsc_env_hdr _hdr; int32_t n; } _nested_0_env;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static void _nested_0_env_destroy(void *_env) {
+    _nested_0_env *env = (_nested_0_env *)_env;
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
-    return env->n + 1;
+typedef struct { tsc_env_hdr _hdr; _nested_0_env *_outer; } _closure_1_env;
+
+static void _closure_1_destroy(void *_env) {
+    _closure_1_env *env = (_closure_1_env *)_env;
+    tsc_env_release(env->_outer);
+}
+
+static int32_t _closure_1_fn(_closure_1_env *env) {
+    return env->_outer->n + 1;
 }
 
 tsc_closure makeAdder_i32(int32_t n) {
-    _closure_0_env *_lambda_env_0 = tsc_malloc(sizeof(_closure_0_env));
-    *_lambda_env_0 = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .n = n};
-    return (tsc_closure){.env = _lambda_env_0, .fn = (void*)_closure_0_fn};
+    _nested_0_env *env = tsc_malloc(sizeof(_nested_0_env));
+    *env = (_nested_0_env){._hdr = {._refcount = 1, ._destroy = _nested_0_env_destroy}};
+    env->n = n;
+    tsc_env_retain(env);
+    _closure_1_env *_lambda_env_1 = tsc_malloc(sizeof(_closure_1_env));
+    *_lambda_env_1 = (_closure_1_env){._hdr = {._refcount = 1, ._destroy = _closure_1_destroy}, ._outer = env};
+    tsc_closure _ret_0 = (tsc_closure){.env = _lambda_env_1, .fn = (void*)_closure_1_fn};
+    tsc_env_release(env);
+    return _ret_0;
 }
 
 int main(void) {

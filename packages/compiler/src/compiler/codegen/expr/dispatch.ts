@@ -79,6 +79,9 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
           ctx._deferredAnons.delete(node.name);
         }
         if (sym?._closureEnvVar) return `env->${node.name}`;
+        // #295 v2c: shared-cell capture — the cell lives in the enclosing
+        // block's env; reach it through this arrow env's `_outer` link.
+        if (sym?._outerCell) return `env->_outer->${node.name}`;
         return node.name;
       }
 

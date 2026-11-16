@@ -1,0 +1,6 @@
+function main(): void {
+  let x: i32 = 1;
+  const fn = (): i32 => x;
+  x = 2;
+  console.log(fn());
+}

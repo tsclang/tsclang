@@ -281,24 +281,33 @@ export function hoistArrow(ctx: CodeGenContext, node: Arrow | FuncExpr, retType:
       }
       ctx.define(p.name, symInfo);
     }
-    if (node.body.kind === 'Block') {
-      // #295 v2b boundary: nested named functions inside closures — the
-      // pre-scan throws E020 (shared-cell closures arrive in v2c).
-      const _prevBuildingClosure = ctx._buildingClosureBody;
-      ctx._buildingClosureBody = true;
-      try {
+    // #295 v2c: isolate the cleanup machinery — the lambda body is a separate
+    // C function; its Returns must not flush the enclosing block's cleanup
+    // frames (e.g. the block env release registered before statements run).
+    const prevCleanupStack = ctx._blockCleanupStack;
+    const prevLoopCleanups = ctx._loopBodyCleanups;
+    ctx._blockCleanupStack = [{ list: [], set: new Set() }];
+    ctx._loopBodyCleanups = null;
+    // #295 v2b boundary: nested named functions inside closures — the
+    // pre-scan throws E020 (shared-cell closures arrive in v2c).
+    const _prevBuildingClosure = ctx._buildingClosureBody;
+    ctx._buildingClosureBody = true;
+    try {
+      if (node.body.kind === 'Block') {
         ctx.visitBlock(node.body, lines, 0);
-      } finally {
-        ctx._buildingClosureBody = _prevBuildingClosure;
-      }
-    } else {
-      const c = ctx.exprToC(node.body, lines, 0);
-      if (ret === 'void') {
-        lines.push(`${c};`);
       } else {
-        const bodySym = node.body.kind === 'Ident' ? ctx.lookup(node.body.name) : null;
-        lines.push(`return ${ctx._derefStrPtr(bodySym, c)};`);
+        const c = ctx.exprToC(node.body, lines, 0);
+        if (ret === 'void') {
+          lines.push(`${c};`);
+        } else {
+          const bodySym = node.body.kind === 'Ident' ? ctx.lookup(node.body.name) : null;
+          lines.push(`return ${ctx._derefStrPtr(bodySym, c)};`);
+        }
       }
+    } finally {
+      ctx._buildingClosureBody = _prevBuildingClosure;
+      ctx._blockCleanupStack = prevCleanupStack;
+      ctx._loopBodyCleanups = prevLoopCleanups;
     }
     ctx.popScope();
     ctx._inHoistedLambda = false;

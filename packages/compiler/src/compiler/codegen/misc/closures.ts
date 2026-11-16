@@ -241,7 +241,25 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
 
     const envFields: string[] = [];
     const capturedStringFields: string[] = [];
+    // #295 v2c shared-cell capture: a captured binding whose storage lives in
+    // the enclosing block's env (`_cellVar` symbol, created by the block
+    // pre-scan) is NOT copied into this env — the env gets a single `_outer`
+    // link to the block env and the body reads/writes `env->_outer->name`.
+    // TS-true semantics: mutations are shared both ways. Inside closure
+    // bodies (`_buildingClosureBody`) the block env is not lexically reachable
+    // as `env` — those captures keep the snapshot behavior.
+    const cellCaptures: string[] = [];
+    const isCellCapture = (nm: string, sym?: SymbolInfo | null): boolean => {
+      if (explicitCaptures?.some((c: ExplicitCapture) => c.name === nm)) return false;
+      return !!sym?._cellVar && !ctx._buildingClosureBody;
+    };
+    let hasOuterLink = false;
     for (const [nm, sym] of captured) {
+      if (isCellCapture(nm, sym)) {
+        if (!cellCaptures.includes(nm)) cellCaptures.push(nm);
+        hasOuterLink = true;
+        continue;
+      }
       const ct = sym.ctype ?? 'void *';
       const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo) {
@@ -261,6 +279,11 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
         else envFields.push(`${ct} ${nm};`);
         if (ct === 'String') capturedStringFields.push(nm);
       }
+    }
+    if (hasOuterLink) {
+      const outerType = ctx._activeEnv?.typeName;
+      if (!outerType) throw ctx.errorCode('E417', arrowNode, { detail: `internal: cell capture without an active block env for '${cellCaptures[0]}'` });
+      envFields.push(`${outerType} *_outer;`);
     }
     const hasStringCapture = capturedStringFields.length > 0;
     // Env structs start with the ARC header: copies of the closure retain the
@@ -284,6 +307,9 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       for (const nm of capturedStringFields) {
         ctx.addLambda(`    tsc_string_release(env->${nm});`);
       }
+      // The `_outer` block env was retained at closure creation — release it
+      // when the last copy of this closure dies (ARC, #290 rules).
+      if (hasOuterLink) ctx.addLambda(`    tsc_env_release(env->_outer);`);
       ctx.addLambda('}');
       ctx.addLambda('');
     }
@@ -303,12 +329,16 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
         const ct = sym.ctype ?? 'void *';
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
         ctx.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
+      } else if (isCellCapture(nm, sym)) {
+        // Shared cell: reads/writes go through the block env via `_outer`.
+        ctx.define(nm, { ctype: sym.ctype ?? 'void *', _outerCell: nm });
       } else {
         const ct = sym.ctype ?? 'void *';
         if (_isComplexCtype(ct) && !ct.endsWith(' *')) {
           ctx.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm });
         } else {
-          ctx.define(nm, { ...sym, _closureEnvVar: nm });
+          const { _cellVar: _drop, _outerCell: _drop2, ...rest } = sym as Record<string, unknown>;
+          ctx.define(nm, { ...rest, _closureEnvVar: nm } as object);
         }
       }
     }
@@ -325,6 +355,14 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       ctx.define(p.name, symInfo);
     }
     const bodyLines: string[] = [];
+    // #295 v2c: isolate the cleanup machinery — the closure body is a separate
+    // C function; its Returns must not flush (and consume) the enclosing
+    // block's cleanup frames (e.g. the block env release registered by the
+    // pre-scan before the statements run).
+    const prevCleanupStack = ctx._blockCleanupStack;
+    const prevLoopCleanups = ctx._loopBodyCleanups;
+    ctx._blockCleanupStack = [{ list: [], set: new Set() }];
+    ctx._loopBodyCleanups = null;
     // #295 v2b boundary: nested named functions inside closures are not
     // supported yet — the pre-scan throws E020 instead of silently miscompiling.
     const _prevBuildingClosure = ctx._buildingClosureBody;
@@ -343,6 +381,8 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
       }
     } finally {
       ctx._buildingClosureBody = _prevBuildingClosure;
+      ctx._blockCleanupStack = prevCleanupStack;
+      ctx._loopBodyCleanups = prevLoopCleanups;
     }
     ctx.popScope();
 
@@ -354,22 +394,30 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
     const retainLines: string[] = [];
     for (const nm of capturedStringFields) {
       const sym = captured.get(nm);
-      const src = sym?._closureEnvVar ? `env->${nm}` : nm;
+      const src = sym?._closureEnvVar ? `env->${nm}` : sym?._outerCell ? `env->_outer->${nm}` : nm;
       retainLines.push(`tsc_string_retain(${src});`);
     }
-    const envInit = '{._hdr = {._refcount = 1, ._destroy = ' + destroyFnName + '}, ' + [...captured.entries()].map(([nm, sym]) => {
-      const src = sym._closureEnvVar ? `env->${nm}` : nm;
+    // The block env outlives this scope as long as the closure lives (ARC).
+    if (hasOuterLink) retainLines.push(`tsc_env_retain(env);`);
+    const initParts: string[] = [];
+    for (const [nm, sym] of captured) {
+      if (isCellCapture(nm, sym)) continue; // shared cell — via _outer, no copy
+      const src = sym._closureEnvVar ? `env->${nm}` : sym._outerCell ? `env->_outer->${nm}` : nm;
       const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
-        if (sym.ctype?.endsWith(' *')) return `.${nm} = ${nm}`;
-        return `.${nm} = &${nm}`;
+        if (sym.ctype?.endsWith(' *')) initParts.push(`.${nm} = ${nm}`);
+        else initParts.push(`.${nm} = &${nm}`);
+        continue;
       }
       const ct = sym.ctype ?? 'void *';
-      if (_isComplexCtype(ct) && !sym._closureEnvVar && !ct.endsWith(' *')) {
-        return `.${nm} = &${nm}`;
+      if (_isComplexCtype(ct) && !sym._closureEnvVar && !sym._outerCell && !ct.endsWith(' *')) {
+        initParts.push(`.${nm} = &${nm}`);
+        continue;
       }
-      return `.${nm} = ${src}`;
-    }).join(', ') + '}';
+      initParts.push(`.${nm} = ${src}`);
+    }
+    if (hasOuterLink) initParts.push('._outer = env');
+    const envInit = '{._hdr = {._refcount = 1, ._destroy = ' + destroyFnName + '}' + (initParts.length > 0 ? ', ' + initParts.join(', ') : '') + '}';
 
     const captureModes = explicitCaptures
       ? new Map(explicitCaptures.map((c: ExplicitCapture) => [c.name, c.mode]))

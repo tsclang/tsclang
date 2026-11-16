@@ -26,7 +26,6 @@ import { TscError } from './error.js';
 import { DIAGNOSTICS, substituteParams } from './diagnostics.js';
 import { isPrimitive } from './types.js';
 import { LANGUAGE_BUILTINS } from './stdlib-registry.js';
-import { collectReactiveArrows } from './func-ref-vars.js';
 
 const MAX_ERRORS = 10;
 
@@ -75,7 +74,6 @@ interface DeclEntry {
   col: number;
   hoisted: boolean;   // functions, `var`, imports — usable before their position
   pre?: boolean;      // pre-scan entry: silently re-declared when the walk reaches the statement
-  prim?: boolean;     // W013: value-captured primitive (number/bool/char/int)
 }
 
 interface Scope {
@@ -114,7 +112,8 @@ function isFloatLiteralText(value: string): boolean {
  * Run pre-codegen semantic checks over a parsed program.
  * Throws `{ isTscErrorBag: true, errors: TscError[] }` on failure — the same
  * protocol as the parse-error bag, consumed by the CLI reporter and the test
- * engine without special-casing. Returns semantic warnings (W013) on success.
+ * engine without special-casing. Returns semantic warnings on success (none
+ * currently — W013 retired with shared-cell closures, #295 v2c).
  */
 export function checkSemantics(ast: Program, filename: string, src: string, opts?: { strict?: string[] | null; defaultNumber?: string }): TscError[] {
   const checker = new SemanticChecker(filename, src, new Set(opts?.strict ?? []), opts?.defaultNumber);
@@ -142,9 +141,6 @@ class SemanticChecker {
 
   run(ast: Program): void {
     this.collectTypeNames(ast);
-    // W013: top-level effect/computed/batch arrows reference promoted static
-    // globals directly (shared cell, like TS) — exempt from snapshot analysis.
-    this.reactiveArrows = collectReactiveArrows(ast);
     this.preDeclareStmts(ast.body);
     for (const s of ast.body ?? []) this.stmt(s);
   }
@@ -230,7 +226,7 @@ class SemanticChecker {
     this.scope = this.scope.parent ?? this.root;
   }
 
-  private declare(name: string, kind: string, node: Pos, hoisted = false, hoistFnScope = false, prim = false, fromPre = false): void {
+  private declare(name: string, kind: string, node: Pos, hoisted = false, hoistFnScope = false, fromPre = false): void {
     if (!name || name === '*') return;
     let target = this.scope;
     if (hoistFnScope) {
@@ -242,14 +238,14 @@ class SemanticChecker {
       // Hoisting pre-scan: first binding wins, silently. Conflicts (real
       // duplicates) are reported when the walk re-declares at statement position.
       if (existing) return;
-      target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted, prim, pre: true });
+      target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted, pre: true });
       return;
     }
     if (existing && !existing.pre && !this.isLegalRedeclare(existing.kind, kind)) {
       this.error('E123', node, { name });
       return; // first binding wins — avoid cascading E123 on the same name
     }
-    target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted, prim });
+    target.vars.set(name, { kind, line: node?.line ?? 0, col: node?.col ?? 0, hoisted });
   }
 
   /**
@@ -267,26 +263,24 @@ class SemanticChecker {
       if (!s) continue;
       switch (s.kind) {
         case 'FuncDecl':
-          this.declare(s.name, 'FuncDecl', s, true, false, false, true);
+          this.declare(s.name, 'FuncDecl', s, true, false, true);
           continue;
         case 'FuncOverload':
-          this.declare(s.name, 'FuncOverload', s, true, false, false, true);
+          this.declare(s.name, 'FuncOverload', s, true, false, true);
           continue;
         case 'ClassDecl': case 'Enum': case 'DeclareConst': case 'DeclareFunction':
-          this.declare(s.name, s.kind, s, true, false, false, true);
+          this.declare(s.name, s.kind, s, true, false, true);
           continue;
         case 'Import': case 'ExportFrom':
-          for (const n of s.names ?? []) this.declare(importLocalName(n), 'import', s, true, false, false, true);
+          for (const n of s.names ?? []) this.declare(importLocalName(n), 'import', s, true, false, true);
           continue;
         case 'VarDecl':
-          this.declare(s.name, s.varKind, s, s.varKind === 'var', s.varKind === 'var',
-            this.primOfAnn(s.typeAnn) || this.primOfInit(s.init), true);
+          this.declare(s.name, s.varKind, s, s.varKind === 'var', s.varKind === 'var', true);
           continue;
         case 'VarDecls':
           for (const d of s.decls ?? []) {
             if (d.kind !== 'VarDecl') continue;
-            this.declare(d.name, d.varKind, d, d.varKind === 'var', d.varKind === 'var',
-              this.primOfAnn(d.typeAnn) || this.primOfInit(d.init), true);
+            this.declare(d.name, d.varKind, d, d.varKind === 'var', d.varKind === 'var', true);
           }
           continue;
         default:
@@ -354,145 +348,10 @@ class SemanticChecker {
     }));
   }
 
-  private warn(code: 'W013', node: Pos, params: Record<string, string>): void {
-    const d = DIAGNOSTICS[code];
-    this.warnings.push(new TscError(substituteParams(d.message, params), {
-      filename: this.filename,
-      line: node?.line ?? 0,
-      col: node?.col ?? 0,
-      src: this.src,
-      code: d.code,
-      title: d.title,
-      help: d.help?.map((h) => substituteParams(h, params)),
-      kind: 'warning',
-    }));
-  }
-
-  // ── W013: snapshot capture vs TS closure semantics ────────────────────────
-  // Arrow closures capture outer primitives by value (a snapshot at closure
-  // creation); TS closures share the variable's cell. The analysis registers
-  // primitive captures, tracks captures mutated inside an arrow, and warns on
-  // later uses of the same binding that can observe the divergence. Keyed by
-  // the captured DeclEntry object (identity, not name) so shadowed bindings
-  // never collide. Boundary: only arrow functions and only `let`/`const`
-  // vars, function params and annotated for-of bindings — named nested
-  // functions, destructuring and untyped for-of bindings are out of scope.
-  private snapCaptures = new Map<DeclEntry, { line: number; col: number; mutated: boolean; warned: boolean }>();
-  private arrowStack: { scope: Scope; pos: Pos; mutations: Set<DeclEntry>; reactive: boolean }[] = [];
-  private reactiveArrows = new Set<object>();
-
-  /** True while visiting the body of a top-level effect/computed/batch arrow
-   *  directly (innermost arrow only). Codegen emits those through a dedicated
-   *  reactive path: non-Signal free variables become static globals referenced
-   *  directly (a shared cell, like TS) — no snapshot capture, no W013. Arrows
-   *  nested inside are ordinary closures that env-capture a snapshot copy. */
-  private inReactiveArrow(): boolean {
-    return this.arrowStack.length > 0 && this.arrowStack[this.arrowStack.length - 1].reactive;
-  }
-
-  /** Resolve `name` to its binding entry from the current scope, or null. */
-  private findEntry(name: string): DeclEntry | null {
-    let sc: Scope | null = this.scope;
-    while (sc) {
-      const e = sc.vars.get(name);
-      if (e) return e;
-      sc = sc.parent;
-    }
-    return null;
-  }
-
-  /** Entry if `name` resolves outside the innermost active arrow (a captured
-   *  outer binding); null when no arrow is active or the name is arrow-local
-   *  (a param or a body-declared binding). */
-  private capturedEntry(name: string): DeclEntry | null {
-    const top = this.arrowStack[this.arrowStack.length - 1];
-    if (!top) return null;
-    let sc: Scope | null = this.scope;
-    while (sc && sc !== top.scope) {
-      if (sc.vars.has(name)) return null; // bound inside the arrow body
-      sc = sc.parent;
-    }
-    if (!sc || top.scope.vars.has(name)) return null;
-    sc = sc.parent;
-    while (sc) {
-      const e = sc.vars.get(name);
-      if (e) return e;
-      sc = sc.parent;
-    }
-    return null;
-  }
-
-  /** Register `entry` as snapshot-captured at the innermost arrow (idempotent). */
-  private registerCapture(entry: DeclEntry): void {
-    if (this.snapCaptures.has(entry)) return;
-    const top = this.arrowStack[this.arrowStack.length - 1];
-    this.snapCaptures.set(entry, { line: top.pos.line ?? 0, col: top.pos.col ?? 0, mutated: false, warned: false });
-  }
-
-  /** Ident in read position: register a snapshot capture, then check uses.
-   *  References made directly by a reactive arrow body are shared global
-   *  accesses (see inReactiveArrow) — skipped entirely. */
-  private noteUse(e: { name: string } & Pos): void {
-    if (this.inReactiveArrow()) return;
-    if (this.arrowStack.length > 0) {
-      const entry = this.capturedEntry(e.name);
-      if (entry?.prim) this.registerCapture(entry);
-    }
-    this.checkSnapshotUse(e, false);
-  }
-
-  /** Ident in write position (assignment target, ++/--): a binding write. */
-  private noteWrite(e: { name: string } & Pos): void {
-    if (this.inReactiveArrow()) return;
-    if (this.arrowStack.length > 0) {
-      const entry = this.capturedEntry(e.name);
-      if (entry?.prim) {
-        this.registerCapture(entry);
-        const cap = this.snapCaptures.get(entry)!;
-        cap.mutated = true;
-        this.arrowStack[this.arrowStack.length - 1].mutations.add(entry);
-      }
-      return; // the mutation inside the arrow is the capture itself, not a divergence
-    }
-    this.checkSnapshotUse(e, true);
-  }
-
-  /** Warn when a use after the capture point can diverge from TS semantics:
-   *  any use once some capture is mutated, any outer write for reader-only
-   *  captures. One warning per binding. */
-  private checkSnapshotUse(e: { name: string } & Pos, isWrite: boolean): void {
-    const entry = this.findEntry(e.name);
-    if (!entry) return;
-    const cap = this.snapCaptures.get(entry);
-    if (!cap || cap.warned) return;
-    if (!cap.mutated && !isWrite) return;
-    const l = e.line ?? 0;
-    const c = e.col ?? 0;
-    if (l < cap.line || (l === cap.line && c <= cap.col)) return; // at or before the capture point
-    if (this.arrowStack.some((a) => a.mutations.has(entry))) return; // the mutating arrow's own body
-    cap.warned = true;
-    this.warn('W013', e, { name: e.name });
-  }
-
-  /** W013: binding is a value-captured primitive (annotation form). */
-  private primOfAnn(t: TypeAnn | null | undefined): boolean {
-    return !!t && t.kind === 'TypeRef' && (isPrimitive(t.name) || t.name === 'number');
-  }
-
-  /** W013: literal initializer of a value-captured primitive type. */
-  private primOfInit(init: Expression | null | undefined): boolean {
-    if (!init) return false;
-    if (init.kind === 'Literal') {
-      const lt = init.litType;
-      return lt === 'number' || lt === 'int' || lt === 'bigint'
-        || lt === 'bool' || lt === 'boolean' || lt === 'char';
-    }
-    if (init.kind === 'Unary' && init.op === '-' && init.expr?.kind === 'Literal') {
-      const lt = init.expr.litType;
-      return lt === 'number' || lt === 'int' || lt === 'bigint';
-    }
-    return false;
-  }
+  // #294/#295 v2c: W013 (snapshot-capture divergence warning) retired —
+  // arrows now capture same-block primitives/strings through shared cells
+  // (TS-true semantics), so the divergence the warning flagged no longer
+  // exists. `warnings` stays in the API for future diagnostics.
 
   // ── Statements ────────────────────────────────────────────────────────────
 
@@ -525,8 +384,7 @@ class SemanticChecker {
       case 'VarDecl':
         this.decorators(s.decorators);
         this.type(s.typeAnn);
-        this.declare(s.name, s.varKind, s, false, s.varKind === 'var',
-          this.primOfAnn(s.typeAnn) || this.primOfInit(s.init));
+        this.declare(s.name, s.varKind, s, false, s.varKind === 'var');
         this.expr(s.init);
         this.checkInitMismatch(s, s.name, s.typeAnn, s.init);
         return;
@@ -752,7 +610,7 @@ class SemanticChecker {
     }
     // Declare all params before visiting defaults: `f(a = 1, b = a)` is legal.
     for (const p of ps) {
-      if (p.name) this.declare(p.name, 'param', {}, true, false, this.primOfAnn(p.typeAnn));
+      if (p.name) this.declare(p.name, 'param', {}, true);
     }
     for (const p of ps) this.expr(p.defaultVal ?? p.default);
   }
@@ -781,7 +639,7 @@ class SemanticChecker {
     if (!binding) return;
     if (binding.kind === 'Ident') {
       this.type(binding.typeAnn);
-      this.declare(binding.name ?? '', varKind, node, false, false, this.primOfAnn(binding.typeAnn));
+      this.declare(binding.name ?? '', varKind, node);
     } else {
       // ObjPattern/ArrayPattern wrappers and flat arrays share one shape handler.
       this.declarePatternItems(b);
@@ -857,7 +715,6 @@ class SemanticChecker {
         // argument is a type name, not a value reference.
         if (e.name === 'keyof') return;
         if (this.resolveIdent(e.name, e) !== 'ok') this.error('E122', e, { name: e.name });
-        this.noteUse(e);
         return;
       case 'Member': case 'OptChain':
         return this.expr(e.object);
@@ -889,7 +746,7 @@ class SemanticChecker {
       case 'Unary':
         if ((e.op === '++pre' || e.op === '--pre' || e.op === '++post' || e.op === '--post')
           && e.expr?.kind === 'Ident') {
-          this.noteWrite(e.expr);
+          // binding write — no snapshot tracking since W013 retired (#295 v2c)
         }
         return this.expr(e.expr);
       case 'Ternary':
@@ -898,7 +755,6 @@ class SemanticChecker {
         this.expr(e.no);
         return;
       case 'Assign':
-        if (e.left?.kind === 'Ident') this.noteWrite(e.left);
         this.expr(e.left);
         this.expr(e.right);
         return;
@@ -922,11 +778,9 @@ class SemanticChecker {
         return this.expr((e as unknown as { value?: Expression }).value);
       case 'Arrow': {
         this.pushScope(true);
-        this.arrowStack.push({ scope: this.scope, pos: e, mutations: new Set(), reactive: this.reactiveArrows.has(e) });
         this.declareParams(e.params);
         this.type(e.returnType);
         this.fnBody(e.body);
-        this.arrowStack.pop();
         this.popScope();
         return;
       }

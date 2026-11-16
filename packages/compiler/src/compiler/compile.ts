@@ -255,7 +255,8 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
   // Pre-codegen semantic checks (#208): unknown types, undeclared identifiers,
   // duplicate declarations, literal/annotation mismatches — before codegen and
   // before the cache, so a cached artifact is always semantically valid.
-  // W013 snapshot-capture warnings come back on the success path (#294).
+  // Semantic warnings come back on the success path (none currently — W013
+  // retired with shared-cell closures, #295 v2c).
   const semWarnings = checkSemantics(ast, filename, src, { strict: opts.strict, defaultNumber: opts.defaultNumber });
 
   // Unicode identifiers → ASCII-mangled C names. Runs after semantic checks

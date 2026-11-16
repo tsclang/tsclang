@@ -1,0 +1,7 @@
+function main(): void {
+  let count: i32 = 0;
+  const inc = (): i32 => { count = count + 1; return count; };
+  inc();
+  inc();
+  console.log(count);
+}

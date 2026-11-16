@@ -4,7 +4,7 @@
 
 > **СТАТУС: РЕШЕНО.**
 >
-> **Ключевое решение:** capture model — **гибридная**. Примитивы и строки = copy (snapshot). Class/array = reference (pointer). Source **всегда жив** после capture. Нет move capture, нет E002 для implicit capture.
+> **Ключевое решение:** capture model — **гибридная**. Примитивы и строки = shared cell (общая ячейка с enclosing-блоком, #295 v2c) либо copy (snapshot на документированных границах). Class/array = reference (pointer). Source **всегда жив** после capture. Нет move capture, нет E002 для implicit capture.
 >
 > **Связь с for-of/spread:** for-of (см. [05-for-of-iteration.md](../05-control-flow/05-for-of-iteration.md)) использует **borrow** (pointer) для complex-типов. Spread/destructuring (см. [08-spread-destructuring.md](../08-collections/08-spread-destructuring.md)) использует **copy**. Closure capture = **reference** (pointer) для class/array — mutations видны снаружи, TS-совместимое поведение.
 >
@@ -22,8 +22,8 @@
 
 | Тип | Capture | Обоснование |
 |-----|---------|-------------|
-| Примитив | Copy (snapshot) | Дёшево, безопасно, без алиасинга |
-| string | Retain (ARC copy) | ARC refcount, source жив |
+| Примитив | Shared cell в функциях; copy (snapshot) на границах D2 | TS-истинная семантика где нужно; копия дёшево на границах |
+| string | Shared cell в функциях; retain-copy на границах D3 | Value type, ARC |
 | Class/Array | Reference (pointer) | TS compat, mutations visible |
 
 **Альтернативы отклонены:**
@@ -33,29 +33,41 @@
 
 **Статус: ✅ Решено. Реализовано.**
 
-### D2: Примитивы — copy (snapshot), не reference
+### D2: Примитивы — shared cell в функциях, snapshot на границах (#295 v2c)
 
-**Решение:** `i32`, `boolean`, `f64` и т.д. захватываются как copy. Изменение source после создания closure не влияет на captured value.
+**Решение:** внутри тела функции arrow-замыкание с implicit capture делит ячейку с enclosing-блоком — как в TS. Переменная (прямой `let`/`const`-ребёнок блока или параметр enclosing-функции, cellable-типа: целые, `float`/`double`, `bool`, `char`, `string`) живёт в env-ячейке блока; env стрелки получает один указатель `_outer` на block env; чтение/запись идут через `env->_outer->x`. Мутации видны с обеих сторон.
 
-Отличие от TS (где `let x = 1; const fn = () => x; x = 2; fn()` → `2`). В TSClang → `1` (snapshot).
+```typescript
+function main(): void {
+  let x: i32 = 1;
+  const fn = (): i32 => x;
+  x = 2;
+  console.log(fn());   // 2 — общая ячейка, как в TS
+}
+```
 
-> **#295 v2b:** это поведение **arrow-замыканий**. Именованные вложенные `function`-декларации (см. раздел 10) используют другую модель — **shared cell**: захваченный примитив живёт в env-ячейке, и enclosing-блок, и вложенная функция читают/пишут одну ячейку — мутации видны с обеих сторон, как в TS. В стадии v2c стрелки планируется перевести на ту же модель, после чего расхождение D2 уходит.
+**Snapshot-границы** (захват копией, как до v2c; документированное отклонение от TS):
 
-**Диагностика W013 (#294):** расхождение с TS молчаливым не остаётся — когда привязка используется после захвата так, что расхождение наблюдаемо (какая-то лямбда мутировала снапшот, либо внешняя запись при reader-захвате), компилятор выдаёт `warning[W013]` с рекомендацией обернуть значение в class/array box. Фабричный паттерн (`makeCounter`), box через class и shadowing не триггерят. Детали анализа и границы стадии — каталог warnings в [16-compiler.md](../16-tooling/16-compiler.md).
+| Позиция стрелки/переменной | Capture | Причина |
+|---------------------------|---------|---------|
+| Стрелка на верхнем уровне программы | Copy (snapshot) | Main-wrapper блок не pre-scan'ится (стадийная граница v2c) |
+| Захват из внешнего блока (не непосредственный родитель) | Copy (snapshot) | Env-chain через несколько блоков — вне стадии v2c |
+| Стрелка внутри тела другого замыкания | Copy (snapshot) | Блок env недостижим лексически (E020 для nested fn) |
+| Переменная без type-анннотации и без literal-инициализации | Copy (snapshot) | Тип ячейки неизвестен без аннотации |
 
-Обоснование: примитивы — маленькие значения, copy дешевле чем pointer + dereference. Нет алиасинга. Безопасно на всех платформах.
+Class/array захватываются pointer'ом всегда (D4) — расхождения с TS нет ни в одной позиции.
 
-**Статус: ✅ Решено. Реализовано.**
+> **История:** до #295 v2b примитивы всегда захватывались копией (snapshot) — расхождение с TS диагностировалось `W013` (#294). В v2c стрелки переведены на shared cell в pre-scan'имых блоках, W013 удалён (см. [16-compiler.md](../16-tooling/16-compiler.md)); snapshot остаётся только на перечисленных границах.
 
-### D3: String — retain (ARC copy)
+**Статус: ✅ Решено. Реализовано (#295 v2c).**
 
-**Решение:** `string` захватывается как shallow copy struct + `tsc_string_retain`. Env cleanup делает `tsc_string_release`. Source жив.
+### D3: String — shared cell в функциях, retain-copy на границах
 
-Отличие от TS (reference capture — изменение source видно в closure). В TSClang — snapshot (как у примитивов).
+**Решение:** в shared-cell позициях (D2) `string` живёт в env-ячейке блока как value; destroy fn block env делает `tsc_string_release` по строковым ячейкам. На snapshot-границах — shallow copy struct + `tsc_string_retain` в env стрелки (как до v2c). Source жив.
 
-Обоснование: String = ARC-managed, retain/release — O(1), безопасно на всех платформах (no-op retain на embedded).
+Обоснование: String = ARC-managed value type; в общей ячейке переприсваивание (`msg = "ok"`) отпускает старое значение обычным путём присваивания, финальный release — destroy fn env. O(1) на всех платформах (no-op retain на embedded).
 
-**Статус: ✅ Решено. Реализовано.**
+**Статус: ✅ Решено. Реализовано (#295 v2c).**
 
 ### D4: Class/Array — reference (pointer)
 
@@ -115,8 +127,10 @@ const fn = [arr](): void => { ... };                             // Error: requi
 
 | Тип переменной | Capture | C-representation в env | Source жив? | TS compat | Cleanup |
 |---------------|---------|----------------------|-------------|-----------|---------|
-| `i32`, `boolean`, `f64` и т.д. | Copy (snapshot) | `int32_t x;` | ✅ Да | ⚠️ Snapshot | Нет |
-| `string` | Retain (ARC copy) | `String s;` | ✅ Да | ⚠️ Snapshot | `tsc_string_release` |
+| `i32`, `boolean`, `f64` и т.д. | Shared cell (в функциях, #295 v2c) | block env: `int32_t x;`, env стрелки: `_outer` ptr | ✅ Да | ✅ Общая ячейка | destroy fn block env |
+| `i32` и др. на snapshot-границах D2 | Copy (snapshot) | `int32_t x;` в env стрелки | ✅ Да | ⚠️ Snapshot | Нет |
+| `string` (в функциях) | Shared cell | block env: `String s;` + `_outer` | ✅ Да | ✅ Общая ячейка | `tsc_string_release` (destroy block env) |
+| `string` на границах D3 | Retain (ARC copy) | `String s;` | ✅ Да | ⚠️ Snapshot | `tsc_string_release` |
 | Class (`User`) | Reference (pointer) | `User *u;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
 | Array (`Array<T>`) | Reference (pointer) | `Array_i32 *arr;` | ✅ Да | ✅ Mutations visible | Нет (source владеет) |
 | `Ref<T>` (explicit) | Const pointer | `const User *u;` | ✅ Да | ✅ | Нет |
@@ -642,41 +656,40 @@ Value captures (примитивы, String через retain) разрешены
 
 ## 7. Отличия от TypeScript
 
-### 7.1 Примитивы: snapshot vs reference
+### 7.1 Примитивы: общая ячейка в функциях, snapshot на верхнем уровне
 
 ```typescript
-// TypeScript:
-let x = 1;
-const fn = () => x;
-x = 2;
-console.log(fn());   // 2 (reference)
+// Внутри функции — общая ячейка, идентично TypeScript (#295 v2c):
+function demo(): void {
+  let x: i32 = 1;
+  const fn = (): i32 => x;
+  x = 2;
+  console.log(fn());   // 2 в TS и в TSClang
+}
+```
 
-// TSClang:
+```typescript
+// Верхний уровень программы — snapshot (стадийная граница v2c):
 let x: number = 1;
 const fn = (): number => x;
 x = 2;
-console.log(fn());   // 1 (snapshot)
+console.log(fn());   // TS: 2 (reference); TSClang: 1 (snapshot)
 ```
 
-**Причина:** без GC, reference capture для примитивов добавляет overhead (pointer + dereference) без пользы. Copy — дёшево и безопасно.
+**Причина границы:** блок верхнего уровня (main-wrapper) не проходит block pre-scan — ячейки создаются только для блоков тел функций. Верхнеуровневые стрелки, мутирующие глобалы, продолжают работать через static-продвижение (`func-ref-vars.ts`) там, где это возможно.
 
-### 7.2 Строки: snapshot vs reference
+### 7.2 Строки: общая ячейка в функциях, snapshot на верхнем уровне
 
 ```typescript
-// TypeScript:
-let s = "hello";
-const fn = () => s;
-s = "world";
-console.log(fn());   // "world" (reference)
-
-// TSClang:
-let s: string = "hello";
-const fn = (): string => s;
-s = "world";
-console.log(fn());   // "hello" (snapshot/retain)
+function demo(): void {
+  let s: string = "hello";
+  const fn = (): string => s;
+  s = "world";
+  console.log(fn());   // "world" в TS и в TSClang
+}
 ```
 
-**Причина:** String = value type (ARC struct, не JS reference). Retain копии = snapshot.
+На верхнем уровне — snapshot/retain (как 7.1). **Причина:** String = value type (ARC struct); в функциях ячейка живёт в block env (destroy fn делает release), на границах — retained copy в env стрелки.
 
 ### 7.3 Class/Array: идентично (reference/mutation)
 
@@ -713,7 +726,7 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 - Class/Array = reference capture (идентично TS)
 - Mutations visible (идентично TS)
 - Source жив после capture (идентично TS)
-- Примитивы/string = snapshot (отклонение, документировано)
+- Примитивы/string в функциях = shared cell (идентично TS, #295 v2c); на верхнем уровне и остальных границах D2/D3 = snapshot (отклонение, документировано)
 - Нет `move ||` (нет аналога в TS)
 
 ### П3: Лучше чем TS/C/C++/Rust
@@ -753,6 +766,9 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 | `arc-factory-cleanup` | Фабрика: env освобождается после release результата |
 | `arc-array-elems` | Замыкания в array literal: retain Ident / move call |
 | `env-pool-avr` | Static env pool на AVR (avr-gcc + simavr): цикл create/retain/release, переиспользование блоков без исчерпания |
+| `shared-cell-arrow` | Arrow в функции читает захваченный примитив через общую ячейку (v2c) |
+| `shared-cell-arrow-mutate` | Мутация захваченного примитива из arrow видна снаружи |
+| `shared-cell-arrow-factory` | Фабрика: arrow + `_outer` retain, вызовы после выхода из функции |
 | `err-capture-move-use` | `[x]` без type = compile error |
 | `nested-fn/*` (13 кейсов) | Именованные вложенные функции — раздел 10: shared-cell capture, рекурсия, мутуальная рекурсия, фабрика, границы E020 |
 
@@ -760,7 +776,7 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 
 ## 10. Именованные вложенные функции — shared-cell env (#295, стадия v2b)
 
-`function`-декларация, вложенная непосредственно в тело другой функции (не на top level), — hoisted замыкание с **shared-cell** захватом. Модель отличается от arrow-замыканий (D1–D4): примитивы не копируются в snapshot, а живут в общей ячейке env.
+`function`-декларация, вложенная непосредственно в тело другой функции (не на top level), — hoisted замыкание с **shared-cell** захватом. С v2c arrow-замыкания в тех же блоках используют ту же модель (D2/D3): блок с вложенными `function` И/ИЛИ захватывающими arrow получает один env; env стрелки достигает ячеек через `_outer`-ссылку на block env, nested-функции — напрямую первым параметром.
 
 ### 10.1 Семантика
 
@@ -778,7 +794,7 @@ console.log(c());   // 2
 Правила:
 
 1. **Hoisting внутри блока.** Вложенная функция видна с начала блока — вызов до декларации работает (`hoisted-call`). Порядок объявлений свободен, как в TS.
-2. **Shared cell.** Каждая захваченная переменная (прямой `let`/`const`-ребёнок блока ИЛИ параметр enclosing-функции, если блок — тело функции) получает ячейку в env. Enclosing-блок и все вложенные функции читают/пишут **одну** ячейку: `count = 10` после декларации видна внутри (`capture-after-write`), мутация изнутри видна снаружи при последующих вызовах. Это TS-истинное поведение — расхождение D2/W013 сюда не применяется.
+2. **Shared cell.** Каждая захваченная переменная (прямой `let`/`const`-ребёнок блока ИЛИ параметр enclosing-функции, если блок — тело функции) получает ячейку в env. Enclosing-блок и все вложенные функции читают/пишут **одну** ячейку: `count = 10` после декларации видна внутри (`capture-after-write`), мутация изнутри видна снаружи при последующих вызовах. Это TS-истинное поведение — snapshot-границы D2 сюда не применяются.
 3. **Один env на блок.** Если хоть одной вложенной функции нужны ячейки — блок получает один env-структур (`tsc_malloc`, refcount 1, ARC-заголовок), все вложенные функции блока принимают её первым параметром. Ячейки без потребности env не создаётся — функции получают `void *_env`.
 4. **String-ячейки** — value в env; destroy fn env делает `tsc_string_release` по всем строковым ячейкам. Переприсваивание строковой ячейки (`msg = "ok"`) безопасно: старое значение отпускается обычным путём присваивания, финальный release — destroy fn.
 5. **ARC lifecycle.** Env живёт до конца блока (release на cleanup блока), либо уезжает с возвращённым замыканием (`return inc` → retain, caller владеет). Копии binding'ов — retain по общим правилам 6.1.
@@ -821,7 +837,7 @@ tsc_closure makeCounter(void) {
 | Именованная function внутри тела arrow-замыкания | `error[E020]: invalid closure capture: nested function declarations inside closures are not supported yet (planned for shared-cell closures)` |
 | Дублирующиеся имена nested-функций в блоке | `error[E123]` |
 
-Глобальные имена (scope 0) захватываются прямой ссылкой без ячеек. Стадия v2c снимает первые два ограничения (общий env-chain) и переводит arrow-захват на те же ячейки.
+Глобальные имена (scope 0) захватываются прямой ссылкой без ячеек. Статус v2c: arrow-захват в pre-scan'имых блоках переведён на общие ячейки (same-block locals + параметры enclosing-функции, cellable-типы); первые два ограничения (захват из внешнего блока, захват без аннотации) остаются E020 до стадии общего env-chain.
 
 ### 10.4 Тесты
 
