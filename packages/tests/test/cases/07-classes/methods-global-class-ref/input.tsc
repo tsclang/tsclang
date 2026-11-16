@@ -1,0 +1,16 @@
+// [R] #298 s2: class methods referencing a top-level class-instance global.
+// The referencing class is declared BEFORE the global's source position, so
+// the method text precedes the promoted static definition in the C output —
+// the forward-declaration section must cover it.
+class Runner {
+    base: number = 5;
+    total(): number { return this.base + c.step; }
+    bump(): void { c.step = c.step + 1; }
+}
+class Counter { step: number = 1 }
+const c = new Counter();
+const r = new Runner();
+console.log(r.total());
+r.bump();
+console.log(r.total());
+console.log(c.step);

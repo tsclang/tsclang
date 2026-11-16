@@ -1,0 +1,8 @@
+let a: i32 = 5;
+class C {
+  v: i32 = 0;
+  get(): i32 { return a + this.v; }
+}
+const c = new C();
+c.v = 10;
+console.log(c.get());

@@ -2,27 +2,21 @@
 
 typedef struct { int32_t count; } Counter;
 
-typedef struct { tsc_env_hdr _hdr; Counter *c; } _closure_0_env;
+static Counter c;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static void _lambda_0_void(void *_env) {
+    c.count = (int32_t)((uint32_t)c.count + (uint32_t)1);
 }
 
-static void _closure_0_fn(_closure_0_env *env) {
-    env->c->count = (int32_t)((uint32_t)env->c->count + (uint32_t)1);
-}
+static Counter c = {0};
 
 int main(void) {
     TSC_INIT();
-    Counter c = {0};
     c.count = 0;
-    _closure_0_env *inc_env = tsc_malloc(sizeof(_closure_0_env));
-    *inc_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .c = &c};
-    tsc_closure inc = {.env = inc_env, .fn = (void*)_closure_0_fn};
+    tsc_closure inc = {.env = NULL, .fn = (void*)_lambda_0_void};
     ((void (*)(void *))inc.fn)(inc.env);
     ((void (*)(void *))inc.fn)(inc.env);
     ((void (*)(void *))inc.fn)(inc.env);
     printf("%d\n", c.count);
-    tsc_env_release(inc_env);
     return 0;
 }

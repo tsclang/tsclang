@@ -1,25 +1,17 @@
 #include "runtime.h"
 
-typedef struct { tsc_env_hdr _hdr; String prefix; } _closure_0_env;
+static const String prefix;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
-    tsc_string_release(env->prefix);
+static String _lambda_0_string(void *_env, String name) {
+    return tsc_string_concat_n((String[]){ prefix, STR_LIT(", "), name }, 3);
 }
 
-static String _closure_0_fn(_closure_0_env *env, String name) {
-    return tsc_string_concat_n((String[]){ env->prefix, STR_LIT(", "), name }, 3);
-}
+static const String prefix = STR_LIT("Hello");
 
 int main(void) {
     TSC_INIT();
-    const String prefix = STR_LIT("Hello");
-    tsc_string_retain(prefix);
-    _closure_0_env *greet_env = tsc_malloc(sizeof(_closure_0_env));
-    *greet_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .prefix = prefix};
-    tsc_closure greet = {.env = greet_env, .fn = (void*)_closure_0_fn};
+    tsc_closure greet = {.env = NULL, .fn = (void*)_lambda_0_string};
     printf("%s\n", ((String (*)(void *, String))greet.fn)(greet.env, STR_LIT("World")).data);
-    tsc_env_release(greet_env);
     tsc_string_release(prefix);
     return 0;
 }

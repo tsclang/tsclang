@@ -1,22 +1,16 @@
 #include "runtime.h"
 
-typedef struct { tsc_env_hdr _hdr; int32_t base; } _closure_0_env;
+static const int32_t base;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static int32_t _lambda_0_i32(void *_env, int32_t x) {
+    return (int32_t)((uint32_t)base + (uint32_t)x);
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env, int32_t x) {
-    return (int32_t)((uint32_t)env->base + (uint32_t)x);
-}
+static const int32_t base = 10;
 
 int main(void) {
     TSC_INIT();
-    const int32_t base = 10;
-    _closure_0_env *add_env = tsc_malloc(sizeof(_closure_0_env));
-    *add_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .base = base};
-    tsc_closure add = {.env = add_env, .fn = (void*)_closure_0_fn};
+    tsc_closure add = {.env = NULL, .fn = (void*)_lambda_0_i32};
     printf("%d\n", ((int32_t (*)(void *, int32_t))add.fn)(add.env, 5));
-    tsc_env_release(add_env);
     return 0;
 }

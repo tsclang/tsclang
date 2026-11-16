@@ -141,6 +141,16 @@ export function _emitSpawnBlock(ctx: CodeGenContext, varName: string | null, bod
     const bodyStmts = body.kind === 'Block' ? body.body : [body];
     findWrites(bodyStmts);
 
+    // #298 s2: promoted static globals are shared storage — a spawn body now
+    // references them directly (no env copy). Writing one from a thread is a
+    // data race (UB); reads stay direct and race-free when nobody writes.
+    for (const nm of writtenVars as Set<string>) {
+      const wsym = ctx.lookup(nm);
+      if (wsym?._promotedGlobal) {
+        throw ctx.errorCode('E021', null, { detail: `cannot write module-scope variable '${nm}' from a spawn block; use Atomic<T> for thread-safe shared state` });
+      }
+    }
+
     // Validate captures
     const _sendSafeTypes = new Set(['int8_t','int16_t','int32_t','int64_t',
       'uint8_t','uint16_t','uint32_t','uint64_t','float','double','bool','size_t','String']);
@@ -272,7 +282,10 @@ export function _collectFreeVars(ctx: CodeGenContext, lambda: { params: Param[];
       const nd = e as Record<string, unknown>;
       if (nd.kind === 'Ident' && !seen.has(nd.name as string)) {
         const sym = ctx.lookup(nd.name as string);
-        if (sym?.ctype) { seen.add(nd.name as string); free.push({ name: nd.name as string, ctype: sym.ctype }); }
+        // #298 s2: promoted static globals are NOT captured — callback/thread
+        // bodies reference the file-scope global directly (one shared cell;
+        // an env snapshot would split the storage).
+        if (sym?.ctype && !sym._promotedGlobal) { seen.add(nd.name as string); free.push({ name: nd.name as string, ctype: sym.ctype }); }
       }
       if (nd.callee) walkE(nd.callee);
       if (nd.object) walkE(nd.object);

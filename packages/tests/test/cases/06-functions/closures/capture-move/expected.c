@@ -2,24 +2,18 @@
 
 typedef struct { int32_t value; } Data;
 
-typedef struct { tsc_env_hdr _hdr; Data *d; } _closure_0_env;
+static Data d;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static int32_t _lambda_0_i32(void *_env) {
+    return d.value;
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
-    return env->d->value;
-}
+static Data d = {0};
 
 int main(void) {
     TSC_INIT();
-    Data d = {0};
     d.value = 42;
-    _closure_0_env *getVal_env = tsc_malloc(sizeof(_closure_0_env));
-    *getVal_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .d = &d};
-    tsc_closure getVal = {.env = getVal_env, .fn = (void*)_closure_0_fn};
+    tsc_closure getVal = {.env = NULL, .fn = (void*)_lambda_0_i32};
     printf("%d\n", ((int32_t (*)(void *))getVal.fn)(getVal.env));
-    tsc_env_release(getVal_env);
     return 0;
 }

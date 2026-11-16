@@ -494,12 +494,22 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     //   Runtime split-init assignments are DEFERRED to the node's source position
     //   (hoisting #295 v2a: a use before the declaration line must observe the
     //   zero-init value, not an early assignment).
+    //   EXCEPT class-instance `new` initializers (#298 s2): their folding needs
+    //   the classes registry (field defaults, monomorphization), which the type
+    //   phase below populates. Emit those at their source position in Phase B;
+    //   the fwd-declaration section covers methods that reference them earlier.
+    const _classNewNames = new Set<string>();
+    for (const node of ast.body) {
+      const n = node.kind === 'Export' ? node.decl : node;
+      if (n?.kind === 'ClassDecl') _classNewNames.add(n.name);
+    }
     const _processedVarDecls = new Set<unknown>();
     ctx._processedVarDecls = _processedVarDecls as Set<Stmt>;
     ctx._deferredStaticInits = new Map();
     for (const node of ast.body) {
       const n = node.kind === 'Export' ? node.decl : node;
-      if (n?.kind === 'VarDecl' && n.name && ctx._funcRefVars?.has(n.name)) {
+      if (n?.kind === 'VarDecl' && n.name && ctx._funcRefVars?.has(n.name)
+          && !(n.init?.kind === 'New' && _classNewNames.has(n.init.name))) {
         _processedVarDecls.add(node);
         if (n !== node) _processedVarDecls.add(n); // dispatch sees the unwrapped decl
         try {

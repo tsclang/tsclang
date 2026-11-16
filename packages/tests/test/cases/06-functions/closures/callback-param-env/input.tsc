@@ -2,7 +2,13 @@
 // The callee cannot know whether the caller passed a capturing closure or a
 // plain function, so tsc_closure calls always pass env first (plain functions
 // hold env = NULL and ignore it). Guard for the env-less parameter call (#290).
+// The mutated cell is function-local: top-level arrows reference promoted
+// static globals directly (#298 s2), so only a local capture keeps a real
+// env behind the callback.
 function twice(f: () => number): number { return f() + f(); }
-let n = 10;
-console.log(twice(() => { n = n + 1; return n }));
-console.log(n);
+function run(): void {
+    let n = 10;
+    console.log(twice(() => { n = n + 1; return n }));
+    console.log(n);
+}
+run();

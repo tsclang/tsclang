@@ -1,8 +1,12 @@
 // [R] Object literal captured by a closure: captured by pointer like class/
 // array (mutations visible to both sides = TS semantics). The deferred anon
 // struct must be materialized BEFORE the env initializer references &o (#290).
-const o = { n: 1 };
-const f = (): number => { o.n = o.n + 1; return o.n; };
-console.log(f());
-console.log(f());
-console.log(o.n);
+// The literal is block-local: top-level arrows reference promoted static
+// globals directly (#298 s2), so only a local capture exercises the env path.
+{
+    const o = { n: 1 };
+    const f = (): number => { o.n = o.n + 1; return o.n; };
+    console.log(f());
+    console.log(f());
+    console.log(o.n);
+}

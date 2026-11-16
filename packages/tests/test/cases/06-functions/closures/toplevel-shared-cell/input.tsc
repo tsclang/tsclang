@@ -1,5 +1,5 @@
 let a = 1;
-const f = (): number => { a = a + 1; return a };
+const f = (): number => { a = a + 1; return a; };
 console.log(f());
 console.log(f());
 console.log(a);

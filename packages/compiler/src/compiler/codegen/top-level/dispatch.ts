@@ -157,15 +157,21 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             }
             const initLines: string[] = [];
             ctx.visitStmt(node, initLines, 0);
-            // Rewrite the emitted line to be static
+            // Rewrite the emitted line to be static; remember the declaration
+            // line so the forward declaration mirrors its exact qualifiers
+            // (struct-typed const bindings suppress `const` — vardecl rule).
+            let _arrDefLine: string | null = null;
             for (const line of initLines) {
               const trimmed = line.trim();
-              if (trimmed) ctx.topLevel.push('static ' + trimmed);
+              if (!trimmed) continue;
+              const full = 'static ' + trimmed;
+              ctx.topLevel.push(full);
+              _arrDefLine = full;
             }
             ctx.topLevel.push('');
             // #298 s1: promoted static global — closures reference it directly
             ctx.define(node.name, { ctype: et, varKind: node.varKind, isFixedArray: true, arraySize: size, _promotedGlobal: true });
-            ctx.addFwd(`static ${node.varKind === 'const' ? 'const ' : ''}${et} ${node.name}[${size}];`);
+            ctx.addFwd(_arrDefLine ? _arrDefLine.replace(/\s*=[^;]*;/, ';') : `static ${et} ${node.name}[${size}];`);
             break;
         }
         if (staticDec && node.init?.kind === 'New' && node.init.name === 'Map') {
@@ -194,7 +200,7 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             ctx.topLevel.push('');
             // #298 s1: promoted static global — closures reference it directly
             ctx.define(node.name, { ctype: smType, varKind: node.varKind, _isStaticMap: true, _smSuffix: `${kId}_${vId}`, _promotedGlobal: true });
-            ctx.addFwd(`static ${node.varKind === 'const' ? 'const ' : ''}${smType} ${node.name};`);
+            ctx.addFwd(`static ${smType} ${node.name};`);
             break;
           }
         }
@@ -207,54 +213,87 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
           const _origName = node.name;
           if (ctx._modulePrefix) node.name = ctx._modulePrefix + _origName;
 
-          // Detect non-constant initializer — C requires static globals to have
-          // constant initializers. Split: zero-init declaration + runtime assignment.
-          // Use AST inspection (not exprToC) to avoid codegen side effects.
-          const _hasCallNode = (nd: unknown): boolean => {
-            if (!nd || typeof nd !== 'object') return false;
-            if (Array.isArray(nd)) return nd.some(_hasCallNode);
-            const n = nd as Record<string, unknown>;
-            if (n.kind === 'Call') return true;
-            if (n.kind === 'Arrow' || n.kind === 'FuncDecl') return false;
-            return _hasCallNode(n.callee) || _hasCallNode(n.object) || _hasCallNode(n.expr) ||
-                   _hasCallNode(n.left) || _hasCallNode(n.right) || _hasCallNode(n.init) ||
-                   _hasCallNode(n.value) || _hasCallNode(n.args) || _hasCallNode(n.elems);
-          };
-          let _splitInit: string | null = null;
-          if (node.init && _hasCallNode(node.init)) {
-            const _savedInit = node.init;
-            node.init = null;
-            const varLines: string[] = [];
-            ctx.visitStmt(node, varLines, 0);
-            node.init = _savedInit;
-            for (const line of varLines) {
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-              ctx.topLevel.push('static ' + trimmed);
+          let _defLine: string | null = null;
+          // #298 s2: a promoted object-literal var must materialize its
+          // deferred anon struct as a static global. The defer-then-expand-
+          // at-first-use path (vardecl) would otherwise emit a LOCAL decl
+          // inside whichever function references the name first — splitting
+          // the storage between the global and that local.
+          if (!node.typeAnn && node.init?.kind === 'ObjLit' && (node.init.props?.length ?? 0) > 0
+              && node.init.props.every((p) => !p.spread && !p.computed)) {
+            for (const p of node.init.props) {
+              if (p.value) ctx._checkNoBareThrows(p.value);
             }
+            const anonName = `_anon_${ctx._anonStructCount++}`;
+            const fields = node.init.props.map((p) => {
+              const ft = ctx.inferType(p.value);
+              return { name: typeof p.key === 'string' ? p.key : '', typeAnn: { kind: 'TypeRef' as const, name: ft, typeArgs: [] as TypeAnn[] }, _ctype: ft };
+            });
+            const fieldDecls = fields.map((f) => `${f._ctype} ${f.name};`).join(' ');
+            ctx.addTop(`typedef struct { ${fieldDecls} } ${anonName};`);
+            ctx.addTop('');
+            const initParts = node.init.props
+              .map((p) => (p.value ? `.${typeof p.key === 'string' ? p.key : ''} = ${ctx.exprToC(p.value, [], 0)}` : null))
+              .filter((s): s is string => s !== null);
+            _defLine = `static ${anonName} ${node.name} = {${initParts.join(', ')}};`;
+            ctx.topLevel.push(_defLine);
             ctx.topLevel.push('');
-            // Generate init expression and collect runtime assignment
-            const _initC = ctx.exprToC(_savedInit, [], 0);
-            _splitInit = `${ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName} = ${_initC};`;
-            if (ctx._processedVarDecls?.has(node)) {
-              // Phase A.0 pre-emission (#295 v2a): the assignment runs at the
-              // node's source position, not at promotion time — a hoisted use
-              // before the declaration line observes the zero-init value.
-              ctx._deferredStaticInits.set(node, _splitInit);
-            } else if (ctx._libraryMode) {
-              ctx._libInitStmts.push(_splitInit);
-            } else {
-              ctx.mainStmts.push(_splitInit);
-            }
+            ctx.classes.set(anonName, { isStruct: true, fields });
+            ctx.define(node.name, { ctype: anonName, varKind: node.varKind, initNode: node.init, _promotedGlobal: true });
           } else {
-            const varLines: string[] = [];
-            ctx.visitStmt(node, varLines, 0);
-            for (const line of varLines) {
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-              ctx.topLevel.push('static ' + trimmed);
+            // Constant initializer — emit the definition directly. Split-init
+            // (runtime initializer) path is above: C statics need constant
+            // initializers, so a Call-bearing init becomes zero-init decl +
+            // runtime assignment at the declaration's source position.
+            const _hasCallNode = (nd: unknown): boolean => {
+              if (!nd || typeof nd !== 'object') return false;
+              if (Array.isArray(nd)) return nd.some(_hasCallNode);
+              const n = nd as Record<string, unknown>;
+              if (n.kind === 'Call') return true;
+              if (n.kind === 'Arrow' || n.kind === 'FuncDecl') return false;
+              return _hasCallNode(n.callee) || _hasCallNode(n.object) || _hasCallNode(n.expr) ||
+                     _hasCallNode(n.left) || _hasCallNode(n.right) || _hasCallNode(n.init) ||
+                     _hasCallNode(n.value) || _hasCallNode(n.args) || _hasCallNode(n.elems);
+            };
+            if (node.init && _hasCallNode(node.init)) {
+              const _savedInit = node.init;
+              node.init = null;
+              const varLines: string[] = [];
+              ctx.visitStmt(node, varLines, 0);
+              node.init = _savedInit;
+              for (const line of varLines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                const full = 'static ' + trimmed;
+                ctx.topLevel.push(full);
+                _defLine = full;
+              }
+              ctx.topLevel.push('');
+              // Generate init expression and collect runtime assignment
+              const _initC = ctx.exprToC(_savedInit, [], 0);
+              const _splitInit = `${ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName} = ${_initC};`;
+              if (ctx._processedVarDecls?.has(node)) {
+                // Phase A.0 pre-emission (#295 v2a): the assignment runs at the
+                // node's source position, not at promotion time — a hoisted use
+                // before the declaration line observes the zero-init value.
+                ctx._deferredStaticInits.set(node, _splitInit);
+              } else if (ctx._libraryMode) {
+                ctx._libInitStmts.push(_splitInit);
+              } else {
+                ctx.mainStmts.push(_splitInit);
+              }
+            } else {
+              const varLines: string[] = [];
+              ctx.visitStmt(node, varLines, 0);
+              for (const line of varLines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                const full = 'static ' + trimmed;
+                ctx.topLevel.push(full);
+                _defLine = full;
+              }
+              ctx.topLevel.push('');
             }
-            ctx.topLevel.push('');
           }
 
           node.name = _origName;
@@ -270,16 +309,21 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
           // #298 s1: mark the promoted symbol so arrow closure envs reference
           // the static global directly instead of snapshotting a copy. Emit a
           // tentative forward declaration (before the lambda section) — closure
-          // fn bodies are compiled before the topLevel globals section.
-          // const-qualified symbols need a matching const in the tentative
-          // declaration, or the later `static const` definition conflicts.
+          // fn bodies are compiled before the topLevel globals section. The
+          // declaration is derived from the emitted definition line so the
+          // qualifiers match exactly (struct-typed const bindings suppress
+          // `const` — a mirrored `static const` would conflict in C).
           const _psym = ctx.lookup(_origName);
           if (_psym) {
             _psym._promotedGlobal = true;
             const _cname = ctx._modulePrefix ? (ctx._modulePrefix + _origName) : _origName;
-            const _qual = _psym.varKind === 'const' ? 'const ' : '';
-            const _ct = _psym.ctype ?? 'int32_t';
-            ctx.addFwd(`static ${_qual}${_ct} ${_cname}${_psym.isFixedArray ? `[${_psym.arraySize}]` : ''};`);
+            if (_defLine && new RegExp(`\\b${_cname}\\b`).test(_defLine)) {
+              ctx.addFwd(_defLine.replace(/\s*=[^;]*;/, ';'));
+            } else {
+              const _qual = _psym.varKind === 'const' ? 'const ' : '';
+              const _ct = _psym.ctype ?? 'int32_t';
+              ctx.addFwd(`static ${_qual}${_ct} ${_cname}${_psym.isFixedArray ? `[${_psym.arraySize}]` : ''};`);
+            }
           }
         } else {
           // Runtime-init variable → stays inside main()

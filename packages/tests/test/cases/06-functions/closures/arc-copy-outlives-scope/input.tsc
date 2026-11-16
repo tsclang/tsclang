@@ -1,10 +1,12 @@
 // [R] A closure copy keeps the env alive after the original's scope ends:
 // copies retain the env, scope exit releases it (#290, ARC env).
-let n = 100;
-
+// The captured cell is block-local (NOT a top-level var): top-level arrows
+// now reference promoted static globals directly (#298 s2), so only a
+// block-local capture keeps the ARC env machinery in play.
 let kept: () => number;
 {
-    const c = (): number => { n = n + 1; return n; };
+    let m = 100;
+    const c = (): number => { m = m + 1; return m; };
     c();                    // 101 — state lives in the env
     kept = c;               // copy: env refcount goes to 2
 }                           // block exit: refcount back to 1 — env stays alive

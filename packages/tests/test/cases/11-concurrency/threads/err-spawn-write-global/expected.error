@@ -1,0 +1,2 @@
+invalid spawn capture: cannot write module-scope variable 'counter' from a spawn block; use Atomic<T> for thread-safe shared state
+error[E021]

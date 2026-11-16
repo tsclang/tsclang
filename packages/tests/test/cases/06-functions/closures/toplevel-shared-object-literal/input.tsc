@@ -1,0 +1,9 @@
+// [R] #298 s2: a top-level object literal referenced by an arrow is promoted
+// to a static struct global — one shared cell, mutations visible on both
+// sides (TS module-scope semantics). The deferred anon struct materializes
+// as a static definition, not a local decl inside the lambda body.
+const o = { n: 1 };
+const f = (): number => { o.n = o.n + 1; return o.n; };
+console.log(f());
+console.log(f());
+console.log(o.n);

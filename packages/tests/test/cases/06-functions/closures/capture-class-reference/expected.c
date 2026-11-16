@@ -2,24 +2,18 @@
 
 typedef struct { int32_t x; } Box;
 
-typedef struct { tsc_env_hdr _hdr; Box *b; } _closure_0_env;
+static Box b;
 
-static void _closure_0_destroy(void *_env) {
-    _closure_0_env *env = (_closure_0_env *)_env;
+static int32_t _lambda_0_i32(void *_env) {
+    return b.x;
 }
 
-static int32_t _closure_0_fn(_closure_0_env *env) {
-    return env->b->x;
-}
+static Box b = {0};
 
 int main(void) {
     TSC_INIT();
-    Box b = {0};
     b.x = 1;
-    _closure_0_env *fn_env = tsc_malloc(sizeof(_closure_0_env));
-    *fn_env = (_closure_0_env){._hdr = {._refcount = 1, ._destroy = _closure_0_destroy}, .b = &b};
-    tsc_closure fn = {.env = fn_env, .fn = (void*)_closure_0_fn};
+    tsc_closure fn = {.env = NULL, .fn = (void*)_lambda_0_i32};
     printf("%d\n", b.x);
-    tsc_env_release(fn_env);
     return 0;
 }

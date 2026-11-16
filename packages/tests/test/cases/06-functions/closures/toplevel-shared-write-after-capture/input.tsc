@@ -1,0 +1,5 @@
+// [R] #298 s2: a top-level arrow shares the cell with module scope (TS semantics).
+let a = 1;
+const f = (): number => a + 1;
+a = 10;
+console.log(f());

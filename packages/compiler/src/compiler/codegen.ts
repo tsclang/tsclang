@@ -1402,28 +1402,38 @@ class Context {
       parts.push('');
     };
 
-    // #298 s1: keep a forward declaration only when pre-topLevel code (typedefs
-    // + lambda sections — closure bodies, reactive/static env captures) actually
-    // references the global; otherwise the topLevel definition suffices and the
-    // C layout stays byte-identical for programs without capturing closures.
+    // #298 s1: keep a forward declaration only when code emitted BEFORE the
+    // definition actually references the global; otherwise the topLevel
+    // definition suffices and the C layout stays byte-identical for programs
+    // without capturing closures. Two pre-definition zones are scanned:
+    //   1. typedefs + lambda sections (closure bodies, reactive/static envs);
+    //   2. topLevel lines preceding the definition (#298 s2: class-instance
+    //      globals are emitted at their source position in Phase B, which is
+    //      after class methods — a method body may reference the global).
     // Env/class struct blocks are stripped first: a struct FIELD named like the
     // global (e.g. `int32_t x;` inside a spawn env) is not a reference.
     const _scanPreTop: string[] = [];
     let _inStructBlock = false;
+    const _stripStructBlock = (l: string): string => l.replace(/typedef struct \{[^}]*\}/, '');
     for (const l of [...this.typedefs, ...this.lambdaLines]) {
       if (_inStructBlock) {
         if (l.startsWith('}')) _inStructBlock = false;
         continue;
       }
       if (/^typedef struct/.test(l) && !l.includes('}')) { _inStructBlock = true; continue; }
-      _scanPreTop.push(l.replace(/typedef struct \{[^}]*\}/, ''));
+      _scanPreTop.push(_stripStructBlock(l));
     }
     const _fwdNeeded = (line: string): boolean => {
       const m = line.match(/^static\s+(?:const\s+)?(.+?)\s([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\])?;$/);
       if (!m) return true;
       const name = m[2];
       const re = new RegExp(`\\b${name}\\b`);
-      return _scanPreTop.some((l) => re.test(l));
+      if (_scanPreTop.some((l) => re.test(l))) return true;
+      // TopLevel zone: reference lines before the definition line itself
+      const declRe = new RegExp(`^static\\s+(?:const\\s+)?[\\w\\s]*?\\b${name}\\b\\s*(?:\\[[^\\]]*\\])?\\s*[=;]`);
+      const defIdx = this.topLevel.findIndex((l) => declRe.test(l));
+      if (defIdx < 0) return true; // definition not found — keep to be safe
+      return this.topLevel.slice(0, defIdx).some((l) => re.test(l));
     };
     const fwdKept = this.fwdDecls.filter(_fwdNeeded);
 

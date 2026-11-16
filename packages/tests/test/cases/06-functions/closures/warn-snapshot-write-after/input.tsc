@@ -1,4 +1,0 @@
-let a = 1;
-const f = (): number => a + 1;
-a = 10;
-console.log(f());
