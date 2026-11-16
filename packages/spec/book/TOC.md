@@ -81,7 +81,7 @@
 
 ### 01.1 Токены и лексер
 - 01.1.1-what-are-tokens.md — Что такое токен, зачем нужен лексер
-- 01.1.2-token-types.md — Типы токенов: identifier, keyword, number, string, char, operator, punctuation
+- 01.1.2-token-types.md — Типы токенов: identifier, keyword, number, bigint (42n), string, char, operator, punctuation
 - 01.1.3-how-lexer-works.md — Как лексер обрабатывает исходный код: позиция, lookahead, ошибки
 - 01.1.4-lexer-errors.md — Ошибки лексера: незаконные символы, незакрытые строки
 - 01.1.5-whitespace.md — Пробелы, табы, переносы строк — что значимо, что нет
@@ -116,12 +116,13 @@
 - 01.5.3-binary-literals.md — Двоичные: 0b1010
 - 01.5.4-octal-literals.md — Восьмеричные: 0o77
 - 01.5.5-number-separators.md — Разделители цифр: 1_000_000
-- 01.5.6-string-literals.md — Строковые литералы: "hello", escape-последовательности
-- 01.5.7-char-literals.md — Символьные литералы: 'a' = u8, отличие от TS
-- 01.5.8-boolean-literals.md — true и false
-- 01.5.9-null-literal.md — null
-- 01.5.10-undefined-literal.md — undefined, синоним null?
-- 01.5.11-literal-overflow.md — Literal overflow: 256 в u8, NOT YET IMPLEMENTED
+- 01.5.6-bigint-literals.md — BigInt-литералы: 42n, 0xFFn, 0b1010n, 0o17n — точная запись 64-битных целых без потерь JS-double; 1.5n, 1e5n — ошибка лексера; запрещены как типы, в enum и match (как в TS)
+- 01.5.7-string-literals.md — Строковые литералы: "hello", escape-последовательности
+- 01.5.8-char-literals.md — Символьные литералы: 'a' = u8, отличие от TS
+- 01.5.9-boolean-literals.md — true и false
+- 01.5.10-null-literal.md — null
+- 01.5.11-undefined-literal.md — undefined, синоним null?
+- 01.5.12-literal-overflow.md — Literal overflow: 256 в u8, NOT YET IMPLEMENTED
 
 ---
 
@@ -170,8 +171,10 @@
 - 02.4.4-octal.md — 0o77, 0o377
 - 02.4.5-separators.md — 1_000_000, 0xFF_FF, где нельзя
 - 02.4.6-suffixes.md — Суффиксы типов: 42i8, 3.14f32
-- 02.4.7-literal-type-rules.md — Правила определения типа литерала
-- 02.4.8-literal-overflow.md — Переполнение литерала: 256 в u8
+- 02.4.7-bigint-typing.md — n-литералы: 42n → i64, 18446744073709551615n → u64 (узкий тип по диапазону); let x: i32 = 42n → E124, вне диапазона i64 → E101; C-output: суффиксы LL/ULL
+- 02.4.8-bigint-mixing.md — Смешивание: 42n + 1 → i64 даже при defaultNumber=f64; number-аннотация резолвится через defaultNumber (при f64 → E100/E124); точность за пределами 2^53
+- 02.4.9-literal-type-rules.md — Правила определения типа литерала
+- 02.4.10-literal-overflow.md — Переполнение литерала: 256 в u8
 
 ### 02.5 Числовая конвертация
 - 02.5.1-widening-auto.md — Автоматическое widening: i8 → i16 → i32 → i64
