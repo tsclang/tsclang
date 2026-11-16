@@ -450,16 +450,18 @@ pnpm tsx test/runner.ts book
 | 15.11 | Cleanup и throw | goto cleanup, ресурсы, C-output |
 | 15.12 | Interior Mutability | почему нет Cell/RefCell, альтернативы, сравнение с Rust |
 
-### Блок 16: Ownership в деталях — по типам
+### Блок 16: Ownership в деталях — по типам (серия «тип от и до»)
 
 | # | Глава | Темы |
 |---|-------|------|
-| 16.1 | Примитивы | copy semantics, Ref/Mut для примитивов, Shared/Weak (ошибка), embedded |
-| 16.2 | String | ARC copy, retain/release, heap vs literal, embedded (PROGMEM), async (retain-on-capture) |
-| 16.3 | Классы | move, borrow, Shared/Weak, поля после move, string-поля, spread, embedded |
-| 16.4 | Массивы | move, borrow, Slice, element access, строки в массивах, spread, embedded |
-| 16.5 | Кортежи | move, borrow, element-level, readonly, optional, rest, spread, embedded |
+| 16.1 | Примитивы (number от и до) | let b = a — копия, foo(a) — T-параметр, Ref/Mut — запрет + заём элемента массива, захват — снапшот + box-паттерн, embedded |
+| 16.2 | String (string от и до) | присваивание — ARC-копия, T-параметр, Ref/Mut, захват — retain, конкатенация, heap vs literal, embedded (PROGMEM), async (retain-on-capture) |
+| 16.3 | Классы (class от и до) | присваивание — move, T-параметр — E002, после move, Ref/Mut, Shared/Weak, захват — box, string-поля, spread, embedded |
+| 16.4 | Массивы (array от и до) | присваивание — move, T-параметр — E002, Ref/Mut/Slice, element access (заём элемента), захват, строки в массивах, spread, capacity, embedded |
+| 16.5 | Кортежи (tuple от и до) | присваивание — move, T-параметр, borrow element-level, захват по элементам, readonly, optional, spread, embedded |
 | 16.6 | Замыкания | capture rules, copy-by-value default, явный список захвата, trampoline, Mut-capture |
+| 16.7 | Map и Set (map от и до) | присваивание — move, T-параметр — E002, Ref/Mut, захват, string-ключи retain/release, embedded (static hashmap) |
+| 16.8 | Сводная матрица | тип × 4 кейса: copy/move/ARC, коды ошибок, тихие расхождения с TS |
 
 ### Блок 17: Замыкания
 
@@ -667,4 +669,4 @@ pnpm tsx test/runner.ts book
 
 ---
 
-**Итого: ~170 глав** в 33 блоках.
+**Итого: ~172 глав** в 33 блоках.

@@ -1100,64 +1100,88 @@
 
 ---
 
-## Блок 16: Ownership по типам (16-ownership-types)
+## Блок 16: Ownership по типам — серия «тип от и до» (16-ownership-types)
 
-### 16.1 Примитивы
-- 16.1.1-primitive-copy.md — Copy semantics
-- 16.1.2-primitive-ref-mut.md — Ref/Mut для примитивов
-- 16.1.3-primitive-shared-weak.md — Shared/Weak: ошибка
-- 16.1.4-primitive-cleanup.md — Cleanup: нет
-- 16.1.5-primitive-desktop-avr.md — Desktop vs AVR
-- 16.1.6-primitive-why.md — Почему
+Каждая глава проводит один тип через одни и те же кейсы: `let b = a` (присваивание), `foo(a)` (T-параметр), `foo(a)` через Ref/Mut (заём), захват в замыкание. Референс владения — Блок 15, механика замыканий — Блок 17.
 
-### 16.2 String
-- 16.2.1-string-arc-copy.md — ARC copy
-- 16.2.2-string-heap-vs-literal.md — Heap vs literal
+### 16.1 Примитивы (number от и до)
+- 16.1.1-primitive-assignment.md — `let b = a`: честная копия, независимость в обе стороны; запись в const → E001; const → C-const
+- 16.1.2-primitive-t-param.md — `foo(a)`: параметр как let, копия внутрь, источник жив; E002 для примитива не существует
+- 16.1.3-primitive-ref-mut.md — Ref/Mut на примитивах: заём самостоятельной переменной — ошибка компилятора (решение зафиксировано, не реализовано — сейчас битый C в ряде позиций); легальное исключение — заём элемента массива
+- 16.1.4-primitive-shared-weak.md — Shared/Weak: ошибка
+- 16.1.5-primitive-closure-capture.md — Захват: copy-снапшот (2,3,1), тихое расхождение с TS (2,3,3), box-паттерн (Cell, массив-бокс), фабрика — работает как в TS
+- 16.1.6-primitive-cleanup.md — Cleanup: нет
+- 16.1.7-primitive-desktop-avr.md — Desktop vs AVR
+- 16.1.8-primitive-why.md — Почему: копия без владения
+
+### 16.2 String (string от и до)
+- 16.2.1-string-assignment.md — `let b = a`: ARC-копия (retain/release)
+- 16.2.2-string-t-param.md — `foo(a)`: параметры функций
 - 16.2.3-string-ref-mut.md — Ref/Mut<string>
-- 16.2.4-string-concat-ownership.md — Конкатенация ownership
-- 16.2.5-string-function-params.md — Параметры функций
-- 16.2.6-string-cleanup.md — Cleanup
-- 16.2.7-string-progmem.md — На AVR: PROGMEM
-- 16.2.8-string-async-retain.md — В async: retain-on-capture
-- 16.2.9-string-why.md — Почему
+- 16.2.4-string-closure-capture.md — Захват: ARC-снапшот — retain при создании замыкания
+- 16.2.5-string-concat-ownership.md — Конкатенация: ownership временных
+- 16.2.6-string-cleanup.md — Cleanup: release
+- 16.2.7-string-heap-vs-literal.md — Heap vs literal
+- 16.2.8-string-progmem.md — На AVR: PROGMEM
+- 16.2.9-string-async-retain.md — В async: retain-on-capture
+- 16.2.10-string-why.md — Почему
 
-### 16.3 Классы
-- 16.3.1-class-move.md — Move
-- 16.3.2-class-borrow.md — Borrow
-- 16.3.3-class-shared-weak.md — Shared/Weak
-- 16.3.4-class-after-move.md — После move
-- 16.3.5-class-string-fields.md — String-поля
-- 16.3.6-class-spread.md — Spread
-- 16.3.7-class-destructuring.md — Деструктуризация
-- 16.3.8-class-desktop-avr.md — Desktop vs AVR
-- 16.3.9-class-why.md — Почему
+### 16.3 Классы (class от и до)
+- 16.3.1-class-assignment.md — `let b = a`: move
+- 16.3.2-class-t-param.md — `foo(a)`: move в функцию; использование после вызова → E002
+- 16.3.3-class-after-move.md — После move
+- 16.3.4-class-ref-mut.md — Borrow: Ref/Mut
+- 16.3.5-class-shared-weak.md — Shared/Weak
+- 16.3.6-class-closure-capture.md — Захват: env держит указатель на владельца; класс как box для общей ячейки (Cell из number от и до)
+- 16.3.7-class-string-fields.md — String-поля
+- 16.3.8-class-spread.md — Spread
+- 16.3.9-class-destructuring.md — Деструктуризация
+- 16.3.10-class-desktop-avr.md — Desktop vs AVR
+- 16.3.11-class-why.md — Почему
 
-### 16.4 Массивы
-- 16.4.1-array-move.md — Move
-- 16.4.2-array-borrow.md — Borrow, Slice
-- 16.4.3-array-element-access.md — Element access
-- 16.4.4-array-string-elements.md — String элементы
-- 16.4.5-array-spread.md — Spread
-- 16.4.6-array-destructuring.md — Деструктуризация
-- 16.4.7-array-capacity.md — Capacity: owning vs non-owning
-- 16.4.8-array-desktop-avr.md — Desktop vs AVR
-- 16.4.9-array-why.md — Почему
+### 16.4 Массивы (array от и до)
+- 16.4.1-array-assignment.md — `let b = a`: move
+- 16.4.2-array-t-param.md — `foo(a)`: move в функцию; использование после вызова → E002
+- 16.4.3-array-ref-mut.md — Borrow: Ref/Mut, Slice
+- 16.4.4-array-element-access.md — Element access: заём элемента — легальный Ref для примитива
+- 16.4.5-array-closure-capture.md — Захват: указатель на массив-владельца; массив-бокс как общая ячейка
+- 16.4.6-array-string-elements.md — String элементы
+- 16.4.7-array-spread.md — Spread
+- 16.4.8-array-destructuring.md — Деструктуризация
+- 16.4.9-array-capacity.md — Capacity: owning vs non-owning
+- 16.4.10-array-desktop-avr.md — Desktop vs AVR
+- 16.4.11-array-why.md — Почему
 
-### 16.5 Кортежи
-- 16.5.1-tuple-move.md — Move
-- 16.5.2-tuple-borrow.md — Borrow: element-level
-- 16.5.3-tuple-readonly-optional.md — Readonly, Optional
-- 16.5.4-tuple-spread.md — Spread
-- 16.5.5-tuple-desktop-avr.md — Desktop vs AVR
-- 16.5.6-tuple-why.md — Почему
+### 16.5 Кортежи (tuple от и до)
+- 16.5.1-tuple-assignment.md — `let b = a`: move целиком
+- 16.5.2-tuple-t-param.md — `foo(a)`: move в функцию
+- 16.5.3-tuple-ref-mut.md — Borrow: element-level
+- 16.5.4-tuple-closure-capture.md — Захват: правила по элементам
+- 16.5.5-tuple-readonly-optional.md — Readonly, Optional
+- 16.5.6-tuple-spread.md — Spread
+- 16.5.7-tuple-desktop-avr.md — Desktop vs AVR
+- 16.5.8-tuple-why.md — Почему
 
-### 16.6 Замыкания
+### 16.6 Замыкания (closure как значение)
 - 16.6.1-closure-capture-rules.md — Capture rules
 - 16.6.2-closure-explicit-capture.md — Явный захват
 - 16.6.3-closure-trampoline.md — Trampoline adapter
 - 16.6.4-closure-mut-capture.md — Mut-capture
 - 16.6.5-closure-mut-await.md — Mut-closure через await: запрещено
 - 16.6.6-closure-why.md — Почему copy-by-value
+
+### 16.7 Map и Set (map от и до)
+- 16.7.1-map-set-assignment.md — `let b = a`: move
+- 16.7.2-map-set-t-param.md — `foo(a)`: move; использование после вызова → E002
+- 16.7.3-map-set-ref-mut.md — Ref/Mut<Map<K,V>>
+- 16.7.4-map-set-closure-capture.md — Захват в замыкание
+- 16.7.5-map-set-string-keys.md — String-ключи: retain при set, release при delete (баг use-after-free — см. 09.2)
+- 16.7.6-map-set-avr.md — На AVR: static hashmap
+- 16.7.7-map-set-why.md — Почему
+
+### 16.8 Сводная матрица серии
+- 16.8.1-type-case-matrix.md — Матрица «тип × 4 кейса»: copy/move/ARC для number, string, class, array, tuple, Map/Set; возможные коды ошибок (E001, E002, ...)
+- 16.8.2-ts-divergences.md — Сводка тихих расхождений с TS: снапшот против общей ячейки и др.
 
 ---
 
