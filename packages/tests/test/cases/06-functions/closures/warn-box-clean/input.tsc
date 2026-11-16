@@ -1,0 +1,5 @@
+class Cell { v: number = 1 }
+const c = new Cell();
+const f = (): number => { c.v = c.v + 1; return c.v };
+console.log(f());
+console.log(c.v);

@@ -255,7 +255,8 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
   // Pre-codegen semantic checks (#208): unknown types, undeclared identifiers,
   // duplicate declarations, literal/annotation mismatches — before codegen and
   // before the cache, so a cached artifact is always semantically valid.
-  checkSemantics(ast, filename, src, { strict: opts.strict, defaultNumber: opts.defaultNumber });
+  // W013 snapshot-capture warnings come back on the success path (#294).
+  const semWarnings = checkSemantics(ast, filename, src, { strict: opts.strict, defaultNumber: opts.defaultNumber });
 
   // Unicode identifiers → ASCII-mangled C names. Runs after semantic checks
   // (diagnostics keep source names) and before codegen / the artifact cache.
@@ -272,7 +273,7 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
       const cachedC = depCParts.length > 0
         ? (depCParts.join('\n').trimEnd() + '\n\n' + cached.c)
         : cached.c;
-      return { c: cachedC, warnings: [], exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
+      return { c: cachedC, warnings: semWarnings, exports: cached.exports, _cacheKey: cacheKey, _initFn: cached._initFn ?? null };
     }
   }
 
@@ -297,7 +298,7 @@ export function compileTsc(inputPath: string, opts: CompileOptions = {}): Compil
     _cacheSet(cacheKey, { c: result.c, exports: result.exports, _initFn: result._initFn ?? null });
   }
 
-  return { c, warnings: result.warnings, exports: result.exports, _cacheKey: cacheKey, _initFn: result._initFn ?? null, lineMap, _sourceFiles: [inputPath, ...Object.keys(importedModules)] };
+  return { c, warnings: [...semWarnings, ...result.warnings], exports: result.exports, _cacheKey: cacheKey, _initFn: result._initFn ?? null, lineMap, _sourceFiles: [inputPath, ...Object.keys(importedModules)] };
 }
 
 // ---------------------------------------------------------------------------

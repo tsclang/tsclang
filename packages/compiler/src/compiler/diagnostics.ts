@@ -1781,6 +1781,34 @@ unintended — that is why it is only a warning, and the strict rule
   1 === "1";   // error[E125] — '===' never coerces
 `,
   },
+
+  W013: {
+    code: 'W013',
+    severity: 'warning',
+    title: 'closure snapshot capture diverges from TS',
+    message: `'{name}' is captured by the arrow function as a snapshot — its mutations are not shared with the outer variable (TS closures share one cell)`,
+    help: ['wrap the value in a class or array field to share one cell between the closure and the outer scope', "if the closure is the variable's only user after creation (factory pattern), the warning is a false alarm — rename or box to document intent"],
+    body: `
+Arrow closures capture outer primitive variables (\`number\`, \`bool\`, \`char\`,
+integers) by value at closure creation — a snapshot. TypeScript closures
+share the variable's cell, so a TS reader sees later mutations and outer
+writes reach the closure. The compiler warns when the same binding is used
+again after the capture AND that use can observe the difference: any use
+once some closure mutates the captured copy, or any outer write when a
+reader closure holds a snapshot.
+
+  let a = 1;
+  const f = (): number => { a = a + 1; return a; };
+  console.log(f(), f());   // 2 3
+  console.log(a);          // warning[W013]: still 1 — TS would print 3
+
+Fix — share one cell via a box:
+
+  class Cell { constructor(public v: number) {} }
+  const c = new Cell(1);
+  const f = (): number => { c.v = c.v + 1; return c.v; };   // shared
+`,
+  },
 } satisfies Record<string, DiagnosticEntry>;
 
 // Derive a union of all valid codes from the registry.
