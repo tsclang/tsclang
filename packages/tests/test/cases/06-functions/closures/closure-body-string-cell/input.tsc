@@ -1,0 +1,8 @@
+const f = (): string => {
+  let s: string = "a";
+  const add = (): void => { s = s + "b"; };
+  add(); add();
+  return s;
+};
+const r = f();
+console.log(`${r}`);

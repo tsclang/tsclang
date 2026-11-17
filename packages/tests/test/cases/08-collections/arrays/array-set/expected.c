@@ -7,7 +7,7 @@ int main(void) {
     int32_t _lit_0[] = {0, 0, 0, 0, 0};
     Array_i32 a = {.data = _lit_0, .length = 5, .capacity = 5};
     int32_t _lit_1[] = {10, 20, 30};
-    const Array_i32 b = {.data = _lit_1, .length = 3, .capacity = 3};
+    Array_i32 b = {.data = _lit_1, .length = 3, .capacity = 3};
     tsc_array_set_i32(&a, b, 1);
     printf("%d\n", a.data[0]);
     printf("%d\n", a.data[1]);

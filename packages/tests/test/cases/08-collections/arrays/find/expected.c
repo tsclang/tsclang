@@ -14,7 +14,7 @@ static bool _lambda_0_bool_adapter(int32_t _p0) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 5, 3, 8, 2};
-    const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
+    Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     opt_ref_i32 found = tsc_array_find_i32(arr, _lambda_0_bool_adapter);
     printf("%d\n", found.has_value ? *found.value : -1);
     return 0;

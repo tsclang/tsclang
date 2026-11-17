@@ -16,8 +16,8 @@ static Array_f64 _lambda_0_Array_f64_adapter(double _p0) {
 int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3};
-    const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
-    const Array_f64 result = tsc_array_flat_map_f64_f64(arr, _lambda_0_Array_f64_adapter);
+    Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
+    Array_f64 result = tsc_array_flat_map_f64_f64(arr, _lambda_0_Array_f64_adapter);
     printf("%zu\n", result.length);
     printf("%s\n", tsc_dtoa((double)(result.data[1])));
     return 0;

@@ -13,7 +13,7 @@ static bool _lambda_0_bool_adapter(String * _p0) {
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("a"), STR_LIT("bb"), STR_LIT("c")};
-    const Array_string arr = {.data = _lit_0, .length = 3, .capacity = 3};
+    Array_string arr = {.data = _lit_0, .length = 3, .capacity = 3};
     opt_ref_string found = tsc_array_find_last_string(arr, _lambda_0_bool_adapter);
     printf("%s\n", found.has_value ? found.value->data : "null");
     return 0;

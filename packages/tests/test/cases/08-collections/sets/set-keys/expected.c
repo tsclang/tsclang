@@ -8,7 +8,7 @@ int main(void) {
     tsc_set_add_i32(&s, 10);
     tsc_set_add_i32(&s, 20);
     tsc_set_add_i32(&s, 30);
-    const Array_i32 k = tsc_set_values_i32(s);
+    Array_i32 k = tsc_set_values_i32(s);
     printf("%zu\n", k.length);
     return 0;
 }

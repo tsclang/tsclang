@@ -2,6 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { Expression, TypeAnn, TypeRef, VarDecl, ObjectField, Call, Block, Literal } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
 import { resolveDecimalBase } from '../types/decimal.js';
+import { _isInteriorMutableCollection } from '../misc/emit-helpers.js';
 const PRIMITIVE_IDENTS = new Set(['i8','i16','i32','i64','u8','u16','u32','u64','f32','f64','d8','d16','d32','d64','boolean','usize']);
 
 // True when the expression contains an n-suffixed literal anywhere
@@ -32,7 +33,9 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
       ctx._expectedType = _cellSym.ctype ?? null;
       const initC = ctx.exprToC(node.init, lines, depth);
       ctx._expectedType = _prevET;
-      p(`env->${node.name} = ${initC};`);
+      // #298 s4: the cell's env local may be a renamed '_blk_envN' inside
+      // closure bodies / nested block envs.
+      p(`${_cellSym._closureEnvLocal ?? 'env'}->${node.name} = ${initC};`);
       return;
     }
     // Apply class field defaults right after a raw tsc_arc_alloc. tsc_arc_alloc
@@ -885,7 +888,7 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         const isGenericClassInst = !enumDef2 && ctx._genericClasses &&
           [...ctx._genericClasses.keys()].some((n: string) => ctype.startsWith(n + '_'));
         // opt_ types suppress const only when inferred (no type annotation); with explicit T|null annotation, keep const
-        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || enumDef2?.isStruct || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date';
+        const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || enumDef2?.isStruct || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date' || _isInteriorMutableCollection(ctype);
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
         // #298 s3: literal-backed array marked by the block/top-level

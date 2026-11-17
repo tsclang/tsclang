@@ -1,0 +1,11 @@
+function f(): number {
+  {
+    let x = 1;
+    {
+      const bump = (): void => { x = x + 1; };
+      bump(); bump();
+    }
+    return x;
+  }
+}
+console.log(`${f()}`);

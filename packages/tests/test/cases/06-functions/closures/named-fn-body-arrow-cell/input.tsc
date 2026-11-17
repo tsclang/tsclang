@@ -1,0 +1,10 @@
+function f(): number {
+  let a = 1;
+  function g(): number {
+    const h = (): number => { a = a + 1; return a; };
+    h();
+    return a;
+  }
+  return g();
+}
+console.log(`${f()}`);

@@ -190,6 +190,13 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
           if (args[0]?.expr.kind === 'Ident') {
             const _pushArgSym = ctx.lookup(args[0].expr.name);
             elemC = ctx._derefStrPtr(_pushArgSym, elemC);
+            // #298 s4: pushing an lvalue closure copies the struct into the
+            // array — the array co-owns the env now (its free macro releases
+            // each element), so retain here: the local's scope-exit release
+            // would otherwise leave the stored copy dangling.
+            if (et === 'tsc_closure' && _pushArgSym?.ctype === 'tsc_closure') {
+              elemC = `(tsc_env_retain(${elemC}.env), ${elemC})`;
+            }
           }
           return `tsc_array_push_${et}(&${objC}, ${elemC})`;
         }

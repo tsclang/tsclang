@@ -13,7 +13,7 @@ static bool _lambda_0_bool_adapter(int32_t _p0) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 2, 3, 4, 5};
-    const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
+    Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     Array_i32 evens = tsc_array_filter_i32(arr, _lambda_0_bool_adapter);
     printf("%zu\n", evens.length);
     printf("%d\n", evens.data[0]);

@@ -257,13 +257,13 @@ export function _ensureArrayFreeMacro(ctx: CodeGenContext, elemIdent: string, ar
     if (ctx._emittedHelpers.has(key)) return;
     ctx._emittedHelpers.add(key);
     if (elemIdent === 'tsc_unknown') {
-      ctx.addTop(`#define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      ctx.addFwd(`#define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
     } else if (elemIdent === 'tsc_closure') {
       // #298 s3: closure arrays own their element envs — release each before
       // freeing the store (matches the inline cleanup the literal path emits).
-      ctx.addTop(`#define tsc_array_free_tsc_closure(arr) do { Array_tsc_closure *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_env_release(_a_->data[_i_].env); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      ctx.addFwd(`#define tsc_array_free_tsc_closure(arr) do { Array_tsc_closure *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_env_release(_a_->data[_i_].env); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
     } else {
-      ctx.addTop(`#define tsc_array_free_${elemIdent}(arr) do { ${arrName} *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
+      ctx.addFwd(`#define tsc_array_free_${elemIdent}(arr) do { ${arrName} *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)`);
     }
 }
 
@@ -298,7 +298,7 @@ export function _ensureArrayPushMacro(ctx: CodeGenContext, elemIdent: string, ar
     ctx._emittedHelpers.add(key);
     // Variadic value parameter: struct-valued elements (compound literals
     // contain commas) would otherwise split the macro arguments.
-    ctx.addTop(`#define tsc_array_push_${elemIdent}(arr, ...) do { ${arrName} *_a_ = (arr); ${et} _v_ = (__VA_ARGS__); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (${et}*)realloc(_a_->data, _nc_ * sizeof(${et})); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)`);
+    ctx.addFwd(`#define tsc_array_push_${elemIdent}(arr, ...) do { ${arrName} *_a_ = (arr); ${et} _v_ = (__VA_ARGS__); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (${et}*)realloc(_a_->data, _nc_ * sizeof(${et})); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)`);
 }
 
 export function _ensureArrayCreateMacro(ctx: CodeGenContext, elemIdent: string, arrName: string, et: string) {
@@ -307,7 +307,7 @@ export function _ensureArrayCreateMacro(ctx: CodeGenContext, elemIdent: string, 
     ctx._emittedHelpers.add(key);
     // i32 and f64 have hardcoded macros in runtime.h
     if (elemIdent === 'i32' || elemIdent === 'f64') return;
-    ctx.addTop(`#define tsc_array_create_${elemIdent}(cap) ({ size_t _c_ = (size_t)(cap); ${et} *_d_ = (${et}*)_tsc_xmalloc(_c_ * sizeof(${et})); (${arrName}){ .data = _d_, .length = 0, .capacity = _c_ }; })`);
+    ctx.addFwd(`#define tsc_array_create_${elemIdent}(cap) ({ size_t _c_ = (size_t)(cap); ${et} *_d_ = (${et}*)_tsc_xmalloc(_c_ * sizeof(${et})); (${arrName}){ .data = _d_, .length = 0, .capacity = _c_ }; })`);
 }
 
 export function _isOptType(ctx: CodeGenContext, elemType: string) {

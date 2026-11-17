@@ -538,8 +538,12 @@ class Context {
 
   // Nested named functions (#295 v2b): shared-cell env active for the block
   // being code-generated, fn-body params eligible as cells, and the
-  // inside-a-closure boundary guard.
+  // inside-a-closure boundary guard. #298 s4: entries carry the env's C local
+  // name and parent link so `_outer` chains resolve across block/env levels.
   _activeEnv!: import('./codegen/misc/nested-fns.js').ActiveEnv | null;
+  // #298 s4: closure/nested-fn env param type for the C fn being built — the
+  // root of the env chain reachable as `env` inside that fn.
+  _envParamType!: string | null;
   _fnBodyParamsForCells!: Param[] | null;
   _buildingClosureBody!: boolean;
   // #295 v2c-2: `for`/`for-of` bindings captured by arrows in the body become
@@ -756,6 +760,10 @@ class Context {
     this._inFlightFuncs = new Set();
     this._funcBuildStack = [];
     this._activeEnv = null;
+    // #298 s4: type of the current C fn's `env` parameter when the fn is a
+    // closure (hoistClosure) or a named nested fn taking a block env — block
+    // envs allocated inside such fns rename their local and chain via _outer.
+    this._envParamType = null;
     this._fnBodyParamsForCells = null;
     this._buildingClosureBody = false;
     this._pendingLoopCells = null;

@@ -10,7 +10,7 @@ int main(void) {
     Point _obj_0 = p;
     String _keys_1_data[] = {STR_LIT("x"), STR_LIT("y")};
     Array_string _keys_1 = {.data = _keys_1_data, .length = 2, .capacity = 2};
-    const Array_string keys = _keys_1;
+    Array_string keys = _keys_1;
     printf("%zu\n", keys.length);
     printf("%s\n", keys.data[0].data);
     printf("%s\n", keys.data[1].data);

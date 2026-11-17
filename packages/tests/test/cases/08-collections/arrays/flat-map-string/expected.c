@@ -14,8 +14,8 @@ static Array_string _lambda_0_Array_string_adapter(String * _p0) {
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("hi"), STR_LIT("yo")};
-    const Array_string arr = {.data = _lit_0, .length = 2, .capacity = 2};
-    const Array_string arr2 = tsc_array_flat_map_string_string(arr, _lambda_0_Array_string_adapter);
+    Array_string arr = {.data = _lit_0, .length = 2, .capacity = 2};
+    Array_string arr2 = tsc_array_flat_map_string_string(arr, _lambda_0_Array_string_adapter);
     printf("%zu\n", arr2.length);
     printf("%s\n", arr2.data[0].data);
     printf("%s\n", arr2.data[1].data);

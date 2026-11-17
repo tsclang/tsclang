@@ -13,7 +13,7 @@ static double _lambda_0_f64_adapter(double _p0, int32_t _p1) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 2, 3, 4};
-    const Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
+    Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
     const double result = tsc_array_reduce_right_i32_f64(arr, _lambda_0_f64_adapter, 0);
     printf("%s\n", tsc_dtoa((double)(result)));
     return 0;

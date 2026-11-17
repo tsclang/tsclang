@@ -29,7 +29,7 @@ static int32_t _closure_2_fn(_closure_2_env *env) {
 
 void _tsc_main(void) {
     int32_t _arr_data_0[] = {10, 20};
-    const Array_i32 items = (Array_i32){.data = _arr_data_0, .length = 2, .capacity = 2};
+    Array_i32 items = (Array_i32){.data = _arr_data_0, .length = 2, .capacity = 2};
     tsc_closure a = {.env = NULL, .fn = (void*)_lambda_0_i32};
     tsc_closure b = {.env = NULL, .fn = (void*)_lambda_1_i32};
     bool first = true;

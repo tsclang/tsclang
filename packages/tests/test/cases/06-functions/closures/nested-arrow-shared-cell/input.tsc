@@ -1,0 +1,7 @@
+const outer = (): number => {
+  let x = 1;
+  const inner = (): number => { x = x + 1; return x; };
+  inner(); inner();
+  return x;
+};
+console.log(`${outer()}`);

@@ -14,8 +14,8 @@ static String _lambda_0_string_adapter(double _p0) {
 int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3, 4, 5, 6};
-    const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 6, .capacity = 6};
-    const TscMap_string_array_f64 grouped = tsc_map_group_by_f64(arr, _lambda_0_string_adapter);
+    Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 6, .capacity = 6};
+    TscMap_string_array_f64 grouped = tsc_map_group_by_f64(arr, _lambda_0_string_adapter);
     printf("%zu\n", grouped.size);
     printf("%zu\n", grouped._vals[0].length);
     printf("%zu\n", grouped._vals[1].length);

@@ -8,7 +8,7 @@ typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {3, 1, 7, 4};
-    const Array_i32 arr_i32 = {.data = _lit_0, .length = 4, .capacity = 4};
+    Array_i32 arr_i32 = {.data = _lit_0, .length = 4, .capacity = 4};
     if (arr_i32.length == 0) { fprintf(stderr, "panic[E407]: Math.min: empty array\n"); abort(); }
     int32_t _min_1 = arr_i32.data[0];
     for (size_t _i_2 = 1; _i_2 < arr_i32.length; _i_2++) {
@@ -22,7 +22,7 @@ int main(void) {
     }
     printf("%d\n", _max_3);
     double _lit_5[] = {3.0, 1.0, 7.0, 4.0};
-    const Array_f64 arr_f64 = {.data = _lit_5, .length = 4, .capacity = 4};
+    Array_f64 arr_f64 = {.data = _lit_5, .length = 4, .capacity = 4};
     if (arr_f64.length == 0) { fprintf(stderr, "panic[E407]: Math.min: empty array\n"); abort(); }
     double _min_6 = arr_f64.data[0];
     for (size_t _i_7 = 1; _i_7 < arr_f64.length; _i_7++) {

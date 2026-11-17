@@ -8,7 +8,7 @@ Array_i32 makeArr(void) {
 
 int main(void) {
     TSC_INIT();
-    const Array_i32 a = makeArr();
+    Array_i32 a = makeArr();
     a.data[0] = 42;
     a.data[1] = 7;
     a.data[2] = 99;

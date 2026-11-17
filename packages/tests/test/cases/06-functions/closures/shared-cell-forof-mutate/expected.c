@@ -21,7 +21,7 @@ static int32_t _closure_2_fn(_closure_2_env *env) {
 
 void _tsc_main(void) {
     int32_t _arr_data_0[] = {10, 20};
-    const Array_i32 items = (Array_i32){.data = _arr_data_0, .length = 2, .capacity = 2};
+    Array_i32 items = (Array_i32){.data = _arr_data_0, .length = 2, .capacity = 2};
     int32_t total = 0;
     for (size_t _i_0 = 0; _i_0 < items.length; _i_0++) {
         int32_t x = items.data[_i_0];

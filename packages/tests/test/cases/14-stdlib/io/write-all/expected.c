@@ -2,7 +2,7 @@
 #include "std/io.h"
 
 static uint8_t _lit_0[] = {72, 105, 10};
-static const Array_u8 data = {.data = _lit_0, .length = 3, .capacity = 3};
+static Array_u8 data = {.data = _lit_0, .length = 3, .capacity = 3};
 
 typedef struct { int32_t _state; int _result; bool _done; TscWriteAllAwaitable _await_0; } run_state;
 

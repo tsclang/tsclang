@@ -11,7 +11,7 @@ int32_t sumPair(int32_t *_arr) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {3, 4};
-    const Array_i32 arr = {.data = _lit_0, .length = 2, .capacity = 2};
+    Array_i32 arr = {.data = _lit_0, .length = 2, .capacity = 2};
     printf("%d\n", sumPair(arr.data));
     return 0;
 }

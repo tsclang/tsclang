@@ -11,7 +11,7 @@ static String _lambda_0_string_adapter(String * _p0) {
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("hello"), STR_LIT("world")};
-    const Array_string arr = {.data = _lit_0, .length = 2, .capacity = 2};
+    Array_string arr = {.data = _lit_0, .length = 2, .capacity = 2};
     Array_string result = tsc_array_map_string_string(arr, _lambda_0_string_adapter);
     printf("%s\n", result.data[0].data);
     printf("%s\n", result.data[1].data);

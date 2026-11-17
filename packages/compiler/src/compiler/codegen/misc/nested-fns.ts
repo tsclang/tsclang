@@ -20,9 +20,14 @@ import type { Block, FuncDecl, Param, Stmt, VarDecl } from '@tsclang/ast';
 
 // Env created by an enclosing block with nested functions: nested blocks and
 // nested function bodies capture through this env instead of allocating
-// their own (`ctx._activeEnv`).
+// their own (`ctx._activeEnv`). #298 s4: entries form a chain — `parent` is
+// the env this one's `_outer` field points to (null = the root, i.e. the
+// current C fn's `env` param); `localName` is the C identifier of the env
+// pointer in the current fn ('env' param or a '_blk_envN' block local).
 export interface ActiveEnv {
   typeName: string;    // C typedef name of the env struct
+  localName: string;   // C identifier of the env pointer in the current fn
+  parent: ActiveEnv | null; // env chained via `_outer` (null = fn env param root)
   fields: Set<string>; // cell names living in this env
 }
 
@@ -133,10 +138,12 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
   if (fns.length > 0 && ctx._buildingClosureBody) {
     throw ctx.errorCode('E020', fns[0], { detail: 'nested function declarations inside closures are not supported yet (planned for shared-cell closures)' });
   }
-  // #295 v2c: arrows with implicit captures flip to shared cells. Inside
-  // closure bodies the block env is not lexically reachable — keep snapshots.
+  // #295 v2c / #298 s4: arrows with implicit captures flip to shared cells —
+  // including inside closure bodies: the body block allocates its own env
+  // (renamed local, chained via `_outer`), so the block env stays lexically
+  // reachable there.
   const arrowCaptured = new Set<string>();
-  if (!ctx._buildingClosureBody) _collectArrowCaptures(block, new Set(fns.map((f: FuncDecl) => f.name)), arrowCaptured);
+  _collectArrowCaptures(block, new Set(fns.map((f: FuncDecl) => f.name)), arrowCaptured);
   if (fns.length === 0 && arrowCaptured.size === 0) return null;
   const I = ' '.repeat(ctx.indent * depth);
 
@@ -236,11 +243,22 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
 
   // Env: allocated iff any nested fn needs new cells. All fns of the block
   // share one env (uniform binding/reconstruction shape below).
+  let _lastEnvLocal: string | null = null;
+  let _lastParentEnv: ActiveEnv | null = null;
   const n = ctx.closureCount++;
   const _pfx = ctx._modulePrefix ?? '';
   const envName = `${_pfx}_nested_${n}_env`;
   if (newCells.size > 0) {
+    // #298 s4: the env this block env chains to (`_outer`) — the innermost
+    // env in C scope here: an enclosing block env, or the current fn's `env`
+    // param (closure / nested-fn body). Null in plain fns and lambdas.
+    const parentEnv = activeSaved
+      ?? (ctx._envParamType ? { typeName: ctx._envParamType, localName: 'env', parent: null, fields: new Set<string>() } : null);
+    // The C local is renamed when it would shadow the fn's `env` param or an
+    // enclosing block env local named `env`.
+    const envLocal = parentEnv ? `_blk_env${n}` : 'env';
     const envFields: string[] = ['tsc_env_hdr _hdr;'];
+    if (parentEnv) envFields.push(`${parentEnv.typeName} *_outer;`);
     const stringCells: string[] = [];
     for (const [nm, cell] of newCells) {
       const ct = cell.ctype;
@@ -254,47 +272,60 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
     ctx.addLambda(`static void ${destroyFn}(void *_env) {`);
     ctx.addLambda(`    ${envName} *env = (${envName} *)_env;`);
     for (const nm of stringCells) ctx.addLambda(`    tsc_string_release(env->${nm});`);
+    // The parent env was retained at allocation — release it when this env
+    // dies (ARC, #290 rules). Escaping closures retain this env, which keeps
+    // the parent alive through the chain.
+    if (parentEnv) ctx.addLambda(`    tsc_env_release(env->_outer);`);
     ctx.addLambda('}');
     ctx.addLambda('');
     // Feed the static env pool estimate (allocator:"static" targets, П1).
     let est = ctx._ptrBytes() * 2;
+    if (parentEnv) est += ctx._ptrBytes();
     for (const [, cell] of newCells) est += ctx._stackSizeOf(cell.ctype);
     ctx._envPoolBytes = (ctx._envPoolBytes ?? 0) + est + 8;
 
     // Scope-entry allocation. The compound literal zero-fills cells — a
     // hoisted call before the declaration line reads zero (documented TDZ
     // divergence, same policy as promoted globals).
-    lines.push(`${I}${envName} *env = ${ctx._envAlloc()}(sizeof(${envName}));`);
-    lines.push(`${I}*env = (${envName}){._hdr = {._refcount = 1, ._destroy = ${destroyFn}}};`);
+    lines.push(`${I}${envName} *${envLocal} = ${ctx._envAlloc()}(sizeof(${envName}));`);
+    lines.push(`${I}*${envLocal} = (${envName}){._hdr = {._refcount = 1, ._destroy = ${destroyFn}}${parentEnv ? `, ._outer = ${parentEnv.localName}` : ''}};`);
+    if (parentEnv) lines.push(`${I}tsc_env_retain(${parentEnv.localName});`);
     for (const [nm, cell] of newCells) {
-      if (cell.fromParam) lines.push(`${I}env->${nm} = ${nm};`);
+      if (cell.fromParam) lines.push(`${I}${envLocal}->${nm} = ${nm};`);
     }
-    ctx._registerCleanup(`tsc_env_release(env)`);
+    ctx._registerCleanup(`tsc_env_release(${envLocal})`);
     // Loop cells copy out AFTER the body (LIFO cleanup emission puts these
     // lines before the release above): body mutations reach the C loop local
     // before the header update/test — TS per-iteration semantics.
     for (const [nm, cell] of newCells) {
-      if (cell.fromLoop) ctx._registerCleanup(`${nm} = env->${nm}`);
+      if (cell.fromLoop) ctx._registerCleanup(`${nm} = ${envLocal}->${nm}`);
     }
+    _lastEnvLocal = envLocal;
+    _lastParentEnv = parentEnv;
   }
 
   // The env this block's nested fns (and their bodies) capture through.
   const envTypeName = newCells.size > 0 ? envName : activeSaved?.typeName ?? null;
   if (newCells.size > 0) {
-    ctx._activeEnv = { typeName: envName, fields: new Set(newCells.keys()) };
+    ctx._activeEnv = {
+      typeName: envName,
+      localName: _lastEnvLocal!,
+      parent: _lastParentEnv as ActiveEnv | null,
+      fields: new Set(newCells.keys()),
+    };
   }
 
   // Cell symbols go in BEFORE statements run: reads, writes, and later
   // closures capturing the same var all resolve through the env cell.
   for (const [nm, cell] of newCells) {
     const extra = cell.fromParam ? {} : { varKind: cell.varKind };
-    ctx.define(nm, { ctype: cell.ctype, _closureEnvVar: nm, _cellVar: true, ...extra });
+    ctx.define(nm, { ctype: cell.ctype, _closureEnvVar: nm, _closureEnvLocal: _lastEnvLocal!, _cellVar: true, ...extra });
   }
 
   // Bindings (C locals at scope entry — declarations are hoisted) and symbols.
   const fnCNames = new Map<string, string>();
   for (const fn of fns) fnCNames.set(fn.name, `${_pfx}_nested_${ctx.closureCount++}_${fn.name}`);
-  const envExpr = envTypeName ? 'env' : 'NULL';
+  const envExpr = envTypeName ? _lastEnvLocal! : 'NULL';
   const retOf = (fn: FuncDecl): string => (fn.returnType ? ctx.resolveType(fn.returnType) : ctx.inferArrowReturn(fn as never));
   for (const fn of fns) {
     lines.push(`${I}tsc_closure ${fn.name} = {.env = ${envExpr}, .fn = (void*)${fnCNames.get(fn.name)}};`);
@@ -348,23 +379,40 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
       ctx._loopBodyCleanups = null;
 
       ctx.pushScope();
-      // The fn body sees the same env; deeper nested fns capture through it.
+      // The fn body sees the same env as its `env` param — re-base the chain
+      // entry (localName 'env', parent = the env's own parent); deeper nested
+      // fns and blocks capture through it.
       const prevActive = ctx._activeEnv;
       const prevFnParams = ctx._fnBodyParamsForCells;
-      if (envTypeName) ctx._activeEnv = { typeName: envTypeName, fields: newCells.size > 0 ? new Set(newCells.keys()) : prevActive!.fields };
+      const prevEnvParamType = ctx._envParamType;
+      if (envTypeName) {
+        ctx._activeEnv = {
+          typeName: envTypeName,
+          localName: 'env',
+          parent: prevActive ? prevActive.parent : null,
+          fields: newCells.size > 0 ? new Set(newCells.keys()) : prevActive!.fields,
+        };
+        ctx._envParamType = envTypeName;
+      } else {
+        ctx._activeEnv = null;
+        ctx._envParamType = null;
+      }
       ctx._fnBodyParamsForCells = fn.params ?? [];
 
       for (const [nm, cell] of newCells) {
-        ctx.define(nm, { ctype: cell.ctype, _closureEnvVar: nm });
+        ctx.define(nm, { ctype: cell.ctype, _closureEnvVar: nm, _closureEnvLocal: 'env', _cellVar: true });
       }
       // Binding-aware sibling/self detection (names not shadowed in this body).
       const free = new Set<string>();
       _collectFreeNames(fn.body, (fn.params ?? []).map((p: Param) => p.name), free);
       const bodyLines: string[] = [];
+      // Sibling bindings inside the fn body reach the env through the `env`
+      // param (the block-level `envExpr` local belongs to the enclosing fn).
+      const fnEnvExpr = envTypeName ? 'env' : 'NULL';
       for (const sib of allFnNames) {
         if (!free.has(sib)) continue;
         const sibDecl = fns.find((f: FuncDecl) => f.name === sib)!;
-        bodyLines.push(`tsc_closure ${sib} = {.env = ${envExpr}, .fn = (void*)${fnCNames.get(sib)}};`);
+        bodyLines.push(`tsc_closure ${sib} = {.env = ${fnEnvExpr}, .fn = (void*)${fnCNames.get(sib)}};`);
         ctx.define(sib, {
           ctype: 'tsc_closure', funcPtr: true,
           closureRetType: retOf(sibDecl),
@@ -380,6 +428,7 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
       if (fn.body) ctx.visitBlock(fn.body, bodyLines, 0);
       ctx._fnBodyParamsForCells = prevFnParams;
       ctx._activeEnv = prevActive;
+      ctx._envParamType = prevEnvParamType;
       ctx.popScope();
 
       ctx._blockCleanupStack = prevCleanupStack;

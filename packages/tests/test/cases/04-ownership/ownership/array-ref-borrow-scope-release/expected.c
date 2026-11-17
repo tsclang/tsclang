@@ -7,7 +7,7 @@ int main(void) {
     int32_t _lit_0[] = {10, 20};
     int32_t *_d_1 = (int32_t*)_tsc_xmalloc(2 * sizeof(int32_t));
     memcpy(_d_1, _lit_0, 2 * sizeof(int32_t));
-    const Array_i32 arr = {.data = _d_1, .length = 2, .capacity = 2};
+    Array_i32 arr = {.data = _d_1, .length = 2, .capacity = 2};
     {
         const int32_t *r = &arr.data[0];
         printf("%d\n", *r);

@@ -21,7 +21,7 @@ static bool _lambda_1_bool_adapter(double _p0) {
 int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3, 4};
-    const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 4, .capacity = 4};
+    Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 4, .capacity = 4};
     printf("%d\n", (int)tsc_array_find_last_index_f64(arr, _lambda_0_bool_adapter));
     printf("%d\n", (int)tsc_array_find_last_index_f64(arr, _lambda_1_bool_adapter));
     return 0;

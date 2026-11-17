@@ -576,7 +576,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         else if (node.init?.kind === 'VarDecls') {
           for (const d of node.init.decls) if (d.kind === 'VarDecl' && d.name && d.varKind !== 'var') _loopVarNames.add(d.name);
         }
-        if (_loopVarNames.size > 0 && !ctx._buildingClosureBody && node.body?.kind === 'Block') {
+        if (_loopVarNames.size > 0 && node.body?.kind === 'Block') {
           const _captured = new Set<string>();
           _collectArrowCaptures(node.body, new Set(), _captured);
           const _cells = new Map<string, { ctype: string; copyOut: boolean }>();
@@ -931,7 +931,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             }
             // #295 v2c-2: captured simple binding — per-iteration cell (no copy-out).
             if (_bindName && !_isComplex && node.varKind !== 'var'
-                && !ctx._buildingClosureBody && node.body?.kind === 'Block'
+                && node.body?.kind === 'Block'
                 && _CELLABLE.has(_elemC) && !ctx.lookup(_bindName)?._cellVar) {
               const _cap = new Set<string>();
               _collectArrowCaptures(node.body, new Set(), _cap);
@@ -1003,7 +1003,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         // discards the binding too). Complex elems are pointer bindings —
         // already TS-true. `var` stays single-binding — no cells.
         if (bindName && !_isComplexType && node.varKind !== 'var'
-            && !ctx._buildingClosureBody && node.body?.kind === 'Block'
+            && node.body?.kind === 'Block'
             && _CELLABLE.has(elemType) && !ctx.lookup(bindName)?._cellVar) {
           const _cap = new Set<string>();
           _collectArrowCaptures(node.body, new Set(), _cap);

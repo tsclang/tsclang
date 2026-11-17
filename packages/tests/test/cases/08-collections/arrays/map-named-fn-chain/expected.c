@@ -18,7 +18,7 @@ double scale_i32(int32_t x) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 2, 3, 4, 5};
-    const Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
+    Array_i32 arr = {.data = _lit_0, .length = 5, .capacity = 5};
     Array_f64 _chain_1 = tsc_array_map_i32_f64(arr, scale_i32);
     Array_f64 result = tsc_array_filter_f64(_chain_1, _lambda_0_bool_adapter);
     printf("%zu\n", result.length);

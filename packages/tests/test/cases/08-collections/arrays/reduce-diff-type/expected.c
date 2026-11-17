@@ -13,7 +13,7 @@ static String _lambda_0_string_adapter(String _p0, int32_t _p1) {
 int main(void) {
     TSC_INIT();
     double _arr_data_0[] = {1, 2, 3};
-    const Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
+    Array_f64 arr = (Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3};
     const String result = tsc_array_reduce_f64_string(arr, _lambda_0_string_adapter, STR_LIT(""));
     printf("%s\n", result.data);
     tsc_string_release(result);

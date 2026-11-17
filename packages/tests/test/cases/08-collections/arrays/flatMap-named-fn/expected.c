@@ -12,8 +12,8 @@ Array_i32 pair_i32(int32_t x) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_1[] = {1, 2};
-    const Array_i32 arr = {.data = _lit_1, .length = 2, .capacity = 2};
-    const Array_i32 result = tsc_array_flat_map_i32_i32(arr, pair_i32);
+    Array_i32 arr = {.data = _lit_1, .length = 2, .capacity = 2};
+    Array_i32 result = tsc_array_flat_map_i32_i32(arr, pair_i32);
     printf("%zu\n", result.length);
     printf("%d\n", result.data[0]);
     printf("%d\n", result.data[1]);

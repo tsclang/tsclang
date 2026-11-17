@@ -1,0 +1,10 @@
+const f = (): number => {
+  let sum = 0;
+  for (let i = 0; i < 3; i++) {
+    const g = (): number => { i = i + 10; return i; };
+    g();
+    sum = sum + i;
+  }
+  return sum;
+};
+console.log(`${f()}`);

@@ -12,7 +12,7 @@ Array_i32 build(void) {
 
 int main(void) {
     TSC_INIT();
-    const Array_i32 result = build();
+    Array_i32 result = build();
     printf("%d\n", result.data[0]);
     printf("%d\n", result.data[1]);
     printf("%d\n", result.data[2]);

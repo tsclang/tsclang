@@ -10,7 +10,7 @@ int32_t third(int32_t *_arr) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 2, 7};
-    const Array_i32 arr = {.data = _lit_0, .length = 3, .capacity = 3};
+    Array_i32 arr = {.data = _lit_0, .length = 3, .capacity = 3};
     printf("%d\n", third(arr.data));
     return 0;
 }

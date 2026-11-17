@@ -10,6 +10,9 @@ static const tsc_unknown_vtable _tsc_vt_bool = {NULL, NULL};
 static const tsc_unknown_vtable _tsc_vt_char = {NULL, NULL};
 typedef struct { tsc_unknown *data; size_t length; size_t capacity; } Array_tsc_unknown;
 
+#define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)
+#define tsc_array_push_tsc_unknown(arr, ...) do { Array_tsc_unknown *_a_ = (arr); tsc_unknown _v_ = (__VA_ARGS__); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (tsc_unknown*)realloc(_a_->data, _nc_ * sizeof(tsc_unknown)); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)
+
 static inline tsc_unknown tsc_unknown_from_i32(int32_t v) { tsc_unknown u = {.type_id = 1, .vtable = &_tsc_vt_i32}; memcpy(u.buffer, &v, sizeof(v)); return u; }
 static inline int32_t tsc_unknown_get_i32(const tsc_unknown *self) { int32_t v; memcpy(&v, self->buffer, sizeof(v)); return v; }
 static inline tsc_unknown tsc_unknown_from_i64(int64_t v) { tsc_unknown u = {.type_id = 2, .vtable = &_tsc_vt_i64}; memcpy(u.buffer, &v, sizeof(v)); return u; }
@@ -36,9 +39,6 @@ static inline tsc_unknown tsc_unknown_from_string(String s) { String *ptr = (Str
 static inline String tsc_unknown_get_string(const tsc_unknown *self) { String *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return *ptr; }
 #endif
 static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }
-#define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)
-#define tsc_array_push_tsc_unknown(arr, ...) do { Array_tsc_unknown *_a_ = (arr); tsc_unknown _v_ = (__VA_ARGS__); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (tsc_unknown*)realloc(_a_->data, _nc_ * sizeof(tsc_unknown)); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)
-
 void test(void) {
     tsc_unknown _lit_0[] = {tsc_unknown_from_f64(1), tsc_unknown_from_string(STR_LIT("hello"))};
     Array_tsc_unknown arr = {.data = _lit_0, .length = 2, .capacity = 2};

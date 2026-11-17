@@ -1,0 +1,9 @@
+const f = (): number => {
+  let sum = 0;
+  for (let v of [1, 2, 3]) {
+    const g = (): number => v;
+    sum = sum + g();
+  }
+  return sum;
+};
+console.log(`${f()}`);

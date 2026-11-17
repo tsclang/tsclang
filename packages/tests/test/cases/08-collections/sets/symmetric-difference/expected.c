@@ -8,7 +8,7 @@ int main(void) {
     TscSet_i32 b = tsc_set_create_i32();
     tsc_set_add_i32(&b, 2);
     tsc_set_add_i32(&b, 3);
-    const TscSet_i32 c = tsc_set_symmetric_difference_i32(a, b);
+    TscSet_i32 c = tsc_set_symmetric_difference_i32(a, b);
     printf("%d\n", c.size);
     return 0;
 }

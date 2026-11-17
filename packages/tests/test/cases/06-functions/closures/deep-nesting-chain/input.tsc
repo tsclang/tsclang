@@ -1,0 +1,10 @@
+const l1 = (): number => {
+  let x = 1;
+  const l2 = (): number => {
+    const l3 = (): void => { x = x + 1; };
+    l3(); l3();
+    return x;
+  };
+  return l2();
+};
+console.log(`${l1()}`);

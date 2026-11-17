@@ -1,0 +1,10 @@
+const fns: Array<() => number> = [];
+const make = (): number => {
+  let x = 1;
+  const get = (): number => x;
+  if (x === 1) { fns.push(get); return 0; }
+  x = 5;
+  return x;
+};
+make();
+console.log(`${fns[0]()}`);

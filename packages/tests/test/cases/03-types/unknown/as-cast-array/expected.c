@@ -11,6 +11,8 @@ static const tsc_unknown_vtable _tsc_vt_char = {NULL, NULL};
 typedef struct { double *data; size_t length; size_t capacity; } Array_f64;
 typedef struct { int32_t *data; size_t length; size_t capacity; } Array_i32;
 
+#define tsc_array_free_f64(arr) do { Array_f64 *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)
+
 static inline tsc_unknown tsc_unknown_from_i32(int32_t v) { tsc_unknown u = {.type_id = 1, .vtable = &_tsc_vt_i32}; memcpy(u.buffer, &v, sizeof(v)); return u; }
 static inline int32_t tsc_unknown_get_i32(const tsc_unknown *self) { int32_t v; memcpy(&v, self->buffer, sizeof(v)); return v; }
 static inline tsc_unknown tsc_unknown_from_i64(int64_t v) { tsc_unknown u = {.type_id = 2, .vtable = &_tsc_vt_i64}; memcpy(u.buffer, &v, sizeof(v)); return u; }
@@ -37,7 +39,6 @@ static inline tsc_unknown tsc_unknown_from_string(String s) { String *ptr = (Str
 static inline String tsc_unknown_get_string(const tsc_unknown *self) { String *ptr; memcpy(&ptr, self->buffer, sizeof(ptr)); return *ptr; }
 #endif
 static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }
-#define tsc_array_free_f64(arr) do { Array_f64 *_a_ = (arr); if (_a_->data && _a_->capacity > 0) free(_a_->data); _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)
 static void _tsc_unknown_drop_Array_f64(void *buf) { Array_f64 *ptr; memcpy(&ptr, buf, sizeof(ptr)); tsc_array_free_f64(ptr); free(ptr); }
 static void _tsc_unknown_clone_Array_f64(const void *src, void *dst) { Array_f64 *sp; memcpy(&sp, src, sizeof(Array_f64*)); Array_f64 *dp = (Array_f64*)malloc(sizeof(Array_f64)); *dp = *sp; dp->data = (double*)malloc(sizeof(double) * dp->capacity); memcpy(dp->data, sp->data, sizeof(double) * sp->length); memcpy(dst, &dp, sizeof(dp)); }
 static const tsc_unknown_vtable _tsc_vt_Array_f64 = {_tsc_unknown_drop_Array_f64, _tsc_unknown_clone_Array_f64};
@@ -54,7 +55,7 @@ int main(void) {
     double _arr_data_0[] = {10, 20, 30};
     tsc_unknown x = tsc_unknown_from_Array_f64((Array_f64){.data = _arr_data_0, .length = 3, .capacity = 3});
     if (x.type_id == 7) {
-        const Array_i32 arr = *tsc_unknown_get_Array_i32(&x);
+        Array_i32 arr = *tsc_unknown_get_Array_i32(&x);
         printf("%d\n", arr.data[0]);
         printf("%d\n", arr.data[1]);
     }

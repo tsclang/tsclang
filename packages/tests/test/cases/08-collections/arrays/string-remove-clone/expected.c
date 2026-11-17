@@ -3,7 +3,7 @@
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("a"), STR_LIT("b"), STR_LIT("c")};
-    const Array_string arr = {.data = _lit_0, .length = 3, .capacity = 3};
+    Array_string arr = {.data = _lit_0, .length = 3, .capacity = 3};
     String removed = tsc_array_remove_string(&arr, 1);
     printf("%s\n", removed.data);
     printf("%zu\n", arr.length);

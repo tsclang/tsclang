@@ -1,5 +1,6 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { TemplateLit, Arrow, FuncExpr, Expression, Param, TypeAnn, Block, SymbolInfo } from '@tsclang/ast';
+import type { ActiveEnv } from './nested-fns.js';
 
 interface TemplatePart { kind: string; value?: string; src?: string; }
 interface CompiledStrPart { kind: 'str'; value: string; }
@@ -181,6 +182,24 @@ export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, v
     return result;
 }
 
+// #298 s4: field hops from this arrow's env param to the env holding the
+// captured cell. The cell's env is located in the active env chain either by
+// its C local name (block cells) or as the chain root (cells already behind
+// `_outerCell` hops — their path base is the current fn's `env` param).
+function _cellPathFor(ctx: CodeGenContext, sym: SymbolInfo): string {
+  const hopsTo = (match: (e: ActiveEnv) => boolean): number => {
+    let e = ctx._activeEnv;
+    let h = 0;
+    while (e) { if (match(e)) return h; e = e.parent; h++; }
+    return -1;
+  };
+  const h = sym._outerCell
+    ? hopsTo((e) => e.parent === null)
+    : hopsTo((e) => e.localName === (sym._closureEnvLocal ?? 'env'));
+  const count = h < 0 ? 0 : h; // defensive: unreachable cell — treat as innermost
+  return Array.from({ length: count + 1 }, () => '_outer').join('->');
+}
+
 function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, varName: string | null) {
     const paramNames = (arrowNode.params ?? []).map((p: Param) => p.name);
     let captured;
@@ -259,17 +278,18 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
 
     const envFields: string[] = [];
     const capturedStringFields: string[] = [];
-    // #295 v2c shared-cell capture: a captured binding whose storage lives in
-    // the enclosing block's env (`_cellVar` symbol, created by the block
-    // pre-scan) is NOT copied into this env — the env gets a single `_outer`
-    // link to the block env and the body reads/writes `env->_outer->name`.
-    // TS-true semantics: mutations are shared both ways. Inside closure
-    // bodies (`_buildingClosureBody`) the block env is not lexically reachable
-    // as `env` — those captures keep the snapshot behavior.
+    // #295 v2c / #298 s4 shared-cell capture: a captured binding whose
+    // storage lives in an env of the enclosing chain — a block cell
+    // (`_cellVar` symbol from the block pre-scan) or a cell already reached
+    // through `_outer` hops (`_outerCell` symbol, e.g. inside another
+    // closure's body) — is NOT copied into this env. The env gets a single
+    // `_outer` link to the innermost env in scope and the body reads/writes
+    // the cell through the hop chain. TS-true semantics: mutations are
+    // shared both ways, across any nesting depth.
     const cellCaptures: string[] = [];
     const isCellCapture = (nm: string, sym?: SymbolInfo | null): boolean => {
       if (explicitCaptures?.some((c: ExplicitCapture) => c.name === nm)) return false;
-      return !!sym?._cellVar && !ctx._buildingClosureBody;
+      return !!(sym?._cellVar || sym?._outerCell);
     };
     let hasOuterLink = false;
     for (const [nm, sym] of captured) {
@@ -298,10 +318,15 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
         if (ct === 'String') capturedStringFields.push(nm);
       }
     }
+    // #298 s4: `_outer` binds the innermost env in C scope at the creation
+    // site — an enclosing block env local, or this fn's own `env` param.
+    let outerLocal = 'env';
     if (hasOuterLink) {
-      const outerType = ctx._activeEnv?.typeName;
-      if (!outerType) throw ctx.errorCode('E417', arrowNode, { detail: `internal: cell capture without an active block env for '${cellCaptures[0]}'` });
-      envFields.push(`${outerType} *_outer;`);
+      const outerEnv = ctx._activeEnv
+        ?? (ctx._envParamType ? { typeName: ctx._envParamType, localName: 'env' } : null);
+      if (!outerEnv) throw ctx.errorCode('E417', arrowNode, { detail: `internal: cell capture without an active block env for '${cellCaptures[0]}'` });
+      outerLocal = outerEnv.localName;
+      envFields.push(`${outerEnv.typeName} *_outer;`);
     }
     const hasStringCapture = capturedStringFields.length > 0;
     // Env structs start with the ARC header: copies of the closure retain the
@@ -346,17 +371,24 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         const ct = sym.ctype ?? 'void *';
         const innerCt = ct.endsWith(' *') ? ct.slice(0, -2) : ct;
-        ctx.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm });
+        ctx.define(nm, { ctype: `${innerCt} *`, isPointer: true, derefType: innerCt, _closureEnvVar: nm, _closureEnvLocal: 'env' });
       } else if (isCellCapture(nm, sym)) {
-        // Shared cell: reads/writes go through the block env via `_outer`.
-        ctx.define(nm, { ctype: sym.ctype ?? 'void *', _outerCell: nm });
+        // Shared cell: reads/writes go through the env-chain hops. The path
+        // grows by one `_outer` for the env levels between this arrow and
+        // the base of the captured symbol's existing access.
+        const path = sym._outerCell
+          ? `${_cellPathFor(ctx, sym)}->${sym._cellPath ?? '_outer'}`
+          : _cellPathFor(ctx, sym);
+        ctx.define(nm, { ctype: sym.ctype ?? 'void *', _outerCell: nm, _cellPath: path });
       } else {
         const ct = sym.ctype ?? 'void *';
         if (_isComplexCtype(ct) && !ct.endsWith(' *')) {
-          ctx.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm });
+          ctx.define(nm, { ctype: `${ct} *`, isPointer: true, derefType: ct, _closureEnvVar: nm, _closureEnvLocal: 'env', _cellVar: true });
         } else {
-          const { _cellVar: _drop, _outerCell: _drop2, ...rest } = sym as Record<string, unknown>;
-          ctx.define(nm, { ...rest, _closureEnvVar: nm } as object);
+          const { _cellVar: _drop, _outerCell: _drop2, _cellPath: _drop3, _closureEnvLocal: _drop4, ...rest } = sym as Record<string, unknown>;
+          // A copied field is still shared storage for deeper arrows nesting
+          // inside this body (`_cellVar`) — TS-true within the body.
+          ctx.define(nm, { ...rest, _closureEnvVar: nm, _closureEnvLocal: 'env', _cellVar: true } as object);
         }
       }
     }
@@ -381,6 +413,14 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
     const prevLoopCleanups = ctx._loopBodyCleanups;
     ctx._blockCleanupStack = [{ list: [], set: new Set() }];
     ctx._loopBodyCleanups = null;
+    // #298 s4: the body is its own C fn — its `env` param is the root of a
+    // fresh env chain. Sub-blocks allocate their own envs (renamed locals)
+    // and chain to this one via `_outer`; the pre-block chain is not in C
+    // scope here.
+    const prevActive = ctx._activeEnv;
+    const prevEnvParamType = ctx._envParamType;
+    ctx._activeEnv = { typeName: envName, localName: 'env', parent: null, fields: new Set(captured.keys()) };
+    ctx._envParamType = envName;
     // #295 v2b boundary: nested named functions inside closures are not
     // supported yet — the pre-scan throws E020 instead of silently miscompiling.
     const _prevBuildingClosure = ctx._buildingClosureBody;
@@ -399,6 +439,8 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
       }
     } finally {
       ctx._buildingClosureBody = _prevBuildingClosure;
+      ctx._activeEnv = prevActive;
+      ctx._envParamType = prevEnvParamType;
       ctx._blockCleanupStack = prevCleanupStack;
       ctx._loopBodyCleanups = prevLoopCleanups;
     }
@@ -412,15 +454,15 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
     const retainLines: string[] = [];
     for (const nm of capturedStringFields) {
       const sym = captured.get(nm);
-      const src = sym?._closureEnvVar ? `env->${nm}` : sym?._outerCell ? `env->_outer->${nm}` : nm;
+      const src = sym?._closureEnvVar ? `${sym._closureEnvLocal ?? 'env'}->${nm}` : sym?._outerCell ? `env->${sym._cellPath ?? '_outer'}->${nm}` : nm;
       retainLines.push(`tsc_string_retain(${src});`);
     }
     // The block env outlives this scope as long as the closure lives (ARC).
-    if (hasOuterLink) retainLines.push(`tsc_env_retain(env);`);
+    if (hasOuterLink) retainLines.push(`tsc_env_retain(${outerLocal});`);
     const initParts: string[] = [];
     for (const [nm, sym] of captured) {
-      if (isCellCapture(nm, sym)) continue; // shared cell — via _outer, no copy
-      const src = sym._closureEnvVar ? `env->${nm}` : sym._outerCell ? `env->_outer->${nm}` : nm;
+      if (isCellCapture(nm, sym)) continue; // shared cell — via _outer hops, no copy
+      const src = sym._closureEnvVar ? `${(sym as SymbolInfo)._closureEnvLocal ?? 'env'}->${nm}` : sym._outerCell ? `env->${sym._cellPath ?? '_outer'}->${nm}` : nm;
       const capInfo = explicitCaptures?.find((c: ExplicitCapture) => c.name === nm);
       if (capInfo && (capInfo.mode === 'ref' || capInfo.mode === 'mut')) {
         if (sym.ctype?.endsWith(' *')) initParts.push(`.${nm} = ${nm}`);
@@ -434,7 +476,7 @@ function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, var
       }
       initParts.push(`.${nm} = ${src}`);
     }
-    if (hasOuterLink) initParts.push('._outer = env');
+    if (hasOuterLink) initParts.push(`._outer = ${outerLocal}`);
     const envInit = '{._hdr = {._refcount = 1, ._destroy = ' + destroyFnName + '}' + (initParts.length > 0 ? ', ' + initParts.join(', ') : '') + '}';
 
     const captureModes = explicitCaptures

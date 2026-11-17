@@ -13,7 +13,7 @@ static bool _lambda_0_bool_adapter(int32_t _p0) {
 int main(void) {
     TSC_INIT();
     int32_t _lit_0[] = {1, 3, 5, 4};
-    const Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
+    Array_i32 arr = {.data = _lit_0, .length = 4, .capacity = 4};
     printf("%s\n", tsc_array_some_i32(arr, _lambda_0_bool_adapter) ? "true" : "false");
     return 0;
 }

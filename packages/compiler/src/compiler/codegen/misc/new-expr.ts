@@ -302,6 +302,13 @@ function _hoistArrowImpl(ctx: CodeGenContext, node: Arrow | FuncExpr, retType: s
     const prevLoopCleanups = ctx._loopBodyCleanups;
     ctx._blockCleanupStack = [{ list: [], set: new Set() }];
     ctx._loopBodyCleanups = null;
+    // #298 s4: a non-capturing lambda is a plain C fn (`void *_env`) — no env
+    // is lexically reachable inside it; body blocks start a fresh parentless
+    // chain (any outer var reference would have turned this into a closure).
+    const prevActive = ctx._activeEnv;
+    const prevEnvParamType = ctx._envParamType;
+    ctx._activeEnv = null;
+    ctx._envParamType = null;
     // #295 v2b boundary: nested named functions inside closures — the
     // pre-scan throws E020 (shared-cell closures arrive in v2c).
     const _prevBuildingClosure = ctx._buildingClosureBody;
@@ -320,6 +327,8 @@ function _hoistArrowImpl(ctx: CodeGenContext, node: Arrow | FuncExpr, retType: s
       }
     } finally {
       ctx._buildingClosureBody = _prevBuildingClosure;
+      ctx._activeEnv = prevActive;
+      ctx._envParamType = prevEnvParamType;
       ctx._blockCleanupStack = prevCleanupStack;
       ctx._loopBodyCleanups = prevLoopCleanups;
     }

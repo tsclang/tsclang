@@ -10,7 +10,7 @@ int main(void) {
     tsc_set_add_i32(&b, 2);
     tsc_set_add_i32(&b, 3);
     tsc_set_add_i32(&b, 4);
-    const TscSet_i32 c = tsc_set_intersection_i32(a, b);
+    TscSet_i32 c = tsc_set_intersection_i32(a, b);
     printf("%d\n", c.size);
     return 0;
 }

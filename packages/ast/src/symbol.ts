@@ -25,6 +25,14 @@ export interface SymbolInfo {
   // #298 s3: promoted via the top-level `var` loop-binding pre-pass (single
   // module-scope binding — every closure sees the final value, TS var)
   _loopVarGlobal?: boolean;
+  // #298 s4: C identifier of the env pointer this cell/field is reached
+  // through ('env' fn param or a '_blk_envN' block local). Only meaningful
+  // together with _closureEnvVar.
+  _closureEnvLocal?: string;
+  // #298 s4: field hops from the current fn's env param to the env holding
+  // the cell ('_outer', '_outer->_outer', ...). Only meaningful together
+  // with _outerCell.
+  _cellPath?: string;
   isWeak?: boolean;
   isClosure?: boolean;
   isStruct?: boolean;

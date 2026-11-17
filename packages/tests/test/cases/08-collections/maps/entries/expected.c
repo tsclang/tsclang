@@ -8,7 +8,7 @@ int main(void) {
     TscMap_string_i32 m = tsc_map_create_string_i32();
     tsc_map_set_string_i32(&m, STR_LIT("a"), 1);
     tsc_map_set_string_i32(&m, STR_LIT("b"), 2);
-    const Array_MapEntry_string_i32 entries = tsc_map_entries_string_i32(&m);
+    Array_MapEntry_string_i32 entries = tsc_map_entries_string_i32(&m);
     printf("%zu\n", entries.length);
     return 0;
 }

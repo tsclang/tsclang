@@ -3,7 +3,7 @@
 int main(void) {
     TSC_INIT();
     String _lit_0[] = {STR_LIT("Alice"), STR_LIT("Bob")};
-    const Array_string names = {.data = _lit_0, .length = 2, .capacity = 2};
+    Array_string names = {.data = _lit_0, .length = 2, .capacity = 2};
     const String first = names.data[0];
     tsc_string_retain(first);
     const String second = names.data[1];

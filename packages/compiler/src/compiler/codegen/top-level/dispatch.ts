@@ -2,6 +2,7 @@ import type { Stmt, Param, Decorator, TypeAnn, TypeRef, FuncOverload, DeclareMod
 import type { CodeGenContext, DeclareModuleEntry } from '../../codegen.js';
 // dispatch.ts
 import { handleStdlibImport, LANGUAGE_BUILTINS } from '../../stdlib-registry.js';
+import { _isInteriorMutableCollection } from '../misc/emit-helpers.js';
 export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
     if (!node) return;
     switch (node.kind) {
@@ -320,7 +321,9 @@ export function visitTopLevel(ctx: CodeGenContext, node: Stmt) {
             if (_defLine && new RegExp(`\\b${_cname}\\b`).test(_defLine)) {
               ctx.addFwd(_defLine.replace(/\s*=[^;]*;/, ';'));
             } else {
-              const _qual = _psym.varKind === 'const' ? 'const ' : '';
+              // Same collection exception as the vardecl qualifier rule: a
+              // `static const` collection would live in read-only memory.
+              const _qual = (_psym.varKind === 'const' && !_isInteriorMutableCollection(_psym.ctype ?? '')) ? 'const ' : '';
               const _ct = _psym.ctype ?? 'int32_t';
               ctx.addFwd(`static ${_qual}${_ct} ${_cname}${_psym.isFixedArray ? `[${_psym.arraySize}]` : ''};`);
             }

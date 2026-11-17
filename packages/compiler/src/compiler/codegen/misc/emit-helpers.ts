@@ -6,6 +6,16 @@ interface LocalVar { name: string; ctype: string; initC: string; isConst: boolea
 export interface FreeVar { name: string; ctype: string; }
 interface EnvField { ctype: string; name: string; }
 
+// TS `const` is a constant *binding*, not constant contents. Collection types
+// are mutated through methods (push/pop/set/add write into the object), so a
+// C `const` qualifier on them is wrong twice over: method calls would discard
+// the qualifier, and a promoted `static const` lands in read-only memory —
+// any mutation segfaults.
+export function _isInteriorMutableCollection(ctype: string): boolean {
+    return ctype.startsWith('Array_') || ctype.startsWith('Map_') ||
+        ctype.startsWith('TscMap_') || ctype.startsWith('TscSet_') || ctype.startsWith('Set_');
+}
+
 // emit-helpers.ts
 export function _emitIterableImpl(ctx: CodeGenContext, className: string, iterMethod: IterMethod, elemCType: string) {
     const stmts: Stmt[] = iterMethod.body?.body ?? iterMethod.body?.stmts ?? [];
