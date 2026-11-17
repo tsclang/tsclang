@@ -454,7 +454,7 @@ pnpm tsx test/runner.ts book
 
 | # | Глава | Темы |
 |---|-------|------|
-| 16.1 | Примитивы (number от и до) | let b = a — копия, foo(a) — T-параметр, Ref/Mut — запрет + заём элемента массива, захват — снапшот + box-паттерн, embedded |
+| 16.1 | Примитивы (number от и до) | let b = a — копия, foo(a) — T-параметр, Ref/Mut — error[E128] на самостоятельных + заём элемента массива легален, захват — общая ячейка как в TS (#298), embedded |
 | 16.2 | String (string от и до) | присваивание — ARC-копия, T-параметр, Ref/Mut, захват — retain, конкатенация, heap vs literal, embedded (PROGMEM), async (retain-on-capture) |
 | 16.3 | Классы (class от и до) | присваивание — move, T-параметр — E002, после move, Ref/Mut, Shared/Weak, захват — box, string-поля, spread, embedded |
 | 16.4 | Массивы (array от и до) | присваивание — move, T-параметр — E002, Ref/Mut/Slice, element access (заём элемента), захват, строки в массивах, spread, capacity, embedded |

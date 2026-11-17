@@ -1107,9 +1107,9 @@
 ### 16.1 Примитивы (number от и до)
 - 16.1.1-primitive-assignment.md — `let b = a`: честная копия, независимость в обе стороны; запись в const → E001; const → C-const
 - 16.1.2-primitive-t-param.md — `foo(a)`: параметр как let, копия внутрь, источник жив; E002 для примитива не существует
-- 16.1.3-primitive-ref-mut.md — Ref/Mut на примитивах: заём самостоятельной переменной — ошибка компилятора (решение зафиксировано, не реализовано — сейчас битый C в ряде позиций); легальное исключение — заём элемента массива
+- 16.1.3-primitive-ref-mut.md — Ref/Mut на примитивах: заём самостоятельной переменной/параметра/захвата — error[E128] (#292, реализовано); легальное исключение — заём элемента массива/поля
 - 16.1.4-primitive-shared-weak.md — Shared/Weak: ошибка
-- 16.1.5-primitive-closure-capture.md — Захват: copy-снапшот (2,3,1), тихое расхождение с TS (2,3,3), box-паттерн (Cell, массив-бокс), фабрика — работает как в TS
+- 16.1.5-primitive-closure-capture.md — Захват: общая ячейка (#295 v2c/#298) — мутации видны с обеих сторон, как в TS; пер-итерационные ячейки циклов; box-паттерн больше не нужен, explicit [a: Ref<number>] — error[E128]
 - 16.1.6-primitive-cleanup.md — Cleanup: нет
 - 16.1.7-primitive-desktop-avr.md — Desktop vs AVR
 - 16.1.8-primitive-why.md — Почему: копия без владения
@@ -1118,7 +1118,7 @@
 - 16.2.1-string-assignment.md — `let b = a`: ARC-копия (retain/release)
 - 16.2.2-string-t-param.md — `foo(a)`: параметры функций
 - 16.2.3-string-ref-mut.md — Ref/Mut<string>
-- 16.2.4-string-closure-capture.md — Захват: ARC-снапшот — retain при создании замыкания
+- 16.2.4-string-closure-capture.md — Захват: String-ячейка в block env (shared cell, #298) — переприсваивание видно стрелкам; retain на copy-in из borrow-биндинга
 - 16.2.5-string-concat-ownership.md — Конкатенация: ownership временных
 - 16.2.6-string-cleanup.md — Cleanup: release
 - 16.2.7-string-heap-vs-literal.md — Heap vs literal
@@ -1181,7 +1181,7 @@
 
 ### 16.8 Сводная матрица серии
 - 16.8.1-type-case-matrix.md — Матрица «тип × 4 кейса»: copy/move/ARC для number, string, class, array, tuple, Map/Set; возможные коды ошибок (E001, E002, ...)
-- 16.8.2-ts-divergences.md — Сводка тихих расхождений с TS: снапшот против общей ячейки и др.
+- 16.8.2-ts-divergences.md — Сводка остаточных расхождений с TS: var-циклы внутри функций (не hoist'ятся), невыводимые типы (snapshot), var-цикл top-level с невыводимым типом; снапшот-границы сняты #298 (верхний уровень/блоки/тела замыканий/спец-for-of)
 
 ---
 

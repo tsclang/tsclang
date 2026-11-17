@@ -257,6 +257,23 @@ async function cacheActor(rx: Rx<CacheRequest>): Promise<void> {
 
 **Реактивность** решается через `std/reactive` с explicit-deps — без interior mutability, как чистая библиотека (см. [14-stdlib/](../14-stdlib/)).
 
+## Верхний уровень = module scope (#298)
+
+Инвариант эпика #298: top-level переменная программы — это **module-scope** переменная TS, а не глобальная функция.
+
+- **Storage:** static storage duration — одна ячейка на всю программу (C `static` global; `var`-цикл top-level продвигается тем же механизмом, TS hoisting). Единственный владелец — программа; `T`-move неприменим: ничто не может «забрать» значение у module scope.
+- **Читатели:** любое замыкание (тело функции, стрелка в любой позиции, метод класса, reactive-callback, library mode, `@static`) получает **прямую ссылку** на глобал — без snapshot-копии и без env-захвата; все видят актуальное значение, как в TS. Компилятор продвигает переменную при первом читателе (`func-ref-vars.ts`) и эмитит tentative forward-declaration, если читатель встречается раньше определения.
+- **Заём на время жизни программы:** поскольку владелец живёт всю программу, любой читатель концептуально — borrow со scope'ом всей программы; правила Ref/Mut-конфликтов (два `Mut`, `Mut`+`Ref`) на top level применяются к статическому анализу использования, а не к runtime-lifetime.
+- **Финальный release:** детерминированный — при выходе из `main` (cleanup глобалов в обратном порядке объявления: String/env release и т.п.).
+- **Потоки:** module-scope переменная — разделяемое состояние; мутация из `spawn`-блока — `error[E021]`, использовать `Atomic<T>` или синхронизацию (`Channel`, Mutex-паттерн). См. `@static let` выше — те же правила гонок.
+
+```typescript
+let x: number = 1;                     // module scope — static storage
+const fn = (): number => x;            // прямая ссылка, не snapshot
+x = 2;
+console.log(fn());                     // 2 — как в TS
+```
+
 ## Scope Constraint (без lifetime аннотаций)
 
 TSC не имеет явных lifetime аннотаций (как `'a` в Rust). Вместо них — набор консервативных правил, которые компилятор проверяет статически.
@@ -408,7 +425,7 @@ async function ok2(arr: number[]): Promise<void> {
 
 > Полная спецификация замыканий — в [06-functions/](../06-functions/).
 
-Замыкание (arrow function) захватывает переменные по-разному: примитивы — copy (snapshot), строки — retain (ARC copy), class/array — reference (pointer). Source всегда жив. Env struct — stack-allocated, escaping scope = UB. Cleanup: source владеет, env нет (кроме String retain/release).
+Env замыкания — **ARC-значение** (#290): heap (desktop) или static pool (embedded, `allocator: "static"`), заголовок `{_refcount, _destroy}`; копии/пере-присваивания — retain/release, детерминированный dealloc. Замыкание **легально переживает** создавший scope: escaping-копии (массив, поле, `return`) удерживают env своим refcount'ом — «escaping = UB» снято (#293, #298 s7). Capture: примитивы — copy в env-ячейку (shared cell в блоках, per-iteration в циклах), строки — retain (ARC copy), class/array — reference (pointer). Явный заём примитива в capture list (`[a: Ref<number>]`) — `error[E128]` (#292). Верхний уровень — см. «Верхний уровень = module scope» ниже.
 
 ---
 
@@ -418,7 +435,7 @@ async function ok2(arr: number[]): Promise<void> {
 |----------|---------------------|------------|
 | Конец `{}` scope | ✅ Да | `_scopeBorrowStack` + `_refBorrowCount` в `pushScope`/`popScope` |
 | Конец функции | ✅ Да | Cleanup + отпускание |
-| Конец arrow function | ✅ Да | Env struct умирает на стеке |
+| Конец arrow function | ✅ Да | `tsc_env_release` env (ARC); escaping-копии удерживают своим refcount'ом |
 | Callback после `await` | ❌ Запрещён | `err-ref-across-await` |
-| Отложенный callback | ❌ Запрещён по дизайну | Closure — стековое |
-| Захват в closure | Copy/retain (примитив/String), Reference (class/array) | Same-scope безопасно, escaping = UB |
+| Отложенный callback | ✅ Разрешён | Env — ARC-значение: замыкание переживает scope, refcount держит цепочку (#290, #293) |
+| Захват в closure | Copy/retain (примитив/String), Reference (class/array) | Env ARC — escaping безопасен; верхний уровень — прямая ссылка на static global |
