@@ -1,1 +1,2 @@
-error[E020]
+Ref/Mut cannot be applied to primitive 'i32' — primitives are copied
+error[E128]

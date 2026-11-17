@@ -1,0 +1,3 @@
+let v: i32 = 1;
+const r: Ref<i32> = v;
+console.log(r);

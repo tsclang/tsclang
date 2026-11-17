@@ -57,6 +57,29 @@ const m1: Mut<Box> = d;
 const m2: Mut<Box> = d;  // ❌ Cannot create two simultaneous mutable borrows
 ```
 
+### Запрет Ref/Mut на самостоятельных примитивах — `error[E128]` (#292)
+
+`Ref<T>`/`Mut<T>` заимствуют память, принадлежащую сложному значению (class instance, array slot). Самостоятельный примитив (`number`, целые/беззнаковые, `f32`/`f64`, `boolean`, `char`, `d8`–`d64`, `bigint`) живёт в собственном хранилище и копируется при каждом присваивании и передаче параметра — заём примитива бессмыслен и раньше компилировался в адрес умершей копии. Отвергается в трёх позициях:
+
+```typescript
+function show(x: Ref<number>): void { … }        // ❌ error[E128] — параметр
+let v: i32 = 1;
+const r: Ref<i32> = v;                           // ❌ error[E128] — локальная из идентификатора
+const f = [a: Mut<number>](): number => a;       // ❌ error[E128] — явный захват
+```
+
+Заём памяти **внутри** сложного типа остаётся легальным — проверка position-aware (сама аннотация `Ref<i32>` резолвится свободно, ведь легальный заём слота резолвится так же; запрет живёт в семантическом проходе на позициях, где целью заёма является сам примитивный биндинг):
+
+```typescript
+const arr: i32[] = [1, 2, 3];
+const r: Ref<i32> = arr[0];                      // ✅ borrow слота массива
+const u: Ref<User> = users[0];                   // ✅ borrow элемента
+function sum(arr: Ref<number[]>): number { … }   // ✅ внутренность — массив, не примитив
+const g = [c: Mut<Counter>](): void => { … };    // ✅ захват сложного типа
+```
+
+Deny-set шире, чем у E106 (Arc/Weak): включены decimal (`d8`–`d64`) и `bigint` — критерий здесь «копируемый скаляр», а не «бессмысленность под Arc». `Ref<string>` не затронут (резолвится в копию `String`). Return-типы не проверяются: `function first(arr: Mut<i32[]>): Mut<i32>` — легальный заём слота массива.
+
 ## Arc\<T\> / Weak\<T\> — см. `04-arc-weak.md`
 
 Полная спецификация ARC ownership, Weak references, upgrade, разрыв циклов, Desktop vs Embedded — см. `04-arc-weak.md`.
@@ -94,6 +117,7 @@ function foo(x: number): void { ... }
 let n = 42;
 foo(n);  // copy — n жив после вызова
 ```
+Аннотировать параметр как `Ref<примитив>`/`Mut<примитив>` нельзя — `error[E128]` (см. раздел выше).
 
 **Строки (`string`) в параметрах — implicit borrow (zero-overhead):**
 ```typescript

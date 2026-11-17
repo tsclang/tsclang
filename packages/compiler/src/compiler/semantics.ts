@@ -51,6 +51,17 @@ const BUILTIN_TYPE_NAMES = new Set([
 
 const INT_TYPES = new Set(['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'usize', 'isize']);
 
+// Copy-by-value scalar primitives (#292): Ref/Mut over a STANDALONE one is
+// rejected with E128 — such a borrow would target a copied value, not borrowed
+// memory. Slot borrows inside complex types (`Ref<i32> = arr[0]`) stay legal,
+// hence the check is position-aware (here), not resolve-level. Unlike the E106
+// Arc/Weak COPY_ONLY set, decimals (d8–d64) and bigint are included: the
+// criterion here is "copied scalar", not "meaningless under Arc".
+const PRIM_BORROW_DENY = new Set([
+  'i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64',
+  'd8', 'd16', 'd32', 'd64', 'boolean', 'usize', 'isize', 'char', 'number', 'bigint',
+]);
+
 // Compiler-native constructors usable without import (`new Arc<T>(…)`,
 // `new Channel<T>(…)`). Mirror of BUILTIN_TYPE_NAMES for the value space —
 // LANGUAGE_BUILTINS (stdlib-registry) covers the non-generic globals.
@@ -333,7 +344,7 @@ class SemanticChecker {
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
 
-  private error(code: 'E121' | 'E122' | 'E123' | 'E124', node: Pos, params: Record<string, string>): void {
+  private error(code: 'E121' | 'E122' | 'E123' | 'E124' | 'E128', node: Pos, params: Record<string, string>): void {
     if (this.errors.length >= MAX_ERRORS) return;
     const d = DIAGNOSTICS[code];
     this.errors.push(new TscError(substituteParams(d.message, params), {
@@ -346,6 +357,22 @@ class SemanticChecker {
       help: d.help?.map((h) => substituteParams(h, params)),
       kind: 'error',
     }));
+  }
+
+  // E128 (#292): reject Ref/Mut applied to a standalone primitive. Position-
+  // aware on purpose — `Ref<i32>` itself resolves fine because the legal
+  // `const r: Ref<i32> = arr[0]` borrows an array slot; only the positions
+  // where the borrow target IS the primitive binding are rejected: function
+  // params, explicit closure captures, Ident-initialized locals. The error
+  // points at the annotation (its node carries the position).
+  private rejectPrimitiveBorrow(typeAnn: TypeAnn | null | undefined): void {
+    if (!typeAnn || typeAnn.kind !== 'TypeRef') return;
+    if (typeAnn.name !== 'Ref' && typeAnn.name !== 'Mut') return;
+    const inner = typeAnn.typeArgs?.[0];
+    if (!inner || inner.kind !== 'TypeRef') return;
+    if (PRIM_BORROW_DENY.has(inner.name)) {
+      this.error('E128', typeAnn, { type: inner.name });
+    }
   }
 
   // #294/#295 v2c: W013 (snapshot-capture divergence warning) retired —
@@ -384,6 +411,10 @@ class SemanticChecker {
       case 'VarDecl':
         this.decorators(s.decorators);
         this.type(s.typeAnn);
+        // E128: `const r: Ref<i32> = v` borrows the primitive binding itself;
+        // `Ref<i32> = arr[0]` / `= obj.field` borrow a slot and stay legal —
+        // hence only Ident-initialized locals are checked (#292).
+        if (s.init?.kind === 'Ident') this.rejectPrimitiveBorrow(s.typeAnn);
         this.declare(s.name, s.varKind, s, false, s.varKind === 'var');
         this.expr(s.init);
         this.checkInitMismatch(s, s.name, s.typeAnn, s.init);
@@ -604,6 +635,7 @@ class SemanticChecker {
     if (!ps) return;
     for (const p of ps) {
       this.type(p.typeAnn);
+      this.rejectPrimitiveBorrow(p.typeAnn);
       // declarePatternItems declares the binding names and visits defaults.
       this.declarePatternItems(p.destructObj as unknown as PatternItem[]);
       this.declarePatternItems(p.destructArr as unknown as PatternItem[]);
@@ -778,6 +810,11 @@ class SemanticChecker {
         return this.expr((e as unknown as { value?: Expression }).value);
       case 'Arrow': {
         this.pushScope(true);
+        // E128: an explicit `[a: Ref<number>]` capture borrows the primitive
+        // binding itself — rejected (#292). CaptureInfo is {name, typeAnn}.
+        for (const cap of e.captures as unknown as { typeAnn?: TypeAnn | null }[] ?? []) {
+          this.rejectPrimitiveBorrow(cap?.typeAnn);
+        }
         this.declareParams(e.params);
         this.type(e.returnType);
         this.fnBody(e.body);

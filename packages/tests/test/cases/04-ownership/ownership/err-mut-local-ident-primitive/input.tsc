@@ -1,0 +1,3 @@
+let v: f64 = 1.5;
+const m: Mut<f64> = v;
+console.log(m);

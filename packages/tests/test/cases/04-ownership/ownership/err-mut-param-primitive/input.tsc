@@ -1,0 +1,4 @@
+function bump(x: Mut<i32>): void {
+    x = x + 1;
+}
+bump(5);

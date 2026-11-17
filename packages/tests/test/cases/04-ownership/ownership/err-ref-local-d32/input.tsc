@@ -1,0 +1,3 @@
+let price: d32 = 1.5;
+const r: Ref<d32> = price;
+console.log(r);

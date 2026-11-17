@@ -1,0 +1,3 @@
+let a = 10;
+const f = [a: Ref<number>](): number => a;
+console.log(f());

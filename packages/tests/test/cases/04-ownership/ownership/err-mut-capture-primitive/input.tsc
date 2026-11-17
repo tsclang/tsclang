@@ -1,0 +1,3 @@
+let flag = true;
+const f = [flag: Mut<boolean>](): boolean => { flag = false; return flag; };
+console.log(f());

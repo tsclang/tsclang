@@ -1,0 +1,2 @@
+Ref/Mut cannot be applied to primitive 'd32' — primitives are copied
+error[E128]

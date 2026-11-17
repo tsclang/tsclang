@@ -1,0 +1,4 @@
+function up(c: Mut<char>): void {
+    console.log(c);
+}
+up('a');

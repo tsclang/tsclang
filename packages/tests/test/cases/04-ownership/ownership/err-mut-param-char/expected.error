@@ -1,0 +1,2 @@
+Ref/Mut cannot be applied to primitive 'char' — primitives are copied
+error[E128]

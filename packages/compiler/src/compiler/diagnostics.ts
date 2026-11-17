@@ -904,6 +904,36 @@ Pointer-like types (Arc, Weak, optionals) keep the usual null check:
 `,
   },
 
+  E128: {
+    code: 'E128',
+    severity: 'error',
+    title: 'Ref/Mut applied to a standalone primitive',
+    message: `Ref/Mut cannot be applied to primitive '{type}' — primitives are copied`,
+    help: [
+      'pass or capture the value directly — primitives are copied, no borrow is needed',
+      'to borrow memory inside a complex type, target its slot: Ref<i32> = arr[0], Ref<T> = obj.field',
+    ],
+    body: `
+Ref<T>/Mut<T> borrow memory owned by a complex value (a class instance, an
+array slot). A standalone primitive (number, i32, f64, boolean, char, d8–d64,
+bigint) lives in its own storage and is copied on every assignment and
+parameter pass — a borrow of one is meaningless and used to compile into the
+address of a soon-dead copy. Rejected in three positions: parameters, local
+annotations initialized from an identifier, explicit closure captures.
+
+  function show(x: Ref<number>): void { … }   // error[E128]
+  let v: i32 = 1;
+  const r: Ref<i32> = v;                      // error[E128]
+  const f = [a: Mut<number>]: number => a;    // error[E128]
+
+Borrowing a slot INSIDE a complex type stays legal:
+
+  const r: Ref<i32> = arr[0];                 // ok — array slot
+  const u: Ref<User> = users[0];              // ok — class instance
+  const f = [c: Mut<Counter>](): void => …;   // ok — complex capture
+`,
+  },
+
   // ── E2xx: Strict-mode rules ──────────────────────────────────────────────────
   E200: {
     code: 'E200',

@@ -1,0 +1,4 @@
+function show(x: Ref<number>): void {
+    console.log(x);
+}
+show(42);

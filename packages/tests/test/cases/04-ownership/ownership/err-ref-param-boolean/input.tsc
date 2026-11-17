@@ -1,0 +1,4 @@
+function check(b: Ref<boolean>): void {
+    console.log(b);
+}
+check(true);

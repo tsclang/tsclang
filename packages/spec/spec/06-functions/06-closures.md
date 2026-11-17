@@ -96,17 +96,18 @@ Class/array захватываются pointer'ом всегда (D4) — рас
 
 **Статус: ✅ Решено. Реализовано.**
 
-### D5: Explicit capture syntax — только Ref/Mut
+### D5: Explicit capture syntax — только Ref/Mut (сложные типы)
 
-**Решение:** explicit capture list `[...]` принимает только `Ref<T>` и `Mut<T>`:
+**Решение:** explicit capture list `[...]` принимает только `Ref<T>` и `Mut<T>`, и только над **сложными** типами:
 
 ```typescript
 const fn = [arr: Mut<Array<i32>>](): void => { arr[0] = 9; };  // OK
 const fn = [arr: Ref<Array<i32>>](): i32 => arr[0];             // OK
 const fn = [arr](): void => { ... };                             // Error: requires a type annotation: Ref<T> or Mut<T>
+const fn = [a: Mut<number>](): number => a;                      // error[E128] — примитив копируется, borrow не нужен
 ```
 
-Обоснование: убрали move `[x: T]` (D6). Остались только Ref/Mut — explicit borrow semantics.
+Обоснование: убрали move `[x: T]` (D6). Остались только Ref/Mut — explicit borrow semantics. Захват примитива (`Ref<number>`, `Mut<i32>`, `boolean`, `char`, `d8`–`d64`, `bigint`…) запрещён отдельным правилом E128 (#292): примитивы копируются в env, заём их памяти бессмыслен — capture the value directly.
 
 **Статус: ✅ Решено. Реализовано.**
 
