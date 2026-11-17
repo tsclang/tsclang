@@ -1,0 +1,10 @@
+let s = new Set<i32>();
+s.add(1);
+s.add(2);
+s.add(3);
+const fs: Array<() => i32> = [];
+for (let v of s) {
+  fs.push((): i32 => v);
+  v = v + 100;
+}
+console.log(`${fs[0]()} ${fs[1]()} ${fs[2]()}`);

@@ -291,7 +291,14 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
     lines.push(`${I}*${envLocal} = (${envName}){._hdr = {._refcount = 1, ._destroy = ${destroyFn}}${parentEnv ? `, ._outer = ${parentEnv.localName}` : ''}};`);
     if (parentEnv) lines.push(`${I}tsc_env_retain(${parentEnv.localName});`);
     for (const [nm, cell] of newCells) {
-      if (cell.fromParam) lines.push(`${I}${envLocal}->${nm} = ${nm};`);
+      if (cell.fromParam) {
+        lines.push(`${I}${envLocal}->${nm} = ${nm};`);
+        // The cell's destroy releases its String — the copied-in source (fn
+        // param / for-of binding) is only a borrow, so the env must take its
+        // own reference (#298 s5: urlParams keys exposed this as heap
+        // corruption; rodata literals stay no-op).
+        if (cell.ctype === 'String') lines.push(`${I}tsc_string_retain(${envLocal}->${nm});`);
+      }
     }
     ctx._registerCleanup(`tsc_env_release(${envLocal})`);
     // Loop cells copy out AFTER the body (LIFO cleanup emission puts these

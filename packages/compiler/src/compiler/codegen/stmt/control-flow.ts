@@ -638,6 +638,22 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         ctx._asyncContinueStack = null;
         const qual = node.varKind === 'const' ? 'const ' : '';
         const II = ' '.repeat(ctx.indent * (depth + 1));
+        // #298 s5: special-iterable for-of paths get the same per-iteration
+        // cell treatment as the generic array path — flip captured simple
+        // bindings into loop cells (copy-in at body entry, no copy-out: the
+        // iteration binding dies with the iteration, as in TS). Iterator
+        // state variables (_iter_N etc.) are not bindings and stay untouched.
+        const _markIterCells = (names: Array<[string | null | undefined, string]>): void => {
+          if (node.varKind === 'var' || node.body?.kind !== 'Block') return;
+          const _cap = new Set<string>();
+          _collectArrowCaptures(node.body, new Set(), _cap);
+          const m = new Map<string, { ctype: string; copyOut: boolean }>();
+          for (const [nm, ct] of names) {
+            if (!nm || !_cap.has(nm) || !_CELLABLE.has(ct) || ctx.lookup(nm)?._cellVar) continue;
+            m.set(nm, { ctype: ct, copyOut: false });
+          }
+          if (m.size > 0) ctx._pendingLoopCells = m;
+        };
 
         // Special case: for (const [k, v] of m.entries()) тЖТ unpack MapEntry fields
         if (node.iterable.kind === 'Call' &&
@@ -672,7 +688,13 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}${vCType} ${vElem.name} = ${entTmpName}.data[${ivar}].value;`);
               ctx.define(vElem.name!, { ctype: vCType, varKind: node.varKind });
             }
+            _markIterCells([[kElem?.name, kCType], [vElem?.name, vCType]]);
+            ctx._pushLoopCleanups();
+            ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+            ctx._loopDepth--;
+            ctx._emitLoopBodyCleanups(lines, II);
+            ctx._popLoopCleanups();
             p('}');
             if (mapSym) ctx.popScope();
             break;
@@ -696,7 +718,13 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             lines.push(`${II}${qual}uint32_t ${bindName2} = ${tmpVar};`);
             ctx.define(bindName2, { ctype: 'uint32_t', varKind: node.varKind });
           }
+          _markIterCells([[bindName2, 'uint32_t']]);
+          ctx._pushLoopCleanups();
+          ctx._loopDepth++;
           ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+          ctx._loopDepth--;
+          ctx._emitLoopBodyCleanups(lines, II);
+          ctx._popLoopCleanups();
           p('}');
           break;
         }
@@ -718,7 +746,13 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             lines.push(`${II}${qual}String ${bindName2} = ${tmpVar};`);
             ctx.define(bindName2, { ctype: 'String', varKind: node.varKind });
           }
+          _markIterCells([[bindName2, 'String']]);
+          ctx._pushLoopCleanups();
+          ctx._loopDepth++;
           ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+          ctx._loopDepth--;
+          ctx._emitLoopBodyCleanups(lines, II);
+          ctx._popLoopCleanups();
           p('}');
           break;
         }
@@ -746,7 +780,13 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}String ${vElem.name} = ${paramVar}.value;`);
               ctx.define(vElem.name!, { ctype: 'String', varKind: node.varKind });
             }
+            _markIterCells([[kElem?.name, 'String'], [vElem?.name, 'String']]);
+            ctx._pushLoopCleanups();
+            ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
+            ctx._loopDepth--;
+            ctx._emitLoopBodyCleanups(lines, II);
+            ctx._popLoopCleanups();
             p('}');
             break;
           }
@@ -767,6 +807,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}${_eC} ${_bindName} = ${_setC}._vals[${_ivar}];`);
               ctx.define(_bindName, { ctype: _eC, varKind: node.varKind });
             }
+            _markIterCells([[_bindName, _eC]]);
             ctx._pushLoopCleanups();
             ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
@@ -809,6 +850,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}${etCType} ${vElem.name} = ${entTmp}.data[${ivar}]._1;`);
               ctx.define(vElem.name!, { ctype: etCType, varKind: node.varKind });
             }
+            _markIterCells([[iElem?.name, 'int32_t'], [vElem?.name, etCType]]);
             ctx._pushLoopCleanups();
             ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
@@ -843,6 +885,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}${_sElemCType} ${bElem.name} = ${entTmp}.data[${ivar}]._1;`);
               ctx.define(bElem.name!, { ctype: _sElemCType, varKind: node.varKind });
             }
+            _markIterCells([[aElem?.name, _sElemCType], [bElem?.name, _sElemCType]]);
             ctx._pushLoopCleanups();
             ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);
@@ -879,6 +922,7 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               lines.push(`${II}${qual}${_vCType} ${vElem.name} = ${_mapC}._vals[${_ivar}];`);
               ctx.define(vElem.name!, { ctype: _vCType, varKind: node.varKind });
             }
+            _markIterCells([[kElem?.name, _kCType], [vElem?.name, _vCType]]);
             ctx._pushLoopCleanups();
             ctx._loopDepth++;
             ctx.visitStmtOrBlock(node.body, lines, depth + 1);

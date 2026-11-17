@@ -46,9 +46,9 @@ function main(): void {
 }
 ```
 
-**Циклы (#295 v2c-2, #298 s3):** `for (let i...)` / `for (let/const x of ...)` с захватом body-стрелками — per-iteration cells (свежий env на итерацию: copy-in на входе, copy-out для C-style `for` на cleanup-пути, release если замыкания не удержали). Мутация в теле видна same-iteration стрелкам; copy-out идёт до header-update, поэтому update работает со «свежим» значением — ровно как TS создаёт новую per-iteration среду до update. Замыкания разных итераций держат разные значения — семантика TS, см. [05-for-of.md](../05-control-flow/05-for-of.md). Механизм работает на верхнем уровне (тело `main`), в функциях и в телах замыканий (#298 s4).
+**Циклы (#295 v2c-2, #298 s3/s5):** `for (let i...)` / `for (let/const x of ...)` с захватом body-стрелками — per-iteration cells (свежий env на итерацию: copy-in на входе, copy-out для C-style `for` на cleanup-пути, release если замыкания не удержали). Мутация в теле видна same-iteration стрелкам; copy-out идёт до header-update, поэтому update работает со «свежим» значением — ровно как TS создаёт новую per-iteration среду до update. Замыкания разных итераций держат разные значения — семантика TS, см. [05-for-of.md](../05-control-flow/05-for-of.md). Механизм работает на верхнем уровне (тело `main`), в функциях и в телах замыканий (#298 s4). Специальные итерируемые (`set`, `map`/`map.entries()`, `arr`/`set.entries()`, `codePoints()`, `graphemes()`, `u.searchParams`) получают те же per-iteration cells (#298 s5): copy-in на входе итерации, без copy-out — биндинг умирает вместе с итерацией; состояние итератора (`_iter_N`) ячейкой не становится.
 
-**`var`-циклы на верхнем уровне (#298 s3):** `for (var i...)` / `for (var x of ...)` с захватом стрелкой — единый биндинг, как в TS: имя hoist'ится в module scope, поэтому компилятор продвигает его в static global (по механизму стадии 2 — упоминание в стрелке триггерит продвижение). Инициализация цикла и привязка for-of становятся присваиваниями глобала; замыкания ссылаются на него напрямую и видят последнее значение. Продвижение требует статически выводимого типа (аннотация на биндинге, literal-инициализация, типизированный итерируемый `Array<T>`/`T[]`/literal); иначе биндинг остаётся snapshot (документированное ограничение). Чтение до цикла даёт zero-init (вместо TS `undefined`). `var`-циклы внутри функций/методов/стрелок — ограничение: компилятор не hoist'ит `var` в scope функции, биндинг ведёт себя как `let` (per-iteration cell); отклонение от TS hoisting, документировано. Специальные итерируемые for-of (`set`, `entries()`, `codePoints()`…) — snapshot (снимается #298 s5).
+**`var`-циклы на верхнем уровне (#298 s3):** `for (var i...)` / `for (var x of ...)` с захватом стрелкой — единый биндинг, как в TS: имя hoist'ится в module scope, поэтому компилятор продвигает его в static global (по механизму стадии 2 — упоминание в стрелке триггерит продвижение). Инициализация цикла и привязка for-of становятся присваиваниями глобала; замыкания ссылаются на него напрямую и видят последнее значение. Продвижение требует статически выводимого типа (аннотация на биндинге, literal-инициализация, типизированный итерируемый `Array<T>`/`T[]`/literal); иначе биндинг остаётся snapshot (документированное ограничение). Чтение до цикла даёт zero-init (вместо TS `undefined`). `var`-циклы внутри функций/методов/стрелок — ограничение: компилятор не hoist'ит `var` в scope функции, биндинг ведёт себя как `let` (per-iteration cell); отклонение от TS hoisting, документировано. Специальные итерируемые for-of — per-iteration cells с #298 s5 (см. «Циклы» выше).
 
 **Snapshot-границы** (захват копией, как до v2c; документированное отклонение от TS):
 
@@ -58,9 +58,8 @@ function main(): void {
 | `var`-биндинг top-level цикла (`for (var i…)`, `for (var x of …)`) со статически выводимым типом | **Прямая ссылка на продвинутый static global** (#298 s3) | TS hoist'ит `var` в module scope — единая ячейка; все замыкания видят последнее значение |
 | `var`-биндинг top-level цикла с невыводимым типом (итерируемый-выражение без аннотации и т.п.) | Copy (snapshot) | Тип global'а нельзя вывести без визита тела; ограничение стадии |
 | Переменная без type-аннотации и без literal-инициализации (в блоках внутри функций) | Copy (snapshot) | Тип ячейки неизвестен без аннотации |
-| Спец-итерируемый for-of (`set`, `entries()`, `codePoints()`…) | Copy (snapshot) | Снимается #298 s5 |
 
-Границы «внешний блок» и «тело замыкания», бывшие snapshot-границами до #298 s4, сняты — см. «Env-иерархия» ниже.
+Границы «внешний блок» и «тело замыкания», бывшие snapshot-границами до #298 s4, сняты — см. «Env-иерархия» ниже. Граница «спец-итерируемые for-of» снята #298 s5 — биндинги спец-итераторов получают те же per-iteration cells, что и generic-массивы (см. [05-for-of.md](../05-control-flow/05-for-of.md)).
 
 **Env-иерархия (#298 s4):** блок-pre-scan распространён на тела замыканий (hoistClosure-путь): блок тела стрелки получает собственный env с ячейками для своих локалей, захваченных вложенными стрелками; вложенная стрелка получает `_outer`-ссылку на него. Блочные env образуют цепочку: env-параметр C-функции (тело замыкания или именованной вложенной функции) — корень; каждый блок со захваченными локалями добавляет env-структуру с полем `<parent> *_outer` (при затенении имени локалка переименовывается в `_blk_envN`). Аллокация блочного env делает `tsc_env_retain` родителя; destroy fn — парный `tsc_env_release(_outer)` — escaping-замыкание удерживает всю цепочку (ARC). Чтения из глубины идут по хопам: `env->_outer->_outer->x`. Покрытые позиции:
 
@@ -69,7 +68,7 @@ function main(): void {
 - циклы в телах замыканий — per-iteration cells (как на верхнем уровне и в функциях);
 - ранний `return` из тела замыкания — cleanup-изоляция сохраняется: LIFO-release env до выхода, escape-копии в массивах удерживают env (push делает `tsc_env_retain`, free-макрос массива — release по элементам).
 
-Остающиеся snapshot-расхождения: явные `Ref<T>`/`Mut<T>`-позиции (#292 → s6: станут E-ошибкой на примитивах), спец-итерируемые for-of (s5), `var`-hoisting внутри функций, невыводимые типы. Именованная функция, объявленная в теле замыкания, — E020 (документированная граница s4).
+Остающиеся snapshot-расхождения: явные `Ref<T>`/`Mut<T>`-позиции (#292 → s6: станут E-ошибкой на примитивах), `var`-hoisting внутри функций, невыводимые типы. Именованная функция, объявленная в теле замыкания, — E020 (документированная граница s4).
 
 Также читателями-по-прямой-ссылке (без env-захвата) являются таймерные колбэки (`setTimeout`/`setInterval`) и read-only тела `spawn`-блоков: продвинутый глобал виден им напрямую. Запись module-scope переменной из `spawn`-блока — ошибка E021 (data race; использовать `Atomic<T>`).
 
@@ -81,7 +80,7 @@ Class/array захватываются pointer'ом всегда (D4) — рас
 
 ### D3: String — shared cell в функциях, retain-copy на границах
 
-**Решение:** в shared-cell позициях (D2) `string` живёт в env-ячейке блока как value; destroy fn block env делает `tsc_string_release` по строковым ячейкам. На snapshot-границах — shallow copy struct + `tsc_string_retain` в env стрелки (как до v2c). Source жив.
+**Решение:** в shared-cell позициях (D2) `string` живёт в env-ячейке блока как value; destroy fn block env делает `tsc_string_release` по строковым ячейкам. Copy-in из borrow-биндинга (параметр функции, биндинг итерации for-of) эмитит `tsc_string_retain` — env владеет своей ссылкой, source не заимствуется (#298 s5). На snapshot-границах — shallow copy struct + `tsc_string_retain` в env стрелки (как до v2c). Source жив.
 
 Обоснование: String = ARC-managed value type; в общей ячейке переприсваивание (`msg = "ok"`) отпускает старое значение обычным путём присваивания, финальный release — destroy fn env. O(1) на всех платформах (no-op retain на embedded).
 
@@ -674,7 +673,7 @@ Value captures (примитивы, String через retain) разрешены
 
 ## 7. Отличия от TypeScript
 
-### 7.1 Примитивы: общая ячейка в функциях, snapshot на верхнем уровне
+### 7.1 Примитивы: общая ячейка в функциях, прямая ссылка на верхнем уровне
 
 ```typescript
 // Внутри функции — общая ячейка, идентично TypeScript (#295 v2c):
@@ -687,16 +686,16 @@ function demo(): void {
 ```
 
 ```typescript
-// Верхний уровень программы — snapshot (стадийная граница v2c):
+// Верхний уровень программы — прямая ссылка на static global (#298 s1–s2):
 let x: number = 1;
 const fn = (): number => x;
 x = 2;
-console.log(fn());   // TS: 2 (reference); TSClang: 1 (snapshot)
+console.log(fn());   // 2 в TS и в TSClang — единая ячейка
 ```
 
-**Причина границы:** блок верхнего уровня (main-wrapper) не проходит block pre-scan — ячейки создаются только для блоков тел функций. Верхнеуровневые стрелки, мутирующие глобалы, продолжают работать через static-продвижение (`func-ref-vars.ts`) там, где это возможно.
+**Причина:** глобал = static storage duration, одна ячейка на программу (TS module-scope). Компилятор продвигает переменную в static global при первом читателе-стрелке (`func-ref-vars.ts`); до #298 верхний уровень был snapshot-границей v2c.
 
-### 7.2 Строки: общая ячейка в функциях, snapshot на верхнем уровне
+### 7.2 Строки: общая ячейка в функциях, прямая ссылка на верхнем уровне
 
 ```typescript
 function demo(): void {
@@ -707,7 +706,7 @@ function demo(): void {
 }
 ```
 
-На верхнем уровне — snapshot/retain (как 7.1). **Причина:** String = value type (ARC struct); в функциях ячейка живёт в block env (destroy fn делает release), на границах — retained copy в env стрелки.
+На верхнем уровне — прямая ссылка на продвинутый static global (как 7.1). **В функциях** String-ячейка живёт в block env (destroy fn делает release; copy-in из borrow-биндинга — с `tsc_string_retain`, #298 s5).
 
 ### 7.3 Class/Array: идентично (reference/mutation)
 
@@ -744,7 +743,7 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 - Class/Array = reference capture (идентично TS)
 - Mutations visible (идентично TS)
 - Source жив после capture (идентично TS)
-- Примитивы/string в функциях и телах замыканий = shared cell (идентично TS, #295 v2c, #298 s4); на верхнем уровне = прямая ссылка на продвинутый static global (#298 s1–s2, идентично TS module-scope); оставшиеся границы (explicit-capture #292, спец-итерируемые for-of #298 s5, `var`-hoisting внутри функций) = snapshot (отклонения, документированы)
+- Примитивы/string в функциях и телах замыканий = shared cell (идентично TS, #295 v2c, #298 s4); на верхнем уровне = прямая ссылка на продвинутый static global (#298 s1–s2, идентично TS module-scope); спец-итерируемые for-of = per-iteration cells (#298 s5, идентично TS); оставшиеся границы (explicit-capture #292, `var`-hoisting внутри функций) = snapshot (отклонения, документированы)
 - Нет `move ||` (нет аналога в TS)
 
 ### П3: Лучше чем TS/C/C++/Rust
@@ -804,6 +803,11 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 | `closure-body-early-return-escape` | Ранний `return` из тела замыкания: cleanup env до выхода, escape-копия в массиве удерживает env (push = retain) (#298 s4, ожидает 1) |
 | `closure-body-string-cell` | string-ячейка в теле замыкания: destroy-release цепочки (#298 s4, ожидает abb) |
 | `closure-body-forof-cell` | `for (const x of ...)` в теле замыкания: per-iteration ячейки (#298 s4, ожидает 6) |
+| `set-arrow-per-iteration` | `for (let v of set)` + мутация после захвата: per-iteration ячейки спец-итератора (#298 s5, ожидает 101 102 103) |
+| `map-entries-arrow-per-iteration` | `for (let [k, v] of m.entries())` + мутация: ячейки k (String, retain-copy-in) и v (#298 s5, ожидает 101 102 a b) |
+| `string-codepoints-arrow-per-iteration` | `for (let cp of s.codePoints())` + мутация: uint32-ячейка (#298 s5, ожидает 1097 1216 1098) |
+| `urlparams-arrow-per-iteration` (14-stdlib/url) | `for (let [k, v] of u.searchParams)` + мутация: String-ячейки + ARC-строки url.h (#298 s5, ожидает a! b!) |
+| `param-string-cell-heap-arg` | Параметр-строка в ячейке env + heap-аргумент: copy-in с `tsc_string_retain`, баланс release (#298 s5, ожидает aaaabbbb!) |
 | `err-capture-move-use` | `[x]` без type = compile error |
 | `nested-fn/*` (13 кейсов) | Именованные вложенные функции — раздел 10: shared-cell capture, рекурсия, мутуальная рекурсия, фабрика, границы E020 |
 

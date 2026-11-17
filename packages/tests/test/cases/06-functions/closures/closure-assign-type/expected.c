@@ -22,6 +22,7 @@ tsc_closure makeGreeter_string(String prefix) {
     _nested_0_env *env = tsc_malloc(sizeof(_nested_0_env));
     *env = (_nested_0_env){._hdr = {._refcount = 1, ._destroy = _nested_0_env_destroy}};
     env->prefix = prefix;
+    tsc_string_retain(env->prefix);
     tsc_env_retain(env);
     _closure_1_env *_lambda_env_1 = tsc_malloc(sizeof(_closure_1_env));
     *_lambda_env_1 = (_closure_1_env){._hdr = {._refcount = 1, ._destroy = _closure_1_destroy}, ._outer = env};

@@ -1,0 +1,8 @@
+import { URL } from "std/url";
+const u = new URL("https://example.com/?a=1&b=2");
+const fs: Array<() => string> = [];
+for (let [k, v] of u.searchParams) {
+  fs.push((): string => k);
+  k = k + "!";
+}
+console.log(`${fs[0]()} ${fs[1]()}`);

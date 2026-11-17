@@ -26,10 +26,13 @@ typedef struct {
 typedef struct { TscURLSearchParams *_params; size_t _idx; } TscURLParamIter;
 
 static inline String _tsc_strdup_s(const char *s, size_t len) {
+    /* ARC String contract: heap strings carry a refcount, so closure cell
+       copy-ins and scope cleanups stay balanced (#298 s5). _tsc_str_make
+       ADOPTS the buffer — duplicate first, never pass a borrowed slice. */
     char *buf = (char *)malloc(len + 1);
-    memcpy(buf, s, len);
+    if (len > 0 && s) memcpy(buf, s, len);
     buf[len] = '\0';
-    return (String){ .data = buf, .length = len, .capacity = len + 1 };
+    return _tsc_str_make(buf, len, len + 1);
 }
 
 static inline TscURLSearchParams _tsc_parse_query(const char *q, size_t qlen) {
@@ -45,7 +48,7 @@ static inline TscURLSearchParams _tsc_parse_query(const char *q, size_t qlen) {
             i++;
             size_t val_start = i;
             while (i < qlen && q[i] != '&') i++;
-            free(v.data);
+            tsc_string_release(v);
             v = _tsc_strdup_s(q + val_start, i - val_start);
         }
         if (i < qlen && q[i] == '&') i++;
@@ -169,7 +172,7 @@ static inline TscURL tsc_url_parse_relative(String ref, TscURL *base) {
     out[pos] = '\0';
     free(segs); free(seg_lens); free(combined);
 
-    u.pathname = (String){ .data = out, .length = pos, .capacity = out_len + 1 };
+    u.pathname = _tsc_str_make(out, pos, pos + 1); /* ARC: adopts out */
     return u;
 }
 
@@ -193,13 +196,13 @@ static inline String tsc_url_search(TscURL *u) {
         if (i + 1 < u->searchParams.count) buf[pos++] = '&';
     }
     buf[pos] = '\0';
-    return (String){ .data = buf, .length = pos, .capacity = total + 1 };
+    return _tsc_str_make(buf, pos, pos + 1); /* ARC: adopts buf */
 }
 
 static inline void tsc_url_params_set(TscURL *u, String key, String value) {
     for (size_t i = 0; i < u->searchParams.count; i++) {
         if (tsc_string_eq(u->searchParams.entries[i].key, key)) {
-            free(u->searchParams.entries[i].value.data);
+            tsc_string_release(u->searchParams.entries[i].value);
             u->searchParams.entries[i].value = _tsc_strdup_s(value.data, value.length);
             return;
         }
@@ -215,8 +218,8 @@ static inline void tsc_url_params_set(TscURL *u, String key, String value) {
 static inline void tsc_url_params_delete(TscURL *u, String key) {
     for (size_t i = 0; i < u->searchParams.count; i++) {
         if (tsc_string_eq(u->searchParams.entries[i].key, key)) {
-            free(u->searchParams.entries[i].key.data);
-            free(u->searchParams.entries[i].value.data);
+            tsc_string_release(u->searchParams.entries[i].key);
+            tsc_string_release(u->searchParams.entries[i].value);
             /* shift remaining entries */
             for (size_t j = i; j + 1 < u->searchParams.count; j++)
                 u->searchParams.entries[j] = u->searchParams.entries[j + 1];
@@ -240,8 +243,8 @@ static inline TscURLSearchParams tsc_search_params_parse(String s) {
 
 static inline void tsc_search_params_free(TscURLSearchParams *sp) {
     for (size_t i = 0; i < sp->count; i++) {
-        free(sp->entries[i].key.data);
-        free(sp->entries[i].value.data);
+        tsc_string_release(sp->entries[i].key);
+        tsc_string_release(sp->entries[i].value);
     }
     sp->count = 0;
 }
@@ -257,10 +260,10 @@ static inline bool tsc_url_params_next(TscURLParamIter *it, TscURLParam *out) {
 }
 
 static inline void tsc_url_free(TscURL *u) {
-    free(u->protocol.data);
-    free(u->host.data);
-    free(u->pathname.data);
-    free(u->hash.data);
+    tsc_string_release(u->protocol);
+    tsc_string_release(u->host);
+    tsc_string_release(u->pathname);
+    tsc_string_release(u->hash);
     tsc_search_params_free(&u->searchParams);
 }
 
@@ -296,8 +299,7 @@ static inline String tsc_url_encode(String s) {
         }
     }
     buf[j] = '\0';
-    String r = {.data = buf, .length = j, .capacity = len};
-    return r;
+    return _tsc_str_make(buf, j, j + 1); /* ARC: adopts buf */
 }
 
 static inline String tsc_url_encode_component(String s) {
@@ -321,8 +323,7 @@ static inline String tsc_url_encode_component(String s) {
         }
     }
     buf[j] = '\0';
-    String r = {.data = buf, .length = j, .capacity = len};
-    return r;
+    return _tsc_str_make(buf, j, j + 1); /* ARC: adopts buf */
 }
 
 static inline int _tsc_hex_val(char c) {
@@ -348,8 +349,7 @@ static inline String tsc_url_decode(String s) {
         buf[j++] = s.data[i++];
     }
     buf[j] = '\0';
-    String r = {.data = buf, .length = j, .capacity = j};
-    return r;
+    return _tsc_str_make(buf, j, j + 1); /* ARC: adopts buf */
 }
 
 static inline String tsc_url_decode_component(String s) {

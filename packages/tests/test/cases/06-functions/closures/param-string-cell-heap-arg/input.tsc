@@ -1,0 +1,6 @@
+function greet(prefix: string): () => string {
+  const f = (): string => prefix + "!";
+  return f;
+}
+const g = greet("aaaa" + "bbbb");
+console.log(g());

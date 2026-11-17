@@ -1,0 +1,7 @@
+let s = "aØb";
+const fs: Array<() => number> = [];
+for (let cp of s.codePoints()) {
+  fs.push((): number => cp);
+  cp = cp + 1000;
+}
+console.log(`${fs[0]()} ${fs[1]()} ${fs[2]()}`);

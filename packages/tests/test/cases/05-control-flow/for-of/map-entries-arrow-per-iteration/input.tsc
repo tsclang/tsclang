@@ -1,0 +1,11 @@
+let m = new Map<string, i32>();
+m.set("a", 1);
+m.set("b", 2);
+const vs: Array<() => i32> = [];
+const ks: Array<() => string> = [];
+for (let [k, v] of m.entries()) {
+  vs.push((): i32 => v);
+  ks.push((): string => k);
+  v = v + 100;
+}
+console.log(`${vs[0]()} ${vs[1]()} ${ks[0]()} ${ks[1]()}`);
