@@ -888,6 +888,33 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
         const suppressConst = (enumDef2?.isEnum && !enumDef2?.isConst && !enumDef2?.isStringLiteralUnion) || enumDef2?.isKeyOf || enumDef2?.isMutable || enumDef2?.isStruct || (ctype.startsWith('opt_') && !typeAnn) || ctype.startsWith('_anon_') || ctype === 'Slice_u8' || (enumDef2 && !enumDef2.isEnum && !enumDef2.isStruct && !enumDef2.isScalarAlias && !enumDef2.isTuple) || isGenericClassInst || ctype.startsWith('volatile ') || ctype === 'Date';
         const qualifier = (varKind === 'const' && !suppressConst) ? 'const ' : '';
 
+        // #298 s3: literal-backed array marked by the block/top-level
+        // pre-scan (a `push` targets it in this subtree) — heap-copy the
+        // elements at declaration. Covers the `T[]`, `Array<T>` and inferred
+        // paths uniformly; closure-element literals are handled in their own
+        // branch below (they carry extra ARC metadata).
+        if (init?.kind === 'ArrayLit' && (init.elems?.length ?? 0) > 0
+            && !init.elems.some((e: { spread?: boolean }) => e.spread)
+            && ctype?.startsWith('Array_') && !ctype.endsWith(' *')
+            && ctype !== 'Array_tsc_closure'
+            && ctx._litHeapifyHas(name)) {
+          const elemIdent = ctype.slice(6);
+          const et = ctx._arrIdentToCType(elemIdent);
+          ctx._ensureArrayStruct(ctype, et);
+          ctx._expectedType = et.startsWith('Array_') ? et : null;
+          const elems = ctx.arrayLitToC(init, et, lines, depth);
+          ctx._expectedType = null;
+          const bufVar = `_lit_${ctx.tempCount++}`;
+          const heapVar = `_d_${ctx.tempCount++}`;
+          p(`${et} ${bufVar}[] = {${elems.join(', ')}};`);
+          p(`${et} *${heapVar} = (${et}*)_tsc_xmalloc(${elems.length} * sizeof(${et}));`);
+          p(`memcpy(${heapVar}, ${bufVar}, ${elems.length} * sizeof(${et}));`);
+          p(`${qualifier}${ctype} ${name} = {.data = ${heapVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
+          ctx._registerCleanup(`tsc_array_free_${elemIdent}(&${name})`);
+          ctx.define(name, { ctype, elemType: elemIdent, arrElemCType: et, isArray: true, arraySize: elems.length, varKind });
+          return;
+        }
+
         // Optional type (opt_T): handle null/value init
         if (ctype.startsWith('opt_') && init) {
           const isNullInit = init.kind === 'Literal' && init.litType === 'null';
@@ -1229,13 +1256,21 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
           return;
         }
 
-        // TypeArray of TypeFunc: array of closures
-        if (typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind === 'TypeFunc') {
+        // TypeArray of TypeFunc: array of closures. Also catches the
+        // `Array<() => T>` TypeRef spelling (parses as TypeRef, not TypeArray)
+        // so the symbol keeps closure metadata (param/return types for call
+        // sites) — without it calls default to int32_t returns.
+        const _fnElem = typeAnn?.kind === 'TypeArray' && typeAnn.element?.kind === 'TypeFunc' ? typeAnn.element
+          : typeAnn?.kind === 'TypeRef' && typeAnn.name === 'Array' && typeAnn.typeArgs?.length === 1 && typeAnn.typeArgs[0].kind === 'TypeFunc' ? typeAnn.typeArgs[0]
+          : null;
+        if (_fnElem) {
           const arrCtype = 'Array_tsc_closure';
-          const _arrElemClosureParams = (typeAnn.element.params ?? []).map((p: TypeAnn) => ctx.resolveType(p));
-          const _arrElemClosureRet = typeAnn.element.ret ? ctx.resolveType(typeAnn.element.ret) : undefined;
-          ctx.addTop(`typedef struct { tsc_closure *data; size_t length; size_t capacity; } ${arrCtype};`);
-          if (init?.kind === 'ArrayLit') {
+          const _arrElemClosureParams = (_fnElem.params ?? []).map((p: TypeAnn) => ctx.resolveType(p));
+          const _arrElemClosureRet = _fnElem.ret ? ctx.resolveType(_fnElem.ret) : undefined;
+          // Shared ensure (typedef + push/free macros), idempotent across
+          // declarations and the expression paths.
+          ctx._ensureArrayStruct(arrCtype, 'tsc_closure');
+          if (init?.kind === 'ArrayLit' && init.elems.length > 0) {
             const elemBorrowed: boolean[] = [];
             const elems = init.elems.map((e: { expr: Expression }) => {
               if (e.expr?.kind === 'Ident') {
@@ -1256,13 +1291,26 @@ export function _visitVarDecl(ctx: CodeGenContext, node: VarDecl, lines: string[
             });
             const litName = `_${name}_lit`;
             p(`tsc_closure ${litName}[] = {${elems.join(', ')}};`);
-            p(`${qualifier}${arrCtype} ${name} = {.data = ${litName}, .length = ${elems.length}, .capacity = ${elems.length}};`);
-            // ARC env: the array owns its elements — retain the ones copied
-            // from closure vars, release everything at scope exit
-            for (let ei = 0; ei < elemBorrowed.length; ei++) {
-              if (elemBorrowed[ei]) p(`tsc_env_retain(${name}.data[${ei}].env);`);
+            if (ctx._litHeapifyHas(name)) {
+              // #298 s3: push targets this array — heap-back the elements
+              // (realloc of the static literal would be UB).
+              const heapVar = `_d_${ctx.tempCount++}`;
+              p(`tsc_closure *${heapVar} = (tsc_closure*)_tsc_xmalloc(${elems.length} * sizeof(tsc_closure));`);
+              p(`memcpy(${heapVar}, ${litName}, ${elems.length} * sizeof(tsc_closure));`);
+              p(`${qualifier}${arrCtype} ${name} = {.data = ${heapVar}, .length = ${elems.length}, .capacity = ${elems.length}};`);
+              for (let ei = 0; ei < elemBorrowed.length; ei++) {
+                if (elemBorrowed[ei]) p(`tsc_env_retain(${name}.data[${ei}].env);`);
+              }
+              ctx._registerCleanup(`tsc_array_free_tsc_closure(&${name})`);
+            } else {
+              p(`${qualifier}${arrCtype} ${name} = {.data = ${litName}, .length = ${elems.length}, .capacity = ${elems.length}};`);
+              // ARC env: the array owns its elements — retain the ones copied
+              // from closure vars, release everything at scope exit
+              for (let ei = 0; ei < elemBorrowed.length; ei++) {
+                if (elemBorrowed[ei]) p(`tsc_env_retain(${name}.data[${ei}].env);`);
+              }
+              ctx._registerCleanup(`for (size_t _ci = 0; _ci < ${name}.length; _ci++) tsc_env_release(${name}.data[_ci].env)`);
             }
-            ctx._registerCleanup(`for (size_t _ci = 0; _ci < ${name}.length; _ci++) tsc_env_release(${name}.data[_ci].env)`);
             ctx.define(name, { ctype: arrCtype, isArray: true, elemType: 'tsc_closure', arrElemCType: 'tsc_closure', arraySize: elems.length, varKind, _arrElemClosureParams, _arrElemClosureRet });
             return;
           }

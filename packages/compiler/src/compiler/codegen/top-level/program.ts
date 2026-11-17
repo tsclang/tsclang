@@ -2,7 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { TscError } from '../../error.js';
 // program.ts
 import { DEFAULT_TARGET } from '@tsclang/shared';
-import type { Program, ClassDecl, ClassMember, TypeAnn, Decorator, Field, Stmt } from '@tsclang/ast';
+import type { Program, ClassDecl, ClassMember, TypeAnn, Decorator, Field, Stmt, Expression, TypeRef, TypeArray } from '@tsclang/ast';
 import { collectFuncRefVars } from '../../func-ref-vars.js';
 export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Pre-scan: find variables exclusively consumed by Object.fromEntries(varName)
@@ -402,6 +402,89 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
     // Shared with semantics.ts (W013) — see func-ref-vars.ts for the rules.
     ctx._funcRefVars = collectFuncRefVars(ast);
 
+    // #298 s3: top-level `var` loop bindings captured by arrows are a single
+    // module-scope cell (TS var semantics) — promote them to static globals
+    // the way stage 2 does for plain top-level vars. Symbols are defined NOW
+    // (root scope) so closure hoisting at any statement resolves them to a
+    // direct global reference; the C definitions are flushed after Phase A
+    // (class typedefs they may reference are emitted by then). Type must be
+    // statically derivable here (annotation, literal init, or a typed
+    // iterable); otherwise the binding keeps the snapshot semantics.
+    const _loopVarGlobals: { name: string; ctype: string }[] = [];
+    {
+      const _topDeclInfo = new Map<string, { typeAnn?: TypeAnn | null; init?: { kind?: string; elems?: { expr?: Expression; spread?: boolean }[] } | null }>();
+      for (const sn of ast.body) {
+        const sd = sn.kind === 'Export' ? sn.decl : sn;
+        if (sd?.kind === 'VarDecl' && sd.name) _topDeclInfo.set(sd.name, { typeAnn: sd.typeAnn, init: sd.init });
+      }
+      const _badCtype = (ct: string | null | undefined): boolean =>
+        !ct || ct === 'unknown' || ct === 'tsc_unknown' || ct === 'void';
+      const _safeInfer = (e: Expression | null | undefined): string | null => {
+        if (!e) return null;
+        try {
+          const ct = ctx.inferType(e);
+          return _badCtype(ct) ? null : ct;
+        } catch { return null; }
+      };
+      // Element ctype of a for-of iterable, derived without visiting bodies
+      const _iterElemCtype = (iter: Expression | null | undefined): string | null => {
+        if (iter?.kind !== 'Ident') return null;
+        const info = _topDeclInfo.get(iter.name);
+        if (!info) return null;
+        const ta = info.typeAnn as (TypeRef & { typeArgs?: TypeAnn[] }) | (TypeArray & { element?: TypeAnn }) | null | undefined;
+        if (ta?.kind === 'TypeRef' && ta.name === 'Array' && ta.typeArgs?.[0]) {
+          try { return ctx.resolveType(ta.typeArgs[0]); } catch { return null; }
+        }
+        if (ta?.kind === 'TypeArray' && ta.element) {
+          try { return ctx.resolveType(ta.element); } catch { return null; }
+        }
+        const elems = info.init?.elems;
+        if (info.init?.kind === 'ArrayLit' && elems?.length && !elems[0].spread) {
+          return _safeInfer(elems[0].expr ?? null);
+        }
+        return null;
+      };
+      const _promote = (name: string, ct: string | null) => {
+        if (!ct || _badCtype(ct)) return;
+        if (!ctx._funcRefVars?.has(name)) return;
+        const _cname = ctx._modulePrefix ? (ctx._modulePrefix + name) : name;
+        ctx.define(name, { ctype: ct, varKind: 'var', _promotedGlobal: true, _loopVarGlobal: true, _cAlias: _cname });
+        _loopVarGlobals.push({ name, ctype: ct });
+      };
+      const _scanVarLoops = (nd: unknown) => {
+        if (!nd || typeof nd !== 'object') return;
+        if (Array.isArray(nd)) { nd.forEach(_scanVarLoops); return; }
+        const n = nd as Record<string, unknown>;
+        if (n.kind === 'FuncDecl' || n.kind === 'ExtensionFunc' || n.kind === 'ClassDecl'
+            || n.kind === 'Arrow' || n.kind === 'FuncExpr') return;
+        if (n.kind === 'For') {
+          const _addDecl = (d: Record<string, unknown> | null | undefined) => {
+            if (d?.kind !== 'VarDecl' || d.varKind !== 'var' || typeof d.name !== 'string') return;
+            const ct = d.typeAnn ? (() => { try { return ctx.resolveType(d.typeAnn as TypeAnn); } catch { return null; } })()
+              : _safeInfer(d.init as Expression | null | undefined);
+            _promote(d.name, ct ?? null);
+          };
+          const init = n.init as Record<string, unknown> | null | undefined;
+          if (init?.kind === 'VarDecls') for (const d of (init.decls as Record<string, unknown>[] | undefined) ?? []) _addDecl(d);
+          else _addDecl(init);
+        } else if (n.kind === 'ForOf') {
+          const bind = n.binding as (Record<string, unknown> & { typeAnn?: TypeAnn }) | null | undefined;
+          if (bind?.kind === 'Ident' && n.varKind === 'var' && typeof bind.name === 'string') {
+            const ct = bind.typeAnn ? (() => { try { return ctx.resolveType(bind.typeAnn!); } catch { return null; } })()
+              : _iterElemCtype(n.iterable as Expression | null | undefined);
+            _promote(bind.name, ct ?? null);
+          }
+        }
+        for (const v of Object.values(n)) {
+          if (v && typeof v === 'object') _scanVarLoops(v);
+        }
+      };
+      for (const sn of ast.body) {
+        const sd = sn.kind === 'Export' ? sn.decl : sn;
+        if (sd) _scanVarLoops(sd);
+      }
+    }
+
     // Hoisting (#295 v2a): index not-yet-processed top-level functions by
     // name. Built before ANY emission phase can run exprToC (Phase A.0 static
     // splits may reference later functions) so forward pulls always resolve.
@@ -539,6 +622,20 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
       }
     }
 
+    // #298 s3: flush the promoted `var` loop-binding globals after the type
+    // phase — class typedefs they reference are registered by now. Zero-init
+    // statics: the runtime value is assigned by the loop init inside main
+    // (TS var hoisting reads `undefined` before the loop; a zeroed cell is
+    // the numeric-neutral analogue).
+    if (_loopVarGlobals.length > 0) {
+      for (const g of _loopVarGlobals) {
+        const _cname = ctx._modulePrefix ? (ctx._modulePrefix + g.name) : g.name;
+        ctx.topLevel.push(`static ${g.ctype} ${_cname};`);
+        ctx.addFwd(`static ${g.ctype} ${_cname};`);
+      }
+      ctx.topLevel.push('');
+    }
+
     // Monomorphization pre-pass: Walk the AST to find explicit generic class
     // demands (TypeRef + New) and emit mono classes before function codegen.
     // Skips generic class/function bodies (they're templates, not concrete code).
@@ -569,6 +666,40 @@ export function visitProgram(ctx: CodeGenContext, ast: Program) {
         }
       };
       for (const node of ast.body) _scanMono(node);
+    }
+
+    // #298 s3: top-level statements don't pass through visitBlock, so seed
+    // the literal-heapify marks here: literal-backed arrays that receive
+    // `push` anywhere at top level heap-copy their elements at declaration
+    // (push on the static C literal would realloc non-heap storage — UB).
+    {
+      const _litArrays = new Set<string>();
+      for (const node of ast.body) {
+        const n = (node.kind === 'Export' ? node.decl : node) as { kind?: string; name?: string; init?: { kind?: string; elems?: { spread?: boolean }[] } } | undefined;
+        if (n?.kind === 'VarDecl' && n.name && n.init?.kind === 'ArrayLit'
+            && (n.init.elems?.length ?? 0) > 0 && !(n.init.elems ?? []).some((e) => e.spread)) {
+          _litArrays.add(n.name);
+        }
+      }
+      const _rootMarks = new Set<string>();
+      if (_litArrays.size > 0) {
+        const walk = (nd: unknown): void => {
+          if (!nd || typeof nd !== 'object') return;
+          if (Array.isArray(nd)) { for (const x of nd) walk(x); return; }
+          const o = nd as Record<string, unknown>;
+          if (o.kind === 'Member' && o.prop === 'push' && (o.object as Record<string, unknown> | undefined)?.kind === 'Ident') {
+            const nm = (o.object as { name?: string }).name;
+            if (nm && _litArrays.has(nm)) _rootMarks.add(nm);
+          }
+          for (const key of Object.keys(o)) {
+            if (key === 'parent') continue;
+            const child = o[key];
+            if (child && typeof child === 'object') walk(child);
+          }
+        };
+        for (const node of ast.body) walk(node);
+      }
+      ctx._litHeapifyStack.push(_rootMarks);
     }
 
     // Phase B: Process functions, imports, and everything else.

@@ -431,12 +431,21 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         };
         const negVal = negLitVal(node.index);
         const isNegLit = negVal !== null;
+        // Array subscripts must be integers in C: a `number`-typed index
+        // variable (double under defaultNumber=f64) needs an explicit cast —
+        // TS allows float-typed index expressions, the C compiler does not.
+        // Literal indices are emitted verbatim (already integral text).
+        const _idxToInt = (idxExpr: Expression, idxC: string): string => {
+          if (idxExpr.kind === 'Literal' && idxExpr.litType === 'number') return idxC;
+          const _t = ctx.inferType(idxExpr);
+          return _t === 'double' || _t === 'float' ? `(size_t)(${idxC})` : idxC;
+        };
         // Pointer to Array (Ref<T[]>): const Array_X * → obj->data[i]
         const _ptrArr = objType?.match(/^(?:const )?Array_(\w+) \*$/);
         if (_ptrArr) {
           if (isNegLit) return `${obj}->data[${obj}->length - ${negVal}]`;
           const idx = ctx.exprToC(node.index, lines, depth);
-          return `${obj}->data[${idx}]`;
+          return `${obj}->data[${_idxToInt(node.index, idx)}]`;
         }
         // Array_T indexing: arr[i] → arr.data[i], arr[-1] → arr.data[arr.length - 1]
         if (objType?.startsWith('Array_')) {
@@ -453,17 +462,17 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
               return `tsc_array_get_checked_${elemIdent}(${obj}, ${idx})`;
             }
           }
-          return `${obj}.data[${idx}]`;
+          return `${obj}.data[${_idxToInt(node.index, idx)}]`;
         }
         // Slice_T / MutSlice_T indexing: s[i] → s.ptr[i]
         if (objType?.startsWith('Slice_') || objType?.startsWith('MutSlice_')) {
           const idx = ctx.exprToC(node.index, lines, depth);
-          return isNegLit ? `${obj}.ptr[${obj}.length - ${negVal}]` : `${obj}.ptr[${idx}]`;
+          return isNegLit ? `${obj}.ptr[${obj}.length - ${negVal}]` : `${obj}.ptr[${_idxToInt(node.index, idx)}]`;
         }
         // Buffer indexing: buf[i] → buf.data[i]
         if (objType === 'Buffer' || objType === 'DataView') {
           const idx = ctx.exprToC(node.index, lines, depth);
-          return `${obj}.data[${idx}]`;
+          return `${obj}.data[${_idxToInt(node.index, idx)}]`;
         }
         // String indexing: s[i] → (uint8_t)TSC_STRING_GET_CHAR(s, i)
         if (objType === 'String') {
@@ -472,10 +481,10 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
             return `(uint8_t)TSC_STRING_GET_CHAR(${obj}, ${obj}.length - ${n})`;
           }
           const idx = ctx.exprToC(node.index, lines, depth);
-          return `(uint8_t)TSC_STRING_GET_CHAR(${obj}, ${idx})`;
+          return `(uint8_t)TSC_STRING_GET_CHAR(${obj}, ${_idxToInt(node.index, idx)})`;
         }
         const idx = ctx.exprToC(node.index, lines, depth);
-        return `${obj}[${idx}]`;
+        return `${obj}[${_idxToInt(node.index, idx)}]`;
       }
 
       case 'RangeIndex': {
@@ -551,6 +560,12 @@ export function exprToC(ctx: CodeGenContext, node: Expression, lines: string[] =
         }
         const arrType = `Array_${ctx.cTypeToIdent(elemType)}`;
         ctx._ensureArrayStruct(arrType, elemType);
+        // Empty literal: NULL storage. A zero-length C array (`T x[] = {}`)
+        // has static storage — a later `push` would realloc a non-heap
+        // pointer (UB, crashes on Windows). NULL reallocs cleanly.
+        if (elems.length === 0) {
+          return `(${arrType}){.data = NULL, .length = 0, .capacity = 0}`;
+        }
         const dataVar = `_arr_data_${ctx.tempCount++}`;
         const prevExpected = ctx._expectedType;
         if (arrType?.startsWith('Array_') && ctx._expectedType?.startsWith('Array_')) {

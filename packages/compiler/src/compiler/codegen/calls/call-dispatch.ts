@@ -238,15 +238,19 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
     // tsc_closure call: closure variable or func-ptr variable (not a regular function).
     // Env-forwarding convention: every fn stored in tsc_closure.fn takes
     // `void *env` first — capturing closures get their env, adapters of plain
-    // functions and non-capturing lambdas ignore it.
-    if (sym?.ctype === 'tsc_closure' && (!sym.funcName || sym.funcPtr) && callee.kind === 'Ident') {
+    // functions and non-capturing lambdas ignore it. A `tsc_closure *`
+    // binding (for-of borrow of an array element) dereferences via `->`.
+    const _cloSym = (sym?.ctype === 'tsc_closure' || sym?.ctype === 'tsc_closure *') ? sym : null;
+    const _cloPtr = _cloSym?.ctype === 'tsc_closure *';
+    if (_cloSym && (!_cloSym.funcName || _cloSym.funcPtr) && callee.kind === 'Ident') {
       const argsC = ctx.argsToC(args, lines, depth);
-      const paramTypes = sym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
-      const retType = sym.closureRetType ?? ctx.inferType(node) ?? 'void';
+      const paramTypes = _cloSym.closureParamTypes ?? (node.args ?? []).map((a: Argument) => ctx.inferType(a.expr) ?? 'void *');
+      const retType = _cloSym.closureRetType ?? ctx.inferType(node) ?? 'void';
       ctx._releaseQuarantineBy(callee.name);
       const sigArgs = paramTypes.length > 0 ? ['void *', ...paramTypes].join(', ') : 'void *';
-      const callArgs = argsC ? `${callee.name}.env, ${argsC}` : `${callee.name}.env`;
-      return `((${retType} (*)(${sigArgs}))${callee.name}.fn)(${callArgs})`;
+      const acc = _cloPtr ? '->' : '.';
+      const callArgs = argsC ? `${callee.name}${acc}env, ${argsC}` : `${callee.name}${acc}env`;
+      return `((${retType} (*)(${sigArgs}))${callee.name}${acc}fn)(${callArgs})`;
     }
 
     // tsc_closure call from expression (e.g. arr[0](args))

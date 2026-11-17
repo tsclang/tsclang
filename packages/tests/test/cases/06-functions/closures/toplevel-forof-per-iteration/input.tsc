@@ -1,0 +1,6 @@
+const fns: Array<() => number> = [];
+const xs: Array<number> = [10, 20, 30];
+for (const x of xs) {
+  fns.push((): number => x);
+}
+for (const f of fns) console.log(`${f()}`);

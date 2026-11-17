@@ -46,13 +46,17 @@ function main(): void {
 }
 ```
 
-**Циклы (#295 v2c-2):** `for (let i...)` / `for (let/const x of ...)` с захватом body-стрелками — per-iteration cells (свежий env на итерацию: copy-in на входе, copy-out для C-style `for` на cleanup-пути, release если замыкания не удержали). Мутация в теле видна same-iteration стрелкам; замыкания разных итераций держат разные значения — семантика TS, см. [05-for-of.md](../05-control-flow/05-for-of.md). `var`-loop — одно binding, ячеек нет. Специальные итерируемые for-of (`set`, `entries()`, `codePoints()`…) — snapshot.
+**Циклы (#295 v2c-2, #298 s3):** `for (let i...)` / `for (let/const x of ...)` с захватом body-стрелками — per-iteration cells (свежий env на итерацию: copy-in на входе, copy-out для C-style `for` на cleanup-пути, release если замыкания не удержали). Мутация в теле видна same-iteration стрелкам; copy-out идёт до header-update, поэтому update работает со «свежим» значением — ровно как TS создаёт новую per-iteration среду до update. Замыкания разных итераций держат разные значения — семантика TS, см. [05-for-of.md](../05-control-flow/05-for-of.md). Механизм работает и на верхнем уровне (тело `main`), и в функциях.
+
+**`var`-циклы на верхнем уровне (#298 s3):** `for (var i...)` / `for (var x of ...)` с захватом стрелкой — единый биндинг, как в TS: имя hoist'ится в module scope, поэтому компилятор продвигает его в static global (по механизму стадии 2 — упоминание в стрелке триггерит продвижение). Инициализация цикла и привязка for-of становятся присваиваниями глобала; замыкания ссылаются на него напрямую и видят последнее значение. Продвижение требует статически выводимого типа (аннотация на биндинге, literal-инициализация, типизированный итерируемый `Array<T>`/`T[]`/literal); иначе биндинг остаётся snapshot (документированное ограничение). Чтение до цикла даёт zero-init (вместо TS `undefined`). `var`-циклы внутри функций/методов/стрелок — в scope enclosing-функции, не продвигаются (снимается #298 s4). Специальные итерируемые for-of (`set`, `entries()`, `codePoints()`…) — snapshot (снимается #298 s5).
 
 **Snapshot-границы** (захват копией, как до v2c; документированное отклонение от TS):
 
 | Позиция стрелки/переменной | Capture | Причина |
 |---------------------------|---------|---------|
 | Стрелка/метод над top-level переменной (любой читатель: тело функции, стрелка в любой позиции, метод класса, reactive-callback, library mode, `@static`) | **Прямая ссылка, без захвата** (#298 s1–s2) | Глобал = static storage duration, одна ячейка на программу (TS module-scope). Компилятор продвигает переменную при первом читателе и эмитит tentative forward-declaration до кода, ссылающегося раньше определения (лямбды, методы). Signal-переменные не продвигаются — reactive env держит их по указателю |
+| `var`-биндинг top-level цикла (`for (var i…)`, `for (var x of …)`) со статически выводимым типом | **Прямая ссылка на продвинутый static global** (#298 s3) | TS hoist'ит `var` в module scope — единая ячейка; все замыкания видят последнее значение |
+| `var`-биндинг top-level цикла с невыводимым типом (итерируемый-выражение без аннотации и т.п.) | Copy (snapshot) | Тип global'а нельзя вывести без визита тела; ограничение стадии |
 | Захват из внешнего блока (не непосредственный родитель) | Copy (snapshot) | Env-chain через несколько блоков — вне стадии v2c (снимается #298 s4) |
 | Стрелка внутри тела другого замыкания | Copy (snapshot) | Блок env недостижим лексически (E020 для nested fn) |
 | Переменная без type-аннотации и без literal-инициализации (в блоках внутри функций) | Copy (snapshot) | Тип ячейки неизвестен без аннотации |
@@ -777,6 +781,10 @@ TSClang: env = ARC-значение на heap (`tsc_malloc`) — замыкан�
 | `shared-cell-for-mutate` | Мутация `i` в теле видна same-iteration стрелке + copy-out в header (v2c-2) |
 | `shared-cell-forof-capture` | `for (const x of ...)`: escaping-стрелки держат значения итераций (10,20) |
 | `shared-cell-forof-mutate` | `for (let x of ...)`: мутация `x` в теле видна same-iteration стрелке (v2c-2) |
+| `toplevel-let-per-iteration` | Top-level `for (let i...)` + push стрелки: замыкания держат значения своих итераций (0,1,2) (#298 s3) |
+| `toplevel-let-mutate-copyout` | Top-level `for (let i...)` + мутация после захвата: same-iteration видимость + copy-out до header-update (1,3) |
+| `toplevel-var-single-binding` | Top-level `for (var i...)`: продвижение в static global, все замыкания видят последнее значение (3,3,3) |
+| `toplevel-forof-per-iteration` | Top-level `for (const x of ...)`: per-iteration ячейки + вызов for-of-биндинга замыкания (10,20,30) |
 | `err-capture-move-use` | `[x]` без type = compile error |
 | `nested-fn/*` (13 кейсов) | Именованные вложенные функции — раздел 10: shared-cell capture, рекурсия, мутуальная рекурсия, фабрика, границы E020 |
 

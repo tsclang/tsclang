@@ -487,7 +487,9 @@ export function _inferCall(ctx: CodeGenContext, node: Call): string {
       // through funcName — same result type. But a factory function whose
       // RETURN type is TypeFunc also has ctype 'tsc_closure'; calling it
       // yields the closure itself, so exclude funcName-without-funcPtr.
-      if (sym?.ctype === 'tsc_closure' && sym.closureRetType && (sym.funcPtr || !sym.funcName)) return sym.closureRetType;
+      // A `tsc_closure *` binding (for-of borrow of an array element) calls
+      // through `->` — same return type.
+      if ((sym?.ctype === 'tsc_closure' || sym?.ctype === 'tsc_closure *') && sym.closureRetType && (sym.funcPtr || !sym.funcName)) return sym.closureRetType;
       // Overload set: infer from the variant the call actually resolves to
       // (arg count, then arg types) — must mirror callToC's matching.
       if (sym?.overloads?.length) {

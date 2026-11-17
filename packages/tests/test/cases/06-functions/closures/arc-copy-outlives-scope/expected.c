@@ -42,9 +42,9 @@ int main(void) {
     Array_f64 sink = {.data = NULL, .length = 0, .capacity = 0};
     for (double i = 0; i < 100; i++) {
         tsc_array_push_f64(&sink, i);
-        tsc_array_free_f64(&sink);
     }
     printf("%s\n", tsc_dtoa((double)(((double (*)(void *))kept.fn)(kept.env))));
+    tsc_array_free_f64(&sink);
     tsc_env_release(kept.env);
     return 0;
 }

@@ -37,7 +37,7 @@ static inline String tsc_unknown_get_string(const tsc_unknown *self) { String *p
 #endif
 static inline void tsc_unknown_drop(tsc_unknown *self) { if (self->vtable && self->vtable->drop) self->vtable->drop(self->buffer); }
 #define tsc_array_free_tsc_unknown(arr) do { Array_tsc_unknown *_a_ = (arr); if (_a_->data) { for (size_t _i_ = 0; _i_ < _a_->length; _i_++) tsc_unknown_drop(&_a_->data[_i_]); if (_a_->capacity > 0) free(_a_->data); } _a_->data = NULL; _a_->length = 0; _a_->capacity = 0; } while(0)
-#define tsc_array_push_tsc_unknown(arr, val) do { Array_tsc_unknown *_a_ = (arr); tsc_unknown _v_ = (val); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (tsc_unknown*)realloc(_a_->data, _nc_ * sizeof(tsc_unknown)); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)
+#define tsc_array_push_tsc_unknown(arr, ...) do { Array_tsc_unknown *_a_ = (arr); tsc_unknown _v_ = (__VA_ARGS__); if (_a_->length >= _a_->capacity) { size_t _nc_ = _a_->capacity == 0 ? 8 : _a_->capacity * 2; _a_->data = (tsc_unknown*)realloc(_a_->data, _nc_ * sizeof(tsc_unknown)); _a_->capacity = _nc_; } _a_->data[_a_->length++] = _v_; } while(0)
 
 int main(void) {
     TSC_INIT();

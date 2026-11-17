@@ -513,25 +513,55 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
             const parts = simpleDecls.map((d) => {
               const ctype = d.typeAnn ? ctx.resolveType(d.typeAnn) : (d.init ? ctx.inferType(d.init) : 'int32_t');
               const initExpr = d.init ? ctx.exprToC(d.init, lines, depth) : '0';
-              ctx.define(d.name, { ctype, varKind: d.varKind });
-              return { ctype, name: d.name, initExpr };
+              // #298 s3: a promoted `var` loop binding is a module-scope
+              // static global — the init assigns it, no local declaration
+              const _gsym = d.varKind === 'var' ? ctx.lookup(d.name) : null;
+              const _glob = _gsym?._loopVarGlobal === true;
+              if (!_glob) ctx.define(d.name, { ctype, varKind: d.varKind });
+              return { ctype, name: d.name, cname: _gsym?._cAlias ?? d.name, initExpr, glob: _glob };
             });
-            const allSameType = parts.every((pt: { ctype: string }) => pt.ctype === parts[0].ctype);
-            if (allSameType) {
-              initC = `${parts[0].ctype} ` + parts.map((pt: { name: string; initExpr: string }) => `${pt.name} = ${pt.initExpr}`).join(', ');
-            } else {
-              const I = ' '.repeat(ctx.indent * depth);
-              for (const pt of parts) {
-                lines.push(`${I}${pt.ctype} ${pt.name} = ${pt.initExpr};`);
+            const locals = parts.filter((pt) => !pt.glob);
+            const globals = parts.filter((pt) => pt.glob);
+            if (locals.length === 0) {
+              initC = globals.map((pt) => `${pt.cname} = ${pt.initExpr}`).join(', ');
+            } else if (globals.length === 0) {
+              const allSameType = parts.every((pt: { ctype: string }) => pt.ctype === parts[0].ctype);
+              if (allSameType) {
+                initC = `${parts[0].ctype} ` + parts.map((pt: { name: string; initExpr: string }) => `${pt.name} = ${pt.initExpr}`).join(', ');
+              } else {
+                const I = ' '.repeat(ctx.indent * depth);
+                for (const pt of parts) {
+                  lines.push(`${I}${pt.ctype} ${pt.name} = ${pt.initExpr};`);
+                }
+                initC = '';
               }
-              initC = '';
+            } else {
+              // Mixed promoted/local: locals are declared on their own lines
+              // before the loop (C for-init cannot mix decls and assignments)
+              const I = ' '.repeat(ctx.indent * depth);
+              const allSameType = locals.every((pt: { ctype: string }) => pt.ctype === locals[0].ctype);
+              if (allSameType) {
+                lines.push(`${I}${locals[0].ctype} ` + locals.map((pt: { name: string; initExpr: string }) => `${pt.name} = ${pt.initExpr}`).join(', ') + ';');
+              } else {
+                for (const pt of locals) {
+                  lines.push(`${I}${pt.ctype} ${pt.name} = ${pt.initExpr};`);
+                }
+              }
+              initC = globals.map((pt) => `${pt.cname} = ${pt.initExpr}`).join(', ');
             }
           } else if (node.init.kind === 'VarDecl') {
             const { varKind, name, typeAnn, init } = node.init;
-            const ctype = typeAnn ? ctx.resolveType(typeAnn) : (init ? ctx.inferType(init) : 'int32_t');
             const initExpr = init ? ctx.exprToC(init, lines, depth) : '0';
-            initC = `${ctype} ${name} = ${initExpr}`;
-            ctx.define(name, { ctype, varKind });
+            // #298 s3: promoted `var` binding — assign the module-scope
+            // global instead of declaring a loop-local
+            const _gsym = varKind === 'var' ? ctx.lookup(name) : null;
+            if (_gsym?._loopVarGlobal === true) {
+              initC = `${_gsym._cAlias ?? name} = ${initExpr}`;
+            } else {
+              const ctype = typeAnn ? ctx.resolveType(typeAnn) : (init ? ctx.inferType(init) : 'int32_t');
+              initC = `${ctype} ${name} = ${initExpr}`;
+              ctx.define(name, { ctype, varKind });
+            }
           } else if (node.init.kind === 'ExprStmt') {
             initC = ctx.exprToC(node.init.expr, lines, depth);
           }
@@ -885,10 +915,18 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
               if (_isComplex) {
                 const ptrQual = node.varKind === 'const' ? 'const ' : '';
                 lines.push(`${II}${ptrQual}${_elemC} *${_bindName} = ${_elemVar}.value;`);
-                ctx.define(_bindName, { ctype: `${_elemC} *`, varKind: node.varKind });
+                ctx.define(_bindName, { ctype: `${_elemC} *`, varKind: node.varKind,
+                  closureParamTypes: _forOfSym?._arrElemClosureParams, closureRetType: _forOfSym?._arrElemClosureRet });
               } else {
-                lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
-                ctx.define(_bindName, { ctype: _elemC, varKind: node.varKind });
+                // #298 s3: promoted `var` binding — assign the module-scope
+                // global instead of declaring a per-iteration local
+                const _gsym = node.varKind === 'var' ? ctx.lookup(_bindName) : null;
+                if (_gsym?._loopVarGlobal === true) {
+                  lines.push(`${II}${_gsym._cAlias ?? _bindName} = ${_elemVar}.value;`);
+                } else {
+                  lines.push(`${II}${qual}${_elemC} ${_bindName} = ${_elemVar}.value;`);
+                  ctx.define(_bindName, { ctype: _elemC, varKind: node.varKind });
+                }
               }
             }
             // #295 v2c-2: captured simple binding — per-iteration cell (no copy-out).
@@ -922,6 +960,10 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           elemType = ctx.resolveType(node.binding.typeAnn);
         } else if (iterSym?.arrElemCType) {
           elemType = iterSym.arrElemCType;
+        } else if (iterSym?.ctype?.startsWith('Array_')) {
+          // TypeRef-spelled `Array<T>` annotations may leave arrElemCType
+          // unset — derive it from the emitted Array_<ident> ctype
+          elemType = ctx._arrIdentToCType(iterSym.ctype.slice(6));
         } else if (iterSym?.ctype === 'String') {
           elemType = 'char';
         }
@@ -935,10 +977,18 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           if (_isComplexType) {
             const ptrQual = node.varKind === 'const' ? 'const ' : '';
             lines.push(`${II}${ptrQual}${elemType} *${bindName} = &${iterC}.data[${ivar}];`);
-            ctx.define(bindName, { ctype: `${elemType} *`, varKind: node.varKind });
+            ctx.define(bindName, { ctype: `${elemType} *`, varKind: node.varKind,
+              closureParamTypes: iterSym?._arrElemClosureParams, closureRetType: iterSym?._arrElemClosureRet });
           } else {
-            lines.push(`${II}${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
-            ctx.define(bindName, { ctype: elemType, varKind: node.varKind });
+            // #298 s3: promoted `var` binding — assign the module-scope
+            // global instead of declaring a per-iteration local
+            const _gsym = node.varKind === 'var' ? ctx.lookup(bindName) : null;
+            if (_gsym?._loopVarGlobal === true) {
+              lines.push(`${II}${_gsym._cAlias ?? bindName} = ${iterC}.data[${ivar}];`);
+            } else {
+              lines.push(`${II}${qual}${elemType} ${bindName} = ${iterC}.data[${ivar}];`);
+              ctx.define(bindName, { ctype: elemType, varKind: node.varKind });
+            }
           }
         } else if (node.binding.kind === 'ArrayPattern') {
           for (let i = 0; i < node.binding.elems.length; i++) {

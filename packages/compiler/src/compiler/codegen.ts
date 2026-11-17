@@ -231,6 +231,11 @@ export interface PoolVar {
 export interface CleanupLevel {
   list: string[];
   set: Set<string>;
+  // Index into the scope stack this frame was opened for (#298 s3): lets a
+  // cleanup anchor to the scope that OWNS the symbol instead of the
+  // innermost frame (e.g. array `push` inside a loop must not free the array
+  // every iteration when it is declared outside the loop).
+  scopeIdx?: number;
 }
 
 export interface StaticTask {
@@ -543,6 +548,18 @@ class Context {
   // map right before visiting the body; the body block's pre-scan consumes it.
   _pendingLoopCells!: Map<string, { ctype: string; copyOut: boolean }> | null;
 
+  // #298 s3: hoisted closures are memoized per arrow node — some call paths
+  // evaluate one argument expression twice (array `push` builds the call line
+  // from a second pass over the element). A second hoist would emit a fresh
+  // env/fn pair and split declaration/use numbering, producing invalid C.
+  _closureMemo!: WeakMap<object, NonNullable<unknown>>;
+
+  // #298 s3: names of block-local literal-backed arrays that receive `push`
+  // anywhere in the block subtree. Their declaration heap-copies the
+  // elements — a push on the static C literal would realloc non-heap
+  // storage (UB). Stack of sets, one per active block.
+  _litHeapifyStack!: Set<string>[];
+
   // Function-visit state
   _curFuncName!: string | null;
   _throwsCtx!: ThrowsCtx | null;
@@ -677,7 +694,7 @@ class Context {
     this.currentFuncReturnType = null;
 
     // Cleanup: per-block stack. Level 0 = main scope, level 1+ = function/block scopes
-    this._blockCleanupStack = [{ list: [], set: new Set() }];
+    this._blockCleanupStack = [{ list: [], set: new Set(), scopeIdx: 0 }];
 
     // goto cleanup for throws functions with owned vars
     this._usesGotoCleanup = false;
@@ -742,6 +759,8 @@ class Context {
     this._fnBodyParamsForCells = null;
     this._buildingClosureBody = false;
     this._pendingLoopCells = null;
+    this._closureMemo = new WeakMap();
+    this._litHeapifyStack = [];
     this._prototypedFuncs = new Set();
     this._processedVarDecls = new Set();
     this._deferredStaticInits = new Map();
@@ -1120,6 +1139,40 @@ class Context {
       top.set.add(stmt);
       top.list.push(stmt);
     }
+  }
+
+  // #298 s3: register a cleanup owned by a SYMBOL (e.g. the heap free for an
+  // array grown via `push`) in the cleanup frame of the scope where the
+  // symbol is declared — not the innermost frame. Without this, pushing to an
+  // array declared outside a loop would free (reset) it at the end of every
+  // iteration. Falls back to _registerCleanup when the declaration frame
+  // cannot be identified (goto-cleanup mode, isolated body builds).
+  _registerSymCleanup(symName: string, stmt: string) {
+    if (this._usesGotoCleanup) return this._registerCleanup(stmt);
+    let symIdx = -1;
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (this.scopes[i].has(symName)) { symIdx = i; break; }
+    }
+    if (symIdx >= 0) {
+      for (let f = this._blockCleanupStack.length - 1; f >= 0; f--) {
+        const lvl = this._blockCleanupStack[f];
+        if (lvl.scopeIdx === symIdx) {
+          if (!lvl.set.has(stmt)) {
+            lvl.set.add(stmt);
+            lvl.list.push(stmt);
+          }
+          return;
+        }
+      }
+    }
+    this._registerCleanup(stmt);
+  }
+
+  // #298 s3: is `name` a literal-backed array marked for heapification by
+  // an enclosing block's pre-scan (a `push` targets it in that subtree)?
+  _litHeapifyHas(name: string): boolean {
+    for (const s of this._litHeapifyStack) if (s.has(name)) return true;
+    return false;
   }
 
   _pushPostStmtCleanup(line: string) {

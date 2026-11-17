@@ -98,6 +98,37 @@ export function preScanNestedFns(ctx: CodeGenContext, block: Block, lines: strin
   // cells. Consume unconditionally so a stray map never leaks past this block.
   const loopCells = ctx._pendingLoopCells;
   ctx._pendingLoopCells = null;
+  // #298 s3: literal-backed arrays that receive `push` anywhere in this
+  // block subtree must be heap-backed from the declaration — push would
+  // realloc the static C literal (UB). Fill the block's mark set before any
+  // early return below.
+  {
+    const _litArrays = new Set<string>();
+    for (const s of block.body) {
+      if (s.kind === 'VarDecl' && s.name && s.init?.kind === 'ArrayLit'
+          && (s.init.elems?.length ?? 0) > 0 && !s.init.elems.some((e: { spread?: boolean }) => e.spread)) {
+        _litArrays.add(s.name);
+      }
+    }
+    const _marks = ctx._litHeapifyStack[ctx._litHeapifyStack.length - 1];
+    if (_litArrays.size > 0 && _marks) {
+      const walk = (n: unknown): void => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { for (const x of n) walk(x); return; }
+        const nd = n as Record<string, unknown>;
+        if (nd.kind === 'Member' && nd.prop === 'push' && (nd.object as Record<string, unknown> | undefined)?.kind === 'Ident') {
+          const nm = (nd.object as { name?: string }).name;
+          if (nm && _litArrays.has(nm)) _marks.add(nm);
+        }
+        for (const key of Object.keys(nd)) {
+          if (key === 'kind') continue;
+          const child = nd[key];
+          if (child && typeof child === 'object') walk(child);
+        }
+      };
+      walk(block.body);
+    }
+  }
   const fns = block.body.filter((s: Stmt) => s.kind === 'FuncDecl') as FuncDecl[];
   if (fns.length > 0 && ctx._buildingClosureBody) {
     throw ctx.errorCode('E020', fns[0], { detail: 'nested function declarations inside closures are not supported yet (planned for shared-cell closures)' });

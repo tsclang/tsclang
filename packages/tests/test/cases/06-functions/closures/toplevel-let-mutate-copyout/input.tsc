@@ -1,0 +1,6 @@
+const fns: Array<() => number> = [];
+for (let i = 0; i < 3; i++) {
+  fns.push((): number => i);
+  i = i + 1;
+}
+for (let k = 0; k < fns.length; k++) console.log(`${fns[k]()}`);

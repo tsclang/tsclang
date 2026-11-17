@@ -167,6 +167,21 @@ export function _findFreeVars(ctx: CodeGenContext, body: Expression | Block | nu
   // Generate closure structs and fn for an Arrow, returning closure metadata.
   // Returns null if no captures (use regular hoistArrow).
 export function hoistClosure(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, varName: string | null) {
+    // Memoized per node (#298 s3): some call paths evaluate one argument
+    // expression twice (array `push` rebuilds the element from a second
+    // pass). A second hoist would emit a duplicate env/fn pair and split the
+    // declaration/use numbering (env declared as _N, used as _N+1) — reuse
+    // the first hoist so both evaluations agree. Entries stored by the
+    // hoistArrow memo ({arrowKey, name} shape) are skipped — a node is hoisted
+    // through exactly one of the two paths.
+    const memoized = ctx._closureMemo.get(arrowNode);
+    if (memoized && (memoized as Record<string, unknown>).fnName) return memoized as ReturnType<typeof _hoistClosureImpl>;
+    const result = _hoistClosureImpl(ctx, arrowNode, varName);
+    if (result) ctx._closureMemo.set(arrowNode, result);
+    return result;
+}
+
+function _hoistClosureImpl(ctx: CodeGenContext, arrowNode: Arrow | FuncExpr, varName: string | null) {
     const paramNames = (arrowNode.params ?? []).map((p: Param) => p.name);
     let captured;
     let explicitCaptures: ExplicitCapture[] | null = null;

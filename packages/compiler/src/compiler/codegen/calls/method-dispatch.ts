@@ -71,6 +71,15 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
     let etC   = sym?.arrElemCType ?? 'int32_t';
     let arrObjC = objC;
 
+    // #298 s3: annotations like `Array<() => number>` resolve the symbol's
+    // ctype to `Array_tsc_closure` but may leave elemType unset (the generic
+    // TypeRef path defines the symbol without it) — derive the element ident
+    // from the array ctype so element-typed macros match the real type.
+    if (!sym?.elemType && sym?.ctype?.startsWith('Array_')) {
+      et = sym.ctype.slice(6);
+      etC = ctx._arrIdentToCType(et);
+    }
+
     // Ref<T[]> / Mut<T[]>: dereference pointer for array operations
     if (sym?.isRefParam && sym?.derefType?.startsWith('Array_')) {
       et = sym.derefType.slice(6);
@@ -161,8 +170,21 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
               }
             }
           }
+          if (et === 'tsc_closure') {
+            // Closure-element arrays get generated push/free macros (the
+            // runtime hardcodes only primitive element types).
+            ctx._ensureArrayFreeMacro(et, _pushArrName, etC);
+            ctx._ensureArrayPushMacro(et, _pushArrName, etC);
+          }
           if (baseObject.kind === 'Ident') {
-            ctx._registerCleanup(`tsc_array_free_${et}(&${objC})`);
+            // #298 s3: anchor the free to the array's declaration scope — an
+            // inner frame (loop body) would reset the array every iteration.
+            // Program-lifetime arrays (promoted globals, @static) are never
+            // freed here: the program owns them for its entire run.
+            const _pushSym = sym;
+            if (!_pushSym?._promotedGlobal && !_pushSym?._isStaticArray) {
+              ctx._registerSymCleanup(baseObject.name, `tsc_array_free_${et}(&${objC})`);
+            }
             if (sym) sym.arraySize = undefined;
           }
           if (args[0]?.expr.kind === 'Ident') {

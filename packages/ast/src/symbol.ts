@@ -22,6 +22,9 @@ export interface SymbolInfo {
   // #298 s1: top-level var promoted to a file-scope static global — closures
   // reference it directly (no env snapshot capture)
   _promotedGlobal?: boolean;
+  // #298 s3: promoted via the top-level `var` loop-binding pre-pass (single
+  // module-scope binding — every closure sees the final value, TS var)
+  _loopVarGlobal?: boolean;
   isWeak?: boolean;
   isClosure?: boolean;
   isStruct?: boolean;

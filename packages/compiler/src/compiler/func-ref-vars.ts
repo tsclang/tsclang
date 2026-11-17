@@ -99,6 +99,36 @@ export function collectFuncRefVars(ast: Program): Set<string> {    const funcRef
       if (sd?.kind === 'VarDecl' && sd.name) _topLevelVarNames.add(sd.name);
       if (sd?.kind === 'VarDecls') for (const d of (sd.decls ?? []) as { name?: string }[]) if (d?.name) _topLevelVarNames.add(d.name);
     }
+    // #298 s3: top-level `var` loop bindings hoist to module scope (TS var) —
+    // they are promotion candidates exactly like top-level VarDecls. Only the
+    // statement tree counts: a `var` loop inside a function/method/arrow body
+    // hoists to THAT function's scope, never to the module.
+    const _collectVarLoopNames = (nd: unknown) => {
+      if (!nd || typeof nd !== 'object') return;
+      if (Array.isArray(nd)) { nd.forEach(_collectVarLoopNames); return; }
+      const n = nd as Record<string, unknown>;
+      if (n.kind === 'FuncDecl' || n.kind === 'ExtensionFunc' || n.kind === 'ClassDecl'
+          || n.kind === 'Arrow' || n.kind === 'FuncExpr') return;
+      if (n.kind === 'For' || n.kind === 'ForOf') {
+        const init = (n.init ?? n.binding) as Record<string, unknown> | null | undefined;
+        if (n.kind === 'For') {
+          const _addDecl = (d: Record<string, unknown> | null | undefined) => {
+            if (d?.kind === 'VarDecl' && d.varKind === 'var' && typeof d.name === 'string') _topLevelVarNames.add(d.name);
+          };
+          if (init?.kind === 'VarDecls') for (const d of (init.decls as Record<string, unknown>[] | undefined) ?? []) _addDecl(d);
+          else _addDecl(init);
+        } else if (init?.kind === 'Ident' && n.varKind === 'var') {
+          _topLevelVarNames.add(init.name as string);
+        }
+      }
+      for (const v of Object.values(n)) {
+        if (v && typeof v === 'object') _collectVarLoopNames(v);
+      }
+    };
+    for (const sn of ast.body) {
+      const sd = sn.kind === 'Export' ? sn.decl : sn;
+      if (sd) _collectVarLoopNames(sd);
+    }
     const _paramScope = (params: unknown): Set<string> => {
       const out = new Set<string>();
       for (const p of ((params ?? []) as Record<string, unknown>[])) {
@@ -204,13 +234,15 @@ export function collectFuncRefVars(ast: Program): Set<string> {    const funcRef
         }
         return;
       }
-      // Loop bindings shadow the loop body only (var promotion for loop cells
-      // is stage 3 — the binding itself is never a top-level VarDecl)
+      // Loop bindings shadow the loop body only. Exception (#298 s3): a `var`
+      // binding hoists to module scope in TS — it does NOT shadow, so arrows
+      // referencing it promote the shared global (let/const stay shadowed:
+      // they are per-iteration cells, never globals).
       if (n.kind === 'For' || n.kind === 'ForOf') {
         const loop = new Set(shadows);
         const init = (n.init ?? n.binding) as Record<string, unknown> | null | undefined;
-        if (init?.kind === 'VarDecl' && typeof init.name === 'string') loop.add(init.name);
-        if (n.kind === 'ForOf' && (n.binding as Record<string, unknown> | undefined)?.kind === 'Ident') {
+        if (init?.kind === 'VarDecl' && typeof init.name === 'string' && init.varKind !== 'var') loop.add(init.name);
+        if (n.kind === 'ForOf' && (n.binding as Record<string, unknown> | undefined)?.kind === 'Ident' && n.varKind !== 'var') {
           loop.add((n.binding as { name?: string }).name as string);
         }
         for (const [k, v] of Object.entries(n)) {

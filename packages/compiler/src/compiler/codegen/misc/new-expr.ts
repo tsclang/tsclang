@@ -248,6 +248,20 @@ export function newToC(ctx: CodeGenContext, node: New, lines: string[], depth: n
   // Arrow function hoisting
   // ----------------------------------------------------------------
 export function hoistArrow(ctx: CodeGenContext, node: Arrow | FuncExpr, retType: string | null | undefined, hint?: unknown) {
+    // Memoized per node (#298 s3): some call paths evaluate one argument
+    // expression twice (array `push` rebuilds the element from a second
+    // pass). A second hoist would emit a duplicate (unused) lambda and split
+    // the numbering — reuse the first hoist name. Keyed by retType+hint so
+    // distinct call conventions of one node never collide.
+    const _key = `${retType ?? ''}|${String(hint ?? '')}`;
+    const _memo = ctx._closureMemo.get(node) as { arrowKey: string; name: string } | undefined;
+    if (_memo && _memo.arrowKey === _key) return _memo.name;
+    const name = _hoistArrowImpl(ctx, node, retType, hint);
+    ctx._closureMemo.set(node, { arrowKey: _key, name });
+    return name;
+}
+
+function _hoistArrowImpl(ctx: CodeGenContext, node: Arrow | FuncExpr, retType: string | null | undefined, hint?: unknown) {
     const n = ctx.lambdaCount++;
     // Determine return type from body
     let ret = retType === 'void' ? ctx.inferArrowReturn(node) : retType;

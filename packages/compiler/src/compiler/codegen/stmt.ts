@@ -4,7 +4,7 @@ import type { CodeGenContext } from '../codegen.js';
 
 export function visitBlock(ctx: CodeGenContext, block: Block, lines: string[], depth: number) {
     ctx.pushScope();
-    ctx._blockCleanupStack.push({ list: [], set: new Set() });
+    ctx._blockCleanupStack.push({ list: [], set: new Set(), scopeIdx: ctx.scopes.length - 1 });
     const blockPoolVars: { name: string; className: string }[] = [];
     const blockHeapVars: { name: string; className: string }[] = [];
     const prevPoolVars = ctx._currentBlockPoolVars;
@@ -18,8 +18,12 @@ export function visitBlock(ctx: CodeGenContext, block: Block, lines: string[], d
     const _heapMovedSnapshot = ctx._snapshotHeapMoved();
     // #295 v2b: nested named functions — hoisted closure bindings + shared-cell
     // env emitted at scope entry; fn bodies build deferred (cleanup isolation).
+    // #298 s3: the block's pre-scan also marks literal-backed arrays that
+    // receive `push` in this subtree — their declarations heap-copy elements.
+    ctx._litHeapifyStack.push(new Set());
     const _nestedFnBodies = ctx._preScanNestedFns(block, lines, depth);
     for (const s of block.body) visitStmt(ctx, s, lines, depth);
+    ctx._litHeapifyStack.pop();
     ctx._restoreHeapMoved(_heapMovedSnapshot);
     const I = ' '.repeat(ctx.indent * depth);
     for (let i = blockPoolVars.length - 1; i >= 0; i--) {
@@ -69,6 +73,11 @@ export function visitStmtInMain(ctx: CodeGenContext, node: Stmt) {
 export function visitStmt(ctx: CodeGenContext, node: Stmt, lines: string[], depth: number) {
     ctx._currentNode = node;
     if (!node) return;
+    // #298 s3: closure hoists memoize per statement — the double evaluation
+    // they guard against (push call line vs element) happens inside a single
+    // statement visit, while generic re-emission of the SAME nodes must start
+    // from a clean slate.
+    ctx._closureMemo = new WeakMap();
 
     switch (node.kind) {
       case 'VarDecl': ctx._visitVarDecl(node, lines, depth); break;
