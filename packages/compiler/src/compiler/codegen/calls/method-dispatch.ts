@@ -3,6 +3,7 @@ import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Expression, Argument, TypeAnn, Member } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
 import { resolveDecimalBase, decimalScale } from '../types/decimal.js';
+import { escapeCString } from '../expr/literals.js';
 export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[], lines: string[], depth: number) {
     let baseObject = callee.object;
     if (baseObject.kind === 'Call' && baseObject.callee?.kind === 'Member') {
@@ -604,7 +605,7 @@ export function methodCall(ctx: CodeGenContext, callee: Member, args: Argument[]
         for (const [b, bEntries] of bucketMap) {
           let line = `        case ${b}:`;
           for (const e of bEntries) {
-            line += ` if (tsc_string_eq(key, STR_LIT("${e.key}"))) return (opt_i32){true, ${e.valC}};`;
+            line += ` if (tsc_string_eq(key, STR_LIT("${escapeCString(e.key)}"))) return (opt_i32){true, ${e.valC}};`;
           }
           line += ' break;';
           fnLines.push(line);

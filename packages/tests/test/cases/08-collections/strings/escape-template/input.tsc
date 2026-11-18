@@ -1,0 +1,3 @@
+const s = `A:\u0041 tab:\t`;
+console.log(s == "A:A tab:\t");
+console.log(s.length);

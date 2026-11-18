@@ -637,6 +637,31 @@ input.tsc:1:
 - [R] for...of по строке → итерация по графемным кластерам
 - [R] `s.bytes` → `Slice<u8>`
 
+### Escape-последовательности в строках (#307)
+
+Лексер декодирует JS-эскейпы (`\uXXXX`, `\u{...}`, `\xNN`, суррогатные пары, line continuation), кодоген повторно кодирует в C. Секция `08-collections/strings/escape-*`.
+
+- [R] `"\u0041BC"` → `ABC`, длина 3
+- [R] `"\u0430"` → `"а"` (сравнение с кириллицей), длина 2 (UTF-8 байты)
+- [R] `"\u{41}"` == `"A"`; `"\u{1F600}"` длина 4
+- [R] `"\x41\x42"` == `"AB"`, длина 2
+- [R] `"\ud83d\ude00"` == `"\u{1F600}"` — суррогатная пара объединяется
+- [R] классика: `\t \n \\ \" ' \0` — длины и байты (NUL через `\x00` в C)
+- [R] неизвестные эскейпы: `"\q"` → `q`, `"\a"` == `"a"` (JS-семантика, backslash отбрасывается)
+- [R] line continuation: `"ab\` + перевод строки + `cd"` → `abcd`
+- [R] template literal: эскейпы декодируются и в строковых частях `...`
+- [R] template с выражением: str-часть попадает в format-строку C с C-эскейпами
+- [R] char-литералы: `'\x41'` → 65, `'\u0042'` → 66, `'\n'` → 10
+- [R] строковый enum: `enum E { A = "\u0430" }` → `E.A.toString()` → `а`
+- [R] match по строке с `\u{1F600}` — эмодзи-паттерн (C не знает `\u{...}`)
+- [E] `"\u12"` → Invalid Unicode escape sequence
+- [E] `"\x4"` → Invalid hexadecimal escape sequence
+- [E] `"\1"` → Octal escape sequences are not allowed
+- [E] `"\ud83d"` (lone surrogate) → Lone surrogate escape is not allowed
+- [E] `"\u{110000}"` → Unicode codepoint out of range
+- [E] `"\u{}"` → Invalid Unicode escape sequence
+- [E] `"\u{D800}"` → Lone surrogate escape is not allowed
+
 ### Встроенные методы строк
 
 - [R] `s.indexOf(sub)` — найдено

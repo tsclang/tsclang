@@ -1,6 +1,7 @@
 import type { CodeGenContext } from '../../codegen.js';
 import type { TemplateLit, Arrow, FuncExpr, Expression, Param, TypeAnn, Block, SymbolInfo } from '@tsclang/ast';
 import type { ActiveEnv } from './nested-fns.js';
+import { escapeCString } from '../expr/literals.js';
 
 interface TemplatePart { kind: string; value?: string; src?: string; }
 interface CompiledStrPart { kind: 'str'; value: string; }
@@ -32,7 +33,7 @@ export function _templateToC(ctx: CodeGenContext, node: TemplateLit, lines: stri
     if (!hasSubs) {
       // Plain string, no substitutions
       const text = parts.map((p: TemplatePart) => p.value ?? '').join('');
-      return `STR_LIT("${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`;
+      return `STR_LIT("${escapeCString(text)}")`;
     }
 
     // Parse and compile each expression part
@@ -62,7 +63,7 @@ export function _templateToC(ctx: CodeGenContext, node: TemplateLit, lines: stri
     if (allStrings) {
       const pieces: string[] = [];
       for (const p of compiled) {
-        if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${p.value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`); }
+        if (p.kind === 'str') { if (p.value) pieces.push(`STR_LIT("${escapeCString(p.value)}")`); }
         else if (p.t === 'String *') pieces.push(`(*${p.c})`);
         else pieces.push(p.c);
       }
@@ -78,7 +79,7 @@ export function _templateToC(ctx: CodeGenContext, node: TemplateLit, lines: stri
     const isEmb = ctx._cap('bits') < 32;
     for (const p of compiled) {
       if (p.kind === 'str') {
-        fmt += p.value.replace(/%/g, '%%');
+        fmt += escapeCString(p.value.replace(/%/g, '%%'));
       } else {
         const t = p.t, c = p.c;
         if (t === 'int32_t') { if (isEmb) { fmt += '%ld'; fmtArgs.push(`(long)${c}`); } else { fmt += '%d'; fmtArgs.push(c); } }

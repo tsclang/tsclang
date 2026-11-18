@@ -432,6 +432,9 @@ export interface NativeTemplatePart {
   kind: 'str' | 'expr';
   value?: string;
   src?: string;
+  // Verbatim source text of a str part. `value` is the JS-decoded form;
+  // native blocks emit `raw` because their escape sequences are C's.
+  raw?: string;
 }
 
 export interface Native extends BaseNode {

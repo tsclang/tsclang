@@ -1,0 +1,2 @@
+enum Status { Ok = "\u0430" }
+console.log(Status.Ok.toString());

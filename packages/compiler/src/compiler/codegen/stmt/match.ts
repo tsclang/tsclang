@@ -2,6 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import type { ClassMeta } from '../../codegen.js';
 import type { Expression, MatchCase, MatchPattern, VarDecl, Stmt, CatchClause, Match, TryCatch, TypeAnn } from '@tsclang/ast';
 import type { SymbolInfo } from '@tsclang/ast';
+import { escapeCString } from '../expr/literals.js';
 export function _emitMatchCore(ctx: CodeGenContext, discriminant: Expression, cases: MatchCase[], hasParens: boolean,
                                discC: string, discType: string, resultType: string, resultVar: string,
                                lines: string[], depth: number) {
@@ -367,7 +368,7 @@ export function _matchPatternCond(ctx: CodeGenContext, pattern: MatchPattern, di
       case 'MatchWild': return null; // becomes else
       case 'MatchNull': return `!${discC}.has_value`;
       case 'MatchLit': {
-        if (pattern.litType === 'string') return `tsc_string_eq(${discC}, STR_LIT("${pattern.value}"))`;
+        if (pattern.litType === 'string') return `tsc_string_eq(${discC}, STR_LIT("${escapeCString(pattern.value)}"))`;
         return `${discC} == ${pattern.value}`;
       }
       case 'MatchRange': return `${discC} >= ${pattern.lo} && ${discC} < ${pattern.hi}`;
@@ -402,7 +403,7 @@ export function _matchPatternCond(ctx: CodeGenContext, pattern: MatchPattern, di
         // Object literal pattern: check discriminator fields
         if (pattern.discriminators.length === 0) return null;
         const conds = pattern.discriminators.map((d: { key: string; value: string; litType: string }) => {
-          if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${d.value}"))`;
+          if (d.litType === 'string') return `tsc_string_eq(${discC}.${d.key}, STR_LIT("${escapeCString(d.value)}"))`;
           return `${discC}.${d.key} == ${d.value}`;
         });
         return conds.join(' && ');

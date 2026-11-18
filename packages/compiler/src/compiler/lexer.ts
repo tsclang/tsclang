@@ -77,6 +77,11 @@ export class Token {
   col: number;
   endCol: number;
   parts?: NativeTemplatePart[];
+  // Verbatim source text of a string literal (between the quotes). `value`
+  // holds the JS-decoded form used by the language; `raw` is kept for
+  // constructs that embed C source verbatim (native blocks), where escape
+  // sequences belong to the C compiler, not to TSClang.
+  raw?: string;
 
   constructor(type: string, value: string, line: number, col: number) {
     this.type   = type;
@@ -112,6 +117,90 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
   function addTok(type: string, value: string): void { tokens.push(new Token(type, value, line, col)); }
   function err(msg: string): never { throw new Error(`${filename}:${line}:${col}: ${msg}`); }
 
+  const HEX = /[0-9a-fA-F]/;
+  // Read exactly n hex digits and return their value (errors on a shortfall).
+  function hexDigits(n: number, msg: string): number {
+    let v = 0;
+    for (let k = 0; k < n; k++) {
+      const c = cur();
+      if (c === undefined || !HEX.test(c)) err(msg);
+      v = v * 16 + parseInt(advance(), 16);
+    }
+    return v;
+  }
+
+  // Decode one JS escape sequence. `i` points at the character after the
+  // backslash. Returns the decoded text ('' for a line continuation).
+  // TS/JS semantics: unknown escapes drop the backslash ("\q" === "q"),
+  // octal escapes are rejected, \uXXXX surrogate pairs combine into one
+  // codepoint. Lone surrogates are rejected: the runtime string model is
+  // UTF-8 bytes and cannot represent them.
+  function decodeEscape(): string {
+    const ec = advance();
+    switch (ec) {
+      case 'n': return '\n';
+      case 't': return '\t';
+      case 'r': return '\r';
+      case 'b': return '\b';
+      case 'f': return '\f';
+      case 'v': return '\v';
+      case '0':
+        if (cur() >= '0' && cur() <= '9') err('Octal escape sequences are not allowed');
+        return '\0';
+      case 'x': {
+        if (cur() === undefined || !HEX.test(cur())) err('Invalid hexadecimal escape sequence');
+        return String.fromCharCode(hexDigits(2, 'Invalid hexadecimal escape sequence'));
+      }
+      case 'u': {
+        if (cur() === '{') {
+          advance();
+          let v = 0, n = 0;
+          while (cur() !== '}') {
+            const c = cur();
+            if (c === undefined) err('Invalid Unicode escape sequence');
+            if (!HEX.test(c)) err('Invalid Unicode escape sequence');
+            if (n === 6) err('Unicode codepoint out of range');
+            v = v * 16 + parseInt(advance(), 16);
+            n++;
+          }
+          advance(); // }
+          if (n === 0) err('Invalid Unicode escape sequence');
+          if (v > 0x10ffff) err('Unicode codepoint out of range');
+          if (v >= 0xd800 && v <= 0xdfff) err('Lone surrogate escape is not allowed');
+          return String.fromCodePoint(v);
+        }
+        if (cur() === undefined || !HEX.test(cur())) err('Invalid Unicode escape sequence');
+        const first = hexDigits(4, 'Invalid Unicode escape sequence');
+        if (first >= 0xd800 && first <= 0xdbff) {
+          // High surrogate: combine with a following \uDCxx low surrogate.
+          if (cur() === '\\' && peek() === 'u') {
+            const saveI = i, saveLine = line, saveCol = col;
+            advance(); advance(); // \ u
+            if (cur() !== undefined && HEX.test(cur())) {
+              const second = hexDigits(4, 'Invalid Unicode escape sequence');
+              if (second >= 0xdc00 && second <= 0xdfff) {
+                return String.fromCodePoint(0x10000 + ((first - 0xd800) << 10) + (second - 0xdc00));
+              }
+              err('Lone surrogate escape is not allowed');
+            }
+            i = saveI; line = saveLine; col = saveCol; // let the next pass report it
+          }
+          err('Lone surrogate escape is not allowed');
+        }
+        if (first >= 0xdc00 && first <= 0xdfff) err('Lone surrogate escape is not allowed');
+        return String.fromCharCode(first);
+      }
+      case '\n': return ''; // line continuation
+      case '\r':
+        if (cur() === '\n') advance();
+        return ''; // \r\n line continuation
+      case undefined: err('Unterminated string');
+      default:
+        if (ec >= '1' && ec <= '9') err('Octal escape sequences are not allowed');
+        return ec; // unknown escape: the backslash is dropped, as in JS
+    }
+  }
+
   while (i < src.length) {
     const startLine = line, startCol = col;
     const ch = cur();
@@ -137,11 +226,18 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
     if (ch === '`') {
       advance(); // consume `
       const parts: NativeTemplatePart[] = [];
-      let str = '';
+      let str = ''; // decoded text
+      let raw = ''; // verbatim text: native blocks embed C source where
+      // escape sequences belong to the C compiler (e.g. printf "\n")
       while (i < src.length && cur() !== '`') {
-        if (cur() === '\\') { advance(); str += '\\' + advance(); }
+        if (cur() === '\\') {
+          const escStart = i;
+          advance();
+          str += decodeEscape();
+          raw += src.slice(escStart, i);
+        }
         else if (cur() === '$' && peek() === '{') {
-          parts.push({ kind: 'str', value: str }); str = '';
+          parts.push({ kind: 'str', value: str, raw }); str = ''; raw = '';
           advance(); advance(); // skip ${
           let depth = 1, exprSrc = '';
           while (i < src.length && depth > 0) {
@@ -152,11 +248,11 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
           if (i >= src.length) err('Unterminated template expression');
           advance(); // consume }
           parts.push({ kind: 'expr', src: exprSrc });
-        } else { str += advance(); }
+        } else { const c = advance(); str += c; raw += c; }
       }
       if (i >= src.length) err('Unterminated template literal');
       advance(); // consume closing `
-      parts.push({ kind: 'str', value: str });
+      parts.push({ kind: 'str', value: str, raw });
       const tmplTok = new Token(TK.TEMPLATE, '', startLine, startCol);
       tmplTok.parts = parts;
       tokens.push(tmplTok);
@@ -167,24 +263,26 @@ export function lex(src: string, filename: string = '<input>'): Token[] {
     if (ch === '"' || ch === "'") {
       const quote = advance();
       let str = '';
+      let raw = '';
       while (i < src.length && cur() !== quote) {
         if (cur() === '\\') {
+          const escStart = i;
           advance();
-          const ec = advance();
-          switch (ec) {
-            case '"': case "'": str += ec; break;
-            case '\\': str += '\\'; break;
-            default: str += '\\' + ec; break;
-          }
-        } else str += advance();
+          str += decodeEscape();
+          raw += src.slice(escStart, i);
+        } else { const c = advance(); str += c; raw += c; }
       }
       if (i >= src.length) err('Unterminated string');
       advance(); // closing quote
       // Single-quoted strings are char literals
       if (quote === "'") {
-        tokens.push(new Token(TK.SQUOTE, str, startLine, startCol));
+        const tok = new Token(TK.SQUOTE, str, startLine, startCol);
+        tok.raw = raw;
+        tokens.push(tok);
       } else {
-        tokens.push(new Token(TK.STRING, str, startLine, startCol));
+        const tok = new Token(TK.STRING, str, startLine, startCol);
+        tok.raw = raw;
+        tokens.push(tok);
       }
       continue;
     }

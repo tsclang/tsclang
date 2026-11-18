@@ -5,6 +5,45 @@
 - Один тип `string` — UTF-8 байтовая последовательность
 - Содержимое **immutable** (ARC Copy); `let` позволяет переприсвоить переменную, `const` — нет
 
+### Escape-последовательности (#307)
+
+Лексер декодирует escape-последовательности по семантике JavaScript/TypeScript (П2) — в строках (`"..."`) и символьных литералах (`'...'`):
+
+| Последовательность | Значение |
+|---|---|
+| `\n` `\t` `\r` `\b` `\f` `\v` | соответствующий control-символ (LF, TAB, CR, backspace, form feed, vertical tab) |
+| `\0` | NUL (байт 0); `\0` + цифра — ошибка |
+| `\"` `\'` `\\` | `"`, `'`, `\` |
+| `\xNN` | символ U+0000..U+00FF по 2 hex-цифрам (ровно 2, иначе ошибка) |
+| `\uXXXX` | кодпоинт BMP по 4 hex-цифрам (ровно 4) |
+| `\u{1..6 hex}` | кодпоинт до U+10FFFF |
+| `\uD83D\uDE00` | суррогатная пара объединяется в один кодпоинт (U+1F600) |
+| `\<перевод строки>` | line continuation — продолжение строки, символ перевода строки удаляется |
+| `\q`, `\a` и др. неизвестные | backslash отбрасывается: `"\q" === "q"` (как в JS) |
+
+Ошибки компиляции (лексер):
+
+- `\u12"` (мало hex-цифр) — `Invalid Unicode escape sequence`
+- `\x4"` — `Invalid hexadecimal escape sequence`
+- `"\1"`..`"\9"` — `Octal escape sequences are not allowed` (strict-семантика JS)
+- `"\ud83d"` без пары, `"\u{D800}"` — `Lone surrogate escape is not allowed`: строка — UTF-8 байты, одиночный суррогат в ней не представим (отличие от JS, где lone surrogate допустим)
+- `"\u{110000}"` — `Unicode codepoint out of range`
+
+Примеры:
+
+```typescript
+const a: string = "\u0041BC";       // "ABC", длина 3
+const b: string = "\u0430";         // "а", длина 2 — .length считает UTF-8 байты
+const c: string = "\u{1F600}";      // 😀, длина 4 байта
+const d: string = "\ud83d\ude00";   // то же, что "\u{1F600}" — пара объединяется
+const e: string = "\x41\x42";       // "AB"
+const f = `tab:\t A:\u0041`;        // template literal — эскейпы декодируются так же
+```
+
+Кодогенерация повторно кодирует значение в C-эскейпы автоматически (`\n` остаётся `\n` в C-исходнике, `\` становится `\\` и т.д.) — пользователю это не видно.
+
+**Исключение — native-блоки** (`native "..."` и ``native(`...`)``): содержимое — дословный C-код, escape-последовательности в нём интерпретирует C-компилятор (`native "printf(\"a\n\");"` печатает перевод строки через C-`\n`). See `12-modules`.
+
 ### C-layout
 
 ```c
@@ -85,6 +124,8 @@ const a = 'A'         // string — "A" (TS compat)
 const n = '\n'        // string — "\n" (newline)
 const b: u8 = 'A'     // 65 — u8, char code (явная аннотация)
 const x: u8 = '\n'    // 10 — u8, escape code
+const h: u8 = '\x41'  // 65 — u8, hex escape
+const u: u8 = '\u0042' // 66 — u8, unicode escape
 const p: u8 = 'п'     // ошибка компилятора: 'п' — мультибайтовый символ (2 байта), не u8
 ```
 

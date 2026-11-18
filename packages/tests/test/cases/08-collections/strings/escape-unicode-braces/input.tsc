@@ -1,0 +1,4 @@
+const a: string = "\u{41}";
+const b: string = "\u{1F600}";
+console.log(a == "A");
+console.log(b.length);

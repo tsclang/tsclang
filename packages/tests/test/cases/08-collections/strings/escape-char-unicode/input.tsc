@@ -1,0 +1,6 @@
+const a: u8 = '\x41';
+const b: u8 = '\u0042';
+const c: u8 = '\n';
+console.log(a);
+console.log(b);
+console.log(c);

@@ -518,6 +518,15 @@ native `
 `
 ```
 
+**Escape-последовательности в `native` — C-семантика, не TSClang** (#307). Содержимое `native "..."` и `` native(`...`) `` вставляется в C-исходник дословно: `\n`, `\t`, `\xNN` и т.д. интерпретирует C-компилятор. TSClang анэскейпит только `\"` и `\\`, чтобы текст мог быть записан внутри TSC-строки:
+
+```typescript
+native "printf(\"hello from C\n\");";   // C получит printf("hello from C\n");
+native(`printf("value = %d\n", ${x});`); // C-эскейп \n сохраняется
+```
+
+Это отличает `native` от обычных строковых литералов, где эскейпы декодируются по семантике JS (см. [03-strings.md](../03-types/03-strings.md)).
+
 Компилятор и линтер выдают предупреждение на каждый `native` блок:
 ```
 warning: native block — C code inserted verbatim, memory management is manual

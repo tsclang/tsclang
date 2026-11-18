@@ -2,6 +2,41 @@ import type { Literal, Binary, Expression } from '@tsclang/ast';
 import type { CodeGenContext } from '../../codegen.js';
 import { isDecimal, decimalScale, scaleLiteral, resolveDecimalBase } from '../types/decimal.js';
 // literals.ts
+  // Re-encode a lexer-decoded string value for embedding inside a C string
+  // literal. The lexer has already applied JS escape semantics, so this only
+  // handles C: backslash/quote, mnemonics for common controls, \xNN for the
+  // remaining control bytes. NUL is emitted as \x00 (not \0) because C octal
+  // escapes greedily absorb following octal digits; after any \xNN a hex-digit
+  // character must be escaped too, or the C lexer would extend the escape.
+  export function escapeCString(s: string): string {
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i]!;
+      switch (ch) {
+        case '\\': out += '\\\\'; continue;
+        case '"':  out += '\\"';  continue;
+        case '\n': out += '\\n';  continue;
+        case '\t': out += '\\t';  continue;
+        case '\r': out += '\\r';  continue;
+        case '\b': out += '\\b';  continue;
+        case '\f': out += '\\f';  continue;
+        case '\v': out += '\\v';  continue;
+      }
+      const code = s.charCodeAt(i);
+      if (code < 0x20 || code === 0x7f) {
+        out += '\\x' + code.toString(16).padStart(2, '0');
+        const next = i + 1 < s.length ? s.charCodeAt(i + 1) : undefined;
+        if (next !== undefined && next < 128 && /[0-9a-fA-F]/.test(String.fromCharCode(next))) {
+          out += '\\x' + next.toString(16).padStart(2, '0');
+          i++;
+        }
+        continue;
+      }
+      out += ch;
+    }
+    return out;
+  }
+
   // Unescape a char literal value to numeric code
 export function _charCode(ctx: CodeGenContext, raw: string) {
     if (raw === '\\n') return 10;
@@ -22,8 +57,7 @@ export function _charCode(ctx: CodeGenContext, raw: string) {
 }
 
 export function _charLiteralToSTR_LIT(ctx: CodeGenContext, value: string) {
-    const escaped = value.replace(/\\(?![ntr0'"\\abfvxuU0-7])/g, '\\\\').replace(/"/g, '\\"');
-    return `STR_LIT("${escaped}")`;
+    return `STR_LIT("${escapeCString(value)}")`;
 }
 
 export function _stringLiteralToByte(ctx: CodeGenContext, node: Literal) {
@@ -45,7 +79,7 @@ export function _stringLiteralToByte(ctx: CodeGenContext, node: Literal) {
 }
 
 export function literalToC(ctx: CodeGenContext, node: Literal): string {
-    if (node.litType === 'string') return `STR_LIT("${node.value.replace(/\\(?![ntr0'"\\abfv])/g, '\\\\').replace(/"/g, '\\"')}")`;
+    if (node.litType === 'string') return `STR_LIT("${escapeCString(node.value)}")`;
     if (node.litType === 'char')   return ctx._charLiteralToSTR_LIT(node.value);
     if (node.litType === 'bool')   return node.value;
     if (node.litType === 'null')   return 'NULL';

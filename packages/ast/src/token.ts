@@ -7,4 +7,8 @@ export interface Token {
   col: number;
   endCol: number;
   parts?: unknown[];
+  // Verbatim source text of a string literal (between the quotes). `value`
+  // holds the JS-decoded form; `raw` is kept for verbatim C embedding
+  // (native blocks). See lexer.ts for details.
+  raw?: string;
 }

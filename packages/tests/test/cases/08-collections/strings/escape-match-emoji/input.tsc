@@ -1,0 +1,6 @@
+const s: string = "\u{1F600}";
+const r = match s {
+    "\u{1F600}" => "emoji",
+    _ => "other",
+};
+console.log(r);

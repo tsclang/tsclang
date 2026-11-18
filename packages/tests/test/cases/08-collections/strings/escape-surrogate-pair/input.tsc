@@ -1,0 +1,3 @@
+const s: string = "\ud83d\ude00";
+console.log(s == "\u{1F600}");
+console.log(s.length);

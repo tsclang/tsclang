@@ -1,0 +1,4 @@
+const n: i32 = 7;
+const s = `n=\u0041${n}!`;
+console.log(s);
+console.log(s.length);

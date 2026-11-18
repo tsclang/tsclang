@@ -3,6 +3,7 @@ import type { ThrowsCtx } from './decorators.js';
 import { mangleParams } from '../../types.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Enum, VarDecl, FuncDecl, ExtensionFunc, Param, TypeAnn, TypeRef, TypeFunc, Block, Expression } from '@tsclang/ast';
+import { escapeCString } from '../expr/literals.js';
 // func.ts
 export function visitEnum(ctx: CodeGenContext, node: Enum) {
     const { name, members, isConst } = node;
@@ -47,7 +48,7 @@ export function visitEnum(ctx: CodeGenContext, node: Enum) {
     let needsToString = false;
     if (!isConst) {
       if (isStringEnum) {
-        ctx.addTop(`static const char *${cname}_strings[] = { ${entries.map((e) => `"${e.strVal ?? e.name}"`).join(', ')} };`);
+        ctx.addTop(`static const char *${cname}_strings[] = { ${entries.map((e) => `"${escapeCString(e.strVal ?? e.name)}"`).join(', ')} };`);
       } else {
         ctx.addTop(`static const ${cname} ${cname}_values[] = { ${entries.map((e) => `${cname}_${e.name}`).join(', ')} };`);
         const numVals = entries.map((e) => e.numVal);

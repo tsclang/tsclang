@@ -1529,10 +1529,12 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
         ctx.warnCode('W004', node);
         let nativeOut = '';
         if (node.templateParts) {
-          // native(`... ${expr} ...`) тАФ interpolate expressions
+          // native(`... ${expr} ...`) — interpolate expressions
           for (const part of node.templateParts) {
             if (part.kind === 'str') {
-              nativeOut += part.value;
+              // Raw source text: escape sequences in embedded C code belong
+              // to the C compiler (e.g. printf "\n"), not to TSClang.
+              nativeOut += part.raw ?? part.value ?? '';
             } else if (part.kind === 'expr') {
               // Re-parse the expression source (same as _templateToC in misc/closures.ts)
               const toks = ctx._lex(part.src!, ctx.filename);
@@ -1543,7 +1545,10 @@ export function _visitControlFlow(ctx: CodeGenContext, node: Stmt, lines: string
           }
         } else {
           // native "..." тАФ verbatim string, unescape escaped quotes
-          nativeOut = (node.content ?? '').replace(/\\"/g, '"');
+          // Unescape \" and \\ only — the lexer now keeps string literals
+          // raw for native blocks; other escapes (\n, \t, \u…) belong to the
+          // C compiler and pass through untouched.
+          nativeOut = (node.content ?? '').replace(/\\(["\\])/g, '$1');
         }
         // Check for undeclared types used as pointer bases: word * varname
         const knownCTypes = new Set([

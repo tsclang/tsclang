@@ -1,0 +1,3 @@
+const s: string = "\u0041BC";
+console.log(s);
+console.log(s.length);

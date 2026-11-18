@@ -1,0 +1,5 @@
+const s: string = "a\qb";
+const bell: string = "\a";
+console.log(s);
+console.log(s.length);
+console.log(bell == "a");

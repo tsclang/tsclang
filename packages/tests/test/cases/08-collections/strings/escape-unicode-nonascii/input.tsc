@@ -1,0 +1,4 @@
+const s: string = "\u0430";
+console.log(s);
+console.log(s == "а");
+console.log(s.length);

@@ -2,6 +2,7 @@ import type { CodeGenContext } from '../../codegen.js';
 import { DEFAULT_TARGET } from '@tsclang/shared';
 import type { Expression, Call, Argument, SymbolInfo, Param, TypeRef } from '@tsclang/ast';
 import { isDecimal, resolveDecimalBase } from '../types/decimal.js';
+import { escapeCString } from '../expr/literals.js';
 
 // True when the expression contains a Call anywhere — such a callee has side
 // effects (e.g. a factory allocating a closure env) and must be evaluated once.
@@ -294,7 +295,9 @@ export function callToC(ctx: CodeGenContext, node: Call, lines: string[], depth:
           throw ctx.errorCode('E419', a.expr ?? a, { detail: "spread '...' requires a va_list in variadic function calls" });
         }
         if (a.expr.kind === 'Literal' && a.expr.litType === 'string') {
-          return { raw: `"${a.expr.value.replace(/"/g, '\\"')}"` };
+          // printf-family formats are C format strings: escapeCString
+          // re-encodes the decoded value back into C escapes (\n stays \n).
+          return { raw: `"${escapeCString(a.expr.value)}"` };
         }
         const ac = ctx.exprToC(a.expr, lines, depth);
         const at = ctx.inferType(a.expr);

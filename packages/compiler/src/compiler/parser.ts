@@ -1209,8 +1209,10 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
         pos++;
         node = { kind: 'Native', content: null as string | null, templateParts: tmpl.parts };
       } else {
-        const content = eat(TK.STRING).value;
-        node = { kind: 'Native', content };
+        // Native content is C source verbatim: keep raw escape text (\n in
+        // printf belongs to the C compiler, not to TSClang's JS decoding).
+        const sTok = eat(TK.STRING);
+        node = { kind: 'Native', content: sTok.raw ?? sTok.value };
       }
       eat(TK.RPAREN);
       eatSemi();
@@ -1224,9 +1226,9 @@ export function parse(tokens: Token[], filename: string = '<input>', src: string
       return { kind: 'Native', content: null as string | null, templateParts: tmpl.parts };
     }
     // native "..." verbatim string
-    const content = eat(TK.STRING).value;
+    const sTok = eat(TK.STRING);
     eatSemi();
-    return { kind: 'Native', content };
+    return { kind: 'Native', content: sTok.raw ?? sTok.value };
   }
 
   function parseUnsafe() {

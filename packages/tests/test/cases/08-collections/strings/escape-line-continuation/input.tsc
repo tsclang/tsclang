@@ -1,0 +1,4 @@
+const s: string = "ab\
+cd";
+console.log(s);
+console.log(s.length);
